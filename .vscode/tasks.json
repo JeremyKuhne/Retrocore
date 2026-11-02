@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build IIe sample and debug host",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-Command",
+                "& .\\tools\\Build-IIeSample.ps1; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; dotnet build .\\src\\Retrocore.Debug\\Retrocore.Debug.csproj -c Release -warnaserror"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build extension and debug host",
+            "dependsOn": ["Compile extension", "Build debug host"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Compile extension",
+            "type": "shell",
+            "command": "npm",
+            "args": ["--prefix", "extension", "run", "compile"],
+            "problemMatcher": "$tsc"
+        },
+        {
+            "label": "Build debug host",
+            "type": "shell",
+            "command": "dotnet",
+            "args": [
+                "build",
+                ".\\src\\Retrocore.Debug\\Retrocore.Debug.csproj",
+                "-c",
+                "Release",
+                "-warnaserror"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

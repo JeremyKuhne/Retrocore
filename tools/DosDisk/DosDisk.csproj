@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Retrocore.DiskTool</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ConsoleAppFramework" Version="5.7.13" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Basic\Retrocore.Basic.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <!-- DOS's sources ship beside the tool, which assembles them for each disk, with the IIe equates they include. -->
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\IIeEquates.asm" Link="System\IIeEquates.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\MonitorEntries.asm" Link="System\MonitorEntries.asm" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+artifacts/
+TestResults/
+BenchmarkDotNet.Artifacts/
+.vs/
+extension/node_modules/
+extension/out/
+.vscode-test/
+
+# The debug host and license Install-Extension.ps1 packages into the VSIX.
+extension/server/
+extension/LICENSE

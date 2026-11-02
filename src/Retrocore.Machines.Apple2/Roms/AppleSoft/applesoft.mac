@@ -1,0 +1,3008 @@
+; retrocore: dialect=macro10 overlay=m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
+; AppleSoft II for the Apple IIe and II Plus: Apple's changes to Microsoft BASIC 1.1 (m6502.asm), maintained by hand.
+;@INSERT BEFORE 11
+IFNDEF  ENHNCD,<ENHNCD==1>      ;1 FOR THE ENHANCED IIE (342-0303/0304), 0 FOR THE ORIGINAL (342-0134/0135).
+IFNDEF  APLPLS,<APLPLS==0>      ;1 FOR THE II PLUS (341-0011 TO 0015), WHOSE APPLESOFT IS THE ORIGINAL IIE'S BUT $F7FF.
+;@END
+;@REPLACE 18-18
+LNGERR==1                       ;;LONG ERROR MESSAGES. (APPLE)
+;@END
+;@REPLACE 100-100
+        ROMLOC=^O150000         ;$D000 (APPLE IIE ROM)
+;@END
+;@REPLACE 731-991
+;; APPLE IIE PAGE ZERO, ONE AND TWO: THE ROM USES THESE FIXED LOCATIONS.
+START==^D0              ;;$00
+RDYJSR==^D3             ;;$03
+ADRAYI==^D6             ;;$06
+ADRGAY==^D8             ;;$08
+USRPOK==^D10            ;;$0A
+CHARAC==^D13            ;;$0D
+INTEGR==^D13            ;;$0D
+ENDCHR==^D14            ;;$0E
+COUNT==^D15             ;;$0F
+DIMFLG==^D16            ;;$10
+KIMY==^D16              ;;$10
+VALTYP==^D17            ;;$11
+INTFLG==^D18            ;;$12
+DORES==^D19             ;;$13
+GARBFL==^D19            ;;$13
+SUBFLG==^D20            ;;$14
+INPFLG==^D21            ;;$15
+TANSGN==^D22            ;;$16
+CNTWFL==^D143           ;;$8F
+TRMPOS==^D36            ;;$24
+LINWID==^D37            ;;$25
+NCMWID==^D112           ;;$70
+LINNUM==^D80            ;;$50
+TEMPPT==^D82            ;;$52
+LASTPT==^D83            ;;$53
+TEMPST==^D85            ;;$55
+INDEX1==^D94            ;;$5E
+INDEX==^D94             ;;$5E
+INDEX2==^D96            ;;$60
+RESHO==^D98             ;;$62
+RESMOH==^D99            ;;$63
+RESMO==^D100            ;;$64
+RESLO==^D101            ;;$65
+ADDEND==^D100           ;;$64
+TXTTAB==^D103           ;;$67
+VARTAB==^D105           ;;$69
+ARYTAB==^D107           ;;$6B
+STREND==^D109           ;;$6D
+FRETOP==^D111           ;;$6F
+FRESPC==^D113           ;;$71
+MEMSIZ==^D115           ;;$73
+CURLIN==^D117           ;;$75
+OLDLIN==^D119           ;;$77
+POKER==^D80             ;;$50
+OLDTXT==^D121           ;;$79
+DATLIN==^D123           ;;$7B
+DATPTR==^D125           ;;$7D
+INPPTR==^D127           ;;$7F
+VARNAM==^D129           ;;$81
+VARPNT==^D131           ;;$83
+FDECPT==^D131           ;;$83
+FORPNT==^D133           ;;$85
+LSTPNT==^D133           ;;$85
+ANDMSK==^D133           ;;$85
+EORMSK==^D134           ;;$86
+OPPTR==^D135            ;;$87
+VARTXT==^D135           ;;$87
+OPMASK==^D137           ;;$89
+DOMASK==^D22            ;;$16
+DEFPNT==^D138           ;;$8A
+GRBPNT==^D138           ;;$8A
+DSCPNT==^D140           ;;$8C
+FOUR6==^D143            ;;$8F
+JMPER==^D144            ;;$90
+SIZE==^D145             ;;$91
+OLDOV==^D146            ;;$92
+TEMPF3==^D138           ;;$8A
+TEMPF1==^D147           ;;$93
+HIGHDS==^D148           ;;$94
+HIGHTR==^D150           ;;$96
+TEMPF2==^D152           ;;$98
+LOWDS==^D153            ;;$99
+LOWTR==^D155            ;;$9B
+ARYPNT==^D148           ;;$94
+GRBTOP==^D155           ;;$9B
+DECCNT==^D153           ;;$99
+TENEXP==^D154           ;;$9A
+DPTFLG==^D155           ;;$9B
+EXPSGN==^D156           ;;$9C
+FAC==^D157              ;;$9D
+FACEXP==^D157           ;;$9D
+FACHO==^D158            ;;$9E
+FACMOH==^D159           ;;$9F
+FACMO==^D160            ;;$A0
+FACLO==^D161            ;;$A1
+FACSGN==^D162           ;;$A2
+SGNFLG==^D163           ;;$A3
+DEGREE==^D163           ;;$A3
+DSCTMP==^D157           ;;$9D
+INDICE==^D160           ;;$A0
+BITS==^D164             ;;$A4
+ARGEXP==^D165           ;;$A5
+ARGHO==^D166            ;;$A6
+ARGMOH==^D167           ;;$A7
+ARGMO==^D168            ;;$A8
+ARGLO==^D169            ;;$A9
+ARGSGN==^D170           ;;$AA
+ARISGN==^D171           ;;$AB
+FACOV==^D172            ;;$AC
+STRNG1==^D171           ;;$AB
+FBUFPT==^D173           ;;$AD
+BUFPTR==^D173           ;;$AD
+STRNG2==^D173           ;;$AD
+POLYPT==^D173           ;;$AD
+CURTOL==^D173           ;;$AD
+CHRGET==^D177           ;;$B1 IN THE CHRGET CODE COPIED TO PAGE ZERO
+CHRGOT==^D183           ;;$B7 IN THE CHRGET CODE COPIED TO PAGE ZERO
+TXTPTR==^D184           ;;$B8
+QNUM==^D190             ;;$BE IN THE CHRGET CODE COPIED TO PAGE ZERO
+CHRRTS==^D200           ;;$C8 IN THE CHRGET CODE COPIED TO PAGE ZERO
+RNDX==^D201             ;;$C9 IN THE CHRGET CODE COPIED TO PAGE ZERO
+LOFBUF==^D255           ;;$FF
+FBUFFR==^D256           ;;$100
+;; APPLE IIE PAGE ZERO (MONITOR AND APPLESOFT), LOCATIONS, SOFT SWITCHES AND MONITOR ENTRY POINTS.
+WNDLFT==^D32            ;;$20 TEXT WINDOW LEFT EDGE
+WNDWDT==^D33            ;;$21 TEXT WINDOW WIDTH
+WNDTOP==^D34            ;;$22 TEXT WINDOW TOP
+WNDBTM==^D35            ;;$23 TEXT WINDOW BOTTOM
+CH==^D36                ;;$24 CURSOR HORIZONTAL POSITION
+CV==^D37                ;;$25 CURSOR VERTICAL POSITION
+GBASL==^D38             ;;$26 LO-RES GRAPHICS BASE ADDRESS
+GBASH==^D39             ;;$27
+BASL==^D40              ;;$28 TEXT BASE ADDRESS
+BASH==^D41              ;;$29
+H2==^D44                ;;$2C LO-RES LINE END
+V2==^D45                ;;$2D LO-RES LINE END
+MASK==^D46              ;;$2E LO-RES COLOR MASK
+LENGTH==^D47            ;;$2F MONITOR TEMPORARY
+COLOR==^D48             ;;$30 LO-RES COLOR
+MODE==^D49              ;;$31 MONITOR MODE
+INVFLG==^D50            ;;$32 NORMAL, INVERSE OR FLASH MASK
+PROMPT==^D51            ;;$33 PROMPT CHARACTER
+YSAV==^D52              ;;$34 MONITOR TEMPORARY
+YSAV1==^D53             ;;$35 MONITOR TEMPORARY
+CSWL==^D54              ;;$36 CHARACTER OUTPUT HOOK
+CSWH==^D55              ;;$37
+KSWL==^D56              ;;$38 CHARACTER INPUT HOOK
+KSWH==^D57              ;;$39
+PCL==^D58               ;;$3A MONITOR PROGRAM COUNTER
+PCH==^D59               ;;$3B
+A1L==^D60               ;;$3C MONITOR ADDRESS ONE
+A1H==^D61               ;;$3D
+A2L==^D62               ;;$3E MONITOR ADDRESS TWO
+A2H==^D63               ;;$3F
+A3L==^D64               ;;$40 MONITOR ADDRESS THREE
+A3H==^D65               ;;$41
+A4L==^D66               ;;$42 MONITOR ADDRESS FOUR
+A4H==^D67               ;;$43
+A5L==^D68               ;;$44 MONITOR ADDRESS FIVE
+A5H==^D69               ;;$45
+XREG==^D70              ;;$46 SAVED X
+YREG==^D71              ;;$47 SAVED Y
+STATUS==^D72            ;;$48 SAVED P
+RNDL==^D78              ;;$4E RANDOM SEED, STIRRED BY KEYIN
+RNDH==^D79              ;;$4F
+SHAPEL==^D26            ;;$1A SHAPE POINTER; HGR CLEAR POINTER
+SHAPEH==^D27            ;;$1B
+HCOLR2==^D28            ;;$1C HI-RES COLOR BYTE BEING DRAWN
+HCOUNT==^D29            ;;$1D HI-RES LINE STEP COUNT
+PRGEND==^D175           ;;$AF END OF THE PROGRAM
+HGRDX==^D208            ;;$D0 HI-RES LINE: X DISTANCE
+HGRDY==^D210            ;;$D2 HI-RES LINE: Y DISTANCE
+HGRQUA==^D211           ;;$D3 HI-RES LINE: QUADRANT
+HGRE==^D212             ;;$D4 HI-RES LINE: ERROR TERM
+LOCK==^D214             ;;$D6 BIT 7: RUN ONLY, NO LISTING OR EDITING
+ERRFLG==^D216           ;;$D8 BIT 7: ONERR GOTO IS ACTIVE
+ERRLIN==^D218           ;;$DA LINE OF THE LAST ERROR
+ERRPOS==^D220           ;;$DC TXTPTR AT THE LAST ERROR
+ERRNUM==^D222           ;;$DE LAST ERROR CODE
+ERRSTK==^D223           ;;$DF STACK POINTER AT THE LAST ERROR
+HGRX==^D224             ;;$E0 HI-RES X
+HGRY==^D226             ;;$E2 HI-RES Y
+HCOLR1==^D228           ;;$E4 HI-RES COLOR BYTE
+HNDX==^D229             ;;$E5 HI-RES BYTE INDEX IN THE ROW
+HPAG==^D230             ;;$E6 HI-RES PAGE: $20 OR $40
+HSCALE==^D231           ;;$E7 SHAPE SCALE
+SHPTBL==^D232           ;;$E8 SHAPE TABLE ADDRESS
+COLCNT==^D234           ;;$EA SHAPE COLLISION COUNT
+FIRST==^D240            ;;$F0 LO-RES PLOT TEMPORARY
+SPEEDZ==^D241           ;;$F1 256 - SPEED
+TRCFLG==^D242           ;;$F2 BIT 7: TRACE
+FLASHB==^D243           ;;$F3 FLASH MASK
+TXTPSV==^D244           ;;$F4 TXTPTR SAVED FOR RESUME
+CURLSV==^D246           ;;$F6 CURLIN SAVED FOR RESUME
+REMSTK==^D248           ;;$F8 STACK POINTER BEFORE EACH STATEMENT
+HROT==^D249             ;;$F9 SHAPE ROTATION
+AMPERV==^D1013          ;$03F5 & STATEMENT VECTOR
+OURCH==^D1403           ;$057B 80-COLUMN FIRMWARE HORIZONTAL POSITION
+KBD==^D49152            ;$C000 KEYBOARD DATA
+SETSLOTCXROM==^D49158           ;$C006 SLOT ROMS AT $C100-$CFFF
+SETINTCXROM==^D49159            ;$C007 INTERNAL ROM AT $C100-$CFFF
+RD80VID==^D49183                ;$C01F BIT 7: 80-COLUMN DISPLAY
+TXTCLR==^D49232         ;$C050 GRAPHICS
+TXTSET==^D49233         ;$C051 TEXT
+MIXCLR==^D49234         ;$C052 FULL SCREEN
+MIXSET==^D49235         ;$C053 MIXED TEXT AND GRAPHICS
+LOWSCR==^D49236         ;$C054 PAGE ONE
+HISCR==^D49237          ;$C055 PAGE TWO
+LORES==^D49238          ;$C056 LO-RES
+HIRES==^D49239          ;$C057 HI-RES
+MPLOT==^D63488          ;$F800 MONITOR PLOT
+HLINE==^D63513          ;$F819 MONITOR
+VLINE==^D63528          ;$F828 MONITOR
+SETCOL==^D63588         ;$F864 MONITOR
+MSCRN==^D63601          ;$F871 MONITOR SCRN
+PREAD==^D64286          ;$FB1E MONITOR PADDLE READ
+SETTXT==^D64313         ;$FB39 MONITOR
+SETGR==^D64320          ;$FB40 MONITOR
+TABV==^D64347           ;$FB5B MONITOR
+HOME==^D64600           ;$FC58 MONITOR
+MWAIT==^D64680          ;$FCA8 MONITOR WAIT
+RD2BIT==^D64762         ;$FCFA MONITOR
+GETLN==^D64874          ;$FD6A MONITOR
+INPORT==^D65163         ;$FE8B MONITOR
+OUTPORT==^D65173                ;$FE95 MONITOR
+MWRITE==^D65229         ;$FECD MONITOR TAPE WRITE
+MREAD==^D65277          ;$FEFD MONITOR TAPE READ
+C5ROM==^D50432          ;$C500 ENHANCED IIE: INTERNAL FIRMWARE AT $C500
+;@END
+;@REPLACE 997-1364
+STMDSP:
+        ADR(END-1)              ;END
+        ADR(FOR-1)              ;FOR
+        ADR(NEXT-1)             ;NEXT
+        ADR(DATA-1)             ;DATA
+        ADR(INPUT-1)            ;INPUT
+        ADR(DEL-1)              ;DEL
+        ADR(DIM-1)              ;DIM
+        ADR(READ-1)             ;READ
+        ADR(GR-1)               ;GR
+        ADR(TEXT-1)             ;TEXT
+        ADR(PRNUM-1)            ;PR#
+        ADR(INNUM-1)            ;IN#
+        ADR(CALL-1)             ;CALL
+        ADR(PLOT-1)             ;PLOT
+        ADR(HLIN-1)             ;HLIN
+        ADR(VLIN-1)             ;VLIN
+        ADR(HGR2-1)             ;HGR2
+        ADR(HGR-1)              ;HGR
+        ADR(HCOLOR-1)           ;HCOLOR=
+        ADR(HPLOT-1)            ;HPLOT
+        ADR(DRAW-1)             ;DRAW
+        ADR(XDRAW-1)            ;XDRAW
+        ADR(HTAB-1)             ;HTAB
+        ADR(HOME-1)             ;HOME
+        ADR(ROT-1)              ;ROT=
+        ADR(SCALE-1)            ;SCALE=
+        ADR(SHLOAD-1)           ;SHLOAD
+        ADR(TRACE-1)            ;TRACE
+        ADR(NOTRACE-1)          ;NOTRACE
+        ADR(NRMSTM-1)           ;NORMAL
+        ADR(INVERS-1)           ;INVERSE
+        ADR(FLASH-1)            ;FLASH
+        ADR(COLSTM-1)           ;COLOR=
+        ADR(POP-1)              ;POP
+        ADR(VTAB-1)             ;VTAB
+        ADR(HIMEM-1)            ;HIMEM:
+        ADR(LOMEM-1)            ;LOMEM:
+        ADR(ONERR-1)            ;ONERR
+        ADR(RESUME-1)           ;RESUME
+        ADR(RECALL-1)           ;RECALL
+        ADR(STORE-1)            ;STORE
+        ADR(SPEED-1)            ;SPEED=
+        ADR(LET-1)              ;LET
+        ADR(GOTO-1)             ;GOTO
+        ADR(RUNSTM-1)           ;RUN
+        ADR(IF-1)               ;IF
+        ADR(RESTOR-1)           ;RESTORE
+        ADR(AMPERV-1)           ;&
+        ADR(GOSUB-1)            ;GOSUB
+        ADR(POP-1)              ;RETURN
+        ADR(REM-1)              ;REM
+        ADR(STOP-1)             ;STOP
+        ADR(ON-1)               ;ON
+        ADR(WAIT-1)             ;WAIT
+        ADR(LOAD-1)             ;LOAD
+        ADR(SAVE-1)             ;SAVE
+        ADR(DEF-1)              ;DEF
+        ADR(POKE-1)             ;POKE
+        ADR(PRINT-1)            ;PRINT
+        ADR(CONT-1)             ;CONT
+        ADR(LIST-1)             ;LIST
+        ADR(CLEAR-1)            ;CLEAR
+        ADR(GET-1)              ;GET
+        ADR(NEW-1)              ;NEW
+FUNDSP:
+        ADR(SGN)                ;SGN
+        ADR(INT)                ;INT
+        ADR(ABS)                ;ABS
+        ADR(USRPOK)             ;USR
+        ADR(FRE)                ;FRE
+        ADR(ERROR)              ;SCRN(
+        ADR(PDL)                ;PDL
+        ADR(POS)                ;POS
+        ADR(SQR)                ;SQR
+        ADR(RND)                ;RND
+        ADR(LOG)                ;LOG
+        ADR(EXP)                ;EXP
+        ADR(COS)                ;COS
+        ADR(SIN)                ;SIN
+        ADR(TAN)                ;TAN
+        ADR(ATN)                ;ATN
+        ADR(PEEK)               ;PEEK
+        ADR(LEN)                ;LEN
+        ADR(STR)                ;STR$
+        ADR(VAL)                ;VAL
+        ADR(ASC)                ;ASC
+        ADR(CHR)                ;CHR$
+        ADR(LEFT)               ;LEFT$
+        ADR(RIGHT)              ;RIGHT$
+        ADR(MID)                ;MID$
+OPTAB:  ^D121           ;+ PRECEDENCE.
+        ADR(FADDT-1)
+        ^D121           ;- PRECEDENCE.
+        ADR(FSUBT-1)
+        ^D123           ;* PRECEDENCE.
+        ADR(FMULTT-1)
+        ^D123           ;/ PRECEDENCE.
+        ADR(FDIVT-1)
+        ^D125           ;^ PRECEDENCE.
+        ADR(FPWRT-1)
+        ^D80            ;AND PRECEDENCE.
+        ADR(OROP1-1)
+        ^D70            ;OR PRECEDENCE.
+        ADR(OROP-1)
+NEGTAB: ^D127           ;NEGATE PRECEDENCE.
+        ADR(NEGOP-1)
+NOTTAB: ^D127           ;NOT PRECEDENCE.
+        ADR(NOTOP-1)
+PTDORL: ^D100           ;RELATIONAL PRECEDENCE.
+        ADR(DOREL-1)
+Q=128-1
+DEFINE  DCI(A),<Q=Q+1
+        DC(A)>
+RESLST:
+        DCI"END"
+        ENDTK==Q
+        DCI"FOR"
+        FORTK==Q
+        DCI"NEXT"
+        DCI"DATA"
+        DATATK==Q
+        DCI"INPUT"
+        DCI"DEL"
+        DCI"DIM"
+        DCI"READ"
+        DCI"GR"
+        DCI"TEXT"
+        DCI"PR#"
+        DCI"IN#"
+        DCI"CALL"
+        DCI"PLOT"
+        DCI"HLIN"
+        DCI"VLIN"
+        DCI"HGR2"
+        DCI"HGR"
+        DCI"HCOLOR="
+        DCI"HPLOT"
+        DCI"DRAW"
+        DCI"XDRAW"
+        DCI"HTAB"
+        DCI"HOME"
+        DCI"ROT="
+        DCI"SCALE="
+        DCI"SHLOAD"
+        DCI"TRACE"
+        DCI"NOTRACE"
+        DCI"NORMAL"
+        DCI"INVERSE"
+        DCI"FLASH"
+        DCI"COLOR="
+        DCI"POP"
+        POPTK==Q
+        DCI"VTAB"
+        DCI"HIMEM:"
+        DCI"LOMEM:"
+        DCI"ONERR"
+        DCI"RESUME"
+        DCI"RECALL"
+        DCI"STORE"
+        DCI"SPEED="
+        DCI"LET"
+        DCI"GOTO"
+        GOTOTK==Q
+        DCI"RUN"
+        DCI"IF"
+        DCI"RESTORE"
+        DCI"&"
+        DCI"GOSUB"
+        GOSUTK==Q
+        DCI"RETURN"
+        DCI"REM"
+        REMTK==Q
+        DCI"STOP"
+        DCI"ON"
+        DCI"WAIT"
+        DCI"LOAD"
+        DCI"SAVE"
+        DCI"DEF"
+        DCI"POKE"
+        DCI"PRINT"
+        PRINTK==Q
+        DCI"CONT"
+        DCI"LIST"
+        DCI"CLEAR"
+        DCI"GET"
+        DCI"NEW"
+        SCRATK==Q
+        DCI"TAB("
+        TABTK==Q
+        DCI"TO"
+        TOTK==Q
+        DCI"FN"
+        FNTK==Q
+        DCI"SPC("
+        SPCTK==Q
+        DCI"THEN"
+        THENTK==Q
+        DCI"AT"
+        ATTK==Q
+        DCI"NOT"
+        NOTTK==Q
+        DCI"STEP"
+        STEPTK==Q
+        DCI"+"
+        PLUSTK==Q
+        DCI"-"
+        MINUTK==Q
+        DCI"*"
+        DCI"/"
+        DCI"^"
+        DCI"AND"
+        DCI"OR"
+        ^D190                   ;">"
+        Q=Q+1
+        GREATK==Q
+        DCI"="
+        EQULTK==Q
+        ^D188                   ;"<"
+        Q=Q+1
+        LESSTK==Q
+        DCI"SGN"
+        ONEFUN==Q
+        DCI"INT"
+        DCI"ABS"
+        DCI"USR"
+        DCI"FRE"
+        DCI"SCRN("
+        SCRNTK==Q
+        DCI"PDL"
+        DCI"POS"
+        DCI"SQR"
+        DCI"RND"
+        DCI"LOG"
+        DCI"EXP"
+        DCI"COS"
+        DCI"SIN"
+        DCI"TAN"
+        DCI"ATN"
+        DCI"PEEK"
+        DCI"LEN"
+        DCI"STR$"
+        DCI"VAL"
+        DCI"ASC"
+        DCI"CHR$"
+        LASNUM==Q
+        DCI"LEFT$"
+        DCI"RIGHT$"
+        DCI"MID$"
+        0                       ;MARKS END OF RESERVED WORD LIST
+Q=0
+ERRTAB: DC"NEXT WITHOUT FOR"
+        ERRNF==Q
+        Q=Q+16.
+        DC"SYNTAX"
+        ERRSN==Q
+        Q=Q+6.
+        DC"RETURN WITHOUT GOSUB"
+        ERRRG==Q
+        Q=Q+20.
+        DC"OUT OF DATA"
+        ERROD==Q
+        Q=Q+11.
+        DC"ILLEGAL QUANTITY"
+        ERRFC==Q
+        Q=Q+16.
+        DC"OVERFLOW"
+        ERROV==Q
+        Q=Q+8.
+        DC"OUT OF MEMORY"
+        ERROM==Q
+        Q=Q+13.
+        DC"UNDEF'D STATEMENT"
+        ERRUS==Q
+        Q=Q+17.
+        DC"BAD SUBSCRIPT"
+        ERRBS==Q
+        Q=Q+13.
+        DC"REDIM'D ARRAY"
+        ERRDD==Q
+        Q=Q+13.
+        DC"DIVISION BY ZERO"
+        ERRDV0==Q
+        Q=Q+16.
+        DC"ILLEGAL DIRECT"
+        ERRID==Q
+        Q=Q+14.
+        DC"TYPE MISMATCH"
+        ERRTM==Q
+        Q=Q+13.
+        DC"STRING TOO LONG"
+        ERRLS==Q
+        Q=Q+15.
+        DC"FORMULA TOO COMPLEX"
+        ERRST==Q
+        Q=Q+19.
+        DC"CAN'T CONTINUE"
+        ERRCN==Q
+        Q=Q+14.
+        DC"UNDEF'D FUNCTION"
+        ERRUF==Q
+ERR:    DT" ERROR"
+        7                       ;BELL.
+        0
+INTXT:  DT" IN "
+        0
+BRKTXT: 13
+        DT"BREAK"
+        7
+        0
+REDDY==0
+GOTK==^D255
+;@END
+;@REPLACE 1473-1473
+; APPLE: $D3D7-$D3D8 REPLACES BASE LINES 1473-1473
+        ADCI    ^D54            ;$D3D7 2*NUMLEV+<3*ADDPRC>+13 WITH 19 LEVELS, NOT NUMLEV
+;@END
+;@REPLACE 1518-1527
+; APPLE: $D412-$D41E REPLACES BASE LINES 1518-1527
+        BIT     ERRFLG          ;$D412
+        BPL     ERROR1          ;$D414
+        JMP     HANDLERR                ;$D416 $F2E9
+ERROR1:
+        JSR     CRDO            ;$D419 $DAFB
+        JSR     OUTQST          ;$D41C $DB5A
+;@END
+;@REPLACE 1536-1537
+; APPLE: $D423-$D425 REPLACES BASE LINES 1536-1537
+        JSR     OUTDO           ;$D423 $DB5C
+;@END
+;@REPLACE 1549-1556
+;; APPLE: $D43C-$D443 REPLACES BASE LINES 1549-1556
+MAIN:
+        JSR     CRDO            ;$D43C $DAFB
+        LDXI    "]"+128         ;$D43F THE PROMPT CHARACTER
+        JSR     INLIN1          ;$D441 $D52E
+;@END
+;@INSERT BEFORE 1558
+; APPLE: $D448-$D449 ADDED
+        LSR     ERRFLG          ;$D448
+;@END
+;@REPLACE 1561-1561
+; APPLE: $D44E-$D44F REPLACES BASE LINES 1561-1561
+        BEQ     MAIN            ;$D44E
+;@END
+;@REPLACE 1564-1564
+; APPLE: $D454-$D455 REPLACES BASE LINES 1564-1564
+        BCC     READY1          ;$D454
+;@END
+;@REPLACE 1566-1566
+; APPLE: $D459-$D463 REPLACES BASE LINES 1566-1566
+        JMP     TRCLIN          ;$D459 $D805
+READY1:
+        LDX     PRGEND          ;$D45C
+        STX     VARTAB          ;$D45E
+        LDX     PRGEND+1                ;$D460
+        STX     VARTAB+1                ;$D462
+;@END
+;@REPLACE 1611-1613
+;; APPLE: $D4B5-$D4B4 REPLACES BASE LINES 1611-1613
+NODEL:
+;@END
+;@REPLACE 1615-1616
+; APPLE: $D4B8-$D4C1 REPLACES BASE LINES 1615-1616
+        BEQ     FINI            ;$D4B8
+        LDWD    MEMSIZ          ;$D4BA
+        STA     FRETOP          ;$D4BE
+        STY     NCMWID          ;$D4C0
+;@END
+;@INSERT BEFORE 1633
+;; APPLE: $D4EA-$D4EC ADDED
+NODEL1:
+        LDA     BUF-5,Y         ;$D4EA $01FB
+;@END
+;@REPLACE 1634-1634
+; APPLE: $D4EE-$D4ED REPLACES BASE LINES 1634-1634
+;@END
+;@REPLACE 1636-1637
+; APPLE: $D4F0-$D4F1 REPLACES BASE LINES 1636-1637
+        BNE     NODEL1          ;$D4F0
+;@END
+;@REPLACE 1640-1641
+; APPLE: $D4F5-$D4F4 REPLACES BASE LINES 1640-1641
+;@END
+;@REPLACE 1653-1653
+; APPLE: $D502-$D50E REPLACES BASE LINES 1653-1653
+        BNE     CHEAD1          ;$D502
+        LDA     VARTAB          ;$D504
+        STA     PRGEND          ;$D506
+        LDA     VARTAB+1                ;$D508
+        STA     PRGEND+1                ;$D50A
+        JMP     MAIN            ;$D50C $D43C
+CHEAD1:
+;@END
+;@REPLACE 1671-1671
+; APPLE: $D52C-$D52B REPLACES BASE LINES 1671-1671
+;@END
+;@INSERT BEFORE 1683
+INLIN1:
+;@END
+;@REPLACE 1684-1684
+; APPLE: $D530-$D532 REPLACES BASE LINES 1684-1684
+        JSR     GETLN           ;$D530 $FD6A
+;@END
+;@REPLACE 1686-1686
+; APPLE: $D535-$D536 REPLACES BASE LINES 1686-1686
+        BCC     GDBUFS          ;$D535
+;@END
+;@REPLACE 1761-1769
+; APPLE: $D558-$D557 REPLACES BASE LINES 1761-1769
+;@END
+;@INSERT BEFORE 1786
+; APPLE: $D55B-$D55B ADDED
+        DEX             ;$D55B
+;@END
+;@REPLACE 1788-1788
+; APPLE: $D560-$D573 REPLACES BASE LINES 1788-1788
+        BIT     LOCK            ;$D560
+        BPL     CRUNC1          ;$D562
+        PLA             ;$D564
+        PLA             ;$D565
+        JSR     RUNC            ;$D566 $D665
+        JMP     NXTCO1          ;$D569 $D7D2
+CRUNC1:
+        INX             ;$D56C
+KLOOP:
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     UPCASE          ;$D56D $F78C
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     BUF,X           ;$D56D $0200
+>
+        BIT     DORES           ;$D570
+        BVS     CMPSP1          ;$D572
+;@END
+;@REPLACE 1796-1796
+; APPLE: $D576-$D577 REPLACES BASE LINES 1796-1796
+        BEQ     CRUNC1          ;$D576
+CMPSP1:
+;@END
+;@REPLACE 1801-1801
+; APPLE: $D57E-$D57D REPLACES BASE LINES 1801-1801
+;@END
+;@INSERT BEFORE 1812
+; APPLE: $D592-$D599 ADDED
+        LDAI    <<RESLST-^D256>&^O377>          ;$D592 (FAC),Y WALKS RESLST; Y STARTS AT 255
+        STA     FAC             ;$D594
+        LDAI    <<RESLST-^D256>/^O400>          ;$D596
+        STA     FACHO           ;$D598
+;@END
+;@INSERT BEFORE 1818
+; APPLE: $D5A3-$D5A6 ADDED
+        BNE     RESPUL          ;$D5A3
+        INC     FACHO           ;$D5A5
+;@END
+;@REPLACE 1819-1819
+; APPLE: $D5A8-$D5AE REPLACES BASE LINES 1819-1819
+IFN     ENHNCD,<                ;ENHANCED IIE
+RESPU1:
+        JSR     UPCASE          ;$D5A8 $F78C
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+RESPU1:
+        LDA     BUF,X           ;$D5A8 $0200
+>
+        CMPI    " "             ;$D5AB SKIP SPACES.
+        BEQ     RESPUL          ;$D5AD
+;@END
+;@REPLACE 1821-1821
+; APPLE: $D5B0-$D5B1 REPLACES BASE LINES 1821-1821
+        SBCDY   FAC             ;$D5B0
+;@END
+;@INSERT BEFORE 1826
+; APPLE: $D5BA-$D5CA ADDED
+        CMPI    ATTK            ;$D5BA AN "AT"?
+        BNE     GETBPT          ;$D5BC
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     UPNXT           ;$D5BE $F787
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     BUF+1,X         ;$D5BE $0201
+>
+        CMPI    "N"             ;$D5C1 NOT IF "ATN"
+        BEQ     NTHIS           ;$D5C3
+        CMPI    "O"             ;$D5C5 NOR IF "A TO"
+        BEQ     NTHIS           ;$D5C7
+        LDAI    ATTK            ;$D5C9
+;@END
+;@REPLACE 1840-1840
+; APPLE: $D5E5-$D5E6 REPLACES BASE LINES 1840-1840
+        BNE     KLOOP           ;$D5E5
+;@END
+;@REPLACE 1842-1842
+;; APPLE: $D5E9-$D5EB REPLACES BASE LINES 1842-1842
+STR1:
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     UPCASE          ;$D5E9 $F78C
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     BUF,X           ;$D5E9 $0200
+>
+;@END
+;@INSERT BEFORE 1852
+;; APPLE: $D5FD-$D5FE ADDED
+NTHIS2:
+        LDADY   FAC             ;$D5FD
+;@END
+;@REPLACE 1853-1857
+; APPLE: $D600-$D60D REPLACES BASE LINES 1853-1857
+        BNE     NTHIS3          ;$D600
+        INC     FACHO           ;$D602
+NTHIS3:
+        ASL     A               ;$D604
+        BCC     NTHIS2          ;$D605
+        LDADY   FAC             ;$D607
+        BNE     RESPU1          ;$D609
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     UPBUF           ;$D60B $F79A
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     BUF,X           ;$D60B $0200
+>
+;@END
+;@INSERT BEFORE 1909
+NEW:
+;@END
+;@INSERT BEFORE 1911
+; APPLE: $D64D-$D64E ADDED
+        STA     LOCK            ;$D64D
+;@END
+;@REPLACE 1916-1916
+; APPLE: $D657-$D656 REPLACES BASE LINES 1916-1916
+;@END
+;@REPLACE 1918-1918
+; APPLE: $D659-$D65C REPLACES BASE LINES 1918-1918
+        STA     VARTAB          ;$D659
+        STA     PRGEND          ;$D65B
+;@END
+;@REPLACE 1921-1921
+; APPLE: $D661-$D664 REPLACES BASE LINES 1921-1921
+        STA     VARTAB+1                ;$D661
+        STA     PRGEND+1                ;$D663
+;@END
+;@REPLACE 1954-1954
+; APPLE: $D68A-$D68B REPLACES BASE LINES 1954-1954
+        LDXI    ^D248           ;$D68A
+;@END
+;@INSERT BEFORE 1978
+; APPLE: $D6AB-$D6AE ADDED
+        BEQ     GOLST           ;$D6AB
+        CMPI    ^D44            ;$D6AD A COMMA?
+;@END
+;@REPLACE 1982-1983
+; APPLE: $D6BA-$D6C1 REPLACES BASE LINES 1982-1983
+        BEQ     LSTEND          ;$D6BA
+        CMPI    MINUTK          ;$D6BC A "-" (LIST A-B)?
+        BEQ     GOLST1          ;$D6BE
+        CMPI    ^D44            ;$D6C0 A COMMA?
+;@END
+;@INSERT BEFORE 1985
+GOLST1:
+;@END
+;@REPLACE 1987-1987
+; APPLE: $D6CA-$D6CB REPLACES BASE LINES 1987-1987
+        BNE     STKRTS          ;$D6CA
+;@END
+;@REPLACE 2000-2000
+; APPLE: $D6DE-$D6DF REPLACES BASE LINES 2000-2000
+        BEQ     GRODY           ;$D6DE
+;@END
+;@REPLACE 2003-2003
+; APPLE: $D6E3-$D6E5 REPLACES BASE LINES 2003-2003
+        JSR     CRDO            ;$D6E3 $DAFB
+;@END
+;@REPLACE 2013-2013
+;; APPLE: $D6F5-$D6F6 REPLACES BASE LINES 2013-2013
+TSTDUN:
+        BCS     GRODY           ;$D6F5
+;@END
+;@REPLACE 2015-2015
+; APPLE: $D6F9-$D6FB REPLACES BASE LINES 2015-2015
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     SPCLIN          ;$D6F9 $F7AA
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        JSR     LINPRT          ;$D6F9 $ED24
+>
+;@END
+;@REPLACE 2019-2019
+;; APPLE: $D702-$D711 REPLACES BASE LINES 2019-2019
+PLOOP:
+        JSR     OUTDO           ;$D702 $DB5C
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     CHKCOL          ;$D705 $F7B4
+        NOP             ;$D708
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     TRMPOS          ;$D705
+        CMPI    ^D33            ;$D707
+>
+        BCC     PLOOP1          ;$D709
+        JSR     CRDO            ;$D70B $DAFB
+        LDAI    ^D5             ;$D70E
+        STA     TRMPOS          ;$D710
+;@END
+;@REPLACE 2025-2025
+; APPLE: $D713-$D712 REPLACES BASE LINES 2025-2025
+;@END
+;@REPLACE 2039-2039
+;; APPLE: $D724-$D733 REPLACES BASE LINES 2039-2039
+GRODY:
+        LDAI    ^D13            ;$D724 CARRIAGE RETURN.
+        JSR     OUTDO           ;$D726 $DB5C
+        JMP     NXTCO1          ;$D729 $D7D2
+GRODY1:
+        INY             ;$D72C
+        BNE     GRODY2          ;$D72D
+        INC     FACHO           ;$D72F
+GRODY2:
+        LDADY   FAC             ;$D731
+        RTS             ;$D733
+;@END
+;@REPLACE 2051-2051
+; APPLE: $D73C-$D745 REPLACES BASE LINES 2051-2051
+        LDYI    <<RESLST-^D256>&^O377>          ;$D73C (FAC),Y WALKS RESLST; Y STARTS AT 255
+        STY     FAC             ;$D73E
+        LDYI    <<RESLST-^D256>/^O400>          ;$D740
+        STY     FACHO           ;$D742
+        LDYI    ^D255           ;$D744
+;@END
+;@REPLACE 2054-2055
+;; APPLE: $D749-$D74B REPLACES BASE LINES 2054-2055
+RESCR1:
+        JSR     GRODY1          ;$D749 $D72C
+;@END
+;@REPLACE 2058-2062
+;; APPLE: $D750-$D765 REPLACES BASE LINES 2058-2062
+PRIT3:
+        LDAI    " "             ;$D750
+        JSR     OUTDO           ;$D752 $DB5C
+PRIT31:
+        JSR     GRODY1          ;$D755 $D72C
+        BMI     PRIT32          ;$D758
+        JSR     OUTDO           ;$D75A $DB5C
+        BNE     PRIT31          ;$D75D
+PRIT32:
+        JSR     OUTDO           ;$D75F $DB5C
+        LDAI    " "             ;$D762
+        BNE     PRIT4           ;$D764
+;@END
+;@REPLACE 2117-2117
+;; APPLE: $D7AF-$D7B2 REPLACES BASE LINES 2117-2117
+LDFONE:
+        LDWDI   FONE            ;$D7AF
+;@END
+;@INSERT BEFORE 2129
+;; APPLE: $D7D2-$D7D4 ADDED
+NXTCO1:
+        TSX             ;$D7D2
+        STX     REMSTK          ;$D7D3
+;@END
+;@REPLACE 2141-2142
+; APPLE: $D7DC-$D7DE REPLACES BASE LINES 2141-2142
+        LDX     CURLIN+1                ;$D7DC
+        INX             ;$D7DE
+;@END
+;@REPLACE 2153-2153
+; APPLE: $D7F0-$D7F1 REPLACES BASE LINES 2153-2153
+        BEQ     GONE1           ;$D7F0
+;@END
+;@REPLACE 2163-2163
+; APPLE: $D801-$D802 REPLACES BASE LINES 2163-2163
+        BCC     TRCLIN          ;$D801
+;@END
+;@INSERT BEFORE 2165
+;; APPLE: $D805-$D81C ADDED
+TRCLIN:
+        BIT     TRCFLG          ;$D805
+        BPL     GONE            ;$D807
+        LDX     CURLIN+1                ;$D809
+        INX             ;$D80B
+        BEQ     GONE            ;$D80C
+        LDAI    "#"             ;$D80E TRACE PRINTS #LINE.
+        JSR     OUTDO           ;$D810 $DB5C
+        LDX     CURLIN          ;$D813
+        LDA     CURLIN+1                ;$D815
+        JSR     LINPRT          ;$D817 $ED24
+        JSR     OUTSPC          ;$D81A $DB57
+;@END
+;@REPLACE 2167-2167
+; APPLE: $D823-$D827 REPLACES BASE LINES 2167-2167
+        JMP     NXTCO1          ;$D823 $D7D2
+GONE1:
+        BEQ     ENDCON          ;$D826
+;@END
+;@REPLACE 2175-2175
+; APPLE: $D830-$D831 REPLACES BASE LINES 2175-2175
+        BCS     SNERR1          ;$D830
+;@END
+;@REPLACE 2186-2186
+; APPLE: $D844-$D845 REPLACES BASE LINES 2186-2186
+        BEQ     TRCLIN          ;$D844
+;@END
+;@REPLACE 2188-2192
+; APPLE: $D849-$D848 REPLACES BASE LINES 2188-2192
+;@END
+;@REPLACE 2220-2226
+;; APPLE: $D858-$D86D REPLACES BASE LINES 2220-2226
+ISCNTC:
+        LDA     KBD             ;$D858 $C000
+        CMPI    ^D131           ;$D85B CTRL-C (HIGH BIT SET)?
+        BEQ     ISCCAP          ;$D85D
+        RTS             ;$D85F
+ISCCAP:
+        JSR     INCHR           ;$D860 $D553
+ISCCA1:
+        LDXI    ^D255           ;$D863 ERROR CODE 255: CTRL-C.
+        BIT     ERRFLG          ;$D865
+        BPL     ISCCA2          ;$D867
+        JMP     HANDLERR                ;$D869 $F2E9
+ISCCA2:
+        CMPI    ^D3             ;$D86C CTRL-C?
+;@END
+;@REPLACE 2243-2245
+; APPLE: $D88E-$D88D REPLACES BASE LINES 2243-2245
+;@END
+;@REPLACE 2325-2325
+; APPLE: $D8B1-$D8B2 REPLACES BASE LINES 2325-2325
+        LDA     PRGEND          ;$D8B1
+;@END
+;@REPLACE 2328-2328
+; APPLE: $D8B7-$D8B8 REPLACES BASE LINES 2328-2328
+        LDA     PRGEND+1                ;$D8B7
+;@END
+;@INSERT BEFORE 2345
+; APPLE: $D8DC-$D8DF ADDED
+        LDA     TEMPPT          ;$D8DC
+        STA     LOCK            ;$D8DE
+;@END
+;@REPLACE 2347-2348
+; APPLE: $D8E6-$D8EC REPLACES BASE LINES 2347-2348
+        BIT     LOCK            ;$D8E6
+        BPL     LOAD1           ;$D8E8
+        JMP     RUNC            ;$D8EA $D665
+LOAD1:
+;@END
+;@REPLACE 2351-2352
+; APPLE: $D8F0-$D8EF REPLACES BASE LINES 2351-2352
+;@END
+;@REPLACE 2357-2357
+; APPLE: $D8FA-$D8FF REPLACES BASE LINES 2357-2357
+        STA     A2L             ;$D8FA
+        STY     A2H             ;$D8FC
+        STY     LOCK            ;$D8FE
+;@END
+;@INSERT BEFORE 2364
+;; APPLE: $D912-$D915 ADDED
+RUNSTM:
+        PHP             ;$D912
+        DEC     CURLIN+1                ;$D913
+        PLP             ;$D915
+;@END
+;@REPLACE 2389-2389
+; APPLE: $D93B-$D93D REPLACES BASE LINES 2389-2389
+        JMP     NXTCO1          ;$D93B $D7D2
+;@END
+;@INSERT BEFORE 2417
+POP:
+;@END
+;@REPLACE 2419-2419
+; APPLE: $D96F-$D970 REPLACES BASE LINES 2419-2419
+        STA     FORPNT          ;$D96F
+;@END
+;@REPLACE 2431-2431
+; APPLE: $D985-$D98E REPLACES BASE LINES 2431-2431
+        PLA             ;$D985
+        CPYI    2*<POPTK-ENDTK>         ;$D986 POP? (Y IS STILL THE STATEMENT DISPATCH INDEX)
+        BEQ     REMER1          ;$D988
+        STA     CURLIN          ;$D98A
+        PLA             ;$D98C
+        STA     CURLIN+1                ;$D98D
+;@END
+;@INSERT BEFORE 2463
+;; APPLE: $D9C5-$D9C8 ADDED
+REMER1:
+        PLA             ;$D9C5
+        PLA             ;$D9C6
+        PLA             ;$D9C7
+        RTS             ;$D9C8
+;@END
+;@INSERT BEFORE 2480
+ON:
+;@END
+;@REPLACE 2669-2675
+;; APPLE: $DAD5-$DADE REPLACES BASE LINES 2669-2675
+PRINT:
+        BEQ     CRDO            ;$DAD5
+PRINTC:
+        BEQ     PRTRTS          ;$DAD7
+        CMPI    TABTK           ;$DAD9
+IFN     ENHNCD,<                ;ENHANCED IIE
+        BEQ     TABER           ;$DADB
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        BEQ     LINCH1          ;$DADB
+>
+        CMPI    SPCTK           ;$DADD
+;@END
+;@REPLACE 2677-2677
+; APPLE: $DAE0-$DAE1 REPLACES BASE LINES 2677-2677
+IFN     ENHNCD,<                ;ENHANCED IIE
+        BEQ     TABER           ;$DAE0
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        BEQ     LINCH1          ;$DAE0
+>
+;@END
+;@REPLACE 2679-2679
+; APPLE: $DAE4-$DAE6 REPLACES BASE LINES 2679-2679
+        CLC             ;$DAE4
+        BEQ     COMPRT          ;$DAE5
+;@END
+;@REPLACE 2687-2768
+;; APPLE: $DAF8-$DB21 REPLACES BASE LINES 2687-2768
+NCMPOS==<<<LINLEN/CLMWID>-1>*CLMWID>    ;;KEPT FROM BASE
+        JMP     STRDON          ;$DAF8 $DACF
+CRDO:
+        LDAI    ^D13            ;$DAFB CARRIAGE RETURN.
+        JSR     OUTDO           ;$DAFD $DB5C
+CRFIN:
+        EORI    ^D255           ;$DB00
+PRTRTS:
+        RTS             ;$DB02
+COMPRT:
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     CHKCOL          ;$DB03 $F7B4
+        BMI     LINCHK          ;$DB06
+        CMPI    ^D24            ;$DB08
+        BCC     LINCHK          ;$DB0A
+        JSR     CRDO            ;$DB0C $DAFB
+        BNE     NOTABR          ;$DB0F
+LINCHK:
+        ADCI    ^D16            ;$DB11
+        ANDI    ^D240           ;$DB13
+        TAX             ;$DB15
+        SEC             ;$DB16
+        BCS     TABER2          ;$DB17
+TABER:
+        PHP             ;$DB19
+        JSR     GTBYTC          ;$DB1A $E6F5
+        CMPI    ^D41            ;$DB1D A RIGHT PARENTHESIS?
+        BNE     SNERR4          ;$DB1F
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        LDA     TRMPOS          ;$DB03
+        CMPI    ^D24            ;$DB05
+        BCC     COMPR1          ;$DB07
+        JSR     CRDO            ;$DB09 $DAFB
+        BNE     NOTABR          ;$DB0C
+COMPR1:
+        ADCI    ^D16            ;$DB0E
+        EXP     ^D41            ;$DB10 AND OPCODE: SKIPS THE NEXT BYTE
+LINCHK:
+        EXP     ^D240           ;$DB11 BEQ OPCODE: SKIPS THE NEXT BYTE
+        EXP     ^D133           ;$DB12 STA OPCODE: SKIPS THE NEXT BYTE
+        SKIP1                   ;$DB13 BIT ZERO PAGE: SKIPS THE NEXT BYTE
+        EXP     ^D144           ;$DB14 BCC OPCODE: SKIPS THE NEXT BYTE
+        EXP     ^D25            ;$DB15 ORA OPCODE: SKIPS THE NEXT TWO BYTES
+LINCH1:
+        PHP             ;$DB16
+        EXP     ^D32            ;$DB17 JSR OPCODE: SKIPS THE NEXT TWO BYTES
+        EXP     ^D245           ;$DB18 SBC OPCODE: SKIPS THE NEXT BYTE
+TABER:
+        EXP     ^D230           ;$DB19 INC OPCODE: SKIPS THE NEXT BYTE
+        EXP     ^D201           ;$DB1A CMP OPCODE: SKIPS THE NEXT BYTE
+        EXP     ^D41            ;$DB1B AND OPCODE: SKIPS THE NEXT BYTE
+        BEQ     TABER1          ;$DB1C
+        JMP     SNERR           ;$DB1E $DEC9
+>
+TABER1:
+        PLP             ;$DB21
+;@END
+;@REPLACE 2770-2771
+; APPLE: $DB24-$DB27 REPLACES BASE LINES 2770-2771
+        DEX             ;$DB24
+IFN     ENHNCD,<                ;ENHANCED IIE
+TABER2:
+        JSR     TRMSET          ;$DB25 $F7C3
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        TXA             ;$DB25
+        SBC     TRMPOS          ;$DB26
+>
+;@END
+;@REPLACE 2778-2778
+; APPLE: $DB32-$DB34 REPLACES BASE LINES 2778-2778
+        JMP     PRINTC          ;$DB32 $DAD7
+;@END
+;@REPLACE 2794-2794
+; APPLE: $DB45-$DB46 REPLACES BASE LINES 2794-2794
+        BEQ     PRTRTS          ;$DB45
+;@END
+;@REPLACE 2796-2796
+; APPLE: $DB49-$DB4B REPLACES BASE LINES 2796-2796
+        JSR     OUTDO           ;$DB49 $DB5C
+;@END
+;@REPLACE 2800-2800
+; APPLE: $DB51-$DB53 REPLACES BASE LINES 2800-2800
+        JSR     CRFIN           ;$DB51 $DB00
+;@END
+;@REPLACE 2816-2838
+; APPLE: $DB59-$DB63 REPLACES BASE LINES 2816-2838
+        SKIP2                   ;$DB59 BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+OUTQST:
+        LDAI    "?"             ;$DB5A
+OUTDO:
+        ORAI    ^D128           ;$DB5C
+        CMPI    " "+128         ;$DB5E A CONTROL CHARACTER?
+        BCC     OUTLOC          ;$DB60
+        ORA     FLASHB          ;$DB62
+TRYOUT:
+;@END
+;@REPLACE 2848-2848
+; APPLE: $DB69-$DB6F REPLACES BASE LINES 2848-2848
+        PHA             ;$DB69
+        LDA     SPEEDZ          ;$DB6A
+        JSR     MWAIT           ;$DB6C $FCA8
+        PLA             ;$DB6F
+;@END
+;@REPLACE 2859-2859
+; APPLE: $DB73-$DB74 REPLACES BASE LINES 2859-2859
+        BEQ     DOAGIN          ;$DB73
+;@END
+;@REPLACE 2867-2874
+;; APPLE: $DB83-$DB93 REPLACES BASE LINES 2867-2874
+SNERR4:
+        JMP     SNERR           ;$DB83 $DEC9
+SNERR6:
+        PLA             ;$DB86
+TRMNO1:
+DOAGIN:
+        BIT     ERRFLG          ;$DB87
+        BPL     TRMNO2          ;$DB89
+        LDXI    ^D254           ;$DB8B ERROR CODE 254: BAD INPUT.
+        JMP     HANDLERR                ;$DB8D $F2E9
+TRMNO2:
+        LDWDI   TRYAGN          ;$DB90
+;@END
+;@REPLACE 2913-2914
+;; APPLE: $DBB2-$DBB1 REPLACES BASE LINES 2913-2914
+INPUT:
+;@END
+;@REPLACE 2916-2916
+; APPLE: $DBB4-$DBB5 REPLACES BASE LINES 2916-2916
+        BNE     INPUT1          ;$DBB4
+;@END
+;@INSERT BEFORE 2920
+; APPLE: $DBC1-$DBC6 ADDED
+        JMP     NOTQTI          ;$DBC1 $DBC7
+INPUT1:
+        JSR     OUTQST          ;$DBC4 $DB5A
+;@END
+;@REPLACE 2924-2924
+;; APPLE: $DBCF-$DBD1 REPLACES BASE LINES 2924-2924
+GETAGN:
+        JSR     INLIN           ;$DBCF $D52C
+;@END
+;@INSERT BEFORE 2935
+; APPLE: $DBD5-$DBD6 ADDED
+        CMPI    ^D3             ;$DBD5 CTRL-C?
+;@END
+;@REPLACE 2939-2946
+; APPLE: $DBD9-$DBDE REPLACES BASE LINES 2939-2946
+        JMP     ISCCA1          ;$DBD9 $D863
+QINLIN:
+        JSR     OUTQST          ;$DBDC $DB5A
+;@END
+;@REPLACE 2949-2955
+; APPLE: $DBE6-$DBEA REPLACES BASE LINES 2949-2955
+        LDAI    ^D152           ;$DBE6 $98 (TYA OPCODE) MAKES INPFLG NONZERO FOR READ.
+        SKIP2                   ;$DBE8 BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+INPCON:
+        LDAI    ^D0             ;$DBE9
+;@END
+;@REPLACE 2994-2995
+; APPLE: $DC21-$DC26 REPLACES BASE LINES 2994-2995
+        JSR     OUTQST          ;$DC21 $DB5A
+GETNTH:
+        JSR     QINLIN          ;$DC24 $DBDC
+;@END
+;@REPLACE 2999-2999
+; APPLE: $DC30-$DC31 REPLACES BASE LINES 2999-2999
+        BPL     NOWGE2          ;$DC30
+;@END
+;@INSERT BEFORE 3025
+;; APPLE: $DC63-$DC69 ADDED
+NOWGE2:
+        PHA             ;$DC63
+        LDA     BUF             ;$DC64 $0200
+        BEQ     TRMOK1          ;$DC67
+NOWGE3:
+        PLA             ;$DC69
+;@END
+;@REPLACE 3041-3042
+; APPLE: $DC93-$DC9F REPLACES BASE LINES 3041-3042
+        JSR     CHKCOM          ;$DC93 $DEBE
+        JMP     INLOOP          ;$DC96 $DBF1
+TRMOK1:
+        LDA     INPFLG          ;$DC99
+        BNE     NOWGE3          ;$DC9B
+        JMP     SNERR6          ;$DC9D $DB86
+;@END
+;@REPLACE 3084-3084
+; APPLE: $DCD7-$DCDA REPLACES BASE LINES 3084-3084
+        LDWDI   EXIGNT          ;$DCD7
+;@END
+;@REPLACE 3087-3110
+;; APPLE: $DCDF-$DCFA REPLACES BASE LINES 3087-3110
+EXIGNT:
+        DT"?EXTRA IGNORED"              ;$DCDF
+        EXP     ^D13,^D0                ;$DCED
+TRYAGN: DT"?REENTER"            ;$DCEF
+        EXP     ^D13,^D0                ;$DCF7
+NEXT:
+        BNE     GETFOR          ;$DCF9
+;@END
+;@INSERT BEFORE 3120
+; APPLE: $DD10-$DD13 ADDED
+        INX             ;$DD10
+        INX             ;$DD11
+        INX             ;$DD12
+        INX             ;$DD13
+;@END
+;@REPLACE 3121-3126
+; APPLE: $DD15-$DD1C REPLACES BASE LINES 3121-3126
+        INX             ;$DD15
+        INX             ;$DD16
+        INX             ;$DD17
+        INX             ;$DD18
+        INX             ;$DD19
+        INX             ;$DD1A
+        STX     INDEX2          ;$DD1B
+;@END
+;@REPLACE 3151-3151
+;; APPLE: $DD52-$DD54 REPLACES BASE LINES 3151-3151
+NEWSGO:
+        JMP     NXTCO1          ;$DD52 $D7D2
+;@END
+;@REPLACE 3171-3172
+; APPLE: $DD6B-$DD6C REPLACES BASE LINES 3171-3172
+        SKIP1                   ;$DD6B BIT ZERO PAGE: SKIPS THE NEXT BYTE
+CHKSTR:
+        SEC             ;$DD6C
+;@END
+;@REPLACE 3200-3201
+; APPLE: $DD85-$DD86 REPLACES BASE LINES 3200-3201
+        SKIP1                   ;$DD85 BIT ZERO PAGE: SKIPS THE NEXT BYTE
+LPOPER:
+        PHA             ;$DD86
+;@END
+;@REPLACE 3211-3211
+; APPLE: $DD99-$DD9A REPLACES BASE LINES 3211-3211
+        SBCI    GREATK          ;$DD99
+;@END
+;@REPLACE 3227-3227
+; APPLE: $DDBA-$DDBB REPLACES BASE LINES 3227-3227
+        ADCI    GREATK-PLUSTK           ;$DDBA
+;@END
+;@REPLACE 3268-3268
+; APPLE: $DE0A-$DE0C REPLACES BASE LINES 3268-3268
+        JMP     LPOPER          ;$DE0A $DD86
+;@END
+;@REPLACE 3358-3364
+;; APPLE: $DE98-$DEA3 REPLACES BASE LINES 3358-3364
+NOTOP:
+        LDA     FAC             ;$DE98
+        BNE     NOTOP1          ;$DE9A
+        LDYI    ^D1             ;$DE9C
+        SKIP2                   ;$DE9E BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+NOTOP1:
+        LDYI    ^D0             ;$DE9F
+        JMP     SNGFLT          ;$DEA1 $E301
+;@END
+;@REPLACE 3369-3372
+; APPLE: $DEAD-$DEB4 REPLACES BASE LINES 3369-3372
+        BCC     PARCHK          ;$DEAD
+        JMP     QSTAT2          ;$DEAF $DF0C
+PARCHK:
+        JSR     CHKOPN          ;$DEB2 $DEBB
+;@END
+;@REPLACE 3376-3379
+; APPLE: $DEBA-$DEBF REPLACES BASE LINES 3376-3379
+        SKIP2                   ;$DEBA BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+CHKOPN:
+        LDAI    ^D40            ;$DEBB A LEFT PARENTHESIS.
+        SKIP2                   ;$DEBD BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+CHKCOM:
+        LDAI    ^D44            ;$DEBE A COMMA.
+;@END
+;@INSERT BEFORE 3466
+;; APPLE: $DEF9-$DF0F ADDED
+QSTAT1:
+        JSR     CHRGET          ;$DEF9 $00B1
+        JSR     PLOTFNS         ;$DEFC $F1EC
+        TXA             ;$DEFF
+        LDY     FIRST           ;$DF00
+        JSR     MSCRN           ;$DF02 $F871
+        TAY             ;$DF05
+        JSR     SNGFLT          ;$DF06 $E301
+        JMP     CHKCLS          ;$DF09 $DEB8
+QSTAT2:
+        CMPI    SCRNTK          ;$DF0C
+        BEQ     QSTAT1          ;$DF0E
+;@END
+;@REPLACE 3491-3491
+; APPLE: $DF1A-$DF1C REPLACES BASE LINES 3491-3491
+        JSR     CHKOPN          ;$DF1A $DEBB
+;@END
+;@REPLACE 3493-3494
+; APPLE: $DF20-$DF25 REPLACES BASE LINES 3493-3494
+        JSR     CHKCOM          ;$DF20 $DEBE
+        JSR     CHKSTR          ;$DF23 $DD6C
+;@END
+;@REPLACE 3507-3507
+;; APPLE: $DF3A-$DF3C REPLACES BASE LINES 3507-3507
+OKNORM:
+        JSR     PARCHK          ;$DF3A $DEB2
+;@END
+;@REPLACE 3518-3540
+;; APPLE: $DF4F-$DF64 REPLACES BASE LINES 3518-3540
+OROP:
+ANDOP:
+        LDA     ARGEXP          ;$DF4F
+        ORA     FAC             ;$DF51
+        BNE     OROP12          ;$DF53
+OROP1:
+        LDA     ARGEXP          ;$DF55
+        BEQ     OROP11          ;$DF57
+        LDA     FAC             ;$DF59
+        BNE     OROP12          ;$DF5B
+OROP11:
+        LDYI    ^D0             ;$DF5D
+        SKIP2                   ;$DF5F BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+OROP12:
+        LDYI    ^D1             ;$DF60
+        JMP     SNGFLT          ;$DF62 $E301
+;@END
+;@REPLACE 3595-3595
+; APPLE: $DFC8-$DFC9 REPLACES BASE LINES 3595-3595
+        LDAI    ^D1             ;$DFC8 TRUE IS 1.
+;@END
+;@REPLACE 3612-3612
+;; APPLE: $DFCD-$DFD8 REPLACES BASE LINES 3612-3612
+PDL:
+        JSR     CONINT          ;$DFCD $E6FB
+        JSR     PREAD           ;$DFD0 $FB1E
+        JMP     SNGFLT          ;$DFD3 $E301
+DIM3:
+        JSR     CHKCOM          ;$DFD6 $DEBE
+;@END
+;@REPLACE 3617-3617
+; APPLE: $DFE0-$DFE1 REPLACES BASE LINES 3617-3617
+        BNE     DIM3            ;$DFE0
+;@END
+;@REPLACE 3639-3639
+; APPLE: $DFFD-$E009 REPLACES BASE LINES 3639-3639
+        JMP     PTRGT4          ;$DFFD $E007
+        JMP     INIT            ;$E000 $F128
+        JMP     MAIN            ;$E003 $D43C
+IFN     ENHNCD,<                ;ENHANCED IIE
+        EXP     ^D196           ;$E006
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        EXP     ^D0             ;$E006
+>
+PTRGT4:
+        JSR     CHRGET          ;$E007 $00B1
+;@END
+;@REPLACE 3657-3657
+; APPLE: $E02C-$E02D REPLACES BASE LINES 3657-3657
+        BMI     INTERR          ;$E02C
+;@END
+;@REPLACE 3672-3672
+; APPLE: $E044-$E04E REPLACES BASE LINES 3672-3672
+        BNE     STRNA2          ;$E044
+STRNA1:
+        JMP     QINTG1          ;$E046 $E11E
+STRNA2:
+        BIT     SUBFLG          ;$E049
+        BMI     STRNA3          ;$E04B
+        BVS     STRNA1          ;$E04D
+STRNA3:
+;@END
+;@REPLACE 3711-3711
+; APPLE: $E089-$E08A REPLACES BASE LINES 3711-3711
+        CMPI    <<ISVRET-1>&^O377>              ;$E089 IS EVAL CALLING?
+;@END
+;@REPLACE 3718-3718
+;; APPLE: $E095-$E098 REPLACES BASE LINES 3718-3718
+LDZR:
+        LDWDI   SIMZER          ;$E095 THE SIMULATED ZERO.
+;@END
+;@INSERT BEFORE 3720
+;; APPLE: $E09A-$E09B ADDED
+SIMZER: EXP     ^D0,^D0         ;$E09A ZERO FOR LDZR
+;@END
+;@INSERT BEFORE 3782
+FMAPT1:
+;@END
+;@REPLACE 3791-3801
+;; APPLE: $E0FE-$E107 REPLACES BASE LINES 3791-3801
+N32768: EXP     ^D144,^D128,^D0,^D0             ;$E0FE -32768.
+INTIDX:
+        JSR     CHRGET          ;$E102 $00B1
+        JSR     FRMNUM          ;$E105 $DD67
+POSINT:
+;@END
+;@REPLACE 3807-3807
+; APPLE: $E112-$E115 REPLACES BASE LINES 3807-3807
+        LDWDI   N32768          ;$E112
+;@END
+;@INSERT BEFORE 3811
+;; APPLE: $E11E-$E121 ADDED
+QINTG1:
+        LDA     SUBFLG          ;$E11E
+        BNE     INDLO1          ;$E120
+;@END
+;@REPLACE 3833-3833
+; APPLE: $E134-$E136 REPLACES BASE LINES 3833-3833
+        JSR     INTIDX          ;$E134 $E102
+;@END
+;@INSERT BEFORE 3859
+INDLO1:
+;@END
+;@REPLACE 3866-3866
+; APPLE: $E177-$E178 REPLACES BASE LINES 3866-3866
+        BEQ     GOTAR2          ;$E177
+;@END
+;@REPLACE 3885-3886
+; APPLE: $E198-$E19A REPLACES BASE LINES 3885-3886
+        SKIP2                   ;$E198 BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+FCERR:
+        LDXI    ERRFC           ;$E199
+;@END
+;@INSERT BEFORE 3891
+; APPLE: $E1A4-$E1A9 ADDED
+        LDA     SUBFLG          ;$E1A4
+        BEQ     GOTAR1          ;$E1A6
+        SEC             ;$E1A8
+        RTS             ;$E1A9
+GOTAR1:
+;@END
+;@REPLACE 3896-3896
+; APPLE: $E1B5-$E1C0 REPLACES BASE LINES 3896-3896
+        JMP     GETDEF          ;$E1B5 $E24B
+GOTAR2:
+        LDA     SUBFLG          ;$E1B8
+        BEQ     NOTFDD          ;$E1BA
+        LDXI    ERROD           ;$E1BC
+        JMP     ERROR           ;$E1BE $D412
+;@END
+;@INSERT BEFORE 4132
+; APPLE: $E303-$E303 ADDED
+        SEC             ;$E303
+;@END
+;@REPLACE 4158-4159
+; APPLE: $E30D-$E30F REPLACES BASE LINES 4158-4159
+        SKIP2                   ;$E30D BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+ERRGUF:
+        LDXI    ERRUF           ;$E30E
+;@END
+;@REPLACE 4164-4164
+; APPLE: $E319-$E31B REPLACES BASE LINES 4164-4164
+        JSR     CHKOPN          ;$E319 $DEBB
+;@END
+;@REPLACE 4188-4188
+; APPLE: $E35D-$E35F REPLACES BASE LINES 4188-4188
+        JSR     PARCHK          ;$E35D $DEB2
+;@END
+;@REPLACE 4325-4325
+; APPLE: $E447-$E446 REPLACES BASE LINES 4325-4325
+;@END
+;@REPLACE 4379-4380
+; APPLE: $E48E-$E48F REPLACES BASE LINES 4379-4380
+        STY     DEFPNT+1                ;$E48E
+;@END
+;@REPLACE 4488-4489
+;; APPLE: $E562-$E563 REPLACES BASE LINES 4488-4489
+GRBPAS:
+        LDX     DEFPNT+1                ;$E562
+;@END
+;@REPLACE 4528-4528
+; APPLE: $E5A0-$E5A2 REPLACES BASE LINES 4528-4528
+        JSR     CHKSTR          ;$E5A0 $DD6C
+;@END
+;@REPLACE 4588-4588
+;; APPLE: $E5FD-$E5FF REPLACES BASE LINES 4588-4588
+FRESTR:
+        JSR     CHKSTR          ;$E5FD $DD6C
+;@END
+;@REPLACE 4689-4689
+; APPLE: $E69C-$E69E REPLACES BASE LINES 4689-4689
+        JSR     CHKCOM          ;$E69C $DEBE
+;@END
+;@REPLACE 4692-4692
+; APPLE: $E6A5-$E6A4 REPLACES BASE LINES 4692-4692
+;@END
+;@INSERT BEFORE 4725
+; APPLE: $E6D3-$E6D4 ADDED
+        BEQ     GOFUC           ;$E6D3
+;@END
+;@REPLACE 4747-4747
+;; APPLE: $E6F2-$E6F4 REPLACES BASE LINES 4747-4747
+GOFUC:
+        JMP     FCERR           ;$E6F2 $E199
+;@END
+;@REPLACE 4751-4751
+;; APPLE: $E6FB-$E6FD REPLACES BASE LINES 4751-4751
+CONINT:
+        JSR     POSINT          ;$E6FB $E108
+;@END
+;@REPLACE 4795-4795
+;; APPLE: $E74C-$E74E REPLACES BASE LINES 4795-4795
+COMBYT:
+        JSR     CHKCOM          ;$E74C $DEBE
+;@END
+;@REPLACE 4797-4798
+;; APPLE: $E752-$E751 REPLACES BASE LINES 4797-4798
+GETADR:
+;@END
+;@REPLACE 4808-4808
+;; APPLE: $E764-$E769 REPLACES BASE LINES 4808-4808
+PEEK:
+        LDA     LINNUM          ;$E764
+        PHA             ;$E766
+        LDA     LINNUM+1                ;$E767
+        PHA             ;$E769
+;@END
+;@REPLACE 4818-4818
+;; APPLE: $E772-$E777 REPLACES BASE LINES 4818-4818
+DOSGFL:
+        PLA             ;$E772
+        STA     LINNUM+1                ;$E773
+        PLA             ;$E775
+        STA     LINNUM          ;$E776
+;@END
+;@INSERT BEFORE 4832
+WAIT:
+;@END
+;@REPLACE 4900-4900
+;; APPLE: $E7A0-$E7A3 REPLACES BASE LINES 4900-4900
+FADDH:
+        LDWDI   FHALF           ;$E7A0
+;@END
+;@REPLACE 5171-5233
+;; APPLE: $E913-$E940 REPLACES BASE LINES 5171-5233
+FONE:
+        EXP     ^D129,^D0,^D0,^D0,^D0           ;$E913
+LOGCN2:
+        EXP     ^D3             ;$E918 DEGREE-1: 4 CONSTANTS FOLLOW
+        EXP     ^D127,^D94,^D86,^D203,^D121             ;$E919
+        EXP     ^D128,^D19,^D155,^D11,^D100             ;$E91E
+        EXP     ^D128,^D118,^D56,^D147,^D22             ;$E923
+        EXP     ^D130,^D56,^D170,^D59,^D32              ;$E928
+SQRHLF:
+        EXP     ^D128,^D53,^D4,^D243,^D52               ;$E92D
+SQRTWO:
+        EXP     ^D129,^D53,^D4,^D243,^D52               ;$E932
+NEGHLF:
+        EXP     ^D128,^D128,^D0,^D0,^D0         ;$E937
+LOG2:
+        EXP     ^D128,^D49,^D114,^D23,^D248             ;$E93C
+;@END
+;@REPLACE 5238-5238
+;; APPLE: $E948-$E94A REPLACES BASE LINES 5238-5238
+LOGERR:
+        JMP     FCERR           ;$E948 $E199
+;@END
+;@REPLACE 5244-5244
+; APPLE: $E954-$E957 REPLACES BASE LINES 5244-5244
+        LDWDI   SQRHLF          ;$E954
+;@END
+;@REPLACE 5249-5249
+; APPLE: $E95B-$E95E REPLACES BASE LINES 5249-5249
+        LDWDI   SQRTWO          ;$E95B
+;@END
+;@REPLACE 5251-5251
+; APPLE: $E962-$E965 REPLACES BASE LINES 5251-5251
+        LDWDI   FONE            ;$E962
+;@END
+;@REPLACE 5253-5253
+; APPLE: $E969-$E96C REPLACES BASE LINES 5253-5253
+        LDWDI   LOGCN2          ;$E969
+;@END
+;@REPLACE 5255-5255
+; APPLE: $E970-$E973 REPLACES BASE LINES 5255-5255
+        LDWDI   NEGHLF          ;$E970
+;@END
+;@REPLACE 5259-5259
+; APPLE: $E97B-$E97E REPLACES BASE LINES 5259-5259
+        LDWDI   LOG2            ;$E97B
+;@END
+;@REPLACE 5350-5351
+; APPLE: $EA1A-$EA1C REPLACES BASE LINES 5350-5351
+        SKIP2                   ;$EA1A BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+TRYOFF:
+        BPL     ZEREMV          ;$EA1B
+;@END
+;@REPLACE 5381-5385
+;; APPLE: $EA50-$EA54 REPLACES BASE LINES 5381-5385
+TENZC:  EXP     ^D132,^D32,^D0,^D0,^D0          ;$EA50 10.0
+;@END
+;@REPLACE 5387-5387
+; APPLE: $EA58-$EA5B REPLACES BASE LINES 5387-5387
+        LDWDI   TENZC           ;$EA58
+;@END
+;@REPLACE 5501-5502
+; APPLE: $EB20-$EB22 REPLACES BASE LINES 5501-5502
+        SKIP2                   ;$EB20 BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+MOV1F:
+        LDXI    TEMPF1          ;$EB21
+;@END
+;@REPLACE 5824-5839
+;; APPLE: $ED0A-$ED18 REPLACES BASE LINES 5824-5839
+NZ0999:
+        EXP     ^D155,^D62,^D188,^D31,^D253             ;$ED0A
+NZ9999:
+        EXP     ^D158,^D110,^D107,^D39,^D253            ;$ED0F
+NZMIL:
+        EXP     ^D158,^D110,^D107,^D40,^D0              ;$ED14
+;@END
+;@REPLACE 5853-5853
+;; APPLE: $ED36-$ED38 REPLACES BASE LINES 5853-5853
+FOUTC:
+        LDAI    "-"             ;$ED36
+        DEY             ;$ED38
+;@END
+;@REPLACE 5855-5856
+; APPLE: $ED3B-$ED3D REPLACES BASE LINES 5855-5856
+        BPL     FOUT13          ;$ED3B
+        INY             ;$ED3D
+;@END
+;@INSERT BEFORE 5858
+FOUT13:
+;@END
+;@REPLACE 5868-5868
+;; APPLE: $ED57-$ED5A REPLACES BASE LINES 5868-5868
+FOUT37:
+        LDWDI   NZMIL           ;$ED57
+;@END
+;@REPLACE 5872-5872
+;; APPLE: $ED62-$ED65 REPLACES BASE LINES 5872-5872
+FOUT4:
+        LDWDI   NZ9999          ;$ED62
+;@END
+;@REPLACE 5877-5877
+;; APPLE: $ED6D-$ED70 REPLACES BASE LINES 5877-5877
+FOUT3:
+        LDWDI   NZ0999          ;$ED6D
+;@END
+;@REPLACE 5925-5925
+; APPLE: $EDC4-$EDC6 REPLACES BASE LINES 5925-5925
+        ADC     FOUTBL+3,Y              ;$EDC4 $EE6C
+;@END
+;@REPLACE 5928-5928
+; APPLE: $EDCB-$EDCD REPLACES BASE LINES 5928-5928
+        ADC     FOUTBL+2,Y              ;$EDCB $EE6B
+;@END
+;@REPLACE 5932-5932
+; APPLE: $EDD2-$EDD4 REPLACES BASE LINES 5932-5932
+        ADC     FOUTBL+1,Y              ;$EDD2 $EE6A
+;@END
+;@REPLACE 5935-5935
+; APPLE: $EDD9-$EDDB REPLACES BASE LINES 5935-5935
+        ADC     FOUTBL,Y                ;$EDD9 $EE69
+;@END
+;@REPLACE 6009-6072
+;; APPLE: $EE64-$EE8C REPLACES BASE LINES 6009-6072
+FHALF:
+        EXP     ^D128,^D0               ;$EE64
+ZERO:
+        EXP     ^D0,^D0,^D0             ;$EE66
+FOUTBL:
+        EXP     ^D250,^D10,^D31,^D0,^D0,^D152,^D150,^D128               ;$EE69
+        EXP     ^D255,^D240,^D189,^D192,^D0,^D1,^D134,^D160             ;$EE71
+        EXP     ^D255,^D255,^D216,^D240,^D0,^D0,^D3,^D232               ;$EE79
+        EXP     ^D255,^D255,^D255,^D156,^D0,^D0,^D0,^D10                ;$EE81
+        EXP     ^D255,^D255,^D255,^D255         ;$EE89
+;@END
+;@REPLACE 6106-6106
+; APPLE: $EE90-$EE93 REPLACES BASE LINES 6106-6106
+        LDWDI   FHALF           ;$EE90
+;@END
+;@REPLACE 6120-6120
+;; APPLE: $EE97-$EE98 REPLACES BASE LINES 6120-6120
+FPWRT:
+        BEQ     EXP             ;$EE97
+;@END
+;@REPLACE 6142-6142
+; APPLE: $EEC9-$EECB REPLACES BASE LINES 6142-6142
+        JSR     EXP             ;$EEC9 $EF09
+;@END
+;@REPLACE 6165-6247
+;; APPLE: $EEDB-$EF0C REPLACES BASE LINES 6165-6247
+LOGEB2:
+        EXP     ^D129,^D56,^D170,^D59,^D41              ;$EEDB
+EXPCON:
+        EXP     ^D7             ;$EEE0 DEGREE-1: 8 CONSTANTS FOLLOW
+        EXP     ^D113,^D52,^D88,^D62,^D86               ;$EEE1
+        EXP     ^D116,^D22,^D126,^D179,^D27             ;$EEE6
+        EXP     ^D119,^D47,^D238,^D227,^D133            ;$EEEB
+        EXP     ^D122,^D29,^D132,^D28,^D42              ;$EEF0
+        EXP     ^D124,^D99,^D89,^D88,^D10               ;$EEF5
+        EXP     ^D126,^D117,^D253,^D231,^D198           ;$EEFA
+        EXP     ^D128,^D49,^D114,^D24,^D16              ;$EEFF
+        EXP     ^D129,^D0,^D0,^D0,^D0           ;$EF04
+EXP:
+        LDWDI   LOGEB2          ;$EF09
+;@END
+;@REPLACE 6278-6278
+; APPLE: $EF4C-$EF4F REPLACES BASE LINES 6278-6278
+        LDWDI   EXPCON          ;$EF4C
+;@END
+;@REPLACE 6294-6294
+; APPLE: $EF60-$EF62 REPLACES BASE LINES 6294-6294
+        JSR     MOV1F           ;$EF60 $EB21
+;@END
+;@REPLACE 6344-6351
+;; APPLE: $EFA6-$EFAD REPLACES BASE LINES 6344-6351
+RMULZC: EXP     ^D152,^D53,^D68,^D122           ;$EFA6
+RADDZC: EXP     ^D104,^D40,^D177,^D70           ;$EFAA
+;@END
+;@REPLACE 6377-6377
+; APPLE: $EFBE-$EFC1 REPLACES BASE LINES 6377-6377
+        LDWDI   RMULZC          ;$EFBE
+;@END
+;@REPLACE 6379-6379
+; APPLE: $EFC5-$EFC8 REPLACES BASE LINES 6379-6379
+        LDWDI   RADDZC          ;$EFC5
+;@END
+;@REPLACE 6401-6668
+;; APPLE: $EFEA-$F10A REPLACES BASE LINES 6401-6668
+COS:
+        LDWDI   PI2             ;$EFEA
+        JSR     FADD            ;$EFEE $E7BE
+SIN:
+        JSR     MOVAF           ;$EFF1 $EB63
+        LDWDI   TWOPI           ;$EFF4
+        LDX     ARGSGN          ;$EFF8
+        JSR     FDIVF           ;$EFFA $EA5E
+        JSR     MOVAF           ;$EFFD $EB63
+        JSR     INT             ;$F000 $EC23
+        LDAI    ^D0             ;$F003
+        STA     ARISGN          ;$F005
+        JSR     FSUBT           ;$F007 $E7AA
+        LDWDI   FR4             ;$F00A
+        JSR     FSUB            ;$F00E $E7A7
+        LDA     FACSGN          ;$F011
+        PHA             ;$F013
+        BPL     SIN1            ;$F014
+        JSR     FADDH           ;$F016 $E7A0
+        LDA     FACSGN          ;$F019
+        BMI     SIN2            ;$F01B
+        LDA     TANSGN          ;$F01D
+        EORI    ^D255           ;$F01F
+        STA     TANSGN          ;$F021
+SIN1:
+        JSR     NEGOP           ;$F023 $EED0
+SIN2:
+        LDWDI   FR4             ;$F026
+        JSR     FADD            ;$F02A $E7BE
+        PLA             ;$F02D
+        BPL     SIN3            ;$F02E
+        JSR     NEGOP           ;$F030 $EED0
+SIN3:
+        LDWDI   SINCON          ;$F033
+GPOLYX:
+        JMP     POLYX           ;$F037 $EF5C
+TAN:
+        JSR     MOV1F           ;$F03A $EB21
+        LDAI    ^D0             ;$F03D
+        STA     TANSGN          ;$F03F
+        JSR     SIN             ;$F041 $EFF1
+        LDXYI   TEMPF3          ;$F044
+        JSR     GMOVMF          ;$F048 $EFE7
+        LDWDI   TEMPF1          ;$F04B
+        JSR     MOVFM           ;$F04F $EAF9
+        LDAI    ^D0             ;$F052
+        STA     FACSGN          ;$F054
+        LDA     TANSGN          ;$F056
+        JSR     COSC            ;$F058 $F062
+        LDWDI   TEMPF3          ;$F05B
+        JMP     FDIV            ;$F05F $EA66
+COSC:
+        PHA             ;$F062
+        JMP     SIN1            ;$F063 $F023
+PI2:
+        EXP     ^D129,^D73,^D15,^D218,^D162             ;$F066
+TWOPI:
+        EXP     ^D131,^D73,^D15,^D218,^D162             ;$F06B
+FR4:
+        EXP     ^D127,^D0,^D0,^D0,^D0           ;$F070
+SINCON:
+        EXP     ^D5             ;$F075 DEGREE-1: 6 CONSTANTS FOLLOW
+        EXP     ^D132,^D230,^D26,^D45,^D27              ;$F076
+        EXP     ^D134,^D40,^D7,^D251,^D248              ;$F07B
+        EXP     ^D135,^D153,^D104,^D137,^D1             ;$F080
+        EXP     ^D135,^D35,^D53,^D223,^D225             ;$F085
+        EXP     ^D134,^D165,^D93,^D231,^D40             ;$F08A
+        EXP     ^D131,^D73,^D15,^D218,^D162             ;$F08F
+        EXP     ^D166,^D211,^D193,^D200,^D212,^D200,^D213,^D196,^D206,^D202             ;$F094 UNUSED: "MICROSOFT!" BACKWARD, EACH BYTE XORED WITH $87
+ATN:
+        LDA     FACSGN          ;$F09E
+        PHA             ;$F0A0
+        BPL     ATN1            ;$F0A1
+        JSR     NEGOP           ;$F0A3 $EED0
+ATN1:
+        LDA     FAC             ;$F0A6
+        PHA             ;$F0A8
+        CMPI    ^D129           ;$F0A9
+        BCC     ATN2            ;$F0AB
+        LDWDI   FONE            ;$F0AD
+        JSR     FDIV            ;$F0B1 $EA66
+ATN2:
+        LDWDI   ATNCON          ;$F0B4
+        JSR     POLYX           ;$F0B8 $EF5C
+        PLA             ;$F0BB
+        CMPI    ^D129           ;$F0BC
+        BCC     ATN3            ;$F0BE
+        LDWDI   PI2             ;$F0C0
+        JSR     FSUB            ;$F0C4 $E7A7
+ATN3:
+        PLA             ;$F0C7
+        BPL     ATN4            ;$F0C8
+        JMP     NEGOP           ;$F0CA $EED0
+ATN4:
+        RTS             ;$F0CD
+ATNCON:
+        EXP     ^D11            ;$F0CE DEGREE-1: 12 CONSTANTS FOLLOW
+        EXP     ^D118,^D179,^D131,^D189,^D211           ;$F0CF
+        EXP     ^D121,^D30,^D244,^D166,^D245            ;$F0D4
+        EXP     ^D123,^D131,^D252,^D176,^D16            ;$F0D9
+        EXP     ^D124,^D12,^D31,^D103,^D202             ;$F0DE
+        EXP     ^D124,^D222,^D83,^D203,^D193            ;$F0E3
+        EXP     ^D125,^D20,^D100,^D112,^D76             ;$F0E8
+        EXP     ^D125,^D183,^D234,^D81,^D122            ;$F0ED
+        EXP     ^D125,^D99,^D48,^D136,^D126             ;$F0F2
+        EXP     ^D126,^D146,^D68,^D153,^D58             ;$F0F7
+        EXP     ^D126,^D76,^D204,^D145,^D199            ;$F0FC
+        EXP     ^D127,^D170,^D170,^D170,^D19            ;$F101
+        EXP     ^D129,^D0,^D0,^D0,^D0           ;$F106
+;@END
+;@REPLACE 6694-6702
+; APPLE: $F123-$F127 REPLACES BASE LINES 6694-6702
+        EXP     ^D128,^D79,^D199,^D82,^D88              ;$F123
+;@END
+;@REPLACE 6710-6717
+; APPLE: $F12F-$F13D REPLACES BASE LINES 6710-6717
+        LDWDI   INIT            ;$F12F
+        STA     START+1         ;$F133
+        STY     START+2         ;$F135
+        STA     RDYJSR+1                ;$F137
+        STY     RDYJSR+2                ;$F139
+        JSR     NRMSTM          ;$F13B $F273
+;@END
+;@REPLACE 6726-6726
+; APPLE: $F148-$F14B REPLACES BASE LINES 6726-6726
+        LDWDI   FCERR           ;$F148
+;@END
+;@REPLACE 6728-6732
+; APPLE: $F150-$F14F REPLACES BASE LINES 6728-6732
+;@END
+;@INSERT BEFORE 6736
+; APPLE: $F157-$F158 ADDED
+        STX     SPEEDZ          ;$F157
+;@END
+;@REPLACE 6738-6739
+; APPLE: $F15C-$F15D REPLACES BASE LINES 6738-6739
+        STX     TRCFLG          ;$F15C
+;@END
+;@INSERT BEFORE 6748
+; APPLE: $F164-$F165 ADDED
+        LDAI    STRSIZ          ;$F164 STA CNTWFL ALSO SETS FOUR6, THE SAME BYTE
+;@END
+;@REPLACE 6751-6756
+; APPLE: $F168-$F172 REPLACES BASE LINES 6751-6756
+        JSR     CRDO            ;$F168 $DAFB
+        LDAI    ^D1             ;$F16B
+        STA     BUF-3           ;$F16D $01FD
+        STA     BUF-4           ;$F170 $01FC
+;@END
+;@REPLACE 6759-6875
+; APPLE: $F177-$F1AA REPLACES BASE LINES 6759-6875
+        LDAI    ^D0             ;$F177
+        LDYI    ^D8
+        STWD    LINNUM          ;$F17B
+        LDYI    ^D0             ;$F17F
+LOOPMM:
+        INC     LINNUM+1                ;$F181
+        LDADY   LINNUM          ;$F183
+        EORI    ^D255           ;$F185
+        STADY   LINNUM          ;$F187
+        CMPDY   LINNUM          ;$F189
+        BNE     USEDEC          ;$F18B
+        EORI    ^D255           ;$F18D
+        STADY   LINNUM          ;$F18F
+        CMPDY   LINNUM          ;$F191
+        BEQ     LOOPMM          ;$F193
+USEDEC:
+        LDY     LINNUM          ;$F195
+        LDA     LINNUM+1                ;$F197
+        ANDI    ^D240           ;$F199
+        STY     MEMSIZ          ;$F19B
+        STA     MEMSIZ+1                ;$F19D
+        STY     FRETOP          ;$F19F
+        STA     NCMWID          ;$F1A1
+        LDXI    ^D0             ;$F1A3
+        LDYI    ^D8
+        STXY    TXTTAB          ;$F1A7
+;@END
+;@INSERT BEFORE 6877
+; APPLE: $F1AD-$F1AE ADDED
+        STY     LOCK            ;$F1AD
+;@END
+;@REPLACE 6884-6898
+; APPLE: $F1BC-$F1BE REPLACES BASE LINES 6884-6898
+        JSR     REASON          ;$F1BC $D3E3
+;@END
+;@REPLACE 6902-6946
+; APPLE: $F1C2-$F7FF REPLACES BASE LINES 6902-6946
+        LDWDI   STROUT          ;$F1C2
+        STA     RDYJSR+1                ;$F1C6
+        STY     RDYJSR+2                ;$F1C8
+        LDWDI   MAIN            ;$F1CA
+        STA     START+1         ;$F1CE
+        STY     START+2         ;$F1D0
+        JMPD    START+1         ;$F1D2
+CALL:
+        JSR     FRMNUM          ;$F1D5 $DD67
+        JSR     GETADR          ;$F1D8 $E752
+        JMPD    LINNUM          ;$F1DB
+INNUM:
+        JSR     GETBYT          ;$F1DE $E6F8
+        TXA             ;$F1E1
+        JMP     INPORT          ;$F1E2 $FE8B
+PRNUM:
+        JSR     GETBYT          ;$F1E5 $E6F8
+        TXA             ;$F1E8
+        JMP     OUTPORT         ;$F1E9 $FE95
+PLOTFNS:
+        JSR     GETBYT          ;$F1EC $E6F8
+        CPXI    ^D48            ;$F1EF
+        BCS     PLOTF1          ;$F1F1
+        STX     FIRST           ;$F1F3
+        LDAI    ^D44            ;$F1F5 A COMMA.
+        JSR     SYNCHR          ;$F1F7 $DEC0
+        JSR     GETBYT          ;$F1FA $E6F8
+        CPXI    ^D48            ;$F1FD
+        BCS     PLOTF1          ;$F1FF
+        STX     H2              ;$F201
+        STX     V2              ;$F203
+        RTS             ;$F205
+PLOTF1:
+        JMP     FCERR           ;$F206 $E199
+LINFNS:
+        JSR     PLOTFNS         ;$F209 $F1EC
+        CPX     FIRST           ;$F20C
+        BCS     LINFN1          ;$F20E
+        LDA     FIRST           ;$F210
+        STA     H2              ;$F212
+        STA     V2              ;$F214
+        STX     FIRST           ;$F216
+LINFN1:
+        LDAI    ATTK            ;$F218
+        JSR     SYNCHR          ;$F21A $DEC0
+        JSR     GETBYT          ;$F21D $E6F8
+        CPXI    ^D48            ;$F220
+        BCS     PLOTF1          ;$F222
+        RTS             ;$F224
+PLOT:
+        JSR     PLOTFNS         ;$F225 $F1EC
+        TXA             ;$F228
+        LDY     FIRST           ;$F229
+        CPYI    ^D40            ;$F22B
+        BCS     PLOTF1          ;$F22D
+        JMP     LASTWR          ;$F22F $F800
+HLIN:
+        JSR     LINFNS          ;$F232 $F209
+        TXA             ;$F235
+        LDY     H2              ;$F236
+        CPYI    ^D40            ;$F238
+        BCS     PLOTF1          ;$F23A
+        LDY     FIRST           ;$F23C
+        JMP     HLINE           ;$F23E $F819
+VLIN:
+        JSR     LINFNS          ;$F241 $F209
+        TXA             ;$F244
+        TAY             ;$F245
+        CPYI    ^D40            ;$F246
+        BCS     PLOTF1          ;$F248
+        LDA     FIRST           ;$F24A
+        JMP     VLINE           ;$F24C $F828
+COLSTM:
+        JSR     GETBYT          ;$F24F $E6F8
+        TXA             ;$F252
+        JMP     SETCOL          ;$F253 $F864
+VTAB:
+        JSR     GETBYT          ;$F256 $E6F8
+        DEX             ;$F259
+        TXA             ;$F25A
+        CMPI    ^D24            ;$F25B
+        BCS     PLOTF1          ;$F25D
+        JMP     TABV            ;$F25F $FB5B
+SPEED:
+        JSR     GETBYT          ;$F262 $E6F8
+        TXA             ;$F265
+        EORI    ^D255           ;$F266
+        TAX             ;$F268
+        INX             ;$F269
+        STX     SPEEDZ          ;$F26A
+        RTS             ;$F26C
+TRACE:
+        SEC             ;$F26D
+        EXP     ^D144           ;$F26E BCC OPCODE: SKIPS THE NEXT BYTE
+NOTRACE:
+        CLC             ;$F26F
+        ROR     TRCFLG          ;$F270
+        RTS             ;$F272
+NRMSTM:
+        LDAI    ^D255           ;$F273
+        BNE     INVER1          ;$F275
+INVERSE:
+        LDAI    ^D63            ;$F277
+INVER1:
+        LDXI    ^D0
+INVER2:
+        STA     INVFLG          ;$F27B
+        STX     FLASHB          ;$F27D
+        RTS             ;$F27F
+FLASH:
+        LDAI    ^D127           ;$F280
+        LDXI    ^D64
+        BNE     INVER2          ;$F284
+HIMEM:
+        JSR     FRMNUM          ;$F286 $DD67
+        JSR     GETADR          ;$F289 $E752
+        LDA     LINNUM          ;$F28C
+        CMP     STREND          ;$F28E
+        LDA     LINNUM+1                ;$F290
+        SBC     STREND+1                ;$F292
+        BCS     HIMEM2          ;$F294
+HIMEM1:
+        JMP     OMERR           ;$F296 $D410
+HIMEM2:
+        LDA     LINNUM          ;$F299
+        STA     MEMSIZ          ;$F29B
+        STA     FRETOP          ;$F29D
+        LDA     LINNUM+1                ;$F29F
+        STA     MEMSIZ+1                ;$F2A1
+        STA     NCMWID          ;$F2A3
+        RTS             ;$F2A5
+LOMEM:
+        JSR     FRMNUM          ;$F2A6 $DD67
+        JSR     GETADR          ;$F2A9 $E752
+        LDA     LINNUM          ;$F2AC
+        CMP     MEMSIZ          ;$F2AE
+        LDA     LINNUM+1                ;$F2B0
+        SBC     MEMSIZ+1                ;$F2B2
+        BCS     HIMEM1          ;$F2B4
+        LDA     LINNUM          ;$F2B6
+        CMP     VARTAB          ;$F2B8
+        LDA     LINNUM+1                ;$F2BA
+        SBC     VARTAB+1                ;$F2BC
+        BCC     HIMEM1          ;$F2BE
+        LDA     LINNUM          ;$F2C0
+        STA     VARTAB          ;$F2C2
+        LDA     LINNUM+1                ;$F2C4
+        STA     VARTAB+1                ;$F2C6
+        JMP     CLEARC          ;$F2C8 $D66C
+ONERR:
+        LDAI    GOTOTK          ;$F2CB
+        JSR     SYNCHR          ;$F2CD $DEC0
+        LDA     TXTPTR          ;$F2D0
+        STA     TXTPSV          ;$F2D2
+        LDA     TXTPTR+1                ;$F2D4
+        STA     TXTPSV+1                ;$F2D6
+        SEC             ;$F2D8
+        ROR     ERRFLG          ;$F2D9
+        LDA     CURLIN          ;$F2DB
+        STA     CURLSV          ;$F2DD
+        LDA     CURLIN+1                ;$F2DF
+        STA     CURLSV+1                ;$F2E1
+        JSR     REMN            ;$F2E3 $D9A6
+        JMP     ADDON           ;$F2E6 $D998
+HANDLERR:
+        STX     ERRNUM          ;$F2E9
+        LDX     REMSTK          ;$F2EB
+        STX     ERRSTK          ;$F2ED
+        LDA     CURLIN          ;$F2EF
+        STA     ERRLIN          ;$F2F1
+        LDA     CURLIN+1                ;$F2F3
+        STA     ERRLIN+1                ;$F2F5
+        LDA     OLDTXT          ;$F2F7
+        STA     ERRPOS          ;$F2F9
+        LDA     OLDTXT+1                ;$F2FB
+        STA     ERRPOS+1                ;$F2FD
+        LDA     TXTPSV          ;$F2FF
+        STA     TXTPTR          ;$F301
+        LDA     TXTPSV+1                ;$F303
+        STA     TXTPTR+1                ;$F305
+        LDA     CURLSV          ;$F307
+        STA     CURLIN          ;$F309
+        LDA     CURLSV+1                ;$F30B
+        STA     CURLIN+1                ;$F30D
+        JSR     CHRGOT          ;$F30F $00B7
+        JSR     GOTO            ;$F312 $D93E
+        JMP     NXTCO1          ;$F315 $D7D2
+RESUME:
+        LDA     ERRLIN          ;$F318
+        STA     CURLIN          ;$F31A
+        LDA     ERRLIN+1                ;$F31C
+        STA     CURLIN+1                ;$F31E
+        LDA     ERRPOS          ;$F320
+        STA     TXTPTR          ;$F322
+        LDA     ERRPOS+1                ;$F324
+        STA     TXTPTR+1                ;$F326
+        LDX     ERRSTK          ;$F328
+        TXS             ;$F32A
+        JMP     NXTCO1          ;$F32B $D7D2
+RESUM1:
+        JMP     SNERR           ;$F32E $DEC9
+DEL:
+        BCS     RESUM1          ;$F331
+        LDX     PRGEND          ;$F333
+        STX     VARTAB          ;$F335
+        LDX     PRGEND+1                ;$F337
+        STX     VARTAB+1                ;$F339
+        JSR     LINGET          ;$F33B $DA0C
+        JSR     FNDLIN          ;$F33E $D61A
+        LDA     LOWTR           ;$F341
+        STA     INDEX2          ;$F343
+        LDA     EXPSGN          ;$F345
+        STA     INDEX2+1                ;$F347
+        LDAI    ^D44            ;$F349 A COMMA.
+        JSR     SYNCHR          ;$F34B $DEC0
+        JSR     LINGET          ;$F34E $DA0C
+        INC     LINNUM          ;$F351
+        BNE     DEL1            ;$F353
+        INC     LINNUM+1                ;$F355
+DEL1:
+        JSR     FNDLIN          ;$F357 $D61A
+        LDA     LOWTR           ;$F35A
+        CMP     INDEX2          ;$F35C
+        LDA     EXPSGN          ;$F35E
+        SBC     INDEX2+1                ;$F360
+        BCS     DEL11           ;$F362
+        RTS             ;$F364
+DEL11:
+        LDYI    ^D0             ;$F365
+DEL111:
+        LDADY   LOWTR           ;$F367
+        STADY   INDEX2          ;$F369
+        INC     LOWTR           ;$F36B
+        BNE     DEL112          ;$F36D
+        INC     EXPSGN          ;$F36F
+DEL112:
+        INC     INDEX2          ;$F371
+        BNE     DEL113          ;$F373
+        INC     INDEX2+1                ;$F375
+DEL113:
+        LDA     VARTAB          ;$F377
+        CMP     LOWTR           ;$F379
+        LDA     VARTAB+1                ;$F37B
+        SBC     EXPSGN          ;$F37D
+        BCS     DEL111          ;$F37F
+        LDX     INDEX2+1                ;$F381
+        LDY     INDEX2          ;$F383
+        BNE     DEL114          ;$F385
+        DEX             ;$F387
+DEL114:
+        DEY             ;$F388
+        STX     VARTAB+1                ;$F389
+        STY     VARTAB          ;$F38B
+        JMP     FINI            ;$F38D $D4F2
+GR:
+        LDA     LORES           ;$F390 $C056
+        LDA     MIXSET          ;$F393 $C053
+        JMP     SETGR           ;$F396 $FB40
+TEXT:
+        LDA     LOWSCR          ;$F399 $C054
+        JMP     SETTXT          ;$F39C $FB39
+STORE:
+        JSR     GETARYPT                ;$F39F $F7D9
+        LDYI    ^D3             ;$F3A2
+        LDADY   LOWTR           ;$F3A4
+        TAX             ;$F3A6
+        DEY             ;$F3A7
+        LDADY   LOWTR           ;$F3A8
+        SBCI    ^D1             ;$F3AA
+        BCS     STORE1          ;$F3AC
+        DEX             ;$F3AE
+STORE1:
+        STWX    LINNUM          ;$F3AF
+        JSR     MWRITE          ;$F3B3 $FECD
+IFN     ENHNCD,<                ;ENHANCED IIE
+        JSR     CALLC5          ;$F3B6 $F777
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        JSR     SETA2           ;$F3B6 $F7BC
+>
+        JMP     MWRITE          ;$F3B9 $FECD
+RECALL:
+        JSR     GETARYPT                ;$F3BC $F7D9
+        JSR     MREAD           ;$F3BF $FEFD
+        LDYI    ^D2             ;$F3C2
+        LDADY   LOWTR           ;$F3C4
+        CMP     LINNUM          ;$F3C6
+        INY             ;$F3C8
+        LDADY   LOWTR           ;$F3C9
+        SBC     LINNUM+1                ;$F3CB
+        BCS     RECAL1          ;$F3CD
+        JMP     OMERR           ;$F3CF $D410
+IFN     ENHNCD,<                ;ENHANCED IIE
+RECAL1:
+        JSR     CALLC5          ;$F3D2 $F777
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+RECAL1:
+        JSR     SETA2           ;$F3D2 $F7BC
+>
+        JMP     MREAD           ;$F3D5 $FEFD
+HGR2:
+        BIT     HISCR           ;$F3D8 $C055
+        BIT     MIXCLR          ;$F3DB $C052
+        LDAI    ^D64            ;$F3DE
+        BNE     HGR1            ;$F3E0
+HGR:
+        LDAI    ^D32            ;$F3E2
+        BIT     LOWSCR          ;$F3E4 $C054
+        BIT     MIXSET          ;$F3E7 $C053
+HGR1:
+        STA     HPAG            ;$F3EA
+        LDA     HIRES           ;$F3EC $C057
+        LDA     TXTCLR          ;$F3EF $C050
+HCLR:
+        LDAI    ^D0             ;$F3F2
+        STA     HCOLR2          ;$F3F4
+BKGND:
+        LDA     HPAG            ;$F3F6
+        STA     SHAPEH          ;$F3F8
+        LDYI    ^D0             ;$F3FA
+        STY     SHAPEL          ;$F3FC
+BKGND1:
+        LDA     HCOLR2          ;$F3FE
+        STADY   SHAPEL          ;$F400
+        JSR     LFTRT5          ;$F402 $F47E
+        INY             ;$F405
+        BNE     BKGND1          ;$F406
+        INC     SHAPEH          ;$F408
+        LDA     SHAPEH          ;$F40A
+        ANDI    ^D31            ;$F40C
+        BNE     BKGND1          ;$F40E
+        RTS             ;$F410
+HPOSN:
+        STA     HGRY            ;$F411
+        STXY    HGRX            ;$F413
+        PHA             ;$F417
+        ANDI    ^D192           ;$F418
+        STA     GBASL           ;$F41A
+        LSR     A               ;$F41C
+        LSR     A               ;$F41D
+        ORA     GBASL           ;$F41E
+        STA     GBASL           ;$F420
+        PLA             ;$F422
+        STA     GBASH           ;$F423
+        ASL     A               ;$F425
+        ASL     A               ;$F426
+        ASL     A               ;$F427
+        ROL     GBASH           ;$F428
+        ASL     A               ;$F42A
+        ROL     GBASH           ;$F42B
+        ASL     A               ;$F42D
+        ROR     GBASL           ;$F42E
+        LDA     GBASH           ;$F430
+        ANDI    ^D31            ;$F432
+        ORA     HPAG            ;$F434
+        STA     GBASH           ;$F436
+        TXA             ;$F438
+        CPYI    ^D0             ;$F439
+        BEQ     HPOSN2          ;$F43B
+        LDYI    ^D35            ;$F43D
+        ADCI    ^D4             ;$F43F
+HPOSN1:
+        INY             ;$F441
+HPOSN2:
+        SBCI    ^D7             ;$F442
+        BCS     HPOSN1          ;$F444
+        STY     HNDX            ;$F446
+        TAX             ;$F448
+        LDA     MSKTBL-^D249,X          ;$F449 $F4B9 X IS $F9-$FF, SO THIS READS MSKTBL
+        STA     COLOR           ;$F44C
+        TYA             ;$F44E
+        LSR     A               ;$F44F
+        LDA     HCOLR1          ;$F450
+        STA     HCOLR2          ;$F452
+        BCS     LFTRT5          ;$F454
+        RTS             ;$F456
+HPLOT0:
+        JSR     HPOSN           ;$F457 $F411
+        LDA     HCOLR2          ;$F45A
+        EORDY   GBASL           ;$F45C
+        AND     COLOR           ;$F45E
+        EORDY   GBASL           ;$F460
+        STADY   GBASL           ;$F462
+        RTS             ;$F464
+LFTRT:
+        BPL     LFTRT7          ;$F465
+        LDA     COLOR           ;$F467
+        LSR     A               ;$F469
+        BCS     LFTRT2          ;$F46A
+        EORI    ^D192           ;$F46C
+LFTRT1:
+        STA     COLOR           ;$F46E
+        RTS             ;$F470
+LFTRT2:
+        DEY             ;$F471
+        BPL     LFTRT3          ;$F472
+        LDYI    ^D39            ;$F474
+LFTRT3:
+        LDAI    ^D192           ;$F476
+LFTRT4:
+        STA     COLOR           ;$F478
+        STY     HNDX            ;$F47A
+        LDA     HCOLR2          ;$F47C
+LFTRT5:
+        ASL     A               ;$F47E
+        CMPI    ^D192           ;$F47F
+        BPL     LFTRT6          ;$F481
+        LDA     HCOLR2          ;$F483
+        EORI    ^D127           ;$F485
+        STA     HCOLR2          ;$F487
+LFTRT6:
+        RTS             ;$F489
+LFTRT7:
+        LDA     COLOR           ;$F48A
+        ASL     A               ;$F48C
+        EORI    ^D128           ;$F48D
+        BMI     LFTRT1          ;$F48F
+        LDAI    ^D129           ;$F491
+        INY             ;$F493
+        CPYI    ^D40            ;$F494
+        BCC     LFTRT4          ;$F496
+        LDYI    ^D0             ;$F498
+        BCS     LFTRT4          ;$F49A
+DRWPNT:
+        CLC             ;$F49C
+DRWPN1:
+        LDA     HGRDX+1         ;$F49D
+        ANDI    ^D4             ;$F49F
+        BEQ     XDRPN3          ;$F4A1
+        LDAI    ^D127           ;$F4A3
+        AND     COLOR           ;$F4A5
+        ANDDY   GBASL           ;$F4A7
+        BNE     XDRPN2          ;$F4A9
+        INC     COLCNT          ;$F4AB
+        LDAI    ^D127           ;$F4AD
+        AND     COLOR           ;$F4AF
+        BPL     XDRPN2          ;$F4B1
+XDRPNT:
+        CLC             ;$F4B3
+XDRPN1:
+        LDA     HGRDX+1         ;$F4B4
+        ANDI    ^D4             ;$F4B6
+        BEQ     XDRPN3          ;$F4B8
+        LDADY   GBASL           ;$F4BA
+        EOR     HCOLR2          ;$F4BC
+        AND     COLOR           ;$F4BE
+        BNE     XDRPN2          ;$F4C0
+        INC     COLCNT          ;$F4C2
+XDRPN2:
+        EORDY   GBASL           ;$F4C4
+        STADY   GBASL           ;$F4C6
+XDRPN3:
+        LDA     HGRDX+1         ;$F4C8
+        ADC     HGRQUA          ;$F4CA
+MASK03=.+1      ;$F4CD: THE NEXT INSTRUCTION'S OPERAND, $03, DOUBLES AS DATA
+        ANDI    ^D3             ;$F4CC
+        CMPI    ^D2             ;$F4CE
+        ROR     A               ;$F4D0
+        BCS     LFTRT           ;$F4D1
+UPDWN:
+        BMI     UPDWN7          ;$F4D3
+        CLC             ;$F4D5
+        LDA     GBASH           ;$F4D6
+        BIT     MASK1C          ;$F4D8 $F5B9
+        BNE     UPDWN5          ;$F4DB
+        ASL     GBASL           ;$F4DD
+        BCS     UPDWN3          ;$F4DF
+        BIT     MASK03          ;$F4E1 $F4CD
+        BEQ     UPDWN1          ;$F4E4
+        ADCI    ^D31            ;$F4E6
+        SEC             ;$F4E8
+        BCS     UPDWN4          ;$F4E9
+UPDWN1:
+        ADCI    ^D35            ;$F4EB
+        PHA             ;$F4ED
+        LDA     GBASL           ;$F4EE
+        ADCI    ^D176           ;$F4F0
+        BCS     UPDWN2          ;$F4F2
+        ADCI    ^D240           ;$F4F4
+UPDWN2:
+        STA     GBASL           ;$F4F6
+        PLA             ;$F4F8
+        BCS     UPDWN4          ;$F4F9
+UPDWN3:
+        ADCI    ^D31            ;$F4FB
+UPDWN4:
+        ROR     GBASL           ;$F4FD
+UPDWN5:
+        ADCI    ^D252           ;$F4FF
+UPDWN6:
+        STA     GBASH           ;$F501
+        RTS             ;$F503
+        EXP     ^D24            ;$F504
+UPDWN7:
+        LDA     GBASH           ;$F505
+MASK04=.+1      ;$F508: THE NEXT INSTRUCTION'S OPERAND, $04, DOUBLES AS DATA
+        ADCI    ^D4             ;$F507
+        BIT     MASK1C          ;$F509 $F5B9
+        BNE     UPDWN6          ;$F50C
+        ASL     GBASL           ;$F50E
+        BCC     UPDWN9          ;$F510
+        ADCI    ^D224           ;$F512
+        CLC             ;$F514
+        BIT     MASK04          ;$F515 $F508
+        BEQ     UPDW10          ;$F518
+        LDA     GBASL           ;$F51A
+        ADCI    ^D80            ;$F51C
+        EORI    ^D240           ;$F51E
+        BEQ     UPDWN8          ;$F520
+        EORI    ^D240           ;$F522
+UPDWN8:
+        STA     GBASL           ;$F524
+        LDA     HPAG            ;$F526
+        BCC     UPDW10          ;$F528
+UPDWN9:
+        ADCI    ^D224           ;$F52A
+UPDW10:
+        ROR     GBASL           ;$F52C
+        BCC     UPDWN6          ;$F52E
+        PHA             ;$F530
+        LDAI    ^D0             ;$F531
+        STA     HGRX            ;$F533
+        STA     HGRX+1          ;$F535
+        STA     HGRY            ;$F537
+        PLA             ;$F539
+HGLIN:
+        PHA             ;$F53A
+        SEC             ;$F53B
+        SBC     HGRX            ;$F53C
+        PHA             ;$F53E
+        TXA             ;$F53F
+        SBC     HGRX+1          ;$F540
+        STA     HGRQUA          ;$F542
+        BCS     HGLIN1          ;$F544
+        PLA             ;$F546
+        EORI    ^D255           ;$F547
+        ADCI    ^D1             ;$F549
+        PHA             ;$F54B
+        LDAI    ^D0             ;$F54C
+        SBC     HGRQUA          ;$F54E
+HGLIN1:
+        STA     HGRDX+1         ;$F550
+        STA     HGRE+1          ;$F552
+        PLA             ;$F554
+        STA     HGRDX           ;$F555
+        STA     HGRE            ;$F557
+        PLA             ;$F559
+        STWX    HGRX            ;$F55A
+        TYA             ;$F55E
+        CLC             ;$F55F
+        SBC     HGRY            ;$F560
+        BCC     HGLIN2          ;$F562
+        EORI    ^D255           ;$F564
+        ADCI    ^D254           ;$F566
+HGLIN2:
+        STA     HGRDY           ;$F568
+        STY     HGRY            ;$F56A
+        ROR     HGRQUA          ;$F56C
+        SEC             ;$F56E
+        SBC     HGRDX           ;$F56F
+        TAX             ;$F571
+        LDAI    ^D255           ;$F572
+        SBC     HGRDX+1         ;$F574
+        STA     HCOUNT          ;$F576
+        LDY     HNDX            ;$F578
+        BCS     HGLIN4          ;$F57A
+HGLIN3:
+        ASL     A               ;$F57C
+        JSR     LFTRT           ;$F57D $F465
+        SEC             ;$F580
+HGLIN4:
+        LDA     HGRE            ;$F581
+        ADC     HGRDY           ;$F583
+        STA     HGRE            ;$F585
+        LDA     HGRE+1          ;$F587
+        SBCI    ^D0             ;$F589
+HGLIN5:
+        STA     HGRE+1          ;$F58B
+        LDADY   GBASL           ;$F58D
+        EOR     HCOLR2          ;$F58F
+        AND     COLOR           ;$F591
+        EORDY   GBASL           ;$F593
+        STADY   GBASL           ;$F595
+        INX             ;$F597
+        BNE     HGLIN6          ;$F598
+        INC     HCOUNT          ;$F59A
+        BEQ     HFIND3          ;$F59C
+HGLIN6:
+        LDA     HGRQUA          ;$F59E
+        BCS     HGLIN3          ;$F5A0
+        JSR     UPDWN           ;$F5A2 $F4D3
+        CLC             ;$F5A5
+        LDA     HGRE            ;$F5A6
+        ADC     HGRDX           ;$F5A8
+        STA     HGRE            ;$F5AA
+        LDA     HGRE+1          ;$F5AC
+        ADC     HGRDX+1         ;$F5AE
+        BVC     HGLIN5          ;$F5B0
+MSKTBL:
+        EXP     ^D129,^D130,^D132,^D136,^D144,^D160,^D192               ;$F5B2
+MASK1C:
+        EXP     ^D28            ;$F5B9
+COSTBL:
+        EXP     ^D255,^D254,^D250,^D244,^D236,^D225,^D212,^D197         ;$F5BA
+        EXP     ^D180,^D161,^D141,^D120,^D97,^D73,^D49,^D24             ;$F5C2
+        EXP     ^D255           ;$F5CA
+HFIND:
+        LDA     GBASL           ;$F5CB
+        ASL     A               ;$F5CD
+        LDA     GBASH           ;$F5CE
+        ANDI    ^D3             ;$F5D0
+        ROL     A               ;$F5D2
+        ORA     GBASL           ;$F5D3
+        ASL     A               ;$F5D5
+        ASL     A               ;$F5D6
+        ASL     A               ;$F5D7
+        STA     HGRY            ;$F5D8
+        LDA     GBASH           ;$F5DA
+        LSR     A               ;$F5DC
+        LSR     A               ;$F5DD
+        ANDI    ^D7             ;$F5DE
+        ORA     HGRY            ;$F5E0
+        STA     HGRY            ;$F5E2
+        LDA     HNDX            ;$F5E4
+        ASL     A               ;$F5E6
+        ADC     HNDX            ;$F5E7
+        ASL     A               ;$F5E9
+        TAX             ;$F5EA
+        DEX             ;$F5EB
+        LDA     COLOR           ;$F5EC
+        ANDI    ^D127           ;$F5EE
+HFIND1:
+        INX             ;$F5F0
+        LSR     A               ;$F5F1
+        BNE     HFIND1          ;$F5F2
+        STA     HGRX+1          ;$F5F4
+        TXA             ;$F5F6
+        CLC             ;$F5F7
+        ADC     HNDX            ;$F5F8
+        BCC     HFIND2          ;$F5FA
+        INC     HGRX+1          ;$F5FC
+HFIND2:
+        STA     HGRX            ;$F5FE
+HFIND3:
+        RTS             ;$F600
+DRAW0:
+        STX     SHAPEL          ;$F601
+        STY     SHAPEH          ;$F603
+DRAW1:
+        TAX             ;$F605
+        LSR     A               ;$F606
+        LSR     A               ;$F607
+        LSR     A               ;$F608
+        LSR     A               ;$F609
+        STA     HGRQUA          ;$F60A
+        TXA             ;$F60C
+        ANDI    ^D15            ;$F60D
+        TAX             ;$F60F
+        LDY     COSTBL,X                ;$F610 $F5BA
+        STY     HGRDX           ;$F613
+        EORI    ^D15            ;$F615
+        TAX             ;$F617
+        LDY     COSTBL+1,X              ;$F618 $F5BB
+        INY             ;$F61B
+        STY     HGRDY           ;$F61C
+        LDY     HNDX            ;$F61E
+        LDXI    ^D0             ;$F620
+        STX     COLCNT          ;$F622
+        LDADX   SHAPEL          ;$F624
+DRAW11:
+        STA     HGRDX+1         ;$F626
+        LDXI    ^D128           ;$F628
+        STX     HGRE            ;$F62A
+        STX     HGRE+1          ;$F62C
+        LDX     HSCALE          ;$F62E
+DRAW12:
+        LDA     HGRE            ;$F630
+        SEC             ;$F632
+        ADC     HGRDX           ;$F633
+        STA     HGRE            ;$F635
+        BCC     DRAW13          ;$F637
+        JSR     XDRPNT          ;$F639 $F4B3
+        CLC             ;$F63C
+DRAW13:
+        LDA     HGRE+1          ;$F63D
+        ADC     HGRDY           ;$F63F
+        STA     HGRE+1          ;$F641
+        BCC     DRAW14          ;$F643
+        JSR     XDRPN1          ;$F645 $F4B4
+DRAW14:
+        DEX             ;$F648
+        BNE     DRAW12          ;$F649
+        LDA     HGRDX+1         ;$F64B
+        LSR     A               ;$F64D
+        LSR     A               ;$F64E
+        LSR     A               ;$F64F
+        BNE     DRAW11          ;$F650
+        INC     SHAPEL          ;$F652
+        BNE     DRAW15          ;$F654
+        INC     SHAPEH          ;$F656
+DRAW15:
+        LDADX   SHAPEL          ;$F658
+        BNE     DRAW11          ;$F65A
+        RTS             ;$F65C
+XDRAW0:
+        STX     SHAPEL          ;$F65D
+        STY     SHAPEH          ;$F65F
+XDRAW1:
+        TAX             ;$F661
+        LSR     A               ;$F662
+        LSR     A               ;$F663
+        LSR     A               ;$F664
+        LSR     A               ;$F665
+        STA     HGRQUA          ;$F666
+        TXA             ;$F668
+        ANDI    ^D15            ;$F669
+        TAX             ;$F66B
+        LDY     COSTBL,X                ;$F66C $F5BA
+        STY     HGRDX           ;$F66F
+        EORI    ^D15            ;$F671
+        TAX             ;$F673
+        LDY     COSTBL+1,X              ;$F674 $F5BB
+        INY             ;$F677
+        STY     HGRDY           ;$F678
+        LDY     HNDX            ;$F67A
+        LDXI    ^D0             ;$F67C
+        STX     COLCNT          ;$F67E
+        LDADX   SHAPEL          ;$F680
+XDRAW2:
+        STA     HGRDX+1         ;$F682
+        LDXI    ^D128           ;$F684
+        STX     HGRE            ;$F686
+        STX     HGRE+1          ;$F688
+        LDX     HSCALE          ;$F68A
+XDRAW3:
+        LDA     HGRE            ;$F68C
+        SEC             ;$F68E
+        ADC     HGRDX           ;$F68F
+        STA     HGRE            ;$F691
+        BCC     XDRAW4          ;$F693
+        JSR     DRWPNT          ;$F695 $F49C
+        CLC             ;$F698
+XDRAW4:
+        LDA     HGRE+1          ;$F699
+        ADC     HGRDY           ;$F69B
+        STA     HGRE+1          ;$F69D
+        BCC     XDRAW5          ;$F69F
+        JSR     DRWPN1          ;$F6A1 $F49D
+XDRAW5:
+        DEX             ;$F6A4
+        BNE     XDRAW3          ;$F6A5
+        LDA     HGRDX+1         ;$F6A7
+        LSR     A               ;$F6A9
+        LSR     A               ;$F6AA
+        LSR     A               ;$F6AB
+        BNE     XDRAW2          ;$F6AC
+        INC     SHAPEL          ;$F6AE
+        BNE     XDRAW6          ;$F6B0
+        INC     SHAPEH          ;$F6B2
+XDRAW6:
+        LDADX   SHAPEL          ;$F6B4
+        BNE     XDRAW2          ;$F6B6
+        RTS             ;$F6B8
+HFNS:
+        JSR     FRMNUM          ;$F6B9 $DD67
+        JSR     GETADR          ;$F6BC $E752
+        LDY     LINNUM+1                ;$F6BF
+        LDX     LINNUM          ;$F6C1
+        CPYI    ^D1             ;$F6C3
+        BCC     HFNS1           ;$F6C5
+        BNE     HFNS11          ;$F6C7
+        CPXI    ^D24            ;$F6C9
+        BCS     HFNS11          ;$F6CB
+HFNS1:
+        TXA             ;$F6CD
+        PHA             ;$F6CE
+        TYA             ;$F6CF
+        PHA             ;$F6D0
+        LDAI    ^D44            ;$F6D1 A COMMA.
+        JSR     SYNCHR          ;$F6D3 $DEC0
+        JSR     GETBYT          ;$F6D6 $E6F8
+        CPXI    ^D192           ;$F6D9
+        BCS     HFNS11          ;$F6DB
+        STX     FAC             ;$F6DD
+        PLA             ;$F6DF
+        TAY             ;$F6E0
+        PLA             ;$F6E1
+        TAX             ;$F6E2
+        LDA     FAC             ;$F6E3
+        RTS             ;$F6E5
+HFNS11:
+        JMP     PLOTF1          ;$F6E6 $F206
+HCOLOR:
+        JSR     GETBYT          ;$F6E9 $E6F8
+        CPXI    ^D8             ;$F6EC
+        BCS     HFNS11          ;$F6EE
+        LDA     COLTBL,X                ;$F6F0 $F6F6
+        STA     HCOLR1          ;$F6F3
+HCOLO1:
+        RTS             ;$F6F5
+COLTBL:
+        EXP     ^D0,^D42,^D85,^D127,^D128,^D170,^D213,^D255             ;$F6F6
+HPLOT:
+        CMPI    TOTK            ;$F6FE
+        BEQ     HPLOT2          ;$F700
+        JSR     HFNS            ;$F702 $F6B9
+        JSR     HPLOT0          ;$F705 $F457
+HPLOT1:
+        JSR     CHRGOT          ;$F708 $00B7
+        CMPI    TOTK            ;$F70B
+        BNE     HCOLO1          ;$F70D
+HPLOT2:
+        JSR     SYNCHR          ;$F70F $DEC0
+        JSR     HFNS            ;$F712 $F6B9
+        STY     FAC             ;$F715
+        TAY             ;$F717
+        TXA             ;$F718
+        LDX     FAC             ;$F719
+        JSR     HGLIN           ;$F71B $F53A
+        JMP     HPLOT1          ;$F71E $F708
+ROT:
+        JSR     GETBYT          ;$F721 $E6F8
+        STX     HROT            ;$F724
+        RTS             ;$F726
+SCALE:
+        JSR     GETBYT          ;$F727 $E6F8
+        STX     HSCALE          ;$F72A
+        RTS             ;$F72C
+SHNUM:
+        JSR     GETBYT          ;$F72D $E6F8
+        LDA     SHPTBL          ;$F730
+        STA     SHAPEL          ;$F732
+        LDA     SHPTBL+1                ;$F734
+        STA     SHAPEH          ;$F736
+        TXA             ;$F738
+        LDXI    ^D0             ;$F739
+        CMPDX   SHAPEL          ;$F73B
+        BEQ     SHNUM1          ;$F73D
+        BCS     HFNS11          ;$F73F
+SHNUM1:
+        ASL     A               ;$F741
+        BCC     SHNUM2          ;$F742
+        INC     SHAPEH          ;$F744
+        CLC             ;$F746
+SHNUM2:
+        TAY             ;$F747
+        LDADY   SHAPEL          ;$F748
+        ADC     SHAPEL          ;$F74A
+        TAX             ;$F74C
+        INY             ;$F74D
+        LDADY   SHAPEL          ;$F74E
+        ADC     SHPTBL+1                ;$F750
+        STA     SHAPEH          ;$F752
+        STX     SHAPEL          ;$F754
+        JSR     CHRGOT          ;$F756 $00B7
+        CMPI    ATTK            ;$F759
+        BNE     SHNUM3          ;$F75B
+        JSR     SYNCHR          ;$F75D $DEC0
+        JSR     HFNS            ;$F760 $F6B9
+        JSR     HPOSN           ;$F763 $F411
+SHNUM3:
+        LDA     HROT            ;$F766
+        RTS             ;$F768
+DRAW:
+        JSR     SHNUM           ;$F769 $F72D
+        JMP     DRAW1           ;$F76C $F605
+XDRAW:
+        JSR     SHNUM           ;$F76F $F72D
+        JMP     XDRAW1          ;$F772 $F661
+IFN     ENHNCD,<                ;ENHANCED IIE
+SHLOAD:
+        SEC             ;$F775
+        EXP     ^D144           ;$F776 BCC OPCODE: SKIPS THE NEXT BYTE
+CALLC5:
+        CLC             ;$F777
+        STA     SETINTCXROM             ;$F778 $C007
+        JSR     C5ROM           ;$F77B $C500
+        STA     SETSLOTCXROM            ;$F77E $C006
+        BCS     CALLC1          ;$F781
+        RTS             ;$F783
+CALLC1:
+        JMP     OMERR           ;$F784 $D410
+UPNXT:
+        LDA     BUF+1,X         ;$F787 $0201
+        BPL     UPBUF1          ;$F78A
+UPCASE:
+        LDA     ENDCHR          ;$F78C
+        BEQ     UPBUF5          ;$F78E
+        CMPI    ^D34            ;$F790 INSIDE A STRING (A QUOTE)?
+        BEQ     UPBUF5          ;$F792
+        LDA     DORES           ;$F794
+        CMPI    DATATK-":"              ;$F796 IN A DATA STATEMENT?
+        BEQ     UPBUF5          ;$F798
+UPBUF:
+        LDA     BUF,X           ;$F79A $0200
+UPBUF1:
+        PHP             ;$F79D
+        CMPI    "a"             ;$F79E LOWER CASE?
+        BCC     UPBUF4          ;$F7A0
+        ANDI    ^D95            ;$F7A2
+UPBUF4:
+        PLP             ;$F7A4
+        RTS             ;$F7A5
+UPBUF5:
+        LDA     BUF,X           ;$F7A6 $0200
+        RTS             ;$F7A9
+SPCLIN:
+        PHA             ;$F7AA
+        LDAI    " "             ;$F7AB
+        JSR     OUTDO           ;$F7AD $DB5C
+        PLA             ;$F7B0
+        JMP     LINPRT          ;$F7B1 $ED24
+CHKCOL:
+        LDA     TRMPOS          ;$F7B4
+        CMPI    ^D33            ;$F7B6
+        BIT     RD80VID         ;$F7B8 $C01F
+        BPL     CHKCO1          ;$F7BB
+        LDA     OURCH           ;$F7BD $057B
+        CMPI    ^D73            ;$F7C0
+CHKCO1:
+        RTS             ;$F7C2
+TRMSET:
+        TXA             ;$F7C3
+        BIT     RD80VID         ;$F7C4 $C01F
+        BMI     TRMSE3          ;$F7C7
+        SKIP2                   ;$F7C9 BIT ABSOLUTE: SKIPS THE NEXT TWO BYTES
+TRMSE1:
+        STA     TRMPOS          ;$F7CA
+        SEC             ;$F7CC
+        TXA             ;$F7CD
+        SBC     TRMPOS          ;$F7CE
+TRMSE2:
+        RTS             ;$F7D0
+TRMSE3:
+        SBC     OURCH           ;$F7D1 $057B
+        RTS             ;$F7D4
+        EXP     ^D0,^D0,^D0,^D0         ;$F7D5
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+SHLOAD:
+        LDAI    ^D0             ;$F775
+        STA     A1H             ;$F777
+        STA     A2H             ;$F779
+        LDYI    LINNUM          ;$F77B READ THE LENGTH INTO LINNUM.
+        STY     A1L             ;$F77D
+        INY             ;$F77F
+        STY     A2L             ;$F780
+        JSR     MREAD           ;$F782 $FEFD
+        CLC             ;$F785
+        LDA     MEMSIZ          ;$F786
+        TAX             ;$F788
+        DEX             ;$F789
+        STX     A2L             ;$F78A
+        SBC     LINNUM          ;$F78C
+        PHA             ;$F78E
+        LDA     MEMSIZ+1                ;$F78F
+        TAY             ;$F791
+        INX             ;$F792
+        BNE     SHLOD1          ;$F793
+        DEY             ;$F795
+SHLOD1:
+        STY     A2H             ;$F796
+        SBC     LINNUM+1                ;$F798
+        CMP     STREND+1                ;$F79A
+        BCC     SHLOD2          ;$F79C
+        BNE     SHLOD3          ;$F79E
+SHLOD2:
+        JMP     OMERR           ;$F7A0 $D410
+SHLOD3:
+        STA     MEMSIZ+1                ;$F7A3
+        STA     NCMWID          ;$F7A5
+        STA     A1H             ;$F7A7
+        STA     SHPTBL+1                ;$F7A9
+        PLA             ;$F7AB
+        STA     SHPTBL          ;$F7AC
+        STA     MEMSIZ          ;$F7AE
+        STA     FRETOP          ;$F7B0
+        STA     A1L             ;$F7B2
+        JSR     RD2BIT          ;$F7B4 $FCFA
+        LDAI    ^D3             ;$F7B7
+        JMP     MREAD+5         ;$F7B9 $FF02
+SETA2:
+        CLC             ;$F7BC
+        LDA     LOWTR           ;$F7BD
+        ADC     LINNUM          ;$F7BF
+        STA     A2L             ;$F7C1
+        LDA     EXPSGN          ;$F7C3
+        ADC     LINNUM+1                ;$F7C5
+        STA     A2H             ;$F7C7
+        LDYI    ^D4             ;$F7C9
+        LDADY   LOWTR           ;$F7CB
+        JSR     FMAPT1          ;$F7CD $E0EF
+        LDA     HIGHDS          ;$F7D0
+        STA     A1L             ;$F7D2
+        LDA     HIGHDS+1                ;$F7D4
+        STA     A1H             ;$F7D6
+        RTS             ;$F7D8
+>
+GETARYPT:
+        LDAI    ^D64            ;$F7D9
+        STA     SUBFLG          ;$F7DB
+        JSR     PTRGET          ;$F7DD $DFE3
+        LDAI    ^D0             ;$F7E0
+        STA     SUBFLG          ;$F7E2
+        JMP     VARTIO          ;$F7E4 $D8F0
+HTAB:
+        JSR     GETBYT          ;$F7E7 $E6F8
+        DEX             ;$F7EA
+IFN     ENHNCD,<                ;ENHANCED IIE
+HTAB1:
+        LDAI    ^D40            ;$F7EB
+        CMP     WNDWDT          ;$F7ED
+        BCS     HTAB12          ;$F7EF
+        LDA     WNDWDT          ;$F7F1
+HTAB12:
+        JSR     TRMSE1          ;$F7F3 $F7CA
+        STX     TRMPOS          ;$F7F6
+        BCC     TRMSE2          ;$F7F8
+        TAX             ;$F7FA
+        JSR     CRDO            ;$F7FB $DAFB
+        BNE     HTAB1           ;$F7FE
+>
+IFE     ENHNCD,<                ;ORIGINAL IIE
+        TXA             ;$F7EB
+HTAB11:
+        CMPI    ^D40            ;$F7EC
+        BCC     HTAB13          ;$F7EE
+        SBCI    ^D40            ;$F7F0
+        PHA             ;$F7F2
+        JSR     CRDO            ;$F7F3 $DAFB
+        PLA             ;$F7F6
+        JMP     HTAB11          ;$F7F7 $F7EC
+HTAB13:
+        STA     TRMPOS          ;$F7FA
+        RTS             ;$F7FC
+IFE     APLPLS,<
+        EXP     ^D203,^D210,^D120               ;$F7FD
+>
+IFN     APLPLS,<                ;II PLUS: THE CHIP'S LAST BYTE DIFFERS.
+        EXP     ^D203,^D210,^D215               ;$F7FD
+>
+>
+;@END

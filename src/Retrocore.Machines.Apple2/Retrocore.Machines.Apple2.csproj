@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Apple IIe: bus, video, disk, audio, and the SDK's ROM sources. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <AdditionalFiles Include="..\Retrocore.Cpu.M6502\OpcodeTables.txt" />
+    <AdditionalFiles Include="Roms\*.rom.asm" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\Retrocore.Generators\Retrocore.Generators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

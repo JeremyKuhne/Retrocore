@@ -1,0 +1,340 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+namespace Retrocore.Basic;
+
+/// <summary>
+///  Finds the reserved words, line references, variables and functions in one tokenized line, with the columns of
+///  the text they came from.
+/// </summary>
+internal sealed class BasicLineScanner
+{
+    private readonly BasicDialect _dialect;
+    private readonly int _line;
+    private readonly string _text;
+    private readonly byte[] _bytes;
+    private readonly IReadOnlyList<int> _positions;
+    private readonly int[] _columns;
+    private readonly HashSet<string> _foreign;
+    private readonly IReadOnlyList<(int Start, int End)> _skip;
+
+    /// <summary>
+    ///  Creates the scanner.
+    /// </summary>
+    /// <param name="dialect">The dialect.</param>
+    /// <param name="line">The zero-based line of the text.</param>
+    /// <param name="text">The line's text.</param>
+    /// <param name="bytes">The line's statements, tokenized.</param>
+    /// <param name="positions">The text unit each byte came from.</param>
+    /// <param name="columns">The column each text unit starts at.</param>
+    /// <param name="foreign">Other dialects' reserved words, which this one reads as names.</param>
+    /// <param name="skip">The columns of label names, which are not BASIC's.</param>
+    internal BasicLineScanner(
+        BasicDialect dialect,
+        int line,
+        string text,
+        byte[] bytes,
+        IReadOnlyList<int> positions,
+        int[] columns,
+        HashSet<string> foreign,
+        IReadOnlyList<(int Start, int End)>? skip = null)
+    {
+        _skip = skip ?? [];
+        _dialect = dialect;
+        _line = line;
+        _text = text;
+        _bytes = bytes;
+        _positions = positions;
+        _columns = columns;
+        _foreign = foreign;
+    }
+
+    /// <summary>
+    ///  Scans the line.
+    /// </summary>
+    /// <param name="sites">Receives what is found.</param>
+    /// <param name="diagnostics">Receives warnings about names BASIC reads differently than they look.</param>
+    internal void Run(List<BasicSite> sites, List<BasicDiagnostic> diagnostics)
+    {
+        BasicJump jump = BasicJump.None;
+        bool afterNumber = false;
+        bool afterFunction = false;
+        bool inString = false;
+        bool inData = false;
+        string? previous = null;
+        string? beforeGoto = null;
+        string? via = null;
+        BasicSite? name = null;
+        BasicSite? split = null;
+        for (int index = 0; index < _bytes.Length; index++)
+        {
+            byte value = _bytes[index];
+            if (inString)
+            {
+                inString = value != '"';
+                continue;
+            }
+
+            if (inData)
+            {
+                inString = value == '"';
+                inData = value != ':';
+                continue;
+            }
+
+            if (value == ' ') { continue; }
+            if (_skip.Count != 0 && _skip.Any(range => Column(index) >= range.Start && Column(index) < range.End))
+            {
+                name = null;
+                continue;
+            }
+
+            if (_dialect.Keyword(value) is { } word)
+            {
+                // Level II stores ELSE as :ELSE and ' as :REM': the site is the last byte from the same text.
+                int last = Last(index);
+                byte token = _bytes[last];
+                BasicSite site = Site(BasicSiteKind.Keyword, index, End(last)) with { Token = token };
+                sites.Add(site);
+                word = _dialect.Keyword(token) ?? word;
+                if (name is { Text.Length: >= 2 } before
+                    && before.End == site.Start
+                    && char.IsAsciiLetter(word[0]))
+                {
+                    split = site;
+                }
+
+                name = null;
+                if (value == _dialect.RemToken) { break; }
+                bool range = jump == BasicJump.Range && afterNumber && word == "-";
+                jump = range ? BasicJump.Range : JumpAfter(word);
+                via = range ? via : word;
+                afterNumber = false;
+                afterFunction = word == "FN";
+                inData = word == "DATA";
+                if (word == "GOTO") { beforeGoto = previous; }
+                previous = word;
+                index = last;
+                continue;
+            }
+
+            if (value == '"')
+            {
+                inString = true;
+                jump = BasicJump.None;
+                name = null;
+                continue;
+            }
+
+            if (char.IsAsciiDigit((char)value) || value == '.')
+            {
+                if (jump != BasicJump.None && value != '.' && !afterNumber)
+                {
+                    index = Reference(index, sites, via, zero: previous == "RESUME" || beforeGoto is "ERROR" or "ONERR");
+                    afterNumber = true;
+                    if (jump == BasicJump.Single) { jump = BasicJump.None; }
+                }
+                else
+                {
+                    index = SkipNumber(index);
+                    jump = BasicJump.None;
+                }
+
+                name = null;
+                continue;
+            }
+
+            if (char.IsAsciiLetter((char)value))
+            {
+                index = Name(index, afterFunction, sites, diagnostics, split, out name);
+                split = null;
+                afterFunction = false;
+                jump = BasicJump.None;
+                continue;
+            }
+
+            // A comma continues a list of lines; anything else ends it.
+            if (!(value == ',' && jump == BasicJump.List && afterNumber)) { jump = BasicJump.None; }
+            afterNumber = false;
+            name = null;
+        }
+    }
+
+    /// <summary>
+    ///  Finds where each statement starts: the line's first byte, and the byte after each colon outside strings,
+    ///  DATA and REM. A statement's column is its first character after any spaces.
+    /// </summary>
+    /// <returns>The statements, in order.</returns>
+    internal List<BasicStatement> Statements()
+    {
+        List<BasicStatement> statements = [new(0, _bytes.Length == 0 ? _text.Length : FirstColumn(0))];
+        bool inString = false;
+        for (int index = 0; index < _bytes.Length; index++)
+        {
+            byte value = _bytes[index];
+            if (inString)
+            {
+                inString = value != '"';
+                continue;
+            }
+
+            if (value == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (value == _dialect.RemToken) { break; }
+            if (value != ':') { continue; }
+            statements.Add(new(index + 1, index + 1 < _bytes.Length ? FirstColumn(index + 1) : _text.Length));
+        }
+
+        return statements;
+    }
+
+    // The column of the first byte at or after an index that is not a space.
+    private int FirstColumn(int index)
+    {
+        int at = index;
+        while (at + 1 < _bytes.Length && _bytes[at] == ' ') { at++; }
+        return Column(at);
+    }
+
+    private static BasicJump JumpAfter(string word) => word switch
+    {
+        "GOTO" or "GOSUB" => BasicJump.List,
+        "THEN" or "ELSE" or "RUN" or "RESUME" or "EDIT" => BasicJump.Single,
+        "LIST" or "LLIST" or "DEL" or "DELETE" => BasicJump.Range,
+        _ => BasicJump.None
+    };
+
+    // A line number after GOTO and the like; zero is not a line after ON ERROR GOTO or RESUME. Spaces between
+    // digits are skipped, as BASIC skips them.
+    private int Reference(int index, List<BasicSite> sites, string? via, bool zero)
+    {
+        int end = index;
+        long number = 0;
+        int last = index;
+        while (end < _bytes.Length && (char.IsAsciiDigit((char)_bytes[end]) || _bytes[end] == ' '))
+        {
+            if (_bytes[end] != ' ')
+            {
+                number = Math.Min(number * 10 + (_bytes[end] - '0'), int.MaxValue);
+                last = end;
+            }
+
+            end++;
+        }
+
+        if (!(zero && number == 0))
+        {
+            sites.Add(Site(BasicSiteKind.LineReference, index, End(last)) with { Number = (int)number, Via = via });
+        }
+
+        return last;
+    }
+
+    // A number that is not a line: digits, a point and an exponent, with its sign token.
+    private int SkipNumber(int index)
+    {
+        int at = index;
+        while (at + 1 < _bytes.Length && (char.IsAsciiDigit((char)_bytes[at + 1]) || _bytes[at + 1] == '.')) { at++; }
+        if (at + 2 < _bytes.Length && _bytes[at + 1] is (byte)'E' or (byte)'D')
+        {
+            int sign = _dialect.Keyword(_bytes[at + 2]) is "+" or "-" ? at + 3 : at + 2;
+            if (sign < _bytes.Length && char.IsAsciiDigit((char)_bytes[sign]))
+            {
+                at = sign;
+                while (at + 1 < _bytes.Length && char.IsAsciiDigit((char)_bytes[at + 1])) { at++; }
+            }
+        }
+
+        return at;
+    }
+
+    // A variable or function name: letters and digits, a type suffix, and a parenthesis for an array.
+    private int Name(
+        int index,
+        bool function,
+        List<BasicSite> sites,
+        List<BasicDiagnostic> diagnostics,
+        BasicSite? split,
+        out BasicSite? site)
+    {
+        int last = index;
+        while (last + 1 < _bytes.Length && char.IsAsciiLetterOrDigit((char)_bytes[last + 1])) { last++; }
+        string letters = new([.. _bytes[index..(last + 1)].Select(value => char.ToUpperInvariant((char)value))]);
+        string suffix = "";
+        if (last + 1 < _bytes.Length && IsSuffix(_bytes[last + 1]))
+        {
+            last++;
+            suffix = ((char)_bytes[last]).ToString();
+        }
+
+        int next = last + 1;
+        while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
+        bool array = !function && next < _bytes.Length && _bytes[next] == '(';
+        string significant = letters.Length > 2 ? letters[..2] : letters;
+        BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
+        {
+            Key = $"{significant}{suffix}{(array ? "(" : "")}",
+            Name = letters + suffix
+        };
+
+        sites.Add(found);
+        site = found;
+        if (split is { } keyword && keyword.End == found.Start && sites.Count >= 3)
+        {
+            BasicSite before = sites[^3];
+            string whole = _text[before.Start..found.End];
+            diagnostics.Add(new(
+                _line,
+                BasicSeverity.Warning,
+                $"BASIC reads {whole} as {before.Text} {keyword.Text} {found.Text}: it finds {keyword.Text.ToUpperInvariant()} inside the name.",
+                before.Start,
+                found.End));
+        }
+        else if (_foreign.Contains(letters) && suffix.Length == 0)
+        {
+            diagnostics.Add(new(
+                _line,
+                BasicSeverity.Warning,
+                $"{letters} is not a reserved word in {_dialect.DisplayName}; it is read as the variable {significant}.",
+                found.Start,
+                found.End));
+        }
+
+        return last;
+    }
+
+    // A type suffix: $ and %, and on Level II ! and # for single and double precision.
+    private bool IsSuffix(byte value) =>
+        value is (byte)'$' or (byte)'%' || (_dialect == BasicDialect.Level2 && value is (byte)'!' or (byte)'#');
+
+    // The last byte that came from the same text as this one.
+    private int Last(int index)
+    {
+        int last = index;
+        while (last + 1 < _bytes.Length && _positions[last + 1] == _positions[index]) { last++; }
+        return last;
+    }
+
+    private int Column(int index) => _positions[index] < _columns.Length ? _columns[_positions[index]] : _text.Length;
+
+    // The column past a byte's text: where the next byte's starts, less spaces BASIC dropped.
+    private int End(int index)
+    {
+        int next = Last(index) + 1;
+        int end = next < _bytes.Length ? Column(next) : _text.Length;
+        int start = Column(index);
+        while (end > start + 1 && _text[end - 1] == ' ') { end--; }
+        return end;
+    }
+
+    private BasicSite Site(BasicSiteKind kind, int index, int end)
+    {
+        int start = Column(index);
+        return new(kind, _line, start, end, _text[start..end]);
+    }
+}

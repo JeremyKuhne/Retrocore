@@ -1,0 +1,1033 @@
+{
+  "name": "retrocore",
+  "displayName": "Retrocore Assembly and Debugger",
+  "description": "6502 and Z80 assembly and BASIC with source-level debugging on emulated Apple II family computers and the TRS-80 Model I.",
+  "version": "0.1.0",
+  "publisher": "retrocore",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.140.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onDebugResolve:retrocore",
+    "onDebugDynamicConfigurations:retrocore",
+    "onFileSystem:retrocore-basic",
+    "onFileSystem:retrocore-basic-file",
+    "onLanguage:retrocore-applesoft",
+    "onLanguage:retrocore-level2",
+    "onLanguage:retrocore-integer",
+    "onLanguage:retrocore-level1",
+    "onLanguage:retrocore-basic"
+  ],
+  "scripts": {
+    "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
+    "compile": "npm run generate:grammar && tsc -p .",
+    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
+    "test:language": "node out/test/runTest.js --language-only",
+    "test:editor": "node out/test/runTest.js",
+    "test": "npm run compile && npm run test:grammar && npm run test:editor"
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "^5.9.3",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.2.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "retrocore-asm",
+        "aliases": [
+          "Retrocore Assembly",
+          "retrocore-asm"
+        ],
+        "extensions": [
+          ".asm",
+          ".retrocore.asm",
+          ".rom.asm"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "retrocore-macro10",
+        "aliases": [
+          "MACRO-10 Assembly",
+          "macro10"
+        ],
+        "extensions": [
+          ".mac"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./media/macro10.svg",
+          "dark": "./media/macro10.svg"
+        }
+      },
+      {
+        "id": "retrocore-applesoft",
+        "aliases": [
+          "AppleSoft BASIC",
+          "applesoft"
+        ],
+        "extensions": [
+          ".applesoft.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-level2",
+        "aliases": [
+          "Level II BASIC",
+          "level2"
+        ],
+        "extensions": [
+          ".level2.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-integer",
+        "aliases": [
+          "Integer BASIC",
+          "integer"
+        ],
+        "extensions": [
+          ".integer.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-level1",
+        "aliases": [
+          "Level I BASIC",
+          "level1"
+        ],
+        "extensions": [
+          ".level1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-basic",
+        "aliases": [
+          "Retrocore BASIC"
+        ],
+        "extensions": [
+          ".bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "retrocore-asm",
+        "scopeName": "source.retrocore",
+        "path": "./syntaxes/retrocore.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-macro10",
+        "scopeName": "source.retrocore.macro10",
+        "path": "./syntaxes/macro10.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-applesoft",
+        "scopeName": "source.retrocore-applesoft",
+        "path": "./syntaxes/applesoft.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-level2",
+        "scopeName": "source.retrocore-level2",
+        "path": "./syntaxes/level2.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-integer",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-level1",
+        "scopeName": "source.retrocore-basic",
+        "path": "./syntaxes/basic.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-basic",
+        "scopeName": "source.retrocore-basic",
+        "path": "./syntaxes/basic.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[retrocore-asm]": {
+        "editor.colorDecorators": false
+      },
+      "[retrocore-macro10]": {
+        "editor.colorDecorators": false
+      }
+    },
+    "configuration": {
+      "title": "Retrocore",
+      "properties": {
+        "retrocore.languageServer.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run the retrocore language server: errors as you type, go to definition, hover, completion and symbols."
+        },
+        "retrocore.languageServer.host": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net10.0."
+        },
+        "retrocore.basic.dialect": {
+          "type": "string",
+          "enum": [
+            "",
+            "applesoft",
+            "integer",
+            "level2"
+          ],
+          "default": "",
+          "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
+        },
+        "retrocore.display.onSessionEnd": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "close"
+          ],
+          "enumDescriptions": [
+            "Keeps the machine's panel, dimmed, with Restart, Start Machine and Close.",
+            "Closes the machine's panel."
+          ],
+          "default": "keep",
+          "markdownDescription": "What the machine's display panel does when its debug session ends."
+        }
+      }
+    },
+    "breakpoints": [
+      {
+        "language": "retrocore-asm"
+      },
+      {
+        "language": "retrocore-macro10"
+      },
+      {
+        "language": "asm"
+      },
+      {
+        "language": "retrocore-applesoft"
+      },
+      {
+        "language": "retrocore-level2"
+      },
+      {
+        "language": "retrocore-integer"
+      },
+      {
+        "language": "retrocore-basic"
+      }
+    ],
+    "views": {
+      "debug": [
+        {
+          "id": "retrocore.devices",
+          "name": "Retro Devices",
+          "when": "debugType == retrocore || !inDebugMode"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "retrocore.devices",
+        "contents": "No machine is running.\n[Start Machine](command:retrocore.startMachine)\nOr pick a machine under Retrocore in the Run and Debug dropdown and press F5.",
+        "when": "!inDebugMode"
+      },
+      {
+        "view": "debug",
+        "contents": "Start a retro machine without a launch.json: the Apple II family or the TRS-80 Model I.\n[Start Retro Machine](command:retrocore.startMachine)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "retrocore.startMachine",
+          "when": "view == retrocore.devices && !inDebugMode",
+          "group": "navigation"
+        },
+        {
+          "command": "retrocore.device.refresh",
+          "when": "view == retrocore.devices",
+          "group": "navigation"
+        },
+        {
+          "command": "retrocore.resetSavedMachine",
+          "when": "view == retrocore.devices"
+        },
+        {
+          "command": "retrocore.breakpoints.showHits",
+          "when": "view == workbench.debug.breakPointsView && debugType == retrocore",
+          "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.breakpoints.resetHits",
+          "when": "view == workbench.debug.breakPointsView && debugType == retrocore",
+          "group": "navigation@2"
+        },
+        {
+          "command": "retrocore.memory.open",
+          "when": "view == workbench.debug.variablesView && debugType == retrocore",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "retrocore.basic.open",
+          "when": "view == retrocore.devices && viewItem == basicProgram",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.hardware.addCard",
+          "when": "view == retrocore.devices && viewItem =~ /\\baddCard\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.hardware.removeCard",
+          "when": "view == retrocore.devices && viewItem =~ /\\bremoveCard\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.device.insert",
+          "when": "view == retrocore.devices && viewItem =~ /\\binsert\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.device.record",
+          "when": "view == retrocore.devices && viewItem =~ /\\brecord\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "view == retrocore.devices && viewItem =~ /\\beject\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "retrocore.device.protect",
+          "when": "view == retrocore.devices && viewItem =~ /\\bprotect\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.unprotect",
+          "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
+          "group": "inline@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "retrocore.hardware.addCard",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.hardware.removeCard",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.insert",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.record",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.protect",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.unprotect",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.breakpoints.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.breakpoints.showHits",
+          "when": "debugType == retrocore"
+        },
+        {
+          "command": "retrocore.breakpoints.resetHits",
+          "when": "debugType == retrocore"
+        },
+        {
+          "command": "retrocore.memory.open",
+          "when": "debugType == retrocore"
+        },
+        {
+          "command": "retrocore.memory.banks",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.basic.open",
+          "when": "debugType == retrocore || resourceScheme == retrocore-basic"
+        },
+        {
+          "command": "retrocore.basic.import",
+          "when": "debugType == retrocore || resourceScheme == retrocore-basic"
+        },
+        {
+          "command": "retrocore.basic.export",
+          "when": "debugType == retrocore || resourceScheme == retrocore-basic"
+        },
+        {
+          "command": "retrocore.basic.renumber",
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+        },
+        {
+          "command": "retrocore.basic.openListing",
+          "when": "resourceScheme == file"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "retrocore.basic.import",
+          "when": "resourceScheme == retrocore-basic",
+          "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.basic.export",
+          "when": "resourceScheme == retrocore-basic",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "retrocore.basic.openListing",
+          "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
+          "group": "navigation@9"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "retrocore.clearCycles",
+        "title": "Retrocore: Clear Source Cycle Counts"
+      },
+      {
+        "command": "retrocore.breakpoints.showHits",
+        "title": "Retrocore: Show Breakpoint Hit Counts",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "retrocore.breakpoints.resetHits",
+        "title": "Retrocore: Reset Breakpoint Hit Counts",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "retrocore.breakpoints.list",
+        "title": "Retrocore: List Breakpoints"
+      },
+      {
+        "command": "retrocore.memory.open",
+        "title": "Retrocore: Open Memory...",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.banks",
+        "title": "Retrocore: List Memory Banks"
+      },
+      {
+        "command": "retrocore.hardware.addCard",
+        "title": "Add Card...",
+        "icon": "$(add)"
+      },
+      {
+        "command": "retrocore.hardware.removeCard",
+        "title": "Remove Card",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "retrocore.device.insert",
+        "title": "Insert Media...",
+        "icon": "$(add)"
+      },
+      {
+        "command": "retrocore.device.record",
+        "title": "Record to...",
+        "icon": "$(record)"
+      },
+      {
+        "command": "retrocore.device.eject",
+        "title": "Eject",
+        "icon": "$(eject)"
+      },
+      {
+        "command": "retrocore.device.protect",
+        "title": "Write Protect",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "retrocore.device.unprotect",
+        "title": "Allow Writes",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.refresh",
+        "title": "Refresh Devices",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "retrocore.device.list",
+        "title": "Retrocore: List Devices"
+      },
+      {
+        "command": "retrocore.resetSavedMachine",
+        "title": "Retrocore: Reset Saved Machine..."
+      },
+      {
+        "command": "retrocore.startMachine",
+        "title": "Retrocore: Start Machine...",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.startLastMachine",
+        "title": "Retrocore: Start Last Machine"
+      },
+      {
+        "command": "retrocore.saveLaunchConfiguration",
+        "title": "Retrocore: Save Last Machine as Launch Configuration"
+      },
+      {
+        "command": "retrocore.insertCassette",
+        "title": "TRS-80: Insert Cassette..."
+      },
+      {
+        "command": "retrocore.recordCassette",
+        "title": "TRS-80: Record Cassette..."
+      },
+      {
+        "command": "retrocore.ejectCassette",
+        "title": "TRS-80: Eject Cassette"
+      },
+      {
+        "command": "retrocore.insertDisk",
+        "title": "TRS-80: Insert Disk..."
+      },
+      {
+        "command": "retrocore.ejectDisk",
+        "title": "TRS-80: Eject Disk..."
+      },
+      {
+        "command": "retrocore.basic.open",
+        "title": "Retrocore: Open BASIC Program",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "retrocore.basic.import",
+        "title": "Retrocore: Import BASIC Program...",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "retrocore.basic.export",
+        "title": "Retrocore: Export BASIC Program...",
+        "icon": "$(save-as)"
+      },
+      {
+        "command": "retrocore.basic.renumber",
+        "title": "Retrocore: Renumber BASIC Program..."
+      },
+      {
+        "command": "retrocore.basic.openListing",
+        "title": "Retrocore: Open as BASIC Listing"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "retrocore",
+        "label": "Retrocore",
+        "languages": [
+          "retrocore-asm",
+          "retrocore-macro10",
+          "asm",
+          "plaintext"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "machine"
+            ],
+            "properties": {
+              "machine": {
+                "enum": [
+                  "apple2",
+                  "trs80-model1",
+                  "apple2e"
+                ],
+                "enumDescriptions": [
+                  "The Apple II family; model says which.",
+                  "The TRS-80 Model I.",
+                  "The older name for apple2, from when only the IIe was emulated."
+                ],
+                "default": "apple2",
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), trs80-model1 a TRS-80 Model I."
+              },
+              "romDirectory": {
+                "type": "string",
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II and RETROCORE_TRS80_ROMS for the Model I. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
+              },
+              "rom": {
+                "enum": [
+                  "level2",
+                  "level1"
+                ],
+                "default": "level2",
+                "description": "Model I: Level II or Level I BASIC."
+              },
+              "revision": {
+                "enum": [
+                  "1.2",
+                  "1.3"
+                ],
+                "default": "1.3",
+                "description": "Model I: the Level II revision; 1.3 reads the dumps' _alt parts."
+              },
+              "ramKilobytes": {
+                "type": "number",
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board."
+              },
+              "expansionInterface": {
+                "type": "boolean",
+                "description": "Model I: the Expansion Interface (RAM above 16K, the clock interrupt, disks); defaults on for Level II."
+              },
+              "diskController": {
+                "anyOf": [
+                  {
+                    "type": "boolean",
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one."
+                  },
+                  {
+                    "enum": [
+                      "diskII",
+                      "slot7"
+                    ],
+                    "enumDescriptions": [
+                      "IIe: the Disk II in slot 6, the default for WOZ and DOS-order images, and with diskBootRom.",
+                      "IIe: the slot 7 block device, the default for .po images."
+                    ]
+                  }
+                ],
+                "description": "Model I: true or false, whether the Expansion Interface has its disk controller (on by default when disks are given). IIe: diskII or slot7, where diskImage goes (the Disk II in slot 6, or the slot 7 block device for .po images)."
+              },
+              "lowercase": {
+                "type": "boolean",
+                "default": false,
+                "description": "Model I: the lowercase modification's seventh video bit."
+              },
+              "characterGenerator": {
+                "enum": [
+                  "stock",
+                  "kit"
+                ],
+                "description": "Model I: the font: the stock MCM6670P, or Radio Shack's lowercase kit's replacement (as xtrs reconstructs it); defaults to kit with lowercase."
+              },
+              "snow": {
+                "type": "boolean",
+                "default": false,
+                "description": "Model I: show video snow when the CPU reads or writes video RAM while the beam draws."
+              },
+              "doubler": {
+                "enum": [
+                  "none",
+                  "percom",
+                  "tandy",
+                  "both"
+                ],
+                "default": "none",
+                "description": "Model I: a double-density doubler: percom (selected by $FE/$FF commands, as NEWDOS/80 expects), tandy (the Radio Shack doubler, selected by $80/$A0 sector writes) or both."
+              },
+              "cassette": {
+                "type": "string",
+                "description": "Model I: a .cas tape to play."
+              },
+              "fastCassette": {
+                "type": "boolean",
+                "default": true,
+                "description": "Model I: run as fast as possible while the cassette motor runs, so tapes load and save quickly; the machine's own timing is unchanged."
+              },
+              "disks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "description": "Model I: JV1 or JV3 (.jv3) images for drives 0-3."
+              },
+              "bootSeconds": {
+                "type": "number",
+                "description": "Model I: emulated seconds the ROM runs before a program loads, to set up its RAM vectors; defaults to 1 when loading a program."
+              },
+              "controllers": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple II: read game controllers (Xbox, PlayStation and others) into the game port while the machine runs, even with VS Code in the background. The first controller's left stick or d-pad is the joystick (paddles 0 and 1) and its A, B and X buttons are buttons 0, 1 and 2; a second controller is paddles 2 and 3. False leaves the paddles unconnected."
+              },
+              "programmersAid": {
+                "type": "boolean",
+                "default": false,
+                "description": "Apple II: put Programmer's Aid #1 in the II's D0 socket ($D000-$D7FF), from the romDirectory's dump if it is there and otherwise built from the SDK's source. CALL -12288 starts its hi-res graphics. Other models have no D0 socket."
+              },
+              "fastDisk": {
+                "type": "boolean",
+                "default": true,
+                "description": "IIe: run as fast as possible while any Disk II drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
+              },
+              "speed": {
+                "enum": [
+                  1,
+                  2,
+                  4,
+                  8,
+                  "max"
+                ],
+                "enumDescriptions": [
+                  "The machine's real speed.",
+                  "Twice the machine's clock.",
+                  "Four times the machine's clock.",
+                  "Eight times the machine's clock.",
+                  "As fast as the host can run it."
+                ],
+                "default": 1,
+                "description": "How fast the machine runs, as a multiple of its clock; the display panel's Speed changes it while debugging."
+              },
+              "sound": {
+                "enum": [
+                  "off",
+                  "speaker",
+                  "mockingboard"
+                ],
+                "enumDescriptions": [
+                  "No sound, and no cost.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed.",
+                  "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
+                ],
+                "default": "speaker",
+                "description": "IIe: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+              },
+              "mockingboard": {
+                "type": "boolean",
+                "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "logpointLimit": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 100,
+                "description": "The most lines logpoints write to the Debug Console each second; the rest are counted and reported. 0 lifts the limit."
+              },
+              "diskImage": {
+                "type": "string",
+                "description": "Disk image for drive 1: a .po image goes to the slot 7 block device, and a WOZ, .dsk or .do image to the Disk II in slot 6."
+              },
+              "dos": {
+                "enum": [
+                  "3.3",
+                  "3.2"
+                ],
+                "description": "Boots the program from a fresh DOS disk built from the SDK's DOS sources (3.2 uses the 13-sector Disk II): the program as a binary file and a HELLO that BRUNs it, in a Disk II in slot 6. The program must start at its first address."
+              },
+              "dosYear": {
+                "enum": [
+                  1983,
+                  1980
+                ],
+                "default": 1983,
+                "description": "With dos 3.3, which DOS 3.3 to boot: 1983 (the 680-0210-A System Master's) or 1980 (the 680-0051 masters')."
+              },
+              "diskSectors": {
+                "enum": [
+                  16,
+                  13
+                ],
+                "default": 16,
+                "description": "Without diskBootRom, the Disk II's ROMs are assembled from the SDK's sources: the 16-sector card's (341-0027 and 341-0028) or the 13-sector card's (341-0009 and 341-0010)."
+              },
+              "diskBootRom": {
+                "type": "string",
+                "description": "Externally supplied 256-byte Disk II P5/P5A boot ROM, instead of the SDK's; selects native floppy I/O."
+              },
+              "diskSequencerRom": {
+                "type": "string",
+                "description": "Externally supplied 256-byte Disk II P6 sequencer PROM."
+              },
+              "sequencerLayout": {
+                "enum": [
+                  "raw",
+                  "beneath-prodos",
+                  "boot-socket"
+                ],
+                "default": "raw",
+                "description": "Explicit sequencer ROM pin/table layout: boot-socket for a dump read from the boot ROM's socket, as the known 341-0010 dump is."
+              },
+              "model": {
+                "enum": [
+                  "iie-enhanced",
+                  "iie",
+                  "iiplus",
+                  "ii",
+                  "enhanced",
+                  "original"
+                ],
+                "enumDescriptions": [
+                  "The enhanced Apple IIe: a 65C02, MouseText and the enhanced firmware.",
+                  "The original (unenhanced) Apple IIe: an NMOS 6502.",
+                  "The Apple II Plus: AppleSoft and the Autostart Monitor, an NMOS 6502, 48 KB and a language card in slot 0.",
+                  "The Apple II: Integer BASIC and the original Monitor (or, with monitor autostart, the Autostart Monitor), an NMOS 6502 and 48 KB.",
+                  "The older name for iie-enhanced.",
+                  "The older name for iie."
+                ],
+                "default": "iie-enhanced",
+                "description": "Apple II: which model of the family."
+              },
+              "slot0": {
+                "enum": [
+                  "languageCard",
+                  "firmwareCard",
+                  "empty"
+                ],
+                "enumDescriptions": [
+                  "A language card: 16 KB of RAM at $D000-$FFFF, which DOS 3.3 loads the other BASIC into. The II Plus's default.",
+                  "A firmware card with the other model's BASIC and Monitor in ROM: AppleSoft on a II, Integer BASIC on a II Plus. $C080 selects it and $C081 the board's ROM, as DOS 3.3's FP and INT do.",
+                  "Nothing. The II's default."
+                ],
+                "description": "Apple II and II Plus: the card in slot 0. The IIe's language card is built in."
+              },
+              "monitor": {
+                "enum": [
+                  "original",
+                  "autostart"
+                ],
+                "enumDescriptions": [
+                  "The original Monitor: reset goes to the Monitor's * prompt; CONTROL-B starts Integer BASIC.",
+                  "The Autostart Monitor of later IIs: power-on boots a disk or starts BASIC, and reset returns to BASIC."
+                ],
+                "default": "original",
+                "description": "Apple II: its Monitor ROM."
+              },
+              "boardRevision": {
+                "enum": [
+                  1,
+                  0
+                ],
+                "enumDescriptions": [
+                  "Revision 1 and later: six hi-res colors.",
+                  "Revision 0, the first boards: hi-res ignores bit 7, so four colors: black, white, green and violet."
+                ],
+                "default": 1,
+                "description": "Apple II: the board's revision."
+              },
+              "firmwareCardRoms": {
+                "type": "string",
+                "description": "Apple II and II Plus: the folder of the other model's ROM dumps the slot 0 firmware card holds; by default RETROCORE_IIPLUS_ROMS or RETROCORE_II_ROMS, or its folder (APPLE II+ or APPLE II) beside romDirectory, and without dumps the SDK's sources of them."
+              },
+              "debugHost": {
+                "type": "string",
+                "description": "Path to Retrocore.Debug.dll."
+              },
+              "source": {
+                "type": "string",
+                "description": "Native, ca65 or Merlin source to assemble with retrocore and load; replaces program and debugFile."
+              },
+              "dialect": {
+                "enum": [
+                  "native",
+                  "ca65",
+                  "merlin"
+                ],
+                "description": "Dialect of source; defaults to native unless the file's first-line pragma names one."
+              },
+              "linkerConfiguration": {
+                "type": "string",
+                "description": "ld65-style linker configuration for source."
+              },
+              "basic": {
+                "type": "string",
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+              },
+              "run": {
+                "type": "boolean",
+                "default": true,
+                "description": "With basic: RUN the program once it is loaded; false leaves BASIC at its prompt."
+              },
+              "program": {
+                "type": "string",
+                "description": "Binary to load into RAM."
+              },
+              "debugFile": {
+                "type": "string",
+                "description": "cc65 .dbg (from ld65 or Retrocore.Debug --assemble) or VICE labels for program."
+              },
+              "loadAddress": {
+                "type": "number",
+                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe and $7000 on the Model I."
+              },
+              "entryAddress": {
+                "type": "number",
+                "description": "Starting PC; defaults to the load address, or the first section of source."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": true
+              },
+              "checkContracts": {
+                "type": "string",
+                "enum": [
+                  "warn",
+                  "stop",
+                  "off"
+                ],
+                "default": "warn",
+                "description": "When a call to a routine with a ;; Keeps: section returns with a kept register, flag or memory location changed: report it in the Debug Console (warn), also stop there (stop), or do not check (off). With warn, ticking the Breakpoints view's Routine broke its Keeps: promise filter also stops."
+              },
+              "checkUses": {
+                "type": "boolean",
+                "default": false,
+                "description": "Also report registers a routine changed that its ;; Uses:, Out: and Keeps: sections do not list."
+              },
+              "sdkRoms": {
+                "type": "string",
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), or the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm)."
+              },
+              "breakpoints": {
+                "type": "array",
+                "description": "Breakpoints to add before launching, once each: a file with a 1-based line, a label in a file whose first instruction to stop at, or a function breakpoint on a label or address expression.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "The source file."
+                    },
+                    "line": {
+                      "type": "number",
+                      "description": "The 1-based line in path."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "A label in path; the breakpoint is on its first instruction."
+                    },
+                    "function": {
+                      "type": "string",
+                      "description": "A function breakpoint instead: a label or address expression, such as DISPLAY_CHAR or $C600."
+                    },
+                    "condition": {
+                      "type": "string",
+                      "description": "An expression that must be nonzero to stop, such as A == $0D."
+                    },
+                    "hitCondition": {
+                      "type": "string",
+                      "description": "Which hits stop: N or =N the Nth, >N, >=N, <N, <=N, or %N every Nth."
+                    },
+                    "logMessage": {
+                      "type": "string",
+                      "description": "Log this instead of stopping; {expression} shows a value, {expression,d} in decimal and {expression,c} as a character."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "Debug IIe sample",
+            "romDirectory": "${env:RETROCORE_IIE_ROMS}",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "program": "${workspaceFolder}\\artifacts\\iie-sample\\main.bin",
+            "debugFile": "${workspaceFolder}\\artifacts\\iie-sample\\main.dbg",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "Debug IIe source",
+            "romDirectory": "${env:RETROCORE_IIE_ROMS}",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "trs80-model1",
+            "name": "Boot TRS-80 Model I",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "trs80-model1",
+            "name": "Debug Model I Z80 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Retrocore: Debug a BASIC file",
+            "description": "Load a BASIC file into the machine's BASIC and RUN it, stopping on its first statement.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Debug BASIC file",
+              "machine": "trs80-model1",
+              "basic": "^\"\\${file}\"",
+              "stopOnEntry": true
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- BASIC programs: each interpreter's tokens, its tokenizer, the text form and the program in memory. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Keywords.txt" LogicalName="Retrocore.Basic.Keywords.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Debug" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,588 @@
+# Copyright (c) 2025 Jeremy W Kuhne
+# SPDX-License-Identifier: MIT
+# See LICENSE file in the project root for full license information
+#
+# The 6502 family's instruction-set description: what the assembler, disassembler and tools know about
+# these CPUs, and the opcode maps the cores are generated from.
+#
+# [isa] and [forms] describe the family (read by Retrocore.Isa.IsaParser). Each CPU section lists
+# 'opcode Instruction Form', optionally followed by 'undocumented'. For the cores, Instruction and Form are
+# members of the Retrocore.Cpu.M6502 Instruction and AddressMode enums. Base sections define every opcode from
+# 00 to FF exactly once; derived sections inherit an earlier complete section, then override some entries.
+
+[isa]
+endian little
+address-bits 16
+registers A:8 X:8 Y:8 S:8 P:8 PC:16
+flags P N=7 V=6 D=3 I=2 Z=1 C=0
+# Documentation names flags by these words on every CPU, never by letter: Out: carry = found.
+flag N negative "Set when a result's bit 7 is 1, a negative number in two's complement. BIT copies the tested byte's bit 7 into it."
+flag V overflow "Set when a signed add or subtract overflows past -128 or 127. BIT copies the tested byte's bit 6 into it; CLV clears it."
+flag D decimal "Set for binary-coded decimal arithmetic in ADC and SBC, by SED; CLD clears it."
+flag I interrupt "Set to mask IRQ interrupts, by SEI and as an interrupt starts; NMI and BRK still run. CLI clears it."
+flag Z zero "Set when a result is zero, or when a compare finds the values equal."
+flag C carry "Set when an add carries out of bit 7, or a subtract or compare does not borrow (the register is at least the value). Shifts and rotates move bits through it."
+bit-suffix BBR BBS RMB SMB          # these mnemonics end in the bit they test or change, opcode bits 4-6
+prefer EA                           # NOP's official encoding wins over the undocumented ones before it
+subset 65SC02 of Wdc65C02 exclude WAI STP BBR BBS RMB SMB message "Instruction '{0}' is not in the 65SC02 subset."
+indirect-page-wrap Mos6502          # NMOS JMP ($xxFF) reads its high byte from $xx00
+vectors FFFA FFFC FFFE              # NMI, RESET and IRQ/BRK, which analysis follows in this order
+
+# Control flow, for disassembly and analysis. Mnemonic:Form entries override the mnemonic's own class.
+flow branch BBR BBS BCC BCS BEQ BMI BNE BPL BVC BVS
+flow jump BRA JMP
+flow indirect-jump JMP:AbsoluteIndirect JMP:AbsoluteIndexedIndirect
+flow call JSR
+flow return RTS RTI
+flow break BRK
+flow wait WAI
+flow stop STP JAM
+
+# How an instruction accesses a memory operand; the rest read it.
+access write STA STX STY STZ SAX AHX SHX SHY TAS
+access read-write ASL LSR ROL ROR INC DEC TRB TSB RMB SMB SLO RLA SRE RRA DCP ISC
+
+[forms]
+# Operand forms, in the order operands are matched. A pattern is literal text with {} for an expression.
+# Literal forms match only when the mnemonic has them. Forms sharing a pattern are alternatives; a narrow-of
+# form is the narrow (zero-page) alternative its value may shrink to. A narrow form takes only a narrow
+# address. An exclusive form takes any operand of a mnemonic that has it. A memory form's first field is an
+# address the instruction accesses; a pointer form's is the address of a pointer it reads, and an indexed
+# pointer form adds an index register to that address first.
+Implied                         ""
+Stack                           ""
+Accumulator                     "A" ""
+Immediate                       "#{}"       fields=byte
+ZeroPageRelative                "{}"        fields=byte,rel8   exclusive memory message="Bit branches need zero-page address and target."
+ProgramCounterRelative          "{}"        fields=rel8        exclusive
+ZeroPageIndirectIndexedY        "({}),Y"    fields=byte        narrow pointer
+ZeroPageIndexedIndirect         "({},X)"    fields=byte        narrow pointer indexed
+AbsoluteIndexedIndirect         "({},X)"    fields=word        pointer indexed
+ZeroPageIndirect                "({})"      fields=byte        narrow pointer
+AbsoluteIndirect                "({})"      fields=word        pointer
+AbsoluteIndexedX                "{},X"      fields=word        memory
+ZeroPageIndexedX                "{},X"      fields=byte        narrow-of=AbsoluteIndexedX memory
+AbsoluteIndexedY                "{},Y"      fields=word        memory
+ZeroPageIndexedY                "{},Y"      fields=byte        narrow-of=AbsoluteIndexedY memory
+Absolute                        "{}"        fields=word        memory
+ZeroPage                        "{}"        fields=byte        narrow-of=Absolute memory
+
+[Mos6502]
+00 BRK Stack
+01 ORA ZeroPageIndexedIndirect
+02 JAM Implied                          undocumented
+03 SLO ZeroPageIndexedIndirect          undocumented
+04 NOP ZeroPage                         undocumented
+05 ORA ZeroPage
+06 ASL ZeroPage
+07 SLO ZeroPage                         undocumented
+08 PHP Stack
+09 ORA Immediate
+0A ASL Accumulator
+0B ANC Immediate                        undocumented
+0C NOP Absolute                         undocumented
+0D ORA Absolute
+0E ASL Absolute
+0F SLO Absolute                         undocumented
+10 BPL ProgramCounterRelative
+11 ORA ZeroPageIndirectIndexedY
+12 JAM Implied                          undocumented
+13 SLO ZeroPageIndirectIndexedY         undocumented
+14 NOP ZeroPageIndexedX                 undocumented
+15 ORA ZeroPageIndexedX
+16 ASL ZeroPageIndexedX
+17 SLO ZeroPageIndexedX                 undocumented
+18 CLC Implied
+19 ORA AbsoluteIndexedY
+1A NOP Implied                          undocumented
+1B SLO AbsoluteIndexedY                 undocumented
+1C NOP AbsoluteIndexedX                 undocumented
+1D ORA AbsoluteIndexedX
+1E ASL AbsoluteIndexedX
+1F SLO AbsoluteIndexedX                 undocumented
+20 JSR Absolute
+21 AND ZeroPageIndexedIndirect
+22 JAM Implied                          undocumented
+23 RLA ZeroPageIndexedIndirect          undocumented
+24 BIT ZeroPage
+25 AND ZeroPage
+26 ROL ZeroPage
+27 RLA ZeroPage                         undocumented
+28 PLP Stack
+29 AND Immediate
+2A ROL Accumulator
+2B ANC Immediate                        undocumented
+2C BIT Absolute
+2D AND Absolute
+2E ROL Absolute
+2F RLA Absolute                         undocumented
+30 BMI ProgramCounterRelative
+31 AND ZeroPageIndirectIndexedY
+32 JAM Implied                          undocumented
+33 RLA ZeroPageIndirectIndexedY         undocumented
+34 NOP ZeroPageIndexedX                 undocumented
+35 AND ZeroPageIndexedX
+36 ROL ZeroPageIndexedX
+37 RLA ZeroPageIndexedX                 undocumented
+38 SEC Implied
+39 AND AbsoluteIndexedY
+3A NOP Implied                          undocumented
+3B RLA AbsoluteIndexedY                 undocumented
+3C NOP AbsoluteIndexedX                 undocumented
+3D AND AbsoluteIndexedX
+3E ROL AbsoluteIndexedX
+3F RLA AbsoluteIndexedX                 undocumented
+40 RTI Stack
+41 EOR ZeroPageIndexedIndirect
+42 JAM Implied                          undocumented
+43 SRE ZeroPageIndexedIndirect          undocumented
+44 NOP ZeroPage                         undocumented
+45 EOR ZeroPage
+46 LSR ZeroPage
+47 SRE ZeroPage                         undocumented
+48 PHA Stack
+49 EOR Immediate
+4A LSR Accumulator
+4B ALR Immediate                        undocumented
+4C JMP Absolute
+4D EOR Absolute
+4E LSR Absolute
+4F SRE Absolute                         undocumented
+50 BVC ProgramCounterRelative
+51 EOR ZeroPageIndirectIndexedY
+52 JAM Implied                          undocumented
+53 SRE ZeroPageIndirectIndexedY         undocumented
+54 NOP ZeroPageIndexedX                 undocumented
+55 EOR ZeroPageIndexedX
+56 LSR ZeroPageIndexedX
+57 SRE ZeroPageIndexedX                 undocumented
+58 CLI Implied
+59 EOR AbsoluteIndexedY
+5A NOP Implied                          undocumented
+5B SRE AbsoluteIndexedY                 undocumented
+5C NOP AbsoluteIndexedX                 undocumented
+5D EOR AbsoluteIndexedX
+5E LSR AbsoluteIndexedX
+5F SRE AbsoluteIndexedX                 undocumented
+60 RTS Stack
+61 ADC ZeroPageIndexedIndirect
+62 JAM Implied                          undocumented
+63 RRA ZeroPageIndexedIndirect          undocumented
+64 NOP ZeroPage                         undocumented
+65 ADC ZeroPage
+66 ROR ZeroPage
+67 RRA ZeroPage                         undocumented
+68 PLA Stack
+69 ADC Immediate
+6A ROR Accumulator
+6B ARR Immediate                        undocumented
+6C JMP AbsoluteIndirect
+6D ADC Absolute
+6E ROR Absolute
+6F RRA Absolute                         undocumented
+70 BVS ProgramCounterRelative
+71 ADC ZeroPageIndirectIndexedY
+72 JAM Implied                          undocumented
+73 RRA ZeroPageIndirectIndexedY         undocumented
+74 NOP ZeroPageIndexedX                 undocumented
+75 ADC ZeroPageIndexedX
+76 ROR ZeroPageIndexedX
+77 RRA ZeroPageIndexedX                 undocumented
+78 SEI Implied
+79 ADC AbsoluteIndexedY
+7A NOP Implied                          undocumented
+7B RRA AbsoluteIndexedY                 undocumented
+7C NOP AbsoluteIndexedX                 undocumented
+7D ADC AbsoluteIndexedX
+7E ROR AbsoluteIndexedX
+7F RRA AbsoluteIndexedX                 undocumented
+80 NOP Immediate                        undocumented
+81 STA ZeroPageIndexedIndirect
+82 NOP Immediate                        undocumented
+83 SAX ZeroPageIndexedIndirect          undocumented
+84 STY ZeroPage
+85 STA ZeroPage
+86 STX ZeroPage
+87 SAX ZeroPage                         undocumented
+88 DEY Implied
+89 NOP Immediate                        undocumented
+8A TXA Implied
+8B XAA Immediate                        undocumented
+8C STY Absolute
+8D STA Absolute
+8E STX Absolute
+8F SAX Absolute                         undocumented
+90 BCC ProgramCounterRelative
+91 STA ZeroPageIndirectIndexedY
+92 JAM Implied                          undocumented
+93 AHX ZeroPageIndirectIndexedY         undocumented
+94 STY ZeroPageIndexedX
+95 STA ZeroPageIndexedX
+96 STX ZeroPageIndexedY
+97 SAX ZeroPageIndexedY                 undocumented
+98 TYA Implied
+99 STA AbsoluteIndexedY
+9A TXS Implied
+9B TAS AbsoluteIndexedY                 undocumented
+9C SHY AbsoluteIndexedX                 undocumented
+9D STA AbsoluteIndexedX
+9E SHX AbsoluteIndexedY                 undocumented
+9F AHX AbsoluteIndexedY                 undocumented
+A0 LDY Immediate
+A1 LDA ZeroPageIndexedIndirect
+A2 LDX Immediate
+A3 LAX ZeroPageIndexedIndirect          undocumented
+A4 LDY ZeroPage
+A5 LDA ZeroPage
+A6 LDX ZeroPage
+A7 LAX ZeroPage                         undocumented
+A8 TAY Implied
+A9 LDA Immediate
+AA TAX Implied
+AB LAX Immediate                        undocumented
+AC LDY Absolute
+AD LDA Absolute
+AE LDX Absolute
+AF LAX Absolute                         undocumented
+B0 BCS ProgramCounterRelative
+B1 LDA ZeroPageIndirectIndexedY
+B2 JAM Implied                          undocumented
+B3 LAX ZeroPageIndirectIndexedY         undocumented
+B4 LDY ZeroPageIndexedX
+B5 LDA ZeroPageIndexedX
+B6 LDX ZeroPageIndexedY
+B7 LAX ZeroPageIndexedY                 undocumented
+B8 CLV Implied
+B9 LDA AbsoluteIndexedY
+BA TSX Implied
+BB LAS AbsoluteIndexedY                 undocumented
+BC LDY AbsoluteIndexedX
+BD LDA AbsoluteIndexedX
+BE LDX AbsoluteIndexedY
+BF LAX AbsoluteIndexedY                 undocumented
+C0 CPY Immediate
+C1 CMP ZeroPageIndexedIndirect
+C2 NOP Immediate                        undocumented
+C3 DCP ZeroPageIndexedIndirect          undocumented
+C4 CPY ZeroPage
+C5 CMP ZeroPage
+C6 DEC ZeroPage
+C7 DCP ZeroPage                         undocumented
+C8 INY Implied
+C9 CMP Immediate
+CA DEX Implied
+CB AXS Immediate                        undocumented
+CC CPY Absolute
+CD CMP Absolute
+CE DEC Absolute
+CF DCP Absolute                         undocumented
+D0 BNE ProgramCounterRelative
+D1 CMP ZeroPageIndirectIndexedY
+D2 JAM Implied                          undocumented
+D3 DCP ZeroPageIndirectIndexedY         undocumented
+D4 NOP ZeroPageIndexedX                 undocumented
+D5 CMP ZeroPageIndexedX
+D6 DEC ZeroPageIndexedX
+D7 DCP ZeroPageIndexedX                 undocumented
+D8 CLD Implied
+D9 CMP AbsoluteIndexedY
+DA NOP Implied                          undocumented
+DB DCP AbsoluteIndexedY                 undocumented
+DC NOP AbsoluteIndexedX                 undocumented
+DD CMP AbsoluteIndexedX
+DE DEC AbsoluteIndexedX
+DF DCP AbsoluteIndexedX                 undocumented
+E0 CPX Immediate
+E1 SBC ZeroPageIndexedIndirect
+E2 NOP Immediate                        undocumented
+E3 ISC ZeroPageIndexedIndirect          undocumented
+E4 CPX ZeroPage
+E5 SBC ZeroPage
+E6 INC ZeroPage
+E7 ISC ZeroPage                         undocumented
+E8 INX Implied
+E9 SBC Immediate
+EA NOP Implied
+EB SBC Immediate                        undocumented
+EC CPX Absolute
+ED SBC Absolute
+EE INC Absolute
+EF ISC Absolute                         undocumented
+F0 BEQ ProgramCounterRelative
+F1 SBC ZeroPageIndirectIndexedY
+F2 JAM Implied                          undocumented
+F3 ISC ZeroPageIndirectIndexedY         undocumented
+F4 NOP ZeroPageIndexedX                 undocumented
+F5 SBC ZeroPageIndexedX
+F6 INC ZeroPageIndexedX
+F7 ISC ZeroPageIndexedX                 undocumented
+F8 SED Implied
+F9 SBC AbsoluteIndexedY
+FA NOP Implied                          undocumented
+FB ISC AbsoluteIndexedY                 undocumented
+FC NOP AbsoluteIndexedX                 undocumented
+FD SBC AbsoluteIndexedX
+FE INC AbsoluteIndexedX
+FF ISC AbsoluteIndexedX                 undocumented
+
+[Wdc65C02]
+00 BRK Stack
+01 ORA ZeroPageIndexedIndirect
+02 NOP Immediate
+03 NOP Implied
+04 TSB ZeroPage
+05 ORA ZeroPage
+06 ASL ZeroPage
+07 RMB ZeroPage
+08 PHP Stack
+09 ORA Immediate
+0A ASL Accumulator
+0B NOP Implied
+0C TSB Absolute
+0D ORA Absolute
+0E ASL Absolute
+0F BBR ZeroPageRelative
+10 BPL ProgramCounterRelative
+11 ORA ZeroPageIndirectIndexedY
+12 ORA ZeroPageIndirect
+13 NOP Implied
+14 TRB ZeroPage
+15 ORA ZeroPageIndexedX
+16 ASL ZeroPageIndexedX
+17 RMB ZeroPage
+18 CLC Implied
+19 ORA AbsoluteIndexedY
+1A INC Accumulator
+1B NOP Implied
+1C TRB Absolute
+1D ORA AbsoluteIndexedX
+1E ASL AbsoluteIndexedX
+1F BBR ZeroPageRelative
+20 JSR Absolute
+21 AND ZeroPageIndexedIndirect
+22 NOP Immediate
+23 NOP Implied
+24 BIT ZeroPage
+25 AND ZeroPage
+26 ROL ZeroPage
+27 RMB ZeroPage
+28 PLP Stack
+29 AND Immediate
+2A ROL Accumulator
+2B NOP Implied
+2C BIT Absolute
+2D AND Absolute
+2E ROL Absolute
+2F BBR ZeroPageRelative
+30 BMI ProgramCounterRelative
+31 AND ZeroPageIndirectIndexedY
+32 AND ZeroPageIndirect
+33 NOP Implied
+34 BIT ZeroPageIndexedX
+35 AND ZeroPageIndexedX
+36 ROL ZeroPageIndexedX
+37 RMB ZeroPage
+38 SEC Implied
+39 AND AbsoluteIndexedY
+3A DEC Accumulator
+3B NOP Implied
+3C BIT AbsoluteIndexedX
+3D AND AbsoluteIndexedX
+3E ROL AbsoluteIndexedX
+3F BBR ZeroPageRelative
+40 RTI Stack
+41 EOR ZeroPageIndexedIndirect
+42 NOP Immediate
+43 NOP Implied
+44 NOP ZeroPage
+45 EOR ZeroPage
+46 LSR ZeroPage
+47 RMB ZeroPage
+48 PHA Stack
+49 EOR Immediate
+4A LSR Accumulator
+4B NOP Implied
+4C JMP Absolute
+4D EOR Absolute
+4E LSR Absolute
+4F BBR ZeroPageRelative
+50 BVC ProgramCounterRelative
+51 EOR ZeroPageIndirectIndexedY
+52 EOR ZeroPageIndirect
+53 NOP Implied
+54 NOP ZeroPageIndexedX
+55 EOR ZeroPageIndexedX
+56 LSR ZeroPageIndexedX
+57 RMB ZeroPage
+58 CLI Implied
+59 EOR AbsoluteIndexedY
+5A PHY Stack
+5B NOP Implied
+5C NOP Absolute
+5D EOR AbsoluteIndexedX
+5E LSR AbsoluteIndexedX
+5F BBR ZeroPageRelative
+60 RTS Stack
+61 ADC ZeroPageIndexedIndirect
+62 NOP Immediate
+63 NOP Implied
+64 STZ ZeroPage
+65 ADC ZeroPage
+66 ROR ZeroPage
+67 RMB ZeroPage
+68 PLA Stack
+69 ADC Immediate
+6A ROR Accumulator
+6B NOP Implied
+6C JMP AbsoluteIndirect
+6D ADC Absolute
+6E ROR Absolute
+6F BBR ZeroPageRelative
+70 BVS ProgramCounterRelative
+71 ADC ZeroPageIndirectIndexedY
+72 ADC ZeroPageIndirect
+73 NOP Implied
+74 STZ ZeroPageIndexedX
+75 ADC ZeroPageIndexedX
+76 ROR ZeroPageIndexedX
+77 RMB ZeroPage
+78 SEI Implied
+79 ADC AbsoluteIndexedY
+7A PLY Stack
+7B NOP Implied
+7C JMP AbsoluteIndexedIndirect
+7D ADC AbsoluteIndexedX
+7E ROR AbsoluteIndexedX
+7F BBR ZeroPageRelative
+80 BRA ProgramCounterRelative
+81 STA ZeroPageIndexedIndirect
+82 NOP Immediate
+83 NOP Implied
+84 STY ZeroPage
+85 STA ZeroPage
+86 STX ZeroPage
+87 SMB ZeroPage
+88 DEY Implied
+89 BIT Immediate
+8A TXA Implied
+8B NOP Implied
+8C STY Absolute
+8D STA Absolute
+8E STX Absolute
+8F BBS ZeroPageRelative
+90 BCC ProgramCounterRelative
+91 STA ZeroPageIndirectIndexedY
+92 STA ZeroPageIndirect
+93 NOP Implied
+94 STY ZeroPageIndexedX
+95 STA ZeroPageIndexedX
+96 STX ZeroPageIndexedY
+97 SMB ZeroPage
+98 TYA Implied
+99 STA AbsoluteIndexedY
+9A TXS Implied
+9B NOP Implied
+9C STZ Absolute
+9D STA AbsoluteIndexedX
+9E STZ AbsoluteIndexedX
+9F BBS ZeroPageRelative
+A0 LDY Immediate
+A1 LDA ZeroPageIndexedIndirect
+A2 LDX Immediate
+A3 NOP Implied
+A4 LDY ZeroPage
+A5 LDA ZeroPage
+A6 LDX ZeroPage
+A7 SMB ZeroPage
+A8 TAY Implied
+A9 LDA Immediate
+AA TAX Implied
+AB NOP Implied
+AC LDY Absolute
+AD LDA Absolute
+AE LDX Absolute
+AF BBS ZeroPageRelative
+B0 BCS ProgramCounterRelative
+B1 LDA ZeroPageIndirectIndexedY
+B2 LDA ZeroPageIndirect
+B3 NOP Implied
+B4 LDY ZeroPageIndexedX
+B5 LDA ZeroPageIndexedX
+B6 LDX ZeroPageIndexedY
+B7 SMB ZeroPage
+B8 CLV Implied
+B9 LDA AbsoluteIndexedY
+BA TSX Implied
+BB NOP Implied
+BC LDY AbsoluteIndexedX
+BD LDA AbsoluteIndexedX
+BE LDX AbsoluteIndexedY
+BF BBS ZeroPageRelative
+C0 CPY Immediate
+C1 CMP ZeroPageIndexedIndirect
+C2 NOP Immediate
+C3 NOP Implied
+C4 CPY ZeroPage
+C5 CMP ZeroPage
+C6 DEC ZeroPage
+C7 SMB ZeroPage
+C8 INY Implied
+C9 CMP Immediate
+CA DEX Implied
+CB WAI Implied
+CC CPY Absolute
+CD CMP Absolute
+CE DEC Absolute
+CF BBS ZeroPageRelative
+D0 BNE ProgramCounterRelative
+D1 CMP ZeroPageIndirectIndexedY
+D2 CMP ZeroPageIndirect
+D3 NOP Implied
+D4 NOP ZeroPageIndexedX
+D5 CMP ZeroPageIndexedX
+D6 DEC ZeroPageIndexedX
+D7 SMB ZeroPage
+D8 CLD Implied
+D9 CMP AbsoluteIndexedY
+DA PHX Stack
+DB STP Implied
+DC NOP Absolute
+DD CMP AbsoluteIndexedX
+DE DEC AbsoluteIndexedX
+DF BBS ZeroPageRelative
+E0 CPX Immediate
+E1 SBC ZeroPageIndexedIndirect
+E2 NOP Immediate
+E3 NOP Implied
+E4 CPX ZeroPage
+E5 SBC ZeroPage
+E6 INC ZeroPage
+E7 SMB ZeroPage
+E8 INX Implied
+E9 SBC Immediate
+EA NOP Implied
+EB NOP Implied
+EC CPX Absolute
+ED SBC Absolute
+EE INC Absolute
+EF BBS ZeroPageRelative
+F0 BEQ ProgramCounterRelative
+F1 SBC ZeroPageIndirectIndexedY
+F2 SBC ZeroPageIndirect
+F3 NOP Implied
+F4 NOP ZeroPageIndexedX
+F5 SBC ZeroPageIndexedX
+F6 INC ZeroPageIndexedX
+F7 SMB ZeroPage
+F8 SED Implied
+F9 SBC AbsoluteIndexedY
+FA PLX Stack
+FB NOP Implied
+FC NOP Absolute
+FD SBC AbsoluteIndexedX
+FE INC AbsoluteIndexedX
+FF BBS ZeroPageRelative
+
+[Rockwell65C02 : Wdc65C02]
+CB NOP Implied
+DB NOP ZeroPageIndexedX

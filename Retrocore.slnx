@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AppleSharp/AppleSharp.csproj" />
+    <Project Path="src/Retrocore.Debug/Retrocore.Debug.csproj" />
+    <Project Path="src/Retrocore.Generators/Retrocore.Generators.csproj" />
+    <Project Path="src/Retrocore.Input/Retrocore.Input.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/DosDisk/DosDisk.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AppleSharp.tests/AppleSharp.tests.csproj" />
+    <Project Path="tests/Retrocore.Aot.Tests/Retrocore.Aot.Tests.csproj" />
+    <Project Path="tests/Retrocore.Perf/Retrocore.Perf.csproj" />
+  </Folder>
+  <Folder Name="/Touki/">
+    <Project Path="../touki/touki.analyzers.bootstrap/touki.analyzers.bootstrap.csproj" />
+    <Project Path="../touki/touki.analyzers.codefixes/touki.analyzers.codefixes.csproj" />
+    <Project Path="../touki/touki.analyzers/touki.analyzers.csproj" />
+  </Folder>
+  <Project Path="src/Retrocore.Core/Retrocore.Core.csproj" />
+  <Project Path="src/Retrocore.Cpu.M6502/Retrocore.Cpu.M6502.csproj" />
+  <Project Path="src/Retrocore.Cpu.Z80/Retrocore.Cpu.Z80.csproj" />
+  <Project Path="src/Retrocore.Assembler/Retrocore.Assembler.csproj" />
+  <Project Path="src/Retrocore.Basic/Retrocore.Basic.csproj" />
+  <Project Path="src/Retrocore.Media/Retrocore.Media.csproj" />
+  <Project Path="src/Retrocore.Machines.Apple2/Retrocore.Machines.Apple2.csproj" />
+  <Project Path="src/Retrocore.Machines.Trs80/Retrocore.Machines.Trs80.csproj" />
+  <Project Path="tests/Retrocore.Tests/Retrocore.Tests.csproj" />
+</Solution>

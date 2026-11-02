@@ -1,0 +1,244 @@
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC) | syntax | what it does.
+# Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
+END|a2|END|Stops the program and returns to the prompt; CONT continues after it.
+FOR|a2|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
+NEXT|a2|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
+DATA|a2|DATA item [, item ...]|Holds constants for READ. Items are numbers or strings; quotes are needed only around commas, colons or leading spaces.
+INPUT|a2|INPUT ["prompt";] v [, v ...]|Reads values typed at the keyboard into variables, asking again when they do not fit.
+DIM|a2|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from 0 to its size. An array used without DIM has 11 elements per dimension (0-10).
+READ|a2|READ v [, v ...]|Takes the next items from DATA statements into variables.
+LET|a2|[LET] v = expression|Assigns a value; LET itself can be left out.
+GOTO|a2|GOTO line|Continues at a line.
+RUN|a2|RUN [line]|Clears the variables and runs the program, from its first line or from the line given.
+IF|a2|IF condition THEN statements|Runs the rest of the line when the condition is not zero; otherwise goes on with the next line.
+RESTORE|a2|RESTORE|Makes READ start again at the program's first DATA item.
+GOSUB|a2|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
+RETURN|a2|RETURN|Returns from a GOSUB to the statement after it.
+REM|a2|REM text|A remark: the rest of the line is ignored.
+STOP|a2|STOP|Stops the program with a BREAK message; CONT continues after it.
+ON|a2|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...]|Jumps to, or calls, the nth line of the list; goes on with the next statement when n is 0 or past the list.
+WAIT|a|WAIT address, mask [, flip]|Waits until the byte at the address, exclusive-ored with flip and then anded with mask, is not zero.
+LOAD|a|LOAD [name]|Loads a program from cassette, or under DOS from disk.
+SAVE|a|SAVE [name]|Saves the program to cassette, or under DOS to disk.
+DEF|a2|DEF FN f(x) = expression|Defines a one-line function of one parameter, called as FN f(value).
+POKE|a2|POKE address, value|Stores a byte in memory.
+PRINT|a2|PRINT [items]|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next print zone, and no punctuation at the end starts a new line. ? is short for PRINT.
+CONT|a2|CONT|Continues a program after STOP, END or BREAK, if it has not been changed.
+LIST|a2|LIST [first] [- last]|Lists the program, or the lines given.
+CLEAR|a|CLEAR|Clears every variable, array and string, and BASIC's stack.
+GET|a|GET v|Waits for one key and puts it in a string variable, or its digit in a numeric one, without echoing it.
+NEW|a2|NEW|Erases the program and its variables.
+TAB(|a2|TAB(column)|In PRINT: moves to a column.
+TO|a2|FOR v = start TO end|Gives the end value of a FOR loop.
+FN|a2|FN f(value)|Calls a function DEF FN defined.
+SPC(|a|SPC(count)|In PRINT: prints that many spaces.
+THEN|a2|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
+AT|a|HLIN x1, x2 AT y / VLIN y1, y2 AT x / DRAW n AT x, y|Gives the row, column or position of a line or shape.
+NOT|a2|NOT x|Logical not: 1 when x is 0, else 0 in AppleSoft; the bitwise complement of an integer in Level II.
+STEP|a2|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
++|a2|a + b|Adds numbers, or joins strings.
+-|a2|a - b, -a|Subtracts, or negates.
+*|a2|a * b|Multiplies.
+/|a2|a / b|Divides.
+^|a|a ^ b|Raises a to the power b.
+[|2|a [ b|Raises a to the power b; the key shows as an up arrow on the Model I.
+AND|a2|a AND b|Logical and in AppleSoft (1 when both are not zero); bitwise and of integers in Level II, where true is -1.
+OR|a2|a OR b|Logical or in AppleSoft; bitwise or of integers in Level II, where true is -1.
+>|a2|a > b|Greater than: true when a is greater than b. Also part of >= and <>.
+=|a2|a = b|Assigns in LET; compares elsewhere.
+<|a2|a < b|Less than. Also part of <=, <> and =<.
+SGN|a2|SGN(x)|-1, 0 or 1 as x is negative, zero or positive.
+INT|a2|INT(x)|The greatest whole number not greater than x.
+ABS|a2|ABS(x)|The absolute value of x.
+USR|a|USR(x)|Calls the machine code that the JMP at $0A sends it to, with x in the floating-point accumulator, and returns what is left there.
+FRE|a2|FRE(x)|The free memory in bytes. In AppleSoft it also compacts the strings first; in Level II, FRE of a string gives the free string space.
+SCRN(|a|SCRN(x, y)|The color of a low-resolution graphics point.
+PDL|a|PDL(n)|Reads game paddle n, 0-255.
+POS|a2|POS(x)|The cursor's column; x is ignored.
+SQR|a2|SQR(x)|The square root of x.
+RND|a2|RND(x)|A random number. AppleSoft: between 0 and 1; a negative x seeds the sequence, and 0 repeats the last. Level II: RND(0) is between 0 and 1, and RND(n) is a whole number from 1 to n.
+LOG|a2|LOG(x)|The natural logarithm of x.
+EXP|a2|EXP(x)|e raised to the power x.
+COS|a2|COS(x)|The cosine of an angle in radians.
+SIN|a2|SIN(x)|The sine of an angle in radians.
+TAN|a2|TAN(x)|The tangent of an angle in radians.
+ATN|a2|ATN(x)|The arctangent of x, in radians.
+PEEK|a2|PEEK(address)|The byte in memory at an address.
+LEN|a2|LEN(s$)|The number of characters in a string.
+STR$|a2|STR$(x)|A number as a string, as PRINT would write it.
+VAL|a2|VAL(s$)|The number at the start of a string, or 0.
+ASC|a2|ASC(s$)|The code of a string's first character.
+CHR$|a2|CHR$(code)|A one-character string with that code.
+LEFT$|a2|LEFT$(s$, n)|A string's first n characters.
+RIGHT$|a2|RIGHT$(s$, n)|A string's last n characters.
+MID$|a2|MID$(s$, start [, n])|Characters from a string, starting at position start (1 is the first).
+DEL|a|DEL first, last|Deletes the lines from first to last.
+GR|a|GR|Switches to low-resolution graphics with four lines of text, and clears the graphics.
+TEXT|a|TEXT|Switches to the full text screen.
+PR#|a|PR# slot|Sends output to the card in a slot; PR# 0 is the screen. Under DOS, PR# 6 boots the disk.
+IN#|a|IN# slot|Takes input from the card in a slot; IN# 0 is the keyboard.
+CALL|a|CALL address|Runs machine code at an address, which returns with RTS.
+PLOT|a|PLOT x, y|Plots a low-resolution point in the current color.
+HLIN|a|HLIN x1, x2 AT y|Draws a low-resolution horizontal line.
+VLIN|a|VLIN y1, y2 AT x|Draws a low-resolution vertical line.
+HGR2|a|HGR2|Shows high-resolution page 2, full screen, and clears it.
+HGR|a|HGR|Shows high-resolution page 1 with four lines of text, and clears it.
+HCOLOR=|a|HCOLOR= n|Sets the high-resolution color, 0-7.
+HPLOT|a|HPLOT x, y [TO x, y ...] / HPLOT TO x, y|Plots high-resolution points and lines.
+DRAW|a|DRAW shape [AT x, y]|Draws a shape from the shape table in the current color.
+XDRAW|a|XDRAW shape [AT x, y]|Draws a shape by inverting the points under it, so drawing it again erases it.
+HTAB|a|HTAB column|Moves the cursor to a column, 1-40.
+HOME|a|HOME|Clears the text window and puts the cursor at its top left.
+ROT=|a|ROT= n|Sets the rotation DRAW and XDRAW use, 0-255; 16 is a quarter turn.
+SCALE=|a|SCALE= n|Sets the scale DRAW and XDRAW use, 1-255; 0 is 256.
+SHLOAD|a|SHLOAD|Loads a shape table from cassette.
+TRACE|a|TRACE|Prints each line number as it runs.
+NOTRACE|a|NOTRACE|Turns TRACE off.
+NORMAL|a|NORMAL|Prints white on black.
+INVERSE|a|INVERSE|Prints black on white.
+FLASH|a|FLASH|Prints flashing characters.
+COLOR=|a|COLOR= n|Sets the low-resolution color, 0-15.
+POP|a|POP|Drops the latest GOSUB's return, so the next RETURN goes to the one before.
+VTAB|a|VTAB row|Moves the cursor to a row, 1-24.
+HIMEM:|a|HIMEM: address|Sets the top of the memory BASIC uses; strings are cleared.
+LOMEM:|a|LOMEM: address|Sets where the variables start; they are cleared.
+ONERR|a|ONERR GOTO line|Sends errors to a line instead of stopping; PEEK(222) holds the error code and RESUME retries the statement.
+RESUME|a|RESUME|After ONERR GOTO, runs the statement that failed again.
+RECALL|a|RECALL array|Reads an array from cassette.
+STORE|a|STORE array|Writes an array to cassette.
+SPEED=|a|SPEED= n|Sets how fast characters are printed, 0 (slowest) to 255.
+&|a|& ...|Runs the machine code that the JMP at $03F5 sends it to, which reads the rest of the statement itself.
+RESET|2|RESET(x, y)|Turns off a graphics block, 0-127 across and 0-47 down.
+SET|2|SET(x, y)|Turns on a graphics block, 0-127 across and 0-47 down.
+CLS|2|CLS|Clears the screen and puts the cursor at the top left.
+CMD|2|CMD "command"|Disk BASIC: runs a DOS command; CMD "S" returns to DOS.
+RANDOM|2|RANDOM|Seeds RND from the refresh register, so each run gives other numbers.
+ELSE|2|IF condition THEN statements ELSE statements|Gives what IF runs when its condition does not hold; a line number alone jumps there.
+TRON|2|TRON|Prints each line number, in angle brackets, as it runs.
+TROFF|2|TROFF|Turns TRON off.
+DEFSTR|2|DEFSTR letter [- letter] [, ...]|Makes variables starting with those letters strings, without a $.
+DEFINT|2|DEFINT letter [- letter] [, ...]|Makes variables starting with those letters integers, without a %.
+DEFSNG|2|DEFSNG letter [- letter] [, ...]|Makes variables starting with those letters single precision, without a !.
+DEFDBL|2|DEFDBL letter [- letter] [, ...]|Makes variables starting with those letters double precision, without a #.
+LINE|2|LINE INPUT ["prompt";] s$|Disk BASIC: reads a whole typed line, commas and quotes included, into a string.
+EDIT|2|EDIT line|Edits a line with the line editor's single-key commands.
+ERROR|2|ERROR code / ON ERROR GOTO line|Causes the error with that code; ON ERROR GOTO sends errors to a line, and ON ERROR GOTO 0 turns that off.
+RESUME|2|RESUME [0 / NEXT / line]|Ends an error handler: runs the failed statement again, the one after it, or a line.
+OUT|2|OUT port, value|Writes a byte to a Z80 port.
+OPEN|2|OPEN "mode", buffer, "file"|Disk BASIC: opens a file in a buffer, for input (I), output (O) or random access (R).
+FIELD|2|FIELD buffer, width AS s$ [, ...]|Disk BASIC: divides a random file's buffer into string fields.
+GET|2|GET buffer [, record]|Disk BASIC: reads a record of a random file into its buffer.
+PUT|2|PUT buffer [, record]|Disk BASIC: writes a random file's buffer as a record.
+CLOSE|2|CLOSE [buffer, ...]|Disk BASIC: closes files.
+LOAD|2|LOAD "file" [, R]|Disk BASIC: loads a program, and with R runs it with files left open.
+MERGE|2|MERGE "file"|Disk BASIC: adds the lines of a program saved as text to the one in memory.
+NAME|2|NAME|Disk BASIC: reserved, with no use in TRSDOS's BASIC.
+KILL|2|KILL "file"|Disk BASIC: deletes a file.
+LSET|2|LSET field$ = s$|Disk BASIC: puts a string in a field, on the left, padded with spaces.
+RSET|2|RSET field$ = s$|Disk BASIC: puts a string in a field, on the right, padded with spaces.
+SAVE|2|SAVE "file" [, A]|Disk BASIC: saves the program, with A as text.
+SYSTEM|2|SYSTEM|Loads a machine-language program from tape at the *? prompt, and runs it with / and an address.
+LPRINT|2|LPRINT [items]|Prints to the printer, as PRINT does to the screen.
+LLIST|2|LLIST [first] [- last]|Lists the program, or the lines given, on the printer.
+DELETE|2|DELETE first - last|Deletes the lines from first to last.
+AUTO|2|AUTO [start] [, increment]|Numbers lines as you type them, until BREAK.
+CLEAR|2|CLEAR [bytes]|Clears every variable, array and string; with a number, sets aside that much string space (50 at power-up).
+CLOAD|2|CLOAD ["name"] / CLOAD? ["name"]|Loads a program from tape, or with ? compares the tape with the program in memory.
+CSAVE|2|CSAVE "name"|Writes the program to tape under a one-letter name.
+USING|2|PRINT USING "format"; items|Prints numbers and strings in a format: # digits, . and , in numbers, $$ and ** for money, ! and % % for strings.
+VARPTR|2|VARPTR(v)|The address of a variable's value, or of a string's descriptor.
+USR|2|USR(x)|Calls the machine code whose address is at $408E, with x in the accumulator, and returns its result.
+ERL|2|ERL|The line of the last error.
+ERR|2|ERR|The last error's code: its number times two, less two.
+STRING$|2|STRING$(n, c)|A string of n copies of a character, given by its code or a string.
+INSTR|2|INSTR([start,] s$, t$)|Disk BASIC: where t$ first appears in s$, or 0.
+POINT|2|POINT(x, y)|-1 when a graphics block is on, 0 when it is off.
+TIME$|2|TIME$|Disk BASIC: the date and time, as MM/DD/YY HH:MM:SS.
+MEM|2|MEM|The free memory in bytes.
+INKEY$|2|INKEY$|The key being pressed, or an empty string; it does not wait.
+INP|2|INP(port)|Reads a byte from a Z80 port.
+CVI|2|CVI(s$)|Disk BASIC: the integer a two-character field holds.
+CVS|2|CVS(s$)|Disk BASIC: the single-precision number a four-character field holds.
+CVD|2|CVD(s$)|Disk BASIC: the double-precision number an eight-character field holds.
+EOF|2|EOF(buffer)|Disk BASIC: -1 at the end of a sequential file.
+LOC|2|LOC(buffer)|Disk BASIC: the current record of a file.
+LOF|2|LOF(buffer)|Disk BASIC: the number of records in a file.
+MKI$|2|MKI$(n)|Disk BASIC: an integer as a two-character field.
+MKS$|2|MKS$(x)|Disk BASIC: a single-precision number as a four-character field.
+MKD$|2|MKD$(x)|Disk BASIC: a double-precision number as an eight-character field.
+CINT|2|CINT(x)|x rounded to an integer, -32768 to 32767.
+CSNG|2|CSNG(x)|x as single precision.
+CDBL|2|CDBL(x)|x as double precision.
+FIX|2|FIX(x)|x with its fraction dropped, toward zero.
+'|2|' text|A remark, like :REM: the rest of the line is ignored.
+# Integer BASIC: 16-bit integers from -32767 to 32767, names of any length, and strings that DIM sizes.
+END|i|END|Stops the program and returns to the > prompt.
+FOR|i|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. Up to 16 loops can be active.
+NEXT|i|NEXT v [, v ...]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end. NEXT names its variable.
+INPUT|i|INPUT ["prompt",] v [, v ...]|Reads numbers, or a line into a string, from the keyboard; a number asks again when what is typed is not one.
+DIM|i|DIM a(size) / DIM a$(length) [, ...]|Makes a numeric array of elements 0 to size, or gives a string room for length characters. A string must be DIMmed before it holds more than one character.
+LET|i|[LET] v = expression|Assigns a value; LET itself can be left out.
+GOTO|i|GOTO expression|Continues at the line the expression gives, so the line number can be computed.
+GOSUB|i|GOSUB expression|Calls the subroutine at the line the expression gives; RETURN comes back after it. Up to 16 GOSUBs can be active.
+RETURN|i|RETURN|Returns from a GOSUB to the statement after it.
+IF|i|IF condition THEN statement / IF condition THEN line|Runs the one statement after THEN when the condition is not zero; the statements after the next colon run either way.
+THEN|i|IF condition THEN statement|Introduces the statement, or the line number, that IF runs.
+TO|i|FOR v = start TO end|Introduces a FOR loop's end value.
+STEP|i|FOR v = start TO end STEP increment|Gives a FOR loop's increment.
+REM|i|REM text|A remark: the rest of the line is ignored.
+PRINT|i|PRINT [expression [; or ,] ...]|Prints numbers and strings; a semicolon joins items, a comma moves to the next 8-column zone, and an ending ; or , stays on the line.
+TAB|i|TAB column|Moves the cursor to a column of the line, 1 to 40.
+VTAB|i|VTAB row|Moves the cursor to a row of the screen, 1 to 24.
+TEXT|i|TEXT|Sets the full text screen.
+GR|i|GR|Sets low-resolution graphics with four lines of text below, and clears the graphics.
+COLOR=|i|COLOR = n|Sets the low-resolution color, 0 to 15, for PLOT, HLIN and VLIN.
+PLOT|i|PLOT x, y|Plots a low-resolution block in the color COLOR= set.
+HLIN|i|HLIN x1, x2 AT y|Draws a low-resolution horizontal line.
+VLIN|i|VLIN y1, y2 AT x|Draws a low-resolution vertical line.
+AT|i|HLIN x1, x2 AT y / VLIN y1, y2 AT x|Introduces the row of HLIN or the column of VLIN.
+CALL|i|CALL address|Calls a machine-language routine; a negative address counts down from 65536, as CALL -936 clears the screen.
+POKE|i|POKE address, value|Stores a byte, 0 to 255, at an address.
+PEEK|i|PEEK (address)|The byte at an address.
+POP|i|POP|Forgets the most recent GOSUB, so the next RETURN goes back one level further.
+CLR|i|CLR|Clears the variables and the FOR and GOSUB stacks.
+NEW|i|NEW|Deletes the program and clears the variables.
+RUN|i|RUN [line]|Clears the variables and runs the program, from its first line or from the line given.
+LIST|i|LIST [line [, line]]|Lists the program, or the lines from the first number to the second.
+DEL|i|DEL line [, line]|Deletes a line, or the lines from the first number to the second.
+AUTO|i|AUTO line [, step]|Offers line numbers for the lines typed next, counting by 10 unless a step is given; MAN ends it.
+MAN|i|MAN|Ends AUTO numbering.
+CON|i|CON|Continues a program that Control-C or an error stopped.
+LOAD|i|LOAD|Loads a program from cassette.
+SAVE|i|SAVE|Saves the program to cassette.
+HIMEM:|i|HIMEM: address|Moves the top of the program's memory, taking the program with it.
+LOMEM:|i|LOMEM: address|Moves the start of the variables, clearing them.
+TRACE|i|TRACE|Prints each line's number as it runs.
+NOTRACE|i|NOTRACE|Stops TRACE.
+DSP|i|DSP v|Prints the variable's name and value each time it is assigned.
+NODSP|i|NODSP v|Stops DSP for the variable.
+PR#|i|PR# slot|Sends output to the card in a slot; PR# 0 is the screen.
+IN#|i|IN# slot|Takes input from the card in a slot; IN# 0 is the keyboard.
+ABS|i|ABS (x)|The absolute value of x.
+SGN|i|SGN (x)|-1, 0 or 1 by the sign of x.
+RND|i|RND (n)|A random number from 0 to n - 1.
+PDL|i|PDL (n)|Reads game paddle n, 0 to 3, as 0 to 255.
+LEN|i|LEN (a$)|The number of characters in a string.
+ASC|i|ASC (a$)|The code of a string's first character, with bit 7 set.
+SCRN|i|SCRN (x, y)|The color of a low-resolution block, 0 to 15.
+MOD|i|a MOD b|The remainder of a divided by b, with the sign of a.
+AND|i|a AND b|1 when both are not zero, else 0.
+OR|i|a OR b|1 when either is not zero, else 0.
+NOT|i|NOT a|1 when a is zero, else 0.
++|i|a + b / +a|Adds numbers.
+-|i|a - b / -a|Subtracts, or negates.
+*|i|a * b|Multiplies.
+/|i|a / b|Divides, dropping the remainder.
+^|i|a ^ b|Raises a to the power b, a positive whole number.
+=|i|a = b / v = expression|Equal: 1 when a equals b, else 0; numbers, or two strings. In an assignment, gives a variable its value.
+#|i|a # b|Not equal: 1 when a differs from b, else 0; numbers, or two strings. The same as <>.
+<>|i|a <> b|Not equal: 1 when a differs from b, else 0. The same as #.
+<|i|a < b|Less than: 1 when a is less than b, else 0.
+>|i|a > b|Greater than: 1 when a is greater than b, else 0.
+<=|i|a <= b|1 when a is less than or equal to b, else 0.
+>=|i|a >= b|1 when a is greater than or equal to b, else 0.
+RNDX|i|RNDX name|A word the syntax tables accept but no routine runs; a program should not use it.

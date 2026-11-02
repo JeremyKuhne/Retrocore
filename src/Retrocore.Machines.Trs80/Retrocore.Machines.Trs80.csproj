@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The TRS-80 Model I: bus, video, keyboard, cassette, and the Expansion Interface's clock and disks. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+  </ItemGroup>
+
+</Project>

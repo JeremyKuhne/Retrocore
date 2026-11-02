@@ -1,0 +1,31 @@
+# Text is stored with LF line endings and checked out with the platform's (CRLF on Windows).
+* text=auto
+
+# Scripts whose interpreters need one line ending wherever they are checked out.
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Images, fonts, archives, ROM dumps and disk or tape images are bytes, never text.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.vsix binary
+*.bin binary
+*.rom binary
+*.dsk binary
+*.do binary
+*.po binary
+*.d13 binary
+*.woz binary
+*.nib binary
+*.2mg binary
+*.cas binary
+*.jv1 binary
+*.jv3 binary
+*.dmk binary
+*.wav binary

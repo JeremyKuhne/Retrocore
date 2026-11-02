@@ -1,0 +1,62 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "extensionHost",
+            "request": "launch",
+            "name": "Run Extension",
+            "preLaunchTask": "Build extension and debug host",
+            "args": [
+                "${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/extension",
+                "${workspaceFolder}/sample/trs80/hello.asm"
+            ],
+            "outFiles": ["${workspaceFolder}/extension/out/**/*.js"]
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "IIe: boot with SDK ROM sources",
+            "preLaunchTask": "Build debug host",
+            "model": "iie-enhanced",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Apple2/Roms",
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "trs80-model1",
+            "name": "Model I: boot Level II with SDK ROM sources",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Trs80/Roms",
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "trs80-model1",
+            "name": "Model I: Z80 sample",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Trs80/Roms",
+            "source": "${workspaceFolder}/sample/trs80/hello.asm",
+            "stopOnEntry": true
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "IIe: ca65 source debugging",
+            "preLaunchTask": "Build IIe sample and debug host",
+            "romDirectory": "${env:RETROCORE_IIE_ROMS}",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "program": "${workspaceFolder}\\artifacts\\iie-sample\\main.bin",
+            "debugFile": "${workspaceFolder}\\artifacts\\iie-sample\\main.dbg",
+            "loadAddress": 24576,
+            "stopOnEntry": true
+        }
+    ]
+}

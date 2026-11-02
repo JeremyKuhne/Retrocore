@@ -1,0 +1,190 @@
+;; SWEET16 INSTRUCTIONS AS MACROS
+;;
+;; Steve Wozniak's SWEET16 is a 16-bit interpreter in the Integer BASIC ROM (<IntegerBasic:SW16>): a 6502 program
+;; does JSR SW16, and the bytes after it are SWEET16 instructions, up to an RTN, after which the 6502 carries on.
+;; Renumber and Relocate are partly written in it. These macros assemble its instructions with Apple's mnemonics.
+;;
+;; A register is a number from 0 to 15, usually a name for one. The instructions that go through a register, which
+;; Apple writes @R, take it in brackets here, as memory operands are written on the Z80: `LD [PRGNDX]` loads the byte
+;; PRGNDX points to, while `LD PRGNDX` copies the register. A branch takes its target and assembles the signed
+;; offset from the byte after it. Part of ProgrammersAid.asm.
+
+;; SET Rn: loads a 16-bit constant into a register.
+;; Parameters: register = the register, value = the constant
+.macro SET register, value
+    .byte $10 | (register), <(value), >(value)
+.endmacro
+
+;; LD Rn copies a register to R0, the accumulator; LD [Rn] loads the byte the register points to, which then steps
+;; up.
+;; Parameters: register = the register, or the register in brackets
+.macro LD register
+    .if .match(.left(1, {register}), [)
+        .byte $40 | (.mid(1, 1, {register}))
+    .else
+        .byte $20 | (register)
+    .endif
+.endmacro
+
+;; ST Rn copies R0 to a register; ST [Rn] stores R0's low byte where the register points, which then steps up.
+;; Parameters: register = the register, or the register in brackets
+.macro ST register
+    .if .match(.left(1, {register}), [)
+        .byte $50 | (.mid(1, 1, {register}))
+    .else
+        .byte $30 | (register)
+    .endif
+.endmacro
+
+;; LDD [Rn]: loads the two bytes the register points to into R0; the register steps up by 2.
+;; Parameters: register = the register in brackets
+.macro LDD register
+    .if .match(.left(1, {register}), [)
+        .byte $60 | (.mid(1, 1, {register}))
+    .else
+        .error "LDD goes through a register: write it in brackets, as [R]."
+    .endif
+.endmacro
+
+;; STD [Rn]: stores R0's two bytes where the register points; the register steps up by 2.
+;; Parameters: register = the register in brackets
+.macro STD register
+    .if .match(.left(1, {register}), [)
+        .byte $70 | (.mid(1, 1, {register}))
+    .else
+        .error "STD goes through a register: write it in brackets, as [R]."
+    .endif
+.endmacro
+
+;; POP [Rn]: steps the register down, then loads the byte it points to into R0.
+;; Parameters: register = the register in brackets
+.macro POP register
+    .if .match(.left(1, {register}), [)
+        .byte $80 | (.mid(1, 1, {register}))
+    .else
+        .error "POP goes through a register: write it in brackets, as [R]."
+    .endif
+.endmacro
+
+;; STP [Rn]: steps the register down, then stores R0's low byte where it points.
+;; Parameters: register = the register in brackets
+.macro STP register
+    .if .match(.left(1, {register}), [)
+        .byte $90 | (.mid(1, 1, {register}))
+    .else
+        .error "STP goes through a register: write it in brackets, as [R]."
+    .endif
+.endmacro
+
+;; POPD [Rn]: steps the register down by 2, then loads the two bytes it points to into R0.
+;; Parameters: register = the register in brackets
+.macro POPD register
+    .if .match(.left(1, {register}), [)
+        .byte $C0 | (.mid(1, 1, {register}))
+    .else
+        .error "POPD goes through a register: write it in brackets, as [R]."
+    .endif
+.endmacro
+
+;; ADD Rn: R0 = R0 + the register.
+;; Parameters: register = the register
+.macro ADD register
+    .byte $A0 | (register)
+.endmacro
+
+;; SUB Rn: R0 = R0 - the register.
+;; Parameters: register = the register
+.macro SUB register
+    .byte $B0 | (register)
+.endmacro
+
+;; CPR Rn: R13 = R0 - the register, for the branches that follow.
+;; Parameters: register = the register
+.macro CPR register
+    .byte $D0 | (register)
+.endmacro
+
+;; INR Rn: adds 1 to the register.
+;; Parameters: register = the register
+.macro INR register
+    .byte $E0 | (register)
+.endmacro
+
+;; DCR Rn: subtracts 1 from the register.
+;; Parameters: register = the register
+.macro DCR register
+    .byte $F0 | (register)
+.endmacro
+
+;; RTN: returns to the 6502 code after the instruction.
+.macro RTN
+    .byte $00
+.endmacro
+
+;; Assembles a branch: the opcode and the signed offset to the target from the byte after the offset.
+;; Parameters: opcode = the branch's opcode, target = where it goes
+.macro SW16BRANCH opcode, target
+    .assert (target) - (* + 2) >= -128 && (target) - (* + 2) <= 127, "The SWEET16 branch is out of range."
+    .byte (opcode)
+    .byte <((target) - (* + 1))       ; the offset counts from the byte after it
+.endmacro
+
+;; BR: branches always.
+;; Parameters: target = where it goes
+.macro BR target
+    SW16BRANCH $01, target
+.endmacro
+
+;; BNC: branches if the last result left no carry.
+;; Parameters: target = where it goes
+.macro BNC target
+    SW16BRANCH $02, target
+.endmacro
+
+;; BC: branches if the last result carried.
+;; Parameters: target = where it goes
+.macro BC target
+    SW16BRANCH $03, target
+.endmacro
+
+;; BP: branches if the last result was positive.
+;; Parameters: target = where it goes
+.macro BP target
+    SW16BRANCH $04, target
+.endmacro
+
+;; BM: branches if the last result was negative.
+;; Parameters: target = where it goes
+.macro BM target
+    SW16BRANCH $05, target
+.endmacro
+
+;; BZ: branches if the last result was zero.
+;; Parameters: target = where it goes
+.macro BZ target
+    SW16BRANCH $06, target
+.endmacro
+
+;; BNZ: branches if the last result was not zero.
+;; Parameters: target = where it goes
+.macro BNZ target
+    SW16BRANCH $07, target
+.endmacro
+
+;; BM1: branches if the last result was -1.
+;; Parameters: target = where it goes
+.macro BM1 target
+    SW16BRANCH $08, target
+.endmacro
+
+;; BNM1: branches if the last result was not -1.
+;; Parameters: target = where it goes
+.macro BNM1 target
+    SW16BRANCH $09, target
+.endmacro
+
+;; BS: calls a SWEET16 subroutine, keeping the return address on the stack R12 points to.
+;; Parameters: target = the subroutine
+.macro BS target
+    SW16BRANCH $0C, target
+.endmacro

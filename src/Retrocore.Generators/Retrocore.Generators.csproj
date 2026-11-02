@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IsPackable>false</IsPackable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- These build-only diagnostics are not a published, versioned analyzer API. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.Diagnostics.CodeAnalysis" />
+    <!-- Analysis consumes generated runtime opcode tables and is not part of the assembler bootstrap. -->
+    <Compile Include="..\Retrocore.Assembler\Assembler\*.cs"
+             Exclude="..\Retrocore.Assembler\Assembler\*.Runtime.cs;..\Retrocore.Assembler\Assembler\Analysis*.cs;..\Retrocore.Assembler\Assembler\Disassembl*.cs"
+             Link="Assembler\%(Filename)%(Extension)" />
+    <Compile Include="..\Retrocore.Assembler\Documentation\*.cs" Exclude="..\Retrocore.Assembler\Documentation\DocumentationResolver*.cs" Link="Documentation\%(Filename)%(Extension)" />
+    <Compile Include="..\Retrocore.Core\Isa\*.cs" Link="Isa\%(Filename)%(Extension)" />
+    <Compile Include="..\Retrocore.Cpu.M6502\ProcessorVariant.cs" Link="Cpu\ProcessorVariant.cs" />
+    <Compile Include="..\Retrocore.Cpu.M6502\AddressMode.cs" Link="Cpu\AddressMode.cs" />
+    <Compile Include="..\Retrocore.Cpu.M6502\Instruction.cs" Link="Cpu\Instruction.cs" />
+    <Compile Include="..\Retrocore.Cpu.M6502\OpCode.cs" Link="Cpu\OpCode.cs" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <!-- Linked sources use current .NET APIs; missing APIs are polyfilled only in this project. -->
+    <!-- PolySharp supplies the compiler attributes needed by those generator-only polyfills. -->
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+  </ItemGroup>
+
+</Project>

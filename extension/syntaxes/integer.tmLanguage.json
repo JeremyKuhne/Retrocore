@@ -1,0 +1,327 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Integer BASIC",
+  "scopeName": "source.retrocore-integer",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-integer"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-integer"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-integer"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-integer"
+        },
+        {
+          "match": "(?i:(HIMEM:)|(LOMEM:)|(LOAD)|(SAVE)|(CON)|(RUN)|(DEL)|(NEW)|(CLR)|(AUTO)|(MAN)|(\\+)|(-)|(\\*)|(/)|(=)|(#)|(>=)|(>)|(<=)|(<>)|(<)|(AND)|(OR)|(MOD)|(\\^)|(NOT)|(THEN)|(PEEK)|(RND)|(SGN)|(ABS)|(PDL)|(RNDX)|(LEN)|(ASC)|(SCRN)|(TEXT)|(GR)|(CALL)|(DIM)|(TAB)|(END)|(INPUT)|(FOR)|(TO)|(STEP)|(NEXT)|(RETURN)|(GOSUB)|(LET)|(G\\s*O\\s*T\\s*O)|(IF)|(PRINT)|(POKE)|(COLOR=)|(PLOT)|(HLIN)|(AT(?![NnOo]))|(VLIN)|(VTAB)|(LIST)|(POP)|(NODSP)|(NOTRACE)|(DSP)|(TRACE)|(PR#)|(IN#))",
+          "captures": {
+            "1": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "2": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "3": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "4": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "5": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "6": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "7": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "8": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "9": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "12": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "13": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "14": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "15": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "16": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "17": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "18": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "19": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "20": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "21": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "22": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "23": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "24": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "25": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "26": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "27": {
+              "name": "keyword.operator.retrocore-integer"
+            },
+            "28": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "29": {
+              "name": "support.function.retrocore-integer"
+            },
+            "30": {
+              "name": "support.function.retrocore-integer"
+            },
+            "31": {
+              "name": "support.function.retrocore-integer"
+            },
+            "32": {
+              "name": "support.function.retrocore-integer"
+            },
+            "33": {
+              "name": "support.function.retrocore-integer"
+            },
+            "34": {
+              "name": "support.function.retrocore-integer"
+            },
+            "35": {
+              "name": "support.function.retrocore-integer"
+            },
+            "36": {
+              "name": "support.function.retrocore-integer"
+            },
+            "37": {
+              "name": "support.function.retrocore-integer"
+            },
+            "38": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "39": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "41": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "42": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "43": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "44": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "45": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "46": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "47": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "48": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "49": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "50": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "52": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "53": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "59": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "60": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "62": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "63": {
+              "name": "keyword.control.retrocore-integer"
+            },
+            "64": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "65": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "66": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "68": {
+              "name": "keyword.other.retrocore-integer"
+            },
+            "69": {
+              "name": "keyword.other.retrocore-integer"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-integer"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-integer"
+        },
+        {
+          "match": "[A-Za-z][A-Za-z0-9]*\\$?",
+          "name": "variable.other.retrocore-integer"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-integer"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-integer"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?i:(REM)).*$",
+      "name": "comment.line.retrocore-integer",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-integer"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-integer"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?i:(DATA))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-integer"
+        }
+      },
+      "end": "(?=:|$)",
+      "contentName": "string.unquoted.data.retrocore-integer",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-integer",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-integer"
+    }
+  }
+}

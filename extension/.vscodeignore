@@ -1,0 +1,10 @@
+# What the VSIX leaves out: sources, build scripts, tests and test downloads. The compiled out/, the grammar, the
+# packaged debug host in server/ and the runtime npm dependencies are what the extension runs.
+src/**
+scripts/**
+out/test/**
+**/*.map
+**/*.ts
+tsconfig.json
+.vscode-test/**
+.gitignore

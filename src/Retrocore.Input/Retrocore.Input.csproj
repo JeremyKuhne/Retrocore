@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Game controllers through SDL3, for the standalone emulators and the debug host. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <PackageReference Include="SDL3-CS" Version="3.4.20" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+  </ItemGroup>
+
+</Project>

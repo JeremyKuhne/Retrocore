@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AppleSharp</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SDL3-CS" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.Windows" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.Linux" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.MacOS" Version="3.4.20" />
+    <ProjectReference Include="..\Retrocore.Input\Retrocore.Input.csproj" />
+    <PackageReference Include="ConsoleAppFramework" Version="5.7.13" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+    <InternalsVisibleTo Include="AppleSharp.tests" />
+    <None Update="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

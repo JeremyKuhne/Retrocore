@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Retrocore.Cpu" />
+    <Using Include="Retrocore.Cpu.M6502" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj"
+                      Aliases="Generator" PrivateAssets="all" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Slot7.rom.asm" Link="Inputs\Slot7.rom.asm" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

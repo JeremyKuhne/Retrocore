@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "$comment": "MACRO-10 sources (.mac), such as AppleSoft's m6502.asm overlay, highlight as Retrocore Assembly; a language of their own gives them their own icon.",
+  "name": "MACRO-10 Assembly",
+  "scopeName": "source.retrocore.macro10",
+  "patterns": [
+    {
+      "include": "source.retrocore"
+    }
+  ]
+}

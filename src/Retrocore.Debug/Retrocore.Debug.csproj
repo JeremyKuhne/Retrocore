@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- The host stays free of reflection so it can be compiled ahead of time; the analyzers report what would
+         stop it. dotnet publish -p:RetrocoreAot=true builds it native. (PublishAot itself would also reach the
+         analyzer and generator projects it references, which cannot be.) -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot Condition="'$(RetrocoreAot)' == 'true'">true</PublishAot>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Retrocore.Cpu" />
+    <Using Include="Retrocore.Cpu.M6502" />
+    <ProjectReference Include="..\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <ProjectReference Include="..\Retrocore.Basic\Retrocore.Basic.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
+    <ProjectReference Include="..\Retrocore.Input\Retrocore.Input.csproj" />
+    <!-- SDL3's native library, for game controllers, on each platform the extension runs on. -->
+    <PackageReference Include="SDL3-CS.Windows" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.Linux" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.MacOS" Version="3.4.20" />
+    <!-- SDK ROM sources ship beside the debug host, which assembles them to step through their source. -->
+    <None Include="..\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Sdk\Roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Sdk\Roms\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Sdk\Roms\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Sdk\Roms\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Sdk\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Sdk\Roms\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Sdk\Roms\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- SDL's packages carry each library once per name its platform links by: libSDL3.so, .so.0 and .so.0.4.20 on
+       Linux, libSDL3.dylib and libSDL3.0.dylib on macOS, all the same file once packed. .NET loads SDL3-CS's "SDL3"
+       as libSDL3.so or libSDL3.dylib, so the other names go, as does 32-bit Windows, which VS Code doesn't run on.
+       They go before the deps.json is written, which must list only files that ship. -->
+  <Target Name="TrimSdlNativeLibraries" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
+        Condition="'%(RuntimeTargetsCopyLocalItems.NuGetPackageId)' != '' and $([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.NuGetPackageId)').StartsWith('SDL3-CS.')) and ('%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)' == 'win-x86' or $([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.DestinationSubPath)').Contains('libSDL3.so.')) or $([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.DestinationSubPath)').EndsWith('libSDL3.0.dylib')))" />
+    </ItemGroup>
+  </Target>
+</Project>

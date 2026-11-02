@@ -1,0 +1,17 @@
+{
+    "dotnet.defaultSolution": "Retrocore.slnx",
+    // This repository's native sources: the SDK's ROM sources and the native samples. The ca65 sample (*.s) keeps
+    // its own language.
+    "files.associations": {
+        "**/src/**/Roms/**/*.asm": "retrocore-asm",
+        "**/src/**/Roms/**/*.mac": "retrocore-macro10",
+        "**/sample/**/*.asm": "retrocore-asm"
+    },
+    // The VS Code builds and profiles the extension tests download; their bundled extensions are not ours to lint.
+    "files.exclude": {
+        "artifacts/vscode-*": true
+    },
+    "files.watcherExclude": {
+        "artifacts/**": true
+    }
+}

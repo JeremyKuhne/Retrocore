@@ -38,24 +38,24 @@ jobs:
         working-directory: Retrocore
     steps:
       - name: Check out Retrocore
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: Retrocore
 
       - name: Check out touki
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: JeremyKuhne/touki
           ref: ${{ env.TOUKI_REF }}
           path: touki
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: Retrocore/global.json
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: ${{ github.workspace }}/test-results

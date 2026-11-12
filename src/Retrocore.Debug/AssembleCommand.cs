@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Assembler;
 
 namespace Retrocore.Debug;
@@ -63,10 +62,5 @@ internal static class AssembleCommand
     /// </summary>
     /// <param name="text">The address.</param>
     /// <returns>The value.</returns>
-    internal static int Address(string text)
-    {
-        int prefix = text.StartsWith('$') ? 1 : text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
-        NumberStyles style = prefix == 0 ? NumberStyles.Integer : NumberStyles.HexNumber;
-        return int.Parse(text.AsSpan(prefix), style, CultureInfo.InvariantCulture);
-    }
+    internal static int Address(string text) => CommandAddress.Parse(text);
 }

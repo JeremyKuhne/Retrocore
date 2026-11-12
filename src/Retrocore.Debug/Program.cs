@@ -31,6 +31,18 @@ if (args.Length > 0 && args[0] == "--basic")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--dos")
+{
+    Environment.ExitCode = DosCommand.Run(args[1..]);
+    return;
+}
+
+if (args.Length > 0 && args[0] == "--disassemble")
+{
+    Environment.ExitCode = DisassembleCommand.Run(args[1..]);
+    return;
+}
+
 if (args.Length > 0 && args[0] is "--boot-probe" or "--boot-state")
 {
     if (args.Length != 4)

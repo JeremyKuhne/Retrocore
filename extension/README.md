@@ -744,6 +744,16 @@ optional). The library writes the same format through `AssemblyDebugFile.Write`.
 For ca65 sources it maps every address and line as ld65 does, including include
 files, macro body lines and BSS.
 
+`Retrocore.Debug --dos catalog disk.dsk` lists a DOS 3.3 or 3.2 disk's files,
+with each binary file's address and length (`--json` for a machine to read), and
+`--dos extract disk.dsk "NAME" out.bin` copies one out. `Retrocore.Debug
+--disassemble --disk disk.dsk --file "NAME" out.asm` turns a binary file into
+native source, or a plain file with `--origin`. It names what the program uses of
+the Monitor, firmware, BASIC and DOS by the SDK sources' names (`--machine` and
+`--dos` pick whose), takes a `--hints` file of entry points, data ranges, names
+and comments, and checks that the source assembles back to the same bytes. The
+`retrocore-disassembly` skill describes the whole process.
+
 Included and Merlin `PUT` files map to their own lines, code after `.org` or Merlin `ORG` maps to its CPU addresses, and scoped
 labels resolve as `scope::name` as well as by plain name. A relative file name
 in an ld65 `.dbg` is looked up beside the sources named with full paths before

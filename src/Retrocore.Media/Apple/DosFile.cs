@@ -81,6 +81,40 @@ public sealed record DosFile(string Name, DosFileType Type, ReadOnlyMemory<byte>
         return new(name, DosFileType.Text, contents.ToArray());
     }
 
+    /// <summary>
+    ///  Takes apart a binary file: the address BLOAD puts it at, and its bytes.
+    /// </summary>
+    /// <param name="address">The load address.</param>
+    /// <param name="data">The bytes, as many as the file's length says.</param>
+    /// <returns>Whether this is a binary file whose length fits its contents.</returns>
+    public bool TryGetBinary(out int address, out ReadOnlyMemory<byte> data)
+    {
+        address = 0;
+        data = default;
+        if (Type != DosFileType.Binary || Contents.Length < 4) { return false; }
+        ReadOnlySpan<byte> header = Contents.Span;
+        int length = header[2] | (header[3] << 8);
+        if (length > Contents.Length - 4) { return false; }
+        address = header[0] | (header[1] << 8);
+        data = Contents.Slice(4, length);
+        return true;
+    }
+
+    /// <summary>
+    ///  Takes apart an AppleSoft or Integer BASIC program file: the program, without its length.
+    /// </summary>
+    /// <param name="program">The program, as many bytes as the file's length says.</param>
+    /// <returns>Whether this is a program file whose length fits its contents.</returns>
+    public bool TryGetProgram(out ReadOnlyMemory<byte> program)
+    {
+        program = default;
+        if (Type is not (DosFileType.AppleSoft or DosFileType.IntegerBasic) || Contents.Length < 2) { return false; }
+        int length = Contents.Span[0] | (Contents.Span[1] << 8);
+        if (length > Contents.Length - 2) { return false; }
+        program = Contents.Slice(2, length);
+        return true;
+    }
+
     // A program's length, then the program.
     private static byte[] WithLength(ReadOnlySpan<byte> program)
     {

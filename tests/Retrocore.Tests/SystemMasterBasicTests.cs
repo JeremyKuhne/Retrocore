@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Security.Cryptography;
+using Retrocore.Assembler;
 using Retrocore.Debug;
+using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
+using NativeAssembler = Retrocore.Assembler.Assembler;
 
 namespace Retrocore.Tests;
 
 /// <summary>
-///  The DOS 3.3 System Masters' FPBASIC and INTBASIC, the BASIC images their HELLO loads into a language card,
-///  against the SDK's builds of AppleSoft, Integer BASIC and the Monitor.
+///  The DOS 3.3 System Masters' BASIC images and MASTER CREATE utility, against the SDK's sources.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -28,6 +31,28 @@ public class SystemMasterBasicTests
     private const int MonitorStart = 0xF800;
 
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+
+    /// <summary>
+    ///  The 1980 master's MASTER CREATE assembles byte-identically, without requiring the disk image.
+    /// </summary>
+    [TestMethod]
+    public void MasterCreateSourceMatchesThe1980Master()
+    {
+        string path = Path.Join(s_inputs, "Software", "MasterCreate.asm");
+        string source = File.ReadAllText(path);
+        AssemblyOptions options = new("Mos6502", origin: 0x0800, imageSize: 0x06FF)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult result = new NativeAssembler().Assemble(new AssemblySource(source, path), options);
+        result.Diagnostics.Should().BeEmpty();
+        Convert.ToHexString(SHA256.HashData(result.Sections[0].Bytes.Span))
+            .Should().Be("B6B6978F771F9F4233B367F2643692E6FD998FDB1D9E03C81BF2D411E6BA4EC5");
+
+        DocumentationSet docs = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        new DocumentationResolver(docs).Check().Should().BeEmpty();
+    }
 
     /// <summary>
     ///  The 1980 masters' FPBASIC is the II Plus's AppleSoft and Autostart Monitor.

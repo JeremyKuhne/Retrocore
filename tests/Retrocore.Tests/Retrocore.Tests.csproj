@@ -60,6 +60,12 @@
     <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\CommandAddress.cs" Link="CommandAddress.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DosCommand.cs" Link="DosCommand.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MachineSymbols.cs" Link="MachineSymbols.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DisassembleCommand.cs" Link="DisassembleCommand.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyHints.cs" Link="DisassemblyHints.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DisassemblyProgram.cs" Link="DisassemblyProgram.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
@@ -80,6 +86,13 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Inputs\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Inputs\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Inputs\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Software\MasterCreate.asm" Link="Inputs\Software\MasterCreate.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Software\Boot13.*.asm" Link="Inputs\Software\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\RwtsEquates.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PreNibble32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\WriteSector32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadSector32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\ReadAddress32.asm;..\..\src\Retrocore.Machines.Apple2\Roms\Dos\PostNibble32.asm" Link="Inputs\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\Equates.asm" Link="Inputs\Roms\Dos\Equates.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\IIeEquates.asm" Link="Inputs\Roms\System\IIeEquates.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\MonitorEntries.asm" Link="Inputs\Roms\System\MonitorEntries.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\FirmwareEquates.asm" Link="Inputs\Roms\System\FirmwareEquates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Trs80\Roms\*.asm" Link="Inputs\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\NativeAssembly.md" Link="Inputs\Docs\NativeAssembly.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\.claude\skills\retrocore-native-assembly\*.md" Link="Inputs\Docs\Skill\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

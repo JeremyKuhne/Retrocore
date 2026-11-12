@@ -153,11 +153,11 @@ public sealed class LanguageAnalysisTests
     /// <param name="file">The opened file, under the test's inputs.</param>
     /// <param name="root">The root it is analyzed through.</param>
     [TestMethod]
-    [DataRow(@"Dos\BootLoader.asm", @"Dos\Dos33.asm")]
-    [DataRow(@"DiskII\Boot.asm", @"DiskII\Boot16.asm")]
-    [DataRow(@"DiskII\Sequencer.asm", @"DiskII\Sequencer16.asm")]
-    [DataRow(@"AppleSoft\m6502.asm", @"AppleSoft\applesoft.mac")]
-    [DataRow(@"Dos\Dos33.asm", @"Dos\Dos33.asm")]
+    [DataRow("Dos/BootLoader.asm", "Dos/Dos33.asm")]
+    [DataRow("DiskII/Boot.asm", "DiskII/Boot16.asm")]
+    [DataRow("DiskII/Sequencer.asm", "DiskII/Sequencer16.asm")]
+    [DataRow("AppleSoft/m6502.asm", "AppleSoft/applesoft.mac")]
+    [DataRow("Dos/Dos33.asm", "Dos/Dos33.asm")]
     public void IncludedFilesAreAnalyzedThroughTheirRoot(string file, string root)
     {
         string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");

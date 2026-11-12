@@ -63,7 +63,7 @@ public class AppTests
     }
 
     /// <summary>
-    ///  Checks generated ROM-folder options accept quoted Windows paths with spaces.
+    ///  Checks generated ROM-folder options accept quoted full paths with spaces, as the platform writes them.
     /// </summary>
     /// <param name="option">A generated option or its documented alias.</param>
     [TestMethod]
@@ -72,7 +72,7 @@ public class AppTests
     [DataRow("-r")]
     public void RomFolderAliasesAreGenerated(string option)
     {
-        string folder = @"N:\external ROMs\APPLE IIe";
+        string folder = OperatingSystem.IsWindows() ? @"N:\external ROMs\APPLE IIe" : "/external ROMs/APPLE IIe";
         AppOptions options = AppOptions.Parse([option, folder]);
         options.RomDirectory.Should().Be(folder);
         options.Help.Should().BeFalse();

@@ -55,9 +55,8 @@ internal static class ExternalTestData
         string manifestPath = Path.Join(root, "manifest.json");
         if (!File.Exists(manifestPath))
         {
-            throw new FileNotFoundException(
-                "External processor fixtures are missing. Run tools\\Fetch-ProcessorTests.ps1 with PowerShell 7.",
-                manifestPath);
+            Assert.Inconclusive(
+                $"External processor fixtures are missing ({manifestPath}). Run tools\\Fetch-ProcessorTests.ps1 with PowerShell 7.");
         }
 
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));

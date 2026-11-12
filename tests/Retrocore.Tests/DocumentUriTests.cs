@@ -18,6 +18,7 @@ public sealed class DocumentUriTests
     /// <param name="uri">The URI.</param>
     /// <param name="path">The file it names.</param>
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     [DataRow("file:///n%3A/repos/Retrocore/main.asm", @"n:\repos\Retrocore\main.asm")]
     [DataRow("file:///N:/repos/Retrocore/main.asm", @"N:\repos\Retrocore\main.asm")]
     [DataRow("file:///c%3A/Users/me/My%20Disks/boot.asm", @"c:\Users\me\My Disks\boot.asm")]
@@ -25,9 +26,33 @@ public sealed class DocumentUriTests
     public void NamesTheFile(string uri, string path) => new DocumentUri(uri).GetFileSystemPath().Should().Be(path);
 
     /// <summary>
+    ///  On Linux and macOS the path is the URI's, its escapes undone.
+    /// </summary>
+    /// <param name="uri">The URI.</param>
+    /// <param name="path">The file it names.</param>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Linux | OperatingSystems.OSX)]
+    [DataRow("file:///home/me/repos/main.asm", "/home/me/repos/main.asm")]
+    [DataRow("file:///home/me/My%20Disks/boot.asm", "/home/me/My Disks/boot.asm")]
+    public void NamesTheUnixFile(string uri, string path) => new DocumentUri(uri).GetFileSystemPath().Should().Be(path);
+
+    /// <summary>
+    ///  On Linux and macOS a file's URI names the same file again, with spaces escaped.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Linux | OperatingSystems.OSX)]
+    public void RoundTripsAUnixFile()
+    {
+        DocumentUri uri = DocumentUri.FromFileSystemPath("/retro disks/Level2.asm");
+        uri.Text.Should().Be("file:///retro%20disks/Level2.asm");
+        uri.GetFileSystemPath().Should().Be("/retro disks/Level2.asm");
+    }
+
+    /// <summary>
     ///  A file's URI names the same file again, with spaces escaped.
     /// </summary>
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     public void RoundTripsAFile()
     {
         DocumentUri uri = DocumentUri.FromFileSystemPath(@"C:\Retro Disks\Level2.asm");

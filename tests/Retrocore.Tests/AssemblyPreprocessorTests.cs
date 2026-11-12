@@ -14,6 +14,13 @@ namespace Retrocore.Tests;
 public partial class AssemblyPreprocessorTests
 {
     /// <summary>
+    ///  Gives a test file name, written with <c>/</c>, with the platform's separator, as the resolver's paths have it.
+    /// </summary>
+    /// <param name="path">The name, such as <c>root/main.asm</c>.</param>
+    /// <returns>The name with the platform's separator.</returns>
+    private static string P(string path) => path.Replace('/', Path.DirectorySeparatorChar);
+
+    /// <summary>
     ///  Inactive branches do not parse operands, unknown statements, includes or arithmetic.
     /// </summary>
     [TestMethod]
@@ -78,19 +85,19 @@ public partial class AssemblyPreprocessorTests
     public void IncludesPreserveSearchOrderAndPhysicalLocations()
     {
         Resolver resolver = new();
-        resolver.Add("root\\local.inc", ".byte $11");
-        resolver.Add("search\\fallback.inc", ".byte $22");
+        resolver.Add(P("root/local.inc"), ".byte $11");
+        resolver.Add(P("search/fallback.inc"), ".byte $22");
         AssemblyOptions options = Options(resolver, includePaths: ["search"]);
         AssemblyResult result = new NativeAssembler().Assemble(
-            new AssemblySource(".include \"local.inc\"\n.include \"fallback.inc\"\n.byte $33", "root\\main.asm"),
+            new AssemblySource(".include \"local.inc\"\n.include \"fallback.inc\"\n.byte $33", P("root/main.asm")),
             options);
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0x11, 0x22, 0x33);
-        result.SourceMap[0].Location?.Path.Should().Be("root\\local.inc");
-        result.SourceMap[0].Location?.ExpandedFrom?.Path.Should().Be("root\\main.asm");
-        result.SourceMap[1].Location?.Path.Should().Be("search\\fallback.inc");
-        resolver.Requests.Select(request => request.Request).Should().Equal("local.inc", "fallback.inc", "search\\fallback.inc");
+        result.SourceMap[0].Location?.Path.Should().Be(P("root/local.inc"));
+        result.SourceMap[0].Location?.ExpandedFrom?.Path.Should().Be(P("root/main.asm"));
+        result.SourceMap[1].Location?.Path.Should().Be(P("search/fallback.inc"));
+        resolver.Requests.Select(request => request.Request).Should().Equal("local.inc", "fallback.inc", P("search/fallback.inc"));
     }
 
     /// <summary>
@@ -100,17 +107,17 @@ public partial class AssemblyPreprocessorTests
     public void AngleIncludesSearchOnlySdkPaths()
     {
         Resolver resolver = new();
-        resolver.Add("root\\api.inc", ".byte 99");
-        resolver.Add("sdk\\api.inc", ".byte 4");
+        resolver.Add(P("root/api.inc"), ".byte 99");
+        resolver.Add(P("sdk/api.inc"), ".byte 4");
         AssemblyResult result = new NativeAssembler().Assemble(
-            new AssemblySource(".include <api.inc>", "root\\main.asm"),
+            new AssemblySource(".include <api.inc>", P("root/main.asm")),
             Options(resolver, sdkPaths: ["sdk"]));
 
         result.Diagnostics.Should().BeEmpty();
         result.Sections[0].Bytes.Span[0].Should().Be(4);
-        resolver.Requests.Should().ContainSingle(request => request.From.Length == 0 && request.Request == "sdk\\api.inc");
+        resolver.Requests.Should().ContainSingle(request => request.From.Length == 0 && request.Request == P("sdk/api.inc"));
         AssemblyResult escape = new NativeAssembler().Assemble(
-            new AssemblySource(".include <..\\root\\api.inc>", "root\\main.asm"),
+            new AssemblySource(".include <../root/api.inc>", P("root/main.asm")),
             Options(resolver, sdkPaths: ["sdk"]));
 
         escape.Diagnostics.Single().Message.Should().Contain("within a configured SDK directory");
@@ -271,12 +278,12 @@ public partial class AssemblyPreprocessorTests
     public void IncludeDialectPrecedenceIsExplicitAndDoesNotSilentlyFallBack()
     {
         Resolver resolver = new();
-        resolver.Add("root\\metadata.inc", "; retrocore: dialect=native\n.byte 1", AssemblyDialect.Ca65);
-        resolver.Add("root\\override.inc", "; retrocore: dialect=ca65\n.byte 2", AssemblyDialect.Ca65);
+        resolver.Add(P("root/metadata.inc"), "; retrocore: dialect=native\n.byte 1", AssemblyDialect.Ca65);
+        resolver.Add(P("root/override.inc"), "; retrocore: dialect=ca65\n.byte 2", AssemblyDialect.Ca65);
         AssemblyResult result = new NativeAssembler().Assemble(
             new AssemblySource(
                 ".include \"metadata.inc\"\n.include \"override.inc\" dialect=native",
-                "root\\main.asm"),
+                P("root/main.asm")),
             Options(resolver));
 
         result.Diagnostics.Should().BeEmpty();
@@ -299,18 +306,18 @@ public partial class AssemblyPreprocessorTests
     public void MacroErrorsRetainIncludeAndInvocationChains()
     {
         Resolver resolver = new();
-        resolver.Add("root\\body.inc", ".macro Broken\nlda #$100\n.endmacro\nBroken");
+        resolver.Add(P("root/body.inc"), ".macro Broken\nlda #$100\n.endmacro\nBroken");
         AssemblyResult result = new NativeAssembler().Assemble(
-            new AssemblySource(".include \"body.inc\"", "root\\main.asm"),
+            new AssemblySource(".include \"body.inc\"", P("root/main.asm")),
             Options(resolver));
 
         AssemblyLocation location = result.Diagnostics.Single().Location
             ?? throw new AssertFailedException("Expected a physical macro-body location.");
 
-        location.Path.Should().Be("root\\body.inc");
+        location.Path.Should().Be(P("root/body.inc"));
         location.Line.Should().Be(1);
         location.ExpandedFrom?.Line.Should().Be(3);
-        location.ExpandedFrom?.ExpandedFrom?.Path.Should().Be("root\\main.asm");
+        location.ExpandedFrom?.ExpandedFrom?.Path.Should().Be(P("root/main.asm"));
     }
 
     /// <summary>
@@ -320,9 +327,9 @@ public partial class AssemblyPreprocessorTests
     public void ExpansionLimitsAreEnforced()
     {
         Resolver resolver = new();
-        resolver.Add("root\\loop.inc", ".include \"loop.inc\"");
+        resolver.Add(P("root/loop.inc"), ".include \"loop.inc\"");
         AssemblyResult cycle = new NativeAssembler().Assemble(
-            new AssemblySource(".include \"loop.inc\"", "root\\main.asm"),
+            new AssemblySource(".include \"loop.inc\"", P("root/main.asm")),
             Options(resolver));
 
         cycle.Diagnostics.Should().Contain(error => error.Message.Contains("cycle"));
@@ -397,7 +404,7 @@ public partial class AssemblyPreprocessorTests
     public void IncludeDepthAndImmutableSearchPathsAreEnforced()
     {
         Resolver resolver = new();
-        resolver.Add("root\\child.inc", ".byte 1");
+        resolver.Add(P("root/child.inc"), ".byte 1");
         string[] paths = ["first"];
         AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 8)
         {
@@ -409,7 +416,7 @@ public partial class AssemblyPreprocessorTests
         paths[0] = "changed";
         options.IncludePaths.Should().Equal("first");
         AssemblyResult result = new NativeAssembler().Assemble(
-            new AssemblySource(".include \"child.inc\"", "root\\main.asm"),
+            new AssemblySource(".include \"child.inc\"", P("root/main.asm")),
             options);
 
         result.Diagnostics.Single().Message.Should().Contain("include depth");

@@ -68,6 +68,14 @@ public class Apple2VideoOracleTests
             throw new InvalidOperationException("The video oracle test must run within the project output tree.");
         }
 
+        string oracle = Path.Join(ExternalTestData.Root, "m1-dependencies", "apple2ts", "src", "ui", "graphics.ts");
+        if (!File.Exists(oracle)) { Assert.Inconclusive($"The pinned Apple2TS oracle ({oracle}) is missing."); }
+        string typeScript = Path.Join(root, "extension", "node_modules", "typescript");
+        if (!Directory.Exists(typeScript))
+        {
+            Assert.Inconclusive($"The extension's npm dependencies ({typeScript}) are missing.");
+        }
+
         ProcessStartInfo start = new("node")
         {
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false

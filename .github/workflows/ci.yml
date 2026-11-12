@@ -28,7 +28,7 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: actions_linux_arm
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
       # An empty cache folder, so no test finds external files on the runner by accident.

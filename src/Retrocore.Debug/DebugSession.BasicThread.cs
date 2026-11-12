@@ -49,6 +49,11 @@ internal sealed partial class DebugSession
     private JsonObject? _basicBreakpoints;
     private readonly Dictionary<int, List<(int Line, BreakpointState State)>> _basicSites = [];
 
+    // The BASIC line and statement each of the document's breakpoints is on, by its place in the request, and the
+    // text of every line of the program they were set in, which tell a program edited from one replaced.
+    private readonly Dictionary<int, (int Number, int Statement)> _basicAnchors = [];
+    private HashSet<string> _basicBoundLines = [];
+
     // AppleSoft's STOP and END run into ENDCON, which also ends a program that runs off its last line.
     private bool _basicEnded;
 
@@ -484,8 +489,12 @@ internal sealed partial class DebugSession
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         BasicView? view = _target is null || Target.Basic is null ? null : View();
-        foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
+        _basicAnchors.Clear();
+        _basicBoundLines = view is null ? [] : [.. view.Source.NumberedLines.Select(line => view.Source.Lines[line.Line])];
+        JsonArray requested = args["breakpoints"] as JsonArray ?? [];
+        for (int index = 0; index < requested.Count; index++)
         {
+            if (requested[index] is not JsonObject breakpoint) { continue; }
             int line = (breakpoint.Int("line") ?? 0);
             int? column = breakpoint.Int("column");
             BreakpointState state = State(BasicGroup, $"{line}:{column}", breakpoint, kept);
@@ -511,6 +520,7 @@ internal sealed partial class DebugSession
                 }
 
                 sites.Add((source.Number, state));
+                _basicAnchors[index] = (source.Number, statement);
             }
 
             state.Response = new JsonObject
@@ -529,11 +539,65 @@ internal sealed partial class DebugSession
         return new JsonObject { ["breakpoints"] = responses.ToJsonArray() };
     }
 
-    // Binds the BASIC breakpoints again after the program changes, and tells VS Code where each is now.
+    // Binds the BASIC breakpoints again after the program changes, and tells VS Code where each is now. A breakpoint
+    // follows its BASIC line as the program is edited, and goes with it when the line is deleted. When the program is
+    // gone, erased or replaced by another that keeps none of its lines, or BASIC itself changed, they all go.
+    // retro/basic/breakpointsMoved tells the extension, which moves them in VS Code's list.
     private void RebindBasicBreakpoints()
     {
         if (_basicBreakpoints is not { } request) { return; }
-        foreach (JsonObject breakpoint in (BasicBreakpoints(request)["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
+        string path = Required((JsonObject)(request["source"] ?? new JsonObject()), "path");
+        BasicView? view = Target.Basic is null ? null : View();
+        bool gone = view is null
+            || view.Source.NumberedLines.Count == 0
+            || !string.Equals(path, BasicDocument, StringComparison.OrdinalIgnoreCase)
+            || (_basicBoundLines.Count > 0
+                && !view.Source.NumberedLines.Any(line => _basicBoundLines.Contains(view.Source.Lines[line.Line])));
+
+        JsonArray requested = request["breakpoints"] as JsonArray ?? [];
+        List<JsonObject> kept = [];
+        List<JsonObject> moves = [];
+        for (int index = 0; index < requested.Count; index++)
+        {
+            if (requested[index] is not JsonObject breakpoint) { continue; }
+            (int Line, int? Column) from = ((breakpoint.Int("line") ?? 0), breakpoint.Int("column"));
+            (int Line, int? Column)? to = from;
+            if (gone || view is null)
+            {
+                to = null;
+            }
+            else if (_basicAnchors.TryGetValue(index, out (int Number, int Statement) anchor))
+            {
+                to = Follow(view, anchor, from.Column);
+            }
+
+            if (to is { } place)
+            {
+                JsonObject copy = (JsonObject)breakpoint.DeepClone();
+                copy["line"] = place.Line;
+                if (place.Column is { } column) { copy["column"] = column; }
+                kept.Add(copy);
+            }
+
+            if (to == from) { continue; }
+            JsonObject move = new() { ["line"] = from.Line, ["column"] = from.Column };
+            if (to is { } moved)
+            {
+                move["toLine"] = moved.Line;
+                move["toColumn"] = moved.Column;
+            }
+
+            moves.Add(move);
+        }
+
+        if (moves.Count > 0)
+        {
+            Notify("retro/basic/breakpointsMoved", new JsonObject { ["path"] = path, ["moves"] = moves.ToJsonArray() });
+        }
+
+        JsonObject rebound = (JsonObject)request.DeepClone();
+        rebound["breakpoints"] = kept.ToJsonArray();
+        foreach (JsonObject breakpoint in (BasicBreakpoints(rebound)["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
         {
             Notify("breakpoint", new JsonObject
             {
@@ -541,6 +605,15 @@ internal sealed partial class DebugSession
                 ["breakpoint"] = breakpoint.DeepClone()
             });
         }
+    }
+
+    // Where a breakpoint on a BASIC line's statement is in the document now: the line's place, and the statement's
+    // column when the breakpoint has one; null when the line is gone.
+    private static (int Line, int? Column)? Follow(BasicView view, (int Number, int Statement) anchor, int? column)
+    {
+        if (view.Line(anchor.Number) is not { } line) { return null; }
+        int statement = Math.Min(anchor.Statement, line.Statements.Count - 1);
+        return (line.Line + 1, column is null ? null : line.Statements[statement].Column + 1);
     }
 
     // The statements on a line of the machine-program document, where inline breakpoints can go.

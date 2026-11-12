@@ -964,7 +964,10 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 - **Breakpoints** in the machine's program stop at a line's first statement; an
   inline breakpoint (Shift+F9) stops at a later one. Conditions are BASIC
   expressions, such as `I>10 AND A$="Y"`, and log messages interpolate
-  `{BASIC expression}`.
+  `{BASIC expression}`. They stay on their BASIC lines as the program changes: a
+  line typed above moves them down, and a deleted line takes its breakpoint with
+  it. When the program goes (NEW, a restart, another program loaded, or the end of
+  the session), so do its breakpoints.
 - **Step Over**, **Step Into** and **Step Out** go by statement: Over runs a GOSUB
   without stopping in it, Out runs to the statement after its RETURN, and Into on a
   CALL, USR or `&` stops at the machine code's first instruction. In Integer BASIC

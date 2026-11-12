@@ -495,6 +495,57 @@ try {
         await event("stopped");
     }
 
+    // Breakpoints in the machine-program document follow their BASIC lines as the program is edited, go with a deleted
+    // line, and all go when the program is erased or replaced: retro/basic/breakpointsMoved says where each went.
+    {
+        events.length = 0;
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, sound: "off" });
+        const path = (await request("retro/basic/document", { base: "retrocore-basic://iie/" })).uri;
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "entry");
+        await request("continue", { threadId: 1 });
+        await new Promise(done => setTimeout(done, 1500));
+        await request("pause", { threadId: 1 });
+        await event("stopped");
+        const lines = async () => (await request("retro/basic/program")).text.split(/\r?\n/);
+        const lineOf = async number => (await lines()).findIndex(line => line.startsWith(`${number} `)) + 1;
+        const write = async text => assert.equal((await request("retro/basic/write", { text })).success, true);
+        const moved = async () => (await event("retro/basic/breakpointsMoved")).moves;
+
+        await write("10 PRINT 1\n20 PRINT 2: PRINT 22\n30 PRINT 3\n");
+        const twenty = await lineOf(20);
+        const thirty = await lineOf(30);
+        const second = (await lines())[twenty - 1].indexOf("PRINT 22") + 1;
+        assert.ok(second > 1);
+        const set = await request("setBreakpoints", { source: { path },
+            breakpoints: [{ line: twenty, column: second }, { line: thirty }] });
+        assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified));
+
+        events.length = 0;
+        await write("10 PRINT 1\n15 PRINT 15\n20 PRINT 2: PRINT 22\n30 PRINT 3\n");
+        assert.deepEqual(await moved(), [
+            { line: twenty, column: second, toLine: twenty + 1, toColumn: second },
+            { line: thirty, column: null, toLine: thirty + 1, toColumn: null }
+        ], "an inserted line moves both down, the inline one still on its statement");
+
+        await request("setBreakpoints", { source: { path },
+            breakpoints: [{ line: twenty + 1, column: second }, { line: thirty + 1 }] });
+        events.length = 0;
+        await write("10 PRINT 1\n15 PRINT 15\n20 PRINT 2: PRINT 22\n");
+        assert.deepEqual(await moved(), [{ line: thirty + 1, column: null }], "deleting line 30 removes its breakpoint");
+
+        await request("setBreakpoints", { source: { path }, breakpoints: [{ line: twenty + 1, column: second }] });
+        events.length = 0;
+        await write("100 HOME\n110 END\n");
+        assert.deepEqual(await moved(), [{ line: twenty + 1, column: second }], "another program replaces this one");
+
+        const last = await lineOf(110);
+        await request("setBreakpoints", { source: { path }, breakpoints: [{ line: last }] });
+        events.length = 0;
+        await write("");
+        assert.deepEqual(await moved(), [{ line: last, column: null }], "erasing the program removes it");
+    }
+
     // dos: the program goes on a DOS 3.3 disk built from the SDK's sources, which the IIe boots; HELLO BRUNs the
     // program, and a breakpoint in its source stops there.
     const dosSource = join(root, "artifacts", `dos-launch-${process.pid}.s`);

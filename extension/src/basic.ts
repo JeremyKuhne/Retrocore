@@ -214,6 +214,45 @@ function activeSession(): vscode.DebugSession | undefined {
     return undefined;
 }
 
+interface BreakpointMove {
+    line: number;
+    column?: number | null;
+    toLine?: number | null;
+    toColumn?: number | null;
+}
+
+/**
+ * Moves the machine-program document's breakpoints where the debugger says their BASIC lines went, and removes those
+ * whose lines, or whole program, are gone: retro/basic/breakpointsMoved. Lines and columns count from 1.
+ */
+function moveBreakpoints(body: unknown): void {
+    if (typeof body !== "object" || body === null || !("path" in body) || typeof body.path !== "string"
+        || !("moves" in body) || !Array.isArray(body.moves)) {
+        return;
+    }
+
+    const uri = vscode.Uri.parse(body.path).toString();
+    const removed: vscode.SourceBreakpoint[] = [];
+    const added: vscode.SourceBreakpoint[] = [];
+    for (const move of body.moves as BreakpointMove[]) {
+        const found = vscode.debug.breakpoints.find((breakpoint): breakpoint is vscode.SourceBreakpoint =>
+            breakpoint instanceof vscode.SourceBreakpoint
+            && breakpoint.location.uri.toString() === uri
+            && breakpoint.location.range.start.line === move.line - 1
+            && breakpoint.location.range.start.character === (move.column ?? 1) - 1
+            && !removed.includes(breakpoint));
+        if (found === undefined) continue;
+        removed.push(found);
+        if (typeof move.toLine !== "number") continue;
+        const place = new vscode.Position(move.toLine - 1, (move.toColumn ?? 1) - 1);
+        added.push(new vscode.SourceBreakpoint(new vscode.Location(found.location.uri, place),
+            found.enabled, found.condition, found.hitCondition, found.logMessage));
+    }
+
+    if (removed.length > 0) vscode.debug.removeBreakpoints(removed);
+    if (added.length > 0) vscode.debug.addBreakpoints(added);
+}
+
 /** The session a command acts on: the BASIC editor's, else the active one. */
 function commandSession(sessions: Map<string, vscode.DebugSession>, uri?: vscode.Uri): vscode.DebugSession | undefined {
     const editor = uri ?? vscode.window.activeTextEditor?.document.uri;
@@ -294,8 +333,17 @@ export function registerBasic(context: vscode.ExtensionContext): BasicPrograms {
         opened.delete(session.id);
         if (summaries.delete(session.id)) summaryChanged.fire(session);
         void files.ended(session).then(undefined, error => console.warn(`retrocore: ${message(error)}`));
+        // The machine-program document's breakpoints were in the program the session had, which is gone with it.
+        const stale = vscode.debug.breakpoints.filter(breakpoint => breakpoint instanceof vscode.SourceBreakpoint
+            && breakpoint.location.uri.scheme === basicScheme && breakpoint.location.uri.authority === session.id);
+        if (stale.length > 0) vscode.debug.removeBreakpoints(stale);
     }));
     context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
+        if (event.event === "retro/basic/breakpointsMoved") {
+            moveBreakpoints(event.body);
+            return;
+        }
+
         if (event.event !== "retro/basic/changed") return;
         const body: unknown = event.body;
         if (typeof body === "object" && body !== null && "version" in body && typeof body.version === "string") {

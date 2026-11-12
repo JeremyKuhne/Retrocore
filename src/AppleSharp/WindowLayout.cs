@@ -12,6 +12,58 @@ namespace AppleSharp;
 internal static class WindowLayout
 {
     /// <summary>
+    ///  Uses whole physical pixels for the debug font, with a readable two-times minimum.
+    /// </summary>
+    /// <param name="displayScale">The display's content scale.</param>
+    /// <returns>The default integer UI scale.</returns>
+    internal static int DefaultUiScale(float displayScale) => Math.Clamp((int)Math.Ceiling(displayScale), 2, 4);
+
+    /// <summary>
+    ///  Places controls in the same scaled coordinate system used for drawing and hit testing.
+    /// </summary>
+    /// <param name="index">The control index.</param>
+    /// <param name="width">The UI width.</param>
+    /// <returns>The control bounds.</returns>
+    internal static SDL.FRect Button(int index, int width)
+    {
+        int columns = Math.Max(1, width / 106);
+        return new()
+        {
+            X = 6 + index % columns * 106,
+            Y = 6 + index / columns * 30,
+            W = 100,
+            H = 26
+        };
+    }
+
+    /// <summary>
+    ///  Wraps debug-font text to the available width without losing long paths.
+    /// </summary>
+    /// <param name="text">The text, including explicit line breaks.</param>
+    /// <param name="width">The available UI width.</param>
+    /// <returns>The display lines.</returns>
+    internal static string[] WrapText(string text, int width)
+    {
+        int columns = Math.Max(1, width / 8);
+        List<string> lines = [];
+        foreach (string paragraph in text.Split('\n'))
+        {
+            string remaining = paragraph;
+            while (remaining.Length > columns)
+            {
+                int split = remaining.LastIndexOf(' ', columns, columns);
+                if (split <= 0) { split = columns; }
+                lines.Add(remaining[..split]);
+                remaining = remaining[split..].TrimStart(' ');
+            }
+
+            lines.Add(remaining);
+        }
+
+        return [.. lines];
+    }
+
+    /// <summary>
     ///  Fits the screen between the emulator controls and status area.
     /// </summary>
     /// <param name="width">The logical window width.</param>

@@ -41,6 +41,7 @@ internal sealed class Application : DisposableBase
     private IntPtr _window;
     private IntPtr _renderer;
     private IntPtr _texture;
+    private int _layoutScale;
     private bool _initialized;
     private bool _running = true;
     private bool _paused;
@@ -224,6 +225,7 @@ internal sealed class Application : DisposableBase
             case SDL.EventType.Quit: _running = false;
                 break;
             case SDL.EventType.TextInput:
+                if ((SDL.GetModState() & SDL.Keymod.Ctrl) != 0) { break; }
                 string text = Marshal.PtrToStringUTF8(input.Text.Text)
                     ?? throw new InvalidOperationException("SDL returned a null text-input payload.");
 
@@ -247,14 +249,20 @@ internal sealed class Application : DisposableBase
                 HandleKey(input.Key);
                 break;
             case SDL.EventType.MouseButtonDown when input.Button.Button == 1:
-                Check(SDL.GetWindowSize(_window, out int width, out _));
+                Check(SDL.GetWindowSize(_window, out int windowWidth, out int windowHeight));
+                Check(SDL.GetRenderOutputSize(_renderer, out int outputWidth, out int outputHeight));
+                if (windowWidth <= 0 || windowHeight <= 0) { break; }
+                int scale = UiScale;
+                int width = outputWidth / scale;
+                float x = input.Button.X * outputWidth / windowWidth / scale;
+                float y = input.Button.Y * outputHeight / windowHeight / scale;
                 for (int index = 0; index < s_labels.Length; index++)
                 {
-                    SDL.FRect rect = Button(index, width);
-                    if (input.Button.X >= rect.X
-                        && input.Button.X < rect.X + rect.W
-                        && input.Button.Y >= rect.Y
-                        && input.Button.Y < rect.Y + rect.H)
+                    SDL.FRect rect = WindowLayout.Button(index, width);
+                    if (x >= rect.X
+                        && x < rect.X + rect.W
+                        && y >= rect.Y
+                        && y < rect.Y + rect.H)
                     {
                         UserAction(() => Invoke((Command)index));
                         break;
@@ -267,6 +275,34 @@ internal sealed class Application : DisposableBase
 
     private void HandleKey(SDL.KeyboardEvent input)
     {
+        if ((input.Mod & SDL.Keymod.Ctrl) != 0
+            && input.Key is SDL.Keycode.Equals
+                or SDL.Keycode.Plus
+                or SDL.Keycode.KpPlus
+                or SDL.Keycode.Minus
+                or SDL.Keycode.KpMinus
+                or SDL.Keycode.Alpha0
+                or SDL.Keycode.Kp0)
+        {
+            if (!input.Repeat)
+            {
+                int? scale = input.Key switch
+                {
+                    SDL.Keycode.Alpha0 or SDL.Keycode.Kp0 => null,
+                    SDL.Keycode.Minus or SDL.Keycode.KpMinus => Math.Max(1, UiScale - 1),
+                    _ => Math.Min(4, UiScale + 1)
+                };
+
+                UserAction(() =>
+                {
+                    _settings = _settings with { UiScale = scale };
+                    if (!_options.SmokeTest) { _settings.Save(_options.SettingsPath); }
+                });
+            }
+
+            return;
+        }
+
         Command? command = input.Key switch
         {
             SDL.Keycode.F1 => Command.Roms, SDL.Keycode.F2 => Command.Mount,
@@ -447,31 +483,61 @@ internal sealed class Application : DisposableBase
         s_dialogResults.Enqueue((request.Command, path, error));
     }
 
+    private int UiScale => _settings.UiScale ?? WindowLayout.DefaultUiScale(SDL.GetWindowDisplayScale(_window));
+
     private void Draw()
     {
-        Check(SDL.GetWindowSize(_window, out int width, out int height));
         Check(SDL.GetRenderOutputSize(_renderer, out int outputWidth, out int outputHeight));
-        if (width <= 0 || height <= 0 || outputWidth <= 0 || outputHeight <= 0)
+        int scale = UiScale;
+        int width = outputWidth / scale;
+        int height = outputHeight / scale;
+        if (width <= 0 || height <= 0)
         {
             SDL.Delay(ms: 10);
             return;
         }
 
-        Check(SDL.SetRenderScale(_renderer, (float)outputWidth / width, (float)outputHeight / height));
+        if (_layoutScale != scale)
+        {
+            Check(SDL.GetWindowSize(_window, out int windowWidth, out int windowHeight));
+            Check(SDL.SetWindowMinimumSize(
+                _window,
+                (int)Math.Ceiling(480d * scale * windowWidth / outputWidth),
+                (int)Math.Ceiling(400d * scale * windowHeight / outputHeight)));
+
+            _layoutScale = scale;
+        }
+
+        string state = _dialogOpen ? "choosing media" : _machine is null ? "setup" : _paused ? "paused"
+            : _machine.Processor.Status == Retrocore.Cpu.ProcessorExecutionStatus.Running ? "running" : _machine.Processor.Status.ToString();
+
+        string status = $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | 1.0205 MHz\n{_message}";
+        if (_machine is not null)
+        {
+            for (int drive = 1; drive <= 2; drive++)
+            {
+                DiskDriveState disk = _machine.Bus.DiskII.State(drive);
+                status += $"\nD{drive}: track {disk.QuarterTrack / 4.0:0.00} | bit {disk.BitPosition}/{disk.BitCount} | motor {(disk.Motor ? "on" : "off")} | {(disk.Dirty ? "changed" : "saved")}";
+            }
+        }
+
+        string[] statusLines = WindowLayout.WrapText(status, width - 24);
+        int statusHeight = statusLines.Length * 16 + 12;
+        int toolbarHeight = (int)WindowLayout.Button(s_labels.Length - 1, width).Y + 38;
+        Check(SDL.SetRenderScale(_renderer, scale, scale));
         Check(SDL.SetRenderDrawColor(_renderer, r: 18, g: 20, b: 24, a: 255));
         Check(SDL.RenderClear(_renderer));
         if (_machine is not null)
         {
             _machine.Bus.Video.RenderScannedBitmap(_pixels);
             Check(SDL.UpdateTexture(_texture, IntPtr.Zero, _pixels.AsSpan(), Apple2Video.Width * 4));
-            int toolbarHeight = Math.Max(72, ((s_labels.Length + Math.Max(5, width / 106) - 1) / Math.Max(5, width / 106)) * 30 + 12);
-            SDL.FRect screen = WindowLayout.Screen(width, height, toolbarHeight, statusHeight: 80);
+            SDL.FRect screen = WindowLayout.Screen(width, height, toolbarHeight, statusHeight);
             Check(SDL.RenderTexture(_renderer, _texture, IntPtr.Zero, in screen));
         }
 
         for (int index = 0; index < s_labels.Length; index++)
         {
-            SDL.FRect rect = Button(index, width);
+            SDL.FRect rect = WindowLayout.Button(index, width);
             Check(SDL.SetRenderDrawColor(_renderer, r: 45, g: 51, b: 60, a: 255));
             Check(SDL.RenderFillRect(_renderer, in rect));
             Check(SDL.SetRenderDrawColor(_renderer, r: 230, g: 235, b: 240, a: 255));
@@ -480,46 +546,22 @@ internal sealed class Application : DisposableBase
 
         if (_machine is null)
         {
-            Text(x: 32, y: 128, "AppleSharp - standalone Apple IIe");
-            Text(x: 32, y: 152, "F1: select your CD, EF and video ROM folder.");
-            Text(x: 32, y: 176, "F2: .po block disk or .woz/.dsk floppy; Shift+F2: drive two.");
-            Text(x: 32, y: 200, "F9/F10: caller-supplied Disk II P5/P6 ROMs.");
-        }
+            string[] help = WindowLayout.WrapText(
+                "AppleSharp - standalone Apple IIe\n\nF1: select your CD, EF and video ROM folder.\nF2: .po block disk or .woz/.dsk floppy; Shift+F2: drive two.\nF9/F10: caller-supplied Disk II P5/P6 ROMs.\nCtrl +/-: UI zoom; Ctrl 0: automatic.",
+                width - 24);
 
-        string state = _dialogOpen ? "choosing media" : _machine is null ? "setup" : _paused ? "paused"
-            : _machine.Processor.Status == Retrocore.Cpu.ProcessorExecutionStatus.Running ? "running" : _machine.Processor.Status.ToString();
-
-        Text(
-            x: 12,
-            height - 68,
-            $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | 1.0205 MHz");
-
-        Text(x: 12, height - 52, _message);
-        if (_machine is not null)
-        {
-            for (int drive = 1; drive <= 2; drive++)
+            for (int line = 0; line < help.Length; line++)
             {
-                DiskDriveState disk = _machine.Bus.DiskII.State(drive);
-                Text(
-                    x: 12,
-                    height - 36 + (drive - 1) * 16,
-                    $"D{drive}: track {disk.QuarterTrack / 4.0:0.00} | bit {disk.BitPosition}/{disk.BitCount} | motor {(disk.Motor ? "on" : "off")} | {(disk.Dirty ? "changed" : "saved")}");
+                Text(x: 12, toolbarHeight + 16 + line * 16, help[line]);
             }
         }
 
-        Check(SDL.RenderPresent(_renderer));
-    }
-
-    private static SDL.FRect Button(int index, int width)
-    {
-        int columns = Math.Max(5, width / 106);
-        return new()
+        for (int line = 0; line < statusLines.Length; line++)
         {
-            X = 6 + index % columns * 106,
-            Y = 6 + index / columns * 30,
-            W = 100,
-            H = 26
-        };
+            Text(x: 12, height - statusHeight + line * 16, statusLines[line]);
+        }
+
+        Check(SDL.RenderPresent(_renderer));
     }
 
     // SDL's debug font draws ASCII; the text is cut at 500 characters as before.

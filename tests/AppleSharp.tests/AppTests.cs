@@ -140,7 +140,8 @@ public class AppTests
             Model = Apple2Model.IIe,
             DiskPath = @"N:\disk.po",
             Writable = true,
-            Fullscreen = true
+            Fullscreen = true,
+            UiScale = 3
         };
 
         expected.Save(path);
@@ -157,12 +158,50 @@ public class AppTests
     [DataRow("null")]
     [DataRow("{\"model\":7}")]
     [DataRow("{\"romDirectory\":\"\"}")]
+    [DataRow("{\"uiScale\":0}")]
+    [DataRow("{\"uiScale\":5}")]
     public void InvalidSettingsFail(string json)
     {
         string path = Temporary(".json");
         File.WriteAllText(path, json);
         Action action = () => AppSettings.Load(path);
         action.Should().Throw<InvalidDataException>();
+    }
+
+    /// <summary>
+    ///  Checks fractional display scaling rounds up to crisp, readable integer pixels.
+    /// </summary>
+    /// <param name="displayScale">The display's content scale.</param>
+    /// <param name="expected">The integer UI scale.</param>
+    [TestMethod]
+    [DataRow(1f, 2)]
+    [DataRow(1.5f, 2)]
+    [DataRow(2.5f, 3)]
+    [DataRow(5f, 4)]
+    public void UiScaleUsesWholePixels(float displayScale, int expected) =>
+        WindowLayout.DefaultUiScale(displayScale).Should().Be(expected);
+
+    /// <summary>
+    ///  Checks zoomed controls wrap instead of extending past the window.
+    /// </summary>
+    [TestMethod]
+    public void NarrowToolbarWrapsControls()
+    {
+        var first = WindowLayout.Button(index: 0, width: 300);
+        var third = WindowLayout.Button(index: 2, width: 300);
+        third.X.Should().Be(first.X);
+        third.Y.Should().BeGreaterThan(first.Y);
+        (third.X + third.W).Should().BeLessThanOrEqualTo(300);
+    }
+
+    /// <summary>
+    ///  Checks text wraps at words or inside long paths and preserves explicit lines.
+    /// </summary>
+    [TestMethod]
+    public void ZoomedTextWrapsWithoutDroppingContent()
+    {
+        WindowLayout.WrapText("one two three\nabcdefghijk", width: 64)
+            .Should().Equal("one two", "three", "abcdefgh", "ijk");
     }
 
     /// <summary>

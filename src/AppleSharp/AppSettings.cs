@@ -38,6 +38,11 @@ internal sealed record AppSettings
     public bool Fullscreen { get; init; }
 
     /// <summary>
+    ///  Gets or initializes the integer UI pixel scale; null selects the display default.
+    /// </summary>
+    public int? UiScale { get; init; }
+
+    /// <summary>
     ///  Gets or initializes native drive-one media.
     /// </summary>
     public string? Floppy1Path { get; init; }
@@ -81,6 +86,11 @@ internal sealed record AppSettings
         if (!settings.Model.IsIIe())
         {
             throw new InvalidDataException("AppleSharp settings name a model that is not a IIe.");
+        }
+
+        if (settings.UiScale is < 1 or > 4)
+        {
+            throw new InvalidDataException("UI scale must be between 1 and 4.");
         }
 
         return !Enum.IsDefined(settings.SequencerLayout)

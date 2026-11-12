@@ -460,6 +460,41 @@ try {
         unlinkSync(fastImage);
     }
 
+    // CONTROL-OPEN APPLE-RESET restarts the machine even though Machine reset stops before the firmware reads Open
+    // Apple and the key is let go while stopped: the buttons down at a reset stay down while the handler runs.
+    {
+        const screen = async () => (await request("apple2/text")).rows.join("\n");
+        const waitFor = async (test, what) => {
+            for (const end = performance.now() + 10000; performance.now() < end;) {
+                if (test(await screen())) return;
+                await new Promise(done => setTimeout(done, 100));
+            }
+            assert.fail(`${what}:\n${await screen()}`);
+        };
+        const type = async text => { for (const key of text) await request("retro/key", { code: key.charCodeAt(0) }); };
+        events.length = 0;
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: false, sound: "off" });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await waitFor(text => text.includes("]"), "AppleSoft's prompt");
+        await type("10 GOTO 10\r");
+        await waitFor(text => text.includes("10 GOTO 10"), "the typed line");
+        await request("setExceptionBreakpoints", { filters: ["machineReset"] });
+        await request("apple2/button", { button: 0, pressed: true });
+        events.length = 0;
+        await request("retro/reset");
+        assert.equal((await event("stopped")).reason, "breakpoint", "Machine reset stops at the handler");
+        await request("apple2/button", { button: 0, pressed: false });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("continue", { threadId: 1 });
+        await new Promise(done => setTimeout(done, 1500));
+        await type("LIST\r");
+        await waitFor(text => /LIST\s*\n\s*\]/.test(text), "LIST after the restart");
+        assert.ok(!(await screen()).includes("10  GOTO 10"), "the restart erased the program");
+        await request("pause", { threadId: 1 });
+        await event("stopped");
+    }
+
     // dos: the program goes on a DOS 3.3 disk built from the SDK's sources, which the IIe boots; HELLO BRUNs the
     // program, and a breakpoint in its source stops there.
     const dosSource = join(root, "artifacts", `dos-launch-${process.pid}.s`);

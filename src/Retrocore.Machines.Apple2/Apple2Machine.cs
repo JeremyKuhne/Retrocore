@@ -69,6 +69,7 @@ public sealed class Apple2Machine : IMachine
     /// </summary>
     public void Reset()
     {
+        Bus.HoldButtonsThroughReset();
         Bus.ResetDevices();
         Bus.ResetSwitches();
         Processor.Reset();

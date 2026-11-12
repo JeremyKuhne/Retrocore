@@ -798,7 +798,11 @@ aren't letters:
 | Closed Apple | hold **right Alt** | **Closed Apple** likewise |
 | ESC, TAB, DELETE, arrows, RETURN | **Esc**, **Tab**, **Delete**, arrows, **Enter** | **Esc** |
 
-Open Apple with CONTROL-RESET restarts the machine, as on the real keyboard. A
+Open Apple with CONTROL-RESET restarts the machine, as on the real keyboard, and
+Closed Apple runs the self-test. This works even when the debugger stops at the
+reset and you let go of the keys: an Apple key that is down at a reset stays down
+for a tenth of a second of the machine's running time, long enough for the firmware
+to read it. A
 CONTROL-C takes the place of any typed key the program hasn't read yet, since BASIC
 checks for it without reading other keys.
 

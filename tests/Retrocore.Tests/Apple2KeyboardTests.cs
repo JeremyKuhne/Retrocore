@@ -63,6 +63,29 @@ public sealed class Apple2KeyboardTests
         Screen(machine).Should().Contain("10  GOTO 10");
     }
 
+    /// <summary>
+    ///  CONTROL-OPEN APPLE-RESET restarts the machine, erasing the program, even when Open Apple is let go before the
+    ///  reset handler runs, as it is when a debugger stops at the handler.
+    /// </summary>
+    /// <param name="model">The IIe.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.IIeEnhanced)]
+    [DataRow(Apple2Model.IIe)]
+    public void OpenAppleResetRestarts(Apple2Model model)
+    {
+        Apple2Machine machine = BasicMachines.BootIIe(model);
+        BasicMachines.TypeLine(machine, "10 GOTO 10");
+        machine.Bus.SetButton(0, pressed: true);
+        machine.Reset();
+        machine.Bus.SetButton(0, pressed: false);
+        machine.Run(BasicMachines.IIeClock * 2);
+        (machine.Bus.Peek(0xC061) & 128).Should().Be(0, "the hold ends");
+
+        BasicMachines.TypeLine(machine, "LIST");
+        machine.Run(BasicMachines.IIeClock / 4);
+        Screen(machine).Should().Contain("Apple ").And.NotContain("10  GOTO 10");
+    }
+
     private static string Screen(Apple2Machine machine)
     {
         char[] text = new char[24 * 41];

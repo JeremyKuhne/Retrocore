@@ -43,6 +43,10 @@ public sealed class Apple2Bus : IProcessorBus
 
     // The game port's push buttons, read at $C061-$C063: the Open Apple and Closed Apple keys are buttons 0 and 1.
     private readonly bool[] _buttons = new bool[3];
+
+    // The buttons down at the last reset, which read as down until the reset handler has had time to read them.
+    private readonly bool[] _heldAtReset = new bool[3];
+    private ulong _resetHoldEnd;
     private byte _diskError;
     private uint? _lastBlock;
     private bool _lastBlockWrite;
@@ -459,6 +463,28 @@ public sealed class Apple2Bus : IProcessorBus
     }
 
     /// <summary>
+    ///  Gets how long the buttons down at a reset stay down: a tenth of a second of the machine's time.
+    /// </summary>
+    public const ulong ResetHoldCycles = 102_273;
+
+    /// <summary>
+    ///  Keeps the buttons that are down now down for <see cref="ResetHoldCycles"/> more cycles, however soon they are
+    ///  released.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The IIe's reset handler reads Open Apple and Closed Apple to choose a restart or the self-test, some time
+    ///   after it starts. Real fingers are still on the keys then; a debugger that stops at the handler's first
+    ///   instruction lets them go first. The hold counts the machine's cycles, so time stopped does not use it up.
+    ///  </para>
+    /// </remarks>
+    public void HoldButtonsThroughReset()
+    {
+        _buttons.CopyTo(_heldAtReset, 0);
+        _resetHoldEnd = CycleCount + ResetHoldCycles;
+    }
+
+    /// <summary>
     ///  Queues a seven-bit keyboard character.
     /// </summary>
     /// <remarks>
@@ -721,7 +747,8 @@ public sealed class Apple2Bus : IProcessorBus
             if (address is >= 0xC061 and <= 0xC063)
             {
                 int button = address - 0xC061;
-                return (byte)((FloatingBus() & 127) | (_buttons[button] || GamePort.Button(button) ? 128 : 0));
+                bool held = _heldAtReset[button] && CycleCount < _resetHoldEnd;
+                return (byte)((FloatingBus() & 127) | (_buttons[button] || held || GamePort.Button(button) ? 128 : 0));
             }
 
             // A paddle's timer reads the same way: bit 7 stays high until it times out.

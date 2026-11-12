@@ -150,6 +150,34 @@ BASIC stops and BRK (a set lookup by filter name), and observes the instruction:
 stack, contracts. Per cycle it checks the beam breakpoints and data watches through the target interface. Profile
 these before choosing.
 
+| Candidate | Exact? | Estimate | Cost |
+| --- | --- | --- | --- |
+| Answer "is there a breakpoint here?" from a 64K-bit map (8 KB per address space), falling back to the set only on a hit | Yes | Unknown; likely more than any runtime upgrade | Small; the map must follow every breakpoint, BASIC stop and filter change. |
+
+## .NET 11
+
+Not started (reviewed 2026-11-12, nothing measured). The repository targets `net10.0`; the 11.0.100 SDK is out.
+Take these measurements on a quiet machine: a busy one hides differences of a few percent.
+
+### Candidates
+
+| Candidate | Exact? | Estimate | Cost |
+| --- | --- | --- | --- |
+| Retarget to `net11.0` (`TargetFramework` in `Directory.Build.props`, the SDK in `global.json`) and rerun every row of "Where things stand" | Yes | Unknown; the cores' big switches, sealed generic buses and lack of virtual calls are the shape each JIT release improves | One line each, plus CI's SDK. Measure net10.0 and net11.0 interleaved on the same build of the benchmarks. |
+| AppleSharp under Native AOT: compare against the same loop under the JIT (tiered, with dynamic PGO) | Yes | If the JIT wins clearly, the gap is the PGO that AOT lacks | Measurement only. If it matters, try static PGO (a recorded `.mibc` profile) in the AOT build. |
+| Native AOT `IlcInstructionSet` above the x64 baseline (for example `x86-x64-v3`), for AppleSharp and the native debug host | Yes | Small; flags and video are bit twiddling that BMI and LZCNT can shorten | One property; the binaries then refuse to start on older CPUs, so it needs a decision on supported hardware. |
+| Video: write whole 32-bit pixels and look up the 16-colour palette with `Vector128.Shuffle` | Yes | Several times faster rendering, but rendering is once per displayed frame (about 107K pixels at 60 Hz), a rounding error today | Small. Worth it only if a frame is rendered per emulated frame (recording, fast-forward previews). |
+| Disk: find sync marks and address fields in nibble tracks with `SearchValues` and `IndexOf` (already vectorized) | Yes | Unknown | Profile the Disk II path first (see "Not measured yet"). |
+
+### Ruled out
+
+| Candidate | Why |
+| --- | --- |
+| `System.Numerics.Tensors` (`Tensor<T>`, `TensorPrimitives`) | Both pay off only when one operation runs over many independent values. The cores and the machine loop are a chain of cycles, each depending on the last. Audio is built up per cycle through a recursive high-pass filter, leaving only the final conversion of a 512-sample buffer, which costs nothing. Video is covered by the hand-written SIMD row above. The package would also grow the AOT binaries for no gain. |
+
+None of these replace the design changes under each core's Headroom (Z80 step programs, the 6502's per-fetch
+handler, the IIe's lazy AY and VIA catch-up): those are where the large gains are, on any runtime.
+
 ## Not measured yet
 
 - The Model I's loop (`Trs80Machine.StepCycle`: the Z80 plus `Trs80Bus.Tick` per T-state).

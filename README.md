@@ -276,7 +276,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 
 - [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
-- [CPU core and machine loop speed](docs/backlog/CoreOptimization.md);
+- [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [the media library and explorers](docs/backlog/Media.md);
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);

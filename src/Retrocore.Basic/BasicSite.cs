@@ -30,10 +30,21 @@ public readonly record struct BasicSite(BasicSiteKind Kind, int Line, int Start,
     public string? Via { get; init; }
 
     /// <summary>
-    ///  Gets what identifies a variable or function to BASIC: its first two characters, its type and whether it is
-    ///  an array, such as <c>SC$(</c>. Names with the same key are the same variable.
+    ///  Gets what identifies a variable or function to BASIC. Names with the same key are the same variable.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   In the Microsoft BASICs it is the first two characters, the type and whether it is an array, such as
+    ///   <c>SC$(</c>. Integer BASIC keeps the whole name and one variable for it, so <c>A</c> and <c>A(3)</c> are one
+    ///   array, and <c>A$</c> and <c>A$(2,5)</c> one string.
+    ///  </para>
+    /// </remarks>
     public string Key { get; init; } = "";
+
+    /// <summary>
+    ///  Gets whether a variable is followed by a parenthesis: an array element or, in Integer BASIC, a substring.
+    /// </summary>
+    public bool Subscripted { get; init; }
 
     /// <summary>
     ///  Gets the name as BASIC stores it, letters and digits uppercase, with its type suffix.

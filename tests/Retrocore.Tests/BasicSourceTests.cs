@@ -32,6 +32,12 @@ public sealed class BasicSourceTests
         40 G O T O 10
         """;
 
+    private const string IntegerJumps = """
+        10 GOTO 1000+K*10
+        20 GOSUB 30: IF K THEN 10
+        30 LIST 10,20
+        """;
+
     /// <summary>
     ///  Line references follow GOTO, GOSUB, THEN, ON and LIST, with their columns; a missing line is a warning.
     /// </summary>
@@ -70,10 +76,51 @@ public sealed class BasicSourceTests
 
         string[] messages = [.. source.Diagnostics.Select(diagnostic => diagnostic.Message)];
         messages.Should().Contain(message => message.StartsWith("BASIC reads SCORE as SC OR E", StringComparison.Ordinal));
-        messages.Should().Contain(message => message.StartsWith("ELSE is not a reserved word in AppleSoft", StringComparison.Ordinal));
+        messages.Should().Contain("AppleSoft has no ELSE; it reads it as the variable EL.");
         source.Diagnostics.Where(diagnostic => diagnostic.Line == 5).Should().BeEmpty("1E+5 is a number");
 
         BasicSource.Analyze(Level2).Sites.Single(site => site.Kind == BasicSiteKind.Variable && site.Line == 3).Key.Should().Be("A#");
+    }
+
+    /// <summary>
+    ///  Integer BASIC keeps a whole name, so LOC and LO are two variables, and a word another BASIC reserves is an
+    ///  ordinary name without a warning.
+    /// </summary>
+    [TestMethod]
+    public void IntegerBasicKeepsWholeNames()
+    {
+        BasicSource source = BasicSource.Analyze("10 LOC = 1: LO = 2: PRINT LOC + LO\n", BasicDialect.Integer);
+        string[] keys = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Distinct()];
+        keys.Should().Equal("LOC", "LO");
+        source.Diagnostics.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Integer BASIC has one variable for a name: A and A(3) are one array, and A$ and A$(2,5) one string.
+    /// </summary>
+    [TestMethod]
+    public void IntegerBasicArraysAndSubstringsAreTheirVariable()
+    {
+        const string Program = "10 DIM A(5), A$(10): A(1) = A: PRINT A$(2,5); A$\n";
+        BasicSource source = BasicSource.Analyze(Program, BasicDialect.Integer);
+        BasicSite[] variables = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable)];
+        variables.Select(site => site.Key).Distinct().Should().Equal("A", "A$");
+        source.References(variables[0]).Should().HaveCount(3);
+        source.References(variables[1]).Should().HaveCount(3);
+        BasicSource.Describe(variables[0], BasicDialect.Integer).Should().Be("integer array");
+        BasicSource.Describe(variables[1], BasicDialect.Integer).Should().Be("string variable");
+    }
+
+    /// <summary>
+    ///  Integer BASIC's GOTO takes an expression, so a number that starts one is not a line; its LIST range takes a
+    ///  comma.
+    /// </summary>
+    [TestMethod]
+    public void IntegerBasicLineReferences()
+    {
+        BasicSource source = BasicSource.Analyze(IntegerJumps, BasicDialect.Integer);
+        Lines(source).Should().Equal("1:30", "1:10", "2:10", "2:20");
+        source.Diagnostics.Select(diagnostic => $"{diagnostic.Line}: {diagnostic.Message}").Should().BeEmpty();
     }
 
     /// <summary>

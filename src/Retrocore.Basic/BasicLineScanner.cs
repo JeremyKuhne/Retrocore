@@ -154,8 +154,10 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            // A comma continues a list of lines; anything else ends it.
-            if (!(value == ',' && jump == BasicJump.List && afterNumber)) { jump = BasicJump.None; }
+            // A comma continues a list of lines, and Integer BASIC's LIST 10,20; anything else ends it.
+            bool commaRange = jump == BasicJump.Range && _dialect == BasicDialect.Integer;
+            bool next = value == ',' && afterNumber && (jump == BasicJump.List || commaRange);
+            if (!next) { jump = BasicJump.None; }
             afterNumber = false;
             name = null;
         }
@@ -227,12 +229,22 @@ internal sealed class BasicLineScanner
             end++;
         }
 
-        if (!(zero && number == 0))
+        if (!(zero && number == 0) && !Computed(last))
         {
             sites.Add(Site(BasicSiteKind.LineReference, index, End(last)) with { Number = (int)number, Via = via });
         }
 
         return last;
+    }
+
+    // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no
+    // ON GOTO: a line is a number that ends the statement or comes before a comma.
+    private bool Computed(int last)
+    {
+        if (_dialect != BasicDialect.Integer) { return false; }
+        int next = last + 1;
+        while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
+        return next < _bytes.Length && _bytes[next] is not ((byte)':' or (byte)',');
     }
 
     // A number that is not a line: digits, a point and an exponent, with its sign token.
@@ -275,11 +287,13 @@ internal sealed class BasicLineScanner
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
-        string significant = letters.Length > 2 ? letters[..2] : letters;
+        // The Microsoft BASICs keep a name's first two characters; Integer BASIC keeps all of it.
+        string significant = letters.Length > 2 && _dialect != BasicDialect.Integer ? letters[..2] : letters;
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
-            Key = $"{significant}{suffix}{(array ? "(" : "")}",
-            Name = letters + suffix
+            Key = $"{significant}{suffix}{(array && _dialect != BasicDialect.Integer ? "(" : "")}",
+            Name = letters + suffix,
+            Subscripted = array
         };
 
         sites.Add(found);
@@ -300,7 +314,7 @@ internal sealed class BasicLineScanner
             diagnostics.Add(new(
                 _line,
                 BasicSeverity.Warning,
-                $"{letters} is not a reserved word in {_dialect.DisplayName}; it is read as the variable {significant}.",
+                $"{_dialect.DisplayName} has no {letters}; it reads it as the variable {significant}.",
                 found.Start,
                 found.End));
         }

@@ -12,7 +12,7 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   Each line is tokenized as the ROM would, so a name is what BASIC makes of it: in <c>SCORE</c>, BASIC finds
 ///   <c>OR</c>, so the variable is <c>SC</c>. Two names are the same variable when their first two characters,
-///   their type and whether they are arrays agree.
+///   their type and whether they are arrays agree. Integer BASIC keeps the whole name, and one variable for it.
 ///  </para>
 /// </remarks>
 public sealed partial class BasicSource
@@ -129,10 +129,16 @@ public sealed partial class BasicSource
     ///  Describes a variable's or function's type, as its suffix and parentheses give it.
     /// </summary>
     /// <param name="site">The variable or function.</param>
+    /// <param name="dialect">The dialect; Integer BASIC's numbers are integers, and it has no string arrays.</param>
     /// <returns>Such as "string array" or "integer variable".</returns>
-    public static string Describe(BasicSite site)
+    public static string Describe(BasicSite site, BasicDialect? dialect = null)
     {
         if (site.Kind == BasicSiteKind.Function) { return "function"; }
+        if (dialect == BasicDialect.Integer)
+        {
+            return site.Key.EndsWith('$') ? "string variable" : site.Subscripted ? "integer array" : "integer variable";
+        }
+
         string type = site.Key.TrimEnd('(')[^1] switch
         {
             '$' => "string",

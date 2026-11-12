@@ -75,11 +75,14 @@ public sealed partial class BasicSource
         Diagnostics = [.. diagnostics.OrderBy(diagnostic => diagnostic.Line).ThenBy(diagnostic => diagnostic.Start)];
     }
 
-    // Words other dialects reserve that this one does not, which this one reads as variable names.
+    // Words other dialects reserve that this one does not, which this one reads as variable names. Integer BASIC's
+    // names are any length, so a word such as LOC is an ordinary name there, and its tokenizer refuses another
+    // BASIC's statements itself.
     private static HashSet<string> ForeignWords(BasicDialect dialect)
     {
-        HashSet<string> own = [.. dialect.Keywords.Select(Letters)];
         HashSet<string> foreign = new(StringComparer.Ordinal);
+        if (dialect == BasicDialect.Integer) { return foreign; }
+        HashSet<string> own = [.. dialect.Keywords.Select(Letters)];
         foreach (BasicDialect other in (BasicDialect[])[BasicDialect.AppleSoft, BasicDialect.Level2])
         {
             foreach (string word in other.Keywords.Select(Letters))

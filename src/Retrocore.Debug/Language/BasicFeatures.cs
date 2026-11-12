@@ -263,10 +263,11 @@ internal static partial class BasicFeatures
     // A variable or function: its type, what BASIC calls it, and its other spellings in the program.
     private static string Name(BasicSource source, BasicSite site)
     {
-        string kind = BasicSource.Describe(site);
+        string kind = BasicSource.Describe(site, source.Dialect);
         string stored = site.Key.TrimEnd('(');
         string[] spellings = [.. source.References(site).Select(other => other.Name).Distinct(StringComparer.Ordinal)];
-        string text = site.Kind == BasicSiteKind.Function ? $"**FN {site.Name}**: a function" : $"**{site.Name}**: a {kind}";
+        string article = kind[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an" : "a";
+        string text = site.Kind == BasicSiteKind.Function ? $"**FN {site.Name}**: a function" : $"**{site.Name}**: {article} {kind}";
         if (site.Name != stored || spellings.Length > 1)
         {
             text += $". BASIC keeps only the first two characters and the type, so it is **{stored}**";

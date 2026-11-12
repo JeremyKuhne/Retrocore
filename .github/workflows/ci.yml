@@ -1,0 +1,96 @@
+# Builds Retrocore and runs every test that needs nothing outside the repository: the .NET tests (those that need
+# ROM dumps, disk images or other external files report inconclusive), the debug adapter scripts, and the
+# extension's grammar and unit tests. The editor tests need VS Code and are not run here.
+#
+# The build takes its analyzers from a sibling checkout of touki (Directory.Build.props), so both repositories
+# are checked out side by side, touki pinned to the commit the build is known to pass with.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TOUKI_REF: 9aaeebda4d9955d7b354926ab7b64812f64ad8cb
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  build-and-test:
+    runs-on: actions_linux_arm
+    timeout-minutes: 60
+    env:
+      # An empty cache folder, so no test finds external files on the runner by accident.
+      RETROCORE_CACHE: ${{ github.workspace }}/cache
+    defaults:
+      run:
+        working-directory: Retrocore
+    steps:
+      - name: Check out Retrocore
+        uses: actions/checkout@v4
+        with:
+          path: Retrocore
+
+      - name: Check out touki
+        uses: actions/checkout@v4
+        with:
+          repository: JeremyKuhne/touki
+          ref: ${{ env.TOUKI_REF }}
+          path: touki
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: Retrocore/global.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Retrocore/extension/package-lock.json
+
+      - name: Build
+        run: dotnet build Retrocore.slnx -c Release
+
+      - name: Test
+        run: dotnet test Retrocore.slnx -c Release --no-build --logger trx --results-directory "${{ github.workspace }}/test-results"
+
+      - name: Assemble the IIe sample
+        run: |
+          mkdir -p artifacts/iie-sample
+          dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
+
+      - name: Debug adapter tests
+        run: |
+          node tools/Test-Trs80Dap.mjs
+          node tools/Test-IntegerBasicDap.mjs
+          node tools/Test-Breakpoints.mjs
+          node tools/Test-Memory.mjs
+          node tools/Test-IIeDap.mjs
+
+      - name: Extension tests
+        working-directory: Retrocore/extension
+        run: |
+          npm ci
+          npm run compile
+          npm run test:grammar
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ github.workspace }}/test-results
+          if-no-files-found: ignore

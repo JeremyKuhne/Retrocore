@@ -205,7 +205,9 @@ Apple2TS sources. `tools\Fetch-Trs80Font.ps1` fetches xtrs's font source to veri
 
 ## Building and testing
 
-With the `.NET 10 SDK`, Node.js, and the sibling `..\touki` checkout in place:
+With the `.NET 10 SDK`, Node.js, and the sibling `..\touki` checkout in place, these build and test the repository.
+[CI](.github/workflows/ci.yml) runs the ones that need nothing external on every push to `main` and every pull
+request, with touki pinned to a known commit:
 
 ```powershell
 dotnet build Retrocore.slnx -c Release

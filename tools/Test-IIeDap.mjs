@@ -4,7 +4,7 @@
 
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";
-import { writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
@@ -153,6 +153,26 @@ try {
     changed = await request("retro/hardware", { id: "slot4", action: "removeCard" });
     assert.equal(slotRow(changed, "slot4").value, "empty");
     assert.equal((await request("apple2/text")).sound, "speaker", "taking the card out leaves the speaker");
+
+    // A ProFile card goes in any free slot: its firmware answers at $Cn00 as a ProDOS block device, its ProFile takes
+    // an image, the configuration keeps both, and Remove Card empties the slot again.
+    changed = await request("retro/hardware", { id: "slot5", action: "addProFile" });
+    assert.equal(slotRow(changed, "slot5").value, "ProFile interface card");
+    assert.deepEqual(slotRow(changed, "slot5").devices, ["slot5profile"]);
+    assert.equal(Buffer.from((await request("readMemory", { memoryReference: "0xC501", count: 1 })).data, "base64")[0], 0x20);
+    const profile = join(root, "artifacts", `profile-${process.pid}.po`);
+    writeFileSync(profile, Buffer.alloc(512 * 1600));
+    try {
+        changed = await request("retro/device", { id: "slot5profile", action: "insert", path: profile });
+        assert.equal(changed.devices.find(device => device.id === "slot5profile").blocks.count, 1600);
+        assert.equal(changed.configuration.cards["5"], "proFile");
+        assert.equal(changed.configuration.media.slot5profile.path, profile);
+    } finally {
+        unlinkSync(profile);
+    }
+    changed = await request("retro/hardware", { id: "slot5", action: "removeCard" });
+    assert.equal(slotRow(changed, "slot5").value, "empty");
+    assert.ok(!changed.devices.some(device => device.id === "slot5profile"), "its ProFile is gone");
 
     // A new monitor while stopped sends the panel a frame drawn on it.
     events.splice(0, events.length, ...events.filter(message => message.event !== "retro/frame"));
@@ -607,6 +627,42 @@ try {
         assert.deepEqual(await moved(), [{ line: last, column: null }], "erasing the program removes it");
     }
 
+    // The mouse and ProFile cards' firmware debugs at its source in whatever slot the card is in: the startup scan
+    // boots the ProFile in slot 7, and a breakpoint in ProFile.rom.asm stops in its driver at $C7xx.
+    const sdkRoms = join(root, "src", "Retrocore.Machines.Apple2", "Roms");
+    const firstLine = (file, label) => {
+        const lines = readFileSync(file, "utf8").split(/\r?\n/);
+        let next = lines.indexOf(`${label}:`) + 1;
+        assert.ok(next > 0, `${label} is in ${file}`);
+        while (/^\s*(;.*)?$/.test(lines[next])) next++;
+        return next + 1;
+    };
+    const profileRom = join(sdkRoms, "ProFile.rom.asm");
+    const mouseRom = join(sdkRoms, "Mouse.rom.asm");
+    const bootImage = join(root, "artifacts", `profile-boot-${process.pid}.po`);
+    const blocks = Buffer.alloc(512 * 280);
+    Buffer.from([0x01, 0x4C, 0x01, 0x08]).copy(blocks); // a boot block that waits: JMP $0801
+    writeFileSync(bootImage, blocks);
+    try {
+        events.length = 0;
+        await request("launch", { machine: "apple2", romDirectory: roms, sdkRoms, model: "iie-enhanced", stopOnEntry: false,
+            speed: "max", sound: "off", mouse: 4, proFiles: [{ slot: 7, image: bootImage }] });
+        const driver = firstLine(profileRom, "Driver");
+        const set = await request("setBreakpoints", { source: { path: profileRom }, breakpoints: [{ line: driver }] });
+        assert.equal(set.breakpoints[0].verified, true, "the ProFile firmware's source maps");
+        const mouse = await request("setBreakpoints", { source: { path: mouseRom }, breakpoints: [{ line: firstLine(mouseRom, "SETMOUSE") }] });
+        assert.equal(mouse.breakpoints[0].verified, true, "the mouse firmware's source maps");
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "breakpoint", "the startup scan booted the ProFile");
+        const top = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+        assert.equal(top.source.path.toLowerCase(), profileRom.toLowerCase());
+        assert.equal(top.line, driver);
+        assert.match((await request("evaluate", { expression: "PC" })).result, /^\$C7/, "in slot 7's page");
+        assert.match((await request("evaluate", { expression: "SETMOUSE" })).result, /^\$C4/, "the mouse's routine, in slot 4");
+    } finally {
+        unlinkSync(bootImage);
+    }
+
     // dos: the program goes on a DOS 3.3 disk built from the SDK's sources, which the IIe boots; HELLO BRUNs the
     // program, and a breakpoint in its source stops there.
     const dosSource = join(root, "artifacts", `dos-launch-${process.pid}.s`);
@@ -625,7 +681,7 @@ try {
         unlinkSync(dosSource);
     }
 
-    console.log("DAP passed: M1 source/call-stack behavior, RGBA video, exact source cycles, cycle-level beam stops, VBL and in-flight instruction resume on both IIe models, speaker sound, fast disk and booting a program from a DOS 3.3 disk.");
+    console.log("DAP passed: M1 source/call-stack behavior, RGBA video, exact source cycles, cycle-level beam stops, VBL and in-flight instruction resume on both IIe models, speaker sound, fast disk, booting a program from a DOS 3.3 disk, and the mouse and ProFile cards' firmware at its source.");
 } finally {
     clearTimeout(timeout);
     close();

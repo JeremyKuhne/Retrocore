@@ -162,6 +162,23 @@ internal static class SdkModules
         string slot7 = Path.Join(roms, "Slot7.rom.asm");
         if (File.Exists(slot7)) { debug.Add(new SourceMapModule(AssembleRom(slot7), Apple2MemoryArea.Slot7Rom)); }
 
+        // The mouse and ProFile cards' firmware reaches nothing inside itself by an absolute address, so it works in
+        // any slot: one assembly maps each slot's page, wherever the card's bytes are the ones installed.
+        foreach (string card in (ReadOnlySpan<string>)["Mouse.rom.asm", "ProFile.rom.asm"])
+        {
+            string path = Path.Join(roms, card);
+            if (!File.Exists(path)) { continue; }
+            AssemblyResult cardRom = AssembleRom(path);
+            for (int slot = 1; slot <= 7; slot++)
+            {
+                int page = 0xC000 | (slot << 8);
+                debug.Add(new SourceMapModule(
+                    cardRom,
+                    Apple2MemoryArea.Slot1Rom + (slot - 1),
+                    relocation: page - cardRom.Sections[0].Origin));
+            }
+        }
+
         // Either boot ROM may be in slot six; each maps only where its bytes are the ones installed.
         foreach (int sectors in (ReadOnlySpan<int>)[16, 13])
         {

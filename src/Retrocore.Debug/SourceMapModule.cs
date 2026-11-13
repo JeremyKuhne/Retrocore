@@ -40,7 +40,11 @@ internal sealed partial class SourceMapModule : IDebugModule
     ///  Whether an invocation that emits one statement debugs as its call line rather than stepping into the macro,
     ///  as for MACRO-10 sources that define instructions as macros.
     /// </param>
-    internal SourceMapModule(AssemblyResult result, Enum? area, bool collapseSingleStatementMacros = false)
+    /// <param name="relocation">
+    ///  How far the code runs from where it was assembled, added to its statements' and labels' addresses but not to
+    ///  its constants: for code that uses no absolute address inside itself, such as a slot ROM that works in any slot.
+    /// </param>
+    internal SourceMapModule(AssemblyResult result, Enum? area, bool collapseSingleStatementMacros = false, int relocation = 0)
     {
         ArgumentNullException.ThrowIfNull(result);
         Area = area;
@@ -60,7 +64,7 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
 
             byte[] bytes = result.Sections[entry.Section].Bytes.Slice(entry.Offset, entry.Size).ToArray();
-            emitted.Add((checked((ushort)entry.Address), bytes, levels));
+            emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels));
         }
 
         HashSet<AssemblyLocation> started = new(ReferenceEqualityComparer.Instance);
@@ -112,10 +116,11 @@ internal sealed partial class SourceMapModule : IDebugModule
             if (s_internalMarkers.Any(marker => name.Contains(marker, StringComparison.Ordinal))) { continue; }
 
             // A scoped name resolves qualified, and by its plain name when that is unambiguous enough to be first.
-            _symbols[name] = symbol.Value;
+            long value = symbol.IsConstant ? symbol.Value : symbol.Value + relocation;
+            _symbols[name] = value;
             int separator = name.LastIndexOf("::", StringComparison.Ordinal);
-            if (separator >= 0) { _symbols.TryAdd(name[(separator + 2)..], symbol.Value); }
-            if (!symbol.IsConstant) { labels.Add((name, symbol.Value)); }
+            if (separator >= 0) { _symbols.TryAdd(name[(separator + 2)..], value); }
+            if (!symbol.IsConstant) { labels.Add((name, value)); }
         }
 
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];

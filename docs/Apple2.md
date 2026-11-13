@@ -42,11 +42,11 @@ floating bus and writes go nowhere, so BASIC finds the top of memory where the R
 | Slot | II and II Plus | IIe |
 | --- | --- | --- |
 | 0 | The language card or a firmware card, or empty (`slot0`) | Built in: the IIe's language card |
-| 1, 2, 5 | Disk II controllers or the mouse card | Disk II controllers or the mouse card |
-| 3 | A Disk II controller or the mouse card | The 80-column firmware |
-| 4 | The Mockingboard, a Disk II controller or the mouse card | The Mockingboard, a Disk II controller or the mouse card |
-| 6 | The Disk II (`diskImage`, `dos`) | The Disk II (`diskImage`, `dos`) |
-| 7 | Block storage (a `.po` `diskImage`) or a Disk II | Block storage or a Disk II |
+| 1, 2, 5 | Disk II controllers, the mouse card or ProFile cards | Disk II controllers, the mouse card or ProFile cards |
+| 3 | A Disk II controller, the mouse card or a ProFile card | The 80-column firmware |
+| 4 | The Mockingboard, a Disk II controller, the mouse card or a ProFile card | The same as the II Plus |
+| 6 | The Disk II (`diskImage`, `dos`), or a ProFile card | The same as the II Plus |
+| 7 | Block storage (a `.po` `diskImage`), a Disk II or a ProFile card | The same as the II Plus |
 
 **The language card** is 16 KB of RAM at $D000-$FFFF, its first 4 KB in two banks, switched at $C080-$C08F. The II
 Plus has one unless `slot0` says otherwise; DOS 3.3's System Master loads the other BASIC into it.
@@ -90,6 +90,13 @@ the tests pin every build by digest.
 | [`CharacterGenerator.asm`](../src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | `IIBOARD` 1: the II and II Plus's 7341-0036; else the IIe's video ROM, with `ENHANCED` |
 | [`Firmware.Original.asm`, `Firmware.Enhanced.asm`](../src/Retrocore.Machines.Apple2/Roms/System) | The IIe's internal firmware, $C100-$CFFF |
 | [`Slot7.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's firmware, $C700-$C7FF |
+| [`Mouse.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Mouse.rom.asm) | The emulated mouse card's firmware, $Cn00-$CnFF in any slot |
+| [`ProFile.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/ProFile.rom.asm) | The emulated ProFile card's firmware, $Cn00-$CnFF in any slot |
+
+Each of these debugs at its source: a breakpoint in it stops there, and the call stack shows its lines. The mouse and
+ProFile cards' firmware reaches nothing inside itself by an absolute address, so the same bytes work in any slot, and
+the debugger maps the source to whichever slot holds the card, its labels (such as `SETMOUSE` or `Driver`) resolving
+to that slot's page.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978
 ([archive.org](https://archive.org/details/Apple_II_Redbook)) for the original Monitor, the Mini-Assembler, SWEET16
@@ -119,6 +126,31 @@ reads the position and the button (B 1 held, 2 pressed, 3 released, 4 up; negati
 until Escape, and a strip under the screen says which; in AppleSharp, where the card is in slot 2, a click on the screen
 does, until a right-click, and the status line says which. AppleSharp's **Shift+F11** steps the monitor through color,
 black and white, green and amber, and keeps the choice.
+
+**The ProFile card** goes in any free slot (`proFiles`, or Add Card), as many as there are slots, each with Apple's
+ProFile hard disk cabled to it. The ProFile takes a ProDOS-order image (`.po` or `.hdv`) of up to 65535 blocks, inserted
+from the Retro Devices view or the launch; the machine can write to it, and the changes stay in memory. The card's
+256-byte firmware (`ProFile.rom.asm`) is the SDK's own, not Apple's: it is a ProDOS block device ($20, $00 and $03 at
+$Cn01-$Cn05, its driver's offset at $CnFF), so ProDOS lists it and the startup scan boots it, from the highest slot
+first. The firmware talks to the ProFile as Apple's SOS driver does on the Apple III: CMD and BSY handshakes, the
+six-byte command, four status bytes and the block, a byte at a time through the card's ports at $C080 plus 16 times the
+slot. `ProFileDrive` plays the ProFile's Z8 controller, shared with the [Apple III](Apple3.md#the-profile)'s card.
+
+| Port | What it does |
+| --- | --- |
+| +0 | Write: a byte to the ProFile |
+| +1 | Read: a byte from the ProFile |
+| +2 | Read: bit 7 set while BSY is low (ready), bit 0 set when no ProFile answers |
+| +3 | Write: clears a parity error (there are none) |
+| +4, +5 | Any access: CMD low, CMD high |
+| +6, +7 | Any access: the ProFile's reset on, off |
+| +8, +9 | Read: the ProFile's size in blocks, for STATUS; Retrocore's own |
+
+The first four are the Apple III card's. Its lines are an addressable latch in its $Cn00 page, which this card keeps for
+its firmware, so they are ports here. Apple's ProFile gives its size only in its identification block ($FFFFFF, which
+the drive answers), and reading that through the handshakes does not fit in 256 bytes beside the driver, so the card
+reports it. FORMAT succeeds and does nothing. The emulated ProFile answers at once, with no seek or rotation time, and
+keeps no block tags.
 
 **Apple's mouse firmware** (341-0270-C) is an SDK source too, `Roms/Mouse/MouseInterface.asm`, which assembles
 byte-identically to the EPROM (`MouseInterfaceSourceTests`). The emulator doesn't run it: it is eight 256-byte banks
@@ -153,6 +185,7 @@ rest, in the [extension README](../extension/README.md)):
 | `romDirectory` | all | The model's ROM dumps, in place of the SDK's builds |
 | `mockingboard`, `sound` | all | The Mockingboard in slot 4 (defaulting on when `sound` is `mockingboard`), and what the panel plays (`speaker`, `mockingboard` or `off`; `speaker` by default) |
 | `mouse` | all | The mouse card in that slot, 1 to 7 (none by default) |
+| `proFiles` | all | ProFile cards, each `{ "slot": 5, "image": "hd.po" }`; the image is optional (none by default) |
 | `screen` | all | The monitor: `color` (the default), or a monochrome `white` (black and white), `green` or `amber` one, which shows each of the 560 dots sharply; the panel's **Screen** menu changes it |
 | `diskImage`, `diskController`, `diskSectors` | all | A disk in slot 6 (`diskII`) or slot 7 (`slot7`, the default for `.po`), and 16- or 13-sector Disk II firmware |
 | `diskBootRom`, `diskSequencerRom`, `sequencerLayout` | all | Disk II P5/P6 ROM dumps in place of the SDK's ([DiskII.md](DiskII.md)) |
@@ -206,6 +239,7 @@ their programs debug on a Pascal thread, by source line through the compiler's l
 | `Apple2MachineTests`, `Apple2PlusTests`, `Apple2IITests`, `Apple2SlotTests`, `Apple2GamePortTests` | The IIe's soft switches and auxiliary memory, the hardware the II and II Plus lack next to the IIe, slot 0 and peripheral cards, memory sizes, the keyboard, the game port, both Monitors, revision 0, and booting from dumps |
 | `Apple2VideoTests`, `Apple2VideoOracleTests`, `Apple2AudioTests`, `Apple2MockingboardTests` | Text, lo-res, hi-res and double hi-res video (including against apple2ts), the speaker and the Mockingboard |
 | `Apple2MouseTests`, `MouseInterfaceSourceTests` | The mouse card's firmware run on each CPU: its identification, routines, screen holes, clamping, interrupts and BASIC's `IN#`/`PR#`; Apple's mouse firmware's source against the EPROM (from `mouse-roms` under `RETROCORE_CACHE`, or `RETROCORE_MOUSE_ROMS`) and its identification against the emulator's |
+| `Apple2ProFileTests` | The ProFile card's firmware run on each CPU against the emulated ProFile: STATUS, READ, WRITE, FORMAT and their errors, the startup scan booting it, and ProDOS booting from it with A2DeskTop's first disk (in `<cache>\disks\a2desktop`) |
 | `Apple2DosTests`, `SystemMasterBasicTests` | DOS 3.3's System Master on the II and II Plus, switching BASIC with FP and INT through the language card and firmware cards, and the System Masters' `FPBASIC` and `INTBASIC` files |
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |

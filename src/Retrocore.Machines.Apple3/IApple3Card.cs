@@ -54,6 +54,15 @@ public interface IApple3Card
     byte ReadRom(int offset) => 0xFF;
 
     /// <summary>
+    ///  Writes the card's ROM page, which a card may decode as switches.
+    /// </summary>
+    /// <param name="offset">The offset in the page.</param>
+    /// <param name="value">The value.</param>
+    void WriteRom(int offset, byte value)
+    {
+    }
+
+    /// <summary>
     ///  Gets whether the card has expansion ROM at <c>$C800-$CFFF</c>, which a read of its ROM page selects.
     /// </summary>
     bool HasExpansionRom => false;

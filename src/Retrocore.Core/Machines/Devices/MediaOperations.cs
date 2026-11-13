@@ -33,5 +33,10 @@ public enum MediaOperations : byte
     /// <summary>
     ///  The media's write protection can be changed, as by covering a disk's notch.
     /// </summary>
-    WriteProtect = 8
+    WriteProtect = 8,
+
+    /// <summary>
+    ///  The media, with what the machine wrote to it, can be saved to an image file.
+    /// </summary>
+    Save = 16
 }

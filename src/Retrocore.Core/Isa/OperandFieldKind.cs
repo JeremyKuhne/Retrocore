@@ -45,5 +45,31 @@ public enum OperandFieldKind : byte
     ///  A restart address, a multiple of 8 from 0 to <c>$38</c>, held in bits 3-5 of the last opcode byte, as the
     ///  Z80's <c>RST</c> holds it; it takes no operand byte.
     /// </summary>
-    Restart
+    Restart,
+
+    /// <summary>
+    ///  An MC6809 indexed postbyte followed by 0, 1 or 2 offset or indirect-address bytes (1-3 bytes total).
+    /// </summary>
+    IndexedPostbyte,
+
+    /// <summary>
+    ///  An MC6809 <c>TFR</c> or <c>EXG</c> register-pair postbyte.
+    /// </summary>
+    RegisterPair,
+
+    /// <summary>
+    ///  An MC6809 <c>PSHS</c> or <c>PULS</c> register-list postbyte (bit 6 selects <c>U</c>).
+    /// </summary>
+    SystemStackMask,
+
+    /// <summary>
+    ///  An MC6809 <c>PSHU</c> or <c>PULU</c> register-list postbyte (bit 6 selects <c>S</c>).
+    /// </summary>
+    UserStackMask,
+
+    /// <summary>
+    ///  A restart number, 0-7, held in bits 3-5 of the last opcode byte, as Intel's 8080 <c>RST</c> holds it; it
+    ///  takes no operand byte, and its value is the restart's address, eight times the number.
+    /// </summary>
+    RestartNumber
 }

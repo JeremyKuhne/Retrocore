@@ -34,12 +34,16 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 .off .title{font-size:16px;font-weight:600}
 .off .name{font-size:12px;color:#b0b0b0}
 .hint{margin-top:4px;font-size:11px;color:var(--vscode-descriptionForeground)}
+.bezel.captured{border-color:var(--vscode-focusBorder);box-shadow:0 0 0 1px var(--vscode-focusBorder)}
+.mouse{margin-top:6px;padding:3px 8px;border-radius:2px;font-size:12px;border:1px solid var(--vscode-panel-border);color:var(--vscode-descriptionForeground)}
+.mouse.captured{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-focusBorder)}
 </style></head>
 <body><div class="bezel" id="bezel"><div class="display" id="display"><canvas id="screen" tabindex="0" aria-label="The machine's display" data-vscode-context='{"webviewSection":"screen","preventDefaultContextMenuItems":true}'></canvas></div>
 <div class="off" id="off" hidden role="status"><div class="title">Machine off</div><div class="name" id="offName"></div>
 <div class="keys"><button id="restart" title="Starts the same launch again, with the cards and disks it last had">Restart</button>
 <button id="startMachine" title="Picks a machine and what it runs: Retrocore: Start Machine">Start Machine…</button>
 <button id="close" title="Closes this panel">Close</button></div></div></div>
+<div class="mouse" id="mouseState" role="status" hidden></div>
 <div class="keys" id="keybar">
 <span class="keys" data-machine="apple2 apple3">
 <button id="ctrl" aria-pressed="false" title="Makes the next letter a control character, as holding CONTROL does (or hold Ctrl)">Ctrl</button>
@@ -54,13 +58,40 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="31" title="CLEAR (or Home)">Clear</button>
 <button id="trs80-reset" title="The reset button (or Ctrl+F12 or Ctrl+Break): boots a disk, or restarts BASIC with the program kept">Reset</button>
 </span>
+<span class="keys" data-machine="trs80-model3">
+<button data-code="1" title="BREAK (or Esc)">Break</button>
+<button data-code="31" title="CLEAR (or Home)">Clear</button>
+<button id="model3-reset" title="The reset button (or Ctrl+F12 or Ctrl+Break): the ROM starts again">Reset</button>
+</span>
+<span class="keys" data-machine="trs80-model2">
+<button data-code="3" title="BREAK (or Esc)">Break</button>
+<button data-code="0" title="HOLD">Hold</button>
+<button data-code="1" title="F1">F1</button>
+<button data-code="2" title="F2">F2</button>
+<button id="model2-reset" title="The reset switch (or Ctrl+F12 or Ctrl+Break): the boot ROM starts again">Reset</button>
+</span>
+<span class="keys" data-machine="apple1">
+<button data-code="27" title="ESC (or Esc): drops the line being typed">Esc</button>
+<button id="apple1-reset" title="RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen">Reset</button>
+<button id="apple1-clear" title="CLEAR SCREEN: blanks the screen and puts the cursor at the top left">Clear Screen</button>
+</span>
+<span class="keys" data-machine="altair">
+<button data-code="27" title="ESC (or Esc)">Esc</button>
+<button id="altair-reset" title="The front panel's RESET (or Ctrl+F12 or Ctrl+Break): the 8080 starts again at $0000, keeping memory">Reset</button>
+<button id="altair-clear" title="The terminal's CLEAR: blanks the screen and homes the cursor, as ^Z does">Clear Screen</button>
+</span>
+<span class="keys" data-machine="coco">
+<button data-code="1" title="BREAK (or Esc)">Break</button>
+<button data-code="31" title="CLEAR (or Home)">Clear</button>
+<button id="coco-reset" title="The RESET button (or Ctrl+F12 or Ctrl+Break): BASIC starts again with the program kept">Reset</button>
+</span>
 <span class="keys end">
 <button id="basic" hidden title="Opens the BASIC program in the machine's memory in an editor; saving puts it back">BASIC program</button>
 <label class="speed" title="How fast the machine runs, as a multiple of its clock. Sound plays only at 1x.">Speed <select id="speed" aria-label="Speed">
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2 apple3">
+<span class="keys" data-machine="apple2 apple3 coco">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -68,6 +99,9 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <div class="strip"><div><div id="status"></div><div id="disk"></div></div>
 <span class="tools">
 <button id="scale" title="Sharp: each dot a whole number of screen pixels, as large as fits. Fit: fills the panel's width.">Scale: sharp</button>
+<label class="speed" id="screenChoice" hidden title="The monitor: color, a IIe's RGB card and monitor (Color RGB: solid colors without fringing), or a monochrome monitor of the time; on an Apple II it shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
+<option value="color">Color</option><option value="rgb">Color RGB</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
+</select></label>
 <label data-machine="apple2 apple3" title="Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
 <label id="details" title="While stopped, marks where the video beam is drawing"><input id="overlay" type="checkbox"> Beam overlay</label>
 </span></div>
@@ -78,8 +112,9 @@ const api=acquireVsCodeApi();
 window.addEventListener('error',event=>api.postMessage({error:event.message}));
 const screen=document.getElementById('screen');
 let lastFrame;
-// The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 fills a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3'};
+// The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
+// border, fill a 4:3 screen.
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -93,8 +128,9 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's fast cassette or the IIe's fast disk, running flat out while the media moves.
-    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'?'Fast tape':'Fast disk']:[];
+    // Accelerated is the Model I's, Apple-1's or Color Computer's fast cassette or the IIe's fast disk, running flat
+    // out while the media moves.
+    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='trs80-model3'||frame.machine==='apple1'||frame.machine==='coco'?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
 const fastDisk=document.getElementById('fastDisk');
@@ -135,8 +171,9 @@ function draw(frame){
     }
     if(!iie){
         const media=frame.media;
-        const tape=media&&media.cassette.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
-        const disks=media?media.disks.filter(disk=>disk.mounted).map(disk=>'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'')):[];
+        // The Apple-1 has a cassette and no disks.
+        const tape=media?.cassette?.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
+        const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(disk=>'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'')):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
         document.getElementById('disk').textContent=disks.join(' | ');
         return;
@@ -190,11 +227,45 @@ window.addEventListener('message',event=>{
     off.hidden=true;
     const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model;
     lastFrame=event.data;draw(lastFrame);
-    // A frame without it, as the Apple III's, is a machine with no Mockingboard.
+    // A frame without it, as the Apple III's or the Color Computer's, is a machine with no Mockingboard.
     mockingboard=lastFrame?.mockingboard===true;
     if(typeof lastFrame?.sound==='string')showSound(lastFrame.sound);
+    syncScreen(lastFrame);
+    showMouse();
     if(changed)showKeys();
 });
+// The monitor: the panel's choice, kept with its state, wins over the launch's, and is sent again to each new session
+// whose machine has that monitor. The menu offers the machine's own monitors, so no color on a monochrome machine.
+const screenSelect=document.getElementById('screenType');
+const screenNames={color:'Color',rgb:'Color RGB',white:'Black and white',green:'Green',amber:'Amber'};
+let offeredScreens='';
+const chosenScreen=()=>api.getState?.()?.screen;
+if(typeof chosenScreen()==='string')screenSelect.value=chosenScreen();
+let sentScreen;
+screenSelect.addEventListener('change',()=>{
+    api.setState?.({...(api.getState?.()??{}),screen:screenSelect.value});
+    sentScreen=screenSelect.value;
+    api.postMessage({command:'screen',screen:screenSelect.value});
+    screen.focus();
+});
+function syncScreen(frame){
+    const choice=document.getElementById('screenChoice');
+    choice.hidden=typeof frame?.screen!=='string';
+    if(choice.hidden)return;
+    const screens=Array.isArray(frame.screens)?frame.screens.filter(name=>name in screenNames):[frame.screen];
+    if(screens.join()!==offeredScreens){
+        offeredScreens=screens.join();
+        screenSelect.replaceChildren(...screens.map(name=>new Option(screenNames[name],name)));
+        screenSelect.value=frame.screen;
+    }
+    const wanted=chosenScreen();
+    if(typeof wanted==='string'&&wanted!==frame.screen&&screens.includes(wanted)){
+        if(sentScreen!==wanted){sentScreen=wanted;api.postMessage({command:'screen',screen:wanted});}
+        return;
+    }
+    sentScreen=undefined;
+    if(document.activeElement!==screenSelect)screenSelect.value=frame.screen;
+}
 // Sound plays through Web Audio, which only starts after a click or key in the panel. Chunks are queued back to
 // back a little ahead of the clock; one that would queue too far ahead, as when running faster than real time, is
 // dropped rather than letting the delay grow.
@@ -273,16 +344,30 @@ overlay.addEventListener('change',()=>{
     api.setState?.({...(api.getState?.()??{}),overlay:overlay.checked});
     if(lastFrame)draw(lastFrame);
 });
-// Each machine's codes for its special keys: the Model I has arrows, CLEAR (Home) and BREAK (Escape).
+// Each machine's codes for its special keys: the Model I and Color Computer have arrows, CLEAR (Home) and BREAK
+// (Escape).
 const keys={
     'apple2':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
     'apple3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
-    'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1}
+    'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    'trs80-model3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    // The Model II's keyboard sends ASCII, with its arrows as $1C-$1F and BREAK as $03.
+    'trs80-model2':{Enter:13,Backspace:8,Tab:9,ArrowLeft:28,ArrowRight:29,ArrowUp:30,ArrowDown:31,Escape:3},
+    // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
+    'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
+    'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    // The Altair's ADM-3A sends ASCII, with its arrows as ^H, ^L, ^K and ^J.
+    'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
     'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
-    'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple'
+    'trs80-model3':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
+    'trs80-model2':'Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset',
+    'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
+    'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
+    'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
+    'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -292,10 +377,13 @@ const board=()=>machine()==='apple2'&&typeof lastFrame?.model==='string'&&!lastF
 const ctrl=document.getElementById('ctrl');
 // Sharp scaling: each dot a whole number of physical pixels across and down, keeping the screen's shape. The IIe's
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
-// screen (768x576). Sizes are in CSS pixels for the display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576]};
+// screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
+// show its lines twice over, about 4:3. Sizes are in CSS pixels for the display's scaling, ratio physical pixels to
+// each.
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480]};
 function sharpSize(machine,width,height,ratio){
-    const [w,h]=sharpBase[machine]??sharpBase['apple2'];
+    const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
+    const [w,h]=sharpBase[key]??sharpBase['apple2'];
     const scale=Math.floor(Math.min(width*ratio/w,height*ratio/h));
     return scale>=1?{width:w*scale/ratio,height:h*scale/ratio,scale}:null;
 }
@@ -421,8 +509,11 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset','altair-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
+}
+for(const id of ['apple1-clear','altair-clear']){
+    document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});
 }
 // The session ended: the last picture stays, dimmed, with ways to go on. The next session's first frame hides it.
 const off=document.getElementById('off');
@@ -431,11 +522,61 @@ function showOff(ended){
     document.getElementById('basic').hidden=true;
     document.getElementById('status').textContent='Stopped';
     off.hidden=false;
+    showMouse();
 }
 for(const id of ['restart','startMachine','close']){
     document.getElementById(id).addEventListener('click',()=>api.postMessage({command:id}));
 }
 document.getElementById('basic').addEventListener('click',()=>api.postMessage({command:'basic'}));
+// The mouse card: a click on the screen locks the pointer to it, so the mouse moves the card's mouse and its left
+// button is the card's; Escape lets go. Movement goes at most once a frame, in the picture's 280 by 192 dots.
+let mouseX=0,mouseY=0,mouseQueued=false;
+// A machine that has ended keeps its last frame, but no longer its mouse card.
+const mouseCard=()=>off.hidden&&lastFrame?.machine==='apple2'&&lastFrame?.mouse>0;
+const mouseLocked=()=>document.pointerLockElement===screen;
+function sendMouse(){
+    mouseQueued=false;
+    const dx=Math.trunc(mouseX),dy=Math.trunc(mouseY);
+    mouseX-=dx;mouseY-=dy;
+    if(dx||dy)api.postMessage({mouse:{dx,dy}});
+}
+screen.addEventListener('mousedown',event=>{
+    if(!mouseCard()||event.button!==0)return;
+    if(!mouseLocked()){Promise.resolve(screen.requestPointerLock()).catch(()=>{});return;}
+    api.postMessage({mouse:{pressed:true}});
+});
+screen.addEventListener('mouseup',event=>{if(mouseLocked()&&event.button===0)api.postMessage({mouse:{pressed:false}});});
+screen.addEventListener('mousemove',event=>{
+    if(!mouseLocked()||!mouseCard()||!screen.clientWidth||!screen.clientHeight)return;
+    mouseX+=event.movementX*280/screen.clientWidth;
+    mouseY+=event.movementY*192/screen.clientHeight;
+    if(!mouseQueued){mouseQueued=true;requestAnimationFrame(sendMouse);}
+});
+document.addEventListener('pointerlockchange',()=>{
+    if(!mouseLocked()&&mouseCard())api.postMessage({mouse:{pressed:false}});
+    showMouse();
+});
+// Whether the mouse card has the pointer, and how to give it or take it back: a strip under the screen, and the
+// screen's border, which lights while the pointer is captured.
+function showMouse(){
+    const state=document.getElementById('mouseState');
+    const card=mouseCard();
+    // Without a card to drive, as when it is taken out or the session ends, the pointer is the user's again.
+    if(!card&&mouseLocked()){
+        mouseX=mouseY=0;
+        document.exitPointerLock?.();
+    }
+
+    const captured=card&&mouseLocked();
+    state.hidden=!card;
+    state.classList.toggle('captured',captured);
+    document.getElementById('bezel').classList.toggle('captured',captured);
+    if(!card)return;
+    const text=captured
+        ?'Mouse captured by the mouse card in slot '+lastFrame.mouse+' · press Esc to release it'
+        :'Mouse card in slot '+lastFrame.mouse+' · click the screen to capture the mouse';
+    if(state.textContent!==text)state.textContent=text;
+}
 showKeys();
 screen.focus();
 </script></body></html>`;

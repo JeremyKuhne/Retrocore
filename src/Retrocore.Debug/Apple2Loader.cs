@@ -65,6 +65,61 @@ internal static class Apple2Loader
         drive.Insert(disk, path, extension.Length == 0 ? "DSK" : extension);
     }
 
+    /// <summary>
+    ///  Saves the disk in a drive, with what the machine wrote to it, to an image: a WOZ image for <c>.woz</c>, else a
+    ///  sector image in the order its extension names (<c>.po</c> in ProDOS's, <c>.dsk</c> and <c>.do</c> in DOS's).
+    /// </summary>
+    /// <param name="drive">The drive.</param>
+    /// <param name="path">The image to write; the disk's own image when null.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    /// <exception cref="ArgumentException">The image's format can't hold the disk.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  A sector image was asked for, and a track no longer reads as 16 sectors.
+    /// </exception>
+    internal static void Save(Apple2FloppyDrive drive, string? path)
+    {
+        WozDisk disk = drive.Disk ?? throw new InvalidOperationException($"{drive.Info.Name} is empty.");
+        path = Path.GetFullPath(path ?? drive.Media?.Label ?? "");
+        string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        byte[] image = extension switch
+        {
+            "WOZ" => disk.Export(),
+            "DSK" or "DO" or "PO" => SectorDiskReader.Read(disk, extension == "PO"),
+            _ => throw new ArgumentException($"{Path.GetFileName(path)} is not a .woz, .dsk, .do or .po image; save it as .woz.")
+        };
+
+        // Written to a new file beside it and moved over it, so a failed write leaves the image as it was.
+        string temporary = Path.Join(Path.GetDirectoryName(path), $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.saving");
+        try
+        {
+            using (FileStream stream = new(temporary, FileMode.CreateNew, FileAccess.Write))
+            {
+                stream.Write(image);
+            }
+
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+
+        drive.Saved(path, extension);
+    }
+
+    /// <summary>
+    ///  Inserts a 3.5-inch disk image (<c>.po</c>, <c>.2mg</c>, <c>.hdv</c>, <c>.img</c> or <c>.dsk</c>) in a 3.5
+    ///  drive.
+    /// </summary>
+    /// <param name="drive">The drive.</param>
+    /// <param name="path">The image's full path.</param>
+    internal static void Insert(Apple2Disk35Drive drive, string path)
+    {
+        Disk35Disk disk = Disk35Disk.Load(File.ReadAllBytes(path));
+        string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        drive.Insert(disk, path, extension.Length == 0 ? "PO" : extension);
+    }
+
     // The most blocks a ProDOS volume, and the slot 7 device's 16-bit block count, can hold: 32 MiB.
     private const int MaximumBlocks = 65535;
 

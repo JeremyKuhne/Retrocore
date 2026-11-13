@@ -48,23 +48,23 @@ public static partial class Disassembler
         out DisassembledInstruction instruction)
     {
         instruction = default;
-        if (!set.TryDecode(bytes, out int encoding)) { return false; }
-        int size = set.Size(encoding);
-        if (bytes.Length < size) { return false; }
+        if (!set.TryDecode(bytes, out int encoding, out int size) || bytes.Length < size) { return false; }
 
-        instruction = new(address, set.Handle, (ushort)encoding, Pack(bytes, size), (byte)size);
+        instruction = new(address, set.Handle, (ushort)encoding, Pack(bytes, size, out byte fifthByte), (byte)size, fifthByte);
         return true;
     }
 
     // Packs the original bytes into the value so the decoded instruction never borrows the caller's span.
-    private static uint Pack(ReadOnlySpan<byte> bytes, int size)
+    private static uint Pack(ReadOnlySpan<byte> bytes, int size, out byte fifthByte)
     {
         uint value = bytes[0];
-        for (int index = 1; index < size; index++)
+        int limit = Math.Min(size, sizeof(uint));
+        for (int index = 1; index < limit; index++)
         {
             value |= (uint)bytes[index] << (index * InstructionEncoding.BitsPerByte);
         }
 
+        fifthByte = size > sizeof(uint) ? bytes[sizeof(uint)] : (byte)0;
         return value;
     }
 
@@ -127,11 +127,7 @@ public static partial class Disassembler
                 encoding = (int)(entry & ushort.MaxValue);
                 size = (int)(entry >> 16);
             }
-            else if (set.TryDecode(rest, out encoding))
-            {
-                size = set.Size(encoding);
-            }
-            else
+            else if (!set.TryDecode(rest, out encoding, out size))
             {
                 return OperationStatus.NeedMoreData;
             }
@@ -141,8 +137,9 @@ public static partial class Disassembler
                 unchecked((ushort)(address + bytesRead)),
                 handle,
                 (ushort)encoding,
-                Pack(rest, size),
-                (byte)size);
+                Pack(rest, size, out byte fifthByte),
+                (byte)size,
+                fifthByte);
 
             bytesRead += size;
         }
@@ -188,7 +185,7 @@ public static partial class Disassembler
                         buffer[length++] = ' ';
                     }
 
-                    AppendField(buffer, ref length, form.Field(field), instruction.Field(field));
+                    AppendField(in instruction, buffer, ref length, form.Field(field), field);
                     field++;
                 }
                 while (list && field < form.FieldCount);
@@ -207,8 +204,28 @@ public static partial class Disassembler
     }
 
     // Relative fields show their target address, a displacement its sign and a bit number one digit.
-    private static void AppendField(Span<char> buffer, ref int length, OperandFieldKind kind, ushort value)
+    private static void AppendField(
+        in DisassembledInstruction instruction,
+        Span<char> buffer,
+        ref int length,
+        OperandFieldKind kind,
+        int fieldIndex)
     {
+        if (OperandForm.IsPostbyte(kind))
+        {
+            // The instruction set's codec formats its postbyte fields, such as the MC6809's [5,X] or D,X.
+            Span<byte> bytes = stackalloc byte[DisassembledInstruction.MaximumPostbyteField];
+            instruction.Postbytes.Format(
+                kind,
+                instruction.PostbyteBytes(bytes),
+                unchecked((ushort)(instruction.Address + instruction.Size)),
+                buffer,
+                ref length);
+
+            return;
+        }
+
+        ushort value = instruction.Field(fieldIndex);
         switch (kind)
         {
             case OperandFieldKind.Byte or OperandFieldKind.Restart:
@@ -221,6 +238,10 @@ public static partial class Disassembler
                 break;
             case OperandFieldKind.BitNumber:
                 buffer[length++] = (char)('0' + value);
+                break;
+            case OperandFieldKind.RestartNumber:
+                // Intel's RST names the restart by number; the field's value is its address.
+                buffer[length++] = (char)('0' + (value >> 3));
                 break;
             default:
                 AppendHex(buffer, ref length, value, 4);

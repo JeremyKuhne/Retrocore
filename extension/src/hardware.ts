@@ -25,8 +25,11 @@ export interface HardwareSetting {
     description: string;
 }
 
-/** A card Add Card offers, the retro/hardware arguments that add it, and the slots it goes in, if not slots 1 to 7. */
-export interface Card { label: string; detail: string; args: Record<string, unknown>; slots?: string[] }
+/**
+ * A card Add Card offers, the retro/hardware arguments that add it, the slots it goes in, if not any but slot 0, and the
+ * machines that take it, if not only the Apple II.
+ */
+export interface Card { label: string; detail: string; args: Record<string, unknown>; slots?: string[]; machines?: string[] }
 
 /** The cards Add Card offers. */
 export const cards: Card[] = [
@@ -35,6 +38,18 @@ export const cards: Card[] = [
     {
         label: "Mockingboard", detail: "Two AY-3-8910 sound chips; Sound: speaker + Mockingboard plays them",
         args: { action: "addMockingboard" }, slots: ["slot4"]
+    },
+    {
+        label: "Mouse card", detail: "An AppleMouse II-compatible mouse; click the display to move it, Escape to let go",
+        args: { action: "addMouse" }
+    },
+    {
+        label: "ProFile interface card", detail: "Apple's ProFile hard disk; insert a .po or .hdv image",
+        args: { action: "addProFile" }, machines: ["apple2", "apple3"]
+    },
+    {
+        label: "3.5 disk controller", detail: "Two SuperDrives: 400K and 800K Apple disks, 720K and 1.44 MB MFM disks",
+        args: { action: "addDisk35" }
     },
     {
         label: "Z80 SoftCard", detail: "Microsoft's Z80 card, for CP/M; one at a time",
@@ -50,9 +65,10 @@ export const cards: Card[] = [
     }
 ];
 
-/** The cards a slot takes: slot 0 the language or firmware card, slots 1 to 7 the others. */
-export function cardsFor(slot: string): Card[] {
-    return cards.filter(card => card.slots === undefined ? slot !== "slot0" : card.slots.includes(slot));
+/** The cards a machine's slot takes: on the Apple II, slot 0 the language or firmware card, slots 1 to 7 the others. */
+export function cardsFor(slot: string, machine = "apple2"): Card[] {
+    return cards.filter(card => (card.machines ?? ["apple2"]).includes(machine)
+        && (card.slots === undefined ? slot !== "slot0" : card.slots.includes(slot)));
 }
 
 /** The view's top level: the hardware rows, each with the devices on it, then any devices no row claims. */
@@ -76,8 +92,8 @@ export function group<T extends { id: string }>(hardware: HardwareRow[] | undefi
 export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
-    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "sound", "slot0", "monitor", "boardRevision",
-    "firmwareCardRoms", "programmersAid", "softCard"
+    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */

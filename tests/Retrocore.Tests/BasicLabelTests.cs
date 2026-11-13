@@ -28,6 +28,37 @@ public sealed class BasicLabelTests
         """;
 
     /// <summary>
+    ///  Color BASIC files take labels too, after GOTO and GOSUB, which it stores as GO and then TO or SUB.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicLabels()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("""
+            ' retrocore colorbasic
+                A=0
+            loop:
+                A=A+1
+                IF A<3 THEN loop ELSE GOSUB @show
+                GO TO @done
+            @show
+                PRINT A: RETURN
+            @done
+                ON A GOSUB @show,@show: GO SUB @show: END ' GOTO @missing
+            """);
+
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Should().Be("""
+            10 A=0
+            20 A=A+1
+            30 IF A<3 THEN 20 ELSE GOSUB 50
+            40 GO TO 60
+            50 PRINT A: RETURN
+            60 ON A GOSUB 50,50: GO SUB 50: END ' GOTO @missing
+
+            """.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>
     ///  Integer BASIC files take labels too; as its GOTO and GOSUB take expressions, a name there that is no label
     ///  stays a variable.
     /// </summary>
@@ -58,6 +89,33 @@ public sealed class BasicLabelTests
             100 RETURN
 
             """.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>
+    ///  THEN GOTO and THEN GOSUB take a label: the word after THEN that is no label is read as the jump it is.
+    /// </summary>
+    /// <param name="dialect">The dialect.</param>
+    /// <param name="listed">How the line lists.</param>
+    [TestMethod]
+    [DataRow("applesoft", "20 IF T<3 THEN GOTO 10")]
+    [DataRow("business", "20 IF T<3 THEN GOTO 10")]
+    public void ThenGotoTakesALabel(string dialect, string listed)
+    {
+        BasicParseResult parsed = BasicProgram.Parse($"REM retrocore {dialect}\nloop:\nT=T+1\nIF T<3 THEN GOTO loop\n");
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Split('\n')[1].Should().Be(listed);
+    }
+
+    /// <summary>
+    ///  Business BASIC takes GOTO only with a separator after it, so after THEN, GOTOCOUNT=1 is an assignment, and
+    ///  no label is wanted.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicGotoNeedsASeparator()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("REM retrocore business\n10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Should().Be("10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
     }
 
     /// <summary>

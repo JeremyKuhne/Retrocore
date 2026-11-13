@@ -21,13 +21,17 @@
     "onLanguage:retrocore-applesoft",
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
+    "onLanguage:retrocore-business",
+    "onLanguage:retrocore-apple1",
     "onLanguage:retrocore-level1",
+    "onLanguage:retrocore-colorbasic",
     "onLanguage:retrocore-basic"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
-    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
+    "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -121,6 +125,36 @@
         }
       },
       {
+        "id": "retrocore-business",
+        "aliases": [
+          "Business BASIC",
+          "business"
+        ],
+        "extensions": [
+          ".business.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-apple1",
+        "aliases": [
+          "Apple-1 BASIC",
+          "apple1"
+        ],
+        "extensions": [
+          ".apple1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -128,6 +162,21 @@
         ],
         "extensions": [
           ".level1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-colorbasic",
+        "aliases": [
+          "Color BASIC",
+          "colorbasic"
+        ],
+        "extensions": [
+          ".colorbasic.bas"
         ],
         "configuration": "./basic-language-configuration.json",
         "icon": {
@@ -148,6 +197,19 @@
           "light": "./media/basic.svg",
           "dark": "./media/basic.svg"
         }
+      },
+      {
+        "id": "retrocore-pascal",
+        "aliases": [
+          "Apple Pascal",
+          "pascal"
+        ],
+        "extensions": [
+          ".pas",
+          ".pascal",
+          ".text"
+        ],
+        "configuration": "./pascal-language-configuration.json"
       }
     ],
     "grammars": [
@@ -177,6 +239,21 @@
         "path": "./syntaxes/integer.tmLanguage.json"
       },
       {
+        "language": "retrocore-business",
+        "scopeName": "source.retrocore-business",
+        "path": "./syntaxes/business.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-apple1",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-colorbasic",
+        "scopeName": "source.retrocore-colorbasic",
+        "path": "./syntaxes/colorbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -185,6 +262,11 @@
         "language": "retrocore-basic",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-pascal",
+        "scopeName": "source.retrocore-pascal",
+        "path": "./syntaxes/pascal.tmLanguage.json"
       }
     ],
     "configurationDefaults": {
@@ -214,7 +296,10 @@
             "",
             "applesoft",
             "integer",
-            "level2"
+            "business",
+            "apple1",
+            "level2",
+            "colorbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -254,7 +339,19 @@
         "language": "retrocore-integer"
       },
       {
+        "language": "retrocore-business"
+      },
+      {
+        "language": "retrocore-apple1"
+      },
+      {
+        "language": "retrocore-colorbasic"
+      },
+      {
         "language": "retrocore-basic"
+      },
+      {
+        "language": "retrocore-pascal"
       }
     ],
     "views": {
@@ -349,6 +446,16 @@
           "command": "retrocore.device.unprotect",
           "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
           "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
+          "group": "1_save"
         }
       ],
       "webview/context": [
@@ -392,6 +499,14 @@
           "when": "false"
         },
         {
+          "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "false"
+        },
+        {
           "command": "retrocore.device.list",
           "when": "false"
         },
@@ -429,7 +544,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -520,6 +635,15 @@
         "icon": "$(unlock)"
       },
       {
+        "command": "retrocore.device.save",
+        "title": "Save to Its Image",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveAs",
+        "title": "Save Disk As..."
+      },
+      {
         "command": "retrocore.device.refresh",
         "title": "Refresh Devices",
         "icon": "$(refresh)"
@@ -602,7 +726,8 @@
           "retrocore-asm",
           "retrocore-macro10",
           "asm",
-          "plaintext"
+          "plaintext",
+          "retrocore-pascal"
         ],
         "configurationAttributes": {
           "launch": {
@@ -615,20 +740,47 @@
                   "apple2",
                   "apple3",
                   "trs80-model1",
+                  "trs80-model3",
+                  "trs80-model4",
+                  "trs80-model2",
+                  "apple1",
+                  "coco",
+                  "altair",
                   "apple2e"
                 ],
                 "enumDescriptions": [
                   "The Apple II family; model says which.",
                   "The Apple III.",
                   "The TRS-80 Model I.",
+                  "The TRS-80 Model III, 4 or 4P; model says which (3 by default).",
+                  "The TRS-80 Model 4: trs80-model3 with model 4 by default.",
+                  "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
+                  "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
+                  "The TRS-80 Color Computer 1, 2 or 3; model says which.",
+                  "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set) and RETROCORE_TRS80_ROMS for the Model I. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+              },
+              "highRam": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: a 4 KB bank of RAM at $E000-$EFFF, where BASIC loads and runs."
+              },
+              "cassetteInterface": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
+              },
+              "loadBasic": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
               },
               "rom": {
                 "enum": [
@@ -637,6 +789,10 @@
                 ],
                 "default": "level2",
                 "description": "Model I: Level II or Level I BASIC."
+              },
+              "bootRom": {
+                "type": "string",
+                "description": "Model II, 12 and 16: the boot ROM dump's file name in romDirectory; by default the newest of u54.u11, cpu_fc86.u11, cpu_2119.u11, cpu_11be.u11, 8047316.u11 and 8043216.u11 found."
               },
               "revision": {
                 "enum": [
@@ -648,7 +804,20 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default."
+              },
+              "switches": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 65535,
+                "default": 0,
+                "description": "Altair 8800: the front panel's 16 address/data switches; the high 8 are the sense switches IN $FF reads."
+              },
+              "baudRate": {
+                "type": "number",
+                "enum": [110, 150, 300, 600, 1200, 2400, 4800, 9600],
+                "default": 9600,
+                "description": "Altair 8800: the 88-2SIO's baud rate, which sets how fast characters reach the terminal and keys reach the program."
               },
               "expansionInterface": {
                 "type": "boolean",
@@ -658,7 +827,7 @@
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one."
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
                   },
                   {
                     "enum": [
@@ -671,12 +840,12 @@
                     ]
                   }
                 ],
-                "description": "Model I: true or false, whether the Expansion Interface has its disk controller (on by default when disks are given). IIe: diskII or slot7, where diskImage goes (the Disk II in slot 6, or the slot 7 block device for .po images)."
+                "description": "Model I: true or false, whether the Expansion Interface has its disk controller (on by default when disks are given). Color Computer: true or false, whether the disk controller cartridge is in the slot (on by default when disks are given). IIe: diskII or slot7, where diskImage goes (the Disk II in slot 6, or the slot 7 block device for .po images)."
               },
               "lowercase": {
                 "type": "boolean",
                 "default": false,
-                "description": "Model I: the lowercase modification's seventh video bit."
+                "description": "Model I: the lowercase modification's seventh video bit. Color Computer 1 and 2: the MC6847T1 VDG, which shows lowercase, as on the CoCo 2B."
               },
               "characterGenerator": {
                 "enum": [
@@ -702,12 +871,12 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I: a .cas tape to play."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session."
               },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I: run as fast as possible while the cassette motor runs, so tapes load and save quickly; the machine's own timing is unchanged."
+                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -715,11 +884,11 @@
                   "type": "string"
                 },
                 "maxItems": 4,
-                "description": "Model I: JV1 or JV3 (.jv3) images for drives 0-3. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I: emulated seconds the ROM runs before a program loads, to set up its RAM vectors; defaults to 1 when loading a program."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II: 0 by default."
               },
               "controllers": {
                 "type": "boolean",
@@ -734,7 +903,7 @@
               "fastDisk": {
                 "type": "boolean",
                 "default": true,
-                "description": "IIe and Apple III: run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
+                "description": "IIe and Apple III (and the Model II while its disk controller works): run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
               },
               "speed": {
                 "enum": [
@@ -762,11 +931,11 @@
                 ],
                 "enumDescriptions": [
                   "No sound, and no cost.",
-                  "The IIe's speaker, in mono. Costs about 2% of emulation speed.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound.",
                   "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
                 ],
                 "default": "speaker",
-                "description": "IIe: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+                "description": "IIe and Color Computer: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
               },
               "mockingboard": {
                 "type": "boolean",
@@ -777,6 +946,66 @@
                 "minimum": 1,
                 "maximum": 7,
                 "description": "Apple II: puts Microsoft's Z80 SoftCard in this slot (1-7; the manual uses 4), so a CP/M diskImage boots. The Z80 shows as its own thread. Not slot 3 on a IIe, nor the Mockingboard's slot 4. None unless given; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "screen": {
+                "type": "string",
+                "enum": [
+                  "color",
+                  "rgb",
+                  "white",
+                  "green",
+                  "amber"
+                ],
+                "enumDescriptions": [
+                  "A color monitor or television (the default on the Apple II family, the Apple III and the Color Computer).",
+                  "Apple IIe: an RGB card and color monitor, without the composite signal's fringing: white runs stay white to their edges, colored areas are solid, and text is white.",
+                  "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
+                  "A green-phosphor monochrome monitor.",
+                  "An amber-phosphor monochrome monitor."
+                ],
+                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1 and the Model I, which have no color). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
+              },
+              "mouse": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of an AppleMouse II-compatible mouse card, which a click on the display drives until Escape. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of a 3.5 disk controller that answers as Apple's Apple II 3.5 Disk Controller Card: a SmartPort with two SuperDrives. Slot 5 is the usual one. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35Images": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Apple II: the disks in the 3.5 controller's drives 1 and 2: 400K or 800K Apple disks or 720K or 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. Drive 1 boots. Needs disk35."
+              },
+              "proFiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "slot"
+                  ],
+                  "properties": {
+                    "slot": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7,
+                      "description": "The card's slot: 1 to 7 on the Apple II (not 3 on a IIe), 1 to 4 on the Apple III."
+                    },
+                    "image": {
+                      "type": "string",
+                      "description": "A ProDOS-order image (.po or .hdv) of up to 65535 blocks for the ProFile; changes stay in memory."
+                    }
+                  }
+                },
+                "description": "Apple II and Apple III: ProFile interface cards, each with Apple's ProFile hard disk. The Apple II card boots ProDOS from it; on the Apple III, SOS reaches it through .PROFILE in SOS.DRIVER (the System Utilities disk's is set for slot 4). None by default; the Retro Devices view's Add Card puts one in while debugging."
               },
               "logpointLimit": {
                 "type": "integer",
@@ -835,7 +1064,16 @@
                   "iiplus",
                   "ii",
                   "enhanced",
-                  "original"
+                  "original",
+                  "coco1",
+                  "coco2",
+                  "coco3",
+                  "3",
+                  "4",
+                  "4p",
+                  "2",
+                  "12",
+                  "16"
                 ],
                 "enumDescriptions": [
                   "The enhanced Apple IIe: a 65C02, MouseText and the enhanced firmware.",
@@ -843,10 +1081,19 @@
                   "The Apple II Plus: AppleSoft and the Autostart Monitor, an NMOS 6502, 48 KB and a language card in slot 0.",
                   "The Apple II: Integer BASIC and the original Monitor (or, with monitor autostart, the Autostart Monitor), an NMOS 6502 and 48 KB.",
                   "The older name for iie-enhanced.",
-                  "The older name for iie."
+                  "The older name for iie.",
+                  "The Color Computer 1: Color BASIC with Extended Color BASIC, the MC6847 VDG and 16 KB.",
+                  "The Color Computer 2: Color BASIC with Extended Color BASIC and 64 KB.",
+                  "The Color Computer 3: Extended Color BASIC 2.0, the GIME and 128 KB.",
+                  "TRS-80 Model III: a 2 MHz Z80, the Model III ROM, 48 KB and 64x16.",
+                  "TRS-80 Model 4: 4 MHz, the Model III ROM, 128 KB, the memory maps and 80x24.",
+                  "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
+                  "TRS-80 Model II: a 4 MHz Z80, 64 KB, 80x24 and 8-inch disks.",
+                  "TRS-80 Model 12: the Model II's successor.",
+                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
               },
               "slot0": {
                 "enum": [
@@ -864,14 +1111,68 @@
               "monitor": {
                 "enum": [
                   "original",
-                  "autostart"
+                  "autostart",
+                  "composite",
+                  "rgb"
                 ],
                 "enumDescriptions": [
                   "The original Monitor: reset goes to the Monitor's * prompt; CONTROL-B starts Integer BASIC.",
-                  "The Autostart Monitor of later IIs: power-on boots a disk or starts BASIC, and reset returns to BASIC."
+                  "The Autostart Monitor of later IIs: power-on boots a disk or starts BASIC, and reset returns to BASIC.",
+                  "Color Computer 3: a composite monitor or TV, the default.",
+                  "Color Computer 3: the CM-8 RGB monitor, with the GIME's 64 colors as they are."
                 ],
                 "default": "original",
-                "description": "Apple II: its Monitor ROM."
+                "description": "Apple II: its Monitor ROM. Color Computer 3: the monitor the GIME drives."
+              },
+              "colorBasic": {
+                "enum": [
+                  "1.0",
+                  "1.1",
+                  "1.2",
+                  "1.3"
+                ],
+                "default": "1.2",
+                "description": "Color Computer 1 and 2: the Color BASIC ROM, bas10.rom to bas13.rom; 1.3 is the CoCo 2B's."
+              },
+              "extendedBasic": {
+                "enum": [
+                  "1.1",
+                  "1.0",
+                  "none"
+                ],
+                "default": "1.1",
+                "description": "Color Computer 1 and 2: the Extended Color BASIC ROM, extbas10.rom or extbas11.rom, or none; without dumps, built from the SDK's ExtendedBasic.asm."
+              },
+              "diskBasic": {
+                "enum": [
+                  "1.1",
+                  "1.0"
+                ],
+                "default": "1.1",
+                "description": "Color Computer: the disk controller's Disk Extended Color BASIC ROM, disk10.rom or disk11.rom; without dumps, built from the SDK's DiskBasic.asm."
+              },
+              "artifacts": {
+                "enum": [
+                  "blue-red",
+                  "red-blue",
+                  "none"
+                ],
+                "enumDescriptions": [
+                  "The colors most CoCo 1 and 2 machines show in 256-dot graphics, where RESET is pressed until they do.",
+                  "The other phase.",
+                  "Black and white dots, as on a monochrome monitor."
+                ],
+                "default": "blue-red",
+                "description": "Color Computer 1 and 2: the artifact colors a composite monitor shows in two-color graphics."
+              },
+              "cartridge": {
+                "type": "string",
+                "description": "Color Computer: a ROM pack image (.ccc or .rom, up to 16 KB) in the cartridge slot."
+              },
+              "autostart": {
+                "type": "boolean",
+                "default": true,
+                "description": "Color Computer: whether the ROM pack starts itself through the CART interrupt, as games do."
               },
               "boardRevision": {
                 "enum": [
@@ -911,7 +1212,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -955,7 +1256,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), or the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
               },
               "breakpoints": {
                 "type": "array",
@@ -1032,6 +1333,25 @@
             "request": "launch",
             "machine": "trs80-model1",
             "name": "Debug Model I Z80 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "coco",
+            "model": "coco2",
+            "name": "Boot Color Computer 2",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "coco",
+            "model": "coco2",
+            "name": "Debug Color Computer 6809 source",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

@@ -45,7 +45,10 @@ public sealed partial class InstructionSet
     private MemoryAccess[] _encodingAccessArray = [];
     private List<(uint Prefix, int PrefixLength, int OperandSize, int OpcodeLength)>? _splits;
     private readonly Dictionary<int, string> _exclusions = [];
+    // Single-byte opcodes by first byte, -1 for none; PostbyteEntry marks an encoding with a postbyte field.
     private readonly int[] _decode = CreateDecodeTable();
+    private const int PostbyteEntry = 1 << 30;
+    private bool _hasPostbytes;
     private Dictionary<ulong, int>? _prefixed;
     private int _maximumOpcodeLength = 1;
     private int[] _table = [];
@@ -91,6 +94,18 @@ public sealed partial class InstructionSet
     ///  the NMOS 6502's <c>JMP ($xxFF)</c> does.
     /// </summary>
     public bool IndirectPageWrap { get; private init; }
+
+    /// <summary>
+    ///  Gets the codec for the set's postbyte fields, or <see langword="null"/> when the set has none or its
+    ///  description was parsed without one.
+    /// </summary>
+    public PostbyteCodec? Postbytes { get; private init; }
+
+    /// <summary>
+    ///  Gets the addresses where code starts on this CPU without a vector pointing there, such as the Z80's and
+    ///  8080's restarts and the 8085's interrupt entries: the description's, and the set's own.
+    /// </summary>
+    public IReadOnlyList<ushort> EntryPoints { get; private init; } = [];
 
     /// <summary>
     ///  Gets a small number that identifies this set for the life of the process, so unmanaged values such as
@@ -237,7 +252,7 @@ public sealed partial class InstructionSet
     /// <remarks>
     ///  <para>
     ///   Decoding loops hold this span in a local, so a single-byte instruction decodes with one table read.
-    ///   <see cref="TryDecode"/> handles prefixed opcodes.
+    ///   <see cref="TryDecode(ReadOnlySpan{byte}, out int)"/> handles prefixed opcodes.
     ///  </para>
     /// </remarks>
     public ReadOnlySpan<uint> FirstByteMap => _firstByteMap;
@@ -266,15 +281,84 @@ public sealed partial class InstructionSet
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public bool TryDecode(ReadOnlySpan<byte> bytes, out int encoding)
     {
+        // A single-byte opcode without a postbyte is one table read; the rest take the slower path.
+        if (!bytes.IsEmpty)
+        {
+            int entry = _decode[bytes[0]];
+            if ((uint)entry < PostbyteEntry)
+            {
+                encoding = entry;
+                return true;
+            }
+        }
+
+        return TryDecodeSlow(bytes, out encoding, out _);
+    }
+
+    /// <summary>
+    ///  Finds the encoding whose opcode starts some bytes and computes its total length, including the bytes a
+    ///  postbyte field selects.
+    /// </summary>
+    /// <param name="bytes">Bytes starting at an instruction.</param>
+    /// <param name="encoding">The encoding ID.</param>
+    /// <param name="size">The complete byte length of the instruction.</param>
+    /// <returns>Whether a valid opcode, and postbyte when the form has one, matched.</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public bool TryDecode(ReadOnlySpan<byte> bytes, out int encoding, out int size)
+    {
+        if (!bytes.IsEmpty)
+        {
+            int entry = _decode[bytes[0]];
+            if ((uint)entry < PostbyteEntry)
+            {
+                encoding = entry;
+                size = _sizeArray[entry];
+                return true;
+            }
+        }
+
+        return TryDecodeSlow(bytes, out encoding, out size);
+    }
+
+    // Prefixed opcodes, postbyte fields and bytes that start no opcode.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private bool TryDecodeSlow(ReadOnlySpan<byte> bytes, out int encoding, out int size)
+    {
+        size = 0;
         if (bytes.IsEmpty)
         {
             encoding = -1;
             return false;
         }
 
-        // A single-byte opcode is one table read; prefixed opcodes take the slower path.
-        encoding = _decode[bytes[0]];
-        return encoding >= 0 || (_prefixed is not null && TryDecodePrefixed(bytes, out encoding));
+        int entry = _decode[bytes[0]];
+        if (entry >= 0)
+        {
+            encoding = entry & ~PostbyteEntry;
+        }
+        else if (_prefixed is null || !TryDecodePrefixed(bytes, out encoding))
+        {
+            encoding = -1;
+            return false;
+        }
+
+        IsaEncoding value = _encodingArray[encoding];
+        if (!_hasPostbytes || !_formArray[value.Form].HasPostbyte)
+        {
+            size = _sizeArray[encoding];
+            return true;
+        }
+
+        int opcodeLength = value.OpcodeLength;
+        if (Postbytes is not { } codec
+            || bytes.Length <= opcodeLength
+            || !codec.TryGetSize(_formArray[value.Form].Field(0), bytes[opcodeLength..], out int fieldSize))
+        {
+            return false;
+        }
+
+        size = opcodeLength + fieldSize;
+        return true;
     }
 
     private bool TryDecodePrefixed(ReadOnlySpan<byte> bytes, out int encoding)
@@ -337,12 +421,44 @@ public sealed partial class InstructionSet
         _flowArray = [.. _flows];
         _encodingAccessArray = [.. _encodingAccess];
         _formArray = [.. Description.Forms];
+        foreach (IsaEncoding encoding in _encodingArray)
+        {
+            _hasPostbytes |= _formArray[encoding.Form].HasPostbyte;
+        }
+
+        // A postbyte's opcode is marked in the decode table, so other opcodes decode without reading its form.
         _firstByteMap = new uint[256];
         for (int value = 0; value < _firstByteMap.Length; value++)
         {
             int encoding = _decode[value];
-            _firstByteMap[value] = encoding < 0 ? NoSingleByteOpcode : (uint)encoding | ((uint)_sizeArray[encoding] << 16);
+            if (encoding >= 0) { encoding &= ~PostbyteEntry; }
+            bool postbyte = encoding >= 0 && _formArray[_encodingArray[encoding].Form].HasPostbyte;
+            if (postbyte) { _decode[value] = encoding | PostbyteEntry; }
+            _firstByteMap[value] = encoding < 0 || postbyte
+                ? NoSingleByteOpcode
+                : (uint)encoding | ((uint)_sizeArray[encoding] << 16);
         }
+    }
+
+    /// <summary>
+    ///  Registers an alternate mnemonic spelling that resolves to an existing canonical mnemonic ID.
+    /// </summary>
+    /// <param name="alias">The alternate mnemonic spelling.</param>
+    /// <param name="canonical">The canonical mnemonic already added to this set.</param>
+    internal void AddAlias(string alias, string canonical)
+    {
+        if (!_ids.TryGetValue(canonical, out int id))
+        {
+            throw new FormatException($"Instruction set '{Name}': alias '{alias}' names unknown mnemonic '{canonical}'.");
+        }
+
+        if (_ids.ContainsKey(alias))
+        {
+            throw new FormatException($"Instruction set '{Name}': duplicate mnemonic or alias '{alias}'.");
+        }
+
+        _ids.Add(alias, id);
+        if (TryPack(alias.AsSpan(), out uint key)) { _packed.Add(key, id); }
     }
 
     private void Add(
@@ -352,7 +468,9 @@ public sealed partial class InstructionSet
         InstructionFlow flow,
         MemoryAccess access,
         MemoryAccess encodingAccess,
-        bool prefer)
+        bool prefer,
+        ushort? target,
+        bool conditional)
     {
         if (!_ids.TryGetValue(mnemonic, out int id))
         {
@@ -381,7 +499,9 @@ public sealed partial class InstructionSet
         _encodings.Add(new((ushort)id, form.Id, entry.Opcode, entry.Length, entry.Undocumented, entry.SplitAt)
         {
             Cycles = entry.Cycles,
-            CyclesTaken = entry.CyclesTaken
+            CyclesTaken = entry.CyclesTaken,
+            FixedTarget = target,
+            IsConditional = conditional
         });
 
         _flows.Add(flow);

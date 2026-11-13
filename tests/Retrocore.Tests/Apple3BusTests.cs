@@ -302,6 +302,25 @@ public class Apple3BusTests
     }
 
     /// <summary>
+    ///  A control character comes with CONTROL held, from which SOS makes it, as it makes a capital from SHIFT; RETURN,
+    ///  ESCAPE and the arrows have keys of their own and do not.
+    /// </summary>
+    [TestMethod]
+    public void ControlCharacterHoldsControl()
+    {
+        Apple3Bus bus = Bus();
+        bus.QueueKey(0x03);
+        bus.QueueKey((byte)'\r');
+        bus.Read(0xC000).Should().Be(0x83);
+        bus.Read(0xC008).Should().Be(0x79, "CONTROL reads low");
+        bus.Read(0xC010);
+        bus.Read(0xC008).Should().Be(0x7C, "CONTROL goes with the key");
+        bus.Advance(300_000_000);
+        bus.Read(0xC000).Should().Be(0x8D);
+        bus.Read(0xC008).Should().Be(0x7D, "RETURN has its own key");
+    }
+
+    /// <summary>
     ///  The ACIA's registers read their reset values with nothing attached, as the boot ROM checks.
     /// </summary>
     [TestMethod]

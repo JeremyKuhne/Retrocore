@@ -84,6 +84,18 @@ internal interface IDebugTarget : IDebugMemory
     bool InInstruction { get; }
 
     /// <summary>
+    ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    /// </summary>
+    bool IsIdle => false;
+
+    /// <summary>
+    ///  Gets whether a device holds the CPU part way through an instruction, as a Z80's WAIT line does, for as long
+    ///  as the device decides. The instruction finishes once the device lets go.
+    /// </summary>
+    bool IsHeld => false;
+
+    /// <summary>
     ///  Gets the cycles run since power-up.
     /// </summary>
     ulong CycleCount { get; }
@@ -140,6 +152,23 @@ internal interface IDebugTarget : IDebugMemory
     BasicDialect? Basic => null;
 
     /// <summary>
+    ///  Gets whether the debugger has the source of the BASIC this machine runs, or will load from its disk, which a
+    ///  basic launch needs to find BASIC's prompt.
+    /// </summary>
+    bool HasBasicSource => BasicRom is not null;
+
+    /// <summary>
+    ///  Gets how long, in the machine's time, a basic launch waits for BASIC's prompt after power-on.
+    /// </summary>
+    double BasicBootSeconds => 10;
+
+    /// <summary>
+    ///  Gets whether a basic launch presses RETURN once a second on the way to BASIC's prompt, as the Model I's
+    ///  MEMORY SIZE? needs.
+    /// </summary>
+    bool PressesReturnForPrompt => true;
+
+    /// <summary>
     ///  Gets the BASIC ROM's statement dispatch and command loop, or null when the SDK's source of the running ROM
     ///  was not assembled.
     /// </summary>
@@ -158,7 +187,8 @@ internal interface IDebugTarget : IDebugMemory
     /// <remarks>
     ///  <para>
     ///   The Microsoft BASICs start every statement at <see cref="Debug.BasicRom.Gone"/>. A BASIC that starts them in
-    ///   more than one place, or only sometimes at one, says so here.
+    ///   more than one place, or only sometimes at one, says so here, as AppleSoft does under ProDOS's BASIC.SYSTEM,
+    ///   which enters each statement past <c>GONE</c>.
     ///  </para>
     /// </remarks>
     /// <param name="pc">The instruction's address.</param>
@@ -207,7 +237,7 @@ internal interface IDebugTarget : IDebugMemory
 
     /// <summary>
     ///  Moves BASIC to another statement, at <see cref="Debug.BasicRom.Gone"/>: sets the current line and the text
-    ///  pointer the statement fetch continues from.
+    ///  pointer the statement fetch continues from. A statement start past <c>GONE</c> moves back to it.
     /// </summary>
     /// <param name="line">The line number.</param>
     /// <param name="textPointer">The address before the statement's first byte.</param>
@@ -298,6 +328,23 @@ internal interface IDebugTarget : IDebugMemory
     void Poke(ushort address, byte value);
 
     /// <summary>
+    ///  Reads memory through an Apple III extended address, as an indirect access through zero page with that X-byte
+    ///  would; a machine without extended addressing reads the address as mapped now.
+    /// </summary>
+    /// <param name="xByte">The X-byte; without bit 7, the address as mapped now.</param>
+    /// <param name="address">The address.</param>
+    /// <returns>The value.</returns>
+    byte PeekFar(byte xByte, ushort address) => Peek(address);
+
+    /// <summary>
+    ///  Writes memory through an Apple III extended address.
+    /// </summary>
+    /// <param name="xByte">The X-byte; without bit 7, the address as mapped now.</param>
+    /// <param name="address">The address.</param>
+    /// <param name="value">The value.</param>
+    void PokeFar(byte xByte, ushort address, byte value) => Poke(address, value);
+
+    /// <summary>
     ///  Copies a program into RAM.
     /// </summary>
     /// <param name="address">The load address.</param>
@@ -322,6 +369,11 @@ internal interface IDebugTarget : IDebugMemory
     bool AddLoadedModules(DebugInfo debug) => false;
 
     /// <summary>
+    ///  Gets Apple Pascal's p-machine on a machine that can run it, or null.
+    /// </summary>
+    PascalRuntime? Pascal => null;
+
+    /// <summary>
     ///  Gets whether a launched source's single-statement macros debug as their call line.
     /// </summary>
     /// <param name="dialect">The source's dialect.</param>
@@ -342,6 +394,17 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="running">Whether the machine is running.</param>
     /// <returns>The frame's state.</returns>
     JsonObject DisplayState(bool running);
+
+    /// <summary>
+    ///  Gets the monitors the video can be shown on, from <see cref="DebugScreens"/>, the default first.
+    /// </summary>
+    IReadOnlyList<string> Screens { get; }
+
+    /// <summary>
+    ///  Gets or sets the monitor the video is shown on, one of <see cref="Screens"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The machine has no such monitor.</exception>
+    string Screen { get; set; }
 
     /// <summary>
     ///  Renders the video as the beam drew it, into a buffer the target keeps.
@@ -378,6 +441,18 @@ internal interface IDebugTarget : IDebugMemory
     bool Key(int code);
 
     /// <summary>
+    ///  Gets how far apart pasted keys go, in the machine's cycles: between keys, and after a RETURN; null to queue
+    ///  them all at once, as the machine's keyboard holds them until a program takes each.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A program that keeps its own type-ahead, as Apple Pascal's Editor does, can lose keys that come faster than
+    ///   it empties it, such as while it scrolls after a line.
+    ///  </para>
+    /// </remarks>
+    (ulong Key, ulong Line)? TypingPace => null;
+
+    /// <summary>
     ///  Presses the machine's reset: CONTROL-RESET on the IIe, the reset button on the Model I.
     /// </summary>
     void Reset();
@@ -409,9 +484,10 @@ internal interface IDebugTarget : IDebugMemory
     ///  Carries out a <c>retro/device</c> action on one of <see cref="Devices"/>.
     /// </summary>
     /// <param name="device">The device.</param>
-    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c> or <c>writeProtect</c>.</param>
+    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c> or <c>save</c>.</param>
     /// <param name="args">
-    ///  The request: <c>path</c> for insert and record, <c>writeProtected</c> for writeProtect.
+    ///  The request: <c>path</c> for insert and record, and for save when not the media's own image;
+    ///  <c>writeProtected</c> for writeProtect.
     /// </param>
     /// <exception cref="ArgumentException">
     ///  The device does not support the action, or an argument is missing.

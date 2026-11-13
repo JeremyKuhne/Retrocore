@@ -24,7 +24,15 @@ public abstract partial class BasicDialect
     /// </summary>
     internal const int FirstToken = 0x80;
 
-    private static readonly BasicDialect[] s_named = [AppleSoftDialect.Enhanced, Level2Dialect.Instance, IntegerBasicDialect.Instance];
+    private static readonly BasicDialect[] s_named =
+    [
+        AppleSoftDialect.Enhanced,
+        Level2Dialect.Instance,
+        IntegerBasicDialect.Instance,
+        IntegerBasicDialect.Apple1Basic,
+        BusinessBasicDialect.Instance,
+        ColorBasicDialect.Disk
+    ];
 
     /// <summary>
     ///  Gets AppleSoft as the Enhanced IIe's ROM tokenizes it: lowercase outside strings, DATA and REM becomes
@@ -48,6 +56,36 @@ public abstract partial class BasicDialect
     public static BasicDialect Integer => IntegerBasicDialect.Instance;
 
     /// <summary>
+    ///  Gets Apple Business BASIC 1.23, the Apple III's.
+    /// </summary>
+    public static BasicDialect BusinessBasic => BusinessBasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets Apple-1 BASIC, the first form of Integer BASIC.
+    /// </summary>
+    public static BasicDialect Apple1 => IntegerBasicDialect.Apple1Basic;
+
+    /// <summary>
+    ///  Gets the TRS-80 Color Computer's BASIC with every word its ROMs add: Color, Extended and Disk Extended Color
+    ///  BASIC 1.1.
+    /// </summary>
+    public static BasicDialect ColorBasic => ColorBasicDialect.Disk;
+
+    /// <summary>
+    ///  Gets the Color Computer's BASIC as the ROMs fitted know it, which crunch only their own words.
+    /// </summary>
+    /// <param name="extended">Whether Extended Color BASIC is fitted.</param>
+    /// <param name="disk">Disk Extended Color BASIC's version, 10 or 11, or 0 for none.</param>
+    /// <returns>The dialect.</returns>
+    public static BasicDialect ColorBasicWith(bool extended, int disk) => (extended, disk) switch
+    {
+        (false, _) => ColorBasicDialect.Color,
+        (true, 0) => ColorBasicDialect.Extended,
+        (true, 10) => ColorBasicDialect.Disk10,
+        _ => ColorBasicDialect.Disk
+    };
+
+    /// <summary>
     ///  Gets the name pragmas, extensions and settings use, such as <c>applesoft</c>.
     /// </summary>
     public abstract string Name { get; }
@@ -61,6 +99,22 @@ public abstract partial class BasicDialect
     ///  Gets the reserved words in token order: the first is token $80.
     /// </summary>
     public abstract IReadOnlyList<string> Keywords { get; }
+
+    /// <summary>
+    ///  Gets the functions that are stored as <see cref="FunctionPrefix"/> and a token, in token order from $80; none
+    ///  in a dialect whose functions are one byte, among its <see cref="Keywords"/>.
+    /// </summary>
+    public virtual IReadOnlyList<string> Functions => [];
+
+    /// <summary>
+    ///  Gets every reserved word: the <see cref="Keywords"/>, then the <see cref="Functions"/>.
+    /// </summary>
+    public IEnumerable<string> AllKeywords => Keywords.Concat(Functions);
+
+    /// <summary>
+    ///  Gets whether the machine keeps words high byte first, as the 6809 does, rather than low byte first.
+    /// </summary>
+    public virtual bool BigEndian => false;
 
     /// <summary>
     ///  Gets the highest line number the interpreter accepts.
@@ -103,6 +157,28 @@ public abstract partial class BasicDialect
     internal abstract byte DataToken { get; }
 
     /// <summary>
+    ///  Tests whether a token starts a remark that runs to the line's end: REM, and in Color BASIC the apostrophe.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <returns>Whether it starts a remark.</returns>
+    internal virtual bool IsRemark(byte token) => token == RemToken;
+
+    /// <summary>
+    ///  Gets the byte before a <see cref="Functions"/> token, or -1 when the dialect has none.
+    /// </summary>
+    internal virtual int FunctionPrefix => -1;
+
+    /// <summary>
+    ///  Gets the token that marks a FOR entry on BASIC's stack.
+    /// </summary>
+    internal virtual int StackForToken => FirstToken + Keywords.ToList().IndexOf("FOR");
+
+    /// <summary>
+    ///  Gets the token that marks a GOSUB entry on BASIC's stack.
+    /// </summary>
+    internal virtual int StackGosubToken => FirstToken + Keywords.ToList().IndexOf("GOSUB");
+
+    /// <summary>
     ///  Finds a dialect by its <see cref="Name"/>.
     /// </summary>
     /// <param name="name">The name, in any case.</param>
@@ -116,6 +192,38 @@ public abstract partial class BasicDialect
     /// <param name="token">The token.</param>
     /// <returns>The word, or null when the byte is not one of this dialect's tokens.</returns>
     public string? Keyword(byte token) => token >= FirstToken && token - FirstToken < Keywords.Count ? Keywords[token - FirstToken] : null;
+
+    /// <summary>
+    ///  Gets the reserved word a whole token stands for: a byte, or a <see cref="Functions"/> token as the prefix in
+    ///  the high byte and the token in the low.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <returns>The word, or null when it is not one of this dialect's tokens.</returns>
+    public string? Word(int token)
+    {
+        if (token <= 0xFF) { return Keyword((byte)token); }
+        int function = (token & 0xFF) - FirstToken;
+        return token >> 8 == FunctionPrefix && function >= 0 && function < Functions.Count ? Functions[function] : null;
+    }
+
+    /// <summary>
+    ///  Reads the reserved word at a place in a crunched line, one byte or a function's two.
+    /// </summary>
+    /// <param name="line">The crunched line.</param>
+    /// <param name="index">Where the token starts.</param>
+    /// <param name="length">The token's length in bytes: 2 for a function's, else 1.</param>
+    /// <returns>The word, or null when the byte starts none.</returns>
+    public string? KeywordAt(ReadOnlySpan<byte> line, int index, out int length)
+    {
+        length = 1;
+        if (line[index] == FunctionPrefix && index + 1 < line.Length)
+        {
+            length = 2;
+            return Word((line[index] << 8) | line[index + 1]);
+        }
+
+        return Keyword(line[index]);
+    }
 
     /// <summary>
     ///  Tokenizes a line's statements as the interpreter would when they are typed after a line number.

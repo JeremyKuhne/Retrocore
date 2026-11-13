@@ -429,7 +429,9 @@ internal sealed partial class AssemblyNameResolver
             if (mnemonic.EndsWith(".W", StringComparison.OrdinalIgnoreCase)) { mnemonic = mnemonic[..^2]; }
             int id = codes.GetMnemonic(mnemonic);
             matcher = OperandFormMatcher.Get(codes.Description);
-            if (matcher.IsLiteral(codes, id, text.Trim())) { return node.Operand; }
+            ReadOnlySpan<char> trimmed = text.Trim();
+            if (matcher.IsLiteral(codes, id, trimmed)) { return node.Operand; }
+            if (IsRegisterOnlyOperand(codes, id, trimmed)) { return node.Operand; }
             bitBranch = matcher.HasFieldList(codes, id);
         }
 
@@ -502,6 +504,7 @@ internal sealed partial class AssemblyNameResolver
             if (node.Kind == AssemblyStatementKind.Section && text[..start].IndexOf(',') < 0) { continue; }
             // A register in its place in some operand pattern, such as X in addr,X or IX in [IX+d], is no symbol.
             if (instruction && (IsWidthPrefix(text, start, token.Length)
+                || codes?.Postbytes?.IsRegisterToken(text, start, token.Length) == true
                 || (!bitBranch && (matcher?.IsPatternWord(text, start, token.Length) ?? IsIndex(text, start, token.Length)))))
             {
                 continue;
@@ -566,5 +569,22 @@ internal sealed partial class AssemblyNameResolver
         int end = start + length;
         while (end < text.Length && char.IsWhiteSpace(text[end])) { end++; }
         return end < text.Length && text[end] == ':' && (end + 1 == text.Length || text[end + 1] != ':');
+    }
+
+    private static bool IsRegisterOnlyOperand(InstructionSet codes, int mnemonic, ReadOnlySpan<char> trimmed)
+    {
+        if (mnemonic < 0) { return false; }
+        foreach (OperandForm form in codes.Forms)
+        {
+            if (!form.Exclusive || form.FieldCount != 1 || !codes.Has(mnemonic, form.Id)) { continue; }
+            OperandFieldKind field = form.Field(0);
+            if (field == OperandFieldKind.RegisterPair) { return true; }
+            if (field is OperandFieldKind.SystemStackMask or OperandFieldKind.UserStackMask)
+            {
+                return !trimmed.StartsWith("#".AsSpan(), StringComparison.Ordinal);
+            }
+        }
+
+        return false;
     }
 }

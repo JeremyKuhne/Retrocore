@@ -28,9 +28,10 @@ public sealed class WozDisk
     }
 
     /// <summary>
-    ///  Gets whether writes are prohibited by the caller or the image's write-protection flag.
+    ///  Gets or sets whether writes are prohibited, as the disk's write-protect notch does: at first by the caller or
+    ///  the image's write-protection flag.
     /// </summary>
-    public bool IsReadOnly { get; }
+    public bool IsReadOnly { get; set; }
 
     /// <summary>
     ///  Gets the bit-cell duration in 125-nanosecond units.
@@ -41,6 +42,12 @@ public sealed class WozDisk
     ///  Gets whether controller writes have changed this media.
     /// </summary>
     public bool IsDirty { get; private set; }
+
+    /// <summary>
+    ///  Gets a count that changes whenever the media changes, so a reader of its files can tell when to read them
+    ///  again.
+    /// </summary>
+    public long Version { get; private set; }
 
     /// <summary>
     ///  Loads validated 5.25-inch WOZ bitstream media; no file I/O or ROM lookup is performed.
@@ -221,6 +228,7 @@ public sealed class WozDisk
         _tracks[index] = new(bits, bitCount);
         _map[quarterTrack] = (byte)index;
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>
@@ -243,6 +251,7 @@ public sealed class WozDisk
 
         _map[quarterTrack] = _map[sourceQuarterTrack];
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>
@@ -264,6 +273,7 @@ public sealed class WozDisk
 
         track.WriteBit(position, transition);
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>

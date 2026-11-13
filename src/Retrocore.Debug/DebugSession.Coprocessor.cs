@@ -11,7 +11,7 @@ namespace Retrocore.Debug;
 // memory references name its address space as a bank, such as z80:0x0100.
 internal sealed partial class DebugSession
 {
-    private const int SoftCardThread = 3;
+    private const int SoftCardThread = 4;
 
     // The coprocessor thread's frame ids start after this; the machine CPU's are 1 up to it.
     private const int SoftCardFrameBase = 1000;

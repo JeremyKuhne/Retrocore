@@ -82,17 +82,113 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
-    ///  The Model I's ROM sources pass the lint as the editor runs it, Z80 registers and conditions included.
+    ///  The TRS-80's ROM sources pass the lint as the editor runs it, Z80 registers and conditions included.
+    ///  <c>Model3.asm</c> includes <c>Level2.asm</c>, so the editor reads Level II with the Model III's blocks; it is
+    ///  checked on its own too, as the Model I's ROM.
     /// </summary>
     [TestMethod]
     public void Trs80DocumentationIsCleanInTheEditor()
     {
         string folder = Path.Join(s_inputs, "Trs80");
-        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
-        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
-        names.Should().Contain(["Level1.asm", "Level2.asm"]);
+        List<string> roots = SourceIncludes.Roots(folder);
+        string[] names = [.. roots.Select(root => Path.GetFileName(root))];
+        names.Should().Contain(["Level1.asm", "Model3.asm", "Model4PBoot.asm", "Model2Boot.asm"]);
+        names.Should().NotContain("Level2.asm");
+        roots.Add(Path.GetFullPath(Path.Join(folder, "Level2.asm")));
+        List<SourceAnalysis> sdk = [.. roots.Select(file => SourceAnalysis.Assemble(file, _ => null))];
         List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    // Sources another source includes that are also whole programs of their own, checked as roots too.
+    private static readonly string[] s_includedRoots = ["Level2.asm"];
+
+    // Each sample folder's machine project, whose sources its links reach.
+    private static readonly Dictionary<string, string> s_sampleMachines = new()
+    {
+        ["coco"] = "Retrocore.Machines.Coco",
+        ["iie"] = "Retrocore.Machines.Apple2",
+        ["softcard"] = "Retrocore.Machines.Apple2",
+        ["trs80"] = "Retrocore.Machines.Trs80"
+    };
+
+    /// <summary>
+    ///  Every assembly source in the repository passes the lint as the editor runs it: each project's sources,
+    ///  its ROMs and software together, and each sample with its machine's. It names no source folder, so a new
+    ///  source is checked as soon as it is added. A file another source includes is checked as the editor sees it,
+    ///  through the source the editor reads it in.
+    /// </summary>
+    [TestMethod]
+    public void EveryRepositorySourceIsCleanInTheEditor()
+    {
+        string repository = RepositoryRoot();
+        Dictionary<string, List<SourceAnalysis>> projects = [];
+        foreach (string project in Directory.EnumerateDirectories(Path.Join(repository, "src")))
+        {
+            projects[Path.GetFileName(project)] = [.. Sources(project).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        }
+
+        List<string> problems = [];
+        foreach ((string name, List<SourceAnalysis> sources) in projects)
+        {
+            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, sources, name)));
+        }
+
+        foreach (string sample in Directory.EnumerateDirectories(Path.Join(repository, "sample")))
+        {
+            List<string> roots = Sources(sample);
+            if (roots.Count == 0) { continue; }
+            string folder = Path.GetFileName(sample);
+            s_sampleMachines.Should().ContainKey(folder, $"sample/{folder}'s links need its machine's project in s_sampleMachines");
+            List<SourceAnalysis> sources = [.. roots.Select(file => SourceAnalysis.Assemble(file, _ => null))];
+            List<SourceAnalysis> reach = [.. sources, .. projects[s_sampleMachines[folder]]];
+            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, reach, $"sample/{folder}")));
+        }
+
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems.Order())}");
+    }
+
+    // A folder's roots, with the included sources that are whole programs too, leaving out build output.
+    private static List<string> Sources(string folder)
+    {
+        string bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+        string obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
+        List<string> roots = [.. SourceIncludes.Roots(folder)
+            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))];
+
+        foreach (string name in s_includedRoots)
+        {
+            roots.AddRange(Directory.EnumerateFiles(folder, name, SearchOption.AllDirectories).Select(Path.GetFullPath));
+        }
+
+        return roots;
+    }
+
+    // The problems in a root and in the files the editor reads through it.
+    private static IEnumerable<string> OwnProblems(SourceAnalysis analysis, List<SourceAnalysis> others, string label)
+    {
+        DocumentationResolver resolver = new(
+            analysis.Documentation,
+            analysis.OtherModules(others).Select(other => other.Documentation),
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        string root = Path.GetFullPath(analysis.Root);
+        string folder = Path.GetDirectoryName(root) ?? "";
+        return resolver.Check()
+            .Where(problem => Path.GetFullPath(problem.Path) == root || SourceIncludes.RootOf(Path.GetFullPath(problem.Path)) == root)
+            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Message}");
+    }
+
+    private static string RepositoryRoot()
+    {
+        string? root = AppContext.BaseDirectory;
+        while (root is not null && !File.Exists(Path.Join(root, "Retrocore.slnx")))
+        {
+            root = Path.GetDirectoryName(root);
+        }
+
+        return root ?? throw new InvalidOperationException("The repository root was not found.");
     }
 
     /// <summary>
@@ -104,6 +200,41 @@ public class SdkDocumentationTests
         string folder = Path.Join(s_inputs, "Apple3");
         List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
         sdk.Select(analysis => Path.GetFileName(analysis.Root)).Should().Contain("BootRom.asm");
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  The Apple-1's sources pass the lint as the editor runs it: the Woz Monitor, the cassette interface, the
+    ///  character generator and Apple-1 BASIC.
+    /// </summary>
+    [TestMethod]
+    public void Apple1DocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Apple1");
+        List<SourceAnalysis> sdk =
+        [
+            .. SourceIncludes.Roots(folder)
+                .Concat(SourceIncludes.Roots(Path.Join(folder, "Basic")))
+                .Select(file => SourceAnalysis.Assemble(file, _ => null))
+        ];
+
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain(["WozMonitor.asm", "Aci.asm", "Basic.asm"]);
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  The Color Computer's ROM sources pass the lint as the editor runs it, 6809 registers and flags included.
+    /// </summary>
+    [TestMethod]
+    public void CocoDocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Coco");
+        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain("ColorBasic.asm");
         List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
@@ -276,6 +407,20 @@ public class SdkDocumentationTests
         sets.Add(Set(SdkModules.AssembleDos(SdkModules.DosPath("Dos32.asm", s_inputs), master: true), "Dos32"));
         sets.Add(Set(SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)), "IntegerBasic"));
         sets.Add(Set(SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)), "ProgrammersAid"));
+
+        // Apple's 3.5 controller's EPROM: the host's code, the diagnostics and the card's 65C02 firmware.
+        string disk35 = Path.GetFullPath(Path.Join(s_inputs, "Disk35", "Disk35Controller.asm"));
+        AssemblyOptions options = new(ProcessorVariant.Wdc65C02, 0x8000, 0x8000)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult controller = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(File.ReadAllText(disk35), disk35),
+            options);
+
+        controller.Success.Should().BeTrue();
+        sets.Add(Set(controller, "Disk35"));
         return sets;
     }
 

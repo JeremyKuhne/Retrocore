@@ -281,19 +281,19 @@ export async function run(): Promise<void> {
         const softCard = vscode.debug.activeDebugSession;
         if (softCard === undefined) throw new Error("VS Code did not create the SoftCard session.");
         const threads = await softCard.customRequest("threads");
-        assert.equal(threads.threads.find((thread: { id: number }) => thread.id === 3).name, "SoftCard Z80");
-        const z80Entry = await softCard.customRequest("stackTrace", { threadId: 3 });
+        assert.equal(threads.threads.find((thread: { id: number }) => thread.id === 4).name, "SoftCard Z80");
+        const z80Entry = await softCard.customRequest("stackTrace", { threadId: 4 });
         assert.equal(z80Entry.stackFrames[0].source.path.toLowerCase(), z80Source.toLowerCase());
         assert.equal(z80Entry.stackFrames[0].instructionPointerReference, "z80:0x0100");
-        await softCard.customRequest("continue", { threadId: 3 });
+        await softCard.customRequest("continue", { threadId: 4 });
         assert.equal(await stop(), "breakpoint");
-        assert.equal((await softCard.customRequest("stackTrace", { threadId: 3 })).stackFrames[0].line, z80Line + 1);
-        await softCard.customRequest("stepIn", { threadId: 3 });
+        assert.equal((await softCard.customRequest("stackTrace", { threadId: 4 })).stackFrames[0].line, z80Line + 1);
+        await softCard.customRequest("stepIn", { threadId: 4 });
         assert.equal(await stop(), "step");
-        assert.equal((await softCard.customRequest("stackTrace", { threadId: 3 })).stackFrames[0].line, z80Line + 2);
-        await softCard.customRequest("stepIn", { threadId: 3 });
+        assert.equal((await softCard.customRequest("stackTrace", { threadId: 4 })).stackFrames[0].line, z80Line + 2);
+        await softCard.customRequest("stepIn", { threadId: 4 });
         assert.equal(await stop(), "step");
-        assert.equal((await softCard.customRequest("stackTrace", { threadId: 3 })).stackFrames[0].name, "NEXT");
+        assert.equal((await softCard.customRequest("stackTrace", { threadId: 4 })).stackFrames[0].name, "NEXT");
 
         // The card's switches are checkboxes under its row in the Retro Devices view.
         let rows: HardwareRow[] = [];

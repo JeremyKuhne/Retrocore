@@ -37,6 +37,16 @@ come in are:
 
 The 6809 already uses brackets for indirection, which the native dialect's convention matches.
 
+## 8080 and 8085 dialects
+
+The native dialect already uses Intel's mnemonics and operands ([backlog](I8080.md)), so these front ends
+change only the directives, numbers and labels around them:
+
+| Dialect | Why |
+| --- | --- |
+| **Intel** (ASM80, and CP/M's ASM and MAC) | The reference, and the syntax period 8080 and CP/M sources are in: `1234H`, `17Q`, `$` for the current address, `EQU`/`SET`, `DB`/`DW`/`DS`, `ORG`, `END`, labels without colons; MAC adds macros. |
+| **zmac** in `.8080` mode | The same cross assembler as the Z80's, already planned above. |
+
 ## What the native dialect keeps
 
 The native dialect stays the one dialect that reads alike on every CPU. On the 6809 it keeps Motorola's operand

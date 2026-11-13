@@ -170,7 +170,7 @@ EXPROM = $CFFF
 
 ;; Where the ROM's NMI vector points: a JMP in system RAM that the operating system sets.
 ;;
-;; The monitor's <SETUP> copies <NMIRQ> here, a JMP to <RECON> followed by an RTI, so that until SOS takes over an
+;; The monitor's <BootRom:SETUP> copies <NMIRQ> here, a JMP to <RECON> followed by an RTI, so that until SOS takes over an
 ;; NMI (the RESET key) restarts the machine and an IRQ returns at once.
 ;; See: <IRQVEC>, <NMIRQ>
 NMIVEC = $FFCA

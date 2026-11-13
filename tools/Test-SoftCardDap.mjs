@@ -64,11 +64,11 @@ try {
     events.length = 0;
     await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, source, stopOnEntry: true, speed: "max" });
     await request("configurationDone");
-    let frame = await stoppedOn("entry", 3);
+    let frame = await stoppedOn("entry", 4);
     assert.equal(frame.line, line("ld a,$12"));
     assert.equal(frame.instructionPointerReference, "z80:0x0100");
     assert.deepEqual((await request("threads")).threads.map(thread => [thread.id, thread.name]),
-        [[1, "II Plus CPU"], [2, "BASIC"], [3, "SoftCard Z80"]]);
+        [[1, "II Plus CPU"], [2, "BASIC"], [4, "SoftCard Z80"]]);
 
     // The 6502 waits; its thread still shows its registers, and the Z80's its own.
     assert.match(await register(1, "PC"), /^\$[0-9A-F]+$/);
@@ -80,41 +80,41 @@ try {
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 
-    await request("next", { threadId: 3 });
-    frame = await stoppedOn("step", 3);
+    await request("next", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("ld b,$34"));
     assert.equal((await request("evaluate", { expression: "A", frameId: z80Frame })).result, "$12 (18)");
 
-    await request("next", { threadId: 3 });
-    frame = await stoppedOn("step", 3);
+    await request("next", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("call bump"));
-    await request("stepIn", { threadId: 3 });
-    frame = await stoppedOn("step", 3);
+    await request("stepIn", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("inc a"));
 
     // A source breakpoint in the Z80's code stops the Z80's thread.
     const set = await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: line("ret") }] });
     assert.equal(set.breakpoints[0].verified, true);
-    await request("continue", { threadId: 3 });
-    frame = await stoppedOn("breakpoint", 3);
+    await request("continue", { threadId: 4 });
+    frame = await stoppedOn("breakpoint", 4);
     assert.equal(frame.line, line("ret"));
     await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
-    assert.equal((await request("stackTrace", { threadId: 3 })).stackFrames[1].line, line("call bump"));
-    await request("stepOut", { threadId: 3 });
-    frame = await stoppedOn("step", 3);
+    assert.equal((await request("stackTrace", { threadId: 4 })).stackFrames[1].line, line("call bump"));
+    await request("stepOut", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("ld [$E400],a"));
     assert.equal((await request("evaluate", { expression: "A", frameId: z80Frame })).result, "$13 (19)");
 
     // Giving the bus back: the step ends on the Z80 thread, waiting at its next instruction, and the 6502 runs on
     // when continued; a pause stops it on its own thread.
-    await request("next", { threadId: 3 });
-    frame = await stoppedOn("step", 3);
+    await request("next", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("spin:"));
     await request("continue", { threadId: 1 });
     await new Promise(done => setTimeout(done, 300));
     await request("pause", { threadId: 1 });
     await stoppedOn("pause", 1);
-    assert.equal((await top(3)).line, line("spin:"));
+    assert.equal((await top(4)).line, line("spin:"));
 
     // The card is a slot's hardware, saved with the machine.
     let devices = await request("retro/devices");
@@ -163,10 +163,10 @@ try {
         await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, diskImage: cpm, stopOnEntry: false, speed: "max" });
         await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: "z80:0x0000" }] });
         await request("configurationDone");
-        frame = await stoppedOn("instruction breakpoint", 3);
+        frame = await stoppedOn("instruction breakpoint", 4);
         assert.equal(frame.instructionPointerReference, "z80:0x0000");
         await request("setInstructionBreakpoints", { breakpoints: [] });
-        await request("continue", { threadId: 3 });
+        await request("continue", { threadId: 4 });
         for (const end = performance.now() + 30000; !(await screen()).includes("A>");) {
             assert.ok(performance.now() < end, `CP/M's prompt never appeared:\n${await screen()}`);
             await new Promise(done => setTimeout(done, 200));

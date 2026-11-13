@@ -19,7 +19,7 @@ export interface Device {
     description: string;
     controller: string;
     formats: string[];
-    operations: ("insert" | "eject" | "record" | "writeProtect")[];
+    operations: ("insert" | "eject" | "record" | "writeProtect" | "save")[];
     tracks: number;
     sides: number;
     media: { label: string; format: string; writeProtected: boolean; changed: boolean } | null;
@@ -192,6 +192,8 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
         if (device.operations.includes("record")) words.push("record");
         if (device.media && device.operations.includes("eject")) words.push("eject");
         if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "unprotect" : "protect");
+        if (device.media && device.operations.includes("save")) words.push("save");
+        if (device.media?.changed && device.operations.includes("save")) words.push("changed");
         item.contextValue = words.join(" ");
         return item;
     }
@@ -258,6 +260,23 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         (node?: Node) => act(node, "writeProtect", { writeProtected: true })));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.unprotect",
         (node?: Node) => act(node, "writeProtect", { writeProtected: false })));
+    // Saving over the disk's own image replaces the file it was loaded from, so it asks first.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.save", async (node?: Node) => {
+        if (node === undefined || !("device" in node) || !node.device.media) return;
+        const save = "Save";
+        const answer = await vscode.window.showWarningMessage(
+            `Replace ${node.device.media.label} with the disk in ${node.device.name}?`, { modal: true }, save);
+        if (answer === save) await act(node, "save");
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveAs", async (node?: Node) => {
+        if (node === undefined || !("device" in node) || !node.device.media) return;
+        const file = await vscode.window.showSaveDialog({
+            title: `Save the disk in ${node.device.name} as`,
+            defaultUri: vscode.Uri.file(node.device.media.label),
+            filters: { "Disk images": node.device.formats.filter(format => ["woz", "dsk", "do", "po"].includes(format)) }
+        });
+        if (file) await act(node, "save", { path: file.fsPath });
+    }));
     // Cards go in and come out while the machine runs, as nothing on the bus minds here.
     const change = async (node: Node | undefined, args: Record<string, unknown>): Promise<void> => {
         const session = vscode.debug.activeDebugSession;
@@ -283,7 +302,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.addCard", async (node?: Node) => {
         if (node === undefined || !("hardware" in node)) return;
-        const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id), { title: `Add a card to ${node.hardware.name}` });
+        const machine = vscode.debug.activeDebugSession?.configuration.machine as string | undefined;
+        const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id, machine),
+            { title: `Add a card to ${node.hardware.name}` });
         if (card) await change(node, card.args);
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.removeCard", async (node?: Node) => {

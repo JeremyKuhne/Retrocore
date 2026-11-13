@@ -35,6 +35,7 @@ flow branch DJNZ JR:NZ,rel JR:Z,rel JR:NC,rel JR:C,rel JP:NZ,nn JP:Z,nn JP:NC,nn
 flow jump JR:rel JP:nn
 flow indirect-jump JP:[HL] JP:[IX] JP:[IY]
 flow call CALL RST
+conditional CALL:NZ,nn CALL:Z,nn CALL:NC,nn CALL:C,nn CALL:PO,nn CALL:PE,nn CALL:P,nn CALL:M,nn
 flow return RET:Implied RETI RETN
 flow wait HALT
 

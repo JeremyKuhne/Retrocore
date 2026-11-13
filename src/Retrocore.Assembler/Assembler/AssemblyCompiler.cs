@@ -301,7 +301,7 @@ internal static partial class AssemblyCompiler
                 InstructionSet selected = cpuSettings is null ? codes : cpuSettings[statement.CpuIndex];
                 statement.Mnemonic = selected.GetMnemonic(mnemonic);
                 ClassifyOperand(selected, matchers?[statement.CpuIndex] ?? matcher, ref statement);
-                if (CanShrinkSyntax(in statement)) { shrinkBudget++; }
+                shrinkBudget += ShrinkBytes(in statement, selected);
             }
         }
 
@@ -315,7 +315,9 @@ internal static partial class AssemblyCompiler
             options,
             symbols,
             declared,
-            errors);
+            errors,
+            codes,
+            cpuSettings);
 
         DeclareLinkerSymbols(project, symbols, declared, errors);
         Dictionary<int, int>? labelSizes = null;
@@ -753,7 +755,10 @@ internal static partial class AssemblyCompiler
             default:
                 int selected = SelectEncoding(codes, matcher, ref statement, symbols, project, address, allowShrink);
                 encoding = selected;
-                length = codes.Size(selected);
+                length = codes.Postbytes is { } postbytes && codes.Forms[codes.Encodings[selected].Form].HasPostbyte
+                    ? LayoutPostbyteLength(postbytes, codes, selected, ref statement, symbols, address, allowShrink)
+                    : codes.Size(selected);
+
                 break;
         }
 
@@ -957,12 +962,26 @@ internal static partial class AssemblyCompiler
         ReadOnlyMemory<char> operand = matcher.Expression(statement.EncodingOperand, form.Id);
         if (form.FieldCount == 1)
         {
+            OperandFieldKind singleField = form.Field(0);
+            if (OperandForm.IsPostbyte(singleField))
+            {
+                EmitPostbyteField(
+                    codes,
+                    image.AsSpan(offset, statement.Size - encoding.OpcodeLength),
+                    singleField,
+                    in statement,
+                    operand,
+                    symbols);
+
+                return;
+            }
+
             // An address operand's layout expression is the emitted expression; other forms evaluate it here once.
             long value = statement.HasNarrowForm
                 ? EmittedLayoutValue(in statement, operand, symbols)
                 : Value(operand, symbols, statement.Address, statement.Line);
 
-            EmitField(image, offset, form.Field(0), value, in fields);
+            EmitField(image, offset, singleField, value, in fields);
             return;
         }
 
@@ -1023,6 +1042,12 @@ internal static partial class AssemblyCompiler
                     : throw new AssemblyError(line, "Restart address must be $00, $08, $10, $18, $20, $28, $30 or $38.");
 
                 return offset;
+            case OperandFieldKind.RestartNumber:
+                image[fields.OpcodeByte] |= value is >= 0 and < InstructionEncoding.BitsPerByte
+                    ? (byte)(value << OpcodeFieldShift)
+                    : throw new AssemblyError(line, "Restart number must be 0-7.");
+
+                return offset;
             default:
                 int word = field == OperandFieldKind.Word ? Word(value, line) : Relative16(value, fields.Next, line);
                 byte low = (byte)word;
@@ -1033,7 +1058,7 @@ internal static partial class AssemblyCompiler
         }
     }
 
-    // A bit number or restart address sits in bits 3-5 of the last opcode byte.
+    // A bit number, restart address or restart number sits in bits 3-5 of the last opcode byte.
     private const int OpcodeFieldShift = 3;
     private const int RestartMask = 0x38;
 
@@ -1065,8 +1090,107 @@ internal static partial class AssemblyCompiler
             statement.EncodingOperand = statement.EncodingOperand[zeroPrefix..];
         }
 
+        ReadOnlySpan<char> span = statement.EncodingOperand.Span;
+        if (codes.Description.AngleWidths
+            && !statement.ForcesAbsolute
+            && !statement.ForcesZeroPage
+            && !span.IsEmpty
+            && span[0] is '<' or '>'
+            && codes.Postbytes?.HasSyntax(OperandFieldKind.IndexedPostbyte, span) != true)
+        {
+            if (span[0] == '<')
+            {
+                statement.ForcesZeroPage = true;
+            }
+            else
+            {
+                statement.ForcesAbsolute = true;
+            }
+
+            statement.EncodingOperand = statement.EncodingOperand[1..].TrimStart();
+        }
+
         statement.Form = matcher.Classify(codes, statement.Mnemonic, statement.EncodingOperand.Span, out ushort narrow);
         statement.HasNarrowForm = narrow != OperandFormMatcher.NoForm;
+    }
+
+    /// <summary>
+    ///  Lays out an instruction whose one field is a postbyte, which its instruction set's codec parses and sizes.
+    /// </summary>
+    /// <param name="postbytes">The instruction set's postbyte codec.</param>
+    /// <param name="codes">The instruction set.</param>
+    /// <param name="encoding">The selected encoding.</param>
+    /// <param name="statement">The instruction.</param>
+    /// <param name="symbols">Values and variable bindings known so far in this pass.</param>
+    /// <param name="address">The location counter.</param>
+    /// <param name="allowShrink">Whether the field may get shorter than in the previous pass.</param>
+    /// <returns>The instruction's length.</returns>
+    private static int LayoutPostbyteLength(
+        PostbyteCodec postbytes,
+        InstructionSet codes,
+        int encoding,
+        ref LayoutStatement statement,
+        AssemblySymbols symbols,
+        int address,
+        bool allowShrink)
+    {
+        IsaEncoding value = codes.Encodings[encoding];
+        OperandFieldKind kind = codes.Forms[value.Form].Field(0);
+        int opcodeLength = value.OpcodeLength;
+        if (!postbytes.TryParse(kind, statement.EncodingOperand, out PostbyteOperand operand, out string? error))
+        {
+            throw new AssemblyError(statement.Line, error);
+        }
+
+        bool known = false;
+        long result = 0;
+        if (!operand.Expression.IsEmpty)
+        {
+            known = TryLayoutValue(ref statement, operand.Expression, symbols, address, out result);
+        }
+
+        // A field written before its operand's value settles keeps its first length, as other forms do.
+        int previous = statement.Size - opcodeLength;
+        if (statement.SourceOrder && previous > 0)
+        {
+            return statement.Size;
+        }
+
+        int size = postbytes.LayoutSize(in operand, known, result, (address + opcodeLength) & ushort.MaxValue);
+        return opcodeLength + (!allowShrink && previous > size ? previous : size);
+    }
+
+    /// <summary>
+    ///  Encodes a postbyte field at the length layout chose.
+    /// </summary>
+    /// <param name="codes">The instruction set.</param>
+    /// <param name="destination">The field's bytes.</param>
+    /// <param name="kind">The field kind.</param>
+    /// <param name="statement">The instruction.</param>
+    /// <param name="operand">The operand text.</param>
+    /// <param name="symbols">The final symbol values.</param>
+    private static void EmitPostbyteField(
+        InstructionSet codes,
+        Span<byte> destination,
+        OperandFieldKind kind,
+        in LayoutStatement statement,
+        ReadOnlyMemory<char> operand,
+        AssemblySymbols symbols)
+    {
+        PostbyteCodec postbytes = codes.Postbytes
+            ?? throw new AssemblyError(statement.Line, $"Instruction set '{codes.Name}' has no postbyte codec.");
+
+        if (!postbytes.TryParse(kind, operand, out PostbyteOperand parsed, out string? error))
+        {
+            throw new AssemblyError(statement.Line, error);
+        }
+
+        long value = parsed.Expression.IsEmpty ? 0 : EmittedLayoutValue(in statement, parsed.Expression, symbols);
+        int fieldAddress = (statement.Address + statement.Size - destination.Length) & ushort.MaxValue;
+        if (!postbytes.TryEncode(in parsed, value, fieldAddress, destination, out error))
+        {
+            throw new AssemblyError(statement.Line, error);
+        }
     }
 
     /// <summary>

@@ -10,16 +10,20 @@ namespace Retrocore.Basic;
 /// <param name="Name">Its name as BASIC stores it, with its type's suffix.</param>
 /// <param name="Kind">What its elements hold.</param>
 /// <param name="Address">Where its entry starts.</param>
-/// <param name="Dimensions">How many elements each subscript has, in subscript order: DIM A(10) has 11.</param>
+/// <param name="Dimensions">
+///  How many elements each subscript has, in subscript order: DIM A(10) has 11, or 10 in Apple-1 BASIC.
+/// </param>
 /// <param name="ElementsAddress">Where its first element starts.</param>
 /// <param name="ElementSize">The bytes in each element.</param>
+/// <param name="LowerBound">The first element's subscript: 0, or 1 in Apple-1 BASIC.</param>
 public sealed record BasicArray(
     string Name,
     BasicVariableKind Kind,
     int Address,
     IReadOnlyList<int> Dimensions,
     int ElementsAddress,
-    int ElementSize)
+    int ElementSize,
+    int LowerBound = 0)
 {
     /// <summary>
     ///  Gets the number of elements.
@@ -43,12 +47,13 @@ public sealed record BasicArray(
         int index = 0;
         for (int dimension = Dimensions.Count - 1; dimension >= 0; dimension--)
         {
-            if (subscripts[dimension] < 0 || subscripts[dimension] >= Dimensions[dimension])
+            int at = subscripts[dimension] - LowerBound;
+            if (at < 0 || at >= Dimensions[dimension])
             {
                 throw new ArgumentOutOfRangeException(nameof(subscripts), "?BAD SUBSCRIPT: a subscript is out of range.");
             }
 
-            index = index * Dimensions[dimension] + subscripts[dimension];
+            index = index * Dimensions[dimension] + at;
         }
 
         return ElementsAddress + index * ElementSize;
@@ -64,7 +69,7 @@ public sealed record BasicArray(
         int[] subscripts = new int[Dimensions.Count];
         for (int dimension = 0; dimension < Dimensions.Count; dimension++)
         {
-            subscripts[dimension] = index % Dimensions[dimension];
+            subscripts[dimension] = index % Dimensions[dimension] + LowerBound;
             index /= Dimensions[dimension];
         }
 

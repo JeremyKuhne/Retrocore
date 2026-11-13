@@ -47,6 +47,122 @@ public class IsaFormatTests
     }
 
     /// <summary>
+    ///  <c>entry-points in Name</c> adds entry points to one set and the sets built on it, and <c>target</c> gives an
+    ///  instruction the address its opcode implies.
+    /// </summary>
+    [TestMethod]
+    public void SetsHaveTheirOwnEntryPointsAndFixedTargets()
+    {
+        const string Text = """
+            [isa]
+            literal-forms
+            entry-points 0000
+            entry-points in Plus 0024
+            entry-points in Plus 003C
+            flow call RSTV
+            target RSTV 0040
+            [forms]
+            Implied ""
+            [Base]
+            00 NOP Implied
+            [Plus : Base]
+            CB RSTV Implied
+            [Derived : Plus]
+            01 NOP Implied
+            """;
+
+        IsaDescription description = IsaParser.Parse(Text);
+        description.InstructionSets["Base"].EntryPoints.Should().Equal(0x0000);
+        description.InstructionSets["Plus"].EntryPoints.Should().Equal(0x0000, 0x0024, 0x003C);
+        description.InstructionSets["Derived"].EntryPoints.Should().Equal(0x0000, 0x0024, 0x003C);
+        description.EntryPoints.Should().Equal(0x0000);
+
+        InstructionSet plus = description.InstructionSets["Plus"];
+        plus.TryDecode([0xCB], out int rstv).Should().BeTrue();
+        plus.GetEncoding(rstv).FixedTarget.Should().Be(0x0040);
+        plus.TryDecode([0x00], out int nop).Should().BeTrue();
+        plus.GetEncoding(nop).FixedTarget.Should().BeNull();
+
+        Action unknown = () => IsaParser.Parse(Text.Replace("in Plus 003C", "in Missing 003C", StringComparison.Ordinal));
+        unknown.Should().Throw<FormatException>().WithMessage("*unknown instruction set 'Missing'*");
+        Action malformed = () => IsaParser.Parse(Text.Replace("target RSTV 0040", "target RSTV", StringComparison.Ordinal));
+        malformed.Should().Throw<FormatException>().WithMessage("*target Mnemonic hex-address*");
+    }
+
+    /// <summary>
+    ///  The <c>conditional</c> line marks instructions by mnemonic or by mnemonic and form; cycles alone do not, as the
+    ///  6809's <c>RTI</c> lists two counts without being conditional.
+    /// </summary>
+    [TestMethod]
+    public void ConditionalLineMarksInstructions()
+    {
+        InstructionSet set = IsaParser.Parse("""
+            [isa]
+            literal-forms
+            conditional CNZ CALL:NZ
+            [forms]
+            Implied ""
+            [Cpu]
+            C4 CNZ Implied t=17/11
+            CD CALL Implied t=17
+            DC CALL NZ t=17/10
+            3B RTI Implied t=15/6
+            """).InstructionSets["Cpu"];
+
+        bool Conditional(byte opcode) => set.TryDecode([opcode], out int id) && set.GetEncoding(id).IsConditional;
+        Conditional(0xC4).Should().BeTrue();
+        Conditional(0xDC).Should().BeTrue();
+        Conditional(0xCD).Should().BeFalse();
+        Conditional(0x3B).Should().BeFalse();
+
+        Retrocore.Cpu.Z80.Z80Isa.InstructionSet.TryDecode([0xC4, 0, 0], out int z80).Should().BeTrue();
+        Retrocore.Cpu.Z80.Z80Isa.InstructionSet.GetEncoding(z80).IsConditional.Should().BeTrue("CALL NZ,nn");
+    }
+
+    /// <summary>
+    ///  A subset may not reuse the name of its base, of another subset or of a set, which would replace it.
+    /// </summary>
+    /// <param name="subsets">The subset lines.</param>
+    [TestMethod]
+    [Timeout(10_000)]
+    [DataRow("subset Base of Base exclude NOP message \"x\"")]
+    [DataRow("subset Small of Base exclude NOP message \"x\"\nsubset Small of Base exclude NOP message \"y\"")]
+    [DataRow("subset Other of Base exclude NOP message \"x\"")]
+    public void SubsetNamesMustBeNew(string subsets)
+    {
+        string text = $"""
+            [isa]
+            {subsets}
+            [forms]
+            Implied ""
+            [Base]
+            00 NOP Implied
+            [Other : Base]
+            01 NOP Implied
+            """;
+
+        Action parse = () => IsaParser.Parse(text);
+        parse.Should().Throw<FormatException>().WithMessage("*repeats the name*");
+    }
+
+    /// <summary>
+    ///  A mnemonic made of hex digits, such as the 8080's <c>CC</c>, follows the opcode bytes rather than joining
+    ///  them.
+    /// </summary>
+    [TestMethod]
+    public void MnemonicsThatReadAsHexAreNotOpcodeBytes()
+    {
+        // The 8080's CC (call if carry) at $DC, with and without options after its form.
+        foreach (string line in (string[])["DC CC Word", "DC CC Word t=17/11", "DC CC Word t=17/11 undocumented"])
+        {
+            InstructionSet set = Parse(line);
+            set.TryDecode([0xDC, 0x34, 0x12], out int encoding).Should().BeTrue(line);
+            set.MnemonicName(set.GetEncoding(encoding).Mnemonic).Should().Be("CC", line);
+            set.GetEncoding(encoding).OpcodeLength.Should().Be(1, line);
+        }
+    }
+
+    /// <summary>
     ///  A bit-number field makes all eight values of opcode bits 3-5 decode to one encoding.
     /// </summary>
     [TestMethod]

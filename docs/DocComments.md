@@ -61,6 +61,15 @@ Rules:
 - **Trailing comments** document the definition on their own line when they start with `;;`: a constant in
   an equate list, or a member of an `.enum` or `.struct`. For example, `KEY_CR = $8D ;; Control-M, Return`.
   The SDK sources' trailing address comments (`; $F800`) stay ordinary comments.
+- **Headings over a group** are plain `;` comments. A `;;` block above a definition that has its own trailing
+  `;;` comment is a lint error, because it reads as the group's heading but would document only the first
+  definition:
+
+  ```text
+  ; Ports.
+  DATA_PORT = $10                     ;; the data
+  STATUS_PORT = $11                   ;; the status
+  ```
 - **The file comment** is a `;;` block at the top of the file, after any `; retrocore:` pragma, followed by a
   blank line. It becomes the file's topic and is exempt from the blank-line error.
 - **Explicit topics.** A `;;` block whose first line is a Natural Docs keyword line (`Section: Title`,
@@ -167,17 +176,19 @@ checked line by line:
   the register and its carry is `carry`. An entry says what the flag means when set, or says set and clear:
   `Out: zero = found`, `Out: carry = clear on success`.
 
-| Word | 6502 | Z80 | Meaning |
-| --- | --- | --- | --- |
-| `carry` | C | C | Carry out of the top bit, or no borrow (6502) or a borrow (Z80) from a subtract or compare |
-| `zero` | Z | Z | A zero result, or an equal compare |
-| `negative` | N | S | Bit 7 of the result, a negative number in two's complement; Zilog calls it the sign |
-| `overflow` | V | P/V | A signed result out of range |
-| `parity` | | P/V | An even number of 1 bits, after logical operations, rotates and IN |
-| `half-carry` | | H | A carry out of or borrow into bit 3, for DAA |
-| `subtract` | | N | The last arithmetic was a subtract, for DAA |
-| `decimal` | D | | Binary-coded decimal arithmetic |
-| `interrupt` | I | | IRQ masked |
+| Word | 6502 | Z80 | 6809 | Meaning |
+| --- | --- | --- | --- | --- |
+| `carry` | C | C | C | Carry out of the top bit, or no borrow (6502) or a borrow (Z80, 6809) from a subtract or compare |
+| `zero` | Z | Z | Z | A zero result, or an equal compare |
+| `negative` | N | S | N | Most significant bit of the result, a negative number in two's complement; Zilog calls it the sign |
+| `overflow` | V | P/V | V | A signed result out of range |
+| `parity` | | P/V | | An even number of 1 bits, after logical operations, rotates and IN |
+| `half-carry` | | H | H | A carry out of or borrow into bit 3, for DAA |
+| `subtract` | | N | | The last arithmetic was a subtract, for DAA |
+| `decimal` | D | | | Binary-coded decimal arithmetic |
+| `interrupt` | I | | I | IRQ masked |
+| `fast-interrupt` | | | F | FIRQ masked |
+| `entire` | | | E | Complete register state stacked for RTI |
 
 A flag's letter is reported with its word (`name the C flag by its word, 'carry'`), as are branch conditions
 such as `NZ`, which say the same as `zero` with its meaning turned around. The words come from the CPU's
@@ -343,4 +354,6 @@ broken link.
 | C# summaries for exports | `src/Retrocore.Generators/ExportDocumentation.cs` |
 | Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`) |
 
-The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems.
+The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems. Its
+`EveryRepositorySourceIsCleanInTheEditor` lints every assembly source under `src` and `sample` as the editor reads
+it, without a list of folders, so a new source is covered from its first commit, and CI runs it on every pull request.

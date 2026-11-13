@@ -24,6 +24,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
 
     private readonly Apple2Machine _machine;
+    private PascalRuntime? _pascal;
     private readonly Apple2Model _model;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels = new byte[Apple2Video.Width * Apple2Video.Height * 4];
@@ -97,9 +98,42 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["apple2/beam"] = _ => Beam(),
             ["apple2/disk"] = _ => DiskState(),
             ["apple2/button"] = Button,
+            ["apple2/mouse"] = Mouse,
             ["apple2/sound"] = Sound,
             ["apple2/fastDisk"] = FastDiskRequest
         };
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K. It uses both
+    ///   of the card's banks at <c>$D000</c>, and is looked for in each. 1.3 on a 128K IIe fetches its code from the
+    ///   auxiliary 64K, which the interpreter's code bank follows at each fetch.
+    ///  </para>
+    /// </remarks>
+    public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
+        "Apple Pascal",
+        new Apple2PascalMemory(_machine.Bus),
+        _machine.Bus.Peek,
+        [address => LanguageCard(Apple2MemoryArea.MainLanguageCard, address), address => LanguageCard(Apple2MemoryArea.MainLanguageCardBank1, address)],
+        (0xD000, 0x10000),
+        extended: false,
+        () => 0,
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount,
+        () => (_machine.Bus.Switches & Apple2Switches.RamRead) != 0 ? (byte)1 : (byte)0);
+
+    // The language card's RAM at an address, bank 1 below $E000 for that bank's area; the CPU's view elsewhere.
+    private byte LanguageCard(Apple2MemoryArea area, ushort address)
+    {
+        Apple2Bus bus = _machine.Bus;
+        if (area == Apple2MemoryArea.MainLanguageCardBank1 && address >= 0xE000)
+        {
+            area = Apple2MemoryArea.MainLanguageCard;
+        }
+
+        return bus.PeekArea(area, address, out byte value) ? value : bus.Peek(address);
     }
 
     /// <summary>
@@ -228,6 +262,18 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         // then the speaker is all there is to hear.
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
+        if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
+        target.InstallDisk35(args);
+        foreach ((int slot, string? image) in ProFileMedia.LaunchCards(args, "a free slot, 1 to 7"))
+        {
+            target.HardwareAction($"slot{slot}", "addProFile", []);
+            if (image is not null && machine.Bus.ProFileIn(slot) is { } card)
+            {
+                ProFileMedia.Insert(card.Drive, image);
+            }
+        }
+
+        if (args.String("screen") is { } screen) { target.Screen = screen; }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
         if (args.Int("softCard") is { } softCard)
         {
@@ -352,6 +398,56 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         _machine.Bus.SetButton(button, args.Bool("pressed") ?? throw new ArgumentException("pressed is required."));
         return [];
     }
+
+    // apple2/mouse: moves the mouse card's mouse by dx and dy and sets its button when pressed is given. Without the
+    // card, nothing happens.
+    private JsonObject Mouse(JsonObject args)
+    {
+        if (_machine.Bus.MouseSlot == 0) { return []; }
+        Apple2MouseCard mouse = _machine.Bus.Mouse;
+        mouse.Move(args.Int("dx") ?? 0, args.Int("dy") ?? 0);
+        if (args.Bool("pressed") is { } pressed) { mouse.Button = pressed; }
+        return [];
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The IIe adds an RGB monitor, through an RGB card in its auxiliary slot.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<string> Screens => _model.IsIIe() ? DebugScreens.WithRgb : DebugScreens.WithColor;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A monochrome monitor shows each of the 560 dots on its own, rather than the color a run of them makes.
+    ///  </para>
+    /// </remarks>
+    public string Screen
+    {
+        get => _machine.Bus.Video.Monitor switch
+        {
+            Apple2Monitor.ColorRgb => DebugScreens.Rgb,
+            Apple2Monitor.Green => DebugScreens.Green,
+            Apple2Monitor.Amber => DebugScreens.Amber,
+            Apple2Monitor.White => DebugScreens.White,
+            _ => DebugScreens.Color
+        };
+
+        set => _machine.Bus.Video.Monitor = ParseScreen(DebugScreens.Require(value, Screens));
+    }
+
+    // The launch's and the panel's names for the monitors.
+    private static Apple2Monitor ParseScreen(string screen) => screen switch
+    {
+        DebugScreens.Color => Apple2Monitor.Color,
+        DebugScreens.Rgb => Apple2Monitor.ColorRgb,
+        DebugScreens.Green => Apple2Monitor.Green,
+        DebugScreens.Amber => Apple2Monitor.Amber,
+        DebugScreens.White => Apple2Monitor.White,
+        _ => throw new ArgumentException("screen must be color, rgb, white, green or amber.")
+    };
 
     // apple2/sound: changes what the panel hears while running, as the launch's sound option does.
     // apple2/fastDisk: turns fast disk on or off.
@@ -555,6 +651,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         if (_machine.Processor.CycleCount != cycles)
         {
             ProcessorCycle cycle = _machine.LastCycle;
+            if (cycle.IsOpcodeFetch && !cycle.IsStalled) { ObserveFetch(cycle.Address, cycle.Value); }
             _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
         }
 
@@ -673,15 +770,28 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     {
         get
         {
-            _banks ??= CreateBanks();
+            // The slots' ROMs come and go with their cards.
+            if (_banks is null || _bankCards != _machine.Bus.CardChanges)
+            {
+                _banks = CreateBanks();
+                _bankCards = _machine.Bus.CardChanges;
+            }
+
             if (Coprocessor is not SoftCardDebugTarget softCard) { return _banks; }
-            if (_softCardBanks?[^1] != softCard.Bank) { _softCardBanks = [.. _banks, softCard.Bank]; }
+            if (_softCardBanks?[^1] != softCard.Bank || !ReferenceEquals(_softCardBase, _banks))
+            {
+                _softCardBanks = [.. _banks, softCard.Bank];
+                _softCardBase = _banks;
+            }
+
             return _softCardBanks;
         }
     }
 
     private List<DebugMemoryBank>? _banks;
+    private int _bankCards;
     private DebugMemoryBank[]? _softCardBanks;
+    private List<DebugMemoryBank>? _softCardBase;
     private SoftCardDebugTarget? _softCard;
 
     /// <inheritdoc/>
@@ -727,14 +837,20 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             banks.Add(Bank("rom", "System ROM", [(0xD000, 0x3000)], Apple2MemoryArea.SystemRom));
         }
 
-        if (_machine.Bus.PeekArea(Apple2MemoryArea.Slot6Rom, 0xC600, out _))
+        // Each slot whose card has a ROM page: a Disk II's boot ROM, the mouse or ProFile card's firmware, or slot
+        // seven's block device.
+        for (int slot = 1; slot <= 7; slot++)
         {
-            banks.Add(Bank("slot6", "Slot 6 ROM (Disk II boot)", [(0xC600, 0x100)], Apple2MemoryArea.Slot6Rom));
-        }
+            Apple2MemoryArea area = Apple2MemoryArea.Slot1Rom + (slot - 1);
+            ushort page = (ushort)(0xC000 | (slot << 8));
+            if (!_machine.Bus.PeekArea(area, page, out _)) { continue; }
+            string card = slot == _machine.Bus.MouseSlot
+                ? "mouse card"
+                : _machine.Bus.ProFileIn(slot) is not null
+                    ? "ProFile card"
+                    : _machine.Bus.DiskIIIn(slot) is not null ? "Disk II boot" : "block device";
 
-        if (_machine.Bus.PeekArea(Apple2MemoryArea.Slot7Rom, 0xC700, out _))
-        {
-            banks.Add(Bank("slot7", "Slot 7 ROM (block device)", [(0xC700, 0x100)], Apple2MemoryArea.Slot7Rom));
+            banks.Add(Bank($"slot{slot}", $"Slot {slot} ROM ({card})", [(page, 0x100)], area));
         }
 
         return banks;
@@ -755,7 +871,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
             return null;
         },
-        areas is [Apple2MemoryArea.SystemRom or Apple2MemoryArea.Slot6Rom or Apple2MemoryArea.Slot7Rom]
+        areas is [Apple2MemoryArea.SystemRom or (>= Apple2MemoryArea.Slot1Rom and <= Apple2MemoryArea.Slot7Rom)]
             ? null
             : (address, value) => areas.Any(area => _machine.Bus.PokeArea(area, address, value)));
 
@@ -815,6 +931,44 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public bool InRom(ushort address) =>
         _machine.Bus.ReadArea(address) == Apple2MemoryArea.SystemRom || (IntegerActive && address is >= 0xE000 and < 0xF800);
 
+    // AppleSoft's GONE is JSR CHRGET, then JSR GONE3 to run the statement CHRGET fetched. ProDOS's BASIC.SYSTEM turns
+    // TRACE on and takes the "#" TRACE prints before GONE, so it sees every statement start: it fetches the statement's
+    // first character itself and jumps to the JSR GONE3, past GONE.
+    private const int GoneFetchLength = 3;
+    private const byte RtiOpcode = 0x40;
+
+    // Whether GONE's JSR CHRGET has run since NEWSTT and its JSR GONE3 has not yet: GONE started this statement. Kept
+    // as instructions are fetched, so an interrupt between the two leaves it as it was.
+    private bool _goneFetching;
+
+    // Whether the last instruction was an RTI: an interrupt that came at an instruction boundary returns to it, which
+    // starts nothing that the boundary did not start before the interrupt.
+    private bool _returnedFromInterrupt;
+
+    // Where a statement starts in AppleSoft: at GONE, with the text pointer before it, or at GONE's JSR GONE3 with the
+    // text pointer on it when GONE did not run first. Neither starts one again when an interrupt returns there.
+    private (int Line, int Address)? AppleSoftStatementStart(BasicRom rom, ushort pc)
+    {
+        if (_returnedFromInterrupt) { return null; }
+        if (pc == rom.Gone) { return (BasicCurrentLine, BasicTextPointer + 1); }
+        return pc == rom.Gone + GoneFetchLength && !_goneFetching ? (BasicCurrentLine, BasicTextPointer) : null;
+    }
+
+    // Follows AppleSoft's statement dispatch at each instruction fetched; an interrupt's response fetches none.
+    private void ObserveFetch(ushort pc, byte opcode)
+    {
+        _returnedFromInterrupt = opcode == RtiOpcode;
+        if (_basicRom is not { } rom) { return; }
+        if (pc == rom.Gone)
+        {
+            _goneFetching = true;
+        }
+        else if (pc == rom.Gone + GoneFetchLength || pc == rom.StatementStart)
+        {
+            _goneFetching = false;
+        }
+    }
+
     /// <inheritdoc/>
     public int BasicTextPointer => IntegerActive ? IntegerWord(IntegerBasicDialect.Px) - 1 : IntegerWord(TextPointer);
 
@@ -857,6 +1011,15 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         Poke(CurrentLine + 1, (byte)(line >> 8));
         Poke(TextPointer, (byte)textPointer);
         Poke(TextPointer + 1, (byte)(textPointer >> 8));
+
+        // Past GONE's JSR CHRGET, as under BASIC.SYSTEM, the old statement's first character is already fetched: back
+        // up to GONE to fetch the new one's. The stack is the same at both.
+        ProcessorRegisters registers = _machine.Processor.Registers;
+        if (_basicRom is { } rom && registers.ProgramCounter == rom.Gone + GoneFetchLength)
+        {
+            registers.ProgramCounter = rom.Gone;
+            _machine.Processor.Registers = registers;
+        }
     }
 
     /// <inheritdoc/>
@@ -888,6 +1051,15 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   About 30 ms a key and 300 ms after a line, at the II's 1.02 MHz: Apple Pascal's Editor takes keys into its
+    ///   own type-ahead, which overflows if a pasted program comes faster.
+    ///  </para>
+    /// </remarks>
+    public (ulong Key, ulong Line)? TypingPace => (30_000, 300_000);
+
+    /// <inheritdoc/>
     public void Reset()
     {
         _machine.Reset();
@@ -911,17 +1083,71 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public IReadOnlyList<Machines.Devices.IDevice> Devices => _machine.Devices;
 
+    // The launch's 3.5 controller: disk35 names its slot, and disk35Images the disks in its drives, in order.
+    private void InstallDisk35(JsonObject args)
+    {
+        JsonArray? images = args["disk35Images"] as JsonArray;
+        int? slot = args.Int("disk35");
+        if (slot is null or 0)
+        {
+            if (images is { Count: > 0 })
+            {
+                throw new ArgumentException("disk35Images needs disk35, the controller's slot.");
+            }
+
+            return;
+        }
+
+        HardwareAction($"slot{slot}", "addDisk35", []);
+        if (images is null) { return; }
+        if (images.Count > 2)
+        {
+            throw new ArgumentException("disk35Images takes at most two disks, one for each drive.");
+        }
+
+        for (int drive = 0; drive < images.Count; drive++)
+        {
+            if (images[drive]?.GetValue<string>() is { Length: > 0 } image)
+            {
+                Apple2Loader.Insert(_machine.Bus.Disk35.Drives[drive], Path.GetFullPath(image));
+            }
+        }
+    }
+
     /// <inheritdoc/>
     public void DeviceAction(Machines.Devices.IDevice device, string action, JsonObject args)
     {
         switch (device, action)
         {
+            case (Apple2Disk35Drive drive, "insert"):
+                string image = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
+                drive.Eject();
+                Apple2Loader.Insert(drive, image);
+                break;
+            case (Apple2Disk35Drive drive, "eject"):
+                drive.Eject();
+                break;
+            case (Apple2Disk35Drive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
                 drive.Eject();
                 Apple2Loader.Insert(drive, path);
                 break;
             case (Apple2FloppyDrive drive, "eject"):
+                drive.Eject();
+                break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
+            case (Apple2FloppyDrive drive, "save"):
+                Apple2Loader.Save(drive, args.String("path"));
+                break;
+            case (ProFileDrive drive, "insert"):
+                ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));
+                break;
+            case (ProFileDrive drive, "eject"):
                 drive.Eject();
                 break;
             default:
@@ -965,6 +1191,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["disk"] = DiskState(),
             ["sound"] = _soundMode,
             ["mockingboard"] = _machine.Bus.MockingboardInstalled,
+            ["mouse"] = _machine.Bus.MouseSlot,
+            ["screen"] = Screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["fastDisk"] = FastDisk,
             ["running"] = running
         };
@@ -1148,8 +1377,10 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard, a Disk II controller or the Z80 SoftCard here."
-            : "Add Card puts a Disk II controller or the Z80 SoftCard here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller, the mouse card, a ProFile card, the 3.5 controller or "
+                + "the Z80 SoftCard here."
+            : "Add Card puts a Disk II controller, the mouse card, a ProFile card, the 3.5 controller or the Z80 SoftCard "
+                + "here.";
 
         if (_machine.Bus.SoftCard is { } softCard && softCard.Slot == slot)
         {
@@ -1175,6 +1406,45 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                         "In each Z80 opcode fetch's refresh, the waiting 6502 reads once at its next opcode's address, as the "
                             + "card lets it to keep its registers. Off, it makes no reads, as in MAME and AppleWin.")
                 ]);
+        }
+
+        if (slot == _machine.Bus.Disk35Slot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "3.5 disk controller",
+                "A SmartPort with two SuperDrives, answering as Apple's Apple II 3.5 Disk Controller Card does: 400K and "
+                    + "800K Apple disks and 720K and 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. The launch "
+                    + "installs it with disk35 and a slot, and disk35Images; Remove Card takes it out and ejects its disks.",
+                [.. _machine.Bus.Disk35.Drives.Select(drive => drive.Id)],
+                ["removeCard"]);
+        }
+
+        if (_machine.Bus.ProFileIn(slot) is { } proFile)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "ProFile interface card",
+                "Apple's ProFile hard disk as a ProDOS block device, through Retrocore's firmware for the card. Insert a "
+                    + ".po or .hdv image of up to 65535 blocks; the startup scan boots it from the highest slot. The "
+                    + "launch's proFiles installs it; Remove Card takes it out.",
+                [proFile.Drive.Id],
+                ["removeCard"]);
+        }
+
+        if (slot == _machine.Bus.MouseSlot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "Mouse card",
+                "A mouse with the AppleMouse II's firmware calls, interrupts and BASIC IN#/PR# interface. Click the "
+                    + "display to move it with your mouse; Escape lets go. The launch installs it with mouse and a slot; "
+                    + "Remove Card takes it out.",
+                [],
+                ["removeCard"]);
         }
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled)
@@ -1261,6 +1531,28 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 _machine.Bus.InstallDiskII(slot, SdkModules.BuildDiskII(sectors, SdkRoms));
                 _diskSectors[slot] = sectors;
                 break;
+            case "addMouse" when _machine.Bus.MouseSlot != 0:
+                throw new ArgumentException($"The mouse card is already in slot {_machine.Bus.MouseSlot}.");
+            case "addMouse" when slot > 0 && _machine.Bus.MouseSlot == 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallMouse(slot);
+                break;
+            case "removeCard" when slot > 0 && slot == _machine.Bus.MouseSlot:
+                _machine.Bus.RemoveMouse();
+                break;
+            case "addDisk35" when _machine.Bus.Disk35Slot != 0:
+                throw new ArgumentException($"The 3.5 controller is already in slot {_machine.Bus.Disk35Slot}.");
+            case "addDisk35" when slot > 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallDisk35(slot);
+                break;
+            case "removeCard" when slot > 0 && slot == _machine.Bus.Disk35Slot:
+                _machine.Bus.RemoveDisk35();
+                break;
+            case "addProFile" when slot > 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallProFile(slot);
+                break;
+            case "removeCard" when slot > 0 && _machine.Bus.ProFileIn(slot) is not null:
+                _machine.Bus.RemoveProFile(slot);
+                break;
             case "addMockingboard" when slot == 4 && _machine.Bus.IsSlotFree(4):
                 _machine.Bus.InstallMockingboard();
                 break;
@@ -1313,6 +1605,10 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public IEnumerable<string> RestoreCards(JsonObject cards)
     {
         List<string> problems = [];
+
+        // The 3.5 controller moves to its saved slot with its disks before any slot is emptied, which would otherwise
+        // take it out, and its disks with it, before its new slot comes up.
+        MoveDisk35To(cards, problems);
         foreach ((string key, JsonNode? node) in cards)
         {
             string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
@@ -1340,6 +1636,22 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                     case "softCard":
                         HardwareAction(id, "addSoftCard", []);
                         break;
+                    case "mouse":
+                        // The machine has one mouse card: the saved slot wins over the launch's, whatever the order
+                        // the slots come in.
+                        if (_machine.Bus.MouseSlot is not 0 and var other && other != slot && _machine.Bus.IsSlotFree(slot))
+                        {
+                            HardwareAction($"slot{other}", "removeCard", []);
+                        }
+
+                        HardwareAction(id, "addMouse", []);
+                        break;
+                    case "disk35":
+                        HardwareAction(id, "addDisk35", []);
+                        break;
+                    case "proFile":
+                        HardwareAction(id, "addProFile", []);
+                        break;
                     case "languageCard":
                         HardwareAction(id, "addLanguageCard", []);
                         break;
@@ -1365,9 +1677,34 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
-    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, softCard,
-    // diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
-    // blockStorage, or empty.
+    // Whether a saved slot holds the 3.5 controller.
+    private static bool IsDisk35(KeyValuePair<string, JsonNode?> entry) =>
+        entry.Value?.GetValueKind() == System.Text.Json.JsonValueKind.String && entry.Value.GetValue<string>() == "disk35";
+
+    // Moves the 3.5 controller, one per machine, to the slot the saved cards give it, taking out what is there unless
+    // the launch gave it.
+    private void MoveDisk35To(JsonObject cards, List<string> problems)
+    {
+        int from = _machine.Bus.Disk35Slot;
+        string? saved = cards.FirstOrDefault(IsDisk35).Key;
+        if (from == 0 || saved is null || !int.TryParse(saved, out int to) || to == from) { return; }
+
+        string current = CardIn(to);
+        if (current is "blockStorage" or "diskII" || to is < 1 or > 7) { return; }
+        try
+        {
+            if (current != "empty") { HardwareAction($"slot{to}", "removeCard", []); }
+            if (_machine.Bus.IsSlotFree(to)) { _machine.Bus.MoveDisk35(to); }
+        }
+        catch (ArgumentException error)
+        {
+            problems.Add(error.Message);
+        }
+    }
+
+    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard,
+    // softCard, mouse, disk35, proFile, diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with
+    // the launch's ROM dumps, blockStorage, or empty.
     private string CardIn(int slot)
     {
         if (slot == 0)
@@ -1379,6 +1716,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
         if (_machine.Bus.SoftCard?.Slot == slot) { return "softCard"; }
+        if (slot == _machine.Bus.MouseSlot) { return "mouse"; }
+        if (slot == _machine.Bus.Disk35Slot) { return "disk35"; }
+        if (_machine.Bus.ProFileIn(slot) is not null) { return "proFile"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {
             return _diskSectors.TryGetValue(slot, out int sectors) ? $"diskII{sectors}" : "diskII";

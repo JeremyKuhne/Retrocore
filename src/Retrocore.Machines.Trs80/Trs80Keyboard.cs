@@ -18,13 +18,23 @@ public sealed class Trs80Keyboard
     // A typed key is held 40 ms and released for 60 ms before the next. Level II 1.3 rereads a new key after
     // 19 ms to debounce it, then takes about 50 ms before it scans again, so a shorter release hides the
     // release of a doubled letter.
-    private const int HoldCycles = 40 * Trs80Timing.CyclesPerMillisecond;
-    private const int ReleaseCycles = 60 * Trs80Timing.CyclesPerMillisecond;
+    private readonly int _holdCycles;
+    private readonly int _releaseCycles;
 
     private readonly byte[] _rows = new byte[8];
     private readonly Queue<(Trs80Key Key, bool Shift)> _typed = new();
     private (Trs80Key Key, bool Shift)? _current;
     private int _remaining;
+
+    /// <summary>
+    ///  Creates the keyboard.
+    /// </summary>
+    /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
+    internal Trs80Keyboard(int clockHertz = Trs80Timing.ClockHertz)
+    {
+        _holdCycles = 40 * (clockHertz / 1000);
+        _releaseCycles = 60 * (clockHertz / 1000);
+    }
 
     /// <summary>
     ///  Presses or releases a key.
@@ -89,7 +99,7 @@ public sealed class Trs80Keyboard
             Set(held.Key, pressed: false);
             if (held.Shift) { Set(Trs80Key.Shift, pressed: false); }
             _current = null;
-            _remaining = ReleaseCycles;
+            _remaining = _releaseCycles;
             return;
         }
 
@@ -97,7 +107,7 @@ public sealed class Trs80Keyboard
         _current = next;
         Set(next.Key, pressed: true);
         if (next.Shift) { Set(Trs80Key.Shift, pressed: true); }
-        _remaining = HoldCycles;
+        _remaining = _holdCycles;
     }
 
     // Shifted digits and punctuation follow the Model I keycaps.

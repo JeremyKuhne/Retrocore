@@ -1,0 +1,573 @@
+# Copyright (c) 2025 Jeremy W Kuhne
+# SPDX-License-Identifier: MIT
+# See LICENSE file in the project root for full license information
+#
+# The Intel 8080 and 8085 instruction-set description: what the assembler, disassembler and tools know about
+# them. The two share one opcode map; the 8085 adds RIM and SIM where the 8080 has undocumented NOPs, and its
+# undocumented instructions (DSUB, ARHL, RDEL, LDHI, LDSI, RSTV, SHLX, LHLX, JNK and JK) where the 8080 has
+# undocumented aliases of JMP, RET and CALL. Their timings differ, so each set lists every opcode.
+#
+# [isa] and [forms] describe the CPUs (read by Retrocore.Isa.IsaParser). Each opcode line lists the opcode, the
+# instruction and its operand form, 't=' with the nominal states (taken/not taken for a conditional
+# instruction) and optionally 'undocumented'. A form the [forms] section does not declare is a literal form
+# whose pattern is its name, such as A,M or PSW.
+#
+# The native syntax is Intel's: M is the byte at HL, a register pair is named by its first register (B, D, H)
+# or SP and PSW, and RST takes the restart number 0-7.
+
+[isa]
+endian little
+address-bits 16
+registers A:8 F:8 B:8 C:8 D:8 E:8 H:8 L:8 BC:16 DE:16 HL:16 PSW:16 SP:16 PC:16
+flags F S=7 Z=6 K=5 AC=4 P=2 V=1 CY=0
+# Documentation names flags by these words on every CPU, never by letter: Out: carry = found. On the 8080 bit
+# 5 and bit 3 read 0 and bit 1 reads 1; the 8085's undocumented K (bit 5) and V (bit 1) have no words.
+flag S negative "Set when a result's bit 7 is 1, a negative number in two's complement. Intel calls it the sign flag."
+flag Z zero "Set when a result is zero, or when a compare finds the values equal."
+flag AC half-carry "Auxiliary carry: set when a result carries out of bit 3. DAA uses it to correct decimal results. ANA sets it from bit 3 of the operands ORed on the 8080, and always on the 8085."
+flag P parity "Set when a result has an even number of 1 bits."
+flag CY carry "Set when an add carries out of the top bit, or a subtract or compare borrows (A is less than the value). Rotates move bits through it."
+literal-forms
+# The restarts, and on the 8085 alone the entries of TRAP and RST 5.5, 6.5 and 7.5, which on the 8080 fall inside
+# the restarts' own code.
+entry-points 0000 0008 0010 0018 0020 0028 0030 0038
+entry-points in I8085 0024 002C 0034 003C
+
+# Control flow, for disassembly and analysis. A conditional return continues when it is not taken, so it keeps
+# the default class.
+flow branch JNZ JZ JNC JC JPO JPE JP JM JNK JK
+flow jump JMP
+flow indirect-jump PCHL
+# RSTV (8085) calls $40 when V is set; the opcode implies its target.
+flow call CALL CNZ CZ CNC CC CPO CPE CP CM RST RSTV
+conditional CNZ CZ CNC CC CPO CPE CP CM RSTV
+target RSTV 0040
+flow return RET
+flow wait HLT
+
+# How an instruction accesses a memory operand; the rest read it.
+access write STA SHLD
+
+[forms]
+# Operand forms with expressions, in the order operands are matched; literal forms such as A,B and M match
+# first, when the mnemonic has them. Forms sharing a pattern are alternatives the mnemonic picks between. An
+# exclusive form takes any operand of a mnemonic that has it. A memory form's first field is an address the
+# instruction accesses. Fields: n byte, nn word, and rst a restart number 0-7 held in the opcode.
+Implied                         ""
+rst                             "{}"            fields=rstn exclusive
+B,n                             "B,{}"          fields=byte
+C,n                             "C,{}"          fields=byte
+D,n                             "D,{}"          fields=byte
+E,n                             "E,{}"          fields=byte
+H,n                             "H,{}"          fields=byte
+L,n                             "L,{}"          fields=byte
+M,n                             "M,{}"          fields=byte
+A,n                             "A,{}"          fields=byte
+B,nn                            "B,{}"          fields=word
+D,nn                            "D,{}"          fields=word
+H,nn                            "H,{}"          fields=word
+SP,nn                           "SP,{}"         fields=word
+nn                              "{}"            fields=word memory
+n                               "{}"            fields=byte
+
+[I8080]
+00          NOP   Implied         t=4
+01          LXI   B,nn            t=10
+02          STAX  B               t=7
+03          INX   B               t=5
+04          INR   B               t=5
+05          DCR   B               t=5
+06          MVI   B,n             t=7
+07          RLC   Implied         t=4
+08          NOP   Implied         t=4    undocumented
+09          DAD   B               t=10
+0A          LDAX  B               t=7
+0B          DCX   B               t=5
+0C          INR   C               t=5
+0D          DCR   C               t=5
+0E          MVI   C,n             t=7
+0F          RRC   Implied         t=4
+10          NOP   Implied         t=4    undocumented
+11          LXI   D,nn            t=10
+12          STAX  D               t=7
+13          INX   D               t=5
+14          INR   D               t=5
+15          DCR   D               t=5
+16          MVI   D,n             t=7
+17          RAL   Implied         t=4
+18          NOP   Implied         t=4    undocumented
+19          DAD   D               t=10
+1A          LDAX  D               t=7
+1B          DCX   D               t=5
+1C          INR   E               t=5
+1D          DCR   E               t=5
+1E          MVI   E,n             t=7
+1F          RAR   Implied         t=4
+20          NOP   Implied         t=4    undocumented
+21          LXI   H,nn            t=10
+22          SHLD  nn              t=16
+23          INX   H               t=5
+24          INR   H               t=5
+25          DCR   H               t=5
+26          MVI   H,n             t=7
+27          DAA   Implied         t=4
+28          NOP   Implied         t=4    undocumented
+29          DAD   H               t=10
+2A          LHLD  nn              t=16
+2B          DCX   H               t=5
+2C          INR   L               t=5
+2D          DCR   L               t=5
+2E          MVI   L,n             t=7
+2F          CMA   Implied         t=4
+30          NOP   Implied         t=4    undocumented
+31          LXI   SP,nn           t=10
+32          STA   nn              t=13
+33          INX   SP              t=5
+34          INR   M               t=10
+35          DCR   M               t=10
+36          MVI   M,n             t=10
+37          STC   Implied         t=4
+38          NOP   Implied         t=4    undocumented
+39          DAD   SP              t=10
+3A          LDA   nn              t=13
+3B          DCX   SP              t=5
+3C          INR   A               t=5
+3D          DCR   A               t=5
+3E          MVI   A,n             t=7
+3F          CMC   Implied         t=4
+40          MOV   B,B             t=5
+41          MOV   B,C             t=5
+42          MOV   B,D             t=5
+43          MOV   B,E             t=5
+44          MOV   B,H             t=5
+45          MOV   B,L             t=5
+46          MOV   B,M             t=7
+47          MOV   B,A             t=5
+48          MOV   C,B             t=5
+49          MOV   C,C             t=5
+4A          MOV   C,D             t=5
+4B          MOV   C,E             t=5
+4C          MOV   C,H             t=5
+4D          MOV   C,L             t=5
+4E          MOV   C,M             t=7
+4F          MOV   C,A             t=5
+50          MOV   D,B             t=5
+51          MOV   D,C             t=5
+52          MOV   D,D             t=5
+53          MOV   D,E             t=5
+54          MOV   D,H             t=5
+55          MOV   D,L             t=5
+56          MOV   D,M             t=7
+57          MOV   D,A             t=5
+58          MOV   E,B             t=5
+59          MOV   E,C             t=5
+5A          MOV   E,D             t=5
+5B          MOV   E,E             t=5
+5C          MOV   E,H             t=5
+5D          MOV   E,L             t=5
+5E          MOV   E,M             t=7
+5F          MOV   E,A             t=5
+60          MOV   H,B             t=5
+61          MOV   H,C             t=5
+62          MOV   H,D             t=5
+63          MOV   H,E             t=5
+64          MOV   H,H             t=5
+65          MOV   H,L             t=5
+66          MOV   H,M             t=7
+67          MOV   H,A             t=5
+68          MOV   L,B             t=5
+69          MOV   L,C             t=5
+6A          MOV   L,D             t=5
+6B          MOV   L,E             t=5
+6C          MOV   L,H             t=5
+6D          MOV   L,L             t=5
+6E          MOV   L,M             t=7
+6F          MOV   L,A             t=5
+70          MOV   M,B             t=7
+71          MOV   M,C             t=7
+72          MOV   M,D             t=7
+73          MOV   M,E             t=7
+74          MOV   M,H             t=7
+75          MOV   M,L             t=7
+76          HLT   Implied         t=7
+77          MOV   M,A             t=7
+78          MOV   A,B             t=5
+79          MOV   A,C             t=5
+7A          MOV   A,D             t=5
+7B          MOV   A,E             t=5
+7C          MOV   A,H             t=5
+7D          MOV   A,L             t=5
+7E          MOV   A,M             t=7
+7F          MOV   A,A             t=5
+80          ADD   B               t=4
+81          ADD   C               t=4
+82          ADD   D               t=4
+83          ADD   E               t=4
+84          ADD   H               t=4
+85          ADD   L               t=4
+86          ADD   M               t=7
+87          ADD   A               t=4
+88          ADC   B               t=4
+89          ADC   C               t=4
+8A          ADC   D               t=4
+8B          ADC   E               t=4
+8C          ADC   H               t=4
+8D          ADC   L               t=4
+8E          ADC   M               t=7
+8F          ADC   A               t=4
+90          SUB   B               t=4
+91          SUB   C               t=4
+92          SUB   D               t=4
+93          SUB   E               t=4
+94          SUB   H               t=4
+95          SUB   L               t=4
+96          SUB   M               t=7
+97          SUB   A               t=4
+98          SBB   B               t=4
+99          SBB   C               t=4
+9A          SBB   D               t=4
+9B          SBB   E               t=4
+9C          SBB   H               t=4
+9D          SBB   L               t=4
+9E          SBB   M               t=7
+9F          SBB   A               t=4
+A0          ANA   B               t=4
+A1          ANA   C               t=4
+A2          ANA   D               t=4
+A3          ANA   E               t=4
+A4          ANA   H               t=4
+A5          ANA   L               t=4
+A6          ANA   M               t=7
+A7          ANA   A               t=4
+A8          XRA   B               t=4
+A9          XRA   C               t=4
+AA          XRA   D               t=4
+AB          XRA   E               t=4
+AC          XRA   H               t=4
+AD          XRA   L               t=4
+AE          XRA   M               t=7
+AF          XRA   A               t=4
+B0          ORA   B               t=4
+B1          ORA   C               t=4
+B2          ORA   D               t=4
+B3          ORA   E               t=4
+B4          ORA   H               t=4
+B5          ORA   L               t=4
+B6          ORA   M               t=7
+B7          ORA   A               t=4
+B8          CMP   B               t=4
+B9          CMP   C               t=4
+BA          CMP   D               t=4
+BB          CMP   E               t=4
+BC          CMP   H               t=4
+BD          CMP   L               t=4
+BE          CMP   M               t=7
+BF          CMP   A               t=4
+C0          RNZ   Implied         t=11/5
+C1          POP   B               t=10
+C2          JNZ   nn              t=10
+C3          JMP   nn              t=10
+C4          CNZ   nn              t=17/11
+C5          PUSH  B               t=11
+C6          ADI   n               t=7
+C7          RST   rst             t=11
+C8          RZ    Implied         t=11/5
+C9          RET   Implied         t=10
+CA          JZ    nn              t=10
+CB          JMP   nn              t=10   undocumented
+CC          CZ    nn              t=17/11
+CD          CALL  nn              t=17
+CE          ACI   n               t=7
+D0          RNC   Implied         t=11/5
+D1          POP   D               t=10
+D2          JNC   nn              t=10
+D3          OUT   n               t=10
+D4          CNC   nn              t=17/11
+D5          PUSH  D               t=11
+D6          SUI   n               t=7
+D8          RC    Implied         t=11/5
+D9          RET   Implied         t=10   undocumented
+DA          JC    nn              t=10
+DB          IN    n               t=10
+DC          CC    nn              t=17/11
+DD          CALL  nn              t=17   undocumented
+DE          SBI   n               t=7
+E0          RPO   Implied         t=11/5
+E1          POP   H               t=10
+E2          JPO   nn              t=10
+E3          XTHL  Implied         t=18
+E4          CPO   nn              t=17/11
+E5          PUSH  H               t=11
+E6          ANI   n               t=7
+E8          RPE   Implied         t=11/5
+E9          PCHL  Implied         t=5
+EA          JPE   nn              t=10
+EB          XCHG  Implied         t=4
+EC          CPE   nn              t=17/11
+ED          CALL  nn              t=17   undocumented
+EE          XRI   n               t=7
+F0          RP    Implied         t=11/5
+F1          POP   PSW             t=10
+F2          JP    nn              t=10
+F3          DI    Implied         t=4
+F4          CP    nn              t=17/11
+F5          PUSH  PSW             t=11
+F6          ORI   n               t=7
+F8          RM    Implied         t=11/5
+F9          SPHL  Implied         t=5
+FA          JM    nn              t=10
+FB          EI    Implied         t=4
+FC          CM    nn              t=17/11
+FD          CALL  nn              t=17   undocumented
+FE          CPI   n               t=7
+
+[I8085]
+00          NOP   Implied         t=4
+01          LXI   B,nn            t=10
+02          STAX  B               t=7
+03          INX   B               t=6
+04          INR   B               t=4
+05          DCR   B               t=4
+06          MVI   B,n             t=7
+07          RLC   Implied         t=4
+08          DSUB  Implied         t=10   undocumented
+09          DAD   B               t=10
+0A          LDAX  B               t=7
+0B          DCX   B               t=6
+0C          INR   C               t=4
+0D          DCR   C               t=4
+0E          MVI   C,n             t=7
+0F          RRC   Implied         t=4
+10          ARHL  Implied         t=7    undocumented
+11          LXI   D,nn            t=10
+12          STAX  D               t=7
+13          INX   D               t=6
+14          INR   D               t=4
+15          DCR   D               t=4
+16          MVI   D,n             t=7
+17          RAL   Implied         t=4
+18          RDEL  Implied         t=10   undocumented
+19          DAD   D               t=10
+1A          LDAX  D               t=7
+1B          DCX   D               t=6
+1C          INR   E               t=4
+1D          DCR   E               t=4
+1E          MVI   E,n             t=7
+1F          RAR   Implied         t=4
+20          RIM   Implied         t=4
+21          LXI   H,nn            t=10
+22          SHLD  nn              t=16
+23          INX   H               t=6
+24          INR   H               t=4
+25          DCR   H               t=4
+26          MVI   H,n             t=7
+27          DAA   Implied         t=4
+28          LDHI  n               t=10   undocumented
+29          DAD   H               t=10
+2A          LHLD  nn              t=16
+2B          DCX   H               t=6
+2C          INR   L               t=4
+2D          DCR   L               t=4
+2E          MVI   L,n             t=7
+2F          CMA   Implied         t=4
+30          SIM   Implied         t=4
+31          LXI   SP,nn           t=10
+32          STA   nn              t=13
+33          INX   SP              t=6
+34          INR   M               t=10
+35          DCR   M               t=10
+36          MVI   M,n             t=10
+37          STC   Implied         t=4
+38          LDSI  n               t=10   undocumented
+39          DAD   SP              t=10
+3A          LDA   nn              t=13
+3B          DCX   SP              t=6
+3C          INR   A               t=4
+3D          DCR   A               t=4
+3E          MVI   A,n             t=7
+3F          CMC   Implied         t=4
+40          MOV   B,B             t=4
+41          MOV   B,C             t=4
+42          MOV   B,D             t=4
+43          MOV   B,E             t=4
+44          MOV   B,H             t=4
+45          MOV   B,L             t=4
+46          MOV   B,M             t=7
+47          MOV   B,A             t=4
+48          MOV   C,B             t=4
+49          MOV   C,C             t=4
+4A          MOV   C,D             t=4
+4B          MOV   C,E             t=4
+4C          MOV   C,H             t=4
+4D          MOV   C,L             t=4
+4E          MOV   C,M             t=7
+4F          MOV   C,A             t=4
+50          MOV   D,B             t=4
+51          MOV   D,C             t=4
+52          MOV   D,D             t=4
+53          MOV   D,E             t=4
+54          MOV   D,H             t=4
+55          MOV   D,L             t=4
+56          MOV   D,M             t=7
+57          MOV   D,A             t=4
+58          MOV   E,B             t=4
+59          MOV   E,C             t=4
+5A          MOV   E,D             t=4
+5B          MOV   E,E             t=4
+5C          MOV   E,H             t=4
+5D          MOV   E,L             t=4
+5E          MOV   E,M             t=7
+5F          MOV   E,A             t=4
+60          MOV   H,B             t=4
+61          MOV   H,C             t=4
+62          MOV   H,D             t=4
+63          MOV   H,E             t=4
+64          MOV   H,H             t=4
+65          MOV   H,L             t=4
+66          MOV   H,M             t=7
+67          MOV   H,A             t=4
+68          MOV   L,B             t=4
+69          MOV   L,C             t=4
+6A          MOV   L,D             t=4
+6B          MOV   L,E             t=4
+6C          MOV   L,H             t=4
+6D          MOV   L,L             t=4
+6E          MOV   L,M             t=7
+6F          MOV   L,A             t=4
+70          MOV   M,B             t=7
+71          MOV   M,C             t=7
+72          MOV   M,D             t=7
+73          MOV   M,E             t=7
+74          MOV   M,H             t=7
+75          MOV   M,L             t=7
+76          HLT   Implied         t=5
+77          MOV   M,A             t=7
+78          MOV   A,B             t=4
+79          MOV   A,C             t=4
+7A          MOV   A,D             t=4
+7B          MOV   A,E             t=4
+7C          MOV   A,H             t=4
+7D          MOV   A,L             t=4
+7E          MOV   A,M             t=7
+7F          MOV   A,A             t=4
+80          ADD   B               t=4
+81          ADD   C               t=4
+82          ADD   D               t=4
+83          ADD   E               t=4
+84          ADD   H               t=4
+85          ADD   L               t=4
+86          ADD   M               t=7
+87          ADD   A               t=4
+88          ADC   B               t=4
+89          ADC   C               t=4
+8A          ADC   D               t=4
+8B          ADC   E               t=4
+8C          ADC   H               t=4
+8D          ADC   L               t=4
+8E          ADC   M               t=7
+8F          ADC   A               t=4
+90          SUB   B               t=4
+91          SUB   C               t=4
+92          SUB   D               t=4
+93          SUB   E               t=4
+94          SUB   H               t=4
+95          SUB   L               t=4
+96          SUB   M               t=7
+97          SUB   A               t=4
+98          SBB   B               t=4
+99          SBB   C               t=4
+9A          SBB   D               t=4
+9B          SBB   E               t=4
+9C          SBB   H               t=4
+9D          SBB   L               t=4
+9E          SBB   M               t=7
+9F          SBB   A               t=4
+A0          ANA   B               t=4
+A1          ANA   C               t=4
+A2          ANA   D               t=4
+A3          ANA   E               t=4
+A4          ANA   H               t=4
+A5          ANA   L               t=4
+A6          ANA   M               t=7
+A7          ANA   A               t=4
+A8          XRA   B               t=4
+A9          XRA   C               t=4
+AA          XRA   D               t=4
+AB          XRA   E               t=4
+AC          XRA   H               t=4
+AD          XRA   L               t=4
+AE          XRA   M               t=7
+AF          XRA   A               t=4
+B0          ORA   B               t=4
+B1          ORA   C               t=4
+B2          ORA   D               t=4
+B3          ORA   E               t=4
+B4          ORA   H               t=4
+B5          ORA   L               t=4
+B6          ORA   M               t=7
+B7          ORA   A               t=4
+B8          CMP   B               t=4
+B9          CMP   C               t=4
+BA          CMP   D               t=4
+BB          CMP   E               t=4
+BC          CMP   H               t=4
+BD          CMP   L               t=4
+BE          CMP   M               t=7
+BF          CMP   A               t=4
+C0          RNZ   Implied         t=12/6
+C1          POP   B               t=10
+C2          JNZ   nn              t=10/7
+C3          JMP   nn              t=10
+C4          CNZ   nn              t=18/9
+C5          PUSH  B               t=12
+C6          ADI   n               t=7
+C7          RST   rst             t=12
+C8          RZ    Implied         t=12/6
+C9          RET   Implied         t=10
+CA          JZ    nn              t=10/7
+CB          RSTV  Implied         t=12/6 undocumented
+CC          CZ    nn              t=18/9
+CD          CALL  nn              t=18
+CE          ACI   n               t=7
+D0          RNC   Implied         t=12/6
+D1          POP   D               t=10
+D2          JNC   nn              t=10/7
+D3          OUT   n               t=10
+D4          CNC   nn              t=18/9
+D5          PUSH  D               t=12
+D6          SUI   n               t=7
+D8          RC    Implied         t=12/6
+D9          SHLX  Implied         t=10   undocumented
+DA          JC    nn              t=10/7
+DB          IN    n               t=10
+DC          CC    nn              t=18/9
+DD          JNK   nn              t=10/7 undocumented
+DE          SBI   n               t=7
+E0          RPO   Implied         t=12/6
+E1          POP   H               t=10
+E2          JPO   nn              t=10/7
+E3          XTHL  Implied         t=16
+E4          CPO   nn              t=18/9
+E5          PUSH  H               t=12
+E6          ANI   n               t=7
+E8          RPE   Implied         t=12/6
+E9          PCHL  Implied         t=6
+EA          JPE   nn              t=10/7
+EB          XCHG  Implied         t=4
+EC          CPE   nn              t=18/9
+ED          LHLX  Implied         t=10   undocumented
+EE          XRI   n               t=7
+F0          RP    Implied         t=12/6
+F1          POP   PSW             t=10
+F2          JP    nn              t=10/7
+F3          DI    Implied         t=4
+F4          CP    nn              t=18/9
+F5          PUSH  PSW             t=12
+F6          ORI   n               t=7
+F8          RM    Implied         t=12/6
+F9          SPHL  Implied         t=6
+FA          JM    nn              t=10/7
+FB          EI    Implied         t=4
+FC          CM    nn              t=18/9
+FD          JK    nn              t=10/7 undocumented
+FE          CPI   n               t=7

@@ -27,6 +27,46 @@
         {
             "type": "retrocore",
             "request": "launch",
+            "machine": "apple2",
+            "name": "IIe: mouse card from BASIC",
+            "preLaunchTask": "Build debug host",
+            "model": "iie-enhanced",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Apple2/Roms",
+            "mouse": 4,
+            "basic": "${workspaceFolder}/sample/iie/mouse.applesoft.bas",
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "IIe: Apple II DeskTop with the mouse card",
+            "preLaunchTask": "Build debug host",
+            "model": "iie-enhanced",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Apple2/Roms",
+            "mouse": 4,
+            "diskImage": "${env:USERPROFILE}/Retrocore/disks/a2desktop/A2DeskTop-1.5-en_800k.po",
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
+            "name": "IIe: Apple II DeskTop on the 3.5 disk controller",
+            "preLaunchTask": "Build debug host",
+            "model": "iie-enhanced",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Apple2/Roms",
+            "mouse": 4,
+            "disk35": 5,
+            "disk35Images": ["${env:USERPROFILE}/Retrocore/disks/a2desktop/A2DeskTop-1.5-en_800k.po"],
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
             "machine": "trs80-model1",
             "name": "Model I: boot Level II with SDK ROM sources",
             "preLaunchTask": "Build debug host",
@@ -43,6 +83,17 @@
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "sdkRoms": "${workspaceFolder}/src/Retrocore.Machines.Trs80/Roms",
             "source": "${workspaceFolder}/sample/trs80/hello.asm",
+            "stopOnEntry": true
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "coco",
+            "model": "coco2",
+            "name": "Color Computer: 6809 sample",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "source": "${workspaceFolder}/sample/coco/hello.asm",
             "stopOnEntry": true
         },
         {

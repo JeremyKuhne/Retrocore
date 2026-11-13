@@ -83,9 +83,17 @@ internal static partial class InstructionDocs
     };
 
     // Lists a Z80 mnemonic's canonical encodings: its operands, opcode bytes with their fields, and T-states.
-    private static string? DescribeZ80(string mnemonic, InstructionSet set)
+    private static string? DescribeZ80(string mnemonic, InstructionSet set) => DescribeEncoded(s_z80, mnemonic, set, "T-states");
+
+    // Lists a mnemonic's canonical encodings from an instruction-set description: its operands, opcode bytes with
+    // their fields, and clock cycles.
+    private static string? DescribeEncoded(
+        Dictionary<string, (string Summary, string Flags)> docs,
+        string mnemonic,
+        InstructionSet set,
+        string cyclesHeading)
     {
-        if (!s_z80.TryGetValue(mnemonic, out (string Summary, string Flags) doc)) { return null; }
+        if (!docs.TryGetValue(mnemonic, out (string Summary, string Flags) doc)) { return null; }
         int id = set.GetMnemonic(mnemonic);
         List<string> rows = [];
         for (int encoding = 0; encoding < set.Encodings.Count; encoding++)
@@ -106,7 +114,8 @@ internal static partial class InstructionDocs
             rows.Add($"| `{mnemonic.ToUpperInvariant()}{operands}`{note} | `{Bytes(value, form)}` | {cycles} |");
         }
 
-        string table = rows.Count == 0 ? "" : $"\n\n| Operands | Opcode | T-states |\n| --- | --- | --- |\n{string.Join('\n', rows)}";
+        string header = $"| Operands | Opcode | {cyclesHeading} |\n| --- | --- | --- |";
+        string table = rows.Count == 0 ? "" : $"\n\n{header}\n{string.Join('\n', rows)}";
         return $"**{mnemonic.ToUpperInvariant()}**: {doc.Summary}\n\nFlags: {doc.Flags}{table}";
     }
 
@@ -141,11 +150,16 @@ internal static partial class InstructionDocs
         return string.Join(' ', parts);
     }
 
-    // A bit number adds 8 per bit to the last opcode byte, and a restart adds its address.
+    // A bit number adds 8 per bit to the last opcode byte, a restart its address, and a restart number 8 per number.
     private static string Opcode(IsaEncoding encoding, OperandForm form, int index)
     {
         string hex = encoding.OpcodeByte(index).ToString("X2", CultureInfo.InvariantCulture);
         if (index != encoding.OpcodeLength - 1 || form.OpcodeField < 0) { return hex; }
-        return form.Field(form.OpcodeField) == OperandFieldKind.BitNumber ? $"{hex}+8b" : $"{hex}+p";
+        return form.Field(form.OpcodeField) switch
+        {
+            OperandFieldKind.BitNumber => $"{hex}+8b",
+            OperandFieldKind.RestartNumber => $"{hex}+8n",
+            _ => $"{hex}+p"
+        };
     }
 }

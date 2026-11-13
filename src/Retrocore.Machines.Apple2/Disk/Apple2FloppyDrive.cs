@@ -58,7 +58,7 @@ public sealed class Apple2FloppyDrive : IDiskDrive
             Description = description,
             Controller = controllerName,
             Formats = ["woz", "dsk", "do", "po"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject,
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 35,
             Sides = 1
         };
@@ -126,6 +126,33 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     public void Insert(WozDisk disk, string label, string format)
     {
         _controller.Mount(Drive, disk);
+        _label = label;
+        _format = format;
+    }
+
+    /// <summary>
+    ///  Gets the disk in the drive, which stays in it; null when the drive is empty.
+    /// </summary>
+    public WozDisk? Disk => _controller.MediaIn(Drive);
+
+    /// <summary>
+    ///  Covers or uncovers the disk's write-protect notch. The disk keeps what is written to it in memory; its image
+    ///  file does not change.
+    /// </summary>
+    /// <param name="writeProtected">Whether the disk is protected.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    public void SetWriteProtected(bool writeProtected) =>
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsReadOnly = writeProtected;
+
+    /// <summary>
+    ///  Records that the disk was saved to an image, which it now comes from.
+    /// </summary>
+    /// <param name="label">What the host calls the image, such as its path.</param>
+    /// <param name="format">Its image format, such as <c>WOZ</c>.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    public void Saved(string label, string format)
+    {
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).MarkSaved();
         _label = label;
         _format = format;
     }

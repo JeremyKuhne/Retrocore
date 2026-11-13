@@ -97,7 +97,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private readonly int _switchableBanks;
     private readonly int _bankMask;
     private readonly int _system;
-    private readonly Queue<(byte Code, bool Shifted)> _keys = new();
+    private readonly Queue<(byte Code, bool Shifted, bool Control)> _keys = new();
 
     private int _zeroPageBase;
     private int _stackBase;
@@ -113,8 +113,12 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private int _driveSelect;
     private bool _externalDrive;
 
+    // The ProFile interface card that answers the pseudo-DMA: the last one reached.
+    private Apple3ProFileCard? _dmaCard;
+
     private byte _key;
     private bool _keyShifted;
+    private bool _keyControl;
     private int _keyDelay;
     private byte _strobe;
     private int _analogSelect;
@@ -245,6 +249,54 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     public bool CharacterWrite { get; private set; }
 
     /// <summary>
+    ///  Gets the time the bus has been advanced by since it was made, in thousandths of a 14.318 MHz dot.
+    /// </summary>
+    public long Time { get; private set; }
+
+    /// <summary>
+    ///  Gets the ProFile interface card in a slot.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <returns>The card, or null when the slot has none.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">There is no such slot.</exception>
+    public Apple3ProFileCard? ProFileIn(int slot)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(slot, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, 4);
+        return _slots[slot] as Apple3ProFileCard;
+    }
+
+    /// <summary>
+    ///  Puts a ProFile interface card in an empty slot, with a ProFile cabled to it that has no image yet. Its ports
+    ///  answer at once at <c>$C080</c> plus 16 times the slot, and its lines at <c>$CN00</c>.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <returns>The card.</returns>
+    /// <exception cref="InvalidOperationException">The slot has a card.</exception>
+    public Apple3ProFileCard InstallProFile(int slot)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(slot, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, 4);
+
+        // A block shows as moving for a thirtieth of a second.
+        Apple3ProFileCard card = new(slot, () => Time, 14_318_181_818 / 30);
+        InstallCard(card);
+        return card;
+    }
+
+    /// <summary>
+    ///  Takes the ProFile interface card out of a slot, with its ProFile.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <exception cref="InvalidOperationException">The slot has no ProFile card.</exception>
+    public void RemoveProFile(int slot)
+    {
+        Apple3ProFileCard card = ProFileIn(slot) ?? throw new InvalidOperationException($"Slot {slot} has no ProFile card.");
+        card.Drive.Eject();
+        RemoveCard(slot);
+    }
+
+    /// <summary>
     ///  Gets the speaker's level, toggled by <c>$C030</c> and by the <c>$C040</c> beep.
     /// </summary>
     public bool Speaker { get; private set; }
@@ -336,7 +388,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         ArgumentNullException.ThrowIfNull(card);
         if (card.Slot is < 1 or > 4 || _slots[card.Slot] is not null)
         {
-            throw new InvalidOperationException($"Slot {card.Slot} is not free.");
+            throw new InvalidOperationException($"Slot {card.Slot} has a card.");
         }
 
         if (card is SoftCard3 softCard)
@@ -374,6 +426,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     {
         if (Card(slot) is not { } card) { throw new InvalidOperationException($"Slot {slot} has no card."); }
         if (ReferenceEquals(card, SoftCard)) { SoftCard = null; }
+        if (ReferenceEquals(card, _dmaCard)) { _dmaCard = null; }
         _slots[slot] = null;
         if (_expansionSlot == slot) { _expansionSlot = 0; }
         CardsChanged();
@@ -430,10 +483,15 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     ///   letter or a shifted symbol goes with SHIFT held while it is the current key, and a small letter as its
     ///   capital without.
     ///  </para>
+    ///  <para>
+    ///   SOS makes control characters the same way, from the key and CONTROL, so any other code below <c>$20</c>
+    ///   goes with CONTROL held: <c>$03</c> is CONTROL-C, not C.
+    ///  </para>
     /// </remarks>
     public void QueueKey(byte code)
     {
         bool shifted = code is >= (byte)'A' and <= (byte)'Z' || ShiftedSymbols.Contains((char)code);
+        bool control = code < 0x20 && code is not (0x08 or 0x09 or 0x0A or 0x0B or 0x0D or 0x15 or 0x1B);
         _keys.Enqueue((code switch
         {
             0x1B => 0x9B,
@@ -445,7 +503,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             0x0B => 0x8B,
             >= (byte)'a' and <= (byte)'z' => (byte)(code - 0x20),
             _ => code
-        }, shifted));
+        }, shifted, control));
 
         if (_strobe == 0 && _keyDelay == 0) { DeliverKey(); }
     }
@@ -473,6 +531,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     /// <param name="units">The time passed, in thousandths of a 14.318 MHz dot.</param>
     public void Advance(int units)
     {
+        Time += units;
         _viaTime += units;
         while (_viaTime >= ViaPeriod)
         {
@@ -584,7 +643,15 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             case >= 0xFFD0 and < 0xFFF0 when (BankRegister & ViasVisible) != 0:
                 return (address < 0xFFE0 ? Via0 : Via1).Read((byte)address);
             default:
-                return (Environment & RomEnable) != 0 ? _rom[address - 0xF000] : _ram[_system + address - 0x8000];
+                if ((Environment & RomEnable) == 0) { return _ram[_system + address - 0x8000]; }
+
+                // The pseudo-DMA: a fetch from $F800-$F8FF moves a byte for the card that answers DMA OK.
+                if (address >> 8 == 0xF8 && _dmaCard is { } card)
+                {
+                    card.Transfer(_ram, _zeroPageBase + (address & 0xFF));
+                }
+
+                return _rom[address - 0xF000];
         }
     }
 
@@ -617,8 +684,8 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             case < 0xC100 when (Environment & IoEnable) != 0:
                 WriteIo((byte)address, value);
                 return;
-            case < 0xC500 when (Environment & IoEnable) != 0:
-                SelectExpansion(address);
+            case >= 0xC100 and < 0xC500 when (Environment & IoEnable) != 0:
+                WriteSlotRom(address, value);
                 return;
             case >= 0xC800 and < 0xD000 when (Environment & IoEnable) != 0:
                 if (address == 0xCFFF) { _expansionSlot = 0; }
@@ -785,9 +852,10 @@ public sealed class Apple3Bus : IOpcodeFetchBus
 
     private void DeliverKey()
     {
-        if (!_keys.TryDequeue(out (byte Code, bool Shifted) key)) { return; }
+        if (!_keys.TryDequeue(out (byte Code, bool Shifted, bool Control) key)) { return; }
         _key = key.Code;
         _keyShifted = key.Shifted;
+        _keyControl = key.Control;
         _strobe = 0x80;
 
         // The encoder's data-ready line, on VIA 1's CA2.
@@ -799,7 +867,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     {
         int value = 0x7C | (_key & 0x80) | (_strobe != 0 ? 1 : 0);
         if ((Modifiers & Apple3Modifiers.Shift) != 0 || (_keyShifted && _strobe != 0)) { value |= 0x02; }
-        if ((Modifiers & Apple3Modifiers.Control) != 0) { value &= ~0x04; }
+        if ((Modifiers & Apple3Modifiers.Control) != 0 || (_keyControl && _strobe != 0)) { value &= ~0x04; }
         if ((Modifiers & Apple3Modifiers.AlphaLock) != 0) { value &= ~0x08; }
         if ((Modifiers & Apple3Modifiers.OpenApple) != 0) { value &= ~0x10; }
         if ((Modifiers & Apple3Modifiers.SolidApple) != 0) { value &= ~0x20; }
@@ -817,11 +885,17 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         return null;
     }
 
-    // A read of a slot's ROM page selects its expansion ROM.
+    // An access to a slot's ROM page selects its expansion ROM.
     private byte ReadSlotRom(ushort address)
     {
         SelectExpansion(address);
-        return _slots[(address >> 8) & 7] is { } card ? card.ReadRom(address & 0xFF) : (byte)0xFF;
+        return SlotCard(address >> 8) is { } card ? card.ReadRom(address & 0xFF) : (byte)0xFF;
+    }
+
+    private void WriteSlotRom(ushort address, byte value)
+    {
+        SelectExpansion(address);
+        SlotCard(address >> 8)?.WriteRom(address & 0xFF, value);
     }
 
     private void SelectExpansion(ushort address)
@@ -843,7 +917,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         switch (offset)
         {
             case >= 0x90 and < 0xD0:
-                return _slots[(offset >> 4) - 8] is { } card ? card.ReadIo(offset & 0x0F) : (byte)0xFF;
+                return SlotCard((offset >> 4) - 8) is { } card ? card.ReadIo(offset & 0x0F) : (byte)0xFF;
             case < 0x08:
                 return (byte)((_key & 0x7F) | _strobe);
             case < 0x10:
@@ -871,7 +945,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         switch (offset)
         {
             case >= 0x90 and < 0xD0:
-                _slots[(offset >> 4) - 8]?.WriteIo(offset & 0x0F, value);
+                SlotCard((offset >> 4) - 8)?.WriteIo(offset & 0x0F, value);
                 break;
             case >= 0x10 and < 0x20:
                 ClearStrobe();
@@ -893,6 +967,15 @@ public sealed class Apple3Bus : IOpcodeFetchBus
                 Switch(offset);
                 break;
         }
+    }
+
+    // The card in a slot, for an access to its I/O or its ROM page. A ProFile card reached becomes the one that
+    // answers the pseudo-DMA.
+    private IApple3Card? SlotCard(int slot)
+    {
+        IApple3Card? card = _slots[slot & 7];
+        if (card is Apple3ProFileCard proFile) { _dmaCard = proFile; }
+        return card;
     }
 
     // The switches a read or a write throws alike.

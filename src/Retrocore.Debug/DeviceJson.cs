@@ -14,7 +14,7 @@ namespace Retrocore.Debug;
 ///  <para>
 ///   Each device is an object with its <c>id</c>, <c>kind</c> (<c>floppyDrive</c>, <c>tapeDrive</c> or
 ///   <c>blockStorage</c>), <c>name</c>, <c>description</c>, <c>controller</c>, <c>formats</c>, <c>operations</c>
-///   (<c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c>), <c>tracks</c> and <c>sides</c>; its
+///   (<c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c>, <c>save</c>), <c>tracks</c> and <c>sides</c>; its
 ///   <c>media</c> (<c>label</c>, <c>format</c>, <c>writeProtected</c>, <c>changed</c>) or null; its
 ///   <c>activity</c> (<c>idle</c>, <c>seeking</c>, <c>reading</c>, <c>writing</c>); and its kind's state:
 ///   <c>head</c> (<c>motor</c>, <c>selected</c>, <c>track</c>, <c>side</c>, <c>sector</c>), <c>transport</c>
@@ -55,15 +55,7 @@ internal static class DeviceJson
             ["operations"] = Operations(info.Operations),
             ["tracks"] = info.Tracks,
             ["sides"] = info.Sides,
-            ["media"] = device.Media is { } media
-                ? new JsonObject
-                {
-                    ["label"] = media.Label,
-                    ["format"] = media.Format,
-                    ["writeProtected"] = media.WriteProtected,
-                    ["changed"] = media.Changed
-                }
-                : null,
+            ["media"] = device.Media is { } media ? Media(media) : null,
             ["activity"] = Camel(device.Activity.ToString())
         };
 
@@ -105,6 +97,14 @@ internal static class DeviceJson
         return result;
     }
 
+    private static JsonObject Media(MediaState media) => new()
+    {
+        ["label"] = media.Label,
+        ["format"] = media.Format,
+        ["writeProtected"] = media.WriteProtected,
+        ["changed"] = media.Changed
+    };
+
     private static JsonArray Operations(MediaOperations operations)
     {
         JsonArray result = [];
@@ -112,6 +112,7 @@ internal static class DeviceJson
         if ((operations & MediaOperations.Eject) != 0) { result.Add((JsonNode)"eject"); }
         if ((operations & MediaOperations.Record) != 0) { result.Add((JsonNode)"record"); }
         if ((operations & MediaOperations.WriteProtect) != 0) { result.Add((JsonNode)"writeProtect"); }
+        if ((operations & MediaOperations.Save) != 0) { result.Add((JsonNode)"save"); }
         return result;
     }
 

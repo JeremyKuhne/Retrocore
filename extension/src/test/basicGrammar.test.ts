@@ -18,7 +18,9 @@ before(async () => {
     const files: Record<string, string> = {
         "source.retrocore-applesoft": "applesoft.tmLanguage.json",
         "source.retrocore-level2": "level2.tmLanguage.json",
-        "source.retrocore-integer": "integer.tmLanguage.json"
+        "source.retrocore-integer": "integer.tmLanguage.json",
+        "source.retrocore-business": "business.tmLanguage.json",
+        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -70,6 +72,35 @@ test("Integer BASIC's names run to any length, and MOD and # are operators", () 
     assert.ok(has(scopes("integer", line, "GOSUB"), "keyword.control"));
     assert.ok(has(scopes("integer", "30 SCORE=SCORE+1", "SC"), "variable.other"));
     assert.ok(has(scopes("integer", "40 A$(1,3)=\"XYZ\"", "A$"), "variable.other"));
+});
+
+test("Business BASIC finds reserved words only between separators", () => {
+    const line = "20 IF PRINTER.COUNT& DIV 2 THEN GOSUB 100 ELSE PRINT FNA(2);MID$(B$,1,1)";
+    assert.ok(has(scopes("business", line, "IF"), "keyword.control"));
+    assert.ok(has(scopes("business", line, "PRINTER"), "variable.other"), "PRINT inside PRINTER");
+    assert.ok(!has(scopes("business", line, "COUNT"), "keyword"), "the name holds a dot and ends in &");
+    assert.ok(has(scopes("business", line, "DIV"), "keyword.operator"));
+    assert.ok(has(scopes("business", line, "THEN"), "keyword.control"));
+    assert.ok(has(scopes("business", line, "ELSE"), "keyword.control"));
+    assert.ok(has(scopes("business", line, "PRINT", 1), "keyword.other"));
+    assert.ok(has(scopes("business", line, "FN"), "support.function"), "FN before its name");
+    assert.ok(has(scopes("business", line, "MID$("), "support.function"));
+    assert.ok(has(scopes("business", "30 X=EXFN.SUM(1)", "EXFN."), "support.function"));
+    assert.ok(has(scopes("business", "40 ! A NOTE", "NOTE"), "comment.line"));
+    assert.ok(has(scopes("business", "50 REMARK=1", "REMARK"), "variable.other"), "REM needs a separator after it");
+});
+
+test("Color BASIC finds words only in capitals and never inside a name", () => {
+    const line = "120 IFA=BTHEN10";
+    assert.ok(has(scopes("colorbasic", line, "IF"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", line, "A"), "variable.other"));
+    assert.ok(has(scopes("colorbasic", line, "THEN"), "variable.other"), "THEN after B is part of the name BTHEN10");
+    assert.ok(has(scopes("colorbasic", "30 IF SCORE > 5 THEN 100", "OR"), "variable.other"), "OR inside SCORE");
+    assert.ok(!has(scopes("colorbasic", "40 print", "print"), "keyword"), "lowercase is not crunched");
+    assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "GO"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
+    assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

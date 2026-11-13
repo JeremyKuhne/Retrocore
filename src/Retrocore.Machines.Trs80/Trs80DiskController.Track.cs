@@ -54,7 +54,7 @@ public sealed partial class Trs80DiskController
             }
         }
 
-        int length = RotationCycles / ByteCycles;
+        int length = _rotationCycles / ByteCycles;
         while (track.Count < length) { track.Add(gap); }
         return [.. track];
     }

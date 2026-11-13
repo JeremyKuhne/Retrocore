@@ -37,6 +37,12 @@ if (args.Length > 0 && args[0] == "--dos")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--pascal")
+{
+    Environment.ExitCode = PascalCommand.Run(args[1..]);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--disassemble")
 {
     Environment.ExitCode = DisassembleCommand.Run(args[1..]);

@@ -15,9 +15,15 @@ namespace Retrocore.Basic;
 public readonly record struct BasicSite(BasicSiteKind Kind, int Line, int Start, int End, string Text)
 {
     /// <summary>
-    ///  Gets the token of a reserved word.
+    ///  Gets the token of a reserved word; for a two-byte token, such as Color BASIC's and Business BASIC's $FF and a
+    ///  second-list token, the prefix in the high byte and the token in the low.
     /// </summary>
-    public byte Token { get; init; }
+    public int Token { get; init; }
+
+    /// <summary>
+    ///  Gets a reserved word as the dialect spells it, such as <c>THEN</c>, or empty for other sites.
+    /// </summary>
+    public string Word { get; init; } = "";
 
     /// <summary>
     ///  Gets the line number of a line or a reference to one.

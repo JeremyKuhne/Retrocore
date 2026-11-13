@@ -91,15 +91,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
             // The Z80's memory accesses reach the Apple's memory through the card, so data breakpoints watch them there.
             ProcessorCycle cycle = Card.Processor.LastCycle;
             return cycle.Operation is BusOperation.Read or BusOperation.Write
-                ? new()
-                {
-                    Number = cycle.Number,
-                    Operation = cycle.Operation,
-                    Address = Card.Translate(cycle.Address),
-                    Value = cycle.Value,
-                    IsOpcodeFetch = cycle.IsOpcodeFetch,
-                    IsStalled = cycle.IsStalled
-                }
+                ? cycle with { Address = Card.Translate(cycle.Address) }
                 : cycle;
         }
     }
@@ -170,6 +162,16 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public IReadOnlyList<DebugMemoryBank> Banks => _host.Banks;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => _host.Screens;
+
+    /// <inheritdoc/>
+    public string Screen
+    {
+        get => _host.Screen;
+        set => _host.Screen = value;
+    }
 
     /// <inheritdoc/>
     public byte Peek(ushort address) => Card.Peek(address);

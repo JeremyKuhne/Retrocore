@@ -1,6 +1,6 @@
 ---
 name: retrocore-native-assembly
-description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
+description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Apple-1 BASIC, Level2.asm, Level1.asm, Model3.asm, Model2Boot.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
 license: MIT
 compatibility: Requires the .NET SDK to assemble and test. The full reference is docs/NativeAssembly.md.
 metadata:
@@ -47,6 +47,9 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
   above its label: a summary line, then compact sections such as `;; In: A = the character`, `;; Out:`,
   `;; Uses:` and `;; Keeps: X, Y`. The debugger checks `Keeps:` when the routine returns, so only list what
   the routine really preserves. [DocComments.md](../../../docs/DocComments.md) has the format.
+- `;;` documents exactly one definition. A heading over a group of constants or a stretch of code is a plain `;`
+  comment, with each constant documented by its own trailing `;;`. The lint fails a `;;` block above a definition
+  that has a trailing `;;` of its own.
 - Name registers by the CPU's letters and flags by word on every CPU, in `In:` and `Out:` (there is no
   `Flags:` section): `;; Out: A = the key, carry = set for Return`, `zero = found`. Never `C`, `Z` or `NZ` for
   a flag: on the Z80 `C` is the register. The words are `carry`, `zero`, `negative`, `overflow`, `parity`,
@@ -63,16 +66,18 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 
 ## Editing the SDK's ROM sources
 
-The sources in `src/Retrocore.Machines.Apple2/Roms` and `src/Retrocore.Machines.Trs80/Roms` must assemble
-byte-identically to the ROMs, for every variant (`ENHANCED` for the IIe, `REVISION` 12 or 13 for Level II). They
-are maintained by hand: change names, comments and structure only in ways that keep the bytes.
+The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms` and
+`src/Retrocore.Machines.Trs80/Roms` must assemble byte-identically to the ROMs, for every variant: `ENHANCED` for the
+IIe; `REVISION` 12 or 13 for Level II; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for
+`Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and
+structure only in ways that keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks.
 - **Rewriting data as macros:** check that the macro emits exactly the bytes it replaces.
 - **Verifying:** run the digest tests, which need no ROMs:
 
   ```powershell
-  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~AppleSoftTests"
+  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests"
   ```
 
   With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`), the same tests name the first byte

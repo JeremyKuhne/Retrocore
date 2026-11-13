@@ -108,12 +108,15 @@ internal sealed class AnalysisEngine
                     // as the Z80's restarts.
                     if (_project.FollowVectors)
                     {
+                        bool littleEndian = _set.Endianness == Endianness.Little;
                         foreach (ushort vector in _set.Description.Vectors)
                         {
-                            FollowVector(vector, vector, (ushort)(vector + 1));
+                            ushort low = littleEndian ? vector : (ushort)(vector + 1);
+                            ushort high = littleEndian ? (ushort)(vector + 1) : vector;
+                            FollowVector(vector, low, high);
                         }
 
-                        foreach (ushort entry in _set.Description.EntryPoints) { Enqueue(entry, entryPoint: false); }
+                        foreach (ushort entry in _set.EntryPoints) { Enqueue(entry, entryPoint: false); }
                     }
 
                     foreach (ushort entry in _project.EntryPoints) { Enqueue(entry, entryPoint: true); }
@@ -376,31 +379,45 @@ internal sealed class AnalysisEngine
             if (_project.Mode == DisassemblyMode.Flow
                 && _project.FollowVectors
                 && instruction.Flow == DisassemblyFlow.IndirectJump
-                && instruction.Form is { Role: OperandRole.Pointer, IsIndexed: false })
+                && HasStaticPointerTarget(in instruction))
             {
                 FollowIndirectJump(in instruction);
             }
 
             offset += instruction.Size;
+
             if (instruction.Flow == DisassemblyFlow.Call
                 && instruction.DirectTarget is { } callee
                 && _project.Calls.TryGetValue(callee, out AnalysisCall? call))
             {
-                if (call.Kind == AnalysisCallKind.NoReturn)
+                if (instruction.Encoding.IsConditional)
+                {
+                    // A conditional call, such as the 8080's CNZ or the Z80's CALL NZ, continues at the next
+                    // instruction when it is not taken. When it is taken, a subroutine that reads inline bytes returns
+                    // past them, so that path is traced as well; the bytes are not pinned as data, since the other
+                    // path may run them.
+                    if (call.Kind != AnalysisCallKind.NoReturn && InlineLength(call, offset) is > 0 and var skip)
+                    {
+                        Enqueue((ushort)(_project.Origin + offset + skip), entryPoint: false);
+                    }
+                }
+                else if (call.Kind == AnalysisCallKind.NoReturn)
                 {
                     // A linear scan decodes every byte anyway; only inferred flow ends at the call.
                     if (!linear) { return; }
                     continue;
                 }
-
-                int inline = InlineLength(call, offset);
-                if (inline < 0 || !PinData(offset, inline))
+                else
                 {
-                    Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
-                    return;
-                }
+                    int inline = InlineLength(call, offset);
+                    if (inline < 0 || !PinData(offset, inline))
+                    {
+                        Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
+                        return;
+                    }
 
-                offset += inline;
+                    offset += inline;
+                }
             }
 
             if (!linear && instruction.Flow == DisassemblyFlow.Break && !_project.StopOnBreak)
@@ -444,13 +461,32 @@ internal sealed class AnalysisEngine
         return true;
     }
 
+    private static bool HasStaticPointerTarget(in DisassembledInstruction instruction)
+    {
+        OperandForm form = instruction.Form;
+        if (form is { Role: OperandRole.Pointer, IsIndexed: false })
+        {
+            return true;
+        }
+
+        // A postbyte can also name a fixed pointer, such as the MC6809's JMP [$FFFE] or JMP [Table,PCR].
+        return instruction.PostbyteReference == PostbyteReference.Pointer;
+    }
+
     /// <summary>
-    ///  Follows the pointer of an indirect jump, such as <c>JMP (abs)</c>, whose bytes lie inside the image.
+    ///  Follows the pointer of an indirect jump, such as <c>JMP (abs)</c> or <c>JMP [abs]</c>, whose bytes lie
+    ///  inside the image.
     /// </summary>
     /// <param name="instruction">The indirect jump.</param>
     private void FollowIndirectJump(in DisassembledInstruction instruction)
     {
         ushort pointer = instruction.Operand;
+        if (instruction.InstructionSet.Endianness == Endianness.Big)
+        {
+            FollowVector(pointer, (ushort)(pointer + 1), pointer);
+            return;
+        }
+
         ushort high = (ushort)(pointer + 1);
         if (instruction.InstructionSet.IndirectPageWrap && (pointer & byte.MaxValue) == byte.MaxValue)
         {
@@ -517,6 +553,38 @@ internal sealed class AnalysisEngine
         }
 
         OperandForm form = instruction.Form;
+        if (form.HasPostbyte)
+        {
+            // Only a postbyte that names a static address refers to one; registers and offsets do not.
+            PostbyteReference reference = instruction.PostbyteReference;
+            if (reference == PostbyteReference.None)
+            {
+                return;
+            }
+
+            if (instruction.Flow == DisassemblyFlow.IndirectJump)
+            {
+                AddReference(instruction.Address, instruction.Operand, DisassemblyReferenceKind.IndirectJump);
+            }
+            else if (reference == PostbyteReference.Pointer)
+            {
+                AddReference(instruction.Address, instruction.Operand, DisassemblyReferenceKind.Read);
+            }
+            else if (instruction.DirectTarget is null)
+            {
+                DisassemblyReferenceKind kind = instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
+                {
+                    MemoryAccess.Write => DisassemblyReferenceKind.Write,
+                    MemoryAccess.ReadWrite => DisassemblyReferenceKind.ReadWrite,
+                    _ => DisassemblyReferenceKind.Read
+                };
+
+                AddReference(instruction.Address, instruction.Operand, kind);
+            }
+
+            return;
+        }
+
         if (instruction.Flow == DisassemblyFlow.IndirectJump)
         {
             // A jump through a register, such as the Z80's JP [HL], encodes no address.

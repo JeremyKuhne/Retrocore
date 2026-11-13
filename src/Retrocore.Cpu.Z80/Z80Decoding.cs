@@ -60,6 +60,7 @@ internal static class Z80Decoding
                     2 => Z80OpcodeGroup.DecrementJump,
                     _ => Z80OpcodeGroup.JumpRelative
                 };
+
             case 1:
                 return q == 0 ? Z80OpcodeGroup.LoadPairImmediate : Z80OpcodeGroup.AddPair;
             case 2:
@@ -72,6 +73,7 @@ internal static class Z80Decoding
                     6 => Z80OpcodeGroup.LoadPairAbsolute,
                     _ => Z80OpcodeGroup.LoadAbsolute
                 };
+
             case 3:
                 return Z80OpcodeGroup.StepPair;
             case 4:
@@ -99,6 +101,7 @@ internal static class Z80Decoding
                     2 => Z80OpcodeGroup.JumpIndex,
                     _ => Z80OpcodeGroup.LoadStackIndex
                 };
+
             case 2:
                 return Z80OpcodeGroup.JumpConditional;
             case 3:
@@ -112,6 +115,7 @@ internal static class Z80Decoding
                     6 => Z80OpcodeGroup.DisableInterrupts,
                     _ => Z80OpcodeGroup.EnableInterrupts
                 };
+
             case 4:
                 return Z80OpcodeGroup.CallConditional;
             case 5:

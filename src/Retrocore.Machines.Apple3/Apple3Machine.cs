@@ -45,6 +45,8 @@ public sealed class Apple3Machine : IMachine
     private bool _verticalBlank;
     private bool _irq;
     private bool _nmi;
+    private IDevice[]? _devices;
+    private int _deviceChanges;
 
     // Time owed to the SoftCard ///'s Z80, less than a T-state.
     private int _z80Time;
@@ -108,7 +110,31 @@ public sealed class Apple3Machine : IMachine
     public IReadOnlyList<Apple2FloppyDrive> Drives { get; }
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices => Drives;
+    /// <remarks>
+    ///  <para>
+    ///   The four floppy drives, then the ProFile on each slot's ProFile card, in slot order. The list is made again
+    ///   only when a card goes in or comes out.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<IDevice> Devices
+    {
+        get
+        {
+            if (_devices is null || _deviceChanges != Bus.CardChanges)
+            {
+                List<IDevice> devices = [.. Drives];
+                for (int slot = 1; slot <= 4; slot++)
+                {
+                    if (Bus.ProFileIn(slot) is { } card) { devices.Add(card.Drive); }
+                }
+
+                _devices = [.. devices];
+                _deviceChanges = Bus.CardChanges;
+            }
+
+            return _devices;
+        }
+    }
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;

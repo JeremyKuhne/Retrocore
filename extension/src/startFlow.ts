@@ -26,6 +26,8 @@ export interface Setup {
     kind: RunKind;
     /** The file run, for every kind but the bare machine. */
     path?: string;
+    /** For a basic launch, the disk the machine's BASIC boots from, when it is not in ROM. */
+    basicDisk?: string;
     /** The machine's choices changed from their defaults, by launch option. */
     options: Record<string, string | number | boolean>;
 }
@@ -71,7 +73,15 @@ export function runChoices(machine: Machine): RunChoice[] {
 }
 
 function dialectName(dialect: string): string {
-    return dialect === "applesoft" ? "AppleSoft" : dialect === "integer" ? "Integer BASIC" : dialect === "level2" ? "Level II BASIC" : dialect;
+    switch (dialect) {
+        case "applesoft": return "AppleSoft";
+        case "integer": return "Integer BASIC";
+        case "apple1": return "Apple-1 BASIC";
+        case "level2": return "Level II BASIC";
+        case "business": return "Business BASIC";
+        case "colorbasic": return "Color BASIC";
+        default: return dialect;
+    }
 }
 
 function fileName(path: string): string {
@@ -98,6 +108,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             break;
         case "basic":
             Object.assign(configuration, { basic: path, stopOnEntry: true });
+            if (setup.basicDisk !== undefined) configuration.disks = [setup.basicDisk];
             break;
         case "disk":
             Object.assign(configuration, machine.configuration.machine === "apple2" ? { diskImage: path } : { disks: [path] });

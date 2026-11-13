@@ -231,9 +231,8 @@ internal sealed partial class Trs80DebugTarget
         }
 
         string full = Path.GetFullPath(path);
-        byte[] image = File.ReadAllBytes(full);
-        bool jv3 = Path.GetExtension(full).Equals(".jv3", StringComparison.OrdinalIgnoreCase);
-        _machine.Drives[drive].Insert(jv3 ? Jv3Format.Read(image) : Jv1Format.Read(image), full, jv3 ? "JV3" : "JV1");
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(full), Path.GetExtension(full));
+        _machine.Drives[drive].Insert(disk, full, format);
     }
 
     private JsonObject MediaState() => new JsonObject

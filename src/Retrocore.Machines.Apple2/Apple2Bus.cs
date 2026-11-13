@@ -61,6 +61,8 @@ public sealed class Apple2Bus : IProcessorBus
 
     // The Z80 SoftCard, in any free slot.
     private SoftCard? _softCard;
+    // The ProFile interface card in each slot, by slot number.
+    private readonly Apple2ProFileCard?[] _proFiles = new Apple2ProFileCard?[8];
 
     /// <summary>
     ///  Constructs a IIe's bus with externally supplied firmware and an optional slot-seven disk.
@@ -87,6 +89,8 @@ public sealed class Apple2Bus : IProcessorBus
         _roms = roms;
         _disk = disk;
         Video = new(this, roms);
+        Mouse = new(this);
+        Disk35 = new(this);
         _diskCards[6] = DiskII;
         ResetSwitches();
         if (disk is not null) { CreateSlot7Rom(); }
@@ -131,13 +135,15 @@ public sealed class Apple2Bus : IProcessorBus
     }
 
     /// <summary>
-    ///  Gets whether a slot is free for a Disk II card or the Mockingboard: slots 1, 2, 5 and 6, 4 without the
-    ///  Mockingboard, and 7 without the block device. Slot 3 is free on the II Plus; on the IIe its space is the
+    ///  Gets whether a slot is free for a Disk II card, the Mockingboard, the mouse card, a ProFile card or the 3.5
+    ///  controller: slots 1, 2, 5 and 6, 4 without the Mockingboard, and 7 without the block device, each without the
+    ///  mouse card, a ProFile card or the 3.5 controller. Slot 3 is free on the II Plus; on the IIe its space is the
     ///  80-column firmware's.
     /// </summary>
     /// <param name="slot">The slot, 1 to 7.</param>
     /// <returns>Whether a card can go in.</returns>
-    public bool IsSlotFree(int slot) => _softCard?.Slot != slot && slot switch
+    public bool IsSlotFree(int slot) =>
+        _softCard?.Slot != slot && slot != MouseSlot && slot != Disk35Slot && _proFiles[slot & 7] is null && slot switch
     {
         1 or 2 or 5 or 6 => Card(slot) is null,
         3 => !_iie && Card(3) is null,
@@ -189,6 +195,58 @@ public sealed class Apple2Bus : IProcessorBus
         _softCard is { } card && address >> 8 == 0xC0 + card.Slot && !InternalRom(address) ? card : null;
 
     private DiskIIController? Card(int slot) => _diskCards[slot] is { IsInstalled: true } card ? card : null;
+
+    /// <summary>
+    ///  Gets the ProFile interface card in a slot.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 7.</param>
+    /// <returns>The card, or null when the slot has none.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">There is no such slot.</exception>
+    public Apple2ProFileCard? ProFileIn(int slot)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(slot, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(slot, 7);
+        return _proFiles[slot];
+    }
+
+    /// <summary>
+    ///  Puts a ProFile interface card in a free slot, with a ProFile cabled to it that has no image yet. Its firmware
+    ///  answers at once at $Cn00, so <c>PR#</c> boots it and the startup scan finds it after a reset, and its ports at
+    ///  $C080 plus 16 times the slot.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <returns>The card.</returns>
+    /// <exception cref="InvalidOperationException">The slot is not free.</exception>
+    public Apple2ProFileCard InstallProFile(int slot)
+    {
+        if (slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a card.");
+        }
+
+        Apple2ProFileCard card = new(slot, this);
+        _proFiles[slot] = card;
+        CardsChanged();
+        return card;
+    }
+
+    /// <summary>
+    ///  Takes the ProFile interface card out of a slot, with its ProFile.
+    /// </summary>
+    /// <param name="slot">The slot.</param>
+    /// <exception cref="InvalidOperationException">The slot has no ProFile card.</exception>
+    public void RemoveProFile(int slot)
+    {
+        Apple2ProFileCard card = (slot is >= 1 and <= 7 ? _proFiles[slot] : null)
+            ?? throw new InvalidOperationException($"Slot {slot} has no ProFile card.");
+
+        card.Drive.Eject();
+        _proFiles[slot] = null;
+        CardsChanged();
+    }
+
+    private const ulong FrameCycles = 65 * 262;
+    private const ulong VerticalBlankCycle = 65 * 192;
 
     private void CardsChanged()
     {
@@ -271,6 +329,116 @@ public sealed class Apple2Bus : IProcessorBus
         _softCard = null;
         CardChanges++;
     }
+
+    /// <summary>
+    ///  Gets the mouse card, which answers in <see cref="MouseSlot"/> once <see cref="InstallMouse"/> puts it in.
+    /// </summary>
+    public Apple2MouseCard Mouse { get; }
+
+    /// <summary>
+    ///  Gets the slot the mouse card is in, or 0 when it is out.
+    /// </summary>
+    public int MouseSlot => Mouse.Slot;
+
+    /// <summary>
+    ///  Puts the mouse card in a free slot, off and reset. Its firmware answers at once at $Cn00, and its ports at
+    ///  $C080 plus 16 times the slot.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <exception cref="InvalidOperationException">The slot is not free, or the card is already in another.</exception>
+    public void InstallMouse(int slot)
+    {
+        if (MouseSlot != 0) { throw new InvalidOperationException($"The mouse card is already in slot {MouseSlot}."); }
+        if (slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a card.");
+        }
+
+        Mouse.Reset();
+        Mouse.Slot = slot;
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Takes the mouse card out, dropping its interrupt.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The mouse card is not in.</exception>
+    public void RemoveMouse()
+    {
+        if (MouseSlot == 0) { throw new InvalidOperationException("The mouse card is not in a slot."); }
+        Mouse.Slot = 0;
+        Mouse.Reset();
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Gets the 3.5 disk controller, which answers in <see cref="Disk35Slot"/> once <see cref="InstallDisk35"/> puts it
+    ///  in.
+    /// </summary>
+    public Apple2Disk35Card Disk35 { get; }
+
+    /// <summary>
+    ///  Gets the slot the 3.5 disk controller is in, or 0 when it is out.
+    /// </summary>
+    public int Disk35Slot => Disk35.Slot;
+
+    /// <summary>
+    ///  Puts the 3.5 disk controller in a free slot. Its firmware answers at once at $Cn00, so <c>PR#</c> boots it and
+    ///  the startup scan finds it, and its ports at $C080 plus 16 times the slot. Its drives keep their disks.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <exception cref="InvalidOperationException">The slot is not free, or the card is already in another.</exception>
+    public void InstallDisk35(int slot)
+    {
+        if (Disk35Slot != 0)
+        {
+            throw new InvalidOperationException($"The 3.5 controller is already in slot {Disk35Slot}.");
+        }
+
+        if (slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a card.");
+        }
+
+        Disk35.Reset();
+        Disk35.Slot = slot;
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Moves the 3.5 disk controller to another free slot, its disks still in its drives, as if it had been taken out
+    ///  and put back.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <exception cref="InvalidOperationException">The card is not in, or the slot is not free.</exception>
+    public void MoveDisk35(int slot)
+    {
+        if (Disk35Slot == 0) { throw new InvalidOperationException("The 3.5 controller is not in a slot."); }
+        if (slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a card.");
+        }
+
+        Disk35.Reset();
+        Disk35.Slot = slot;
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Takes the 3.5 disk controller out, ejecting its disks.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The card is not in.</exception>
+    public void RemoveDisk35()
+    {
+        if (Disk35Slot == 0) { throw new InvalidOperationException("The 3.5 controller is not in a slot."); }
+        Disk35.Slot = 0;
+        foreach (Apple2Disk35Drive drive in Disk35.Drives) { drive.Eject(); }
+        Disk35.Reset();
+        CardChanges++;
+    }
+
+    // Whether an address at $C090-$C0FF is the 3.5 controller's ports.
+    private bool IsDisk35Port(ushort address) => Disk35Slot != 0 && ((address >> 4) & 7) == Disk35Slot;
 
     /// <summary>
     ///  Gets cycle-stamped stereo speaker/Mockingboard resampling. A caller-owned sink enables output.
@@ -471,6 +639,9 @@ public sealed class Apple2Bus : IProcessorBus
         DiskII.Tick();
         foreach (DiskIIController card in _otherCards) { card.Tick(); }
         if (MockingboardInstalled) { Mockingboard.Tick(); }
+
+        // The mouse card's interrupts come as vertical blanking starts, after the 192 visible lines.
+        if (MouseSlot != 0 && CycleCount % FrameCycles == VerticalBlankCycle) { Mouse.VerticalBlank(); }
         Audio.Tick(Speaker, Mockingboard);
         CycleCount++;
     }
@@ -484,6 +655,9 @@ public sealed class Apple2Bus : IProcessorBus
         foreach (DiskIIController card in _otherCards) { card.Reset(); }
         Mockingboard.Reset();
         _softCard?.Reset();
+        Mouse.Reset();
+        Disk35.Reset();
+        foreach (Apple2ProFileCard? card in _proFiles) { card?.Reset(); }
         Audio.Reset();
         Speaker = false;
     }
@@ -596,7 +770,7 @@ public sealed class Apple2Bus : IProcessorBus
         if (InternalRom(address)) { return Apple2MemoryArea.SystemRom; }
         if (address >= 0xC800) { return Apple2MemoryArea.None; }
         int slot = (address >> 8) & 7;
-        bool driven = slot switch
+        bool driven = slot == MouseSlot || slot == Disk35Slot || _proFiles[slot] is not null || slot switch
         {
             4 => MockingboardInstalled || Card(4) is not null,
             7 => _disk is not null || Card(7) is not null,
@@ -648,11 +822,31 @@ public sealed class Apple2Bus : IProcessorBus
             return system;
         }
 
-        // A slot's ROM page: its Disk II card's boot ROM, or slot seven's block device firmware.
-        if (area is >= Apple2MemoryArea.Slot1Rom and <= Apple2MemoryArea.Slot7Rom and not Apple2MemoryArea.Slot4Rom)
+        // A slot's ROM page: its Disk II card's boot ROM, the mouse, ProFile or 3.5 controller card's firmware, or slot
+        // seven's block device firmware. The Mockingboard's page is its VIAs, not ROM.
+        if (area is >= Apple2MemoryArea.Slot1Rom and <= Apple2MemoryArea.Slot7Rom
+            && (area != Apple2MemoryArea.Slot4Rom || !MockingboardInstalled))
         {
             int slot = area - Apple2MemoryArea.Slot1Rom + 1;
             bool page = address >> 8 == (0xC0 | slot);
+            if (page && slot == MouseSlot)
+            {
+                value = MouseRom.Bytes[address & 255];
+                return true;
+            }
+
+            if (page && slot == Disk35Slot)
+            {
+                value = Disk35Rom.Bytes[address & 255];
+                return true;
+            }
+
+            if (page && _proFiles[slot] is not null)
+            {
+                value = ProFileRom.Bytes[address & 255];
+                return true;
+            }
+
             if (page && Card(slot) is { BootRom.Length: 256 } card)
             {
                 value = card.BootRom[address & 255];
@@ -737,9 +931,21 @@ public sealed class Apple2Bus : IProcessorBus
         {
             if (address < _ramTop) { Ram(address, write: true)[address] = value; }
         }
+        else if (address is >= 0xC090 and < 0xC100 && MouseSlot != 0 && ((address >> 4) & 7) == MouseSlot)
+        {
+            Mouse.Write(address & 15, value);
+        }
+        else if (address is >= 0xC090 and < 0xC100 && IsDisk35Port(address))
+        {
+            Disk35.WritePort(address & 15, value);
+        }
         else if (address is >= 0xC090 and < 0xC100 && Card((address >> 4) & 7) is { } card)
         {
             card.Write((byte)(address & 15), value);
+        }
+        else if (address is >= 0xC090 and < 0xC100 && _proFiles[(address >> 4) & 7] is { } proFile)
+        {
+            proFile.Write(address & 15, value);
         }
         else if (address < 0xC100)
         {
@@ -768,10 +974,25 @@ public sealed class Apple2Bus : IProcessorBus
         if (address < 0xC000) { return address < _ramTop ? Ram(address, write: false)[address] : FloatingBus(); }
         if (address < 0xC100)
         {
+            if (address >= 0xC090 && MouseSlot != 0 && ((address >> 4) & 7) == MouseSlot)
+            {
+                return Mouse.Read(address & 15, FloatingBus());
+            }
+
+            if (address >= 0xC090 && IsDisk35Port(address))
+            {
+                return Disk35.ReadPort(address & 15, FloatingBus(), sideEffects);
+            }
+
             if (address >= 0xC090 && Card((address >> 4) & 7) is { } card)
             {
                 return sideEffects ? card.Read((byte)(address & 15), FloatingBus())
                     : card.Peek((byte)(address & 15), FloatingBus());
+            }
+
+            if (address >= 0xC090 && _proFiles[(address >> 4) & 7] is { } proFile)
+            {
+                return sideEffects ? proFile.Read(address & 15, FloatingBus()) : proFile.Peek(address & 15, FloatingBus());
             }
 
             if (sideEffects) { AccessSwitch(address, write: false); }
@@ -812,8 +1033,8 @@ public sealed class Apple2Bus : IProcessorBus
             }
 
             return address == 0xC0F1 && _disk is not null
-                ? (byte)_disk.BlockCount
-                : address == 0xC0F2 && _disk is not null ? (byte)(_disk.BlockCount >> 8) : FloatingBus();
+                ? (byte)ReportedBlockCount
+                : address == 0xC0F2 && _disk is not null ? (byte)(ReportedBlockCount >> 8) : FloatingBus();
         }
 
         if (address >= 0xD000)
@@ -831,6 +1052,18 @@ public sealed class Apple2Bus : IProcessorBus
         if (internalRom)
         {
             result = _roms.System[address - 0xC000];
+        }
+        else if (address < 0xC800 && MouseSlot != 0 && ((address >> 8) & 7) == MouseSlot)
+        {
+            result = MouseRom.Bytes[address & 255];
+        }
+        else if (address < 0xC800 && Disk35Slot != 0 && ((address >> 8) & 7) == Disk35Slot)
+        {
+            result = Disk35Rom.Bytes[address & 255];
+        }
+        else if (address < 0xC800 && _proFiles[(address >> 8) & 7] is not null)
+        {
+            result = ProFileRom.Bytes[address & 255];
         }
         else if (address is >= 0xC400 and < 0xC500 && MockingboardInstalled)
         {
@@ -968,6 +1201,11 @@ public sealed class Apple2Bus : IProcessorBus
     private byte FloatingBus() => Video.FloatingBus;
 
     /// <summary>
+    ///  Gets whether a key is latched with its strobe set, waiting for the program to take it.
+    /// </summary>
+    internal bool KeyStrobe => (_keyboard & 128) != 0;
+
+    /// <summary>
     ///  Gets the displayed text-page byte without altering the CPU memory map.
     /// </summary>
     /// <param name="row">The text row, from zero through 23.</param>
@@ -1040,6 +1278,10 @@ public sealed class Apple2Bus : IProcessorBus
     /// </summary>
     internal bool BlockWritten => _blockWritten;
 
+    // The block count the slot 7 device reports: ProDOS counts blocks in 16 bits, so a 32 MiB image's 65536 is
+    // 65535, its last block unused, as on real 32 MiB hard disks.
+    private uint ReportedBlockCount => Math.Min(_disk?.BlockCount ?? 0, 0xFFFF);
+
     private void DiskCommand()
     {
         uint block = (uint)(Peek(0x46) | (Peek(0x47) << 8));
@@ -1047,6 +1289,13 @@ public sealed class Apple2Bus : IProcessorBus
         byte command = Peek(0x42);
         _diskError = 0;
         if (_disk is null)
+        {
+            _diskError = 0x28;
+            return;
+        }
+
+        // The device is one volume, drive one; drive two is not there.
+        if ((Peek(0x43) & 0x80) != 0)
         {
             _diskError = 0x28;
             return;

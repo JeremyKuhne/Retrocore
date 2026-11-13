@@ -11,6 +11,8 @@
     <InternalsVisibleTo Include="Retrocore.Perf" />
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.I8080\Retrocore.Cpu.I8080.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />
   </ItemGroup>
 

@@ -147,6 +147,28 @@ public class DeviceModelTests
     }
 
     /// <summary>
+    ///  An Apple disk's write protection can be taken off, so the machine's writes reach it, and put back.
+    /// </summary>
+    [TestMethod]
+    public void AppleDiskWriteProtectionChanges()
+    {
+        DiskIIController controller = new();
+        controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
+        Apple2FloppyDrive drive = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
+        drive.Info.Operations.Should().HaveFlag(MediaOperations.WriteProtect);
+        Action empty = () => drive.SetWriteProtected(writeProtected: false);
+        empty.Should().Throw<InvalidOperationException>();
+
+        drive.Insert(SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false), "blank.dsk", "DSK");
+        drive.Media?.WriteProtected.Should().BeTrue("a sector image loads protected");
+        drive.SetWriteProtected(writeProtected: false);
+        drive.Media?.WriteProtected.Should().BeFalse();
+        drive.Disk?.IsReadOnly.Should().BeFalse();
+        drive.SetWriteProtected(writeProtected: true);
+        drive.Media?.WriteProtected.Should().BeTrue();
+    }
+
+    /// <summary>
     ///  A IIe lists its slot 7 block device, and the Disk II drives once the card's firmware is installed.
     /// </summary>
     [TestMethod]

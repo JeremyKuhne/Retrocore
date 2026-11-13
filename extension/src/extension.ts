@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.insertDisk", async () => {
         const drive = await pickDrive();
         if (drive === undefined) return;
-        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3"] });
+        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3", "jvc", "dmk", "imd"] });
         if (path !== undefined) await media({ device: "disk", action: "insert", drive, path });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.ejectDisk", async () => {
@@ -222,10 +222,17 @@ export function activate(context: vscode.ExtensionContext): void {
                     endedSession = undefined;
                     const machine = typeof message.body === "object" && message.body !== null && "machine" in message.body ? message.body.machine : undefined;
                     const model = typeof message.body === "object" && message.body !== null && "model" in message.body && typeof message.body.model === "string" ? message.body.model : undefined;
-                    const title = machine === "trs80-model1" ? "TRS-80 Model I" : model ?? "Apple IIe";
+                    const title = machine === "trs80-model1" ? "TRS-80 Model I"
+                        : (machine === "trs80-model3" || machine === "trs80-model2") && model !== undefined ? `TRS-80 ${model}`
+                            : machine === "apple1" ? "Apple-1"
+                                : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
+                    // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal does; the
+                    // Model II's is green, like the IIe's.
+                    const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" ? "trs80-model1"
+                        : machine === "apple1" || machine === "coco" ? machine : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
-                    const screen = running ? (machine === "trs80-model1" ? "trs80-model1" : "apple2") : "off";
+                    const screen = running ? phosphor : "off";
                     const icon = machineIcon(context.extensionUri, screen);
                     if (panel !== undefined && panel.title !== title) panel.title = title;
                     if (panel !== undefined && panelScreen !== screen) {
@@ -255,12 +262,36 @@ export function activate(context: vscode.ExtensionContext): void {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest(`${applePrefix(displaySession)}/button`, { button: input.button, pressed: input.pressed }).then(undefined, showError);
                                 }
+                            } else if (typeof input === "object" && input !== null && "mouse" in input
+                                && typeof input.mouse === "object" && input.mouse !== null) {
+                                // The mouse card's movement and button, from the display's locked pointer.
+                                const mouse = input.mouse as Record<string, unknown>;
+                                const args: Record<string, unknown> = {};
+                                for (const axis of ["dx", "dy"]) {
+                                    const value = mouse[axis];
+                                    if (typeof value === "number" && Number.isInteger(value) && Math.abs(value) <= 4096) args[axis] = value;
+                                }
+                                if (typeof mouse.pressed === "boolean") args.pressed = mouse.pressed;
+                                if (displaySession !== undefined && Object.keys(args).length !== 0) {
+                                    void displaySession.customRequest("apple2/mouse", args).then(undefined, showError);
+                                }
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "screen"
+                                && "screen" in input && (input.screen === "color" || input.screen === "rgb" || input.screen === "white" || input.screen === "green" || input.screen === "amber")) {
+                                if (displaySession !== undefined) {
+                                    void displaySession.customRequest("retro/screen", { screen: input.screen }).then(undefined, showError);
+                                }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "paste") {
                                 // Ctrl+V sends no text, and the clipboard is read here; a paste event sends its own.
                                 void paste("text" in input && typeof input.text === "string" ? input.text : undefined).then(undefined, showError);
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "reset") {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/reset").then(undefined, showError);
+                                }
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "clearScreen") {
+                                if (displaySession !== undefined) {
+                                    // The Apple-1's CLEAR SCREEN button, or the Altair terminal's.
+                                    const clear = displaySession.configuration.machine === "altair" ? "altair" : "apple1";
+                                    void displaySession.customRequest(`${clear}/clearScreen`).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "sound"
                                 && "mode" in input && (input.mode === "off" || input.mode === "speaker" || input.mode === "mockingboard")) {
@@ -311,9 +342,10 @@ function applePrefix(session: vscode.DebugSession): string {
 
 /**
  * The display panel's tab icon: a CRT monitor framed in the theme's tab text color, whose screen glows in the
- * machine's phosphor while it runs (green for the IIe, white for the Model I) and is dark (off) when it stops.
+ * machine's phosphor while it runs (green for the IIe, white for the Model I and the Apple-1, the Color Computer's
+ * green text screen) and is dark (off) when it stops.
  */
-function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
+function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "apple1" | "coco" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
     const name = screen === "off" ? "crt-off" : screen;
     return {
         light: vscode.Uri.joinPath(extension, "media", `${name}-light.svg`),

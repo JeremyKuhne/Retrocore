@@ -92,8 +92,8 @@ public sealed class Apple2Machine : IMachine
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The drives of each slot's Disk II card in slot order, then slot seven's block storage. The list is made again
-    ///   only when a card goes in or comes out.
+    ///   The drives of each slot's Disk II card or the 3.5 controller, and the ProFile on each slot's ProFile card, in
+    ///   slot order, then slot seven's block storage. The list is made again only when a card goes in or comes out.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<IDevice> Devices
@@ -104,7 +104,13 @@ public sealed class Apple2Machine : IMachine
             if (_devices is null || key != _devicesKey)
             {
                 List<IDevice> devices = [];
-                for (int slot = 1; slot <= 7; slot++) { devices.AddRange(DrivesIn(slot)); }
+                for (int slot = 1; slot <= 7; slot++)
+                {
+                    devices.AddRange(DrivesIn(slot));
+                    if (slot == Bus.Disk35Slot) { devices.AddRange(Bus.Disk35.Drives); }
+                    if (Bus.ProFileIn(slot) is { } proFile) { devices.Add(proFile.Drive); }
+                }
+
                 if (BlockStorage is not null) { devices.Add(BlockStorage); }
                 _devices = [.. devices];
                 _devicesKey = key;
@@ -130,7 +136,7 @@ public sealed class Apple2Machine : IMachine
     public Processor<Apple2Bus> Processor { get; }
 
     /// <summary>
-    ///  Gets or sets an external IRQ source ORed with the Mockingboard's interrupt output.
+    ///  Gets or sets an external IRQ source ORed with the Mockingboard's and mouse card's interrupt outputs.
     ///  Use this input rather than changing the CPU IRQ bit while a device owns that bit.
     /// </summary>
     public bool ExternalIrq { get; set; }
@@ -190,7 +196,7 @@ public sealed class Apple2Machine : IMachine
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void BeginCycle()
     {
-        bool irq = ExternalIrq || Bus.Mockingboard.InterruptRequested;
+        bool irq = ExternalIrq || Bus.Mockingboard.InterruptRequested || Bus.Mouse.InterruptRequested;
         if (irq || _deviceIrq)
         {
             Processor.Signals = (Processor.Signals & ~ProcessorSignals.InterruptRequest)

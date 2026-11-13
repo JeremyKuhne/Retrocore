@@ -14,6 +14,7 @@ import { testBasicVariables } from "./basicVariables";
 import { testAppleSoftLaunch, testBasicLaunch } from "./basicLaunch";
 import { testMachineMenu } from "./machineMenu";
 import { testOffMachine } from "./offMachine";
+import { testFavorites } from "./favorites";
 import { testProgramBreakpoints } from "./basicBreakpoints";
 import type { BreakpointHits } from "../breakpoints";
 import { memoryUri, type MemoryBank } from "../memory";
@@ -27,6 +28,7 @@ export async function run(): Promise<void> {
     if (process.env.RETROCORE_TEST_LANGUAGE_ONLY === "1") return;
     await testMachineMenu(workspace);
     await testOffMachine(workspace);
+    await testFavorites(workspace);
     await testProgramBreakpoints(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");

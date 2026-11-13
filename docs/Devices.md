@@ -195,6 +195,24 @@ remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memor
 and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
 Machine...**). The views redraw at most ten times a second.
 
+The **Favorites** view ([favorites.ts](../extension/src/favorites.ts), the favorite itself in
+[favorite.ts](../extension/src/favorite.ts)) lists the `retrocore.favorites` setting: in user settings, and the
+workspace's, grouped under **User** and **Workspace** when both have some. A favorite is a Start Machine setup (the
+catalog machine, its settings that differ from their defaults, and what it runs) with a name, a description and the
+saved machine; a launch.json machine is kept as the setup it amounts to, so launch options Start Machine cannot set
+are not. Loading one sets it up off under its own name, which names its launch configuration and saved machine, with
+its saved machine as that one's; starting one loads it and boots it through Start Machine, so **Start Last Machine**
+repeats it. In user settings a favorite's paths are kept as they are; in the workspace's, paths inside the workspace
+are written as `${workspaceFolder}/...`, and moving a favorite between the two converts them.
+
+The Machine view's heart, on the machine's row, says whether the machine shown is a favorite. The machine is one when
+it was loaded from one (its name is the favorite's) or was saved as one (the extension links the launch
+configuration's name to the favorite's). Its heart is empty when it is not one, and clicking it saves the machine at
+once under its machine's name, numbered if taken, and links it. Filled, the favorite matches the machine as it is
+now, and clicking it reveals the favorite in the Favorites view. Broken, it differs, in its settings, what it runs,
+its cards, or its disks and tapes (`differences` in favorite.ts, which ignores empty slots and drives), and clicking
+it updates the favorite. The machine's tooltip names the favorite and what differs.
+
 VS Code opens Run and Debug as a session starts and when it breaks (its `debug.openDebug` setting). When that
 takes the sidebar from the Retrocore views within a moment of a Retrocore session starting or stopping, the
 extension reveals the Machine view again without focusing it, so the keyboard stays with the display panel or the

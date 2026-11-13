@@ -19,7 +19,7 @@ the next round:
 
 ## Agreed: the powered-off machine and favorites
 
-Status: **agreed, not started.** The Retrocore activity bar's Machine and Drives views
+Status: **done.** The Retrocore activity bar's Machine and Drives views
 ([devices.ts](../../extension/src/devices.ts), described in [Devices.md](../Devices.md)) show only a running
 session's machine. Changing hardware means starting a machine first, and a setup worth keeping lives only in the
 workspace's saved machine for one launch configuration's name. This round lets a machine be set up while it is
@@ -99,4 +99,6 @@ Each step is usable on its own:
    the saved machine is cut down to what differs from what the old settings give (`changesFrom` in
    [hardware.ts](../../extension/src/hardware.ts)), so the new setting takes effect under the cards and media added.
    A launch.json machine's setting is written to its entry, so its next F5 matches.
-4. The `retrocore.favorites` setting and the Favorites view.
+4. **Done.** The `retrocore.favorites` setting and the Favorites view ([favorites.ts](../../extension/src/favorites.ts)),
+   with Start Machine and Switch Machine listing favorites first. The editor tests' `favorites.ts` keeps, loads,
+   starts, describes, renames, shares and removes one.

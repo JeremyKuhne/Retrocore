@@ -1227,6 +1227,23 @@ The Drives view lists each part that has drives, with its drives under it: slot 
 two Disk II drives, the Model I's cassette and its disk drives. Its badge counts the
 disks changed in the machine and not yet saved to their images.
 
+The machine's row has a heart, running or off. Empty, the machine is not in your
+favorites, and clicking it saves it at once, named for the machine (such as **Apple II
+Plus**), with its settings, what it runs, and its cards and disks; the note that follows
+offers to rename it or add a description. Filled, it is saved as it is, and clicking it
+shows it in the **Favorites** view. Broken, it was saved but its settings, cards or
+disks have changed since, and clicking it updates the favorite. Hovering the machine
+says which favorite it is and what changed.
+
+The **Favorites** view lists them with their descriptions, marking the one the Machine
+view shows. Clicking a favorite sets it up off in the Machine and Drives views, and its
+▶ starts it; Start Machine and Switch Machine list favorites first. Its menu edits its
+description, renames it, updates it from the Machine view, and removes it. Favorites
+live in the `retrocore.favorites` setting: in your user settings they are in every
+workspace, and **Share with Workspace** moves one into the workspace's settings,
+shared with the project, with paths inside the workspace written as
+`${workspaceFolder}/...`.
+
 On the IIe, a free slot's **Add Card** button puts a Disk II controller there
 (16-sector, or 13-sector for DOS 3.2), even while the machine runs: `PR#5` boots it,
 and a reset's startup scan finds it. Its two drives take disks like any other, and

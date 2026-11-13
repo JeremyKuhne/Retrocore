@@ -30,7 +30,7 @@
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
-    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
+    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -315,6 +315,76 @@
           ],
           "default": "keep",
           "markdownDescription": "What the machine's display panel does when its debug session ends."
+        },
+        "retrocore.favorites": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Machines kept under a name, listed in the Retrocore activity bar's **Favorites** view and first in **Start Machine** and **Switch Machine**. In user settings a favorite is in every workspace; in the workspace's settings it is shared with the project. Paths inside the workspace are written as `${workspaceFolder}/...`. Add one with **Add to Favorites** on the Machine view.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "machine"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The favorite's name, which also names its launch configuration."
+              },
+              "description": {
+                "type": "string",
+                "description": "What the machine is for."
+              },
+              "machine": {
+                "type": "string",
+                "enum": [
+                  "apple2-iie-enhanced",
+                  "apple2-iie",
+                  "apple2-iiplus",
+                  "apple2-ii",
+                  "apple3",
+                  "trs80-model1-level2",
+                  "trs80-model1-level1",
+                  "apple1",
+                  "coco1",
+                  "coco2",
+                  "coco3"
+                ],
+                "description": "The machine, as Start Machine lists it."
+              },
+              "options": {
+                "type": "object",
+                "description": "The machine's settings that differ from their defaults, by launch option, such as { \"ramKilobytes\": 32 }."
+              },
+              "run": {
+                "type": "object",
+                "description": "What it runs, when not just the machine.",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "source",
+                      "program",
+                      "basic",
+                      "disk",
+                      "tape",
+                      "dosSource"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "basicDisk": {
+                    "type": "string"
+                  }
+                }
+              },
+              "machineState": {
+                "type": "object",
+                "description": "Its cards and media, as the debugger saves them: { \"cards\": { \"5\": \"diskII16\" }, \"media\": { \"slot5disk1\": { \"path\": \"...\", \"writeProtected\": false } } }."
+              }
+            }
+          }
         }
       }
     },
@@ -371,6 +441,10 @@
         {
           "id": "retrocore.drives",
           "name": "Drives"
+        },
+        {
+          "id": "retrocore.favorites",
+          "name": "Favorites"
         }
       ]
     },
@@ -382,6 +456,10 @@
       {
         "view": "retrocore.drives",
         "contents": "The machine's disk, tape and hard disk drives show here, with their media."
+      },
+      {
+        "view": "retrocore.favorites",
+        "contents": "No favorites yet. The heart on the machine in the Machine view saves it here, with its settings, cards and disks: empty when it is not saved, filled when it is, broken when it has changed since.\n[Save the current machine to favorites](command:retrocore.favorite.add)\nFavorites are in your user settings, in every workspace; Share with Workspace puts one in the project's settings."
       },
       {
         "view": "debug",
@@ -496,6 +574,66 @@
           "command": "retrocore.device.saveAs",
           "when": "view == retrocore.drives && viewItem =~ /\\bsave\\b/",
           "group": "1_save"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.favorite.load",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "1_use@1"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "1_use@2"
+        },
+        {
+          "command": "retrocore.favorite.editDescription",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "retrocore.favorite.rename",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "retrocore.favorite.update",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "retrocore.favorite.share",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/ && viewItem =~ /\\buser\\b/ && workbenchState != empty",
+          "group": "3_move@1"
+        },
+        {
+          "command": "retrocore.favorite.moveToUser",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/ && viewItem =~ /\\bworkspace\\b/",
+          "group": "3_move@1"
+        },
+        {
+          "command": "retrocore.favorite.remove",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "4_remove@1"
+        },
+        {
+          "command": "retrocore.favorite.add",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-none\\b/",
+          "group": "inline@0"
+        },
+        {
+          "command": "retrocore.favorite.showShown",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-saved\\b/",
+          "group": "inline@0"
+        },
+        {
+          "command": "retrocore.favorite.updateShown",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-changed\\b/",
+          "group": "inline@0"
         }
       ],
       "webview/context": [
@@ -605,6 +743,54 @@
         {
           "command": "retrocore.basic.openListing",
           "when": "resourceScheme == file"
+        },
+        {
+          "command": "retrocore.favorite.load",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.editDescription",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.rename",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.update",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.share",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.moveToUser",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.remove",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.showShown",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.updateShown",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.mark",
+          "when": "false"
         }
       ],
       "editor/title": [
@@ -794,6 +980,72 @@
       {
         "command": "retrocore.basic.openListing",
         "title": "Retrocore: Open as BASIC Listing"
+      },
+      {
+        "command": "retrocore.favorite.load",
+        "title": "Set Up This Machine"
+      },
+      {
+        "command": "retrocore.favorite.start",
+        "title": "Start This Favorite",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.favorite.editDescription",
+        "title": "Edit Description..."
+      },
+      {
+        "command": "retrocore.favorite.rename",
+        "title": "Rename..."
+      },
+      {
+        "command": "retrocore.favorite.update",
+        "title": "Update from Machine"
+      },
+      {
+        "command": "retrocore.favorite.share",
+        "title": "Share with Workspace"
+      },
+      {
+        "command": "retrocore.favorite.moveToUser",
+        "title": "Move to User Settings"
+      },
+      {
+        "command": "retrocore.favorite.remove",
+        "title": "Remove"
+      },
+      {
+        "command": "retrocore.favorite.list",
+        "title": "Retrocore: List Favorites"
+      },
+      {
+        "command": "retrocore.favorite.add",
+        "title": "Save the current machine to favorites",
+        "category": "Retrocore",
+        "icon": {
+          "light": "media/heart-light.svg",
+          "dark": "media/heart-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.showShown",
+        "title": "Saved in Favorites (Show It)",
+        "icon": {
+          "light": "media/heart-filled-light.svg",
+          "dark": "media/heart-filled-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.updateShown",
+        "title": "Changed Since Saved (Update the Favorite)",
+        "icon": {
+          "light": "media/heart-broken-light.svg",
+          "dark": "media/heart-broken-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.mark",
+        "title": "Retrocore: Favorite Mark"
       }
     ],
     "debuggers": [

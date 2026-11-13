@@ -6,7 +6,7 @@
 // launch configuration that starts it. Free of the vscode module, so the unit tests walk it. startMachine.ts shows the
 // quick picks.
 
-import { launchConfiguration, machineById, type Machine } from "./machines";
+import { catalogMachine, launchConfiguration, machineById, type Machine } from "./machines";
 
 /** What a machine is started with. */
 export type RunKind = "machine" | "source" | "program" | "basic" | "disk" | "tape" | "dosSource";
@@ -22,6 +22,8 @@ export interface RunChoice {
 
 /** A setup chosen in Start Machine, kept to start it again. */
 export interface Setup {
+    /** A favorite's name, which names its launch configuration and saved machine; none for Start Machine's own. */
+    name?: string;
     machineId: string;
     kind: RunKind;
     /** The file run, for every kind but the bare machine. */
@@ -90,6 +92,7 @@ function fileName(path: string): string {
 
 /** How a setup is named: in the dropdown, the saved machine and the last-setup item. */
 export function setupName(machine: Machine, setup: Setup): string {
+    if (setup.name !== undefined) return setup.name;
     return setup.path === undefined ? `${machine.label} (Retrocore)` : `${machine.label}: ${fileName(setup.path)}`;
 }
 
@@ -145,7 +148,7 @@ export function optionValue(machine: Machine, setup: Setup, option: string): str
 export function describeSetup(setup: Setup): string {
     const machine = machineById(setup.machineId);
     if (machine === undefined) return setup.machineId;
-    const parts = [machine.label];
+    const parts = setup.name === undefined ? [machine.label] : [setup.name, machine.label];
     if (setup.path !== undefined) parts.push(fileName(setup.path));
     for (const [option, value] of Object.entries(setup.options)) {
         const choice = machine.choices.find(candidate => candidate.option === option);
@@ -161,4 +164,30 @@ export function isUsable(setup: Setup | undefined): setup is Setup {
     const machine = setup === undefined ? undefined : machineById(setup.machineId);
     return machine !== undefined && runChoices(machine).some(choice => choice.kind === setup?.kind)
         && (setup?.kind === "machine" || typeof setup?.path === "string");
+}
+
+/**
+ * The setup a launch configuration amounts to: its catalog machine, the choices it sets that differ from their
+ * defaults, and the source, program or BASIC file it runs. Options Start Machine cannot set, such as a debug file,
+ * are not kept; none for a machine the catalog lacks.
+ */
+export function setupFromConfiguration(configuration: Record<string, unknown>): Setup | undefined {
+    const machine = catalogMachine(configuration);
+    if (machine === undefined) return undefined;
+    const options: Setup["options"] = {};
+    for (const choice of machine.choices) {
+        const value = configuration[choice.option];
+        if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && value !== choice.default) {
+            options[choice.option] = value;
+        }
+    }
+
+    const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
+    const source = text("source");
+    if (source !== undefined) return { machineId: machine.id, kind: text("dos") === undefined ? "source" : "dosSource", path: source, options };
+    const program = text("program");
+    if (program !== undefined) return { machineId: machine.id, kind: "program", path: program, options };
+    const basic = text("basic");
+    if (basic !== undefined) return { machineId: machine.id, kind: "basic", path: basic, options };
+    return { machineId: machine.id, kind: "machine", options };
 }

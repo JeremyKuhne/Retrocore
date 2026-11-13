@@ -6,13 +6,13 @@
 // Switch Machine picked, powered off. The language server builds it (retrocore/machine/describe and change), and
 // what is changed while it is off is its launch configuration's saved machine, which its next launch restores.
 
-import * as os from "node:os";
 import * as vscode from "vscode";
+import { resolveVariables } from "./favorite";
 import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { describeSetup, isUsable, setupConfiguration, withOption, type Setup } from "./startFlow";
+import { describeSetup, isUsable, setupConfiguration, setupFromConfiguration, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -37,29 +37,8 @@ export interface OffBody {
 const targetKey = "retrocore.offMachine";
 const lastSetupKey = "retrocore.lastSetup";
 
-function folder(): vscode.WorkspaceFolder | undefined {
+export function folder(): vscode.WorkspaceFolder | undefined {
     return vscode.workspace.workspaceFolders?.[0];
-}
-
-/**
- * Substitutes the variables a launch configuration in launch.json uses, as VS Code does when it starts one:
- * ${workspaceFolder}, ${workspaceFolderBasename}, ${userHome} and ${env:NAME}. Anything else is left as it is.
- */
-export function resolveVariables<T>(value: T, workspace: string | undefined, env: NodeJS.ProcessEnv = process.env): T {
-    if (typeof value === "string") {
-        return value.replace(/\$\{([^}]+)\}/g, (whole, name: string) => {
-            if (name === "workspaceFolder" && workspace !== undefined) return workspace;
-            if (name === "workspaceFolderBasename" && workspace !== undefined) return workspace.split(/[\\/]/).pop() ?? whole;
-            if (name === "userHome") return os.homedir();
-            if (name.startsWith("env:")) return env[name.slice(4)] ?? "";
-            return whole;
-        }) as T;
-    }
-    if (Array.isArray(value)) return value.map(item => resolveVariables(item, workspace, env)) as T;
-    if (typeof value === "object" && value !== null) {
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveVariables(item, workspace, env)])) as T;
-    }
-    return value;
 }
 
 /** The workspace's Retrocore launch configurations in launch.json. */
@@ -67,18 +46,6 @@ function launchConfigurations(): Record<string, unknown>[] {
     const launch = vscode.workspace.getConfiguration("launch", folder()?.uri);
     return (launch.get<Record<string, unknown>[]>("configurations") ?? [])
         .filter(entry => entry.type === "retrocore" && entry.request === "launch" && typeof entry.name === "string");
-}
-
-/** A catalog machine as a setup that runs nothing, with the choices a configuration sets. */
-function catalogSetup(machine: Machine, configuration: Record<string, unknown> = {}): Setup {
-    const options: Setup["options"] = {};
-    for (const choice of machine.choices) {
-        const value = configuration[choice.option];
-        if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && value !== choice.default) {
-            options[choice.option] = value;
-        }
-    }
-    return { machineId: machine.id, kind: "machine", options };
 }
 
 /** Sets one choice in a launch.json configuration, keeping its variables as written. */
@@ -116,11 +83,15 @@ export class OffMachine {
         return typeof name === "string" ? name : undefined;
     }
 
-    /** Makes a machine the off one, and describes it. */
-    async select(target: OffTarget): Promise<void> {
+    /**
+     * Makes a machine the off one, and describes it; with a saved machine, as a favorite brings, that becomes its
+     * cards and media.
+     */
+    async select(target: OffTarget, machineState?: unknown): Promise<void> {
         const { machineState: _saved, ...configuration } = target.configuration;
         this.target = { ...target, configuration };
         this.body = undefined;
+        if (machineState !== undefined) await this.saved.set(configuration, machineState);
         await this.state.update(targetKey, this.target);
         await this.describe();
     }
@@ -138,7 +109,10 @@ export class OffMachine {
         let source: OffSource = { kind: "configuration" };
         if (isUsable(setup) && setupConfiguration(setup).name === name) source = { kind: "setup", setup };
         else if (typeof name === "string" && launchConfigurations().some(entry => entry.name === name)) source = { kind: "launch", name };
-        else if (machine !== undefined && launchConfiguration(machine).name === name) source = { kind: "setup", setup: catalogSetup(machine, configuration) };
+        else if (machine !== undefined && launchConfiguration(machine).name === name) {
+            const setup = setupFromConfiguration(configuration);
+            if (setup !== undefined) source = { kind: "setup", setup };
+        }
         const { machineState: _saved, ...rest } = configuration;
         this.target = { configuration: rest, source };
         this.body = undefined;
@@ -214,11 +188,17 @@ export class OffMachine {
         }
     }
 
-    /** Switch Machine…: the last setup, the workspace's launch configurations, then the catalog's machines. */
-    async pick(): Promise<OffTarget | undefined> {
-        type Item = vscode.QuickPickItem & { target?: OffTarget };
+    /**
+     * Switch Machine…: the favorites given, the last setup, the workspace's launch configurations, then the
+     * catalog's machines; a favorite brings its saved machine.
+     */
+    async pick(favorites: (vscode.QuickPickItem & { target: OffTarget; machineState: unknown })[] = []):
+        Promise<{ target: OffTarget; machineState?: unknown } | undefined> {
+        type Item = vscode.QuickPickItem & { target?: OffTarget; machineState?: unknown };
         const items: Item[] = [];
         const setup = this.state.get<Setup>(lastSetupKey);
+        if (favorites.length !== 0) items.push({ label: "Favorites", kind: vscode.QuickPickItemKind.Separator }, ...favorites);
+        if (favorites.length !== 0 && isUsable(setup)) items.push({ label: "Recent", kind: vscode.QuickPickItemKind.Separator });
         if (isUsable(setup)) {
             items.push({ label: "$(history) " + describeSetup(setup), detail: "What Start Machine started last",
                 target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
@@ -233,13 +213,14 @@ export class OffMachine {
         }
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });
         for (const machine of machines) {
-            const setup = catalogSetup(machine);
+            const setup: Setup = { machineId: machine.id, kind: "machine", options: {} };
             items.push({ label: machine.label, detail: machine.detail,
                 target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
         }
         const current = this.name;
         for (const item of items) if (item.target?.configuration.name === current) item.description = "$(check) " + (item.description ?? "");
-        return (await vscode.window.showQuickPick(items, { title: "Switch Machine", placeHolder: "Which machine to set up?" }))?.target;
+        const picked = await vscode.window.showQuickPick(items, { title: "Switch Machine", placeHolder: "Which machine to set up?" });
+        return picked?.target === undefined ? undefined : { target: picked.target, machineState: picked.machineState };
     }
 
     private async ask(method: string, params: Record<string, unknown>, save = false): Promise<void> {

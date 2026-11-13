@@ -12,7 +12,8 @@ import * as path from "node:path";
 import { cardsFor, group, type HardwareRow } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
 import { catalogMachine, settingValue, type MachineChoice } from "./machines";
-import { OffMachine, type OffTarget } from "./offMachine";
+import { favoriteChoices, type Favorites } from "./favorites";
+import type { OffMachine, OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
 
 /** A device as the debug host's retro/devices describes it. */
@@ -154,7 +155,7 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
     private readonly changed = new vscode.EventEmitter<Node | undefined>();
     readonly onDidChangeTreeData = this.changed.event;
 
-    constructor(private readonly state: MachineState, private readonly extension: vscode.Uri) {
+    constructor(private readonly state: MachineState, private readonly extension: vscode.Uri, private readonly favorites: Favorites) {
         state.onDidChange(() => this.changed.fire(undefined));
     }
 
@@ -276,8 +277,18 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         tooltip.appendMarkdown(off !== undefined
             ? `*${escape(name)}*, off. Cards and media changed now are there when it starts.`
             : `Launched by *${escape(name)}*, ${paused ? "stopped in the debugger" : "running"}.`);
+
+        // The heart beside it: empty when it is not a favorite, filled when it is one as saved, broken when it has
+        // changed since.
+        const mark = this.favorites.mark();
+        const favorite = mark.kept === undefined ? "" : escape(mark.kept.favorite.name);
+        tooltip.appendMarkdown(mark.state === "none"
+            ? "\n\nNot in your favorites: the empty heart saves it, with its settings, cards and disks."
+            : mark.state === "saved"
+                ? `\n\nSaved in your favorites as *${favorite}*.`
+                : `\n\nSaved in your favorites as *${favorite}*, but ${(mark.differences ?? []).join(", ")} changed since: the broken heart updates it.`);
         item.tooltip = tooltip;
-        item.contextValue = off !== undefined ? "machine off" : "machine";
+        item.contextValue = [off !== undefined ? "machine off" : "machine", `heart-${mark.state}`].join(" ");
         return item;
     }
 }
@@ -372,9 +383,8 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
 const resumes = new Set(["continue", "next", "stepIn", "stepOut", "stepBack", "reverseContinue", "goto"]);
 
 /** Registers the Retrocore activity bar's Machine and Drives views and their actions. */
-export function registerDevices(context: vscode.ExtensionContext, basic: BasicPrograms, saved: SavedMachines): void {
+export function registerDevices(context: vscode.ExtensionContext, basic: BasicPrograms, saved: SavedMachines, off: OffMachine, favorites: Favorites): void {
     const tree = new MachineState();
-    const off = new OffMachine(context.workspaceState, saved);
     const showBasic = (): void => {
         tree.basic = basic.summary(vscode.debug.activeDebugSession);
         tree.show({ devices: tree.devices, hardware: tree.hardware });
@@ -423,8 +433,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         await off.describe();
     };
     context.subscriptions.push(off.onDidChange(showOff));
+    // A favorite saved, updated or removed changes the heart.
+    context.subscriptions.push(favorites.onDidChange(() => tree.redraw()));
 
-    const machineView = vscode.window.createTreeView("retrocore.machine", { treeDataProvider: new MachineTree(tree, context.extensionUri) });
+    const machineView = vscode.window.createTreeView("retrocore.machine", { treeDataProvider: new MachineTree(tree, context.extensionUri, favorites) });
     const drivesView = vscode.window.createTreeView("retrocore.drives", { treeDataProvider: new DriveTree(tree) });
     context.subscriptions.push(machineView, drivesView);
 
@@ -575,11 +587,13 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.refresh", () => refresh(vscode.debug.activeDebugSession)));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.boot", () => off.boot()));
     // Switch Machine… picks the off machine, or takes it given, as the tests and favorites do.
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.switch", async (given?: OffTarget) => {
-        const target = given ?? await off.pick();
-        if (target === undefined) return;
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.switch", async (given?: unknown) => {
+        // The machine row's button passes its row; only the tests give a machine.
+        const target = typeof given === "object" && given !== null && "configuration" in given && "source" in given ? given as OffTarget : undefined;
+        const picked = target === undefined ? await off.pick(favoriteChoices()) : { target };
+        if (picked === undefined) return;
         stale = false;
-        await off.select(target);
+        await off.select(picked.target, picked.machineState);
     }));
     // A setting's row: pick its value while the machine is off, or take it given, as the tests do.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.setting",

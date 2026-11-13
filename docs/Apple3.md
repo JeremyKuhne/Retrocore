@@ -23,10 +23,11 @@ names it with `"machine": "apple3"`:
 | Option | Meaning |
 | --- | --- |
 | `ramKilobytes` | 128, 256 (the default) or 512 (third-party upgrades). |
-| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Sector images load read-only. |
+| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Unprotect** in the Retro Devices view lets the machine write one, in memory. |
 | `romDirectory` | MAME's `apple3` set (`apple3.rom`, `341-0028-a.rom`), or `RETROCORE_APPLE3_ROMS`. Without it the ROM comes from the SDK. |
 | `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
 | `sound` | `speaker` (the default) or `off`. |
+| `screen` | The monitor: `color` (the default), or a monochrome `white`, `green` or `amber` one, which shows each pixel in the phosphor's color by its brightness. The display panel's **Screen** changes it. |
 
 With no disk, the boot ROM runs its diagnostics and shows RETRY. Press a key to try again once a disk is in.
 
@@ -90,7 +91,7 @@ A program calls SOS with `BRK`, a call number and its parameters' address:
 
 [Breakpoints.md](Breakpoints.md#sos-call-breakpoints) has the details.
 
-Apple III Pascal's programs debug on a Pascal thread, with `pascal` breakpoints on their procedures: see
+Apple III Pascal's programs debug on a Pascal thread, by source line through the compiler's listing: see
 [Pascal.md](Pascal.md).
 
 SOS itself debugs at its source: the SDK has SOS 1.3's kernel, its bootstrap loader and Apple's drivers, each

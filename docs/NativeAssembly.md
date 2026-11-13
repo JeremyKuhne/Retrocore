@@ -19,6 +19,7 @@ checks them.
 - [CPUs and instructions](#cpus-and-instructions)
 - [6502 operands](#6502-operands)
 - [Z80 operands](#z80-operands)
+- [6809 operands](#6809-operands)
 - [Macros](#macros)
 - [Conditionals](#conditionals)
 - [Repeats](#repeats)
@@ -293,6 +294,7 @@ applies to any instructions before it; without one, the host's CPU applies.
 | `Rockwell65C02` | The Rockwell 65C02: the WDC set without `WAI` and `STP`. |
 | `65SC02` | The 65SC02: the WDC set without `WAI`, `STP` and the bit instructions. |
 | `Z80` | The Z80, documented and undocumented instructions alike. |
+| `M6809` | The Motorola MC6809, with page-`$10` and page-`$11` instructions, indexed postbytes, register pairs and stack register lists. |
 
 An instruction is a mnemonic and its operand. Where one instruction has several encodings, such as the Z80's
 duplicate `NEG`s, the documented one is used.
@@ -396,6 +398,44 @@ Data:   .word 0
 
 A Zilog `(HL)` in native source is an expression in parentheses, so it reports "Unresolved expression '(HL)'".
 `[HL+5]` is memory at the address `HL+5`, which needs a symbol named `HL`; only IX and IY take displacements.
+
+## 6809 operands
+
+Mnemonics, registers and width prefixes (`<` and `>`) follow Motorola; indirection uses **brackets** (`[...]`) so
+parentheses always group an expression:
+
+| Operand | Addressing |
+| --- | --- |
+| (none) | Inherent (`NOP`, `ASLA`/`LSLA`, `RTS`, `RTI`, `MUL`, `DAA`, `SEX`, `ABX`, `SYNC`, `SWI`/`SWI2`/`SWI3`). |
+| `#e` | 8-bit or 16-bit immediate (`LDA #$A5`, `LDD #$1234`). |
+| `e`, `<e`, `>e` | Direct page (`$00`–`$FF` when unforced, or forced with `<`) or extended (`>`), or a relative branch target. |
+| `,R`, `e,R`, `<e,R`, `<<e,R`, `>e,R` | Indexed by `X`, `Y`, `U` or `S`: no offset, or 5-bit (`<<`), 8-bit (`<`) or 16-bit (`>`). |
+| `A,R` `B,R` `D,R` | Accumulator-offset indexed. |
+| `,R+` `,R++` `,-R` `,--R` | Auto-increment and auto-decrement indexed. |
+| `target,PCR` / `>target,PCR` | PC-relative indexed (8-bit or 16-bit displacement). |
+| `[,R]` `[e,R]` `[A,R]` `[,R++]` `[target,PCR]` `[nn]` | Indirect indexed and extended indirect (`[nn]`); `,R+` and `,-R` have no indirect form. |
+| `R1,R2` | `TFR` and `EXG` register pairs (`D`, `X`, `Y`, `U`, `S`, `PC` or `A`, `B`, `CC`, `DP`). |
+| `CC,A,B,DP,X,Y,U,PC` (or `#mask`) | `PSHS`/`PULS` (`U` allowed) and `PSHU`/`PULU` (`S` allowed); `D` stands for `A,B`. |
+
+`LSL`, `LSLA`, `LSLB`, `BHS`, `BLO`, `LBHS` and `LBLO` are accepted as synonyms for `ASL` and `BCC`/`BCS`.
+
+```asm
+.cpu M6809
+        .org $1000
+Entry:  lds #$2000
+        lda <$10
+        lda >$0010
+        lda [,x]
+        lda 5,x
+        lda ,x++
+        leax -2,u
+        leay Table,pcr
+        pshs d,x,y,pc
+        tfr d,u
+        lbne Done
+Done:   puls d,x,y,pc
+Table:  .dbyt $1234
+```
 
 ## Macros
 

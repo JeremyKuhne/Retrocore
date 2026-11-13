@@ -3,6 +3,9 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.M6809;
+using Retrocore.Cpu.Z80;
+using Retrocore.Isa;
 using Retrocore.Machines.Apple2;
 using System.Runtime.CompilerServices;
 
@@ -33,6 +36,19 @@ public class EnumStorageTests
         AssertByteEnum<ProcessorSequence>();
         AssertByteEnum<ProcessorSignals>();
         AssertByteEnum<ProcessorVariant>();
+        AssertByteEnum<OperandFieldKind>();
+        AssertByteEnum<M6809OffsetWidth>();
+        AssertByteEnum<M6809IndexedKind>();
+        AssertByteEnum<M6809ConditionCode>();
+        AssertByteEnum<M6809Signals>();
+        AssertByteEnum<M6809Sequence>();
+        AssertByteEnum<M6809AddressPhase>();
+        AssertByteEnum<M6809WaitState>();
+        AssertByteEnum<M6809Operation>();
+        AssertByteEnum<Z80Signals>();
+        AssertByteEnum<Z80MachineCycle>();
+        AssertByteEnum<Z80OpcodeGroup>();
+        AssertByteEnum<Z80Operation>();
         AssertByteEnum<Apple2Model>();
         AssertByteEnum<P6PromLayout>();
     }

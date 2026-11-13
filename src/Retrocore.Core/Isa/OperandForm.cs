@@ -158,7 +158,28 @@ public sealed class OperandForm
     public bool IsNarrow { get; init; }
 
     /// <summary>
-    ///  Gets the number of bytes a field encodes as.
+    ///  Gets whether the form's length depends on its operand: an indexed postbyte and the offset bytes it selects.
+    /// </summary>
+    public bool HasVariableSize => _fields.Length == 1 && _fields[0] == OperandFieldKind.IndexedPostbyte;
+
+    /// <summary>
+    ///  Gets whether the form's one field is a postbyte field, which the instruction set's
+    ///  <see cref="PostbyteCodec"/> decodes, sizes, formats and encodes.
+    /// </summary>
+    public bool HasPostbyte => _fields.Length == 1 && IsPostbyte(_fields[0]);
+
+    /// <summary>
+    ///  Gets whether a field kind is a postbyte field.
+    /// </summary>
+    /// <param name="field">The field.</param>
+    /// <returns>Whether a <see cref="PostbyteCodec"/> handles it.</returns>
+    public static bool IsPostbyte(OperandFieldKind field) => field is OperandFieldKind.IndexedPostbyte
+        or OperandFieldKind.RegisterPair
+        or OperandFieldKind.SystemStackMask
+        or OperandFieldKind.UserStackMask;
+
+    /// <summary>
+    ///  Gets the number of bytes a field encodes as (minimum size for variable-length postbytes).
     /// </summary>
     /// <param name="field">The field.</param>
     /// <returns>Its size.</returns>

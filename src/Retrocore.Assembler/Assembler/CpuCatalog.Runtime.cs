@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Cpu.M6502;
+using Retrocore.Cpu.M6809;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
 
@@ -16,7 +17,7 @@ public static class CpuCatalog
     private static readonly Dictionary<string, InstructionSet> s_sets = Create();
 
     /// <summary>
-    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c> or <c>Z80</c>; names ignore case.
+    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c>, <c>Z80</c> or <c>M6809</c>; names ignore case.
     /// </summary>
     public static IReadOnlyDictionary<string, InstructionSet> InstructionSets => s_sets;
 
@@ -34,7 +35,7 @@ public static class CpuCatalog
     private static Dictionary<string, InstructionSet> Create()
     {
         Dictionary<string, InstructionSet> sets = new(StringComparer.OrdinalIgnoreCase);
-        foreach (IsaDescription description in (IsaDescription[])[M6502Isa.Description, Z80Isa.Description])
+        foreach (IsaDescription description in (IsaDescription[])[M6502Isa.Description, Z80Isa.Description, M6809Isa.Description])
         {
             foreach (KeyValuePair<string, InstructionSet> pair in description.InstructionSets)
             {

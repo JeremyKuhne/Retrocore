@@ -46,6 +46,11 @@ public sealed class IsaDescription
     public IReadOnlyList<ushort> EntryPoints { get; init; } = [];
 
     /// <summary>
+    ///  Gets whether leading <c>&lt;</c> and <c>&gt;</c> prefixes on address operands force narrow and wide modes.
+    /// </summary>
+    public bool AngleWidths { get; init; }
+
+    /// <summary>
     ///  Gets the instruction sets the file defines, by name.
     /// </summary>
     public IReadOnlyDictionary<string, InstructionSet> InstructionSets { get; internal set; } =

@@ -23,6 +23,9 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     private readonly Z80CallStack _calls;
     private readonly int? _revision;
     private readonly byte[] _pixels;
+
+    // The Model I's video is white on black; a monitor of another phosphor shows it in that color.
+    private string _screen = DebugScreens.Green;
     private DebugFrame _beforeInstruction;
     private bool _instruction;
     private BasicRom? _basicRom;
@@ -429,6 +432,8 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
             ["cycles"] = CycleCount,
             ["video"] = VideoState(),
             ["media"] = MediaState(),
+            ["screen"] = _screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
         };
     }
@@ -482,9 +487,20 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => DebugScreens.Monochrome;
+
+    /// <inheritdoc/>
+    public string Screen
+    {
+        get => _screen;
+        set => _screen = DebugScreens.Require(value, Screens);
+    }
+
+    /// <inheritdoc/>
     public ReadOnlySpan<byte> RenderVideo()
     {
         _machine.Bus.Video.Render(_pixels, scanned: true);
+        DebugScreens.Show(_pixels, _screen);
         return _pixels;
     }
 
@@ -499,6 +515,7 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     private JsonObject VideoFrame(bool scanned)
     {
         _machine.Bus.Video.Render(_pixels, scanned);
+        DebugScreens.Show(_pixels, _screen);
         return new JsonObject
         {
             ["width"] = _machine.Bus.Video.Width,

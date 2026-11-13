@@ -99,7 +99,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["apple2/disk"] = _ => DiskState(),
             ["apple2/button"] = Button,
             ["apple2/mouse"] = Mouse,
-            ["apple2/screen"] = Screen,
             ["apple2/sound"] = Sound,
             ["apple2/fastDisk"] = FastDiskRequest
         };
@@ -108,18 +107,32 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K.
+    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K. It uses both
+    ///   of the card's banks at <c>$D000</c>, and is looked for in each.
     ///  </para>
     /// </remarks>
     public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
         "Apple Pascal",
         new Apple2PascalMemory(_machine.Bus),
         _machine.Bus.Peek,
+        [address => LanguageCard(Apple2MemoryArea.MainLanguageCard, address), address => LanguageCard(Apple2MemoryArea.MainLanguageCardBank1, address)],
         (0xD000, 0x10000),
         extended: false,
         () => 0,
         () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
         () => CycleCount);
+
+    // The language card's RAM at an address, bank 1 below $E000 for that bank's area; the CPU's view elsewhere.
+    private byte LanguageCard(Apple2MemoryArea area, ushort address)
+    {
+        Apple2Bus bus = _machine.Bus;
+        if (area == Apple2MemoryArea.MainLanguageCardBank1 && address >= 0xE000)
+        {
+            area = Apple2MemoryArea.MainLanguageCard;
+        }
+
+        return bus.PeekArea(area, address, out byte value) ? value : bus.Peek(address);
+    }
 
     /// <summary>
     ///  Launches a IIe from a launch request's arguments.
@@ -376,11 +389,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return [];
     }
 
-    // apple2/screen: shows the video on a color monitor or a green, amber or white monochrome one.
-    private JsonObject Screen(JsonObject args)
+    /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => DebugScreens.WithColor;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A monochrome monitor shows each of the 560 dots on its own, rather than the color a run of them makes.
+    ///  </para>
+    /// </remarks>
+    public string Screen
     {
-        _machine.Bus.Video.Monitor = ParseScreen(args.String("screen") ?? throw new ArgumentException("screen is required."));
-        return [];
+        get => _machine.Bus.Video.Monitor.ToString().ToLowerInvariant();
+        set => _machine.Bus.Video.Monitor = ParseScreen(value);
     }
 
     // The launch's and the panel's names for the monitors.
@@ -390,7 +411,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         "green" => Apple2Monitor.Green,
         "amber" => Apple2Monitor.Amber,
         "white" => Apple2Monitor.White,
-        _ => throw new ArgumentException("screen must be color, green, amber or white.")
+        _ => throw new ArgumentException("screen must be color, white, green or amber.")
     };
 
     // apple2/sound: changes what the panel hears while running, as the launch's sound option does.
@@ -957,6 +978,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }
@@ -999,7 +1023,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["sound"] = _soundMode,
             ["mockingboard"] = _machine.Bus.MockingboardInstalled,
             ["mouse"] = _machine.Bus.MouseSlot,
-            ["screen"] = _machine.Bus.Video.Monitor.ToString().ToLowerInvariant(),
+            ["screen"] = Screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["fastDisk"] = FastDisk,
             ["running"] = running
         };

@@ -373,3 +373,27 @@ test("after .cpu Z80, Z80 mnemonics, registers and conditions are highlighted un
     assert.ok(scopeAt(lines[7], result[7], "LDA").includes(scope.opcode));
     assert.ok(!scopeAt(lines[7], result[7], "B").includes(scope.register), "6502 operands keep their own rules");
 });
+
+test("after .cpu M6809, M6809 mnemonics, aliases and registers are highlighted until another .cpu", () => {
+    const lines = [
+        ".cpu M6809",
+        "Entry:  LDS #$2000",
+        "        LEAX -2,U",
+        "        LDA [D,PCR]",
+        "        PSHS CC,A,B,DP,X,Y,U,PC",
+        "        LBHS Entry",
+        ".cpu Mos6502",
+        "        LDA U"
+    ];
+    const result = lineTokens(lines);
+    assert.ok(scopeAt(lines[0], result[0], "M6809").includes("constant.language.processor.retrocore"));
+    assert.ok(scopeAt(lines[1], result[1], "LDS").includes(scope.opcode));
+    assert.ok(scopeAt(lines[2], result[2], "LEAX").includes(scope.opcode));
+    assert.ok(scopeAt(lines[2], result[2], "U").includes(scope.register));
+    assert.ok(scopeAt(lines[3], result[3], "D,").includes(scope.register));
+    assert.ok(scopeAt(lines[3], result[3], "PCR").includes(scope.register));
+    assert.ok(scopeAt(lines[4], result[4], "PSHS").includes(scope.opcode));
+    assert.ok(scopeAt(lines[4], result[4], "DP").includes(scope.register));
+    assert.ok(scopeAt(lines[5], result[5], "LBHS").includes(scope.flow));
+    assert.ok(!scopeAt(lines[7], result[7], "U").includes(scope.register));
+});

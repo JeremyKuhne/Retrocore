@@ -108,6 +108,20 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
+    /// <summary>
+    ///  The Color Computer's ROM sources pass the lint as the editor runs it, 6809 registers and flags included.
+    /// </summary>
+    [TestMethod]
+    public void CocoDocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Coco");
+        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain("ColorBasic.asm");
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
     private static readonly string[] s_sdkFolders = ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
 
     // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.

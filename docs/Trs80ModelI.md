@@ -175,6 +175,8 @@ The other options are:
   or `both`);
 - `characterGenerator`: `stock` or `kit` (the default with `lowercase`);
 - `snow`: show video snow (off by default);
+- `screen`: the monitor, `green` (the default), `white` (black and white) or `amber`, which lights the dots in
+  that phosphor's color. The display panel's **Screen** changes it while debugging;
 - `cassette`, `fastCassette` (on by default) and `disks`;
 - `speed`: `1` (the default) runs at 1.774 MHz, `2`, `4` or `8` that many times as fast, and `"max"` as fast as
   possible. The display panel's **Speed** changes it while debugging.

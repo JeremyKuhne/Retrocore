@@ -73,6 +73,12 @@ internal interface IDebugTarget : IDebugMemory
     bool InInstruction { get; }
 
     /// <summary>
+    ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    /// </summary>
+    bool IsIdle => false;
+
+    /// <summary>
     ///  Gets the cycles run since power-up.
     /// </summary>
     ulong CycleCount { get; }
@@ -336,6 +342,17 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="running">Whether the machine is running.</param>
     /// <returns>The frame's state.</returns>
     JsonObject DisplayState(bool running);
+
+    /// <summary>
+    ///  Gets the monitors the video can be shown on, from <see cref="DebugScreens"/>, the default first.
+    /// </summary>
+    IReadOnlyList<string> Screens { get; }
+
+    /// <summary>
+    ///  Gets or sets the monitor the video is shown on, one of <see cref="Screens"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The machine has no such monitor.</exception>
+    string Screen { get; set; }
 
     /// <summary>
     ///  Renders the video as the beam drew it, into a buffer the target keeps.

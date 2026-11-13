@@ -306,20 +306,17 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     ///   The III's keyboard sends letters as capitals and reports SHIFT at <c>$C008</c>, from which SOS makes
     ///   lowercase, and SOS also reads SHIFT to tell a symbol from the digit or mark on the same key. So a capital
     ///   letter or a shifted symbol goes with SHIFT held while it is the current key, and a small letter as its
-    ///   capital without. Another control character, such as CONTROL-C, goes as its letter with CONTROL held, which
-    ///   is how the keyboard sends it and the console driver reads it.
+    ///   capital without.
+    ///  </para>
+    ///  <para>
+    ///   SOS makes control characters the same way, from the key and CONTROL, so any other code below <c>$20</c>
+    ///   goes with CONTROL held: <c>$03</c> is CONTROL-C, not C.
     ///  </para>
     /// </remarks>
     public void QueueKey(byte code)
     {
         bool shifted = code is >= (byte)'A' and <= (byte)'Z' || ShiftedSymbols.Contains((char)code);
-        if (code is > 0 and < 0x20 and not (0x08 or 0x09 or 0x0A or 0x0B or 0x0D or 0x15 or 0x1B))
-        {
-            _keys.Enqueue(((byte)(code | 0x40), false, true));
-            if (_strobe == 0 && _keyDelay == 0) { DeliverKey(); }
-            return;
-        }
-
+        bool control = code < 0x20 && code is not (0x08 or 0x09 or 0x0A or 0x0B or 0x0D or 0x15 or 0x1B);
         _keys.Enqueue((code switch
         {
             0x1B => 0x9B,
@@ -331,7 +328,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             0x0B => 0x8B,
             >= (byte)'a' and <= (byte)'z' => (byte)(code - 0x20),
             _ => code
-        }, shifted, false));
+        }, shifted, control));
 
         if (_strobe == 0 && _keyDelay == 0) { DeliverKey(); }
     }

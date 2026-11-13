@@ -55,15 +55,7 @@ internal static class DeviceJson
             ["operations"] = Operations(info.Operations),
             ["tracks"] = info.Tracks,
             ["sides"] = info.Sides,
-            ["media"] = device.Media is { } media
-                ? new JsonObject
-                {
-                    ["label"] = media.Label,
-                    ["format"] = media.Format,
-                    ["writeProtected"] = media.WriteProtected,
-                    ["changed"] = media.Changed
-                }
-                : null,
+            ["media"] = device.Media is { } media ? Media(media) : null,
             ["activity"] = Camel(device.Activity.ToString())
         };
 
@@ -104,6 +96,14 @@ internal static class DeviceJson
 
         return result;
     }
+
+    private static JsonObject Media(MediaState media) => new()
+    {
+        ["label"] = media.Label,
+        ["format"] = media.Format,
+        ["writeProtected"] = media.WriteProtected,
+        ["changed"] = media.Changed
+    };
 
     private static JsonArray Operations(MediaOperations operations)
     {

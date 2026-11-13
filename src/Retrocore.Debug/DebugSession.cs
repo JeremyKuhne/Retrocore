@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
 
@@ -30,12 +31,14 @@ internal sealed partial class DebugSession
         "apple2/disk",
         "apple2/sound",
         "apple2/button",
+        "apple2/mouse",
         "apple2/fastDisk",
         "apple3/disk",
         "apple3/sound",
         "apple3/button",
         "apple3/fastDisk",
-        "retro/media"
+        "retro/media",
+        "apple1/clearScreen"
     ];
 
     private readonly object _gate = new();
@@ -139,10 +142,20 @@ internal sealed partial class DebugSession
 
         transport.On("threads", args => Reply(() => new JsonObject { ["threads"] = Threads() }));
         transport.On("stackTrace", args => Reply(() =>
-            args.Int("threadId") == BasicThread ? BasicStackTrace() : StackTrace(args)));
+            args.Int("threadId") switch
+            {
+                BasicThread => BasicStackTrace(),
+                PascalThread => PascalStackTrace(),
+                _ => StackTrace(args)
+            }));
 
         transport.On("scopes", args => Reply(() =>
-            (args.Int("frameId") ?? 0) >= BasicFrameBase ? BasicScopes() : Scopes(args)));
+            (args.Int("frameId") ?? 0) switch
+            {
+                >= BasicFrameBase => BasicScopes(),
+                >= PascalFrameBase and var frame => PascalScopesOf(frame),
+                _ => Scopes(args)
+            }));
 
         transport.On("variables", args => Reply(() => Variables((args.Int("variablesReference") ?? 0))));
         transport.On("evaluate", args => Reply(() =>
@@ -150,6 +163,24 @@ internal sealed partial class DebugSession
             string expression = Required(args, "expression");
             int frameId = args.Int("frameId") ?? 1;
             if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
+
+            // In a Pascal frame, a variable its listing names; other expressions are the CPU's, as the machine is now.
+            if (frameId is >= PascalFrameBase and < BasicFrameBase)
+            {
+                if (PascalVariableNamed(frameId, expression.Trim()) is { } named && Pascal is { } pascal)
+                {
+                    return new JsonObject
+                    {
+                        ["result"] = PascalValue(pascal.Memory, named.At, named.Variable),
+                        ["type"] = named.Variable.Type,
+                        ["variablesReference"] = 0,
+                        ["memoryReference"] = named.At.Bank == 0 ? Reference(bank: null, named.At.Address) : null
+                    };
+                }
+
+                frameId = 1;
+            }
+
             long value;
             DebugMemoryBank? bank;
             try
@@ -163,10 +194,18 @@ internal sealed partial class DebugSession
             }
 
 
-            // A value in the CPU's 64K can open a memory view there; a bank-qualified one, in that bank.
+            // A value in the CPU's 64K can open a memory view there; a bank-qualified one, in that bank. While
+            // debugging, the editor shows this hover in place of the language server's, so a documented name
+            // brings its ;; summary along.
+            string result = bank is null ? $"${value:X} ({value})" : $"{bank.Name}:${value:X4}";
+            if (args.String("context") == "hover" && SymbolSummary(expression) is { } summary)
+            {
+                result = $"{result} · {summary}";
+            }
+
             return new JsonObject
             {
-                ["result"] = bank is null ? $"${value:X} ({value})" : $"{bank.Name}:${value:X4}",
+                ["result"] = result,
                 ["variablesReference"] = 0,
                 ["memoryReference"] = value is >= 0 and <= 0xFFFF ? Reference(bank, (int)value) : null
             };
@@ -191,6 +230,7 @@ internal sealed partial class DebugSession
         transport.On("continue", args => Reply(() =>
         {
             _basicGoal = null;
+            _pascalGoal = null;
             Continue();
             return new JsonObject
             {
@@ -207,6 +247,12 @@ internal sealed partial class DebugSession
                 return [];
             }
 
+            if (OnPascal(args))
+            {
+                StepPascal(PascalStep.Pause);
+                return [];
+            }
+
             _run?.Cancel();
             Stopped("pause");
             return [];
@@ -214,21 +260,24 @@ internal sealed partial class DebugSession
 
         transport.On("next", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Over); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Over, Instruction(args)); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Over); }
             else { Step(over: true, outOf: false, Instruction(args)); }
             return [];
         }));
 
         transport.On("stepIn", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Into); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Into, Instruction(args)); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Into); }
             else { Step(over: false, outOf: false, Instruction(args)); }
             return [];
         }));
 
         transport.On("stepOut", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Out); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Out); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Out); }
             else { Step(over: false, outOf: true, Instruction(args)); }
             return [];
         }));
@@ -328,10 +377,21 @@ internal sealed partial class DebugSession
             return new JsonObject { ["typed"] = typed, ["skipped"] = skipped };
         }));
 
+        // retro/screen: shows the video on another of the machine's monitors, such as a green-phosphor one. A new
+        // monitor changes the picture, so a stopped machine sends the panel a frame drawn on it.
+        transport.On("retro/screen", args => Reply(() =>
+        {
+            Target.Screen = args.String("screen") ?? throw new ArgumentException("screen is required.");
+            if (_run is not { IsCancellationRequested: false }) { NotifyFrame(running: false); }
+            return new JsonObject { ["screen"] = Target.Screen };
+        }));
+
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", _ => Reply(() =>
         {
             Target.Reset();
+            Pascal?.Reset();
+            _pascalFrames = null;
             Invalidate();
             if (_run is not { IsCancellationRequested: false })
             {
@@ -346,10 +406,23 @@ internal sealed partial class DebugSession
     // The display as the panel draws it, while running or stopped.
     private JsonObject DisplayNow() => Target.DisplayFrame(running: _run is { IsCancellationRequested: false });
 
-    private JsonObject MachineRequest(string name, JsonObject args) =>
-        Target.Requests.TryGetValue(name, out Func<JsonObject, JsonObject>? handler)
-            ? handler(args)
-            : throw new InvalidOperationException($"{name} is not supported on this machine.");
+    private JsonObject MachineRequest(string name, JsonObject args)
+    {
+        if (!Target.Requests.TryGetValue(name, out Func<JsonObject, JsonObject>? handler))
+        {
+            throw new InvalidOperationException($"{name} is not supported on this machine.");
+        }
+
+        JsonObject result = handler(args);
+
+        // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
+        if (name == "apple1/clearScreen" && _run is not { IsCancellationRequested: false })
+        {
+            NotifyFrame(running: false);
+        }
+
+        return result;
+    }
 
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
 
@@ -465,8 +538,12 @@ internal sealed partial class DebugSession
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
+            DebugMachines.Apple1 => LaunchApple1(args, loads),
+            DebugMachines.Coco => LaunchCoco(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
+
+        if (args.String("screen") is { } screen) { Target.Screen = screen; }
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -488,6 +565,7 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         _basicStarting = null;
         _basicView = null;
+        ForgetPascal();
         _basicEnded = false;
         _lineCycles.Clear();
         _callCycles.Clear();
@@ -622,12 +700,29 @@ internal sealed partial class DebugSession
         return [];
     }
 
+    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO reaches the terminal.
+    private static Apple1DebugTarget LaunchApple1(JsonObject args, bool loads)
+    {
+        Apple1DebugTarget target = Apple1DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 0.05 : 0));
+        return target;
+    }
+
     // A program on a Model I calls the ROM through the RAM vectors and device control blocks, so the ROM runs
     // briefly first to set them up.
     private static Trs80DebugTarget LaunchModelI(JsonObject args, bool loads)
     {
         Trs80DebugTarget target = Trs80DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Color Computer calls Color BASIC's routines through RAM hooks it sets up as it starts, so the
+    // ROM runs first; Disk BASIC takes longer, as it resets the drives.
+    private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
+    {
+        CocoDebugTarget target = CocoDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }
 
@@ -781,6 +876,36 @@ internal sealed partial class DebugSession
     private const int DocumentationScope = 100000;
 
     /// <summary>
+    ///  Gets the <c>;;</c> summary of a name the program's or the ROMs' sources document, inheritance followed, as
+    ///  plain text: a link shows its name.
+    /// </summary>
+    /// <param name="name">The name, as the hover's expression gives it.</param>
+    /// <returns>The summary, or null when the name is not a documented one.</returns>
+    private string? SymbolSummary(string name)
+    {
+        if (name.Length == 0 || !name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '.'))
+        {
+            return null;
+        }
+
+        DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
+        // The module whose definition the value came from, as evaluation resolves it: the first that defines the
+        // name. Its documentation, or none, describes it; another module's same name is a different symbol.
+        IDebugModule? defining = _debug.Modules.FirstOrDefault(module => module.TryResolve(name, out _));
+        if (defining is null) { return null; }
+        DocumentationSet documentation = defining.Documentation;
+        if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { return null; }
+        string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
+
+        // A link shows its name without its module.
+        return summary.Length == 0 ? null : LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
+    }
+
+    // A documentation link, such as <XAMH> or <Monitor:A1L>.
+    [GeneratedRegex(@"<([A-Za-z_][\w.]*(?::[A-Za-z_][\w.]*)?)>")]
+    private static partial Regex LinkPattern();
+
+    /// <summary>
     ///  Finds the documented routine a frame is in: the nearest documented routine at or before its PC.
     /// </summary>
     private DocumentationTopic? FrameTopic(int frameId)
@@ -854,6 +979,7 @@ internal sealed partial class DebugSession
 
     private JsonObject Variables(int reference)
     {
+        if (reference >= PascalReferences) { return PascalVariablesOf(reference); }
         if (reference >= BasicReferences) { return BasicVariablesOf(reference); }
         if (reference > DocumentationScope) { return DocumentationVariables(reference - DocumentationScope); }
         if (reference == BanksScope) { return BankVariables(); }
@@ -941,6 +1067,9 @@ internal sealed partial class DebugSession
         for (int count = 0; count < 1_000_000; count++)
         {
             if (!Execute()) { return; }
+
+            // While the CPU is idle no instruction has finished, so the step neither ends nor meets a breakpoint.
+            if (!Target.IsInstructionBoundary) { continue; }
             DebugFrame r = Target.Frame;
             DebugPosition? now = _debug.Position(Target, r.ProgramCounter);
 
@@ -1025,6 +1154,11 @@ internal sealed partial class DebugSession
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
             if (instruction && Target.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+
+            // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
+            // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
+            // made its writes, so the watchpoints they hit stop now.
+            if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");
@@ -1053,6 +1187,7 @@ internal sealed partial class DebugSession
         DebugFrame before = Target.Frame;
         _instructionStart = before.ProgramCounter;
         ObserveBasic(before.ProgramCounter);
+        ObservePascal(before.ProgramCounter);
         FlushLineCycles();
         (string Path, int Line)? previous = _cycleSource;
         _cycleSource = _debug.Position(Target, before.ProgramCounter)?.Chain[0] is { } line
@@ -1132,6 +1267,7 @@ internal sealed partial class DebugSession
                             }
 
                             if (Target.IsInstructionBoundary && !first && BasicStops(pc)) { return; }
+                            if (Target.IsInstructionBoundary && !first && PascalStops(pc)) { return; }
 
                             // Continuing from a BRK stop runs the BRK.
                             if (Target.IsInstructionBoundary
@@ -1344,6 +1480,8 @@ internal sealed partial class DebugSession
     {
         Invalidate();
         _basicGoal = null;
+        _pascalGoal = null;
+        _pascalFrames = null;
         ForgetBasicReferences();
         _unchecked = false;
         AddLoadedModules();

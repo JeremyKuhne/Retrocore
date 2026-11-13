@@ -25,10 +25,7 @@ public sealed class SosVolume
     public const int BlockSize = 512;
 
     private const int VolumeDirectory = 2;
-    private const int DiskSize = 35 * 16 * 256;
-
-    // Where a block's two halves are on a DOS-order image: ProDOS sector n of a track is this DOS sector.
-    private static readonly byte[] s_dosSectors = [0x0, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0xF];
+    private const int DiskSize = DiskBlocks.DiskSize;
 
     private readonly byte[] _image;
     private readonly bool _proDosOrder;
@@ -65,7 +62,9 @@ public sealed class SosVolume
     ///  Whether its sectors are in ProDOS order (<c>.po</c>) rather than DOS order (<c>.dsk</c>).
     /// </param>
     /// <returns>The volume.</returns>
-    /// <exception cref="InvalidDataException">The image is not 140K or holds no SOS volume.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not 140K, holds no SOS volume, or its directory's blocks loop or leave the volume.
+    /// </exception>
     public static SosVolume Read(byte[] image, bool proDosOrder)
     {
         ArgumentNullException.ThrowIfNull(image);
@@ -80,7 +79,9 @@ public sealed class SosVolume
     /// <param name="name">Its name, in any case.</param>
     /// <returns>Its contents, as long as its end of file.</returns>
     /// <exception cref="FileNotFoundException">The volume directory has no such file.</exception>
-    /// <exception cref="InvalidDataException">The file is a directory.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The file is a directory, or its blocks are past the end of the volume.
+    /// </exception>
     public byte[] ReadFile(string name)
     {
         SosFileEntry entry = Files.FirstOrDefault(file => string.Equals(file.Name, name, StringComparison.OrdinalIgnoreCase))
@@ -88,7 +89,7 @@ public sealed class SosVolume
 
         byte[] data = entry.StorageType switch
         {
-            1 => Block(entry.KeyBlock),
+            1 => Data(entry.KeyBlock),
             2 => Indexed(entry.KeyBlock, entry.EndOfFile),
             3 => Tree(entry.KeyBlock, entry.EndOfFile),
             _ => throw new InvalidDataException($"{name} is not a file SOS stores in blocks.")
@@ -102,30 +103,20 @@ public sealed class SosVolume
     /// </summary>
     /// <param name="block">The block number, 0-279.</param>
     /// <returns>Its 512 bytes.</returns>
-    public byte[] Block(int block)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(block);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(block, DiskSize / BlockSize);
-        if (_proDosOrder) { return _image.AsSpan(block * BlockSize, BlockSize).ToArray(); }
-
-        byte[] data = new byte[BlockSize];
-        int track = block / 8;
-        int half = block % 8;
-        for (int part = 0; part < 2; part++)
-        {
-            int sector = s_dosSectors[(half * 2) + part];
-            _image.AsSpan(((track * 16) + sector) * 256, 256).CopyTo(data.AsSpan(part * 256));
-        }
-
-        return data;
-    }
+    public byte[] Block(int block) => DiskBlocks.Read(_image, _proDosOrder, block);
 
     private IEnumerable<SosFileEntry> Entries()
     {
         bool header = true;
+        HashSet<int> read = [];
         for (int number = VolumeDirectory; number != 0;)
         {
-            byte[] block = Block(number);
+            if (!read.Add(number))
+            {
+                throw new InvalidDataException($"The volume directory's blocks loop back to block {number}.");
+            }
+
+            byte[] block = Data(number);
             int length = block[0x23];
             int perBlock = block[0x24];
             for (int index = header ? 1 : 0; index < perBlock; index++)
@@ -148,16 +139,22 @@ public sealed class SosVolume
         }
     }
 
+    // A block a directory or index names, which must be on the volume.
+    private byte[] Data(int number) =>
+        (uint)number < DiskSize / BlockSize
+            ? Block(number)
+            : throw new InvalidDataException($"Block {number} is past the end of the volume.");
+
     // A sapling: an index block whose low bytes are in its first half and high bytes in its second.
     private byte[] Indexed(int key, int length)
     {
-        byte[] index = Block(key);
+        byte[] index = Data(key);
         int blocks = Math.Min(256, (length + BlockSize - 1) / BlockSize);
         byte[] data = new byte[blocks * BlockSize];
         for (int entry = 0; entry < blocks; entry++)
         {
             int number = index[entry] | (index[256 + entry] << 8);
-            if (number != 0) { Block(number).CopyTo(data, entry * BlockSize); }
+            if (number != 0) { Data(number).CopyTo(data, entry * BlockSize); }
         }
 
         return data;
@@ -166,7 +163,7 @@ public sealed class SosVolume
     // A tree: a master index of sapling index blocks.
     private byte[] Tree(int key, int length)
     {
-        byte[] master = Block(key);
+        byte[] master = Data(key);
         byte[] data = new byte[length];
         const int perIndex = 256 * BlockSize;
         for (int entry = 0; entry * perIndex < length; entry++)

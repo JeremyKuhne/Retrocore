@@ -72,5 +72,10 @@ internal enum Command : byte
     /// <summary>
     ///  Mute or resume SDL speaker/Mockingboard output.
     /// </summary>
-    Mute
+    Mute,
+
+    /// <summary>
+    ///  Show the next monitor: color, black and white, green, then amber.
+    /// </summary>
+    Screen
 }

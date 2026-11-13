@@ -26,8 +26,6 @@ namespace Retrocore.Media;
 /// </remarks>
 public static class SosDriverCodeFile
 {
-    private const int BlockSize = 512;
-
     /// <summary>
     ///  Reads the driver in a driver code file.
     /// </summary>
@@ -36,55 +34,30 @@ public static class SosDriverCodeFile
     /// <exception cref="InvalidDataException">The file is not a code file with one driver segment.</exception>
     public static SosDriver Read(ReadOnlySpan<byte> data)
     {
-        if (data.Length < BlockSize)
+        PascalCodeFile file = PascalCodeFile.Read(data);
+        PascalSegment[] segments = [.. file.Segments.Where(segment => segment.Code.Length != 0)];
+        if (segments.Length != 1)
         {
-            throw new InvalidDataException("A code file starts with its segment dictionary.");
+            throw new InvalidDataException(segments.Length == 0 ? "The code file has no segment." : "The code file has more than one segment.");
         }
 
-        int start = -1;
-        int length = 0;
-        for (int segment = 0; segment < 16; segment++)
-        {
-            int size = Word(data, (segment * 4) + 2);
-            if (size == 0) { continue; }
-            if (start >= 0)
-            {
-                throw new InvalidDataException("The code file has more than one segment.");
-            }
+        PascalSegment segment = segments[0];
+        PascalProcedure procedure = segment.Procedure(1)
+            ?? throw new InvalidDataException("The driver's segment has no procedure.");
 
-            start = Word(data, segment * 4) * BlockSize;
-            length = size;
-        }
+        if (!procedure.IsNative) { throw new InvalidDataException("The driver's procedure is not assembled code."); }
 
-        if (start < 0 || start + length > data.Length)
-        {
-            throw new InvalidDataException("The code file has no segment.");
-        }
-
-        ReadOnlySpan<byte> code = data.Slice(start, length);
-        int attributes = (length - 4) - Word(code, length - 4);
-        int pointer = attributes - 2;
-        int entry = pointer - Word(code, pointer);
-        List<int>[] lists = [[], [], [], []];
-        foreach (List<int> list in lists)
-        {
-            pointer -= 2;
-            int count = Word(code, pointer);
-            for (int item = 0; item < count; item++)
-            {
-                pointer -= 2;
-                list.Add(pointer - Word(code, pointer));
-            }
-        }
-
-        int[] relocations = [.. lists[2].Order()];
-        int end = relocations.Length == 0 ? pointer : relocations[^1] + 2;
-        ReadOnlySpan<byte> driver = code[entry..end];
+        // Below the entry pointer are the four lists, each a count and its pointers.
+        int listEnd = procedure.Attributes - 2 - (2 * (procedure.Relocations.Count + procedure.Relocations.Sum(list => list.Count)));
+        int entry = procedure.Entry;
+        int[] relocations = [.. procedure.Relocations[2].Order()];
+        int end = relocations.Length == 0 ? listEnd : relocations[^1] + 2;
+        ReadOnlySpan<byte> driver = segment.Code.AsSpan(entry..end);
         string comment = "";
         int offset = 0;
         if (driver.Length >= 4 && driver[0] == 0xFF && driver[1] == 0xFF)
         {
-            int size = Word(driver, 2);
+            int size = driver[2] | (driver[3] << 8);
             comment = Encoding.ASCII.GetString(driver.Slice(4, size));
             offset = 4 + size;
         }
@@ -94,6 +67,4 @@ public static class SosDriverCodeFile
             driver[offset..].ToArray(),
             [.. relocations.Select(relocation => relocation - entry - offset)]);
     }
-
-    private static int Word(ReadOnlySpan<byte> data, int offset) => data[offset] | (data[offset + 1] << 8);
 }

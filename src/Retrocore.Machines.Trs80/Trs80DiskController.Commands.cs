@@ -74,7 +74,7 @@ public sealed partial class Trs80DiskController
         }
 
         // The E bit adds the 15 ms head-load delay.
-        _wait = (value & 0x04) != 0 ? SettleCycles : 1;
+        _wait = (value & 0x04) != 0 ? _settleCycles : 1;
         _phase = Phase.Delaying;
     }
 
@@ -111,7 +111,7 @@ public sealed partial class Trs80DiskController
     private int StepCycles()
     {
         int[] rates = _doubleDensity ? s_stepRates1791 : s_stepRates1771;
-        return rates[_command & 3] * Trs80Timing.CyclesPerMillisecond;
+        return rates[_command & 3] * _cyclesPerMillisecond;
     }
 
     private void Run()
@@ -138,7 +138,7 @@ public sealed partial class Trs80DiskController
                 if ((_command & 0x0C) != 0) { _status |= HeadLoaded; }
                 if ((_command & 0x04) != 0)
                 {
-                    _wait = SettleCycles;
+                    _wait = _settleCycles;
                     _phase = Phase.Verifying;
                     return;
                 }
@@ -201,8 +201,8 @@ public sealed partial class Trs80DiskController
 
         IReadOnlyList<FloppySector> sectors = disk.Track(_cylinders[_selected], Side);
         if (sectors.Count == 0) { return; }
-        int spacing = (RotationCycles - IndexPulseCycles) / sectors.Count;
-        long offset = _rotation - IndexPulseCycles;
+        int spacing = (_rotationCycles - _indexPulseCycles) / sectors.Count;
+        long offset = _rotation - _indexPulseCycles;
         if (offset < 0 || offset % spacing != 0 || offset / spacing >= sectors.Count) { return; }
         FloppySector sector = sectors[(int)(offset / spacing)];
         if (sector.DoubleDensity != _doubleDensity) { return; }

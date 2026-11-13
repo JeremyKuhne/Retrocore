@@ -1,0 +1,414 @@
+# Copyright (c) 2025 Jeremy W Kuhne
+# SPDX-License-Identifier: MIT
+# See LICENSE file in the project root for full license information
+#
+# The Motorola MC6809's instruction-set description: what the assembler, disassembler and tools know about it.
+#
+# Native syntax writes indirection in brackets ([...]) so parentheses always group expressions: LDA [,X],
+# LDA [5,Y], LDA [,U++], LDA [Label,PCR] and LDA [$1234]. Direct-page versus extended addressing is chosen by
+# value ($00-$FF uses direct when unforced), or forced with < and > as Motorola does.
+#
+# The undocumented encodings follow David Banks's Undocumented 6809 Behaviours
+# (https://github.com/hoglet67/6809Decoder/wiki/Undocumented-6809-Behaviours) and David Flamand's Comprehensive
+# Document of 6809 Undocumented and Undefined Behavior, both from real chips, with Banks's names. A prefix before
+# an opcode it leaves undefined is ignored, so those pairs are not listed.
+
+[isa]
+endian big
+address-bits 16
+angle-widths
+registers A:8 B:8 D:16 X:16 Y:16 U:16 S:16 DP:8 CC:8 PC:16
+flags CC E=7 F=6 H=5 I=4 N=3 Z=2 V=1 C=0
+flag E entire "Set when the complete register state was stacked for an interrupt, so RTI pulls all registers; cleared by FIRQ so RTI pulls only CC and PC."
+flag F fast-interrupt "Set to mask FIRQ interrupts, by reset, FIRQ, NMI and SWI."
+flag H half-carry "Set when an 8-bit add carries out of bit 3; DAA uses it to correct packed BCD results."
+flag I interrupt "Set to mask IRQ interrupts, by reset, IRQ, FIRQ, NMI and SWI."
+flag N negative "Set when a result's most significant bit is 1, a negative number in two's complement."
+flag Z zero "Set when a result is zero, or when a compare finds the values equal."
+flag V overflow "Set when signed arithmetic overflows two's-complement range."
+flag C carry "Set when an add carries out of the top bit, a subtract or compare borrows, or MUL sets bit 7 of B. Shifts and rotates move bits through it."
+alias LSL=ASL LSLA=ASLA LSLB=ASLB BHS=BCC BLO=BCS LBHS=LBCC LBLO=LBCS
+vectors FFFE FFFC FFFA FFF8 FFF6 FFF4 FFF2
+
+# Control flow, for disassembly and analysis.
+flow branch BHI BLS BCC BCS BNE BEQ BVC BVS BPL BMI BGE BLT BGT BLE LBHI LBLS LBCC LBCS LBNE LBEQ LBVC LBVS LBPL LBMI LBGE LBLT LBGT LBLE
+flow jump BRA LBRA JMP
+flow indirect-jump JMP:Indexed
+flow call BSR LBSR JSR
+flow return RTS RTI
+flow wait SYNC CWAI
+flow stop XHCF
+
+# How an instruction accesses a memory operand; the rest read it.
+access write STA STB STD STX STY STU STS CLR
+access read-write NEG COM LSR ROR ASR ASL ROL DEC INC XNC XDEC
+
+[forms]
+Implied                         ""
+Pair                            "{}"        fields=pair        exclusive
+SystemStack                     "{}"        fields=sysmask     exclusive
+UserStack                       "{}"        fields=usermask    exclusive
+Immediate8                      "#{}"       fields=byte
+Immediate16                     "#{}"       fields=word
+Relative8                       "{}"        fields=rel8        exclusive
+Relative16                      "{}"        fields=rel16       exclusive
+Indexed                         "{}"        fields=indexed     memory indexed
+Extended                        "{}"        fields=word        memory
+Direct                          "{}"        fields=byte        narrow-of=Extended memory
+
+[M6809]
+# Direct unary and jump ($00-$0F)
+00 NEG Direct                           t=6
+01 NEG Direct                           undocumented t=6
+02 XNC Direct                           undocumented t=6
+03 COM Direct                           t=6
+04 LSR Direct                           t=6
+05 LSR Direct                           undocumented t=6
+06 ROR Direct                           t=6
+07 ASR Direct                           t=6
+08 ASL Direct                           t=6
+09 ROL Direct                           t=6
+0A DEC Direct                           t=6
+0B XDEC Direct                          undocumented t=6
+0C INC Direct                           t=6
+0D TST Direct                           t=6
+0E JMP Direct                           t=3
+0F CLR Direct                           t=6
+
+# Inherent, long relative, condition-code and register-pair ($12-$1F)
+12 NOP Implied                          t=2
+13 SYNC Implied                         t=4
+14 XHCF Implied                         undocumented
+15 XHCF Implied                         undocumented
+16 LBRA Relative16                      t=5
+17 LBSR Relative16                      t=9
+18 X18 Implied                          undocumented t=3
+19 DAA Implied                          t=2
+1A ORCC Immediate8                      t=3
+1B NOP Implied                          undocumented t=2
+1C ANDCC Immediate8                     t=3
+1D SEX Implied                          t=2
+1E EXG Pair                             t=8
+1F TFR Pair                             t=6
+
+# Short branches ($20-$2F)
+20 BRA Relative8                        t=3
+21 BRN Relative8                        t=3
+22 BHI Relative8                        t=3
+23 BLS Relative8                        t=3
+24 BCC Relative8                        t=3
+25 BCS Relative8                        t=3
+26 BNE Relative8                        t=3
+27 BEQ Relative8                        t=3
+28 BVC Relative8                        t=3
+29 BVS Relative8                        t=3
+2A BPL Relative8                        t=3
+2B BMI Relative8                        t=3
+2C BGE Relative8                        t=3
+2D BLT Relative8                        t=3
+2E BGT Relative8                        t=3
+2F BLE Relative8                        t=3
+
+# Load effective address, stack lists, returns, multiply and interrupts ($30-$3F)
+30 LEAX Indexed                         t=4
+31 LEAY Indexed                         t=4
+32 LEAS Indexed                         t=4
+33 LEAU Indexed                         t=4
+34 PSHS SystemStack                     t=5
+35 PULS SystemStack                     t=5
+36 PSHU UserStack                       t=5
+37 PULU UserStack                       t=5
+38 XANDCC Immediate8                    undocumented t=4
+39 RTS Implied                          t=5
+3A ABX Implied                          t=3
+3B RTI Implied                          t=15/6
+3C CWAI Immediate8                      t=20
+3D MUL Implied                          t=11
+3E XRES Implied                         undocumented t=19
+3F SWI Implied                          t=19
+
+# Accumulator A inherent ($40-$4F)
+40 NEGA Implied                         t=2
+41 NEGA Implied                         undocumented t=2
+42 XNCA Implied                         undocumented t=2
+43 COMA Implied                         t=2
+44 LSRA Implied                         t=2
+45 LSRA Implied                         undocumented t=2
+46 RORA Implied                         t=2
+47 ASRA Implied                         t=2
+48 ASLA Implied                         t=2
+49 ROLA Implied                         t=2
+4A DECA Implied                         t=2
+4B XDECA Implied                        undocumented t=2
+4C INCA Implied                         t=2
+4D TSTA Implied                         t=2
+4E XCLRA Implied                        undocumented t=2
+4F CLRA Implied                         t=2
+
+# Accumulator B inherent ($50-$5F)
+50 NEGB Implied                         t=2
+51 NEGB Implied                         undocumented t=2
+52 XNCB Implied                         undocumented t=2
+53 COMB Implied                         t=2
+54 LSRB Implied                         t=2
+55 LSRB Implied                         undocumented t=2
+56 RORB Implied                         t=2
+57 ASRB Implied                         t=2
+58 ASLB Implied                         t=2
+59 ROLB Implied                         t=2
+5A DECB Implied                         t=2
+5B XDECB Implied                        undocumented t=2
+5C INCB Implied                         t=2
+5D TSTB Implied                         t=2
+5E XCLRB Implied                        undocumented t=2
+5F CLRB Implied                         t=2
+
+# Indexed unary and jump ($60-$6F)
+60 NEG Indexed                          t=6
+61 NEG Indexed                          undocumented t=6
+62 XNC Indexed                          undocumented t=6
+63 COM Indexed                          t=6
+64 LSR Indexed                          t=6
+65 LSR Indexed                          undocumented t=6
+66 ROR Indexed                          t=6
+67 ASR Indexed                          t=6
+68 ASL Indexed                          t=6
+69 ROL Indexed                          t=6
+6A DEC Indexed                          t=6
+6B XDEC Indexed                         undocumented t=6
+6C INC Indexed                          t=6
+6D TST Indexed                          t=6
+6E JMP Indexed                          t=3
+6F CLR Indexed                          t=6
+
+# Extended unary and jump ($70-$7F)
+70 NEG Extended                         t=7
+71 NEG Extended                         undocumented t=7
+72 XNC Extended                         undocumented t=7
+73 COM Extended                         t=7
+74 LSR Extended                         t=7
+75 LSR Extended                         undocumented t=7
+76 ROR Extended                         t=7
+77 ASR Extended                         t=7
+78 ASL Extended                         t=7
+79 ROL Extended                         t=7
+7A DEC Extended                         t=7
+7B XDEC Extended                        undocumented t=7
+7C INC Extended                         t=7
+7D TST Extended                         t=7
+7E JMP Extended                         t=4
+7F CLR Extended                         t=7
+
+# Accumulator A / X / D immediate and BSR ($80-$8E)
+80 SUBA Immediate8                      t=2
+81 CMPA Immediate8                      t=2
+82 SBCA Immediate8                      t=2
+83 SUBD Immediate16                     t=4
+84 ANDA Immediate8                      t=2
+85 BITA Immediate8                      t=2
+86 LDA Immediate8                       t=2
+87 XSTA Immediate8                      undocumented t=2
+88 EORA Immediate8                      t=2
+89 ADCA Immediate8                      t=2
+8A ORA Immediate8                       t=2
+8B ADDA Immediate8                      t=2
+8C CMPX Immediate16                     t=4
+8D BSR Relative8                        t=7
+8E LDX Immediate16                      t=3
+
+# Accumulator A / X / D direct and JSR ($90-$9F)
+8F XSTX Immediate16                     undocumented t=3
+90 SUBA Direct                          t=4
+91 CMPA Direct                          t=4
+92 SBCA Direct                          t=4
+93 SUBD Direct                          t=6
+94 ANDA Direct                          t=4
+95 BITA Direct                          t=4
+96 LDA Direct                           t=4
+97 STA Direct                           t=4
+98 EORA Direct                          t=4
+99 ADCA Direct                          t=4
+9A ORA Direct                           t=4
+9B ADDA Direct                          t=4
+9C CMPX Direct                          t=6
+9D JSR Direct                           t=7
+9E LDX Direct                           t=5
+9F STX Direct                           t=5
+
+# Accumulator A / X / D indexed and JSR ($A0-$AF)
+A0 SUBA Indexed                         t=4
+A1 CMPA Indexed                         t=4
+A2 SBCA Indexed                         t=4
+A3 SUBD Indexed                         t=6
+A4 ANDA Indexed                         t=4
+A5 BITA Indexed                         t=4
+A6 LDA Indexed                          t=4
+A7 STA Indexed                          t=4
+A8 EORA Indexed                         t=4
+A9 ADCA Indexed                         t=4
+AA ORA Indexed                          t=4
+AB ADDA Indexed                         t=4
+AC CMPX Indexed                         t=6
+AD JSR Indexed                          t=7
+AE LDX Indexed                          t=5
+AF STX Indexed                          t=5
+
+# Accumulator A / X / D extended and JSR ($B0-$BF)
+B0 SUBA Extended                        t=5
+B1 CMPA Extended                        t=5
+B2 SBCA Extended                        t=5
+B3 SUBD Extended                        t=7
+B4 ANDA Extended                        t=5
+B5 BITA Extended                        t=5
+B6 LDA Extended                         t=5
+B7 STA Extended                         t=5
+B8 EORA Extended                        t=5
+B9 ADCA Extended                        t=5
+BA ORA Extended                         t=5
+BB ADDA Extended                        t=5
+BC CMPX Extended                        t=7
+BD JSR Extended                         t=8
+BE LDX Extended                         t=6
+BF STX Extended                         t=6
+
+# Accumulator B / D / U immediate ($C0-$CE)
+C0 SUBB Immediate8                      t=2
+C1 CMPB Immediate8                      t=2
+C2 SBCB Immediate8                      t=2
+C3 ADDD Immediate16                     t=4
+C4 ANDB Immediate8                      t=2
+C5 BITB Immediate8                      t=2
+C6 LDB Immediate8                       t=2
+C7 XSTB Immediate8                      undocumented t=2
+C8 EORB Immediate8                      t=2
+C9 ADCB Immediate8                      t=2
+CA ORB Immediate8                       t=2
+CB ADDB Immediate8                      t=2
+CC LDD Immediate16                      t=3
+CD XHCF Implied                         undocumented
+CE LDU Immediate16                      t=3
+
+# Accumulator B / D / U direct ($D0-$DF)
+CF XSTU Immediate16                     undocumented t=3
+D0 SUBB Direct                          t=4
+D1 CMPB Direct                          t=4
+D2 SBCB Direct                          t=4
+D3 ADDD Direct                          t=6
+D4 ANDB Direct                          t=4
+D5 BITB Direct                          t=4
+D6 LDB Direct                           t=4
+D7 STB Direct                           t=4
+D8 EORB Direct                          t=4
+D9 ADCB Direct                          t=4
+DA ORB Direct                           t=4
+DB ADDB Direct                          t=4
+DC LDD Direct                           t=5
+DD STD Direct                           t=5
+DE LDU Direct                           t=5
+DF STU Direct                           t=5
+
+# Accumulator B / D / U indexed ($E0-$EF)
+E0 SUBB Indexed                         t=4
+E1 CMPB Indexed                         t=4
+E2 SBCB Indexed                         t=4
+E3 ADDD Indexed                         t=6
+E4 ANDB Indexed                         t=4
+E5 BITB Indexed                         t=4
+E6 LDB Indexed                          t=4
+E7 STB Indexed                          t=4
+E8 EORB Indexed                         t=4
+E9 ADCB Indexed                         t=4
+EA ORB Indexed                          t=4
+EB ADDB Indexed                         t=4
+EC LDD Indexed                          t=5
+ED STD Indexed                          t=5
+EE LDU Indexed                          t=5
+EF STU Indexed                          t=5
+
+# Accumulator B / D / U extended ($F0-$FF)
+F0 SUBB Extended                        t=5
+F1 CMPB Extended                        t=5
+F2 SBCB Extended                        t=5
+F3 ADDD Extended                        t=7
+F4 ANDB Extended                        t=5
+F5 BITB Extended                        t=5
+F6 LDB Extended                         t=5
+F7 STB Extended                         t=5
+F8 EORB Extended                        t=5
+F9 ADCB Extended                        t=5
+FA ORB Extended                         t=5
+FB ADDB Extended                        t=5
+FC LDD Extended                         t=6
+FD STD Extended                         t=6
+FE LDU Extended                         t=6
+FF STU Extended                         t=6
+
+# Page $10: long conditional branches, SWI2, CMPD, CMPY, LDY, STY, LDS and STS
+10 20 LBRA Relative16                   undocumented t=6
+10 21 LBRN Relative16                   t=5
+10 22 LBHI Relative16                   t=6/5
+10 23 LBLS Relative16                   t=6/5
+10 24 LBCC Relative16                   t=6/5
+10 25 LBCS Relative16                   t=6/5
+10 26 LBNE Relative16                   t=6/5
+10 27 LBEQ Relative16                   t=6/5
+10 28 LBVC Relative16                   t=6/5
+10 29 LBVS Relative16                   t=6/5
+10 2A LBPL Relative16                   t=6/5
+10 2B LBMI Relative16                   t=6/5
+10 2C LBGE Relative16                   t=6/5
+10 2D LBLT Relative16                   t=6/5
+10 2E LBGT Relative16                   t=6/5
+10 2F LBLE Relative16                   t=6/5
+10 3E XSWI2 Implied                     undocumented t=20
+10 3F SWI2 Implied                      t=20
+10 83 CMPD Immediate16                  t=5
+10 87 XSTA Immediate8                   undocumented t=3
+10 8C CMPY Immediate16                  t=5
+10 8E LDY Immediate16                   t=4
+10 8F XSTY Immediate16                  undocumented t=4
+10 93 CMPD Direct                       t=7
+10 9C CMPY Direct                       t=7
+10 9E LDY Direct                        t=6
+10 9F STY Direct                        t=6
+10 A3 CMPD Indexed                      t=7
+10 AC CMPY Indexed                      t=7
+10 AE LDY Indexed                       t=6
+10 AF STY Indexed                       t=6
+10 B3 CMPD Extended                     t=8
+10 BC CMPY Extended                     t=8
+10 BE LDY Extended                      t=7
+10 BF STY Extended                      t=7
+10 C3 XADDD Immediate16                 undocumented t=5
+10 C7 XSTB Immediate8                   undocumented t=3
+10 CE LDS Immediate16                   t=4
+10 CF XSTS Immediate16                  undocumented t=4
+10 D3 XADDD Direct                      undocumented t=7
+10 DE LDS Direct                        t=6
+10 DF STS Direct                        t=6
+10 E3 XADDD Indexed                     undocumented t=7
+10 EE LDS Indexed                       t=6
+10 EF STS Indexed                       t=6
+10 F3 XADDD Extended                    undocumented t=8
+10 FE LDS Extended                      t=7
+10 FF STS Extended                      t=7
+
+# Page $11: SWI3, CMPU and CMPS
+11 3E XFIRQ Implied                     undocumented t=20
+11 3F SWI3 Implied                      t=20
+11 83 CMPU Immediate16                  t=5
+11 87 XSTA Immediate8                   undocumented t=3
+11 8C CMPS Immediate16                  t=5
+11 8F XSTX Immediate16                  undocumented t=4
+11 93 CMPU Direct                       t=7
+11 9C CMPS Direct                       t=7
+11 A3 CMPU Indexed                      t=7
+11 AC CMPS Indexed                      t=7
+11 B3 CMPU Extended                     t=8
+11 BC CMPS Extended                     t=8
+11 C3 XADDU Immediate16                 undocumented t=5
+11 C7 XSTB Immediate8                   undocumented t=3
+11 CF XSTU Immediate16                  undocumented t=4
+11 D3 XADDU Direct                      undocumented t=7
+11 E3 XADDU Indexed                     undocumented t=7
+11 F3 XADDU Extended                    undocumented t=8

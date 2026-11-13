@@ -238,6 +238,7 @@ internal sealed partial class DebugSession
         int free = Word(pointers.FreeStart);
         int strings = Word(pointers.StringBottom);
         int top = Word(pointers.MemoryTop);
+        string data = $"${Word(pointers.DataPointer) + 1:X4}";
         return
         [
             new JsonObject { ["name"] = "Program", ["value"] = Span(start, variables), ["variablesReference"] = 0 },
@@ -246,12 +247,7 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Free", ["value"] = Span(free, strings), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
-            new JsonObject
-            {
-                ["name"] = "Next DATA",
-                ["value"] = $"${Word(pointers.DataPointer) + 1:X4}",
-                ["variablesReference"] = 0
-            }
+            new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
         ];
     }
 

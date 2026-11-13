@@ -39,7 +39,7 @@ public class RomAssemblyGeneratorTests
             Other:
                 rts
             """, path: "Test.rom.asm"))
-            .RunGenerators(Compilation());
+                .RunGenerators(Compilation());
 
         string generated = driver.GetRunResult().GeneratedTrees.Single().ToString();
         generated.Should().Contain(
@@ -66,7 +66,7 @@ public class RomAssemblyGeneratorTests
                         ASC "A"00
                 """, path: "Test.rom.asm"),
             new InMemoryAdditionalText("EMIT MAC\n     LDA #]1\n     EOM", path: "macros.S"))
-            .RunGenerators(Compilation());
+                .RunGenerators(Compilation());
 
         byte[] bytes = Bytes(driver);
         bytes.Take(4).Should().Equal((byte)0xA9, (byte)3, (byte)0xC1, (byte)0);
@@ -151,7 +151,7 @@ public class RomAssemblyGeneratorTests
         GeneratorDriver driver = Driver(
             new InMemoryAdditionalText(Header + ".include \"sdk.inc\"\nEmit Value", path: "Test.rom.asm"),
             new InMemoryAdditionalText("Value = $42\n.macro Emit arg\nlda #arg\n.endmacro", path: "sdk.inc"))
-            .RunGenerators(Compilation());
+                .RunGenerators(Compilation());
 
         Bytes(driver).Take(2).Should().Equal((byte)0xA9, (byte)0x42);
     }
@@ -217,7 +217,7 @@ public class RomAssemblyGeneratorTests
             new InMemoryAdditionalText(
                 ".macro Broken\n.scope Inner\n.byte Missing\n.endscope\n.endmacro",
                 path: "scope.inc"))
-            .RunGenerators(Compilation()).GetRunResult();
+                    .RunGenerators(Compilation()).GetRunResult();
 
         result.GeneratedTrees.Should().BeEmpty();
         Diagnostic error = result.Diagnostics.Single();
@@ -254,7 +254,7 @@ public class RomAssemblyGeneratorTests
         GeneratorDriverRunResult result = Driver(
             new InMemoryAdditionalText(Header + ".include \"bad.inc\"\nBroken", path: "Test.rom.asm"),
             new InMemoryAdditionalText(".macro Broken\nlda #$100\n.endmacro", path: "bad.inc"))
-            .RunGenerators(Compilation()).GetRunResult();
+                .RunGenerators(Compilation()).GetRunResult();
 
         Diagnostic error = result.Diagnostics.Single();
         error.Location.GetLineSpan().Path.Should().Be("bad.inc");

@@ -84,6 +84,26 @@ const lowercase: MachineChoice = {
     default: false
 };
 
+const cocoSound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "On", detail: "The DAC, cassette and single-bit sound through the TV", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
+
+const cocoDisk: MachineChoice = {
+    option: "diskController",
+    label: "Disk controller",
+    values: [
+        { label: "None", detail: "Tapes and ROM packs", value: false },
+        { label: "Disk controller", detail: "Disk Extended Color BASIC and four drives", value: true }
+    ],
+    default: false
+};
+
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
     {
@@ -216,6 +236,124 @@ export const machines: readonly Machine[] = [
         basicDialects: [],
         dos: false,
         choices: [lowercase]
+    },
+    {
+        id: "apple1",
+        label: "Apple-1",
+        detail: "6502, the Woz Monitor, 4 KB plus 4 KB at $E000, and the cassette interface",
+        configuration: { machine: "apple1" },
+        diskFormats: [],
+        tapeFormats: ["wav"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [{ label: "4 KB", value: 4 }, { label: "8 KB", value: 8 }],
+                default: 4
+            },
+            {
+                option: "highRam",
+                label: "$E000 bank",
+                values: [
+                    { label: "4 KB at $E000", detail: "Where BASIC loads and runs", value: true },
+                    { label: "Empty", value: false }
+                ],
+                default: true
+            },
+            {
+                option: "cassetteInterface",
+                label: "Cassette interface",
+                values: [
+                    { label: "The Apple Cassette Interface", detail: "Started from the Monitor with C100R", value: true },
+                    { label: "Empty slot", value: false }
+                ],
+                default: true
+            }
+        ]
+    },
+    // The Color Computer 1 and 2 build Color, Extended and Disk BASIC from the SDK's sources without dumps; the CoCo 3
+    // needs the ROM dumps: romDirectory, or RETROCORE_COCO_ROMS.
+    {
+        id: "coco1",
+        label: "TRS-80 Color Computer",
+        detail: "6809, Extended Color BASIC 1.1 and 16 KB",
+        configuration: { machine: "coco", model: "coco1" },
+        diskFormats: ["dsk"],
+        tapeFormats: ["cas"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [
+                    { label: "16 KB", value: 16 },
+                    { label: "32 KB", value: 32 },
+                    { label: "64 KB", value: 64 },
+                    { label: "4 KB", detail: "Color BASIC alone", value: 4 }
+                ],
+                default: 16
+            },
+            cocoDisk,
+            cocoSound
+        ]
+    },
+    {
+        id: "coco2",
+        label: "TRS-80 Color Computer 2",
+        detail: "6809, Extended Color BASIC 1.1 and 64 KB",
+        configuration: { machine: "coco", model: "coco2" },
+        diskFormats: ["dsk"],
+        tapeFormats: ["cas"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "lowercase",
+                label: "Video chip",
+                values: [
+                    { label: "MC6847", detail: "Uppercase, lowercase shown inverse", value: false },
+                    { label: "MC6847T1", detail: "True lowercase, as on the CoCo 2B", value: true }
+                ],
+                default: false
+            },
+            cocoDisk,
+            cocoSound
+        ]
+    },
+    {
+        id: "coco3",
+        label: "TRS-80 Color Computer 3",
+        detail: "6809, Extended Color BASIC 2.0, the GIME and 128 KB",
+        configuration: { machine: "coco", model: "coco3" },
+        diskFormats: ["dsk"],
+        tapeFormats: ["cas"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [
+                    { label: "128 KB", value: 128 },
+                    { label: "512 KB", value: 512 }
+                ],
+                default: 128
+            },
+            {
+                option: "monitor",
+                label: "Monitor",
+                values: [
+                    { label: "Composite", detail: "A TV or composite monitor", value: "composite" },
+                    { label: "RGB", detail: "The CM-8 RGB monitor", value: "rgb" }
+                ],
+                default: "composite"
+            },
+            cocoDisk,
+            cocoSound
+        ]
     }
 ];
 

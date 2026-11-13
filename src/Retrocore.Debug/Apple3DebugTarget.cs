@@ -7,6 +7,7 @@ using Retrocore.Assembler;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Apple3;
+using Retrocore.Media;
 
 namespace Retrocore.Debug;
 
@@ -28,8 +29,12 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     private static readonly DebugRegisters s_registers = new(M6502Isa.Description);
 
     private readonly Apple3Machine _machine;
+    private PascalRuntime? _pascal;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels;
+
+    // The monitor the video is shown on: color, or monochrome in its phosphor's color by each pixel's brightness.
+    private string _screen = DebugScreens.Color;
     private DebugAudioSink? _sound;
     private bool _resetPending;
     private SosDriverModules? _sosDrivers;
@@ -73,6 +78,23 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     ///  Gets the machine.
     /// </summary>
     internal Apple3Machine Machine => _machine;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   <c>SOS.INTERP</c> loads below the SOS kernel, in the bank switched in at <c>$2000-$9FFF</c> and above.
+    ///  </para>
+    /// </remarks>
+    public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
+        "Apple III Pascal",
+        new Apple3PascalMemory(_machine.Bus),
+        _machine.Bus.Peek,
+        [],
+        (0x2000, 0xC000),
+        extended: true,
+        () => (ushort)(_machine.Bus.ZeroPage << 8),
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount);
 
     /// <summary>
     ///  Gets or sets whether running outpaces the clock while a drive's motor turns.
@@ -422,6 +444,9 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }
@@ -449,14 +474,27 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             ["disk"] = DiskState(),
             ["sound"] = _sound is null ? "off" : "speaker",
             ["fastDisk"] = FastDisk,
+            ["screen"] = _screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
         };
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => DebugScreens.WithColor;
+
+    /// <inheritdoc/>
+    public string Screen
+    {
+        get => _screen;
+        set => _screen = DebugScreens.Require(value, Screens);
     }
 
     /// <inheritdoc/>
     public ReadOnlySpan<byte> RenderVideo()
     {
         _machine.Video.Render(_pixels, scanned: true);
+        DebugScreens.Show(_pixels, _screen);
         return _pixels;
     }
 
@@ -499,6 +537,7 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     private JsonObject VideoFrame(bool scanned)
     {
         _machine.Video.Render(_pixels, scanned);
+        DebugScreens.Show(_pixels, _screen);
         return new JsonObject
         {
             ["width"] = _machine.Video.Width,

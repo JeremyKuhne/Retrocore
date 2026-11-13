@@ -108,9 +108,12 @@ internal sealed class AnalysisEngine
                     // as the Z80's restarts.
                     if (_project.FollowVectors)
                     {
+                        bool littleEndian = _set.Endianness == Endianness.Little;
                         foreach (ushort vector in _set.Description.Vectors)
                         {
-                            FollowVector(vector, vector, (ushort)(vector + 1));
+                            ushort low = littleEndian ? vector : (ushort)(vector + 1);
+                            ushort high = littleEndian ? (ushort)(vector + 1) : vector;
+                            FollowVector(vector, low, high);
                         }
 
                         foreach (ushort entry in _set.Description.EntryPoints) { Enqueue(entry, entryPoint: false); }
@@ -376,7 +379,7 @@ internal sealed class AnalysisEngine
             if (_project.Mode == DisassemblyMode.Flow
                 && _project.FollowVectors
                 && instruction.Flow == DisassemblyFlow.IndirectJump
-                && instruction.Form is { Role: OperandRole.Pointer, IsIndexed: false })
+                && HasStaticPointerTarget(in instruction))
             {
                 FollowIndirectJump(in instruction);
             }
@@ -444,13 +447,32 @@ internal sealed class AnalysisEngine
         return true;
     }
 
+    private static bool HasStaticPointerTarget(in DisassembledInstruction instruction)
+    {
+        OperandForm form = instruction.Form;
+        if (form is { Role: OperandRole.Pointer, IsIndexed: false })
+        {
+            return true;
+        }
+
+        // A postbyte can also name a fixed pointer, such as the MC6809's JMP [$FFFE] or JMP [Table,PCR].
+        return instruction.PostbyteReference == PostbyteReference.Pointer;
+    }
+
     /// <summary>
-    ///  Follows the pointer of an indirect jump, such as <c>JMP (abs)</c>, whose bytes lie inside the image.
+    ///  Follows the pointer of an indirect jump, such as <c>JMP (abs)</c> or <c>JMP [abs]</c>, whose bytes lie
+    ///  inside the image.
     /// </summary>
     /// <param name="instruction">The indirect jump.</param>
     private void FollowIndirectJump(in DisassembledInstruction instruction)
     {
         ushort pointer = instruction.Operand;
+        if (instruction.InstructionSet.Endianness == Endianness.Big)
+        {
+            FollowVector(pointer, (ushort)(pointer + 1), pointer);
+            return;
+        }
+
         ushort high = (ushort)(pointer + 1);
         if (instruction.InstructionSet.IndirectPageWrap && (pointer & byte.MaxValue) == byte.MaxValue)
         {
@@ -517,6 +539,38 @@ internal sealed class AnalysisEngine
         }
 
         OperandForm form = instruction.Form;
+        if (form.HasPostbyte)
+        {
+            // Only a postbyte that names a static address refers to one; registers and offsets do not.
+            PostbyteReference reference = instruction.PostbyteReference;
+            if (reference == PostbyteReference.None)
+            {
+                return;
+            }
+
+            if (instruction.Flow == DisassemblyFlow.IndirectJump)
+            {
+                AddReference(instruction.Address, instruction.Operand, DisassemblyReferenceKind.IndirectJump);
+            }
+            else if (reference == PostbyteReference.Pointer)
+            {
+                AddReference(instruction.Address, instruction.Operand, DisassemblyReferenceKind.Read);
+            }
+            else if (instruction.DirectTarget is null)
+            {
+                DisassemblyReferenceKind kind = instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
+                {
+                    MemoryAccess.Write => DisassemblyReferenceKind.Write,
+                    MemoryAccess.ReadWrite => DisassemblyReferenceKind.ReadWrite,
+                    _ => DisassemblyReferenceKind.Read
+                };
+
+                AddReference(instruction.Address, instruction.Operand, kind);
+            }
+
+            return;
+        }
+
         if (instruction.Flow == DisassemblyFlow.IndirectJump)
         {
             // A jump through a register, such as the Z80's JP [HL], encodes no address.

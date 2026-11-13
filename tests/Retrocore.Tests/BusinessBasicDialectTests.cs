@@ -186,6 +186,7 @@ public sealed class BusinessBasicDialectTests
             {
                 SourceResolver = new FileAssemblySourceResolver()
             });
+
         result.Diagnostics.Should().BeEmpty();
         return result;
     }

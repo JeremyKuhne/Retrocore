@@ -302,22 +302,22 @@ public class Apple3BusTests
     }
 
     /// <summary>
-    ///  A control character, such as CONTROL-C, comes as its letter with CONTROL held while it is the key, as the
-    ///  keyboard sends it; RETURN keeps its own code.
+    ///  A control character comes with CONTROL held, from which SOS makes it, as it makes a capital from SHIFT; RETURN,
+    ///  ESCAPE and the arrows have keys of their own and do not.
     /// </summary>
     [TestMethod]
-    public void ControlCharactersHoldControl()
+    public void ControlCharacterHoldsControl()
     {
         Apple3Bus bus = Bus();
-        bus.QueueKey(3);
+        bus.QueueKey(0x03);
         bus.QueueKey((byte)'\r');
-        bus.Read(0xC000).Should().Be(0xC3, "CONTROL-C is C");
-        bus.Read(0xC008).Should().Be(0x79, "with CONTROL, active low, held");
-        bus.Write(0xC010, 0);
-        bus.Read(0xC008).Should().Be(0x7C, "and let go with the key");
+        bus.Read(0xC000).Should().Be(0x83);
+        bus.Read(0xC008).Should().Be(0x79, "CONTROL reads low");
+        bus.Read(0xC010);
+        bus.Read(0xC008).Should().Be(0x7C, "CONTROL goes with the key");
         bus.Advance(300_000_000);
-        bus.Read(0xC000).Should().Be(0x8D, "RETURN is its own key");
-        bus.Read(0xC008).Should().Be(0x7D, "without CONTROL");
+        bus.Read(0xC000).Should().Be(0x8D);
+        bus.Read(0xC008).Should().Be(0x7D, "RETURN has its own key");
     }
 
     /// <summary>

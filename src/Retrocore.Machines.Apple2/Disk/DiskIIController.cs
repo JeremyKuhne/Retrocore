@@ -138,6 +138,13 @@ public sealed class DiskIIController
     }
 
     /// <summary>
+    ///  Gets the media in a drive without ejecting it.
+    /// </summary>
+    /// <param name="drive">The drive, from one.</param>
+    /// <returns>The mounted media, or null.</returns>
+    public WozDisk? MediaIn(int drive) => GetDrive(drive).Media;
+
+    /// <summary>
     ///  Gets side-effect-free drive telemetry.
     /// </summary>
     /// <param name="drive">The drive, from one.</param>

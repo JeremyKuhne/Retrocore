@@ -47,7 +47,7 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
         _state.Variant = variant;
         _state.InterruptData = 0xFF;
         Reset();
-        _state.Registers.F = Is8085 ? (byte)0 : I8080Flags.V;
+        _state.Registers.F = NormalizeFlags(0);
     }
 
     /// <summary>
@@ -61,7 +61,8 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
     public ref TBus Bus => ref _bus;
 
     /// <summary>
-    ///  Gets or sets the registers at an instruction boundary.
+    ///  Gets or sets the registers at an instruction boundary. The flags keep only the bits the CPU has, as
+    ///  <c>POP PSW</c> does: on the 8080 bit 1 reads 1 and bits 3 and 5 read 0, and on the 8085 bit 3 reads 0.
     /// </summary>
     /// <exception cref="InvalidOperationException">An instruction is in progress.</exception>
     public I8080Registers Registers
@@ -74,6 +75,7 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
                 throw new InvalidOperationException("Registers can only be replaced at an instruction boundary.");
             }
 
+            value.F = NormalizeFlags(value.F);
             _state.Registers = value;
         }
     }
@@ -125,6 +127,10 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
     public ProcessorExecutionStatus Status => _state.Status;
 
     private bool Is8085 => _state.Variant == I8080Variant.I8085;
+
+    // The flag bits the CPU keeps; the 8080's bit 1 always reads 1.
+    private byte NormalizeFlags(byte flags) =>
+        Is8085 ? (byte)(flags & I8080Flags.Mask8085) : (byte)((flags & I8080Flags.Mask8080) | I8080Flags.V);
 
     /// <summary>
     ///  Resets the processor: PC clears, interrupts are disabled, and on the 8085 the RST 5.5, 6.5 and 7.5 masks
@@ -216,6 +222,8 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
         ulong start = _state.CycleCount;
         for (int index = 0; index < maximumCycles; index++)
         {
+            // A TRAP, RST 7.5 or RESET edge while halted must latch before deciding whether the CPU still waits.
+            if (_state.Halted && _state.Signals != _state.PreviousSignals) { SampleSignals(); }
             if (_state.Halted && IsInstructionBoundary && !InterruptReady())
             {
                 return new() { Status = ProcessorExecutionStatus.Waiting, Cycles = _state.CycleCount - start };

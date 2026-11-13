@@ -37,6 +37,12 @@ public readonly record struct IsaEncoding(
     public byte CyclesTaken { get; init; }
 
     /// <summary>
+    ///  Gets whether the instruction is conditional: its description lists different cycles when it is taken and
+    ///  when it is not, as every description writes a conditional jump, call or return.
+    /// </summary>
+    public bool IsConditional => CyclesTaken != Cycles;
+
+    /// <summary>
     ///  Gets the number of opcode bytes before the operand bytes.
     /// </summary>
     public int OpcodeBytesBeforeOperands => SplitAt == 0 ? OpcodeLength : SplitAt;

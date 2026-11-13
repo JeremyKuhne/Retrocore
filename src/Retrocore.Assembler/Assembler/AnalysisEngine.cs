@@ -385,7 +385,11 @@ internal sealed class AnalysisEngine
             }
 
             offset += instruction.Size;
+
+            // A conditional call, such as the 8080's CNZ or the Z80's CALL NZ, continues when it is not taken, so a
+            // hint that the subroutine never returns or reads inline bytes does not end or skip that path.
             if (instruction.Flow == DisassemblyFlow.Call
+                && !instruction.Encoding.IsConditional
                 && instruction.DirectTarget is { } callee
                 && _project.Calls.TryGetValue(callee, out AnalysisCall? call))
             {

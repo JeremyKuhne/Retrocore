@@ -43,6 +43,10 @@ public class I8080ExerciserTests
     // The states Run takes between checks for the final HLT.
     private const ulong Chunk = 4096;
 
+    // The most states a program may run before the test fails rather than hang: far above the longest 8080EXM test,
+    // and deterministic, since it counts emulated states.
+    private const ulong Budget = 50_000_000_000;
+
     /// <summary>
     ///  Gets the index of every test in 8080EXM's table.
     /// </summary>
@@ -167,7 +171,16 @@ public class I8080ExerciserTests
             }
         };
 
-        while (!cpu.IsHalted) { cpu.Run(Chunk); }
+        while (!cpu.IsHalted)
+        {
+            if (cpu.CycleCount >= Budget)
+            {
+                Assert.Fail($"The program ran {cpu.CycleCount:N0} states without returning to CP/M. Output:\n{console}");
+            }
+
+            cpu.Run(Chunk);
+        }
+
         cycles = cpu.CycleCount;
         return console.ToString();
     }

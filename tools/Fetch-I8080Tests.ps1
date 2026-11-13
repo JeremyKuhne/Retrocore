@@ -2,14 +2,16 @@
 # Fetch-ProcessorTests.ps1 also uses: the 8080 CP/M test programs 8080PRE, TST8080 (Microcosm Associates),
 # CPUTEST (SuperSoft Associates) and 8080EXM (Frank D. Cringle's exerciser, ported to the 8080 by Ian Bartholomew),
 # as collected in superzazu/8080. They are test inputs only; nothing is copied into the workspace.
+# The cache follows the tests' precedence: RETROCORE_TEST_CACHE, then RETROCORE_CACHE\processor-tests, then the
+# user profile's Retrocore\processor-tests.
 param(
-    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path $env:USERPROFILE 'Retrocore' }) 'processor-tests')
+    [string] $Cache = $(if ($env:RETROCORE_TEST_CACHE) { $env:RETROCORE_TEST_CACHE } else { Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'processor-tests' })
 )
 
 $ErrorActionPreference = 'Stop'
 $Cache = [System.IO.Path]::GetFullPath($Cache)
 $repo = [System.IO.Path]::GetFullPath((Split-Path $PSScriptRoot))
-if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo\", [StringComparison]::OrdinalIgnoreCase)) {
+if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
     throw 'External test programs must not be cached in the workspace.'
 }
 
@@ -22,7 +24,7 @@ function Get-Pinned([string] $Repository, [string] $Pin, [scriptblock] $Select, 
     $files = @(($treeJson | ConvertFrom-Json).tree | Where-Object { $_.type -eq 'blob' } | Where-Object $Select)
     if ($files.Count -ne $Expected) { throw "Unexpected $Repository manifest: $($files.Count) files." }
     foreach ($file in $files) {
-        $path = Join-Path $root ($file.path.Replace('/', '\'))
+        $path = Join-Path $root ($file.path.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
         New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
         if (-not (Test-Path -LiteralPath $path)) {
             $temporary = "$path.download"

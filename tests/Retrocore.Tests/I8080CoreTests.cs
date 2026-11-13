@@ -153,6 +153,50 @@ public class I8080CoreTests
     }
 
     /// <summary>
+    ///  A TRAP edge while halted wakes the CPU through <see cref="I8080Processor{TBus}.StepInstruction"/> alone, and
+    ///  a RESET edge resets it.
+    /// </summary>
+    [TestMethod]
+    public void HaltedStepInstructionSamplesEdges()
+    {
+        (I8080Processor<Z80TestBus> cpu, _) = Create(I8080Variant.I8085, 0x76);
+        cpu.Registers = cpu.Registers with { SP = 0x8000 };
+        cpu.StepInstruction();
+        cpu.StepInstruction().Status.Should().Be(ProcessorExecutionStatus.Waiting);
+        cpu.Signals = I8080Signals.Trap;
+        cpu.StepInstruction().Status.Should().Be(ProcessorExecutionStatus.InstructionComplete);
+        cpu.Registers.PC.Should().Be(0x0024);
+
+        cpu.Registers = cpu.Registers with { PC = Origin };
+        cpu.StepInstruction();
+        cpu.IsHalted.Should().BeTrue();
+        cpu.Signals = I8080Signals.Reset;
+        cpu.StepInstruction();
+        cpu.IsHalted.Should().BeFalse();
+        cpu.Registers.PC.Should().Be(1, "reset cleared PC and the NOP at 0 ran");
+    }
+
+    /// <summary>
+    ///  Registers set from outside keep only the flag bits the CPU has, so <c>PUSH PSW</c> pushes the fixed bits.
+    /// </summary>
+    /// <param name="variant">The CPU.</param>
+    /// <param name="pushed">The flags PUSH PSW writes after F is set to 0 and then to $FF.</param>
+    [TestMethod]
+    [DataRow(I8080Variant.I8080, new byte[] { 0x02, 0xD7 })]
+    [DataRow(I8080Variant.I8085, new byte[] { 0x00, 0xF7 })]
+    public void RegistersKeepTheFixedFlagBits(I8080Variant variant, byte[] pushed)
+    {
+        // PUSH PSW / PUSH PSW
+        (I8080Processor<Z80TestBus> cpu, Z80TestBus bus) = Create(variant, 0xF5, 0xF5);
+        cpu.Registers = cpu.Registers with { SP = 0x8000, F = 0 };
+        cpu.StepInstruction();
+        bus.Memory[0x7FFE].Should().Be(pushed[0]);
+        cpu.Registers = cpu.Registers with { F = 0xFF };
+        cpu.StepInstruction();
+        bus.Memory[0x7FFC].Should().Be(pushed[1]);
+    }
+
+    /// <summary>
     ///  The 8085's TRAP is non-maskable and taken first; RIM then reads IE as TRAP found it.
     /// </summary>
     [TestMethod]

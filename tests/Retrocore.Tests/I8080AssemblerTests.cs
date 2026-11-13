@@ -252,6 +252,28 @@ public class I8080AssemblerTests
     }
 
     /// <summary>
+    ///  A subroutine hint ends or skips the path after an unconditional call, but not after a conditional one,
+    ///  which continues when it is not taken.
+    /// </summary>
+    [TestMethod]
+    public void HintsDoNotEndConditionalCalls()
+    {
+        // $0000: CNZ $0020 / MVI A,1 / CALL $0020 / MVI A,2 ... $0020: HLT
+        byte[] image = new byte[0x30];
+        byte[] code = [0xC4, 0x20, 0x00, 0x3E, 0x01, 0xCD, 0x20, 0x00, 0x3E, 0x02];
+        code.CopyTo(image, 0);
+        image[0x20] = 0x76;
+        AnalysisProject project = new(image, 0, I8080Isa.InstructionSet) { FollowVectors = false };
+        project.EntryPoints.Add(0x0000);
+        project.Calls.Add(0x0020, AnalysisCall.NoReturn);
+
+        DisassemblyResult result = Disassembler.Analyze(project);
+        ushort[] addresses = [.. result.Instructions.Select(instruction => instruction.Address)];
+        addresses.Should().Contain([0x0000, 0x0003, 0x0005, 0x0020], "CNZ falls through to MVI A,1 and the CALL");
+        addresses.Should().NotContain(0x0008, "the unconditional CALL never returns");
+    }
+
+    /// <summary>
     ///  An exported disassembly, with undocumented aliases as bytes, assembles back to the same image.
     /// </summary>
     /// <param name="cpu">The CPU.</param>

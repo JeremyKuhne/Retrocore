@@ -79,7 +79,7 @@ public sealed partial class I8080Processor<TBus>
 
                 // POP PSW keeps only the flag bits the CPU has.
                 r.A = (byte)(value >> 8);
-                r.F = Is8085 ? (byte)(value & Mask8085) : (byte)((value & Mask8080) | V);
+                r.F = NormalizeFlags((byte)value);
                 break;
         }
     }

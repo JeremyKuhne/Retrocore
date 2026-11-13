@@ -44,6 +44,15 @@ XVEC17 = $88F0
 XIRQSV_TIMER = $8955                ;; the IRQ handler once the field sync is acknowledged: counts TIMER, then PLAY's and SOUND's timers
 DLOAD_KIND = $8C1B                  ;; DLOAD once files are closed: reads M for DLOADM, then the name and baud
 
+;; Inherit: <ExtendedBasic:INTRESET>
+INTRESET = $8C1B
+
+;; Inherit: <ExtendedBasic:CARTFIRQ>
+CARTFIRQ = $8C28
+
+;; Inherit: <ExtendedBasic:CARTROM>
+CARTROM = $8C2E
+
 ;; Inherit: <ExtendedBasic:XVEC4>
 XVEC4 = $8CF1
 

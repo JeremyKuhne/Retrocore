@@ -19,6 +19,8 @@ CONIN = $A176
 ;; Inherit: <ColorBasic:PUTCHR>
 PUTCHR = $A282
 
+SCRCHR_SAVED = $A30E                ;; SCRCHR with its registers saved: prints A on the 32-column screen
+
 ;; Inherit: <ColorBasic:SETPRM>
 SETPRM = $A35F
 
@@ -110,6 +112,8 @@ MOTOROFF = $A7E9
 
 ;; Inherit: <ColorBasic:SNDBLK>
 SNDBLK = $A7F4
+
+CLS_HOOKED = $A913                  ;; CLS past its hook: clears the screen, to the color given when there is one
 
 ;; Inherit: <ColorBasic:CLRSCN>
 CLRSCN = $A928

@@ -24,12 +24,20 @@
 VERSION = 11
 .endif
 .assert (VERSION = 10) | (VERSION = 11), "VERSION is 10 or 11."
+.ifndef COCO3
+COCO3 = 0
+.endif
+.assert (COCO3 = 0) | (VERSION = 11), "The CoCo 3's Extended BASIC is 1.1, patched."
 
 .cpu M6809
 
 .include "ColorBasicEquates.asm"
 .include "ColorBasicEntries.asm"
 .include "ExtendedBasicEquates.asm"
+.if COCO3
+.include "Coco3Equates.asm"
+.include "Coco3Entries.asm"
+.endif
 
 .org $8000
 
@@ -114,7 +122,11 @@ XBINIT_USR:
 ;; Extended BASIC's warm start, where <RSTVEC> points: stops PLAY's timer and lets the field sync interrupt through
 ;; again, then warm starts Color BASIC.
 XBWMST:
+.if COCO3
+    .byte $FF                       ; not NOP: the ROM never warm starts here, and start-up's patch makes it NOP
+.else
     NOP                             ; the warm start's mark: <WARMCK> looks for it
+.endif
     CLR PLYTMR
     CLR PLYTMR+1
     LDA PIA0+3
@@ -161,10 +173,13 @@ XCOMVEC:
 
 ;; The sign-on message, ended by a zero.
 XSIGNON:
+.if COCO3
+    .byte "EXTENDED COLOR BASIC 2.0", $0D, "COPR. 1982, 1986 BY TANDY  ", $0D
+.elseif VERSION = 10
     .byte "EXTENDED COLOR BASIC 1."
-.if VERSION = 10
     .byte "0", $0D, "COPYRIGHT (C) 1981 BY TANDY", $0D
 .else
+    .byte "EXTENDED COLOR BASIC 1."
     .byte "1", $0D, "COPYRIGHT (C) 1982 BY TANDY", $0D
 .endif
     .byte "UNDER LICENSE FROM MICROSOFT", $0D, $0D, 0
@@ -1867,6 +1882,60 @@ HEXDOL_NEXT:
 ;; Errors: ?FM ERROR when the file is not of the kind asked for; ?NE ERROR when the host has no such file
 DLOAD:
     JSR CLSALL_CASSETTE
+.if COCO3
+    ; DLOAD is gone from the CoCo 3: it falls into RESET's routine, which takes its place
+
+;; The CoCo 3's RESET: maps the whole internal ROM in, with the MMU off, and starts the machine at <COCO3RESET>.
+;;
+;; The 6809's RESET vector points here, so RESET works whatever the MMU had mapped: this part of the ROM is at
+;; $8C1B in every mapping.
+INTRESET:
+    ORCC #$50                       ; no interrupts
+    LDA #MC3+MC1
+    STA INIT0                       ; 32K of internal ROM, the MMU off, not CoCo compatible
+    CLR SAMREG+$1E                  ; the ROM in: the SAM's map type cleared
+    JMP COCO3RESET
+
+;; Starts a ROM pack from its FIRQ: marks the GIME's interrupt vectors invalid and turns off the cartridge's
+;; interrupt, then maps the cartridge's ROM in as <CARTROM> does. <CARTST> calls it.
+CARTFIRQ:
+    CLR INT_FLAG                    ; the vectors at $FEEE must be set up again
+    CLR PIA1+3                      ; CB1's interrupt off
+;; Maps a ROM pack in: the internal ROM at $8000-$BFFF and the cartridge's at $C000-$FDFF, with the MMU on and
+;; the constant page at $FE00, and the ROM in place of RAM.
+CARTROM:
+    LDA #COCO+MMUEN+MC3+MC2
+    STA INIT0
+    CLR SAMREG+$1E                  ; the ROM in: the SAM's map type cleared
+    RTS
+
+;; The screen's character output, which start-up patches into <SCRCHR>: on a hi-res text screen it prints there,
+;; through <HPUTCHR>, and otherwise goes on as <SCRCHR> does.
+;;
+;; In:   A = the character
+PUTCHR3:
+    PSHS A,B,X
+    LDX CURPOS
+    LDB HRWIDTH
+    LBNE HPUTCHR                    ; a hi-res text screen
+    LDB 1,S                         ; B as it came
+    JMP SCRCHR_SAVED
+
+;; CLS, which start-up patches in after <CLS>'s hook: on a hi-res text screen it clears that screen through
+;; <HCLS>, and otherwise goes on as <CLS> does.
+;;
+;; In:   zero = set when CLS has no color
+CLS3:
+    PSHS CC
+    TST HRWIDTH
+    BEQ CLS3_LORES
+    JMP HCLS                        ; a hi-res text screen
+CLS3_LORES:
+    PULS CC
+    JMP CLS_HOOKED
+    NOP
+    .byte <NAMEND_CHECK             ; the last byte of 1.1's JSR NAMEND_CHECK, left in place
+.else
 DLOAD_KIND:
 .if VERSION = 10
     CLR ,-S                         ; not DLOADM
@@ -1909,6 +1978,7 @@ DLOAD_OPEN:
     BEQ XCLOAD_TYPE                 ; DLOADM
 .endif
     JSR NAMEND_CHECK
+.endif
     TSTB
     BEQ DLOAD_FM                    ; not text
     JSR ERASEP

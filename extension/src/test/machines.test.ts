@@ -139,3 +139,14 @@ test("a setting reads its default when the configuration leaves it out, and is l
     assert.equal(configuration.ramKilobytes, undefined, "the original is unchanged");
     assert.equal("ramKilobytes" in withSetting(smaller, memory, 48), false, "the default is left out");
 });
+
+test("a Color Computer given disks shows the disk controller they bring", () => {
+    const coco = machineById("coco2");
+    const controller = coco?.choices.find(choice => choice.option === "diskController");
+    assert.ok(coco && controller);
+    const withDisks = { ...launchConfiguration(coco), disks: ["a.dsk"] };
+    assert.equal(settingValue(controller, launchConfiguration(coco)), false, "none without disks");
+    assert.equal(settingValue(controller, withDisks), true, "the controller its disks bring");
+    assert.equal("diskController" in withSetting(withDisks, controller, true), false, "left out, as the disks imply it");
+    assert.equal(withSetting(withDisks, controller, false).diskController, false, "turned off explicitly, not by leaving it out");
+});

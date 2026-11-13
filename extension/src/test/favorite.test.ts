@@ -50,6 +50,13 @@ test("a launch configuration becomes the setup Start Machine would make", () => 
         { machineId: "coco2", kind: "source", path: "C:\a.asm", options: { diskController: true } }, "the controller stays when it runs a source");
     assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\a.dsk"], diskController: false })?.options, {},
         "a controller turned off stays off");
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", source: "C:\a.asm", disks: ["C:\d.dsk"] })?.options, { diskController: true },
+        "the Model I keeps its implied controller as the launch option");
+    const dos32 = setupFromConfiguration({ machine: "apple2", model: "iiplus", source: "C:\a.s", dos: "3.2" });
+    assert.equal(dos32?.dos, "3.2", "a DOS 3.2 source stays one");
+    assert.equal(dos32 === undefined ? undefined : setupConfiguration(dos32).dos, "3.2");
+    assert.equal(setupFromConfiguration({ machine: "apple2", source: "C:\a.s", dos: "3.3" })?.dos, undefined);
+    assert.equal(favoriteSetup(favoriteFrom(dos32!, "D", undefined, undefined)).dos, "3.2", "and through a favorite");
     assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", cassette: "C:\a.cas" }),
         { machineId: "trs80-model1-level2", kind: "tape", path: "C:\a.cas", options: {} });
 });

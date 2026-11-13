@@ -10,15 +10,15 @@ import * as vscode from "vscode";
 import { resolveVariables } from "./favorite";
 import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
-import { catalogMachine, launchConfiguration, machineById, machines, withSetting, type Machine, type MachineChoice } from "./machines";
+import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
 import { describeSetup, isUsable, setupConfiguration, setupFromConfiguration, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
     | { kind: "setup"; setup: Setup }
-    | { kind: "launch"; name: string }
-    | { kind: "configuration" };
+    | { kind: "launch"; name: string; folder?: string }
+    | { kind: "configuration"; folder?: string };
 
 /** The machine shown while off: its launch configuration, resolved, and where it came from. */
 export interface OffTarget {
@@ -42,15 +42,20 @@ export function folder(): vscode.WorkspaceFolder | undefined {
 }
 
 /** The workspace's Retrocore launch configurations in launch.json. */
-function launchConfigurations(): Record<string, unknown>[] {
-    const launch = vscode.workspace.getConfiguration("launch", folder()?.uri);
+/** The workspace folder a launch came from, by its URI, or the first when it names none or that folder is gone. */
+function folderOf(uri: string | undefined): vscode.WorkspaceFolder | undefined {
+    return vscode.workspace.workspaceFolders?.find(candidate => candidate.uri.toString() === uri) ?? folder();
+}
+
+function launchConfigurations(workspace: vscode.WorkspaceFolder | undefined = folder()): Record<string, unknown>[] {
+    const launch = vscode.workspace.getConfiguration("launch", workspace?.uri);
     return (launch.get<Record<string, unknown>[]>("configurations") ?? [])
         .filter(entry => entry.type === "retrocore" && entry.request === "launch" && typeof entry.name === "string");
 }
 
 /** Sets one choice in a launch.json configuration, keeping its variables as written. */
-async function updateLaunch(name: string, choice: MachineChoice, value: string | number | boolean): Promise<void> {
-    const workspace = folder();
+async function updateLaunch(name: string, choice: MachineChoice, value: string | number | boolean, at: string | undefined): Promise<void> {
+    const workspace = folderOf(at);
     if (workspace === undefined) return;
     const launch = vscode.workspace.getConfiguration("launch", workspace.uri);
     const entries = launch.get<Record<string, unknown>[]>("configurations") ?? [];
@@ -119,9 +124,12 @@ export class OffMachine {
         const name = configuration.name;
         const setup = this.state.get<Setup>(lastSetupKey);
         const machine = catalogMachine(configuration);
-        let source: OffSource = { kind: "configuration" };
+        let source: OffSource = { kind: "configuration", folder: session.workspaceFolder?.uri.toString() };
         if (isUsable(setup) && setupConfiguration(setup).name === name) source = { kind: "setup", setup };
-        else if (typeof name === "string" && launchConfigurations().some(entry => entry.name === name)) source = { kind: "launch", name };
+        // Its own folder's launch.json, as a multi-root workspace can have one in each.
+        else if (typeof name === "string" && launchConfigurations(session.workspaceFolder ?? folder()).some(entry => entry.name === name)) {
+            source = { kind: "launch", name, folder: (session.workspaceFolder ?? folder())?.uri.toString() };
+        }
         else if (machine !== undefined && launchConfiguration(machine).name === name) {
             const setup = setupFromConfiguration(configuration);
             if (setup !== undefined) source = { kind: "setup", setup };
@@ -178,6 +186,10 @@ export class OffMachine {
         if (target === undefined || machine === undefined || choice === undefined) {
             throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
         }
+        // Its disks need their controller: without it the launch would have no drives to put them in.
+        if (option === "diskController" && value === false && startsWithDisks(target.configuration)) {
+            throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its disk controller.`);
+        }
 
         let next: OffTarget;
         if (target.source.kind === "setup") {
@@ -185,7 +197,7 @@ export class OffMachine {
             next = { configuration: setupConfiguration(setup), source: { kind: "setup", setup } };
             await this.state.update(lastSetupKey, setup);
         } else {
-            if (target.source.kind === "launch") await updateLaunch(target.source.name, choice, value);
+            if (target.source.kind === "launch") await updateLaunch(target.source.name, choice, value, target.source.folder);
             next = { configuration: withSetting(target.configuration, choice, value), source: target.source };
         }
 
@@ -200,15 +212,17 @@ export class OffMachine {
 
     /** Boots the machine as it came: Start Machine's setup, the launch.json configuration, or the configuration. */
     async boot(): Promise<boolean> {
+        // Changes sent before it are saved first, so the launch restores them and its start finds none in flight.
+        await this.serially(async () => undefined);
         const target = this.target;
         if (target === undefined) return false;
         switch (target.source.kind) {
             case "setup":
                 return await vscode.commands.executeCommand<boolean>("retrocore.startMachine", target.source.setup);
             case "launch":
-                return await vscode.debug.startDebugging(folder(), target.source.name);
+                return await vscode.debug.startDebugging(folderOf(target.source.folder), target.source.name);
             default:
-                return await vscode.debug.startDebugging(folder(), target.configuration as vscode.DebugConfiguration);
+                return await vscode.debug.startDebugging(folderOf(target.source.folder), target.configuration as vscode.DebugConfiguration);
         }
     }
 
@@ -227,13 +241,17 @@ export class OffMachine {
             items.push({ label: "$(history) " + describeSetup(setup), detail: "What Start Machine started last",
                 target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
         }
-        const workspace = folder()?.uri.fsPath;
-        const launches = launchConfigurations();
-        if (launches.length !== 0) items.push({ label: "launch.json", kind: vscode.QuickPickItemKind.Separator });
-        for (const entry of launches) {
-            const name = String(entry.name);
-            items.push({ label: name, description: String(entry.machine ?? ""),
-                target: { configuration: resolveVariables(entry, workspace), source: { kind: "launch", name } } });
+        // Each folder's launch.json, resolved against that folder, as a multi-root workspace has one in each.
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        for (const workspace of folders) {
+            const launches = launchConfigurations(workspace);
+            if (launches.length === 0) continue;
+            items.push({ label: folders.length > 1 ? `launch.json: ${workspace.name}` : "launch.json", kind: vscode.QuickPickItemKind.Separator });
+            for (const entry of launches) {
+                const name = String(entry.name);
+                items.push({ label: name, description: String(entry.machine ?? ""),
+                    target: { configuration: resolveVariables(entry, workspace.uri.fsPath), source: { kind: "launch", name, folder: workspace.uri.toString() } } });
+            }
         }
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });
         for (const machine of machines) {

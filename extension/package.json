@@ -384,6 +384,13 @@
                   },
                   "basicDisk": {
                     "type": "string"
+                  },
+                  "dos": {
+                    "type": "string",
+                    "enum": [
+                      "3.2"
+                    ],
+                    "description": "For a source on a fresh DOS disk, DOS 3.2 (13-sector) rather than 3.3."
                   }
                 }
               },
@@ -1153,7 +1160,16 @@
               },
               "baudRate": {
                 "type": "number",
-                "enum": [110, 150, 300, 600, 1200, 2400, 4800, 9600],
+                "enum": [
+                  110,
+                  150,
+                  300,
+                  600,
+                  1200,
+                  2400,
+                  4800,
+                  9600
+                ],
                 "default": 9600,
                 "description": "Altair 8800: the 88-2SIO's baud rate, which sets how fast characters reach the terminal and keys reach the program."
               },

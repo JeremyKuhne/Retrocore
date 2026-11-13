@@ -21,7 +21,7 @@ export interface Favorite {
     /** Its settings that differ from their defaults, by launch option. */
     options?: Record<string, string | number | boolean>;
     /** What it runs, when not just the machine. */
-    run?: { kind: RunKind; path?: string; basicDisk?: string };
+    run?: { kind: RunKind; path?: string; basicDisk?: string; dos?: "3.2" };
     /** Its cards and media, as the debug host's retro/devices gives them. */
     machineState?: unknown;
 }
@@ -39,6 +39,7 @@ export function favoriteSetup(favorite: Favorite): Setup {
     const setup: Setup = { name: favorite.name, machineId: favorite.machine, kind: favorite.run?.kind ?? "machine", options: { ...favorite.options } };
     if (favorite.run?.path !== undefined) setup.path = favorite.run.path;
     if (favorite.run?.basicDisk !== undefined) setup.basicDisk = favorite.run.basicDisk;
+    if (favorite.run?.dos === "3.2") setup.dos = "3.2";
     return setup;
 }
 
@@ -51,6 +52,7 @@ export function favoriteFrom(setup: Setup, name: string, description: string | u
         favorite.run = { kind: setup.kind };
         if (setup.path !== undefined) favorite.run.path = setup.path;
         if (setup.basicDisk !== undefined) favorite.run.basicDisk = setup.basicDisk;
+        if (setup.dos !== undefined) favorite.run.dos = setup.dos;
     }
     if (machineState !== undefined) favorite.machineState = machineState;
     return favorite;

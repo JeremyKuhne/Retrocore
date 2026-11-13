@@ -521,16 +521,29 @@ export function catalogMachine(configuration: Record<string, unknown>): Machine 
         && (kind !== "trs80-model1" || (machine.configuration.rom ?? "level2") === rom));
 }
 
-/** The value a launch configuration gives one of its machine's choices: its own, or the choice's default. */
-export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
-    const value = configuration[choice.option];
-    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : choice.default;
+/** Whether a launch configuration starts with disks in its drives, which brings a disk controller with them. */
+export function startsWithDisks(configuration: Record<string, unknown>): boolean {
+    return Array.isArray(configuration.disks) && configuration.disks.length !== 0;
 }
 
-/** A launch configuration with one choice set, leaving the option out when it is the choice's default. */
+/**
+ * What a choice is when the configuration leaves it out, as the debug host decides: the choice's default, except that
+ * disks given bring their disk controller.
+ */
+export function impliedValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    return choice.option === "diskController" && startsWithDisks(configuration) ? true : choice.default;
+}
+
+/** The value a launch configuration gives one of its machine's choices: its own, or what it is left out. */
+export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    const value = configuration[choice.option];
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : impliedValue(choice, configuration);
+}
+
+/** A launch configuration with one choice set, leaving the option out when it is what it would be without it. */
 export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {
     const changed = { ...configuration };
-    if (value === choice.default) delete changed[choice.option];
+    if (value === impliedValue(choice, configuration)) delete changed[choice.option];
     else changed[choice.option] = value;
     return changed;
 }

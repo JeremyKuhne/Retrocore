@@ -30,6 +30,8 @@ export interface Setup {
     path?: string;
     /** For a basic launch, the disk the machine's BASIC boots from, when it is not in ROM. */
     basicDisk?: string;
+    /** For a source on a fresh DOS disk, DOS 3.2 (13-sector) rather than 3.3. */
+    dos?: "3.2";
     /** The machine's choices changed from their defaults, by launch option. */
     options: Record<string, string | number | boolean>;
 }
@@ -120,7 +122,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             Object.assign(configuration, { cassette: path });
             break;
         case "dosSource":
-            Object.assign(configuration, { source: path, dos: "3.3", stopOnEntry: false });
+            Object.assign(configuration, { source: path, dos: setup.dos ?? "3.3", stopOnEntry: false });
             break;
         default:
             break;
@@ -150,6 +152,7 @@ export function describeSetup(setup: Setup): string {
     if (machine === undefined) return setup.machineId;
     const parts = setup.name === undefined ? [machine.label] : [setup.name, machine.label];
     if (setup.path !== undefined) parts.push(fileName(setup.path));
+    if (setup.dos !== undefined) parts.push(`DOS ${setup.dos}`);
     for (const [option, value] of Object.entries(setup.options)) {
         const choice = machine.choices.find(candidate => candidate.option === option);
         const label = choice?.values.find(candidate => candidate.value === value)?.label ?? String(value);
@@ -185,15 +188,19 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
     const disks = Array.isArray(configuration.disks) ? configuration.disks.filter((disk): disk is string => typeof disk === "string") : [];
 
-    // A Color Computer given disks has its disk controller without saying so; kept, it is the setting it amounts to,
-    // so the drives its saved media go in are there whatever it runs.
+    // A Color Computer or Model I given disks has its disk controller without saying so; kept, it is the setting it
+    // amounts to, so the drives its saved media go in are there whatever it runs. The Model I has no such choice in
+    // the catalog, so it is kept as the launch option.
     const controller = machine.choices.find(choice => choice.option === "diskController");
-    if (controller !== undefined && disks.length !== 0 && configuration.diskController === undefined && controller.default === false) {
-        options.diskController = true;
-    }
+    const implied = controller !== undefined ? controller.default === false : machine.configuration.machine === "trs80-model1";
+    if (implied && disks.length !== 0 && configuration.diskController === undefined) options.diskController = true;
 
     const source = text("source");
-    if (source !== undefined) return { machineId: machine.id, kind: text("dos") === undefined ? "source" : "dosSource", path: source, options };
+    if (source !== undefined) {
+        // A DOS 3.2 disk is kept as one, as the 13-sector controller its saved machine records needs it.
+        if (text("dos") === undefined) return { machineId: machine.id, kind: "source", path: source, options };
+        return { machineId: machine.id, kind: "dosSource", path: source, options, ...text("dos") === "3.2" ? { dos: "3.2" as const } : {} };
+    }
     const program = text("program");
     if (program !== undefined) return { machineId: machine.id, kind: "program", path: program, options };
     const basic = text("basic");

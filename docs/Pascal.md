@@ -39,9 +39,9 @@ Once the interpreter is running, the debugger finds it in memory, and a **Pascal
 
 Compile the program with a listing, and its source debugs by line:
 
-1. Keep a copy of the source on the host, such as `hello.pas` (the extension highlights `.pas` and `.pascal`
-   files as Apple Pascal), with the same lines as the program the machine compiles. `--pascal extract` copies a
-   `.TEXT` file out of a disk image as plain text.
+1. Keep a copy of the source on the host, such as `hello.pas` or `HELLO.TEXT` (the extension opens `.pas`,
+   `.pascal` and `.text` files as Apple Pascal), with the same lines as the program the machine compiles.
+   `--pascal extract` copies a `.TEXT` file out of a disk image as plain text.
 2. Compile it with a listing named after it: `HELLO.LST.TEXT` for `hello.pas` or `HELLO.TEXT`, at the Compiler's
    `Listing file` prompt or with `(*$L HELLO.LST.TEXT*)` at the top of the program. The debugger reads the listing
    from a disk in a drive, again whenever the disk changes, or from beside the source on the host.

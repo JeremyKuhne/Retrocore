@@ -157,7 +157,8 @@
         ],
         "extensions": [
           ".pas",
-          ".pascal"
+          ".pascal",
+          ".text"
         ],
         "configuration": "./pascal-language-configuration.json"
       }

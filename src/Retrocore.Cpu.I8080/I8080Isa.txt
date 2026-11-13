@@ -40,6 +40,7 @@ flow jump JMP
 flow indirect-jump PCHL
 # RSTV (8085) calls $40 when V is set; the opcode implies its target.
 flow call CALL CNZ CZ CNC CC CPO CPE CP CM RST RSTV
+conditional CNZ CZ CNC CC CPO CPE CP CM RSTV
 target RSTV 0040
 flow return RET
 flow wait HLT

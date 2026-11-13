@@ -58,6 +58,11 @@ internal sealed class IsaRules
     internal Dictionary<string, ushort> Targets { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    ///  Gets the instructions, by <c>Mnemonic</c> or <c>Mnemonic:Form</c>, that the <c>conditional</c> line marks.
+    /// </summary>
+    internal HashSet<string> Conditional { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     ///  Gets the instruction sets whose indirect pointers do not carry into the high byte's page.
     /// </summary>
     internal HashSet<string> IndirectPageWrap { get; } = new(StringComparer.OrdinalIgnoreCase);

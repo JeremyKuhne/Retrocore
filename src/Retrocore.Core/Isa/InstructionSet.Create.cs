@@ -64,7 +64,8 @@ public sealed partial class InstructionSet
                 access,
                 rules.Access.TryGetValue($"{entry.Instruction}:{form.Name}", out MemoryAccess specific) ? specific : access,
                 rules.Preferred.Contains(entry.Opcode),
-                target);
+                target,
+                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains($"{entry.Instruction}:{form.Name}"));
         }
 
         foreach (KeyValuePair<string, string> alias in rules.Aliases)

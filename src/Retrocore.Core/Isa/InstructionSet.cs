@@ -469,7 +469,8 @@ public sealed partial class InstructionSet
         MemoryAccess access,
         MemoryAccess encodingAccess,
         bool prefer,
-        ushort? target)
+        ushort? target,
+        bool conditional)
     {
         if (!_ids.TryGetValue(mnemonic, out int id))
         {
@@ -499,7 +500,8 @@ public sealed partial class InstructionSet
         {
             Cycles = entry.Cycles,
             CyclesTaken = entry.CyclesTaken,
-            FixedTarget = target
+            FixedTarget = target,
+            IsConditional = conditional
         });
 
         _flows.Add(flow);

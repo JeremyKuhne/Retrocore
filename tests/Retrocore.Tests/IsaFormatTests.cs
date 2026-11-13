@@ -90,6 +90,62 @@ public class IsaFormatTests
     }
 
     /// <summary>
+    ///  The <c>conditional</c> line marks instructions by mnemonic or by mnemonic and form; cycles alone do not, as the
+    ///  6809's <c>RTI</c> lists two counts without being conditional.
+    /// </summary>
+    [TestMethod]
+    public void ConditionalLineMarksInstructions()
+    {
+        InstructionSet set = IsaParser.Parse("""
+            [isa]
+            literal-forms
+            conditional CNZ CALL:NZ
+            [forms]
+            Implied ""
+            [Cpu]
+            C4 CNZ Implied t=17/11
+            CD CALL Implied t=17
+            DC CALL NZ t=17/10
+            3B RTI Implied t=15/6
+            """).InstructionSets["Cpu"];
+
+        bool Conditional(byte opcode) => set.TryDecode([opcode], out int id) && set.GetEncoding(id).IsConditional;
+        Conditional(0xC4).Should().BeTrue();
+        Conditional(0xDC).Should().BeTrue();
+        Conditional(0xCD).Should().BeFalse();
+        Conditional(0x3B).Should().BeFalse();
+
+        Retrocore.Cpu.Z80.Z80Isa.InstructionSet.TryDecode([0xC4, 0, 0], out int z80).Should().BeTrue();
+        Retrocore.Cpu.Z80.Z80Isa.InstructionSet.GetEncoding(z80).IsConditional.Should().BeTrue("CALL NZ,nn");
+    }
+
+    /// <summary>
+    ///  A subset may not reuse the name of its base, of another subset or of a set, which would replace it.
+    /// </summary>
+    /// <param name="subsets">The subset lines.</param>
+    [TestMethod]
+    [Timeout(10_000)]
+    [DataRow("subset Base of Base exclude NOP message \"x\"")]
+    [DataRow("subset Small of Base exclude NOP message \"x\"\nsubset Small of Base exclude NOP message \"y\"")]
+    [DataRow("subset Other of Base exclude NOP message \"x\"")]
+    public void SubsetNamesMustBeNew(string subsets)
+    {
+        string text = $"""
+            [isa]
+            {subsets}
+            [forms]
+            Implied ""
+            [Base]
+            00 NOP Implied
+            [Other : Base]
+            01 NOP Implied
+            """;
+
+        Action parse = () => IsaParser.Parse(text);
+        parse.Should().Throw<FormatException>().WithMessage("*repeats the name*");
+    }
+
+    /// <summary>
     ///  A mnemonic made of hex digits, such as the 8080's <c>CC</c>, follows the opcode bytes rather than joining
     ///  them.
     /// </summary>

@@ -274,6 +274,28 @@ public class I8080AssemblerTests
     }
 
     /// <summary>
+    ///  After a conditional call to a subroutine that reads inline bytes, both paths are traced: the next byte when
+    ///  the call is not taken, and the instruction after the inline bytes when it is.
+    /// </summary>
+    [TestMethod]
+    public void ConditionalCallsToInlineSubroutinesTraceBothPaths()
+    {
+        // $0000: CNZ $0020 / RET / MVI A,1 / HLT ... $0020: RET; the subroutine reads one inline byte.
+        byte[] image = new byte[0x30];
+        byte[] code = [0xC4, 0x20, 0x00, 0xC9, 0x3E, 0x01, 0x76];
+        code.CopyTo(image, 0);
+        image[0x20] = 0xC9;
+        AnalysisProject project = new(image, 0, I8080Isa.InstructionSet) { FollowVectors = false };
+        project.EntryPoints.Add(0x0000);
+        project.Calls.Add(0x0020, AnalysisCall.InlineBytes(1));
+
+        DisassemblyResult result = Disassembler.Analyze(project);
+        result.Diagnostics.Where(diagnostic => diagnostic.IsError).Should().BeEmpty();
+        ushort[] addresses = [.. result.Instructions.Select(instruction => instruction.Address)];
+        addresses.Should().Contain([0x0003, 0x0004, 0x0006], "RET when not taken, MVI A,1 past the inline byte when taken");
+    }
+
+    /// <summary>
     ///  The 8085's TRAP and RST 5.5, 6.5 and 7.5 entries are traced as code on the 8085 only, and <c>RSTV</c> calls
     ///  <c>$40</c>, which is traced as its handler.
     /// </summary>

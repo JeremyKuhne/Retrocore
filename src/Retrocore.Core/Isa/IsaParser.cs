@@ -133,6 +133,12 @@ public static partial class IsaParser
             AngleWidths = rules.AngleWidths
         };
 
+        // A subset named like a set would replace it; [isa] comes before the sets, so this is checked once both are known.
+        foreach ((string name, _, _, _) in subsets)
+        {
+            if (sets.ContainsKey(name)) { throw Error(0, $"Subset '{name}' repeats the name of an instruction set."); }
+        }
+
         foreach (string name in rules.SetEntryPoints.Keys)
         {
             if (!sets.ContainsKey(name) && !subsets.Exists(subset => string.Equals(subset.Name, name, StringComparison.OrdinalIgnoreCase)))
@@ -285,6 +291,12 @@ public static partial class IsaParser
                 }
 
                 HashSet<string> excluded = new(tokens.GetRange(5, message - 5), StringComparer.OrdinalIgnoreCase);
+                if (string.Equals(tokens[1], tokens[3], StringComparison.OrdinalIgnoreCase)
+                    || subsets.Exists(subset => string.Equals(subset.Item1, tokens[1], StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw Error(number, $"Subset '{tokens[1]}' repeats the name of its base or of another subset.");
+                }
+
                 subsets.Add((tokens[1], tokens[3], excluded, Unquote(tokens[message + 1])));
                 break;
             case "flow":
@@ -337,6 +349,11 @@ public static partial class IsaParser
                 }
 
                 Addresses(tokens, number, rules.EntryPoints);
+                break;
+            case "conditional":
+                // conditional Mnemonic[:Form] ...: calls (and returns) that run only when a condition holds.
+                if (tokens.Count < 2) { throw Error(number, "Expected 'conditional Instruction ...'."); }
+                for (int index = 1; index < tokens.Count; index++) { rules.Conditional.Add(tokens[index]); }
                 break;
             case "target":
                 // target Mnemonic[:Form] address: a fixed target the opcode implies, such as the 8085's RSTV to $40.

@@ -18,12 +18,13 @@ straight into the ROM or DOS source.
 | TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C), the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 baud |
 | TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Five boot ROM versions and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
+| MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs with an 80x24 ADM-3A-style terminal, sense switches, the front panel's EXAMINE and DEPOSIT |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
-[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md) and
-[Color Computer](docs/Coco.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
+[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md),
+[Color Computer](docs/Coco.md) and [Altair 8800](docs/Altair8800.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
 model runs with nothing external.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
@@ -324,7 +325,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III](docs/backlog/Apple3.md);
-- [the Intel 8080 and 8085](docs/backlog/I8080.md), CPUs without a machine yet;
+- [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its BASIC, disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md).

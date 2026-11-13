@@ -75,6 +75,11 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button id="apple1-reset" title="RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen">Reset</button>
 <button id="apple1-clear" title="CLEAR SCREEN: blanks the screen and puts the cursor at the top left">Clear Screen</button>
 </span>
+<span class="keys" data-machine="altair">
+<button data-code="27" title="ESC (or Esc)">Esc</button>
+<button id="altair-reset" title="The front panel's RESET (or Ctrl+F12 or Ctrl+Break): the 8080 starts again at $0000, keeping memory">Reset</button>
+<button id="altair-clear" title="The terminal's CLEAR: blanks the screen and homes the cursor, as ^Z does">Clear Screen</button>
+</span>
 <span class="keys" data-machine="coco">
 <button data-code="1" title="BREAK (or Esc)">Break</button>
 <button data-code="31" title="CLEAR (or Home)">Clear</button>
@@ -109,7 +114,7 @@ const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
 // border, fill a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3'};
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -350,7 +355,9 @@ const keys={
     'trs80-model2':{Enter:13,Backspace:8,Tab:9,ArrowLeft:28,ArrowRight:29,ArrowUp:30,ArrowDown:31,Escape:3},
     // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
     'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
-    'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1}
+    'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    // The Altair's ADM-3A sends ASCII, with its arrows as ^H, ^L, ^K and ^J.
+    'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
@@ -359,7 +366,8 @@ const hints={
     'trs80-model2':'Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset',
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
-    'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET'
+    'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
+    'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -372,7 +380,7 @@ const ctrl=document.getElementById('ctrl');
 // screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
 // show its lines twice over, about 4:3. Sizes are in CSS pixels for the display's scaling, ratio physical pixels to
 // each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480]};
 function sharpSize(machine,width,height,ratio){
     const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
     const [w,h]=sharpBase[key]??sharpBase['apple2'];
@@ -501,10 +509,12 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset','altair-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
 }
-document.getElementById('apple1-clear').addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});
+for(const id of ['apple1-clear','altair-clear']){
+    document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});
+}
 // The session ended: the last picture stays, dimmed, with ways to go on. The next session's first frame hides it.
 const off=document.getElementById('off');
 function showOff(ended){

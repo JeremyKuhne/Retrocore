@@ -52,8 +52,10 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model 4", "TRS-80 Model 4P", "TRS-80 Model II",
         "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer", "TRS-80 Color Computer 2",
-        "TRS-80 Color Computer 3"
+        "TRS-80 Color Computer 3", "MITS Altair 8800"
     ]);
+    assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
+    assert.deepEqual(machineById("altair")?.diskFormats, []);
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.deepEqual(machineById("apple3")?.basicDialects, ["business"]);
     assert.equal(machineById("apple3")?.basicDisk, "The Business BASIC disk");

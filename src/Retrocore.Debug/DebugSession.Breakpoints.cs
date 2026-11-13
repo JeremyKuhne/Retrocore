@@ -121,6 +121,9 @@ internal sealed partial class DebugSession
             DebugMachines.Apple3 => [reset, sosBrk, .. checks],
             DebugMachines.Apple1 => [reset, brk, .. checks, .. BasicFilters],
             DebugMachines.Coco => [reset, .. checks],
+
+            // The Altair has no ROM, BASIC or break instruction to stop in.
+            DebugMachines.Altair => [reset, .. checks],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]
         };
     }

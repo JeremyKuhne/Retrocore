@@ -745,6 +745,7 @@
                   "trs80-model2",
                   "apple1",
                   "coco",
+                  "altair",
                   "apple2e"
                 ],
                 "enumDescriptions": [
@@ -756,10 +757,11 @@
                   "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
+                  "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, and coco a TRS-80 Color Computer (model picks 1, 2 or 3)."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
               },
               "romDirectory": {
                 "type": "string",
@@ -802,7 +804,20 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default."
+              },
+              "switches": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 65535,
+                "default": 0,
+                "description": "Altair 8800: the front panel's 16 address/data switches; the high 8 are the sense switches IN $FF reads."
+              },
+              "baudRate": {
+                "type": "number",
+                "enum": [110, 150, 300, 600, 1200, 2400, 4800, 9600],
+                "default": 9600,
+                "description": "Altair 8800: the 88-2SIO's baud rate, which sets how fast characters reach the terminal and keys reach the program."
               },
               "expansionInterface": {
                 "type": "boolean",

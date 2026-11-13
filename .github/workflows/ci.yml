@@ -74,6 +74,7 @@ jobs:
           node tools/Test-Apple3Dap.mjs
           node tools/Test-BusinessBasicDap.mjs
           node tools/Test-CocoDap.mjs
+          node tools/Test-AltairDap.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension

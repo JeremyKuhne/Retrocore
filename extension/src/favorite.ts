@@ -150,6 +150,8 @@ export function differences(kept: Favorite, now: Favorite): string[] {
             : {};
         return canonical(held);
     };
+    // A favorite that records no cards and media is the machine its launch gives, whatever that holds.
+    if (kept.machineState === undefined) return found;
     if (part(kept, "cards") !== part(now, "cards")) found.push("its cards");
     if (part(kept, "media") !== part(now, "media")) found.push("its disks and tapes");
     return found;

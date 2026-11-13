@@ -63,7 +63,8 @@ async function writeFavorites(scope: Scope, favorites: Favorite[]): Promise<void
 export function favoriteTarget(favorite: Favorite): { target: OffTarget; machineState: unknown } {
     const resolved = resolveVariables(favorite, workspacePath());
     const setup = favoriteSetup(resolved);
-    return { target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } }, machineState: resolved.machineState };
+    // One with no saved machine restores nothing over its launch, so loading it drops edits made to it since.
+    return { target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } }, machineState: resolved.machineState ?? {} };
 }
 
 /** Each favorite as Switch Machine and Start Machine list it. */
@@ -194,10 +195,13 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
         const list = readFavorites()[scope].filter(candidate => candidate.name !== name);
         await writeFavorites(scope, favorite === undefined ? list : [...list, favorite].sort((a, b) => a.name.localeCompare(b.name)));
     };
-    const unique = (scope: Scope, except?: string) => (name: string): string | undefined => {
+    // A name is one favorite across user and workspace settings: it names the favorite's launch configuration and
+    // saved machine, so loading it, its heart and Start Machine always find the one meant.
+    const unique = (except?: string) => (name: string): string | undefined => {
         if (name.trim() === "") return "A favorite needs a name.";
-        return readFavorites()[scope].some(candidate => candidate.name === name.trim() && candidate.name !== except)
-            ? `${scopeName(scope)} already have a favorite named ${name.trim()}.` : undefined;
+        const kept = readFavorites();
+        return [...kept.user, ...kept.workspace].some(candidate => candidate.name === name.trim() && candidate.name !== except)
+            ? `There is already a favorite named ${name.trim()}.` : undefined;
     };
 
     // What the Machine view shows, as a favorite: the running session's machine, or the off one.
@@ -211,7 +215,8 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
         const shown = off.target;
         if (shown === undefined) return undefined;
         const setup = shown.source.kind === "setup" ? shown.source.setup : setupFromConfiguration(shown.configuration);
-        return setup === undefined ? undefined : { setup, machineState: saved.get(shown.configuration) ?? off.body?.configuration };
+        // As described, every card and drive; the saved machine can be only what differs from the launch's own.
+        return setup === undefined ? undefined : { setup, machineState: off.body?.configuration ?? saved.get(shown.configuration) };
     };
     // The shown machine as a favorite in a scope: in the workspace's settings, paths inside it as ${workspaceFolder}.
     const capture = (name: string, description: string | undefined, scope: Scope, quiet = false): Favorite | undefined => {
@@ -247,7 +252,7 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
         const machine = machineById(setup.machineId);
         const base = setup.name ?? (machine === undefined ? "Machine" : setupName(machine, { ...setup, name: undefined }).replace(/ \(Retrocore\)$/, ""));
         let name = base;
-        for (let count = 2; unique("user")(name) !== undefined; count++) name = `${base} ${count}`;
+        for (let count = 2; unique()(name) !== undefined; count++) name = `${base} ${count}`;
         return name;
     };
 
@@ -276,7 +281,7 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
             return false;
         }
         const chosen = name?.trim() ?? suggestedName(setup);
-        if (unique("user")(chosen) !== undefined) return false;
+        if (unique()(chosen) !== undefined) return false;
         const favorite = capture(chosen, description, "user");
         if (favorite === undefined) return false;
         await link(from, chosen);
@@ -343,13 +348,15 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
         const name = typeof text === "string" ? text : undefined;
         const kept = find(given);
         if (kept === undefined) return false;
-        const check = unique(kept.scope, kept.favorite.name);
+        const check = unique(kept.favorite.name);
         const chosen = name ?? await vscode.window.showInputBox({ title: `Rename ${kept.favorite.name}`, value: kept.favorite.name, validateInput: check });
         if (chosen === undefined || chosen.trim() === kept.favorite.name || check(chosen) !== undefined) return false;
         await replace(kept.scope, kept.favorite.name, undefined);
         await replace(kept.scope, chosen.trim(), { ...kept.favorite, name: chosen.trim() });
-        // Machines saved as it follow it to its new name.
+        // Machines saved as it follow it to its new name, as does one loaded from it, which still has the old name.
         for (const [from, to] of Object.entries(links())) if (to === kept.favorite.name) await link(from, chosen.trim());
+        await link(kept.favorite.name, chosen.trim());
+        refresh();
         return true;
     }));
 
@@ -360,7 +367,7 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
             error("open a folder to share a favorite with its workspace.");
             return false;
         }
-        if (unique(to)(kept.favorite.name) !== undefined) {
+        if (readFavorites()[to].some(candidate => candidate.name === kept.favorite.name)) {
             error(`${scopeName(to)} already have a favorite named ${kept.favorite.name}; rename one first.`);
             return false;
         }

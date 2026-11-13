@@ -40,7 +40,8 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
         async set(configuration, machine) {
             const name = configuration.name;
             if (typeof name !== "string") return;
-            const text = JSON.stringify(machine);
+            // The same cards and media under other settings are saved again, under those settings' fingerprint.
+            const text = JSON.stringify({ fingerprint: fingerprint(configuration), machine });
             if (last.get(name) === text) return;
             last.set(name, text);
             await state.update(key(name), { fingerprint: fingerprint(configuration), configuration: machine } satisfies SavedMachine);

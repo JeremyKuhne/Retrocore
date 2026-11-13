@@ -40,6 +40,18 @@ test("a launch configuration becomes the setup Start Machine would make", () => 
         { machineId: "trs80-model1-level2", kind: "source", path: "C:\\a.asm", options: {} });
     assert.deepEqual(setupFromConfiguration({ machine: "apple2", source: "C:\\a.s", dos: "3.3" })?.kind, "dosSource");
     assert.equal(setupFromConfiguration({ machine: "pdp10" }), undefined);
+
+    // Disks and tapes it starts with are what it runs, and a Color Computer's disks bring their controller.
+    assert.deepEqual(setupFromConfiguration({ machine: "apple2", diskImage: "C:\dos.dsk" }),
+        { machineId: "apple2-iie-enhanced", kind: "disk", path: "C:\dos.dsk", options: {} });
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\a.dsk", "C:\b.dsk"] }),
+        { machineId: "coco2", kind: "disk", path: "C:\a.dsk", options: { diskController: true } });
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", source: "C:\a.asm", disks: ["C:\a.dsk"] }),
+        { machineId: "coco2", kind: "source", path: "C:\a.asm", options: { diskController: true } }, "the controller stays when it runs a source");
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\a.dsk"], diskController: false })?.options, {},
+        "a controller turned off stays off");
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", cassette: "C:\a.cas" }),
+        { machineId: "trs80-model1-level2", kind: "tape", path: "C:\a.cas", options: {} });
 });
 
 test("paths inside the workspace are kept as ${workspaceFolder} and come back as they were", () => {
@@ -80,4 +92,7 @@ test("a favorite differs from its machine by its settings, what it runs, its car
         ["its cards"], "a card taken out, its drives' empty entries gone with it");
     assert.deepEqual(differences(kept, { ...kept, machineState: { cards: { "5": "diskII16" }, media: { slot5disk1: { path: "a.dsk", writeProtected: false } } } }),
         ["its disks and tapes"], "write protection is part of the disk");
+    const bare: Favorite = { name: "B", machine: "apple2-iiplus" };
+    assert.deepEqual(differences(bare, { ...bare, machineState: { cards: { "0": "languageCard" } } }), [],
+        "a favorite with no cards and media recorded is whatever its launch gives");
 });

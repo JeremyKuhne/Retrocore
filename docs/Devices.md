@@ -202,7 +202,10 @@ catalog machine, its settings that differ from their defaults, and what it runs)
 saved machine; a launch.json machine is kept as the setup it amounts to, so launch options Start Machine cannot set
 are not. Loading one sets it up off under its own name, which names its launch configuration and saved machine, with
 its saved machine as that one's; starting one loads it and boots it through Start Machine, so **Start Last Machine**
-repeats it. In user settings a favorite's paths are kept as they are; in the workspace's, paths inside the workspace
+repeats it. A name is one favorite across user and workspace settings, as it names the favorite's launch configuration and
+saved machine; one with no saved machine loads as its launch gives it, dropping edits made to it since. Changes to an
+off machine run one at a time, each from the saved machine the one before left. In user settings a favorite's paths
+are kept as they are; in the workspace's, paths inside the workspace
 are written as `${workspaceFolder}/...`, and moving a favorite between the two converts them.
 
 The Machine view's heart, on the machine's row, says whether the machine shown is a favorite. The machine is one when

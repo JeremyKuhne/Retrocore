@@ -183,11 +183,26 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     }
 
     const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
+    const disks = Array.isArray(configuration.disks) ? configuration.disks.filter((disk): disk is string => typeof disk === "string") : [];
+
+    // A Color Computer given disks has its disk controller without saying so; kept, it is the setting it amounts to,
+    // so the drives its saved media go in are there whatever it runs.
+    const controller = machine.choices.find(choice => choice.option === "diskController");
+    if (controller !== undefined && disks.length !== 0 && configuration.diskController === undefined && controller.default === false) {
+        options.diskController = true;
+    }
+
     const source = text("source");
     if (source !== undefined) return { machineId: machine.id, kind: text("dos") === undefined ? "source" : "dosSource", path: source, options };
     const program = text("program");
     if (program !== undefined) return { machineId: machine.id, kind: "program", path: program, options };
     const basic = text("basic");
     if (basic !== undefined) return { machineId: machine.id, kind: "basic", path: basic, options };
+
+    // A disk or tape it starts with is what it runs, so the launch installs what takes it.
+    const disk = text("diskImage") ?? disks[0];
+    if (disk !== undefined && machine.diskFormats.length !== 0) return { machineId: machine.id, kind: "disk", path: disk, options };
+    const tape = text("cassette");
+    if (tape !== undefined && machine.tapeFormats.length !== 0) return { machineId: machine.id, kind: "tape", path: tape, options };
     return { machineId: machine.id, kind: "machine", options };
 }

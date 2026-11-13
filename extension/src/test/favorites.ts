@@ -103,6 +103,7 @@ export async function testFavorites(workspace: vscode.WorkspaceFolder): Promise<
     const renamed = `${name}, renamed`;
     assert.ok(await vscode.commands.executeCommand<boolean>("retrocore.favorite.rename", { name, scope: "user" }, renamed));
     assert.deepEqual((await list()).user.filter(favorite => favorite.name === name), [], "the old name is gone");
+    assert.equal((await heart("saved", "the loaded favorite's heart after renaming it")).name, renamed, "its heart follows the new name");
     const settingsFile = path.join(workspace.uri.fsPath, ".vscode", "settings.json");
     const before = fs.existsSync(settingsFile) ? fs.readFileSync(settingsFile, "utf8") : undefined;
     try {

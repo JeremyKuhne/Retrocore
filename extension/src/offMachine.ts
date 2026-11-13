@@ -68,6 +68,15 @@ export class OffMachine {
     /** Why the machine could not be described, if it could not. */
     error: string | undefined;
     private shownProblems = "";
+    // The work that reads or writes the saved machine, one at a time: two changes in quick succession would otherwise
+    // both start from the same saved machine, and the second's answer undo the first.
+    private queue: Promise<unknown> = Promise.resolve();
+
+    private serially<T>(work: () => Promise<T>): Promise<T> {
+        const run = this.queue.then(work, work);
+        this.queue = run.catch(() => undefined);
+        return run;
+    }
 
     constructor(private readonly state: vscode.Memento, private readonly saved: SavedMachines) {
         this.target = state.get<OffTarget>(targetKey);
@@ -88,12 +97,16 @@ export class OffMachine {
      * cards and media.
      */
     async select(target: OffTarget, machineState?: unknown): Promise<void> {
+        await this.serially(() => this.selectNow(target, machineState));
+    }
+
+    private async selectNow(target: OffTarget, machineState?: unknown): Promise<void> {
         const { machineState: _saved, ...configuration } = target.configuration;
         this.target = { ...target, configuration };
         this.body = undefined;
         if (machineState !== undefined) await this.saved.set(configuration, machineState);
         await this.state.update(targetKey, this.target);
-        await this.describe();
+        await this.describeNow();
     }
 
     /**
@@ -121,6 +134,10 @@ export class OffMachine {
 
     /** Asks the language server for the machine with its saved cards and media. */
     async describe(): Promise<void> {
+        await this.serially(() => this.describeNow());
+    }
+
+    private async describeNow(): Promise<void> {
         const target = this.target;
         if (target === undefined) return;
         await this.ask("retrocore/machine/describe", { configuration: target.configuration, machineState: this.saved.get(target.configuration) });
@@ -128,11 +145,14 @@ export class OffMachine {
 
     /** Changes the machine as retro/hardware or retro/device would, and saves the result for its next launch. */
     async change(request: "hardware" | "device", args: Record<string, unknown>): Promise<void> {
-        const target = this.target;
-        if (target === undefined) return;
-        await this.ask("retrocore/machine/change", {
-            configuration: target.configuration, machineState: this.saved.get(target.configuration), request, arguments: args
-        }, true);
+        // The saved machine is read once the change before has saved its own.
+        await this.serially(async () => {
+            const target = this.target;
+            if (target === undefined) return;
+            await this.ask("retrocore/machine/change", {
+                configuration: target.configuration, machineState: this.saved.get(target.configuration), request, arguments: args
+            }, true);
+        });
     }
 
     /** The catalog machine the off machine is, whose choices are its settings. */
@@ -148,6 +168,10 @@ export class OffMachine {
      * stay on top of the new setting, where the whole saved machine would put back what the setting replaced.
      */
     async setSetting(option: string, value: string | number | boolean): Promise<void> {
+        await this.serially(() => this.setSettingNow(option, value));
+    }
+
+    private async setSettingNow(option: string, value: string | number | boolean): Promise<void> {
         const target = this.target;
         const machine = this.machine;
         const choice = machine?.choices.find(candidate => candidate.option === option);
@@ -171,7 +195,7 @@ export class OffMachine {
             await this.saved.set(next.configuration, changesFrom(saved, base.configuration));
         }
 
-        await this.select(next);
+        await this.selectNow(next);
     }
 
     /** Boots the machine as it came: Start Machine's setup, the launch.json configuration, or the configuration. */

@@ -27,6 +27,7 @@ names it with `"machine": "apple3"`:
 | `romDirectory` | MAME's `apple3` set (`apple3.rom`, `341-0028-a.rom`), or `RETROCORE_APPLE3_ROMS`. Without it the ROM comes from the SDK. |
 | `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
 | `sound` | `speaker` (the default) or `off`. |
+| `screen` | The monitor: `color` (the default), or a monochrome `white`, `green` or `amber` one, which shows each pixel in the phosphor's color by its brightness. The display panel's **Screen** changes it. |
 
 With no disk, the boot ROM runs its diagnostics and shows RETRY. Press a key to try again once a disk is in.
 

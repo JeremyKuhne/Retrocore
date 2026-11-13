@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family and the TRS-80 Model I in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1 and the TRS-80 Model I in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -98,7 +98,7 @@ assembled from the SDK's sources, so there is nothing else to set up.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II) and TRS-80 Model I (Level I). Pick one and press F5, and it boots as it
+Model I (Level II), TRS-80 Model I (Level I) and Apple-1. Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -112,7 +112,7 @@ session runs. It asks three things:
    - a binary program, loaded at the machine's usual address;
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive;
-   - a tape, on the Model I;
+   - a tape, on the Model I and the Apple-1;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -121,8 +121,8 @@ session runs. It asks three things:
    - **Start** boots it with the machine's defaults. Cards and disks the machine
      last ran with come back, as [Retro Devices](#retro-devices) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
-     and II Plus's memory and slot 0 card, the Mockingboard, and the Model I's
-     Expansion Interface and lowercase. Each shows its current value; Esc goes back.
+     and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
+     Expansion Interface and lowercase, and the Apple-1's memory and cassette interface. Each shows its current value; Esc goes back.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -195,6 +195,9 @@ includes and macros:
     and opcodes for the CPU selected by the nearest `.cpu`;
   - for a directive: what it does;
   - for any line that emits code: its address and bytes.
+
+  While debugging, VS Code shows the debugger's hover instead: a name's value now,
+  followed by its `;;` summary. Hold Alt to see the full hover above.
 - **Completion:** at an operation, the CPU's mnemonics, the directives and the
   assembly's macros; in an operand, its labels and constants, each with its
   documented summary.
@@ -784,11 +787,13 @@ multiples on the Model I, allowing for Windows display scaling. **Scale: fit** f
 the panel's width instead; sharp falls back to it when the panel is too small for 1x.
 The panel remembers the choice.
 
-**Screen** picks the IIe's monitor: **Color**, or a monochrome monitor of the time,
-**Black and white**, **Green** or **Amber**. A monochrome monitor shows every one of the
-560 dots on its own, so double hi-res text and the mouse desktops are sharp instead of
-smeared into color. The `screen` launch option sets where a session starts; once you
-pick one in the panel, the panel keeps it for later sessions.
+**Screen** picks the machine's monitor: **Color** on the Apple II family and the Apple
+III, or a monochrome monitor of the time, **Black and white**, **Green** or **Amber**, on
+any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
+own, so double hi-res text and the mouse desktops are sharp instead of smeared into
+color; on the others it lights the picture in the phosphor's color. The `screen` launch
+option sets where a session starts; once you pick one in the panel, the panel keeps it
+for later sessions on machines that have it.
 
 With a mouse card in, a strip under the screen says so. Click the screen to capture
 your mouse for it: the strip and the screen's border light up and say **press Esc to
@@ -913,6 +918,35 @@ a disk controller, and otherwise restarts BASIC with the program kept. **TRS-80:
 Cassette…** and **Eject Cassette** handle tapes (a recording is saved when ejected),
 and **TRS-80: Insert Disk…** and **Eject Disk…** handle drives 0-3, through the
 debug host's `retro/media` request.
+
+## Debugging on the Apple-1
+
+`"machine": "apple1"` debugs an Apple-1 with the same source debugging, 6502 call
+stack, cycle counts and `Keeps:` checks. The machine is configured by:
+
+- `ramKilobytes`: 4 (the default) or 8 from `$0000`;
+- `highRam`: the 4 KB bank at `$E000` where BASIC loads and runs (on by default);
+- `cassetteInterface`: the Apple Cassette Interface, started with `C100R` (on by
+  default);
+- `cassette` (a `.wav` tape, which plays from the start of the session) and
+  `fastCassette` (on by default: run unthrottled while a tape plays or records).
+
+The Monitor and the cassette interface's PROM are `wozmon.bin` and `aci.bin` from
+`romDirectory` or `RETROCORE_APPLE1_ROMS` when they are there. Otherwise they are
+assembled from the SDK's sources, as the terminal's character generator always is,
+so the Apple-1 needs no external files. `WozMonitor.asm` and `Aci.asm` also debug as
+ROM modules: a breakpoint on `ECHO` stops as each character goes to the screen.
+
+A program (`source` or `program`, loaded at `$0300` by default) runs after the
+Monitor has set up the PIA, so it can print through `ECHO` ($FFEF) and return to the
+Monitor with `JMP $FF1F`.
+
+The panel shows the 40x24 terminal, which takes about 60 characters a second as the
+real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
+**Ctrl+F12** or **Ctrl+Break** RESET; the key bar has **Esc**, **Reset** and **Clear
+Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
+[Retro Devices](#retro-devices); a recording is saved as a WAV file when it is
+ejected.
 
 ## Breakpoints
 

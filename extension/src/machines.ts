@@ -213,6 +213,42 @@ export const machines: readonly Machine[] = [
         basicDialects: [],
         dos: false,
         choices: [lowercase]
+    },
+    {
+        id: "apple1",
+        label: "Apple-1",
+        detail: "6502, the Woz Monitor, 4 KB plus 4 KB at $E000, and the cassette interface",
+        configuration: { machine: "apple1" },
+        diskFormats: [],
+        tapeFormats: ["wav"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [{ label: "4 KB", value: 4 }, { label: "8 KB", value: 8 }],
+                default: 4
+            },
+            {
+                option: "highRam",
+                label: "$E000 bank",
+                values: [
+                    { label: "4 KB at $E000", detail: "Where BASIC loads and runs", value: true },
+                    { label: "Empty", value: false }
+                ],
+                default: true
+            },
+            {
+                option: "cassetteInterface",
+                label: "Cassette interface",
+                values: [
+                    { label: "The Apple Cassette Interface", detail: "Started from the Monitor with C100R", value: true },
+                    { label: "Empty slot", value: false }
+                ],
+                default: true
+            }
+        ]
     }
 ];
 

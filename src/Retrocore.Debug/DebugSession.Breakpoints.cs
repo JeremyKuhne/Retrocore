@@ -110,6 +110,7 @@ internal sealed partial class DebugSession
 
             // The Apple III has no BASIC in ROM to stop in, nor a beam position to stop at yet.
             DebugMachines.Apple3 => [reset, sosBrk, .. checks],
+            DebugMachines.Apple1 => [reset, brk, .. checks],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]
         };
     }

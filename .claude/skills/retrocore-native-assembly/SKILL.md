@@ -1,6 +1,6 @@
 ---
 name: retrocore-native-assembly
-description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
+description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
 license: MIT
 compatibility: Requires the .NET SDK to assemble and test. The full reference is docs/NativeAssembly.md.
 metadata:
@@ -63,8 +63,8 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 
 ## Editing the SDK's ROM sources
 
-The sources in `src/Retrocore.Machines.Apple2/Roms` and `src/Retrocore.Machines.Trs80/Roms` must assemble
-byte-identically to the ROMs, for every variant (`ENHANCED` for the IIe, `REVISION` 12 or 13 for Level II). They
+The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms` and
+`src/Retrocore.Machines.Trs80/Roms` must assemble byte-identically to the ROMs, for every variant (`ENHANCED` for the IIe, `REVISION` 12 or 13 for Level II). They
 are maintained by hand: change names, comments and structure only in ways that keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks.
@@ -72,7 +72,7 @@ are maintained by hand: change names, comments and structure only in ways that k
 - **Verifying:** run the digest tests, which need no ROMs:
 
   ```powershell
-  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~AppleSoftTests"
+  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests"
   ```
 
   With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`), the same tests name the first byte

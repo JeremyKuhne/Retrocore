@@ -99,7 +99,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["apple2/disk"] = _ => DiskState(),
             ["apple2/button"] = Button,
             ["apple2/mouse"] = Mouse,
-            ["apple2/screen"] = Screen,
             ["apple2/sound"] = Sound,
             ["apple2/fastDisk"] = FastDiskRequest
         };
@@ -375,11 +374,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return [];
     }
 
-    // apple2/screen: shows the video on a color monitor or a green, amber or white monochrome one.
-    private JsonObject Screen(JsonObject args)
+    /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => DebugScreens.WithColor;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A monochrome monitor shows each of the 560 dots on its own, rather than the color a run of them makes.
+    ///  </para>
+    /// </remarks>
+    public string Screen
     {
-        _machine.Bus.Video.Monitor = ParseScreen(args.String("screen") ?? throw new ArgumentException("screen is required."));
-        return [];
+        get => _machine.Bus.Video.Monitor.ToString().ToLowerInvariant();
+        set => _machine.Bus.Video.Monitor = ParseScreen(value);
     }
 
     // The launch's and the panel's names for the monitors.
@@ -389,7 +396,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         "green" => Apple2Monitor.Green,
         "amber" => Apple2Monitor.Amber,
         "white" => Apple2Monitor.White,
-        _ => throw new ArgumentException("screen must be color, green, amber or white.")
+        _ => throw new ArgumentException("screen must be color, white, green or amber.")
     };
 
     // apple2/sound: changes what the panel hears while running, as the launch's sound option does.
@@ -956,7 +963,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["sound"] = _soundMode,
             ["mockingboard"] = _machine.Bus.MockingboardInstalled,
             ["mouse"] = _machine.Bus.MouseSlot,
-            ["screen"] = _machine.Bus.Video.Monitor.ToString().ToLowerInvariant(),
+            ["screen"] = Screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["fastDisk"] = FastDisk,
             ["running"] = running
         };

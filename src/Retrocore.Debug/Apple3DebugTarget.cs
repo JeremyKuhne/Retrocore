@@ -32,6 +32,9 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     private PascalRuntime? _pascal;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels;
+
+    // The monitor the video is shown on: color, or monochrome in its phosphor's color by each pixel's brightness.
+    private string _screen = DebugScreens.Color;
     private DebugAudioSink? _sound;
     private bool _resetPending;
     private SosDriverModules? _sosDrivers;
@@ -427,14 +430,27 @@ internal sealed class Apple3DebugTarget : IDebugTarget
             ["disk"] = DiskState(),
             ["sound"] = _sound is null ? "off" : "speaker",
             ["fastDisk"] = FastDisk,
+            ["screen"] = _screen,
+            ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
         };
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> Screens => DebugScreens.WithColor;
+
+    /// <inheritdoc/>
+    public string Screen
+    {
+        get => _screen;
+        set => _screen = DebugScreens.Require(value, Screens);
     }
 
     /// <inheritdoc/>
     public ReadOnlySpan<byte> RenderVideo()
     {
         _machine.Video.Render(_pixels, scanned: true);
+        DebugScreens.Show(_pixels, _screen);
         return _pixels;
     }
 
@@ -477,6 +493,7 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     private JsonObject VideoFrame(bool scanned)
     {
         _machine.Video.Render(_pixels, scanned);
+        DebugScreens.Show(_pixels, _screen);
         return new JsonObject
         {
             ["width"] = _machine.Video.Width,

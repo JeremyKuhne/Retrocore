@@ -58,6 +58,11 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="31" title="CLEAR (or Home)">Clear</button>
 <button id="trs80-reset" title="The reset button (or Ctrl+F12 or Ctrl+Break): boots a disk, or restarts BASIC with the program kept">Reset</button>
 </span>
+<span class="keys" data-machine="apple1">
+<button data-code="27" title="ESC (or Esc): drops the line being typed">Esc</button>
+<button id="apple1-reset" title="RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen">Reset</button>
+<button id="apple1-clear" title="CLEAR SCREEN: blanks the screen and puts the cursor at the top left">Clear Screen</button>
+</span>
 <span class="keys end">
 <button id="basic" hidden title="Opens the BASIC program in the machine's memory in an editor; saving puts it back">BASIC program</button>
 <label class="speed" title="How fast the machine runs, as a multiple of its clock. Sound plays only at 1x.">Speed <select id="speed" aria-label="Speed">
@@ -72,7 +77,7 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <div class="strip"><div><div id="status"></div><div id="disk"></div></div>
 <span class="tools">
 <button id="scale" title="Sharp: each dot a whole number of screen pixels, as large as fits. Fit: fills the panel's width.">Scale: sharp</button>
-<label class="speed" data-machine="apple2" title="The monitor: color, or a monochrome monitor of the time, which shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
+<label class="speed" id="screenChoice" hidden title="The monitor: color, or a monochrome monitor of the time; on an Apple II it shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
 <option value="color">Color</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
 </select></label>
 <label data-machine="apple2 apple3" title="Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
@@ -86,7 +91,7 @@ window.addEventListener('error',event=>api.postMessage({error:event.message}));
 const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 fills a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3'};
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','apple1':'280/192'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -100,8 +105,9 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's fast cassette or the IIe's fast disk, running flat out while the media moves.
-    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'?'Fast tape':'Fast disk']:[];
+    // Accelerated is the Model I's or Apple-1's fast cassette or the IIe's fast disk, running flat out while the
+    // media moves.
+    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='apple1'?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
 const fastDisk=document.getElementById('fastDisk');
@@ -142,8 +148,9 @@ function draw(frame){
     }
     if(!iie){
         const media=frame.media;
-        const tape=media&&media.cassette.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
-        const disks=media?media.disks.filter(disk=>disk.mounted).map(disk=>'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'')):[];
+        // The Apple-1 has a cassette and no disks.
+        const tape=media?.cassette?.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
+        const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(disk=>'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'')):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
         document.getElementById('disk').textContent=disks.join(' | ');
         return;
@@ -204,8 +211,11 @@ window.addEventListener('message',event=>{
     showMouse();
     if(changed)showKeys();
 });
-// The monitor: the panel's choice, kept with its state, wins over the launch's, and is sent again to each new session.
+// The monitor: the panel's choice, kept with its state, wins over the launch's, and is sent again to each new session
+// whose machine has that monitor. The menu offers the machine's own monitors, so no color on a monochrome machine.
 const screenSelect=document.getElementById('screenType');
+const screenNames={color:'Color',white:'Black and white',green:'Green',amber:'Amber'};
+let offeredScreens='';
 const chosenScreen=()=>api.getState?.()?.screen;
 if(typeof chosenScreen()==='string')screenSelect.value=chosenScreen();
 let sentScreen;
@@ -216,9 +226,17 @@ screenSelect.addEventListener('change',()=>{
     screen.focus();
 });
 function syncScreen(frame){
-    if(typeof frame?.screen!=='string')return;
+    const choice=document.getElementById('screenChoice');
+    choice.hidden=typeof frame?.screen!=='string';
+    if(choice.hidden)return;
+    const screens=Array.isArray(frame.screens)?frame.screens.filter(name=>name in screenNames):[frame.screen];
+    if(screens.join()!==offeredScreens){
+        offeredScreens=screens.join();
+        screenSelect.replaceChildren(...screens.map(name=>new Option(screenNames[name],name)));
+        screenSelect.value=frame.screen;
+    }
     const wanted=chosenScreen();
-    if(typeof wanted==='string'&&wanted!==frame.screen){
+    if(typeof wanted==='string'&&wanted!==frame.screen&&screens.includes(wanted)){
         if(sentScreen!==wanted){sentScreen=wanted;api.postMessage({command:'screen',screen:wanted});}
         return;
     }
@@ -307,12 +325,15 @@ overlay.addEventListener('change',()=>{
 const keys={
     'apple2':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
     'apple3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
-    'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1}
+    'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
+    'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
     'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
-    'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple'
+    'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
+    'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -323,7 +344,7 @@ const ctrl=document.getElementById('ctrl');
 // Sharp scaling: each dot a whole number of physical pixels across and down, keeping the screen's shape. The IIe's
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
 // screen (768x576). Sizes are in CSS pixels for the display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'apple1':[560,384]};
 function sharpSize(machine,width,height,ratio){
     const [w,h]=sharpBase[machine]??sharpBase['apple2'];
     const scale=Math.floor(Math.min(width*ratio/w,height*ratio/h));
@@ -451,9 +472,10 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset']){
+for(const id of ['reset','trs80-reset','apple1-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
 }
+document.getElementById('apple1-clear').addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});
 // The session ended: the last picture stays, dimmed, with ways to go on. The next session's first frame hides it.
 const off=document.getElementById('off');
 function showOff(ended){

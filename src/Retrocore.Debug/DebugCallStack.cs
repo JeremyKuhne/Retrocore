@@ -40,6 +40,15 @@ internal sealed class DebugCallStack : IDebugCallStack
     }
 
     /// <summary>
+    ///  Creates the tracker for a machine whose stack page is plain RAM.
+    /// </summary>
+    /// <param name="peek">Reads memory without side effects.</param>
+    internal DebugCallStack(Func<ushort, byte> peek)
+        : this(() => 0, (_, offset) => peek((ushort)(0x100 | offset)))
+    {
+    }
+
+    /// <summary>
     ///  Creates the tracker for a machine that says which stack is in use and reads it.
     /// </summary>
     /// <param name="currentStack">Names the stack in use, as the machine numbers its stacks.</param>

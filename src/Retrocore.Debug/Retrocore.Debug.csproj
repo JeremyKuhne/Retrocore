@@ -15,6 +15,7 @@
     <ProjectReference Include="..\Retrocore.Basic\Retrocore.Basic.csproj" />
     <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\Retrocore.Pascal\Retrocore.Pascal.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Apple1\Retrocore.Machines.Apple1.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
@@ -36,6 +37,7 @@
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Sdk\Roms\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\Kernel\*.asm" Link="Sdk\Roms\Apple3\Sos\Kernel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\Drivers\**\*.asm" Link="Sdk\Roms\Apple3\Sos\Drivers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple1\Roms\*.asm" Link="Sdk\Roms\Apple1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- SDL's packages carry each library once per name its platform links by: libSDL3.so, .so.0 and .so.0.4.20 on

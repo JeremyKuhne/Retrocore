@@ -19,7 +19,7 @@ import { testFavorites } from "./favorites";
 import { testProgramBreakpoints } from "./basicBreakpoints";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
-import { memoryUri, type MemoryBank } from "../memory";
+import { memoryUri, openMemory, type MemoryBank } from "../memory";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -235,6 +235,36 @@ export async function run(): Promise<void> {
         await vscode.workspace.fs.writeFile(memoryUri(model, "0x3C00", "video", { from: 0, to: 1 }), Uint8Array.of(0x2A));
         assert.equal(Buffer.from((await model.customRequest("readMemory", { memoryReference: "0x3C00", count: 1 })).data, "base64")[0], 0x2A);
 
+        // Retrocore Memory opens the same URIs and edits through the debugger, as typing in its page would.
+        await openMemory(model, "0x3C00");
+        const memoryTab = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+        assert.ok(memoryTab instanceof vscode.TabInputCustom && memoryTab.viewType === "retrocore.memory", "Retrocore Memory opens");
+        type MemoryState = { cursor: number; status: string; inspector: { label: string; value: string }[] };
+        const drive = async (actions: unknown[]): Promise<MemoryState> => {
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    return await vscode.commands.executeCommand("retrocore.memory.test", actions);
+                } catch (error) {
+                    // The editor is still resolving its reference.
+                    if (attempt >= 40) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                }
+            }
+        };
+        const videoByte = async () => Buffer.from((await model.customRequest("readMemory", { memoryReference: "0x3C00", count: 1 })).data, "base64")[0];
+        let memoryState = await drive([{ goto: 0x3C00 }, { type: "2B" }]);
+        assert.equal(memoryState.cursor, 0x3C01, "the cursor moves past the byte typed");
+        assert.equal(await videoByte(), 0x2B);
+        memoryState = await drive([{ undo: true }]);
+        assert.equal(await videoByte(), 0x2A, "undo writes the byte back");
+        memoryState = await drive([{ goto: 0x3C00 }, { pane: "text" }, { type: "A" }]);
+        assert.equal(await videoByte(), 0x41);
+        memoryState = await drive([{ goto: 0x3C00 }]);
+        assert.equal(memoryState.inspector.find(row => row.label === "Byte")?.value, "$41");
+        memoryState = await drive([{ goto: 0x0000 }, { pane: "hex" }, { type: "00" }]);
+        assert.match(memoryState.status, /not RAM/, "ROM refuses the write");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+
         // A function breakpoint from the Breakpoints view, with a hit count: Level II prints READY through
         // DISPLAY_CHAR, and the second character stops there. The hit count command reads its hits.
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
@@ -267,7 +297,7 @@ export async function run(): Promise<void> {
         await testBasicVariables(model, stop);
         await vscode.debug.stopDebugging(model);
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-        console.log("Isolated VS Code passed: the Model I boot configuration stops as it powers on, at Level II's READY and at the reset button's NMI, lists its devices, reads and writes memory views, counts a function breakpoint's hits, edits, saves, imports and exports its BASIC program, and debugs it on the BASIC thread with its variables.");
+        console.log("Isolated VS Code passed: the Model I boot configuration stops as it powers on, at Level II's READY and at the reset button's NMI, lists its devices, reads and writes memory views, edits memory in Retrocore Memory, counts a function breakpoint's hits, edits, saves, imports and exports its BASIC program, and debugs it on the BASIC thread with its variables.");
 
         // A labeled BASIC file launched and debugged in place.
         await testBasicLaunch(root, stop);

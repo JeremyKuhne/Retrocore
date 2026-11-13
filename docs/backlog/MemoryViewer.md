@@ -1,10 +1,10 @@
 # Backlog: a memory viewer and editor
 
-Status: **proposed.** Today memory opens in Microsoft's Hex Editor through VS Code's debug memory file system
-([Memory.md](../Memory.md)). That works, but the Hex Editor knows nothing about the machine: not
-its labels, its banks, its character sets, which bytes are code, or what a byte means. This plan adds Retrocore's
-own memory editor, with the Hex Editor as its baseline, that shows assembly at any address and says what the
-bytes under the cursor are.
+Status: **step 1 built** ([Memory.md](../Memory.md#retrocore-memory)), with the debug host's `retro/memory/read`
+reading past a bank's gaps. Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file
+system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
+sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor
+as its baseline, that shows assembly at any address and says what the bytes under the cursor are.
 
 ## What others do
 

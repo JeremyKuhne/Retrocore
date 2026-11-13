@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Memory view DAP integration: readMemory and writeMemory as VS Code's Hex Editor uses them, memory references on
-// variables and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's
+// Memory view DAP integration: readMemory and writeMemory as VS Code's memory views use them, retro/memory/read as
+// Retrocore Memory uses it, memory references on variables and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's
 // memory banks with breakpoints and disassembly in them. It also checks the breakpoints a data breakpoint's stop
 // leaves for resuming, a step that lands on a breakpoint, and the logpoint limit. The Model I part needs nothing
 // external; the IIe part runs when RETROCORE_IIE_ROMS names the IIe ROMs.
@@ -73,6 +73,14 @@ try {
     const top = await read("0xFFFE", 4);
     assert.equal(top.bytes.length, 2);
     assert.equal(top.unreadable, 2);
+
+    // Retrocore Memory reads past gaps, with the unreadable runs marked and read as zero.
+    at = "reading a range with gaps";
+    const range = await request("retro/memory/read", { memoryReference: "0xFFFE", count: 4 });
+    assert.equal(range.address, "0xFFFE");
+    assert.deepEqual([...Buffer.from(range.data, "base64").subarray(0, 2)], [...top.bytes]);
+    assert.deepEqual([...Buffer.from(range.data, "base64").subarray(2)], [0, 0]);
+    assert.deepEqual(range.unreadable, [{ offset: 2, count: 2 }]);
 
     at = "memory references on variables";
     const registers = await variables(1, "Registers");
@@ -209,6 +217,9 @@ try {
         const hole = await read("main:0xBFFE", 4);
         assert.equal(hole.bytes.length, 2);
         assert.equal(hole.unreadable, 2);
+        const lead = await request("retro/memory/read", { memoryReference: "bank1:0x0000", offset: 0xCFFE, count: 4 });
+        assert.deepEqual(lead.unreadable, [{ offset: 0, count: 2 }], "a range reads on past a bank's gap");
+        assert.deepEqual([...Buffer.from(lead.data, "base64").subarray(2)], [...(await read("bank1:0xD000", 2)).bytes]);
         assert.deepEqual((await read("rom:0xD000", 4)).bytes, (await read("0xD000", 4)).bytes);
         await rejects(write("rom:0xD000", [0]), /System ROM is read-only/);
         await rejects(write("0xD000", [0]), /reads the system ROM now, not RAM/);

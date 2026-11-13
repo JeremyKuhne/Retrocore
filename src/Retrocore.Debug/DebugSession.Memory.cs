@@ -98,6 +98,60 @@ internal sealed partial class DebugSession
     }
 
     /// <summary>
+    ///  Answers retro/memory/read: the bytes of a range with every unreadable run marked, for Retrocore Memory.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Unlike readMemory, which stops at the first unreadable byte, this reads past gaps, so a view of a bank
+    ///   such as bank 1 at $D000-$DFFF shows the bank where it is. Unreadable bytes read as zero. The view is
+    ///   tracked as readMemory's are, so memory events name its reference when its bytes change.
+    ///  </para>
+    /// </remarks>
+    private JsonObject ReadMemoryRange(JsonObject args)
+    {
+        string reference = Required(args, "memoryReference");
+        long address = MemoryReference(reference, out DebugMemoryBank? bank);
+        long offset = args.Long("offset") ?? 0;
+        int count = args.Int("count") ?? 0;
+        if (count is < 0 or > 0x10000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(args), "count must be 0-65536.");
+        }
+
+        byte[] data = new byte[count];
+        List<JsonNode?> unreadable = [];
+        int? gap = null;
+        for (int index = 0; index < count; index++)
+        {
+            if (MemoryByte(bank, address + offset + index) is not { } value)
+            {
+                gap ??= index;
+                continue;
+            }
+
+            data[index] = value;
+            if (gap is { } from)
+            {
+                unreadable.Add(new JsonObject { ["offset"] = from, ["count"] = index - from });
+                gap = null;
+            }
+        }
+
+        if (gap is { } last)
+        {
+            unreadable.Add(new JsonObject { ["offset"] = last, ["count"] = count - last });
+        }
+
+        Track(reference, bank, address, offset, count);
+        return new JsonObject
+        {
+            ["address"] = $"0x{address + offset:X4}",
+            ["data"] = Convert.ToBase64String(data),
+            ["unreadable"] = unreadable.ToJsonArray()
+        };
+    }
+
+    /// <summary>
     ///  Answers writeMemory: writes RAM at a reference, in a bank or where the CPU reads it now.
     /// </summary>
     /// <remarks>

@@ -6,19 +6,44 @@ not flip it, and reading the keyboard does not take the key. Writes go to RAM on
 
 ## Opening memory
 
-- **View Binary Data.** A register that holds an address, a byte in the memory scope, a watch expression and each
-  entry of the **Memory** scope all have a binary-data icon in the Variables and Watch views. Clicking it opens
-  that address in Microsoft's [Hex Editor](https://marketplace.visualstudio.com/items?itemName=ms-vscode.hexeditor),
-  which VS Code offers to install the first time.
+Memory opens in **Retrocore Memory**, the extension's memory editor:
+
 - **Retrocore: Open Memory...** is in the Variables view's title bar and the command palette. It asks for the
-  CPU's memory or a bank, then an address, label or expression, and opens it in the Hex Editor.
-- **Other memory tools**, such as Eclipse CDT Cloud's
-  [Memory Inspector](https://marketplace.visualstudio.com/items?itemName=eclipse-cdt.memory-inspector), work too.
-  Type any memory reference below as their address.
+  CPU's memory or a bank, then an address, label or expression, and opens it there.
+- **Open in Retrocore Memory** is on the context menu of anything in the Variables and Watch views that holds an
+  address: a register such as PC or HL, a byte in the memory scope, a watch expression and each entry of the
+  **Memory** scope.
+- **Reopen Editor With...** switches between Retrocore Memory and any other editor for the same memory.
+- **Other memory tools** keep working through the standard protocol: VS Code's own binary-data icon on those
+  variables opens Microsoft's [Hex Editor](https://marketplace.visualstudio.com/items?itemName=ms-vscode.hexeditor),
+  and Eclipse CDT Cloud's
+  [Memory Inspector](https://marketplace.visualstudio.com/items?itemName=eclipse-cdt.memory-inspector) takes any
+  memory reference below as its address.
 
 A memory view stays current: at each stop, about four times a second while the machine runs, and after a write
-through another view, the debugger tells VS Code to read it again if the bytes it has read have changed. You can edit bytes in the
-Hex Editor, and the Variables view updates to match.
+through another view, the debugger tells the view to read again if the bytes it has read have changed. Bytes you
+edit are written at once, and the Variables view updates to match.
+
+## Retrocore Memory
+
+Retrocore Memory shows the whole 64K of memory as the CPU maps it, or of one bank, in hex and as text, opened at
+the address asked for. A bank's gaps show as `··`. The design for what comes next is in
+[MemoryViewer.md](backlog/MemoryViewer.md).
+
+- **Editing.** Type two hex digits in the hex column to write a byte, or a character in the text column. Writes
+  go to RAM at once; a read-only bank refuses typing, and the debugger refuses a write that reaches ROM, saying
+  why. **Ctrl+Z** undoes and **Ctrl+Y** or **Ctrl+Shift+Z** redoes, by writing the bytes back.
+- **The text column** shows each byte's low seven bits as text, so the Apple II's text, kept with bit 7 set,
+  reads as text, in another color. Typing there keeps the byte's bit 7.
+- **Go to** (**Ctrl+G**) takes an address, label or expression, in the editor's bank. Digits alone are hex.
+- **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`, or text in quotes, such as
+  `"HELLO"`, which matches with bit 7 clear or set. **Enter** or **F3** finds the next, with **Shift** the one
+  before, wrapping around.
+- **The inspector** beside the bytes shows the byte at the cursor as unsigned, signed, binary and text, and the
+  word there with either byte first.
+- **Moving and selecting.** The arrow keys, **Page Up**, **Page Down**, **Home** and **End** (with **Ctrl**, the
+  ends of memory) move; **Shift** or dragging selects; **Tab** switches between the hex and text columns.
+  **Ctrl+C** copies the selection as hex bytes, or as text from the text column.
 
 ## Memory references
 
@@ -81,7 +106,10 @@ its labels and lines do not show for auxiliary RAM switched in at the same addre
 ## The debug protocol
 
 The debugger answers `readMemory` and `writeMemory`, and its launch `capabilities` event adds
-`supportsWriteMemoryRequest`. `readMemory` returns the bytes up to the first it cannot read, and counts the rest
+`supportsWriteMemoryRequest`. Retrocore Memory reads through `retro/memory/read`, which takes the same
+`memoryReference`, `offset` and `count` but reads past unreadable bytes: it returns all `count` bytes in `data`,
+with each unreadable run as `{ offset, count }` in `unreadable` and its bytes as zero, so a bank shows where it is
+inside the CPU's 64K. Memory events track its reads as they do `readMemory`'s. `readMemory` returns the bytes up to the first it cannot read, and counts the rest
 of the request as `unreadableBytes`, as VS Code expects. It keeps, for each reference a view has read, the range
 read and a hash of its bytes. After each stop, every eighth running frame and each `writeMemory`, it sends a
 `memory` event for each view whose bytes have changed, naming the view's reference exactly, as VS Code requires,
@@ -93,8 +121,10 @@ Variables carry a `memoryReference` when they hold an address: the 6502's PC and
 
 ## Testing
 
-`node tools/Test-Memory.mjs` checks memory references, unreadable bytes, writes and their rollback, memory events
+`node tools/Test-Memory.mjs` checks memory references, unreadable bytes and `retro/memory/read`'s gaps, writes and their rollback, memory events
 for changed views and variables on the Model I, which needs nothing external, along with resuming after a data
 breakpoint, a step landing on a breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the
 IIe's banks, their mapping, bank expressions, disassembly and data, function and instruction breakpoints. The extension's editor test reads and writes the
-Model I's video memory through VS Code's debug memory file system, as the Hex Editor does.
+Model I's video memory through VS Code's debug memory file system, as the Hex Editor does, then opens it in Retrocore
+Memory and types, undoes and inspects bytes there. `npm run test:grammar` runs the editor page's script with a
+stand-in DOM, for reading, writing, undo and read-only banks.

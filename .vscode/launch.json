@@ -74,6 +74,18 @@
         {
             "type": "retrocore",
             "request": "launch",
+            "machine": "coco",
+            "model": "coco2",
+            "name": "Color Computer: 6809 sample",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
+            "source": "${workspaceFolder}/sample/coco/hello.asm",
+            "stopOnEntry": true
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
             "machine": "apple2",
             "name": "IIe: ca65 source debugging",
             "preLaunchTask": "Build IIe sample and debug host",

@@ -17,6 +17,7 @@ public sealed partial class InstructionSet
     /// <param name="rules">The description's settings.</param>
     /// <param name="excluded">Instructions a subset leaves out, or null.</param>
     /// <param name="message">The subset's diagnostic, with <c>{0}</c> for the operation, or null.</param>
+    /// <param name="postbytes">The codec for the set's postbyte fields, or null.</param>
     /// <returns>The set.</returns>
     internal static InstructionSet Create(
         string name,
@@ -24,9 +25,15 @@ public sealed partial class InstructionSet
         SortedDictionary<ulong, IsaEntry> entries,
         IsaRules rules,
         HashSet<string>? excluded,
-        string? message)
+        string? message,
+        PostbyteCodec? postbytes)
     {
-        InstructionSet set = new(name, description) { IndirectPageWrap = rules.IndirectPageWrap.Contains(name) };
+        InstructionSet set = new(name, description)
+        {
+            IndirectPageWrap = rules.IndirectPageWrap.Contains(name),
+            Postbytes = postbytes
+        };
+
         foreach (IsaEntry entry in entries.Values)
         {
             OperandForm form = description.Form(entry.Form)
@@ -50,6 +57,11 @@ public sealed partial class InstructionSet
                 access,
                 rules.Access.TryGetValue($"{entry.Instruction}:{form.Name}", out MemoryAccess specific) ? specific : access,
                 rules.Preferred.Contains(entry.Opcode));
+        }
+
+        foreach (KeyValuePair<string, string> alias in rules.Aliases)
+        {
+            set.AddAlias(alias.Key, alias.Value);
         }
 
         if (excluded is not null && message is not null)

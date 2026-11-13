@@ -24,6 +24,11 @@ internal static class ExternalTestData
     internal const string KlausPin = "7954e2dbb49c469ea286070bf46cdd71aeb29e4b";
 
     /// <summary>
+    ///  The pinned GPL MC6809 functional, cycle, and interrupt test programs.
+    /// </summary>
+    internal const string M6809Pin = "f445da35665991ec00a7bfc3ab4ce36f4482687e";
+
+    /// <summary>
     ///  Gets the folder that holds every external file the tests read, such as fixtures, ROM dumps and disk images:
     ///  <c>RETROCORE_CACHE</c>, or <c>%USERPROFILE%\Retrocore</c>.
     /// </summary>

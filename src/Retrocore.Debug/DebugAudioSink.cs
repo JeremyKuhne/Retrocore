@@ -3,7 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Runtime.InteropServices;
-using Retrocore.Machines.Apple2;
+using Retrocore.Machines;
 
 namespace Retrocore.Debug;
 

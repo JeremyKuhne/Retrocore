@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Apple2;
+namespace Retrocore.Machines;
 
 /// <summary>
 ///  Receives normalized floating-point PCM, ordered left, right, left, right.

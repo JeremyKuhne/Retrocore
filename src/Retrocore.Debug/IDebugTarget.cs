@@ -73,6 +73,12 @@ internal interface IDebugTarget : IDebugMemory
     bool InInstruction { get; }
 
     /// <summary>
+    ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    /// </summary>
+    bool IsIdle => false;
+
+    /// <summary>
     ///  Gets the cycles run since power-up.
     /// </summary>
     ulong CycleCount { get; }

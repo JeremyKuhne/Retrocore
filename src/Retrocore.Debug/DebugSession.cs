@@ -524,6 +524,7 @@ internal sealed partial class DebugSession
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads),
+            DebugMachines.Coco => LaunchCoco(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -698,6 +699,15 @@ internal sealed partial class DebugSession
     {
         Trs80DebugTarget target = Trs80DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Color Computer calls Color BASIC's routines through RAM hooks it sets up as it starts, so the
+    // ROM runs first; Disk BASIC takes longer, as it resets the drives.
+    private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
+    {
+        CocoDebugTarget target = CocoDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }
 
@@ -1042,6 +1052,9 @@ internal sealed partial class DebugSession
         for (int count = 0; count < 1_000_000; count++)
         {
             if (!Execute()) { return; }
+
+            // While the CPU is idle no instruction has finished, so the step neither ends nor meets a breakpoint.
+            if (!Target.IsInstructionBoundary) { continue; }
             DebugFrame r = Target.Frame;
             DebugPosition? now = _debug.Position(Target, r.ProgramCounter);
 
@@ -1126,6 +1139,11 @@ internal sealed partial class DebugSession
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
             if (instruction && Target.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+
+            // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
+            // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
+            // made its writes, so the watchpoints they hit stop now.
+            if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");

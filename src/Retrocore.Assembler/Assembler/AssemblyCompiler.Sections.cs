@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Isa;
+
 namespace Retrocore.Assembler;
 
 internal static partial class AssemblyCompiler
@@ -15,7 +17,9 @@ internal static partial class AssemblyCompiler
         AssemblyOptions options,
         AssemblySymbols symbols,
         Dictionary<string, AssemblyStatement> declared,
-        List<AssemblyError> errors)
+        List<AssemblyError> errors,
+        InstructionSet codes,
+        List<InstructionSet>? cpuSettings)
     {
         List<LayoutSection> sections = new(capacity: 1);
         bool configured = project.DeclaredSections is { Count: > 0 };
@@ -89,10 +93,15 @@ internal static partial class AssemblyCompiler
             else
             {
                 statement.Section = current;
-                if (CanShrinkSyntax(in statement))
+                InstructionSet selected = statement.CpuIndex == 0 || cpuSettings is null
+                    ? codes
+                    : cpuSettings[statement.CpuIndex];
+
+                int shrink = ShrinkBytes(in statement, selected);
+                if (shrink != 0)
                 {
                     LayoutSection section = sections[current];
-                    section.ShrinkBudget++;
+                    section.ShrinkBudget += shrink;
                     sections[current] = section;
                 }
             }
@@ -101,12 +110,12 @@ internal static partial class AssemblyCompiler
         return sections;
     }
 
-    private static bool CanShrinkSyntax(in LayoutStatement statement) =>
-        statement.Kind == LayoutOperation.Instruction
-            && statement.HasNarrowForm
-            && !statement.ForcesAbsolute
-            && !statement.ForcesZeroPage
-            && !statement.SourceOrder;
+    private static int ShrinkBytes(in LayoutStatement statement, InstructionSet codes) =>
+        statement.Kind != LayoutOperation.Instruction || statement.SourceOrder
+            ? 0
+            : statement.Form != OperandFormMatcher.NoForm && codes.Forms[statement.Form].HasVariableSize
+                ? 2
+                : statement.HasNarrowForm && !statement.ForcesAbsolute && !statement.ForcesZeroPage ? 1 : 0;
 
     private static void CheckStatementBounds(
         LayoutStatement[] statements,

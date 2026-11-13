@@ -35,6 +35,11 @@ internal static class DebugMachines
     internal const string Apple1 = "apple1";
 
     /// <summary>
+    ///  The TRS-80 Color Computer 1, 2 or 3; the launch's <c>model</c> says which.
+    /// </summary>
+    internal const string Coco = "coco";
+
+    /// <summary>
     ///  Gets the machine a launch names.
     /// </summary>
     /// <param name="machine">The launch's <c>machine</c> value.</param>
@@ -46,8 +51,9 @@ internal static class DebugMachines
         Trs80Model1 => Trs80Model1,
         Apple3 => Apple3,
         Apple1 => Apple1,
-        null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\" or \"{Trs80Model1}\"."),
+        Coco => Coco,
+        null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
-            $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\" and \"{Trs80Model1}\".")
+            $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\" and \"{Coco}\".")
     };
 }

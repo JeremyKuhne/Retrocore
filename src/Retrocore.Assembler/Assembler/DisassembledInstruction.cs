@@ -18,10 +18,17 @@ namespace Retrocore.Assembler;
 /// </remarks>
 public readonly struct DisassembledInstruction
 {
+    // An instruction is at most five bytes: the first four packed into _bytes, the fifth in _fifthByte.
     private readonly uint _bytes;
     private readonly ushort _set;
     private readonly ushort _encoding;
     private readonly byte _size;
+    private readonly byte _fifthByte;
+
+    /// <summary>
+    ///  The most bytes a postbyte field and the bytes it selects take, in an instruction of at most five bytes.
+    /// </summary>
+    internal const int MaximumPostbyteField = 4;
 
     /// <summary>
     ///  Creates a complete, validated decoding.
@@ -29,15 +36,17 @@ public readonly struct DisassembledInstruction
     /// <param name="address">The instruction address.</param>
     /// <param name="set">The <see cref="InstructionSet.Handle"/> of the set that decoded it.</param>
     /// <param name="encoding">The encoding's ID in that set.</param>
-    /// <param name="bytes">The original bytes, first byte in the low eight bits.</param>
+    /// <param name="bytes">The first four original bytes, first byte in the low eight bits.</param>
     /// <param name="size">The complete encoding length.</param>
-    internal DisassembledInstruction(ushort address, ushort set, ushort encoding, uint bytes, byte size)
+    /// <param name="fifthByte">The fifth original byte when <paramref name="size"/> is 5.</param>
+    internal DisassembledInstruction(ushort address, ushort set, ushort encoding, uint bytes, byte size, byte fifthByte = 0)
     {
         Address = address;
         _set = set;
         _encoding = encoding;
         _bytes = bytes;
         _size = size;
+        _fifthByte = fifthByte;
     }
 
     /// <summary>
@@ -107,24 +116,58 @@ public readonly struct DisassembledInstruction
     /// <summary>
     ///  Gets the statically described control-flow effect.
     /// </summary>
-    public DisassemblyFlow Flow => (DisassemblyFlow)InstructionSet.Flow(_encoding);
+    public DisassemblyFlow Flow
+    {
+        get
+        {
+            // A jump through a postbyte that names its target directly, such as JMP Label,PCR, is a direct jump.
+            DisassemblyFlow flow = (DisassemblyFlow)InstructionSet.Flow(_encoding);
+            return flow == DisassemblyFlow.IndirectJump && PostbyteReference == PostbyteReference.Target
+                ? DisassemblyFlow.Jump
+                : flow;
+        }
+    }
 
     /// <summary>
-    ///  Gets a relative branch target, with 16-bit program-counter wrapping.
+    ///  Gets a relative branch or PC-relative target, with 16-bit program-counter wrapping.
     /// </summary>
     public ushort? RelativeTarget
     {
         get
         {
-            int relative = Form.RelativeField;
-            return relative < 0 ? null : Field(relative);
+            OperandForm form = Form;
+            int relative = form.RelativeField;
+            if (relative >= 0)
+            {
+                return Field(relative);
+            }
+
+            return PostbyteReference == PostbyteReference.Target ? Field(0) : null;
+        }
+    }
+
+    /// <summary>
+    ///  Gets what the instruction's postbyte field refers to, or <see cref="PostbyteReference.None"/> when its
+    ///  form has no postbyte field.
+    /// </summary>
+    public PostbyteReference PostbyteReference
+    {
+        get
+        {
+            OperandForm form = Form;
+            if (!form.HasPostbyte) { return PostbyteReference.None; }
+            Span<byte> buffer = stackalloc byte[MaximumPostbyteField];
+            return Postbytes.GetReference(form.Field(0), PostbyteBytes(buffer));
         }
     }
 
     /// <summary>
     ///  Gets a direct branch, jump or call target; indirect pointers are never resolved.
     /// </summary>
-    public ushort? DirectTarget => RelativeTarget ?? AbsoluteTarget();
+    public ushort? DirectTarget =>
+        Flow is DisassemblyFlow.Jump or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch
+            ? RelativeTarget ?? AbsoluteTarget()
+            : null;
 
     /// <summary>
     ///  Gets whether this is an undocumented encoding, such as an NMOS 6502's illegal opcodes and alternate
@@ -137,8 +180,11 @@ public readonly struct DisassembledInstruction
     /// </summary>
     /// <param name="index">The zero-based encoding-byte index.</param>
     /// <returns>The byte.</returns>
-    public byte GetByte(int index) => (uint)index < (uint)Size
-        ? (byte)(_bytes >> (index * InstructionEncoding.BitsPerByte)) : throw new ArgumentOutOfRangeException(nameof(index));
+    public byte GetByte(int index) => (uint)index >= (uint)Size
+        ? throw new ArgumentOutOfRangeException(nameof(index))
+        : index == 4
+            ? _fifthByte
+            : (byte)(_bytes >> (index * InstructionEncoding.BitsPerByte));
 
     /// <summary>
     ///  Gets an operand field's value; a relative field's value is its target address.
@@ -159,8 +205,37 @@ public readonly struct DisassembledInstruction
             OperandFieldKind.Displacement8 => unchecked((ushort)(sbyte)GetByte(offset)),
             OperandFieldKind.BitNumber => (ushort)((LastOpcodeByte(encoding, form) >> 3) & 7),
             OperandFieldKind.Restart => (ushort)(LastOpcodeByte(encoding, form) & 0x38),
+            OperandFieldKind.IndexedPostbyte
+                or OperandFieldKind.RegisterPair
+                or OperandFieldKind.SystemStackMask
+                or OperandFieldKind.UserStackMask => PostbyteField(form.Field(index)),
             _ => Word(set, offset)
         };
+    }
+
+    /// <summary>
+    ///  Copies the postbyte field's bytes, postbyte first, from a form whose one field is a postbyte.
+    /// </summary>
+    /// <param name="buffer">At least <see cref="MaximumPostbyteField"/> bytes.</param>
+    /// <returns>The field's bytes.</returns>
+    internal ReadOnlySpan<byte> PostbyteBytes(Span<byte> buffer)
+    {
+        int offset = Encoding.OpcodeBytesBeforeOperands;
+        int count = Size - offset;
+        for (int index = 0; index < count; index++) { buffer[index] = GetByte(offset + index); }
+        return buffer[..count];
+    }
+
+    /// <summary>
+    ///  Gets the codec of a set that decoded a postbyte field; a set without one decodes no such field.
+    /// </summary>
+    internal PostbyteCodec Postbytes => InstructionSet.Postbytes
+        ?? throw new InvalidOperationException($"Instruction set '{InstructionSet.Name}' has no postbyte codec.");
+
+    private ushort PostbyteField(OperandFieldKind kind)
+    {
+        Span<byte> buffer = stackalloc byte[MaximumPostbyteField];
+        return Postbytes.Decode(kind, PostbyteBytes(buffer), unchecked((ushort)(Address + Size)));
     }
 
     // A field held in the opcode is in bits 3-5 of its last byte, which a split opcode puts after the operands.

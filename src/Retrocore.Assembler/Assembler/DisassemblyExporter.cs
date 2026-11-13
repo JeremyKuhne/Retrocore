@@ -81,15 +81,15 @@ internal static class DisassemblyExporter
                 {
                     if (widthPending && text[position] == ' ')
                     {
-                        // The assembler would shorten a low-valued operand; a: keeps the original absolute encoding.
-                        source.Append(" a:");
+                        // The assembler would shorten a low-valued operand; > or a: keeps the wide encoding.
+                        source.Append(codes.Description.AngleWidths ? " >" : " a:");
                         widthPending = false;
                         position++;
                         continue;
                     }
 
-                    // A numeric immediate is not evidence of an address reference, even if a symbol has that value.
-                    if (text[position] != '$' || IsValue(instruction.Form))
+                    // A numeric immediate or register offset is not evidence of an address reference.
+                    if (text[position] != '$' || IsValue(in instruction))
                     {
                         source.Append(text[position++]);
                         continue;
@@ -212,13 +212,15 @@ internal static class DisassemblyExporter
     }
 
     /// <summary>
-    ///  Gets whether a form's operand is a value rather than an address, such as an immediate.
+    ///  Gets whether an instruction's formatted hex literal is a value/offset rather than a symbol target.
     /// </summary>
-    /// <param name="form">The form.</param>
-    /// <returns>Whether no field is an address or branch target.</returns>
-    private static bool IsValue(OperandForm form)
+    /// <param name="instruction">The decoded instruction.</param>
+    /// <returns>Whether no field is a static memory address or branch target.</returns>
+    private static bool IsValue(in DisassembledInstruction instruction)
     {
-        if (form.Role != OperandRole.None) { return false; }
-        return form.RelativeField < 0;
+        OperandForm form = instruction.Form;
+        return form.HasPostbyte
+            ? instruction.PostbyteReference == PostbyteReference.None
+            : form.Role == OperandRole.None && form.RelativeField < 0;
     }
 }

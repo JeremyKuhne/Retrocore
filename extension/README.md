@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1 and the TRS-80 Model I in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -74,7 +74,7 @@ a separate VS Code window running the in-repo extension, on
 `sample\trs80\hello.asm` or the files given with `-File`. That window has its own
 profile under `artifacts\self-host`, so your VS Code profile is unchanged.
 Highlighting and IntelliSense need no ROMs, and neither does a launch: without dumps
-the IIe and the Model I run ROMs assembled from the SDK's sources. `-RomDirectory` (or
+the IIe, the Model I and the CoCo 1 and 2 run ROMs assembled from the SDK's sources. `-RomDirectory` (or
 `RETROCORE_IIE_ROMS`) lets the IIe launch configurations use your IIe dumps instead, and
 `tools\Start-IIeDevelopment.ps1 <rom directory>` opens the IIe sample with them.
 `-SkipBuild` relaunches without building. After a change, rebuild and run
@@ -93,12 +93,15 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 
 ## Starting a machine
 
-No launch.json is needed to start a machine. Without dumps, every machine runs ROMs
-assembled from the SDK's sources, so there is nothing else to set up.
+No launch.json is needed to start a machine. Without dumps, the Apple II family and the
+Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
+Color Computer 1 and 2 run Color, Extended and Disk BASIC from their sources, and need ROM
+dumps in `RETROCORE_COCO_ROMS` only for the CoCo 3.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II), TRS-80 Model I (Level I) and Apple-1. Pick one and press F5, and it boots as it
+Model I (Level II), TRS-80 Model I (Level I), Apple-1, and the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -112,7 +115,7 @@ session runs. It asks three things:
    - a binary program, loaded at the machine's usual address;
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive;
-   - a tape, on the Model I and the Apple-1;
+   - a tape, on the Model I, the Apple-1 and the Color Computer;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -947,6 +950,35 @@ real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
 Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
 [Retro Devices](#retro-devices); a recording is saved as a WAV file when it is
 ejected.
+
+## Debugging on the TRS-80 Color Computer
+
+`"machine": "coco"` debugs a Color Computer 1, 2 or 3, chosen by `model` (`coco1`,
+`coco2`, the default, or `coco3`), with the same source debugging, call stack, cycle
+counts and `Keeps:` checks; the call stack follows `JSR`, `BSR`, `LBSR`, `SWI` and
+interrupts on the 6809's S stack. The machine is configured by:
+
+- `ramKilobytes`: 4, 16, 32 or 64 on a CoCo 1 or 2, 128 or 512 on a CoCo 3;
+- `colorBasic` and `extendedBasic`, the CoCo 1 and 2's ROM versions;
+- `lowercase` (the MC6847T1 VDG), `artifacts` (`blue-red`, `red-blue` or `none`)
+  and, on a CoCo 3, `monitor` (`composite` or `rgb`);
+- `cartridge` and `autostart`, a ROM pack;
+- `diskController`, `diskBasic` and `disks` (JVC `.dsk` images for drives 0-3);
+- `cassette`, `fastCassette` and `sound` (`speaker` or `off`).
+
+Color, Extended and Disk BASIC are the SDK sources `ColorBasic.asm`, `ExtendedBasic.asm`
+and `DiskBasic.asm`, so a CoCo 1 or 2 needs nothing else, disk controller included, and
+debugging steps into the sources. The CoCo 3's ROM is a dump from `romDirectory` or
+`RETROCORE_COCO_ROMS`, under MAME's name (`coco3.rom`), and debugs as disassembly; dumps,
+when given, replace the sources' ROMs too. A program
+(`source` or `program`, loaded at `$3000` by default) runs after BASIC has started for
+`bootSeconds` (2 by default); [the sample](../sample/coco/hello.asm) prints through
+Color BASIC's `CHROUT` vector.
+
+The panel shows the screen and takes keys: arrows, **Home** for CLEAR, **Escape** for
+BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key bar. The
+TRS-80 cassette and disk commands work as on the Model I. See the
+[Color Computer guide](../docs/Coco.md) for what is emulated.
 
 ## Breakpoints
 

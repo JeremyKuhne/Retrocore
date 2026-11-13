@@ -4,10 +4,10 @@
 
 // Color Computer DAP integration: runs Color and Extended BASIC built from the SDK's sources, stepping from the 6809
 // sample into ColorBasic.asm, through the console out hook into ExtendedBasic.asm, and out again; with a disk, into
-// DiskBasic.asm's hook instead; boots a CoCo 3 on its ROM built from the sources, stepping into its ColorBasic.asm and
-// out, and switches it to 80 columns; then, with the ROM dumps, boots a CoCo 2 with the disk controller to Disk Extended
-// Color BASIC, saves and lists a program on a disk, stops in the sample with its call stack, and boots a CoCo 3 to its
-// 80-column screen.
+// DiskBasic.asm's hook instead; boots a CoCo 3 on its ROM built from the sources, stepping into its ColorBasic.asm, out,
+// and on into a patch in Coco3.asm, and switches it to 80 columns; then, with the ROM dumps, boots a CoCo 2 with the
+// disk controller to Disk Extended Color BASIC, saves and lists a program on a disk, stops in the sample with its call
+// stack, and boots a CoCo 3 to its 80-column screen.
 // The dumps are those in RETROCORE_COCO_ROMS, or %USERPROFILE%\Retrocore\coco-roms\extract.
 
 import { resolve, join } from "node:path";
@@ -25,6 +25,7 @@ const sdkRoms = join(root, "src", "Retrocore.Machines.Coco", "Roms");
 const colorBasic = join(sdkRoms, "ColorBasic.asm");
 const extendedBasic = join(sdkRoms, "ExtendedBasic.asm");
 const diskBasic = join(sdkRoms, "DiskBasic.asm");
+const coco3 = join(sdkRoms, "Coco3.asm");
 const hello = join(root, "sample", "coco", "hello.asm");
 
 // The host takes RETROCORE_COCO_ROMS when a launch names no dumps, so the source's part must not see it.
@@ -46,6 +47,12 @@ async function screen(test, what) {
         if (test(frame.rows.join("\n"))) return frame;
         if (!frame.running) throw new Error(`Stopped before ${what}.`);
     }
+}
+
+// Waits for some frames to pass while the machine runs.
+async function frames(count) {
+    drop("retro/frame");
+    for (let index = 0; index < count; index++) await event("retro/frame");
 }
 
 // Forgets queued events of a kind, so a wait sees only what happens next.
@@ -143,8 +150,7 @@ try {
     await screen(text => text.includes("DISK EXTENDED COLOR BASIC 1.1") && text.includes("HELLO FROM THE 6809"), "the sample on the SDK's Disk BASIC");
 
     // A CoCo 3 boots its ROM built from the SDK's sources, which it copies into RAM and patches: the sample's
-    // JSR [CHROUT] steps into PUTCHR in the CoCo 3's build of ColorBasic.asm, on through the patched screen output
-    // into Coco3.asm, and stepping out comes back.
+    // JSR [CHROUT] steps into PUTCHR in the CoCo 3's build of ColorBasic.asm, and stepping out comes back.
     events.length = 0;
     await request("launch", {
         machine: "coco", model: "coco3", sdkRoms, source: hello, stopOnEntry: true, speed: "max", sound: "off"
@@ -167,6 +173,21 @@ try {
     sdkStack = await request("stackTrace", { threadId: 1 });
     assert.equal(sdkStack.stackFrames[0].source.path.toLowerCase(), hello.toLowerCase());
     assert.equal(sdkStack.stackFrames[0].line, chrout + 1);
+
+    // The next character steps on from PUTCHR into SCRCHR, whose first instruction start-up patched: that is the
+    // patch's line in Coco3.asm.
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    let patch;
+    for (let step = 0; step < 60 && !patch; step++) {
+        await request("stepIn", { threadId: 1 });
+        assert.equal((await event("stopped")).reason, "step");
+        const frame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+        if (frame.source?.path.toLowerCase() === coco3.toLowerCase()) patch = frame;
+    }
+    assert.ok(patch, "stepping from PUTCHR reaches the SCRCHR patch in Coco3.asm");
+    assert.equal(patch.name, "SCRCHR_PATCH");
+    assert.match(readFileSync(coco3, "utf8").split(/\r?\n/)[patch.line - 1], /JMP PUTCHR3/);
     await request("setBreakpoints", { source: { path: hello }, breakpoints: [] });
     await request("continue", { threadId: 1 });
     await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && text.includes("HELLO FROM THE 6809"), "the sample on the CoCo 3's SDK ROM");
@@ -177,13 +198,14 @@ try {
     await request("launch", { machine: "coco", model: "coco3", sdkRoms, stopOnEntry: false, speed: "max", sound: "off" });
     await request("configurationDone");
     await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK from the SDK's ROM");
+    await frames(10);                                           // BASIC waiting for a key, not still starting
     await type("WIDTH 80\r");
     const sdkWide = await screen(text => /^OK/m.test(text) && !text.includes("EXTENDED"), "the 80-column screen from the SDK's ROM");
     assert.equal(sdkWide.columns, 80);
 
     if (!dumps) {
         await request("disconnect");
-        console.log(`Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm and DiskBasic.asm and out, and a CoCo 3 on the SDK's ROM at 80 columns. No dumps in ${romDirectory}, so the rest was skipped.`);
+        console.log(`Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm and DiskBasic.asm and out, and a CoCo 3 on the SDK's ROM into a patch in Coco3.asm and at 80 columns. No dumps in ${romDirectory}, so the rest was skipped.`);
         process.exit(0);
     }
 

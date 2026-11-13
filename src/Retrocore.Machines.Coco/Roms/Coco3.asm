@@ -384,23 +384,28 @@ PATCHTAB:
     .byte 27                        ; the patches
 
     PATCH XBWMST, 1                 ; Extended BASIC's warm start back: start-up has made sure BASIC is in RAM
+XBWMST_PATCH:
     NOP
     ENDPATCH
 
     PATCH CRUNCH_FUNCTIONS, 3       ; crunching: Super Extended BASIC's words
+CRUNCH_FUNCTIONS_PATCH:
     JMP CRUNCH20
     ENDPATCH
 
     PATCH DETOK_TABLE, 3            ; listing: Super Extended BASIC's tokens as words
+DETOK_TABLE_PATCH:
     JMP DETOK20
     ENDPATCH
 
     PATCH XCOMMAND_DISK, 4          ; Extended BASIC's commands: Super Extended BASIC's, before Disk BASIC's
+XCOMMAND_DISK_PATCH:
     JMP XCOMMAND20
     NOP
     ENDPATCH
 
     PATCH XFUNCTION_DISK, 4         ; Extended BASIC's functions: Super Extended BASIC's, before Disk BASIC's
+XFUNCTION_DISK_PATCH:
     JMP XFUNCTION20
     NOP
     ENDPATCH
@@ -408,6 +413,7 @@ PATCHTAB:
     ; Patches 6 to 11 read &H and &O numbers up to 24 bits, for LPEEK and LPOKE: the digits shift through
     ; <HEXSHIFT>, and the number fills three bytes of FPA0.
     PATCH HEXOCT_SHIFT, 18
+HEXOCT_SHIFT_PATCH:
     JMP HEXSHIFT
 HEXPATCH_CLEAR:
     CLR FPA0+1
@@ -422,6 +428,7 @@ HEXPATCH_OCTAL:
     ENDPATCH
 
     PATCH HEXOCT, 7
+HEXOCT_PATCH:
     BRA HEXPATCH_CLEAR
     NOP
 HEXPATCH_RTS:
@@ -431,73 +438,90 @@ HEXPATCH_POINT:
     ENDPATCH
 
     PATCH HEXOCT_OCTAL_CHECK, 2
+HEXOCT_OCTAL_CHECK_PATCH:
     BRA HEXPATCH_OCTAL
     ENDPATCH
 
     PATCH HEXOCT_HEX_END, 2
+HEXOCT_HEX_END_PATCH:
     BCS HEXPATCH_TOP
     ENDPATCH
 
     PATCH XVEC19_AMPERSAND, 2
+XVEC19_AMPERSAND_PATCH:
     BNE HEXPATCH_RTS
     ENDPATCH
 
     PATCH NODIRECT_RUNNING, 2       ; its RTS is gone under patch 6
+NODIRECT_RUNNING_PATCH:
     BNE HEXPATCH_RTS
     ENDPATCH
 
     PATCH XBINIT_SIGNON, 3          ; Extended BASIC's sign-on: Super Extended BASIC's, with Microware's copyright
+XBINIT_SIGNON_PATCH:
     JMP XSIGNON20
     ENDPATCH
 
     PATCH XSIGNON_LAST, 1           ; one blank line fewer after it
+XSIGNON_LAST_PATCH:
     .byte 0
     ENDPATCH
 
     PATCH GRINIT_END, 3             ; the end of GRINIT: the hi-res graphics' state too
+GRINIT_END_PATCH:
     JMP GRINIT20
     ENDPATCH
 
     PATCH ISCNTC_KEY, 4             ; BREAK in a program: ON BRK
+ISCNTC_KEY_PATCH:
     JMP BREAK20
     NOP
     ENDPATCH
 
     PATCH LINEIN_BREAK, 4           ; BREAK while typing a line: ON BRK
+LINEIN_BREAK_PATCH:
     JMP LINEBRK20
     NOP
     ENDPATCH
 
     PATCH INPLIN_BREAK+1, 2         ; BREAK during INPUT: ON BRK
+INPLIN_BREAK_PATCH:
     .dbyt INPUTBRK20
     ENDPATCH
 
     PATCH ON, 3                     ; ON ERR and ON BRK
+ON_PATCH:
     JMP ON20
     ENDPATCH
 
     PATCH RSTSTK_OLDPTR, 4          ; resetting the stack: ON ERR and ON BRK off
+RSTSTK_OLDPTR_PATCH:
     JMP RSTSTK20
     NOP
     ENDPATCH
 
     PATCH ERROR, 3                  ; errors: ON ERR
+ERROR_PATCH:
     JMP ERROR20
     ENDPATCH
 
     PATCH OKPRMT, 3                 ; the OK prompt: the hi-res text screen, when WIDTH chose one
+OKPRMT_PATCH:
     JMP OKPRMT20
     ENDPATCH
 
     PATCH SCRCHR, 3                 ; the screen's output: the hi-res text screen
+SCRCHR_PATCH:
     JMP PUTCHR3
     ENDPATCH
 
     PATCH CLS, 3                    ; CLS: the hi-res text screen
+CLS_PATCH:
     JMP CLS3
     ENDPATCH
 
     PATCH WAITKY, 8                 ; waiting for a key: the hi-res text screen's cursor
+WAITKY_PATCH:
     JMP WAITKY3
     NOP
     NOP
@@ -507,14 +531,17 @@ HEXPATCH_POINT:
     ENDPATCH
 
     PATCH PRINT_AT_CURSOR, 3        ; PRINT @: the hi-res text screen
+PRINT_AT_CURSOR_PATCH:
     JMP PRINTAT20
     ENDPATCH
 
     PATCH NEWLIN, 3                 ; a new line: the hi-res text screen
+NEWLIN_PATCH:
     JMP NEWLIN20
     ENDPATCH
 
     PATCH LINEIN_CLEAR, 3           ; typing a line: the hi-res text screen
+LINEIN_CLEAR_PATCH:
     JMP LINEIN20
     ENDPATCH
 
@@ -554,14 +581,22 @@ DSKPATCH_COPY:
     BNE DSKPATCH_COPY
     RTS
 
-;; Disk BASIC 1.1's sign-on patch for <DSKPATCH>: its length, then a jump to <DISK21SIGNON>.
+;; Disk BASIC 1.1's sign-on patch for <DSKPATCH>: its length, then a jump to <DISK21SIGNON>, assembled for where it
+;; runs.
 DSK11PATCH:
     .byte 3
+    .logicalorg DSKSIGNON11
+DSKSIGNON11_PATCH:
     JMP DISK21SIGNON
-;; Disk BASIC 1.0's sign-on patch for <DSKPATCH>: its length, then a jump to <DISK20SIGNON>.
+    ENDPATCH
+;; Disk BASIC 1.0's sign-on patch for <DSKPATCH>: its length, then a jump to <DISK20SIGNON>, assembled for where it
+;; runs.
 DSK10PATCH:
     .byte 3
+    .logicalorg DSKSIGNON10
+DSKSIGNON10_PATCH:
     JMP DISK20SIGNON
+    ENDPATCH
 
 ;; The constant page's interrupt jumps, which <STARTUP> copies to $FEED: the flag that says they are set up, then a
 ;; jump for each vector to its jump in page 1, where BASIC can change it.

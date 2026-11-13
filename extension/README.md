@@ -1187,6 +1187,12 @@ display to move it with your mouse, and press Escape to let go. Any free slot al
 a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
 insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
 Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
+`disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
+Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
+MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
+in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
+from it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you

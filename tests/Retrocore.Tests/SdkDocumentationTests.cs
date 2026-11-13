@@ -272,6 +272,20 @@ public class SdkDocumentationTests
         sets.Add(Set(SdkModules.AssembleDos(SdkModules.DosPath("Dos32.asm", s_inputs), master: true), "Dos32"));
         sets.Add(Set(SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)), "IntegerBasic"));
         sets.Add(Set(SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)), "ProgrammersAid"));
+
+        // Apple's 3.5 controller's EPROM: the host's code, the diagnostics and the card's 65C02 firmware.
+        string disk35 = Path.GetFullPath(Path.Join(s_inputs, "Disk35", "Disk35Controller.asm"));
+        AssemblyOptions options = new(ProcessorVariant.Wdc65C02, 0x8000, 0x8000)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult controller = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(File.ReadAllText(disk35), disk35),
+            options);
+
+        controller.Success.Should().BeTrue();
+        sets.Add(Set(controller, "Disk35"));
         return sets;
     }
 

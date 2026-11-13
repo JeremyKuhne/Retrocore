@@ -829,6 +829,20 @@
                 "maximum": 7,
                 "description": "Apple II: the slot of an AppleMouse II-compatible mouse card, which a click on the display drives until Escape. None by default; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "disk35": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of a 3.5 disk controller that answers as Apple's Apple II 3.5 Disk Controller Card: a SmartPort with two SuperDrives. Slot 5 is the usual one. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35Images": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Apple II: the disks in the 3.5 controller's drives 1 and 2: 400K or 800K Apple disks or 720K or 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. Drive 1 boots. Needs disk35."
+              },
               "proFiles": {
                 "type": "array",
                 "items": {

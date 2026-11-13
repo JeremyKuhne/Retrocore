@@ -24,11 +24,13 @@ test("devices no row claims, or a host without hardware rows, are listed on thei
     assert.deepEqual(grouped.loose, [{ id: "cassette" }]);
 });
 
-test("the Mockingboard is offered only for slot 4, and Disk II, mouse and ProFile cards for any free slot", () => {
-    assert.deepEqual(cardsFor("slot4").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Mouse card", "ProFile interface card"]);
+test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile and 3.5 controller cards for any free slot", () => {
+    assert.deepEqual(cardsFor("slot4").map(card => card.label), [
+        "Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Mouse card", "ProFile interface card",
+        "3.5 disk controller"
+    ]);
     assert.deepEqual(cardsFor("slot5").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mouse card", "ProFile interface card"]);
+        ["Disk II controller", "Disk II controller, 13-sector", "Mouse card", "ProFile interface card", "3.5 disk controller"]);
     assert.deepEqual(cardsFor("slot0").map(card => card.label), ["Language card", "Firmware card"],
         "slot 0 takes the language and firmware cards");
 });

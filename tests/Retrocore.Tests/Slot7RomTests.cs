@@ -20,11 +20,21 @@ public class Slot7RomTests
     [TestMethod]
     public void GeneratedRomMatchesOriginalAndAllocatesNothingOnAccess()
     {
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        ReadOnlySpan<byte> bytes = Slot7Rom.Bytes;
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
-        bytes.Length.Should().Be(256);
+        // The measured read is copied out and checked, so optimized code cannot drop it; it runs once first, so
+        // what its first use loads is not counted.
+        byte[] bytes = new byte[256];
+        int length = 0;
+        void Read()
+        {
+            ReadOnlySpan<byte> measured = Slot7Rom.Bytes;
+            length = measured.Length;
+            measured.TryCopyTo(bytes);
+        }
+
+        Read();
+        Array.Clear(bytes);
+        Allocations.During(Read).Should().Be(0);
+        length.Should().Be(256);
         Convert.ToHexString(SHA256.HashData(bytes)).Should().Be("992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E");
         Slot7Rom.DriverEntry.Should().Be(0xC740);
         Slot7Rom.DeviceInfo.Should().Be(0xC7FE);

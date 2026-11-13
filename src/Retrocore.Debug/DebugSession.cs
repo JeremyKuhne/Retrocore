@@ -567,6 +567,7 @@ internal sealed partial class DebugSession
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
+            DebugMachines.Altair => AltairDebugTarget.Launch(args),
             _ => Apple2DebugTarget.Launch(args)
         };
 

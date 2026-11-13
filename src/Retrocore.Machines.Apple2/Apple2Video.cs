@@ -315,14 +315,26 @@ public sealed class Apple2Video : IVideoSource
             }
             else
             {
+                // A delayed byte's first half dot is the previous column's last dot, carried over; it and the dots
+                // either side count only where their columns are shown as hi-res (see ShownHiresDot).
                 for (int dot = 0; dot < 14; dot++)
                 {
                     bool delayed = !Revision0 && (main[column] & 128) != 0;
                     int within = dot - (delayed ? 1 : 0);
                     int position = within < 0 ? column * 7 - 1 : column * 7 + within / 2;
-                    if (!HiresBit(main, position)) { continue; }
-                    if (within < 0 && column != 0) { delayed = !Revision0 && (main[column - 1] & 128) != 0; }
-                    bool white = HiresBit(main, position - 1) || HiresBit(main, position + 1);
+                    if (!ShownHiresDot(main, switches, row, position))
+                    {
+                        continue;
+                    }
+
+                    if (within < 0 && column != 0)
+                    {
+                        delayed = !Revision0 && (main[column - 1] & 128) != 0;
+                    }
+
+                    bool white = ShownHiresDot(main, switches, row, position - 1)
+                        || ShownHiresDot(main, switches, row, position + 1);
+
                     int color = white ? 3 : delayed ? (position & 1) == 0 ? 6 : 5 : (position & 1) == 0 ? 2 : 1;
                     HiresPalette.Slice(color * 4, 4).CopyTo(pixels.Slice((start + dot) * 4, 4));
                 }
@@ -415,7 +427,7 @@ public sealed class Apple2Video : IVideoSource
     //  - Any other dark dot is black. That includes the gap in 11011, between two white runs; AppleWin colors it, and
     //    neither the Video-7 nor Apple's card manual says which is right.
     //
-    // Only dots of columns shown as hi-res count as lit (see RgbDot): where a scanned line changes mode partway, the
+    // Only dots of columns shown as hi-res count as lit (see ShownHiresDot): where a scanned line changes mode partway, the
     // hi-res stretch ends as it does at the screen's edges, whatever bytes the text, lo-res or double hi-res beside it
     // hold.
     private int RgbHiresColor(
@@ -424,34 +436,35 @@ public sealed class Apple2Video : IVideoSource
         int row,
         int position)
     {
-        if (RgbDot(bytes, switches, row, position))
+        if (ShownHiresDot(bytes, switches, row, position))
         {
-            bool inRun = RgbDot(bytes, switches, row, position - 1) || RgbDot(bytes, switches, row, position + 1);
+            bool inRun = ShownHiresDot(bytes, switches, row, position - 1) || ShownHiresDot(bytes, switches, row, position + 1);
             return inRun ? RgbWhite : RgbLoneDotColor(bytes, position);
         }
 
-        return IsLoneRgbDot(bytes, switches, row, position - 1) && IsLoneRgbDot(bytes, switches, row, position + 1)
+        return IsLoneShownHiresDot(bytes, switches, row, position - 1) && IsLoneShownHiresDot(bytes, switches, row, position + 1)
             ? RgbLoneDotColor(bytes, position - 1)
             : RgbBlack;
     }
 
-    // Whether hi-res dot 0-279 is lit for the RGB rule: its bit is set and its column is shown as hi-res. A column
-    // shown as text, lo-res or double hi-res holds other bytes, so its bits are not hi-res dots.
-    private static bool RgbDot(ReadOnlySpan<byte> bytes, ReadOnlySpan<Apple2Switches> switches, int row, int position)
+    // Whether hi-res dot 0-279 is lit, for working out its neighbours' colors: its bit is set and its column is shown
+    // as hi-res. A column shown as text, lo-res or double hi-res holds other bytes, so its bits are not hi-res dots, and
+    // a scanned line's hi-res stretch ends at a mid-line mode change as it does at the screen's edges.
+    private static bool ShownHiresDot(ReadOnlySpan<byte> bytes, ReadOnlySpan<Apple2Switches> switches, int row, int position)
     {
         return HiresBit(bytes, position) && IsHires(switches[position / 7], row);
     }
 
-    // A lit dot with dark dots on both sides, by the RGB rule's idea of lit.
-    private static bool IsLoneRgbDot(
+    // A lit dot with dark dots on both sides, counting only dots shown as hi-res.
+    private static bool IsLoneShownHiresDot(
         ReadOnlySpan<byte> bytes,
         ReadOnlySpan<Apple2Switches> switches,
         int row,
         int position)
     {
-        bool lit = RgbDot(bytes, switches, row, position);
-        bool before = RgbDot(bytes, switches, row, position - 1);
-        bool after = RgbDot(bytes, switches, row, position + 1);
+        bool lit = ShownHiresDot(bytes, switches, row, position);
+        bool before = ShownHiresDot(bytes, switches, row, position - 1);
+        bool after = ShownHiresDot(bytes, switches, row, position + 1);
         return lit && !before && !after;
     }
 

@@ -252,6 +252,53 @@ public class Apple2VideoTests
     }
 
     /// <summary>
+    ///  Checks that where a scanned line changes between text and hi-res partway, the composite monitor reads only
+    ///  hi-res columns as hi-res dots: the boundary dots keep their colors, and a delayed byte carries over no dot from
+    ///  a text column before it.
+    /// </summary>
+    [TestMethod]
+    public void CompositeHiresIgnoresMidLineTextNeighbours()
+    {
+        byte[] green = [1, 255, 1, 255];
+        byte[] violet = [255, 1, 255, 255];
+        byte[] black = [0, 0, 0, 255];
+
+        // Text, a character code with bit 6 set, then hi-res with its lone dot 7 lit: green, not white.
+        byte[] pixels = ScanModeChange(textFirst: true, (0x400, 0xC0), (0x2001, 0x01));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(green);
+        Pixel(pixels, x: 15, y: 0).Should().Equal(green);
+
+        // Text, bit 6 set, then a delayed hi-res byte with no dots: no dot carried over into its first half dot.
+        pixels = ScanModeChange(textFirst: true, (0x400, 0x40), (0x2001, 0x80));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(black);
+
+        // Hi-res with its lone dot 6 lit, then text, a character code with bit 0 set: violet, not white.
+        pixels = ScanModeChange(textFirst: false, (0x2000, 0x40), (0x401, 0x01));
+        Pixel(pixels, x: 12, y: 0).Should().Equal(violet);
+        Pixel(pixels, x: 13, y: 0).Should().Equal(violet);
+    }
+
+    // Scans line 0's first column in one mode and its second in the other, text and hi-res, on the composite
+    // monitor, after writing the given main memory bytes.
+    private static byte[] ScanModeChange(bool textFirst, params (ushort Address, byte Value)[] memory)
+    {
+        Apple2Bus bus = Bus();
+        foreach ((ushort address, byte value) in memory)
+        {
+            bus.SetRam(auxiliary: false, address, value);
+        }
+
+        bus.Read(0xC057);
+        bus.Read(textFirst ? (ushort)0xC051 : (ushort)0xC050);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(textFirst ? (ushort)0xC050 : (ushort)0xC051);
+        bus.Video.ScanCycle();
+        return bus.Video.RenderScannedBitmap();
+    }
+
+    /// <summary>
     ///  Checks the RGB monitor's hi-res has no fringing: a run of lit dots is white to its exact edges, alternate dots
     ///  fill solid with their color, a lone dot is its color, a gap between white runs is black, there is no half-dot
     ///  delay, and text is white.

@@ -138,4 +138,35 @@ public class PascalListingTests
             new PascalVariable("C", 9, 1, "CHAR"),
             new PascalVariable("S", 10, 11, "STRING[20]"));
     }
+
+    /// <summary>
+    ///  Headings name in any case; a VAR parameter's word holds its variable's address; and an array with a range in
+    ///  its type is no integer, so the names after it on its line, whose words are unknown, are left out.
+    /// </summary>
+    [TestMethod]
+    public void CaseReferencesAndArraysRead()
+    {
+        PascalListing listing = PascalListing.Parse("""
+                1   1    1:D     1 program Shapes;
+                2   1    1:D     3 var A: array[1..3] of integer; B: integer;
+                3   1    2:D     3 function Area(var Side: integer; N: integer): integer;
+                4   1    2:0     0 begin
+            """);
+
+        listing.SegmentName(1).Should().Be("Shapes");
+        listing.Compiles(1, "SHAPES").Should().BeTrue();
+        listing.ProcedureName(1, 2).Should().Be("Area");
+        listing.Variables(1, 1).Should().Equal(new PascalVariable("A", 3, 0, "array[1..3] of integer"));
+        listing.Variables(1, 2).Should().Equal(
+            new PascalVariable("Area", 1, 2, "integer"),
+            new PascalVariable("Side", 3, 1, "integer", Reference: true),
+            new PascalVariable("N", 4, 1, "integer"));
+
+        PascalListing.IsOrdinal("Integer").Should().BeTrue();
+        PascalListing.IsOrdinal("1..10").Should().BeTrue();
+        PascalListing.IsOrdinal("-5..'Z'").Should().BeTrue();
+        PascalListing.IsOrdinal("ARRAY[1..3] OF INTEGER").Should().BeFalse();
+        PascalListing.WordsOf("STRING[20]").Should().Be(11);
+        PascalListing.WordsOf("ARRAY[1..3] OF INTEGER").Should().Be(0);
+    }
 }

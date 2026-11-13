@@ -16,7 +16,14 @@ internal sealed partial class DebugSession
     /// <param name="Deadline">When a pause gives up waiting for a p-code.</param>
     /// <param name="Listing">The listing of the line it started on, to step by line; null to step by p-code.</param>
     /// <param name="Line">The line it started on.</param>
-    private sealed record PascalGoal(PascalStep Step, ushort Mark, ulong Deadline, PascalListing? Listing = null, PascalListingLine? Line = null)
+    /// <param name="LineStart">Where the line's first p-code is, from the procedure's entry.</param>
+    private sealed record PascalGoal(
+        PascalStep Step,
+        ushort Mark,
+        ulong Deadline,
+        PascalListing? Listing = null,
+        PascalListingLine? Line = null,
+        int LineStart = 0)
     {
         /// <summary>
         ///  Gets or sets whether a p-code past the line's first has run, so coming back to its first starts it again.
@@ -38,7 +45,7 @@ internal sealed partial class DebugSession
                 return true;
             }
 
-            if (top.Offset == Line.Offset) { return Moved; }
+            if (top.Offset == LineStart) { return Moved; }
             Moved = true;
             return false;
         }

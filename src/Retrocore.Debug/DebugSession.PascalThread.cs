@@ -132,7 +132,9 @@ internal sealed partial class DebugSession
         (PascalListing Listing, PascalListingLine Line, string? Path)? place =
             instruction || step is PascalStep.Pause or PascalStep.Out || PascalFrames() is not [PascalFrame top, ..] ? null : PascalPlace(top);
 
-        _pascalGoal = new PascalGoal(step, mark, Target.CycleCount + 2_000_000, place?.Listing, place?.Line);
+        string? segment = place?.Listing.SegmentName(place.Value.Line.Segment) is { } named ? PascalListing.CodeName(named) : null;
+        int start = place is { } at && Pascal is { } pascal ? FirstPcode(pascal, segment, at.Line) : 0;
+        _pascalGoal = new PascalGoal(step, mark, Target.CycleCount + 2_000_000, place?.Listing, place?.Line, start);
         if (step == PascalStep.Pause) { return; }
         Continue();
     }
@@ -268,7 +270,7 @@ internal sealed partial class DebugSession
 
                 foreach (PascalVariable variable in named.Where(variable => variable.Word <= frame.Words))
                 {
-                    PascalPointer at = frame.Local(variable.Word);
+                    PascalPointer at = PascalVariableAt(pascal.Memory, frame, variable);
                     variables.Add(new JsonObject
                     {
                         ["name"] = variable.Name,
@@ -315,7 +317,8 @@ internal sealed partial class DebugSession
     {
         string type = variable.Type.ToUpperInvariant().Replace(" ", "", StringComparison.Ordinal);
         ushort word = PascalMachine.Word(memory, at);
-        if (type == "INTEGER" || type.Contains("..", StringComparison.Ordinal))
+        int size = variable.Reference ? PascalListing.WordsOf(variable.Type) : variable.Words;
+        if (PascalListing.IsOrdinal(variable.Type))
         {
             return ((short)word).ToString(CultureInfo.InvariantCulture);
         }
@@ -327,9 +330,9 @@ internal sealed partial class DebugSession
             return character is >= ' ' and < (char)0x7F ? $"'{character}' ({word & 0xFF})" : $"CHR({word & 0xFF})";
         }
 
-        if (type.StartsWith("STRING", StringComparison.Ordinal) && variable.Words > 0)
+        if (type.StartsWith("STRING", StringComparison.Ordinal) && size > 0)
         {
-            int length = Math.Min(memory.Read(at.Address, at.Bank), (variable.Words * 2) - 1);
+            int length = Math.Min(memory.Read(at.Address, at.Bank), (size * 2) - 1);
             char[] text = new char[length];
             for (int index = 0; index < length; index++)
             {
@@ -340,8 +343,16 @@ internal sealed partial class DebugSession
             return $"'{new string(text).Replace("'", "''", StringComparison.Ordinal)}'";
         }
 
-        int words = Math.Clamp(variable.Words, 1, 4);
+        int words = Math.Clamp(size, 1, 4);
         return string.Join(' ', Enumerable.Range(0, words).Select(index => $"${PascalMachine.Word(memory, at.Plus(index * 2)):X4}"));
+    }
+
+    // Where a variable is: its word in the frame, or for a VAR parameter the address that word holds, in the frame's
+    // banks on the Apple III.
+    private static PascalPointer PascalVariableAt(IPascalMemory? memory, PascalFrame frame, PascalVariable variable)
+    {
+        PascalPointer slot = frame.Local(variable.Word);
+        return variable.Reference && memory is not null ? new PascalPointer(PascalMachine.Word(memory, slot), slot.Bank) : slot;
     }
 
     // A variable a Pascal frame's listing names, and where it is: in the frame, or in the program's globals.
@@ -357,7 +368,7 @@ internal sealed partial class DebugSession
                 && PascalPlace(frame)?.Listing.Variables(frame.SegmentNumber, frame.Procedure)
                     .FirstOrDefault(variable => string.Equals(variable.Name, name, StringComparison.OrdinalIgnoreCase)) is { } variable)
             {
-                return (variable, frame.Local(variable.Word));
+                return (variable, PascalVariableAt(Pascal?.Memory, frame, variable));
             }
         }
 

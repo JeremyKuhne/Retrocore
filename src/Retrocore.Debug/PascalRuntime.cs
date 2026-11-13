@@ -194,6 +194,11 @@ internal sealed class PascalRuntime
     }
 
     /// <summary>
+    ///  Gets a count of the times the disks have been read, which changes when their code files and listings may have.
+    /// </summary>
+    internal int Generation { get; private set; }
+
+    /// <summary>
     ///  Reads the disks in the drives again if one has changed since they were read.
     /// </summary>
     /// <returns>Whether they were read again.</returns>
@@ -273,6 +278,7 @@ internal sealed class PascalRuntime
 
     private void ReadLibrary()
     {
+        Generation++;
         _library.Clear();
         _listings.Clear();
         _libraryDisks = [.. _disks().Select(disk => (disk, disk.Version))];

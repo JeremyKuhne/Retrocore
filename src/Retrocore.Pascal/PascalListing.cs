@@ -54,7 +54,7 @@ public sealed partial class PascalListing
             {
                 string name = heading.Groups["name"].Value;
                 _procedures.TryAdd(procedure, name);
-                if (heading.Groups["segment"].Success || heading.Groups["kind"].Value is "PROGRAM" or "UNIT")
+                if (heading.Groups["segment"].Success || heading.Groups["kind"].Value.ToUpperInvariant() is "PROGRAM" or "UNIT")
                 {
                     _segments.TryAdd(line.Segment, name);
                 }
@@ -199,7 +199,7 @@ public sealed partial class PascalListing
             if (Heading().Match(code) is { Success: true } heading)
             {
                 section = "";
-                string kind = heading.Groups["kind"].Value;
+                string kind = heading.Groups["kind"].Value.ToUpperInvariant();
                 string rest = code[heading.Length..];
                 int open = rest.IndexOf('(', StringComparison.Ordinal);
                 int close = rest.LastIndexOf(')');
@@ -246,7 +246,7 @@ public sealed partial class PascalListing
                 {
                     if (!Identifier().IsMatch(name.Trim())) { continue; }
 
-                    Add(procedure, new PascalVariable(name.Trim(), word, Math.Max(size, 0), type));
+                    Add(procedure, new PascalVariable(name.Trim(), word, Math.Max(size, 0), type, reference));
                     known = size > 0;
                     if (!known) { break; }
                     word += size;
@@ -265,15 +265,24 @@ public sealed partial class PascalListing
         if (!variables.Exists(known => known.Word == variable.Word)) { variables.Add(variable); }
     }
 
+    /// <summary>
+    ///  Gets how many words a variable of a type takes, where the type says: 1 for an integer, subrange, character,
+    ///  boolean, pointer or enumeration, 2 for a real and a string's length over two, plus one.
+    /// </summary>
+    /// <param name="type">The type, as declared.</param>
+    /// <returns>The words, or 0 for a named, array, record or set type, whose size the listing does not show.</returns>
+    public static int WordsOf(string type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return Size(type, parameter: false);
+    }
+
     // The words a type takes, or 0 when the listing cannot tell: a named type, an array, a record or a set. A
     // structured value parameter's size is not known either.
     private static int Size(string type, bool parameter)
     {
         string upper = type.ToUpperInvariant().Replace(" ", "", StringComparison.Ordinal);
-        if (upper is "INTEGER" or "CHAR" or "BOOLEAN"
-            || upper.StartsWith('^')
-            || upper.Contains("..", StringComparison.Ordinal)
-            || (upper.StartsWith('(') && upper.EndsWith(')')))
+        if (upper is "CHAR" or "BOOLEAN" || IsOrdinal(type) || upper.StartsWith('^') || (upper.StartsWith('(') && upper.EndsWith(')')))
         {
             return 1;
         }
@@ -282,6 +291,19 @@ public sealed partial class PascalListing
         if (upper == "REAL") { return 2; }
         if (upper == "STRING") { return 41; }
         return StringOf().Match(upper) is { Success: true } sized ? (Number(sized.Groups["length"].Value) + 2) / 2 : 0;
+    }
+
+    /// <summary>
+    ///  Says whether a type is an integer or a subrange of one, such as <c>INTEGER</c> or <c>1..10</c>, rather than a
+    ///  structured type with a range in it, such as <c>ARRAY[1..3] OF INTEGER</c>.
+    /// </summary>
+    /// <param name="type">The type, as declared.</param>
+    /// <returns>Whether it is a one-word integer.</returns>
+    public static bool IsOrdinal(string type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        string upper = type.ToUpperInvariant().Replace(" ", "", StringComparison.Ordinal);
+        return upper == "INTEGER" || Subrange().IsMatch(upper);
     }
 
     // A line's code, without its comments.
@@ -300,6 +322,9 @@ public sealed partial class PascalListing
 
     [GeneratedRegex(@"^\s*[A-Za-z][A-Za-z0-9_]*\s*$")]
     private static partial Regex Identifier();
+
+    [GeneratedRegex(@"^-?[A-Z0-9_']+\.\.-?[A-Z0-9_']+$")]
+    private static partial Regex Subrange();
 
     [GeneratedRegex(@"^STRING\[(?<length>\d+)\]$")]
     private static partial Regex StringOf();

@@ -12,4 +12,7 @@ namespace Retrocore.Pascal;
 /// <param name="Word">Its first word.</param>
 /// <param name="Words">How many words it takes, or 0 when the listing does not say.</param>
 /// <param name="Type">Its type, as declared, such as <c>INTEGER</c> or <c>STRING[20]</c>.</param>
-public sealed record PascalVariable(string Name, int Word, int Words, string Type);
+/// <param name="Reference">
+///  Whether it is a <c>VAR</c> parameter, whose word holds the address of the variable the caller passed.
+/// </param>
+public sealed record PascalVariable(string Name, int Word, int Words, string Type, bool Reference = false);

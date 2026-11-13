@@ -19,8 +19,10 @@ namespace Retrocore.Debug;
 // names it.
 internal sealed partial class DebugSession
 {
-    // The Pascal sources breakpoints are set in, each with its text when they were set.
+    // The Pascal sources breakpoints are set in, each with its text when they were set, and the generation of the
+    // disks' code files and listings they were bound with.
     private readonly Dictionary<string, string[]> _pascalSources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _pascalBound = new(StringComparer.OrdinalIgnoreCase);
     private long _pascalRefreshed;
 
     private static bool IsPascalSource(string path)
@@ -52,6 +54,7 @@ internal sealed partial class DebugSession
         string group = $"pascal\n{path.ToUpperInvariant()}";
         _pascalBreakpoints.RemoveAll(entry => entry.State.Line is { } line && string.Equals(line.Path, path, StringComparison.OrdinalIgnoreCase));
         (string Where, PascalListing Listing)? listing = _target is null ? null : ListingFor(path);
+        _pascalBound[path] = Pascal?.Generation ?? 0;
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -115,30 +118,33 @@ internal sealed partial class DebugSession
         }
 
         string? name = listing.Listing.SegmentName(statement.Segment) is { } named ? PascalListing.CodeName(named) : null;
-        int offset = statement.Offset;
-
-        // A line's code starts where the compiler was when it read the line, which can be inside a p-code it had not
-        // finished: the breakpoint stops at the first p-code from there.
-        if (name is not null
-            && pascal.CodeSegment(name, statement.Segment) is { } segment
-            && segment.Procedure(statement.Procedure) is { IsNative: false } procedure)
-        {
-            try
-            {
-                if (PcodeDisassembler.Disassemble(segment, procedure)
-                    .FirstOrDefault(instruction => instruction.Offset - procedure.Entry >= statement.Offset) is { } first)
-                {
-                    offset = first.Offset - procedure.Entry;
-                }
-            }
-            catch (InvalidDataException)
-            {
-                // Bind to the listing's offset.
-            }
-        }
-
+        int offset = FirstPcode(pascal, name, statement);
         state.Location = $"{Path.GetFileName(path)}:{line} ({name ?? statement.Segment.ToString(CultureInfo.InvariantCulture)}.{statement.Procedure}+${offset:X4})";
         return new PascalBreakpoint(name, statement.Segment, statement.Procedure, offset);
+    }
+
+    // Where a statement's code starts: the first p-code from where the compiler was when it read the line, which can be
+    // inside a p-code it had not finished; the listing's offset when the code file is not on a disk.
+    private static int FirstPcode(PascalRuntime pascal, string? name, PascalListingLine statement)
+    {
+        if (name is null
+            || pascal.CodeSegment(name, statement.Segment) is not { } segment
+            || segment.Procedure(statement.Procedure) is not { IsNative: false } procedure)
+        {
+            return statement.Offset;
+        }
+
+        try
+        {
+            return PcodeDisassembler.Disassemble(segment, procedure)
+                .FirstOrDefault(instruction => instruction.Offset - procedure.Entry >= statement.Offset) is { } first
+                    ? first.Offset - procedure.Entry
+                    : statement.Offset;
+        }
+        catch (InvalidDataException)
+        {
+            return statement.Offset;
+        }
     }
 
     private static bool SameText(string source, string listed) =>
@@ -187,13 +193,15 @@ internal sealed partial class DebugSession
     {
         if (Pascal is not { } pascal || pascal.Segment(frame)?.Segment.Name is not { } name) { return null; }
 
-        foreach (string path in _pascalSources.Keys)
+        foreach ((string path, string[] text) in _pascalSources)
         {
             if (ListingFor(path) is { } listing
                 && listing.Listing.Compiles(frame.SegmentNumber, name)
                 && listing.Listing.LineAt(frame.SegmentNumber, frame.Procedure, frame.Offset) is { } line)
             {
-                return (listing.Listing, line, path);
+                // A source that no longer has the listing's line there is not where the frame is.
+                bool same = line.Line <= text.Length && SameText(text[line.Line - 1], line.Text);
+                return (listing.Listing, line, same ? path : null);
             }
         }
 
@@ -217,11 +225,16 @@ internal sealed partial class DebugSession
         }
 
         _pascalRefreshed = Stopwatch.GetTimestamp();
-        if (!pascal.Refresh()) { return; }
+        pascal.Refresh();
 
+        // Each source binds again once the disks have been read since it bound, by this look or another.
         foreach (string path in _pascalSources.Keys.ToArray())
         {
-            if (!_requested.TryGetValue(path, out JsonObject? request)) { continue; }
+            if (_pascalBound.GetValueOrDefault(path) == pascal.Generation || !_requested.TryGetValue(path, out JsonObject? request))
+            {
+                continue;
+            }
+
             foreach (JsonObject breakpoint in (PascalSourceBreakpoints(request, path)["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
             {
                 Notify("breakpoint", new JsonObject

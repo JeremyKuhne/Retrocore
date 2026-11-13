@@ -351,7 +351,18 @@
           "group": "inline@4"
         }
       ],
+      "webview/context": [
+        {
+          "command": "retrocore.display.paste",
+          "when": "webviewId == 'retrocore' && webviewSection == 'screen'",
+          "group": "9_cutcopypaste"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "retrocore.display.paste",
+          "when": "false"
+        },
         {
           "command": "retrocore.hardware.addCard",
           "when": "false"
@@ -527,6 +538,11 @@
         "icon": "$(play)"
       },
       {
+        "command": "retrocore.display.paste",
+        "title": "Paste",
+        "category": "Retrocore"
+      },
+      {
         "command": "retrocore.startLastMachine",
         "title": "Retrocore: Start Last Machine"
       },
@@ -597,20 +613,22 @@
               "machine": {
                 "enum": [
                   "apple2",
+                  "apple3",
                   "trs80-model1",
                   "apple2e"
                 ],
                 "enumDescriptions": [
                   "The Apple II family; model says which.",
+                  "The Apple III.",
                   "The TRS-80 Model I.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), trs80-model1 a TRS-80 Model I."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II and RETROCORE_TRS80_ROMS for the Model I. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set) and RETROCORE_TRS80_ROMS for the Model I. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
               },
               "rom": {
                 "enum": [
@@ -630,7 +648,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512."
               },
               "expansionInterface": {
                 "type": "boolean",
@@ -697,7 +715,7 @@
                   "type": "string"
                 },
                 "maxItems": 4,
-                "description": "Model I: JV1 or JV3 (.jv3) images for drives 0-3."
+                "description": "Model I: JV1 or JV3 (.jv3) images for drives 0-3. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4."
               },
               "bootSeconds": {
                 "type": "number",
@@ -716,7 +734,7 @@
               "fastDisk": {
                 "type": "boolean",
                 "default": true,
-                "description": "IIe: run as fast as possible while any Disk II drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
+                "description": "IIe and Apple III: run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
               },
               "speed": {
                 "enum": [

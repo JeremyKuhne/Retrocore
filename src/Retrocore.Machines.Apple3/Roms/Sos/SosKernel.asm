@@ -1,0 +1,324 @@
+;; The SOS 1.3 kernel: the SOS.KERNEL file that the SOS bootstrap loader reads into memory and starts.
+;; Remarks:
+;;   The file loads at $1E00 and is a series of modules, each assembled for the address it runs from
+;;   (SosOrg.asm's ORG names) and placed in the file at its load address there (the BLA names, $2000 being
+;;   the file's start). The loader moves each into place. Each module is a scope of its own, as each was
+;;   once assembled on its own; the names other modules use are defined at the end.
+;;
+;;   Assembled at $2000 for $5600 bytes, it is byte-identical to SOS 1.3's SOS.KERNEL.
+
+    .cpu Mos6502
+    .include "SosOrg.asm"
+
+    .org BLALODR
+
+; The loader: it moves the kernel into place, reads the interpreter and the drivers, and starts them. INIT runs
+; from the space it keeps at its end.
+    .logicalorg ORGLODR
+.scope SOSLDR
+    .include "Kernel/SosLdr.asm"
+.endscope
+    .logicalorg
+
+; Global data, and the jump table drivers call SOS through.
+    .res BLAGLOB - *
+    .logicalorg ORGGLOB
+.scope SYSGLOB
+    .include "Kernel/SysGlob.asm"
+.endscope
+    .logicalorg
+
+; The block file manager's second initialization; its space then holds the volume bitmaps.
+    .res BLABFMI - *
+    .logicalorg ORGBFMI
+.scope BFMINIT2
+    .include "Kernel/BfmInit2.asm"
+.endscope
+    .logicalorg
+
+; The block file manager: SOS's file system.
+    .res BLABFM - *
+    .logicalorg ORGBFM
+.scope BFM
+    .include "Kernel/Bfm.asm"
+.endscope
+    .logicalorg
+
+; Operator messages: asking for a volume to be put in a drive.
+    .res BLAOMSG - *
+    .logicalorg ORGOMSG
+.scope OPRMSG
+    .include "Kernel/OprMsg.asm"
+.endscope
+    .logicalorg
+
+; Interrupts, events and the kernel's entry from BRK.
+    .res BLAIPL - *
+    .logicalorg ORGIPL
+.scope IPL
+    .include "Kernel/Ipl.asm"
+.endscope
+    .logicalorg
+
+; The utility manager: the fence, the clock and the joystick calls.
+    .res BLAUMGR - *
+    .logicalorg ORGUMGR
+.scope UMGR
+    .include "Kernel/UMgr.asm"
+.endscope
+    .logicalorg
+
+; The Disk III driver for .D1-.D4.
+    .res BLADISK3 - *
+    .logicalorg ORGDISK3
+.scope DISK3
+    .include "Kernel/Disk3.asm"
+.endscope
+    .logicalorg
+
+; Error returns, and SYSDEATH's message for an unrecoverable one.
+    .res BLASERR - *
+    .logicalorg ORGSERR
+.scope SYSERR
+    .include "Kernel/SysErr.asm"
+.endscope
+    .logicalorg
+
+; The device manager: the system device table and device calls.
+    .res BLADMGR - *
+    .logicalorg ORGDMGR
+.scope DEVMGR
+    .include "Kernel/DevMgr.asm"
+.endscope
+    .logicalorg
+
+; The system call manager: checks a call and passes it on.
+    .res BLASCMGR - *
+    .logicalorg ORGSCMGR
+.scope SCMGR
+    .include "Kernel/ScMgr.asm"
+.endscope
+    .logicalorg
+
+; The file manager: sends file calls to BFM or CFMGR.
+    .res BLAFMGR - *
+    .logicalorg ORGFMGR
+.scope FMGR
+    .include "Kernel/FMgr.asm"
+.endscope
+    .logicalorg
+
+; The character file manager: files on character devices.
+    .res BLACFM - *
+    .logicalorg ORGCFM
+.scope CFMGR
+    .include "Kernel/CfMgr.asm"
+.endscope
+    .logicalorg
+
+; The buffer manager: the kernel's buffers in banked memory.
+    .res BLABUFMG - *
+    .logicalorg ORGBUFMG
+.scope BUFMGR
+    .include "Kernel/BufMgr.asm"
+.endscope
+    .logicalorg
+
+; The memory manager: segments and the memory calls.
+    .res BLAMEMMG - *
+    .logicalorg ORGMEMMG
+.scope MEMMGR
+    .include "Kernel/MemMgr.asm"
+.endscope
+    .logicalorg
+
+; The names one module defines for others, as Apple's linker made them global.
+INT_INIT = SOSLDR::INIT::INT_INIT
+EVQ_INIT = SOSLDR::INIT::EVQ_INIT
+CLK_INIT = SOSLDR::INIT::CLK_INIT
+MMGR_INIT = SOSLDR::INIT::MMGR_INIT
+BMGR_INIT = SOSLDR::INIT::BMGR_INIT
+DMGR_INIT = SOSLDR::INIT::DMGR_INIT
+CFMGR_INIT = SOSLDR::INIT::CFMGR_INIT
+BFM_INIT = SOSLDR::INIT::BFM_INIT
+MEMSIZE = SYSGLOB::MEMSIZE
+SYSBANK = SYSGLOB::SYSBANK
+SUSPFLSH = SYSGLOB::SUSPFLSH
+NMIFLAG = SYSGLOB::NMIFLAG
+SCRNMODE = SYSGLOB::SCRNMODE
+GRSIZE = SYSGLOB::GRSIZE
+SERR = SYSGLOB::SERR
+DBUGBRK = SYSGLOB::DBUGBRK
+KYBDNMI = SYSGLOB::KYBDNMI
+NMISPSV = SYSGLOB::NMISPSV
+SDEATH_REGS = SYSGLOB::SDEATH_REGS
+SOSVER = SYSGLOB::SOSVER
+SOSVERL = SYSGLOB::SOSVERL
+SZPAGE = SYSGLOB::SZPAGE
+SXPAGE = SYSGLOB::SXPAGE
+SSPAGE = SYSGLOB::SSPAGE
+CZPAGE = SYSGLOB::CZPAGE
+CXPAGE = SYSGLOB::CXPAGE
+CSPAGE = SYSGLOB::CSPAGE
+CEVPRI = SYSGLOB::CEVPRI
+SIRTEMP = SYSGLOB::SIRTEMP
+SIRARGSIZ = SYSGLOB::SIRARGSIZ
+IRQCNTR = SYSGLOB::IRQCNTR
+NMICNTR = SYSGLOB::NMICNTR
+QEVTEMP = SYSGLOB::QEVTEMP
+QEV_THIS = SYSGLOB::QEV_THIS
+QEV_LAST = SYSGLOB::QEV_LAST
+BADBRK = SYSGLOB::BADBRK
+BADINT1 = SYSGLOB::BADINT1
+BADINT2 = SYSGLOB::BADINT2
+NMIHANG = SYSGLOB::NMIHANG
+EVQOVFL = SYSGLOB::EVQOVFL
+STKOVFL = SYSGLOB::STKOVFL
+BADSYSCALL = SYSGLOB::BADSYSCALL
+DEV_OVFLOW = SYSGLOB::DEV_OVFLOW
+MEM2SML = SYSGLOB::MEM2SML
+VCBERR = SYSGLOB::VCBERR
+FCBERR = SYSGLOB::FCBERR
+ALCERR = SYSGLOB::ALCERR
+DIRERR = SYSGLOB::DIRERR
+TOOLONG = SYSGLOB::TOOLONG
+BADBUFNUM = SYSGLOB::BADBUFNUM
+BADBUFSIZ = SYSGLOB::BADBUFSIZ
+BITMAPADR = SYSGLOB::BITMAPADR
+BADSCNUM = SYSGLOB::BADSCNUM
+BADCZPAGE = SYSGLOB::BADCZPAGE
+BADXBYTE = SYSGLOB::BADXBYTE
+BADSCPCNT = SYSGLOB::BADSCPCNT
+BADSCBNDS = SYSGLOB::BADSCBNDS
+NODNAME = SYSGLOB::NODNAME
+BADDNUM = SYSGLOB::BADDNUM
+BADPATH = SYSGLOB::BADPATH
+CFCBFULL = SYSGLOB::CFCBFULL
+FCBFULL = SYSGLOB::FCBFULL
+BADREFNUM = SYSGLOB::BADREFNUM
+PATHNOTFND = SYSGLOB::PATHNOTFND
+VNFERR = SYSGLOB::VNFERR
+FNFERR = SYSGLOB::FNFERR
+DUPERR = SYSGLOB::DUPERR
+OVRERR = SYSGLOB::OVRERR
+DIRFULL = SYSGLOB::DIRFULL
+CPTERR = SYSGLOB::CPTERR
+TYPERR = SYSGLOB::TYPERR
+EOFERR = SYSGLOB::EOFERR
+POSNERR = SYSGLOB::POSNERR
+ACCSERR = SYSGLOB::ACCSERR
+BTSERR = SYSGLOB::BTSERR
+FILBUSY = SYSGLOB::FILBUSY
+NOTSOS = SYSGLOB::NOTSOS
+BADLSTCNT = SYSGLOB::BADLSTCNT
+OUTOFMEM = SYSGLOB::OUTOFMEM
+BUFTBLFULL = SYSGLOB::BUFTBLFULL
+BADSYSBUF = SYSGLOB::BADSYSBUF
+DUPVOL = SYSGLOB::DUPVOL
+NOTBLKDEV = SYSGLOB::NOTBLKDEV
+LVLERR = SYSGLOB::LVLERR
+BADJMODE = SYSGLOB::BADJMODE
+BADBKPG = SYSGLOB::BADBKPG
+SEGRQDN = SYSGLOB::SEGRQDN
+SEGTBLFULL = SYSGLOB::SEGTBLFULL
+BADSEGNUM = SYSGLOB::BADSEGNUM
+SEGNOTFND = SYSGLOB::SEGNOTFND
+BADSRCHMODE = SYSGLOB::BADSRCHMODE
+BADCHGMODE = SYSGLOB::BADCHGMODE
+BADPGCNT = SYSGLOB::BADPGCNT
+XREQCODE = SYSGLOB::XREQCODE
+XCTLCODE = SYSGLOB::XCTLCODE
+XCTLPARM = SYSGLOB::XCTLPARM
+XNOTOPEN = SYSGLOB::XNOTOPEN
+XNOTAVAIL = SYSGLOB::XNOTAVAIL
+XNORESRC = SYSGLOB::XNORESRC
+XBADOP = SYSGLOB::XBADOP
+XIOERROR = SYSGLOB::XIOERROR
+XNODRIVE = SYSGLOB::XNODRIVE
+XNOWRITE = SYSGLOB::XNOWRITE
+XBYTECNT = SYSGLOB::XBYTECNT
+XBLKNUM = SYSGLOB::XBLKNUM
+XDISKSW = SYSGLOB::XDISKSW
+BACKMASK = SYSGLOB::BACKMASK
+E1908 = SYSGLOB::E1908
+BFM_INIT2 = BFMINIT2::BFM_INIT2
+BFMGR = BFM::BFMGR
+BFMFCB1 = BFM::BFMFCB1
+BFMFCB2 = BFM::BFMFCB2
+FCBZPP = BFM::FCBZPP
+SISTER = BFM::SISTER
+PATHBUF = BFM::PATHBUF
+VCB = BFM::VCB
+WORKSPC = BFM::WORKSPC
+PFIXPTR = BFM::PFIXPTR
+BMAPAGE = BFM::BMAPAGE
+BMBPAGE = BFM::BMBPAGE
+FCBADDRH = BFM::FCBADDRH
+BMAMADR = BFM::BMAMADR
+BMBMADR = BFM::BMBMADR
+OPMSGRPLY = OPRMSG::OPMSGRPLY
+IRQ_RCVR = IPL::IRQ_RCVR
+NMI_RCVR = IPL::NMI_RCVR
+DISPATCH = IPL::DISPATCH
+ALLOCSIR = IPL::ALLOCSIR
+DEALCSIR = IPL::DEALCSIR
+SELC800 = IPL::SELC800
+NMIDSBL = IPL::NMIDSBL
+NMIENBL = IPL::NMIENBL
+NMIDBUG = IPL::NMIDBUG
+NMICONT = IPL::NMICONT
+QUEEVENT = IPL::QUEEVENT
+EV_QUEUE = IPL::EV_QUEUE
+EVQ_CNT = IPL::EVQ_CNT
+EVQ_SIZ = IPL::EVQ_SIZ
+EVQ_LEN = IPL::EVQ_LEN
+EVQ_FREE = IPL::EVQ_FREE
+EVQ_LINK = IPL::EVQ_LINK
+SIRTABLE = IPL::SIRTABLE
+SIRTBLSIZ = IPL::SIRTBLSIZ
+ZPGSTACK = IPL::ZPGSTACK
+ZPGSTART = IPL::ZPGSTART
+UMGR = UMGR::UMGR
+DATETIME = UMGR::DATETIME
+BCDBIN = UMGR::BCDBIN
+COLDSTRT = UMGR::COLDSTRT
+PCLOCK = UMGR::PCLOCK
+DIB1 = DISK3::DIB1
+DIB2 = DISK3::DIB2
+DIB3 = DISK3::DIB3
+DIB4 = DISK3::DIB4
+SEEKDSK3 = DISK3::SEEKDSK3
+SYSERR = SYSERR::SYSERR
+SYSDEATH = SYSERR::SYSDEATH
+DMGR = DEVMGR::DMGR
+MAX_DNUM = DEVMGR::MAX_DNUM
+SDT_SIZE = DEVMGR::SDT_SIZE
+SDT_DIBL = DEVMGR::SDT_DIBL
+SDT_DIBH = DEVMGR::SDT_DIBH
+SDT_ADRL = DEVMGR::SDT_ADRL
+SDT_ADRH = DEVMGR::SDT_ADRH
+SDT_BANK = DEVMGR::SDT_BANK
+SDT_UNIT = DEVMGR::SDT_UNIT
+BLKD_SIZE = DEVMGR::BLKD_SIZE
+BLKDLST = DEVMGR::BLKDLST
+SCMGR = SCMGR::SCMGR
+FMGR = FMGR::FMGR
+LEVEL = FMGR::LEVEL
+CFMGR = CFMGR::CFMGR
+CFCB_MAX = CFMGR::CFCB_MAX
+CFCB_DEV = CFMGR::CFCB_DEV
+REQBUF = BUFMGR::REQBUF
+REQFXBUF = BUFMGR::REQFXBUF
+GETBUFADR = BUFMGR::GETBUFADR
+CHKBUF = BUFMGR::CHKBUF
+RELBUF = BUFMGR::RELBUF
+BUF_CNT = BUFMGR::BUF_CNT
+PGCT_T = BUFMGR::PGCT_T
+XBYTE_T = BUFMGR::XBYTE_T
+BUFREF = BUFMGR::BUFREF
+MMGR = MEMMGR::MMGR
+ST_CNT = MEMMGR::ST_CNT
+ST_ENTRY = MEMMGR::ST_ENTRY
+ST_FREE = MEMMGR::ST_FREE
+ST_FLINK = MEMMGR::ST_FLINK
+VRT_LIM = MEMMGR::VRT_LIM

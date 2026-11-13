@@ -22,6 +22,13 @@ test("the display panel's script parses", () => {
     assert.ok(script.includes(String.raw`join('\n')`), "the rows are joined by a newline escape, not a line break");
 });
 
+test("the screen has its own context menu, whose Paste types the clipboard, in place of VS Code's", () => {
+    const html = webviewHtml("NONCE");
+    const match = /<canvas id="screen"[^>]*data-vscode-context='([^']*)'/.exec(html);
+    assert.ok(match, "the screen names its context");
+    assert.deepEqual(JSON.parse(match[1]), { webviewSection: "screen", preventDefaultContextMenuItems: true });
+});
+
 type Listener = (event: Record<string, unknown>) => void;
 
 interface FakeImage { width: number; height: number; data: Uint8ClampedArray }
@@ -80,7 +87,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
     const codes = [new Element({ code: "3" }), new Element({ code: "27" })];
-    const groups = [new Element({ machine: "apple2" }), new Element({ machine: "trs80-model1" })];
+    const groups = [new Element({ machine: "apple2 apple3" }), new Element({ machine: "trs80-model1" })];
     // A panel 1240 pixels wide with 900 left for the screen, at 100% display scaling: room for the IIe at 2x.
     const window: PanelWindow = Object.assign(new Element(), { innerHeight: 1000, devicePixelRatio: 1, AudioContext: audioContext });
     const body = new Element();
@@ -365,6 +372,54 @@ test("the Sound button cycles the modes, the Mockingboard's only while it is in,
     // A frame carries the host's mode; a chunk of audio with no Web Audio to play it changes nothing.
     window.dispatch("message", { data: { audio: { rate: 48000, channels: 1, samples: "AAA=" } } });
     assert.deepEqual(posted, []);
+});
+
+test("Ctrl+V is CONTROL-V, Shift+Insert pastes, and pasted text goes to the machine to type", () => {
+    const { posted, screen } = loadPanel();
+    const press = (key: string, extra: Record<string, unknown> = {}): boolean => {
+        let stopped = false;
+        screen.dispatch("keydown", { key, code: "", ctrlKey: false, shiftKey: false, altKey: false, metaKey: false,
+            stopPropagation: () => { stopped = true; }, ...extra });
+        return stopped;
+    };
+    assert.equal(press("v", { ctrlKey: true }), true, "Ctrl+V stays with the screen");
+    assert.equal(press("Insert", { shiftKey: true }), true);
+    assert.deepEqual(posted.splice(0), [{ code: 22 }, { command: "paste" }],
+        "Ctrl+V types CONTROL-V; for Shift+Insert the extension reads the clipboard");
+
+    let prevented = false;
+    const paste = (text: string): void => screen.dispatch("paste", {
+        clipboardData: { getData: (type: string) => type === "text/plain" ? text : "" },
+        preventDefault: () => { prevented = true; }
+    });
+    paste("10 PRINT “HI”\r\nRUN\r\n");
+    paste("");
+    assert.equal(prevented, true);
+    assert.deepEqual(posted, [{ command: "paste", text: "10 PRINT “HI”\r\nRUN\r\n" }], "the host makes keys of it; nothing is pasted for no text");
+});
+
+test("the Apple III has the Apple keys, Solid Apple among them, and sound without a Mockingboard", () => {
+    const { posted, screen, byId, buttons, window } = loadPanel();
+    const frame = (machine: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+        machine, rows: [""], cycles: 1, running: false, sound: "speaker", ...extra,
+        video: { width: 2, height: 1, pixelFormat: "rgba", pixels: "AAAAAAAAAAA=", beam: { scanline: 0, column: 30 } }
+    });
+    // After an Apple II with the Mockingboard in, the Apple III's frame, which names none, takes it away.
+    window.dispatch("message", { data: frame("apple2", { mockingboard: true }) });
+    window.dispatch("message", { data: frame("apple3") });
+    assert.deepEqual(buttons.map(button => button.textContent), ["Open Apple", "Solid Apple"]);
+    assert.match((byId.get("hint") as Element).textContent, /Open\/Solid Apple/);
+    assert.doesNotMatch((byId.get("sound") as Element & { title: string }).title, /Mockingboard/);
+
+    const sound = byId.get("sound") as Element;
+    sound.dispatch("click");
+    sound.dispatch("click");
+    screen.dispatch("keydown", { key: "Alt", code: "AltRight", ctrlKey: false, altKey: true });
+    buttons[0].dispatch("click");
+    assert.deepEqual(posted.splice(0), [
+        { command: "sound", mode: "off" }, { command: "sound", mode: "speaker" },
+        { button: 1, pressed: true }, { button: 0, pressed: true }
+    ]);
 });
 
 // Web Audio as Chromium runs it: a context runs only once the page has had a click or key. Made before then

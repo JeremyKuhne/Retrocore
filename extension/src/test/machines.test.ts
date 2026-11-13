@@ -46,10 +46,12 @@ test("each choice sets a launch option to values it allows, and its default is o
     }
 });
 
-test("the machines are the six agreed, each with its own id and name, in order", () => {
+test("the machines are the seven agreed, each with its own id and name, in order", () => {
     assert.deepEqual(machines.map(machine => machine.label), [
-        "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "TRS-80 Model I (Level II)", "TRS-80 Model I (Level I)"
+        "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
+        "TRS-80 Model I (Level I)"
     ]);
+    assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.equal(new Set(machines.map(machine => machine.id)).size, machines.length);
     assert.equal(machineById("apple2-iiplus")?.configuration.model, "iiplus");
     assert.equal(machineById("nothing"), undefined);

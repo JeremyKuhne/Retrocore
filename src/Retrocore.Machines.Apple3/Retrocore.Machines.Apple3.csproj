@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Apple III: banked memory, extended addressing, the system VIAs and the built-in disk. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -3,13 +3,14 @@
 The Retrocore debugger supports every kind of breakpoint VS Code's **Breakpoints** view offers. Each can have a
 condition, a hit count and a log message (though VS Code's UI does not offer **Edit Log Message** on data
 breakpoints). The debugger counts each breakpoint's hits and shows them in the breakpoint's hover. All of this
-works the same on the Apple II family and the Model I, in your program, in BASIC and in the SDK's ROM sources.
+works the same on the Apple II family, the Apple III and the Model I, in your program, in BASIC and in the SDK's ROM sources.
 
 | Kind | Set it | Stops when |
 | --- | --- | --- |
 | Source | The editor's gutter (F9), Shift+F9 for a later BASIC statement on a line, or `breakpoints` in a launch configuration | The PC reaches the line's code in a module that applies there (a line in a macro body stops in every expansion), or BASIC starts that statement. |
 | Function | **+** in the Breakpoints view: a label or an address expression, such as `DISPLAY_CHAR`, `$C600` or `COUT+3` | The PC reaches that address, from any code. |
 | Scanline (Apple II) | The **Video beam reaches a scanline** checkbox in the Breakpoints view, with **Edit Condition** for the positions; or **+** with a name such as `scanline 192:0` | The video beam reaches that scanline and column, between any two cycles. See [Scanline breakpoints](#scanline-breakpoints). |
+| SOS call (Apple III) | **+** with a name such as `sos OPEN`, `sos $C8`, or `sos` for every call | A program is about to make that SOS call. See [SOS call breakpoints](#sos-call-breakpoints). |
 | Instruction | The gutter of the **Disassembly** view (**Open Disassembly View** from the call stack or the editor's context menu) | The PC reaches that instruction. |
 | Data | **Break on Value Read / Change / Access** on a memory variable or a watch expression, **Break on Value Change** on a BASIC variable or array element, or **Add Data Breakpoint at Address** in the Breakpoints view | The CPU reads or writes the watched bytes or Z80 I/O port (stopping after the instruction), or a BASIC statement changes the watched variable. |
 | Exception | The checkboxes in the Breakpoints view | See [Exception filters](#exception-filters). |
@@ -21,7 +22,7 @@ The Breakpoints view lists these checkboxes. Each one's hover says what it stops
 | Checkbox | Machines | Default | Stops |
 | --- | --- | --- | --- |
 | **Machine reset** | both | on | As the machine powers on, at the reset handler's first instruction, or at a loaded program's entry. Then at each reset: RESET on the Apple II stops at the reset vector's handler (`RESET`, or DOS's handler once booted), and the Model I's reset button at its non-maskable interrupt's handler, `NMI` at `$0066`. A BASIC file's launch boots past reset during the launch, so it stops only at later resets. With `stopOnEntry`, the entry stop is the power-on stop. |
-| **BRK instructions** | Apple II | on | Before a 6502 `BRK` runs. |
+| **BRK instructions** | Apple II, Apple III | on | Before a 6502 `BRK` runs. On the Apple III, only before one that SOS would refuse as a call, and before SOS's debug call: see [SOS call breakpoints](#sos-call-breakpoints). |
 | **Video beam reaches a scanline** | Apple II | off | See [Scanline breakpoints](#scanline-breakpoints). |
 | **Routine broke its Keeps: promise** | both | off | Where a call returns having changed something its routine's `;; Keeps:` comment says it keeps. Listed when a source has such a comment and `checkContracts` is not `off`. |
 | **BASIC program start** | both | on | On the BASIC thread, at the first statement each `RUN` runs, and where `CONT` resumes. A BASIC file's launch stops on its first statement as its entry instead. |
@@ -56,8 +57,9 @@ offer **Edit Condition** and **Edit Hit Count** there.
 - **Log message.** A logpoint writes its message to the Debug Console, with a link to its line, instead of
   stopping, but only on the hits its condition and hit count let through. `{expression}` puts a value in the
   message, in hex like `$1F`. `{expression,d}` shows it in decimal, `,x` as bare hex, `,b` as binary and `,c` as
-  an ASCII character. `{{` and `}}` are literal braces. For example, `char {A,c} at {HL}`. A placeholder that
-  cannot be evaluated shows the error in its place. A data breakpoint's log message ends with the access it saw.
+  an ASCII character. `{{` and `}}` are literal braces. For example, `char {A,c} at {HL}`. On the Apple III,
+  `{sos}` describes the SOS call about to be made, such as `OPEN ".CONSOLE"`. A placeholder that cannot be
+  evaluated shows the error in its place. A data breakpoint's log message ends with the access it saw.
 
   Logpoints write at most 100 lines a second between them, so one in a loop cannot flood the Debug Console. The
   lines past the limit are counted, and a line such as `Retrocore dropped 18 logpoint lines` reports them when
@@ -117,6 +119,32 @@ does not read leaves the checkbox unverified, saying why. The stop's description
 For a position with its own hit count, condition or log message, add a function breakpoint (**+**) named
 `scanline S:C`, `scanline S` (column 0) or `scanline vbl` (192:0); each is its own entry in the view. The Model I
 has no beam to stop on, so it lists no such checkbox, and a `scanline` function breakpoint there stays unverified.
+
+## SOS call breakpoints
+
+An Apple III program calls SOS with `BRK`, then the call's number and its parameter list's address. A function
+breakpoint (**+**) named `sos` and a call, by the SOS Reference Manual's name or by number, such as `sos OPEN`,
+`sos get file info` or `sos $C8`, stops before the program makes that call; `sos` alone stops before every call.
+The stop's description names the call, such as `SOS call OPEN ($C8) at $2077.` A name that is not a call leaves
+the breakpoint unverified, saying why, and on another machine it stays unverified.
+
+With a log message it traces calls instead of stopping. `{sos}` in the message describes the call with its main
+parameters, read as SOS will read them: pathnames and device names, `ref_num`s, device numbers, and the byte
+counts of reads and writes. For example, `sos` with the message `{sos} from {PC}` writes lines such as:
+
+```text
+OPEN ".D1/SOS.INTERP" from $2077
+READ ref 1, 61704 bytes from $209A
+GET_DEV_NUM ".CONSOLE" from $84FA
+D_CONTROL device 8, code 2 from $8703
+```
+
+A call's result is not known until it returns, so the line cannot show it. The logpoint limit applies, and
+`logpointLimit: 0` keeps every line of a busy trace.
+
+The **BRK instructions** checkbox stops at the BRKs that are not calls: those SOS would refuse, such as `BRK $00`
+from running into empty memory, or one made with zero page anywhere but `$1A00`, as in SOS itself or before it
+has loaded. It also stops at SOS's debug call, `BRK $FE`, which a program makes to be stopped.
 
 ## Stepping
 

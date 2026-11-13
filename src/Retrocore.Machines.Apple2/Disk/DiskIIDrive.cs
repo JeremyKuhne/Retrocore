@@ -77,7 +77,10 @@ internal sealed class DiskIIDrive
     {
         _writeFlux |= writing && transition;
         _writing |= writing;
-        ulong interval = (ulong)(Media?.OptimalBitTiming ?? 32) * 125 * 2_041_000;
+        // Reading, a cell is the media's bit time, 4 µs or 8.16 sequencer clocks. Writing, the controller shifts a bit
+        // out every 8 clocks, so a cell is made exactly 8: at 8.16 two bits would now and then fall in one cell and
+        // be lost, where a real drive records them a little closer together.
+        ulong interval = (ulong)(Media?.OptimalBitTiming ?? 32) * (writing ? 250_000_000UL : 125UL * 2_041_000);
         _fraction += 1_000_000_000;
         bool pulse = false;
         while (_fraction >= interval)

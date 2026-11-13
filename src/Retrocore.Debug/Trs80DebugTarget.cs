@@ -226,7 +226,7 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     public bool HasPorts => true;
 
     /// <inheritdoc/>
-    public bool Traps(ushort address) => false;
+    public string? Trap(ushort address) => null;
 
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)

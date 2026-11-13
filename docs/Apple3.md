@@ -93,6 +93,10 @@ A program calls SOS with `BRK`, a call number and its parameters' address:
 SOS itself debugs at its source: the SDK has SOS 1.3's kernel, its bootstrap loader and Apple's drivers, each
 byte-identical to Apple's disks, and the debugger maps the drivers as SOS loads them. [Sos.md](Sos.md) covers them.
 
+The SDK also has the source of Business BASIC 1.23's interpreter, byte-identical to its disk's `SOS.INTERP`, and it
+debugs at that source where SOS loads it. Programs in Business BASIC debug on a BASIC thread, statement by statement.
+[BusinessBasic.md](BusinessBasic.md) covers both.
+
 The display panel shows the screen, with **Fast disk**, **Sound** and its volume, and buttons for Ctrl, CONTROL-C,
 CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid Apple, and Ctrl+F12 CONTROL-RESET.
 

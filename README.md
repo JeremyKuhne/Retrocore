@@ -288,7 +288,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md);
 - [the Apple III](docs/backlog/Apple3.md);
-- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md).
+- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
+- [debugging Business BASIC](docs/backlog/BusinessBasic.md).
 
 ## License
 

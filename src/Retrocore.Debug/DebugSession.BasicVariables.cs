@@ -230,6 +230,7 @@ internal sealed partial class DebugSession
             ];
         }
 
+        if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -251,6 +252,37 @@ internal sealed partial class DebugSession
                 ["value"] = $"${Word(pointers.DataPointer) + 1:X4}",
                 ["variablesReference"] = 0
             }
+        ];
+    }
+
+    // Business BASIC's memory, in its order: the program, then the arrays and the simple variables, then free space
+    // up to the strings; its pointers reach banked memory, so each span gives its X-byte.
+    private List<JsonNode?> BusinessProgramVariables(string line)
+    {
+        TargetBasicMemory memory = new(Target);
+        BasicPointers pointers = Basic.Pointers;
+        int Pointer(int address) => BusinessBasicDialect.Pointer(memory, address);
+        string Span(int from, int to)
+        {
+            string first = BusinessBasicDialect.Describe(from);
+            string last = BusinessBasicDialect.Describe(Math.Max(from, to - 1));
+            return $"{first}-{last} ({Math.Max(0, to - from)} bytes)";
+        }
+
+        int start = Pointer(pointers.ProgramStart);
+        int arrays = Pointer(pointers.Arrays);
+        int variables = Pointer(pointers.Variables);
+        int free = Pointer(pointers.FreeStart);
+        int strings = Pointer(pointers.StringBottom);
+        int top = Pointer(pointers.MemoryTop);
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = Span(start, arrays), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Arrays", ["value"] = Span(arrays, variables), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Variables", ["value"] = Span(variables, free), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free", ["value"] = Span(free, strings), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 }
         ];
     }
 
@@ -277,6 +309,7 @@ internal sealed partial class DebugSession
         BasicVariableKind.String => "string",
         BasicVariableKind.Single => "single",
         BasicVariableKind.Double => "double",
+        BasicVariableKind.Long => "long integer",
         _ => "real"
     };
 

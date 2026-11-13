@@ -81,6 +81,11 @@ public sealed partial class BasicEvaluator
             return new IntegerBasicExpression(_variables, _memory).Evaluate(expression);
         }
 
+        if (_dialect == BasicDialect.BusinessBasic)
+        {
+            return new BusinessBasicExpression(_variables).Evaluate(expression);
+        }
+
         if (BareName().IsMatch(expression.Trim())) { return Variable(expression.Trim(), subscripts: null); }
         byte[] saved = _bytes;
         int savedAt = _at;
@@ -116,6 +121,7 @@ public sealed partial class BasicEvaluator
     public string Format(BasicResult result)
     {
         if (_dialect == BasicDialect.Integer) { return IntegerBasicExpression.Format(result.Value); }
+        if (_dialect == BasicDialect.BusinessBasic) { return BusinessBasicExpression.Format(result.Value); }
         if (result.Value.Text is { } text)
         {
             StringBuilder builder = new("\"");

@@ -1025,10 +1025,12 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas` and `.level2.bas` files are AppleSoft, Integer BASIC
-and Level II BASIC. A plain `.bas` file takes its dialect from a first line such as
-`REM retrocore applesoft` or `' retrocore level2`, else the `retrocore.basic.dialect`
-setting, else the BASIC of the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.business.bas` and `.level2.bas` files are
+AppleSoft, Integer BASIC, Business BASIC and Level II BASIC. Business BASIC takes a
+reserved word only between separators, so its highlighting leaves `PRINTER` a name,
+and its names count in full, dots included. A plain `.bas` file takes its dialect
+from a first line such as `REM retrocore applesoft` or `' retrocore level2`, else the
+`retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and
@@ -1055,7 +1057,10 @@ A launch configuration's `basic` names a file to debug: the machine boots to BAS
 prompt, the file is compiled into memory and RUN (`"run": false` leaves it at the
 prompt), and `stopOnEntry` stops on its first statement. While the program in memory
 is what the file compiles to, its frames, breakpoints, inline breakpoints and Jump to
-Cursor are in the file itself, labels and all. BASIC files, the machine's program and opened listings
+Cursor are in the file itself, labels and all. On the Apple III, a `.business.bas` file
+(or one with `REM retrocore business`) needs the Business BASIC disk in `disks`, which
+**Retrocore: Start Machine** asks for: SOS boots it, BASIC runs the disk's HELLO, and the
+program goes in once BASIC is at its prompt. BASIC files, the machine's program and opened listings
 get:
 
 - highlighting that finds reserved words where the ROM does, inside names too;

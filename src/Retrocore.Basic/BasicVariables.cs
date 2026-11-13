@@ -56,6 +56,7 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicVariable> Simple()
     {
         if (IntegerBasic) { return IntegerSimple(); }
+        if (BusinessBasic) { return BusinessSimple(); }
         List<BasicVariable> variables = [];
         int at = Word(Pointers.Variables);
         int end = Word(Pointers.Arrays);
@@ -90,6 +91,7 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicArray> Arrays()
     {
         if (IntegerBasic) { return IntegerArrays(); }
+        if (BusinessBasic) { return BusinessArrays(); }
         List<BasicArray> arrays = [];
         int at = Word(Pointers.Arrays);
         int end = Word(Pointers.FreeStart);
@@ -142,6 +144,7 @@ public sealed partial class BasicVariables
     public BasicValue Read(BasicVariableKind kind, int address)
     {
         if (IntegerBasic) { return IntegerRead(kind, address); }
+        if (BusinessBasic) { return BusinessRead(kind, address); }
         switch (kind)
         {
             case BasicVariableKind.String:
@@ -185,6 +188,12 @@ public sealed partial class BasicVariables
             return;
         }
 
+        if (BusinessBasic)
+        {
+            BusinessWrite(kind, address, value);
+            return;
+        }
+
         switch (kind)
         {
             case BasicVariableKind.String:
@@ -224,6 +233,13 @@ public sealed partial class BasicVariables
             return Simple().FirstOrDefault(variable => variable.Name == name.ToUpperInvariant());
         }
 
+        if (BusinessBasic)
+        {
+            (string letters, BasicVariableKind type) = BusinessParse(name);
+            string full = BusinessName(letters, type);
+            return Simple().FirstOrDefault(variable => variable.Name == full && variable.Kind != BasicVariableKind.Function);
+        }
+
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Name(first, second, kind);
         return Simple().FirstOrDefault(variable => variable.Kind == kind && variable.Name == stored);
@@ -242,6 +258,13 @@ public sealed partial class BasicVariables
             return Arrays().FirstOrDefault(array => array.Name == name.ToUpperInvariant());
         }
 
+        if (BusinessBasic)
+        {
+            (string letters, BasicVariableKind type) = BusinessParse(name);
+            string full = BusinessName(letters, type);
+            return Arrays().FirstOrDefault(array => array.Name == full);
+        }
+
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Name(first, second, kind);
         return Arrays().FirstOrDefault(array => array.Kind == kind && array.Name == stored);
@@ -258,6 +281,7 @@ public sealed partial class BasicVariables
     {
         if (Find(name) is { } existing) { return existing; }
         if (IntegerBasic) { return IntegerCreate(name); }
+        if (BusinessBasic) { return BusinessCreate(name); }
         (char first, char second, BasicVariableKind kind) = Parse(name);
         int size = LevelTwo ? 3 + ValueSize(kind) : AppleSoftEntry;
         int start = Word(Pointers.Arrays);
@@ -298,6 +322,7 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicLoop> Loops(int stack, int forSize, int gosubSize)
     {
         if (IntegerBasic) { return IntegerLoops(); }
+        if (BusinessBasic) { return BusinessLoops(stack, forSize, gosubSize); }
         List<BasicLoop> loops = [];
         int forToken = Token("FOR");
         int gosubToken = Token("GOSUB");
@@ -328,8 +353,9 @@ public sealed partial class BasicVariables
         BasicVariableKind.Integer => 2,
         BasicVariableKind.String => 3,
         BasicVariableKind.Single => 4,
-        BasicVariableKind.Double => 8,
-        _ => LevelTwo ? 4 : 5
+        BasicVariableKind.Double or BasicVariableKind.Long => 8,
+        BasicVariableKind.Function when BusinessBasic => 6,
+        _ => LevelTwo || BusinessBasic ? 4 : 5
     };
 
     // AppleSoft's FOR entry: the token, the variable, the step unpacked (its top bit set, its sign after it), the

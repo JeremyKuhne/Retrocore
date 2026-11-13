@@ -77,7 +77,7 @@ async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; a
 
     const run = await pickRun(machine);
     if (run === undefined) return undefined;
-    let setup: Setup = { machineId: machine.id, kind: run.kind, path: run.path, options: {} };
+    let setup: Setup = { machineId: machine.id, kind: run.kind, path: run.path, basicDisk: run.basicDisk, options: {} };
 
     // Start or save, after any options.
     for (;;) {
@@ -96,7 +96,7 @@ async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; a
 
 // What the machine runs: a choice, and the file for every choice but the bare machine. The active editor's file comes
 // first when the machine can run it.
-async function pickRun(machine: Machine): Promise<{ kind: RunChoice["kind"]; path?: string } | undefined> {
+async function pickRun(machine: Machine): Promise<{ kind: RunChoice["kind"]; path?: string; basicDisk?: string } | undefined> {
     const active = vscode.window.activeTextEditor?.document.uri;
     const activeExtension = active?.scheme === "file" ? path.extname(active.fsPath).slice(1).toLowerCase() : "";
     const items: RunItem[] = [];
@@ -109,16 +109,29 @@ async function pickRun(machine: Machine): Promise<{ kind: RunChoice["kind"]; pat
     for (const choice of runChoices(machine)) items.push({ label: choice.label, detail: choice.detail, choice });
     const picked = await vscode.window.showQuickPick(items, { title: `Start ${machine.label}`, placeHolder: "What should it run?" });
     if (picked === undefined) return undefined;
-    if (picked.choice.kind === "machine" || picked.path !== undefined) return { kind: picked.choice.kind, path: picked.path };
+    let file = picked.path;
+    if (picked.choice.kind !== "machine" && file === undefined) {
+        const files = await vscode.window.showOpenDialog({
+            title: picked.choice.label,
+            canSelectMany: false,
+            defaultUri: folder()?.uri,
+            filters: { [picked.choice.label]: picked.choice.extensions }
+        });
 
-    const files = await vscode.window.showOpenDialog({
-        title: picked.choice.label,
+        file = files?.[0]?.fsPath;
+        if (file === undefined) return undefined;
+    }
+
+    // A BASIC loaded from disk, as the Apple III's Business BASIC is, needs that disk as well.
+    if (picked.choice.kind !== "basic" || machine.basicDisk === undefined) return { kind: picked.choice.kind, path: file };
+    const disks = await vscode.window.showOpenDialog({
+        title: machine.basicDisk,
         canSelectMany: false,
         defaultUri: folder()?.uri,
-        filters: { [picked.choice.label]: picked.choice.extensions }
+        filters: { [machine.basicDisk]: machine.diskFormats }
     });
 
-    return files?.[0] === undefined ? undefined : { kind: picked.choice.kind, path: files[0].fsPath };
+    return disks?.[0] === undefined ? undefined : { kind: picked.choice.kind, path: file, basicDisk: disks[0].fsPath };
 }
 
 // One option at a time: which, then its value; back to Start when nothing more is picked.

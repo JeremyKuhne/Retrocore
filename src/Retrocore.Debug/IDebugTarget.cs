@@ -129,6 +129,23 @@ internal interface IDebugTarget : IDebugMemory
     BasicDialect? Basic => null;
 
     /// <summary>
+    ///  Gets whether the debugger has the source of the BASIC this machine runs, or will load from its disk, which a
+    ///  basic launch needs to find BASIC's prompt.
+    /// </summary>
+    bool HasBasicSource => BasicRom is not null;
+
+    /// <summary>
+    ///  Gets how long, in the machine's time, a basic launch waits for BASIC's prompt after power-on.
+    /// </summary>
+    double BasicBootSeconds => 10;
+
+    /// <summary>
+    ///  Gets whether a basic launch presses RETURN once a second on the way to BASIC's prompt, as the Model I's
+    ///  MEMORY SIZE? needs.
+    /// </summary>
+    bool PressesReturnForPrompt => true;
+
+    /// <summary>
     ///  Gets the BASIC ROM's statement dispatch and command loop, or null when the SDK's source of the running ROM
     ///  was not assembled.
     /// </summary>
@@ -285,6 +302,23 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="address">The address.</param>
     /// <param name="value">The value.</param>
     void Poke(ushort address, byte value);
+
+    /// <summary>
+    ///  Reads memory through an Apple III extended address, as an indirect access through zero page with that X-byte
+    ///  would; a machine without extended addressing reads the address as mapped now.
+    /// </summary>
+    /// <param name="xByte">The X-byte; without bit 7, the address as mapped now.</param>
+    /// <param name="address">The address.</param>
+    /// <returns>The value.</returns>
+    byte PeekFar(byte xByte, ushort address) => Peek(address);
+
+    /// <summary>
+    ///  Writes memory through an Apple III extended address.
+    /// </summary>
+    /// <param name="xByte">The X-byte; without bit 7, the address as mapped now.</param>
+    /// <param name="address">The address.</param>
+    /// <param name="value">The value.</param>
+    void PokeFar(byte xByte, ushort address, byte value) => Poke(address, value);
 
     /// <summary>
     ///  Copies a program into RAM.

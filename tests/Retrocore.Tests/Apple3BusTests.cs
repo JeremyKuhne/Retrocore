@@ -302,6 +302,25 @@ public class Apple3BusTests
     }
 
     /// <summary>
+    ///  A control character, such as CONTROL-C, comes as its letter with CONTROL held while it is the key, as the
+    ///  keyboard sends it; RETURN keeps its own code.
+    /// </summary>
+    [TestMethod]
+    public void ControlCharactersHoldControl()
+    {
+        Apple3Bus bus = Bus();
+        bus.QueueKey(3);
+        bus.QueueKey((byte)'\r');
+        bus.Read(0xC000).Should().Be(0xC3, "CONTROL-C is C");
+        bus.Read(0xC008).Should().Be(0x79, "with CONTROL, active low, held");
+        bus.Write(0xC010, 0);
+        bus.Read(0xC008).Should().Be(0x7C, "and let go with the key");
+        bus.Advance(300_000_000);
+        bus.Read(0xC000).Should().Be(0x8D, "RETURN is its own key");
+        bus.Read(0xC008).Should().Be(0x7D, "without CONTROL");
+    }
+
+    /// <summary>
     ///  The ACIA's registers read their reset values with nothing attached, as the boot ROM checks.
     /// </summary>
     [TestMethod]

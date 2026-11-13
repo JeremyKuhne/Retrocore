@@ -170,11 +170,13 @@ public sealed partial class BasicProgram
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
                 bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
-                if (jump.Required || (labels.ContainsKey(label) && alone))
+                if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
-                    references.Add((at, end, label, jump.Required, jump.Word));
+                    // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.
+                    return at;
                 }
 
+                references.Add((at, end, label, jump.Required, jump.Word));
                 at = end;
             }
             else

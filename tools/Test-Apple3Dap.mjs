@@ -5,7 +5,8 @@
 // Apple III DAP integration: stops at a breakpoint in the SDK's boot ROM source at power-on, runs the diagnostics to
 // RETRY, lists the hardware, drives and memory banks, reads memory through a bank and an X-byte, and boots SOS 1.3's
 // System Utilities to their menu when the disk is present, stopping at an sos function breakpoint's call, tracing
-// another's, and stopping at a BRK that is no SOS call.
+// another's, and stopping at a BRK that is no SOS call. With Business BASIC 1.23's disk, it stops in the
+// interpreter's source as HELLO runs.
 // The ROM is assembled from the SDK's BootRom.asm unless RETROCORE_APPLE3_ROMS names MAME's apple3 set.
 
 import { resolve, join } from "node:path";
@@ -18,6 +19,8 @@ const sdkRoms = join(root, "src", "Retrocore.Machines.Apple3", "Roms");
 const bootRom = join(sdkRoms, "BootRom.asm");
 const utilities = process.env.RETROCORE_APPLE3_UTILITIES
     ?? join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "apple3-disks", "Apple3SOS1.3SysUtils.dsk");
+const businessBasic = process.env.RETROCORE_APPLE3_BUSINESS_BASIC
+    ?? join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "apple3-disks", "Apple3BusBasic1.23.dsk");
 
 const { request, event, events, fail, close, failure } = startDap(root);
 let last = "";
@@ -168,9 +171,28 @@ try {
         console.log(`Skipped the SOS boot: ${utilities} is missing.`);
     }
 
+    // Business BASIC debugs at its source where SOS loaded it: HELLO's first statement passes through GONE.
+    if (existsSync(businessBasic)) {
+        events.length = 0;
+        await request("launch", { machine: "apple3", sdkRoms, stopOnEntry: false, speed: "max", disks: [businessBasic] });
+        await request("setExceptionBreakpoints", { filters: [] });
+        const listd = join(sdkRoms, "BusinessBasic", "B3ListD.asm");
+        const basicSet = await request("setBreakpoints", { source: { path: listd }, breakpoints: [{ line: lineOf("GONE", listd) }] });
+        assert.equal(basicSet.breakpoints[0].verified, true, "Business BASIC's source maps where SOS loads it");
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "breakpoint");
+        const basicFrame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+        assert.equal(basicFrame.source.path.toLowerCase(), listd.toLowerCase());
+        assert.equal(basicFrame.line, lineOf("GONE", listd));
+        assert.equal((await request("evaluate", { expression: "PC" })).result, "$683E (26686)");
+    } else {
+        console.log(`Skipped Business BASIC: ${businessBasic} is missing.`);
+    }
+
     await request("disconnect");
     console.log("Apple III DAP passed: a power-on breakpoint in BootRom.asm, the diagnostics to RETRY, the hardware, "
-        + "drives and memory banks" + (existsSync(utilities) ? ", SOS 1.3's System Utilities, SOS call breakpoints and trace points, the BRK filter, and breakpoints in SOS's kernel and driver sources." : "."));
+        + "drives and memory banks" + (existsSync(utilities) ? ", SOS 1.3's System Utilities, SOS call breakpoints and trace points, the BRK filter, and breakpoints in SOS's kernel and driver sources" : "")
+        + (existsSync(businessBasic) ? ", and a breakpoint in Business BASIC's source." : "."));
 } finally {
     clearTimeout(timeout);
     close();

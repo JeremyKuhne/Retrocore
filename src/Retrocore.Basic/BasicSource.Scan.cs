@@ -76,12 +76,12 @@ public sealed partial class BasicSource
     }
 
     // Words other dialects reserve that this one does not, which this one reads as variable names. Integer BASIC's
-    // names are any length, so a word such as LOC is an ordinary name there, and its tokenizer refuses another
-    // BASIC's statements itself.
+    // and Business BASIC's names are any length, so a word such as LOC is an ordinary name there; Integer BASIC's
+    // tokenizer refuses another BASIC's statements itself.
     private static HashSet<string> ForeignWords(BasicDialect dialect)
     {
         HashSet<string> foreign = new(StringComparer.Ordinal);
-        if (dialect == BasicDialect.Integer) { return foreign; }
+        if (dialect == BasicDialect.Integer || dialect == BasicDialect.BusinessBasic) { return foreign; }
         HashSet<string> own = [.. dialect.Keywords.Select(Letters)];
         foreach (BasicDialect other in (BasicDialect[])[BasicDialect.AppleSoft, BasicDialect.Level2])
         {

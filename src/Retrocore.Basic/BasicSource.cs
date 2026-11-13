@@ -143,6 +143,7 @@ public sealed partial class BasicSource
         {
             '$' => "string",
             '%' => "integer",
+            '&' when dialect == BasicDialect.BusinessBasic => "long integer",
             '!' => "single-precision",
             '#' => "double-precision",
             _ => "numeric"

@@ -38,6 +38,8 @@ export interface Machine {
     tapeFormats: string[];
     /** The BASIC dialects a basic launch runs on it. */
     basicDialects: string[];
+    /** The disk a basic launch boots for its BASIC, as the open dialog asks for it; none when BASIC is in ROM. */
+    basicDisk?: string;
     /** Whether a launch can put a program on a fresh DOS disk (dos). */
     dos: boolean;
     /** What the Start Machine command can set up, with its defaults. */
@@ -166,7 +168,8 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "apple3" },
         diskFormats: ["dsk", "do", "po", "woz"],
         tapeFormats: [],
-        basicDialects: [],
+        basicDialects: ["business"],
+        basicDisk: "The Business BASIC disk",
         dos: false,
         choices: [
             {

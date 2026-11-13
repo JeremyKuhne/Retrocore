@@ -363,7 +363,8 @@ internal interface IDebugTarget : IDebugMemory
     ///  Types a key.
     /// </summary>
     /// <param name="code">The ASCII code, 0-127.</param>
-    void Key(int code);
+    /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
+    bool Key(int code);
 
     /// <summary>
     ///  Presses the machine's reset: CONTROL-RESET on the IIe, the reset button on the Model I.

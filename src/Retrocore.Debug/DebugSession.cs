@@ -319,8 +319,13 @@ internal sealed partial class DebugSession
         {
             string text = args.String("text") ?? throw new ArgumentException("text is required.");
             List<int> codes = TypedText.Codes(text, out int skipped);
-            foreach (int code in codes) { Target.Key(code); }
-            return new JsonObject { ["typed"] = codes.Count, ["skipped"] = skipped };
+            int typed = 0;
+            foreach (int code in codes)
+            {
+                if (Target.Key(code)) { typed++; } else { skipped++; }
+            }
+
+            return new JsonObject { ["typed"] = typed, ["skipped"] = skipped };
         }));
 
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.

@@ -310,7 +310,11 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     public bool AddLoadedModules(DebugInfo debug) => _sosDrivers?.Scan(debug) ?? false;
 
     /// <inheritdoc/>
-    public void Key(int code) => _machine.Bus.QueueKey((byte)code);
+    public bool Key(int code)
+    {
+        _machine.Bus.QueueKey((byte)code);
+        return true;
+    }
 
     /// <inheritdoc/>
     /// <remarks>

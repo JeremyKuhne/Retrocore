@@ -822,7 +822,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
-    public void Key(int code) => _machine.Bus.QueueKey((byte)code);
+    public bool Key(int code)
+    {
+        _machine.Bus.QueueKey((byte)code);
+        return true;
+    }
 
     /// <inheritdoc/>
     public void Reset()

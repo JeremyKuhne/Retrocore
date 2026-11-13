@@ -359,7 +359,7 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public void Key(int code) => _machine.Bus.Keyboard.Type((byte)code);
+    public bool Key(int code) => _machine.Bus.Keyboard.Type((byte)code);
 
     /// <inheritdoc/>
     public void Reset()

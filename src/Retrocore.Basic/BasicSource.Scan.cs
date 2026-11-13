@@ -81,7 +81,7 @@ public sealed partial class BasicSource
     private static HashSet<string> ForeignWords(BasicDialect dialect)
     {
         HashSet<string> foreign = new(StringComparer.Ordinal);
-        if (dialect == BasicDialect.Integer || dialect == BasicDialect.BusinessBasic) { return foreign; }
+        if (dialect is IntegerBasicDialect || dialect == BasicDialect.BusinessBasic) { return foreign; }
         HashSet<string> own = [.. dialect.AllKeywords.Select(Letters)];
         foreach (BasicDialect other in (BasicDialect[])[BasicDialect.AppleSoft, BasicDialect.Level2])
         {

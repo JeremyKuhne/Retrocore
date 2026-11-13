@@ -96,7 +96,7 @@ try {
     assert.equal((await request("threads")).threads[0].name, "Apple-1 CPU");
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.deepEqual(Object.keys(hardware), ["model", "memory", "terminal", "cassette"]);
-    assert.equal(hardware.memory.value, "4 KB at $0000, 4 KB at $E000");
+    assert.equal(hardware.memory.value, "4 KB at $0000, 4 KB at $E000 with BASIC");
     assert.deepEqual(hardware.cassette.devices, ["cassette"]);
 
     // The Monitor examines its own first bytes, after the blank line its Return leaves.

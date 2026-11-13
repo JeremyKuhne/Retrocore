@@ -22,6 +22,7 @@
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
     "onLanguage:retrocore-business",
+    "onLanguage:retrocore-apple1",
     "onLanguage:retrocore-level1",
     "onLanguage:retrocore-colorbasic",
     "onLanguage:retrocore-basic"
@@ -138,6 +139,21 @@
         }
       },
       {
+        "id": "retrocore-apple1",
+        "aliases": [
+          "Apple-1 BASIC",
+          "apple1"
+        ],
+        "extensions": [
+          ".apple1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -227,6 +243,11 @@
         "path": "./syntaxes/business.tmLanguage.json"
       },
       {
+        "language": "retrocore-apple1",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
         "language": "retrocore-colorbasic",
         "scopeName": "source.retrocore-colorbasic",
         "path": "./syntaxes/colorbasic.tmLanguage.json"
@@ -275,6 +296,7 @@
             "applesoft",
             "integer",
             "business",
+            "apple1",
             "level2",
             "colorbasic"
           ],
@@ -317,6 +339,9 @@
       },
       {
         "language": "retrocore-business"
+      },
+      {
+        "language": "retrocore-apple1"
       },
       {
         "language": "retrocore-colorbasic"
@@ -743,6 +768,11 @@
                 "default": true,
                 "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
               },
+              "loadBasic": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
+              },
               "rom": {
                 "enum": [
                   "level2",
@@ -1136,7 +1166,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",

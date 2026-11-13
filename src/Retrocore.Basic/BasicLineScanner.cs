@@ -179,7 +179,7 @@ internal sealed class BasicLineScanner
             }
 
             // A comma continues a list of lines, and Integer BASIC's LIST 10,20; anything else ends it.
-            bool commaRange = jump == BasicJump.Range && _dialect == BasicDialect.Integer;
+            bool commaRange = jump == BasicJump.Range && _dialect is IntegerBasicDialect;
             bool next = value == ',' && afterNumber && (jump == BasicJump.List || commaRange);
             if (!next) { jump = BasicJump.None; }
             afterNumber = false;
@@ -272,7 +272,7 @@ internal sealed class BasicLineScanner
     // ON GOTO: a line is a number that ends the statement or comes before a comma.
     private bool Computed(int last)
     {
-        if (_dialect != BasicDialect.Integer) { return false; }
+        if (_dialect is not IntegerBasicDialect) { return false; }
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         return next < _bytes.Length && _bytes[next] is not ((byte)':' or (byte)',');
@@ -324,10 +324,10 @@ internal sealed class BasicLineScanner
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
         // The Microsoft BASICs keep a name's first two characters; Integer BASIC and Business BASIC keep all of it.
-        string significant = letters.Length > 2 && _dialect != BasicDialect.Integer && !Business ? letters[..2] : letters;
+        string significant = letters.Length > 2 && _dialect is not IntegerBasicDialect && !Business ? letters[..2] : letters;
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
-            Key = $"{significant}{suffix}{(array && _dialect != BasicDialect.Integer ? "(" : "")}",
+            Key = $"{significant}{suffix}{(array && _dialect is not IntegerBasicDialect ? "(" : "")}",
             Name = letters + suffix,
             Subscripted = array
         };

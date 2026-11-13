@@ -79,7 +79,7 @@ public sealed partial class BasicEvaluator
     public BasicResult Evaluate(string expression)
     {
         ArgumentNullException.ThrowIfNull(expression);
-        if (_dialect == BasicDialect.Integer)
+        if (_dialect is IntegerBasicDialect)
         {
             return new IntegerBasicExpression(_variables, _memory).Evaluate(expression);
         }
@@ -123,7 +123,7 @@ public sealed partial class BasicEvaluator
     /// <returns>The text.</returns>
     public string Format(BasicResult result)
     {
-        if (_dialect == BasicDialect.Integer) { return IntegerBasicExpression.Format(result.Value); }
+        if (_dialect is IntegerBasicDialect) { return IntegerBasicExpression.Format(result.Value); }
         if (_dialect == BasicDialect.BusinessBasic) { return BusinessBasicExpression.Format(result.Value); }
         if (result.Value.Text is { } text)
         {

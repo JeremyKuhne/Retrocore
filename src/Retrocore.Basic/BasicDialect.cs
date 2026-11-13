@@ -29,6 +29,7 @@ public abstract partial class BasicDialect
         AppleSoftDialect.Enhanced,
         Level2Dialect.Instance,
         IntegerBasicDialect.Instance,
+        IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
         ColorBasicDialect.Disk
     ];
@@ -58,6 +59,11 @@ public abstract partial class BasicDialect
     ///  Gets Apple Business BASIC 1.23, the Apple III's.
     /// </summary>
     public static BasicDialect BusinessBasic => BusinessBasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets Apple-1 BASIC, the first form of Integer BASIC.
+    /// </summary>
+    public static BasicDialect Apple1 => IntegerBasicDialect.Apple1Basic;
 
     /// <summary>
     ///  Gets the TRS-80 Color Computer's BASIC with every word its ROMs add: Color, Extended and Disk Extended Color

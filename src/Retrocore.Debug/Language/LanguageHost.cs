@@ -44,6 +44,11 @@ internal static class LanguageHost
     internal const string BusinessId = "retrocore-business";
 
     /// <summary>
+    ///  The VS Code language of Apple-1 BASIC documents.
+    /// </summary>
+    internal const string Apple1Id = "retrocore-apple1";
+
+    /// <summary>
     ///  The VS Code language of Level I BASIC documents.
     /// </summary>
     internal const string Level1Id = "retrocore-level1";
@@ -69,6 +74,7 @@ internal static class LanguageHost
     internal static bool IsBasic(string languageId) => languageId is AppleSoftId
         or Level2Id
         or IntegerId
+        or Apple1Id
         or BusinessId
         or Level1Id
         or ColorBasicId

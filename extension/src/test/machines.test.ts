@@ -83,6 +83,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("trs80-model1-level1")?.diskFormats, [], "Level I has no disks");
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
     assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");
+    assert.deepEqual(machineById("apple1")?.basicDialects, ["apple1"], "Apple-1 BASIC loads into its $E000 bank");
     for (const id of ["coco1", "coco2", "coco3"]) {
         const coco = machineById(id);
         assert.equal(coco?.configuration.machine, "coco");

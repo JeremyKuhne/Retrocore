@@ -109,8 +109,8 @@ async function startFrom(context: vscode.ExtensionContext, host: string): Promis
 }
 
 /** The BASIC languages: one per dialect, and one whose pragma, file name or session decides. */
-export const basicLanguages = ["retrocore-applesoft", "retrocore-level2", "retrocore-integer", "retrocore-business", "retrocore-level1",
-    "retrocore-colorbasic", "retrocore-basic"];
+export const basicLanguages = ["retrocore-applesoft", "retrocore-level2", "retrocore-integer", "retrocore-apple1", "retrocore-business",
+    "retrocore-level1", "retrocore-colorbasic", "retrocore-basic"];
 
 /** Assembly documents must be files; BASIC also supports virtual documents. */
 export const documentSelector = [

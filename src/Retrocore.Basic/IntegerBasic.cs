@@ -50,6 +50,37 @@ public static class IntegerBasic
         "NODSP", "NODSP", "NOTRACE", "DSP", "DSP", "TRACE", "PR#", "IN#"
     ];
 
+    // How Apple-1 BASIC lists each token, as its LIST prints it alone in a line: the same count down its own syntax
+    // table. Tokens it has no keyword for print as what the count lands on; LIST never meets them.
+    private static readonly string[] s_apple1Tokens =
+    [
+        "HIMEM=", "?", "_", ":", "LIST", ",", "LIST", "RUN",
+        "RUN", "DEL", ",", "SCR", "CLR", "AUTO", ",", "OFF",
+        "HIMEM=", "LOMEM=", "+", "-", "*", "/", "=", "#",
+        ">=", ">", "<=", "<>", "<", "AND", "OR", "MOD",
+        "^", "+", "(", ",", "THEN", "THEN", ",", ",",
+        "\"", "\"", "(", "!", "!", "(", "PEEK", "RND",
+        "SGN", "ABS", "USR", "RNDX", "(", "+", "-", "NOT",
+        "(", "=", "#", "LEN(", "COLOR", "HIMEM", "LOMEM", "(",
+        "$", "$", "(", ",", ",", ";", ";", ";",
+        ",", ",", "!", "?", "?", "CALL", "DIM", "DIM",
+        "TAB", "END", "INPUT", "INPUT", "INPUT", "FOR", "=", "TO",
+        "STEP", "NEXT", ",", "RETURN", "GOSUB", "REM", "LET", "GOTO",
+        "IF", "PRINT", "PRINT", "PRINT", "POKE", ",", "COLOR=", "PLOT",
+        ",", "HLIN", ",", "AT", "_", ",", "+", "-",
+        "=", "=", ")", ")", "_", ",", "+", "-"
+    ];
+
+    /// <summary>
+    ///  Gets how Integer BASIC lists each token.
+    /// </summary>
+    internal static string[] Spellings => s_tokens;
+
+    /// <summary>
+    ///  Gets how Apple-1 BASIC lists each token.
+    /// </summary>
+    internal static string[] Apple1Spellings => s_apple1Tokens;
+
     /// <summary>
     ///  Tests whether a statement calls machine code, with CALL, up to the colon or line end after it.
     /// </summary>
@@ -81,13 +112,6 @@ public static class IntegerBasic
 
         return false;
     }
-
-    /// <summary>
-    ///  Gets how Integer BASIC lists a token.
-    /// </summary>
-    /// <param name="token">The token, below $80.</param>
-    /// <returns>Its spelling, such as <c>PRINT</c> or <c>,</c>.</returns>
-    internal static string Spelling(byte token) => s_tokens[token & 0x7F];
 
     /// <summary>
     ///  Lists a program: one line of text for each of its lines, such as <c>10 PRINT "HI";A1+23</c>.

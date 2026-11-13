@@ -57,8 +57,8 @@ public class IntegerBasicSyntaxTests
     public void TablesAreTheRoms()
     {
         byte[] rom = SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)).Sections[0].Bytes.ToArray();
-        IntegerBasicSyntax.s_table.Should().Equal(rom[0xC00..0xE00]);
-        IntegerBasicSyntax.s_index.Should().Equal(rom[0x1197..0x11B7]);
+        IntegerBasicSyntax.Integer.Table.Should().Equal(rom[0xC00..0xE00]);
+        IntegerBasicSyntax.Integer.Index.Should().Equal(rom[0x1197..0x11B7]);
     }
 
     /// <summary>

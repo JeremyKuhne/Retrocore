@@ -112,6 +112,20 @@ public static partial class DocumentationParser
                     continue;
                 }
 
+                // A definition documented by its own trailing comment is one of a group, and a block above the group is
+                // its heading, which is a plain comment.
+                if (Split(next).Comment is { } trailing && trailing.StartsWith(Marker, StringComparison.Ordinal))
+                {
+                    diagnostics.Add(new(
+                        "A documentation comment cannot document a definition that has its own trailing documentation "
+                            + "comment; write a heading above a group as a plain ; comment.",
+                        path,
+                        start,
+                        DocumentationSeverity.Error));
+
+                    continue;
+                }
+
                 comments.Add(Documented(path, lines, start, index, definition, body, conditions, dataMacros, isTrailing: false));
                 continue;
             }

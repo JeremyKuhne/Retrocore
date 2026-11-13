@@ -1042,6 +1042,12 @@ internal static partial class AssemblyCompiler
                     : throw new AssemblyError(line, "Restart address must be $00, $08, $10, $18, $20, $28, $30 or $38.");
 
                 return offset;
+            case OperandFieldKind.RestartNumber:
+                image[fields.OpcodeByte] |= value is >= 0 and < InstructionEncoding.BitsPerByte
+                    ? (byte)(value << OpcodeFieldShift)
+                    : throw new AssemblyError(line, "Restart number must be 0-7.");
+
+                return offset;
             default:
                 int word = field == OperandFieldKind.Word ? Word(value, line) : Relative16(value, fields.Next, line);
                 byte low = (byte)word;
@@ -1052,7 +1058,7 @@ internal static partial class AssemblyCompiler
         }
     }
 
-    // A bit number or restart address sits in bits 3-5 of the last opcode byte.
+    // A bit number, restart address or restart number sits in bits 3-5 of the last opcode byte.
     private const int OpcodeFieldShift = 3;
     private const int RestartMask = 0x38;
 

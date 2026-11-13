@@ -21,14 +21,15 @@ public sealed class Trs80CassetteDrive : ITapeDrive
     /// </summary>
     /// <param name="cassette">The cassette interface.</param>
     /// <param name="baud">The ROM's rate: 500 for Level II, 250 for Level I.</param>
-    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud)
+    /// <param name="motorPort">Where the motor relay is driven.</param>
+    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud, string motorPort = "$FF")
     {
         _cassette = cassette;
         Info = new()
         {
             Name = "Cassette",
             Description = $"Cassette recorder, {baud} baud",
-            Controller = "the cassette port, with the motor relay on port $FF",
+            Controller = $"the cassette port, with the motor relay on port {motorPort}",
             Formats = ["cas"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
         };

@@ -45,7 +45,13 @@ public sealed class Trs80Cassette
     ///  Creates the interface.
     /// </summary>
     /// <param name="baud">500 for Level II, 250 for Level I.</param>
-    internal Trs80Cassette(int baud) => _cellCycles = Trs80Timing.ClockHertz / baud;
+    /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
+    internal Trs80Cassette(int baud, int clockHertz = Trs80Timing.ClockHertz) => _cellCycles = clockHertz / baud;
+
+    /// <summary>
+    ///  Gets whether the input latch holds a pulse the program has not cleared.
+    /// </summary>
+    internal bool Latch => _latch;
 
     /// <summary>
     ///  Gets whether the motor relay is closed.
@@ -126,14 +132,28 @@ public sealed class Trs80Cassette
     /// <param name="value">The value.</param>
     internal void Write(byte value)
     {
-        _latch = false;
-        bool motor = (value & 0x04) != 0;
-        if (motor != MotorOn)
-        {
-            MotorOn = motor;
-            if (!motor && _recording) { Flush(); }
-        }
+        SetMotor((value & 0x04) != 0);
+        WriteLevel(value);
+    }
 
+    /// <summary>
+    ///  Opens or closes the motor relay, which the Model III and 4 drive from port <c>$EC</c>.
+    /// </summary>
+    /// <param name="motor">Whether the motor runs.</param>
+    internal void SetMotor(bool motor)
+    {
+        if (motor == MotorOn) { return; }
+        MotorOn = motor;
+        if (!motor && _recording) { Flush(); }
+    }
+
+    /// <summary>
+    ///  Writes the output level from bits 0-1, clearing the input latch, as port <c>$FF</c> does.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    internal void WriteLevel(byte value)
+    {
+        _latch = false;
         int level = value & 0x03;
         if (level == 1 && _outputLevel != 1 && MotorOn && _recording) { Pulse(); }
         _outputLevel = level;

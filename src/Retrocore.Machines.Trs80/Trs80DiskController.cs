@@ -46,6 +46,8 @@ public sealed partial class Trs80DiskController
     private readonly bool[] _changed = new bool[DriveCount];
     private readonly Trs80Doubler _doubler;
     private readonly int _clockHertz;
+    private readonly bool _wd179x;
+    private readonly bool _eightInch;
     private readonly int _cyclesPerMillisecond;
     private readonly int _rotationCycles;
     private readonly int _indexPulseCycles;
@@ -77,12 +79,25 @@ public sealed partial class Trs80DiskController
     /// </summary>
     /// <param name="doubler">The doubler that can select a WD1791 for double density.</param>
     /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
-    internal Trs80DiskController(Trs80Doubler doubler, int clockHertz = Trs80Timing.ClockHertz)
+    /// <param name="wd179x">
+    ///  Whether the controller is a WD179x in both densities, as the Model III, 4 and II have, rather than an FD1771.
+    /// </param>
+    /// <param name="eightInch">
+    ///  Whether the drives are 8-inch, as the Model II's are: 360 rpm, twice the data rate, and the controller clocked
+    ///  at 2 MHz, which halves its step rates.
+    /// </param>
+    internal Trs80DiskController(
+        Trs80Doubler doubler,
+        int clockHertz = Trs80Timing.ClockHertz,
+        bool wd179x = false,
+        bool eightInch = false)
     {
         _doubler = doubler;
         _clockHertz = clockHertz;
+        _wd179x = wd179x;
+        _eightInch = eightInch;
         _cyclesPerMillisecond = clockHertz / 1000;
-        _rotationCycles = 200 * _cyclesPerMillisecond;
+        _rotationCycles = eightInch ? clockHertz / 6 : 200 * _cyclesPerMillisecond;
         _indexPulseCycles = 4 * _cyclesPerMillisecond;
         _settleCycles = 15 * _cyclesPerMillisecond;
     }
@@ -234,6 +249,22 @@ public sealed partial class Trs80DiskController
     }
 
     /// <summary>
+    ///  Selects a drive, its side and the density, starting the motors for 3 seconds, as the Model III and 4's drive
+    ///  select port does.
+    /// </summary>
+    /// <param name="drive">The drive, 0-3, or -1 for none.</param>
+    /// <param name="side">The side, 0 or 1.</param>
+    /// <param name="doubleDensity">Whether the controller reads and writes MFM.</param>
+    internal void SelectTimed(int drive, int side, bool doubleDensity)
+    {
+        _selected = drive;
+        Side = side;
+        _doubleDensity = doubleDensity;
+        _motorHeld = false;
+        if (drive >= 0) { _motorCycles = 3000 * _cyclesPerMillisecond; }
+    }
+
+    /// <summary>
     ///  Gets whether the data register waits for the program (DRQ).
     /// </summary>
     public bool DataRequest => _request;
@@ -317,7 +348,11 @@ public sealed partial class Trs80DiskController
 
     private bool Ready => Current is not null && _motorCycles > 0;
 
-    private int ByteCycles => _doubleDensity ? _clockHertz / 31250 : _clockHertz / 15625;
+    private int ByteCycles => (_doubleDensity ? _clockHertz / 31250 : _clockHertz / 15625) / (_eightInch ? 2 : 1);
+
+    // Whether the chip reading now behaves as a WD179x: always for a Model III, 4 or II, and with a doubler's
+    // WD1791 selected on a Model I.
+    private bool Is179x => _wd179x || _doubleDensity;
 
     private byte Status()
     {

@@ -109,13 +109,20 @@ internal static class OffMachine
         // Game controllers are read only while a machine runs; an off machine does not open them.
         JsonObject args = (JsonObject)configuration.DeepClone();
         args["controllers"] = false;
-        return DebugMachines.Require(args.String("machine")) switch
+        // Each machine by name, as DebugSession's launch builds it, so a machine added there and not here fails rather
+        // than being built as another.
+        string machine = DebugMachines.Require(args.String("machine"));
+        return machine switch
         {
+            DebugMachines.Apple2 => Apple2DebugTarget.Launch(args),
             DebugMachines.Trs80Model1 => Trs80DebugTarget.Launch(args),
+            DebugMachines.Trs80Model3 => Trs80Model3DebugTarget.Launch(args),
+            DebugMachines.Trs80Model2 => Trs80Model2DebugTarget.Launch(args),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => Apple1DebugTarget.Launch(args),
             DebugMachines.Coco => CocoDebugTarget.Launch(args),
-            _ => Apple2DebugTarget.Launch(args)
+            DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            _ => throw new ArgumentException($"A machine that is off cannot yet be a {machine}.")
         };
     }
 

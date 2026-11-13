@@ -38,7 +38,8 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
-        "apple1/clearScreen"
+        "apple1/clearScreen",
+        "altair/clearScreen"
     ];
 
     private readonly object _gate = new();
@@ -414,7 +415,9 @@ internal sealed partial class DebugSession
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", _ => Reply(() =>
         {
+            // A reset abandons every call in progress, even where it keeps the stack pointer and RAM, as the 8080's does.
             Target.Reset();
+            Target.CallStack.Reset();
             Pascal?.Reset();
             _pascalFrames = null;
             Invalidate();
@@ -441,7 +444,7 @@ internal sealed partial class DebugSession
         JsonObject result = handler(args);
 
         // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
-        if (name == "apple1/clearScreen" && _run is not { IsCancellationRequested: false })
+        if (name is "apple1/clearScreen" or "altair/clearScreen" && _run is not { IsCancellationRequested: false })
         {
             NotifyFrame(running: false);
         }
@@ -562,9 +565,12 @@ internal sealed partial class DebugSession
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
+            DebugMachines.Trs80Model3 => LaunchModelIII(args, loads),
+            DebugMachines.Trs80Model2 => LaunchModelII(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
+            DebugMachines.Altair => AltairDebugTarget.Launch(args),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -712,7 +718,7 @@ internal sealed partial class DebugSession
                 ["supportsSetVariable"] = HasBasicThread,
                 ["supportsSetExpression"] = HasBasicThread,
                 ["supportsGotoTargetsRequest"] = HasBasicThread,
-                ["exceptionBreakpointFilters"] = FilterJson(ExceptionFilters(machine, _contracts is not null))
+                ["exceptionBreakpointFilters"] = FilterJson(ExceptionFilters(machine, _contracts is not null, HasBasicThread))
 }
         });
 
@@ -745,6 +751,22 @@ internal sealed partial class DebugSession
     {
         Trs80DebugTarget target = Trs80DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Model III, 4 or 4P loads once the ROM has set up its RAM, as on a Model I.
+    private static Trs80Model3DebugTarget LaunchModelIII(JsonObject args, bool loads)
+    {
+        Trs80Model3DebugTarget target = Trs80Model3DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Model II, 12 or 16 loads at once unless the launch asks the boot ROM to run first.
+    private static Trs80Model2DebugTarget LaunchModelII(JsonObject args, bool loads)
+    {
+        Trs80Model2DebugTarget target = Trs80Model2DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? 0);
         return target;
     }
 
@@ -1193,6 +1215,10 @@ internal sealed partial class DebugSession
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
             // made its writes, so the watchpoints they hit stop now.
             if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
+
+            // A held CPU may stay so for any time too. Its instruction has not finished, so the watchpoints it hit
+            // wait for the instruction's end.
+            if (Target.IsHeld) { return true; }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");

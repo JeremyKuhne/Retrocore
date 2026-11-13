@@ -110,6 +110,29 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A <c>;;</c> block above a definition with its own trailing <c>;;</c> comment is a group's heading written as
+    ///  documentation, an error; as a plain comment it is fine, and the trailing comments still document.
+    /// </summary>
+    [TestMethod]
+    public void HeadingsAboveTrailingCommentsAreChecked()
+    {
+        DocumentationFile file = Parse("""
+            ;; The file.
+
+            ;; Ports.
+            DATA_PORT = $10                     ;; the data
+            STATUS_PORT = $11                   ;; the status
+
+            ; Memory.
+            SCREEN = $3C00                      ;; video RAM
+            """);
+
+        file.Diagnostics.Should().ContainSingle().Which.Line.Should().Be(2);
+        file.Comments.Where(comment => comment.Kind != DocumentationKind.File).Select(comment => comment.Name)
+            .Should().Equal("DATA_PORT", "STATUS_PORT", "SCREEN");
+    }
+
+    /// <summary>
     ///  Each kind of definition is recognized, with members, parameters, trailing comments and stacked labels.
     /// </summary>
     [TestMethod]
@@ -431,12 +454,15 @@ public class DocumentationTests
     [TestMethod]
     public void FlagsHaveWordsAndDescriptions()
     {
-        foreach (Retrocore.Isa.IsaDescription description in (Retrocore.Isa.IsaDescription[])[
-            Retrocore.Cpu.M6502.M6502Isa.Description,
-            Retrocore.Cpu.Z80.Z80Isa.Description,
-            Retrocore.Cpu.M6809.M6809Isa.Description])
+        // The undocumented flags, the Z80's X and Y and the 8085's K and V, have no words.
+        foreach ((Retrocore.Isa.IsaDescription description, string[] undocumented) in
+            (ValueTuple<Retrocore.Isa.IsaDescription, string[]>[])[
+                (Retrocore.Cpu.M6502.M6502Isa.Description, []),
+                (Retrocore.Cpu.Z80.Z80Isa.Description, ["X", "Y"]),
+                (Retrocore.Cpu.M6809.M6809Isa.Description, []),
+                (Retrocore.Cpu.I8080.I8080Isa.Description, ["K", "V"])])
         {
-            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => flag.Name is not ("X" or "Y")))
+            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => !undocumented.Contains(flag.Name)))
             {
                 flag.Words.Should().NotBeEmpty(flag.Name);
                 flag.Description.Should().NotBeEmpty(flag.Name);

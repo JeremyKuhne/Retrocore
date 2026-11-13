@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Cpu.I8080;
 using Retrocore.Cpu.M6502;
 using Retrocore.Cpu.M6809;
 using Retrocore.Cpu.Z80;
@@ -17,7 +18,7 @@ public static class CpuCatalog
     private static readonly Dictionary<string, InstructionSet> s_sets = Create();
 
     /// <summary>
-    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c>, <c>Z80</c> or <c>M6809</c>; names ignore case.
+    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c>, <c>Z80</c>, <c>M6809</c> or <c>I8080</c>; names ignore case.
     /// </summary>
     public static IReadOnlyDictionary<string, InstructionSet> InstructionSets => s_sets;
 
@@ -35,7 +36,7 @@ public static class CpuCatalog
     private static Dictionary<string, InstructionSet> Create()
     {
         Dictionary<string, InstructionSet> sets = new(StringComparer.OrdinalIgnoreCase);
-        foreach (IsaDescription description in (IsaDescription[])[M6502Isa.Description, Z80Isa.Description, M6809Isa.Description])
+        foreach (IsaDescription description in (IsaDescription[])[M6502Isa.Description, Z80Isa.Description, M6809Isa.Description, I8080Isa.Description])
         {
             foreach (KeyValuePair<string, InstructionSet> pair in description.InstructionSets)
             {

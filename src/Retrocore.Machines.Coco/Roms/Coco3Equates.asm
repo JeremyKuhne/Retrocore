@@ -287,7 +287,7 @@ HRWIDTH = $E7
 ; Tokens and error codes
 ; ----------------------------------------------------------------------------------------------------------------
 
-;; Tokens: Super Extended BASIC's commands follow Disk BASIC's, from $E2, in the order of <COMDIC20>.
+; Tokens: Super Extended BASIC's commands follow Disk BASIC's, from $E2, in the order of <COMDIC20>.
 TK_WIDTH = $E2                      ;; WIDTH
 TK_PALETTE = $E3                    ;; PALETTE
 TK_HSCREEN = $E4                    ;; HSCREEN
@@ -312,14 +312,14 @@ TK_CMP = $F6                        ;; CMP
 TK_RGB = $F7                        ;; RGB
 TK_ATTR = $F8                       ;; ATTR
 
-;; Function tokens: $FF, then Super Extended BASIC's functions follow Disk BASIC's, from $A8, in the order of
-;; <FUNDIC20>.
+; Function tokens: $FF, then Super Extended BASIC's functions follow Disk BASIC's, from $A8, in the order of
+; <FUNDIC20>.
 TK_LPEEK = $A8                      ;; LPEEK
 TK_BUTTON = $A9                     ;; BUTTON
 TK_HPOINT = $AA                     ;; HPOINT
 TK_ERNO = $AB                       ;; ERNO
 TK_ERLIN = $AC                      ;; ERLIN
 
-;; Error codes: Super Extended BASIC's follow Disk BASIC's, twice the error's number.
+; Error codes: Super Extended BASIC's follow Disk BASIC's, twice the error's number.
 ERR_HR = 76                         ;; HR: a hi-res graphics command with no HSCREEN
 ERR_HP = 78                         ;; HP: HPRINT with no HSCREEN

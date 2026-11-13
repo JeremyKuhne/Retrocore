@@ -37,6 +37,10 @@ public class Z80ExerciserTests
     // The T-states Run takes between checks for the final HALT.
     private const ulong Chunk = 4096;
 
+    // The most T-states a program may run before the test fails rather than hang: 2.5 times aluop's 20 billion, the
+    // longest test, and deterministic, since it counts emulated T-states.
+    private const ulong Budget = 50_000_000_000;
+
     private const string ZexdocSkipped = "ZEXDOC is optional: ZEXALL checks the same instructions with every flag. "
         + "Set RETROCORE_ZEXDOC=1 to run it, such as to tell whether a ZEXALL failure is only in the undocumented flags.";
 
@@ -144,7 +148,16 @@ public class Z80ExerciserTests
             }
         };
 
-        while (!cpu.IsHalted) { cpu.Run(Chunk); }
+        while (!cpu.IsHalted)
+        {
+            if (cpu.CycleCount >= Budget)
+            {
+                Assert.Fail($"The program ran {cpu.CycleCount:N0} T-states without returning to CP/M. Output:\n{console}");
+            }
+
+            cpu.Run(Chunk);
+        }
+
         cycles = cpu.CycleCount;
         return console.ToString();
     }

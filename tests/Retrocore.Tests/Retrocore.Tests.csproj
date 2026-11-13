@@ -26,11 +26,13 @@
     <ProjectReference Include="..\..\src\Retrocore.Basic\Retrocore.Basic.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Pascal\Retrocore.Pascal.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Altair\Retrocore.Machines.Altair.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple1\Retrocore.Machines.Apple1.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Cpu.I8080\Retrocore.Cpu.I8080.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\..\tools\DosDisk\DosDisk.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj" Aliases="Generator" />
@@ -53,6 +55,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\M6502Frames.cs" Link="M6502Frames.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Z80CallStack.cs" Link="Z80CallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\M6809CallStack.cs" Link="M6809CallStack.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\I8080CallStack.cs" Link="I8080CallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugCallStack.cs" Link="DebugCallStack.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugCallCycles.cs" Link="DebugCallCycles.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugContract.cs" Link="DebugContract.cs" />
@@ -91,6 +94,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.cs" Link="Language\InstructionDocs.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.M6809.cs" Link="Language\InstructionDocs.M6809.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.Z80.cs" Link="Language\InstructionDocs.Z80.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.I8080.cs" Link="Language\InstructionDocs.I8080.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\DirectiveDocs.cs" Link="Language\DirectiveDocs.cs" />
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

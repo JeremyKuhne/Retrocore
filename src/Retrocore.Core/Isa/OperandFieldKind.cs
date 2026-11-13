@@ -65,5 +65,11 @@ public enum OperandFieldKind : byte
     /// <summary>
     ///  An MC6809 <c>PSHU</c> or <c>PULU</c> register-list postbyte (bit 6 selects <c>S</c>).
     /// </summary>
-    UserStackMask
+    UserStackMask,
+
+    /// <summary>
+    ///  A restart number, 0-7, held in bits 3-5 of the last opcode byte, as Intel's 8080 <c>RST</c> holds it; it
+    ///  takes no operand byte, and its value is the restart's address, eight times the number.
+    /// </summary>
+    RestartNumber
 }

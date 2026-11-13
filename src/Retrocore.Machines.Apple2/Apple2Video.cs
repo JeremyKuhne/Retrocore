@@ -22,6 +22,10 @@ namespace Retrocore.Machines.Apple2;
 ///   scanned again. HGR uses a six-colour lookup with half-dot delay, not analog colour fringing.
 ///   Mode changes are sampled at CPU-clock boundaries; sub-cycle propagation is not modeled.
 ///  </para>
+///  <para>
+///   On <see cref="Apple2Monitor.ColorRgb"/>, an RGB card's monitor, hi-res has no fringing: white runs stay white to
+///   their edges and colored areas are solid. Text is white; lo-res and double hi-res are as on a composite monitor.
+///  </para>
 /// </remarks>
 public sealed class Apple2Video : IVideoSource
 {
@@ -231,8 +235,14 @@ public sealed class Apple2Video : IVideoSource
             }
 
             Span<byte> line = pixels.Slice(row * Width * 4, Width * 4);
-            if (_monitor == Apple2Monitor.Color) { RenderLine(line, row, main, auxiliary, switches, flash); }
-            else { RenderMonochromeLine(line, row, main, auxiliary, switches, flash); }
+            if (_monitor is Apple2Monitor.Color or Apple2Monitor.ColorRgb)
+            {
+                RenderLine(line, row, main, auxiliary, switches, flash);
+            }
+            else
+            {
+                RenderMonochromeLine(line, row, main, auxiliary, switches, flash);
+            }
         }
     }
 
@@ -263,7 +273,7 @@ public sealed class Apple2Video : IVideoSource
 
                     int bit = wide ? dot % 7 : dot / 2;
                     bool lit = ((_roms.Characters[code * 8 + (row & 7)] >> bit) & 1) == 0;
-                    SetTextPixel(pixels, start + dot, lit);
+                    SetTextPixel(pixels, start + dot, lit, _monitor == Apple2Monitor.ColorRgb);
                 }
             }
             else if (!Has(state, Apple2Switches.HiRes))
@@ -295,16 +305,36 @@ public sealed class Apple2Video : IVideoSource
                     SetPixel(pixels, dot, color);
                 }
             }
+            else if (_monitor == Apple2Monitor.ColorRgb)
+            {
+                // Each hi-res dot is two of the line's 560 pixels, in place: an RGB card has no half-dot delay.
+                for (int dot = start; dot < start + 14; dot++)
+                {
+                    SetPixel(pixels, dot, RgbHiresColor(main, switches, row, dot >> 1));
+                }
+            }
             else
             {
+                // A delayed byte's first half dot is the previous column's last dot, carried over; it and the dots
+                // either side count only where their columns are shown as hi-res (see ShownHiresDot).
                 for (int dot = 0; dot < 14; dot++)
                 {
                     bool delayed = !Revision0 && (main[column] & 128) != 0;
                     int within = dot - (delayed ? 1 : 0);
                     int position = within < 0 ? column * 7 - 1 : column * 7 + within / 2;
-                    if (!HiresBit(main, position)) { continue; }
-                    if (within < 0 && column != 0) { delayed = !Revision0 && (main[column - 1] & 128) != 0; }
-                    bool white = HiresBit(main, position - 1) || HiresBit(main, position + 1);
+                    if (!ShownHiresDot(main, switches, row, position))
+                    {
+                        continue;
+                    }
+
+                    if (within < 0 && column != 0)
+                    {
+                        delayed = !Revision0 && (main[column - 1] & 128) != 0;
+                    }
+
+                    bool white = ShownHiresDot(main, switches, row, position - 1)
+                        || ShownHiresDot(main, switches, row, position + 1);
+
                     int color = white ? 3 : delayed ? (position & 1) == 0 ? 6 : 5 : (position & 1) == 0 ? 2 : 1;
                     HiresPalette.Slice(color * 4, 4).CopyTo(pixels.Slice((start + dot) * 4, 4));
                 }
@@ -363,11 +393,13 @@ public sealed class Apple2Video : IVideoSource
                 }
                 else
                 {
-                    // Hi-res: each bit two dots wide, half a bit later when the byte's high bit is set.
+                    // Hi-res: each bit two dots wide, half a bit later when the byte's high bit is set. A delayed
+                    // byte's first half dot is the previous column's last dot, carried over only when that column
+                    // is shown as hi-res (see ShownHiresDot).
                     bool delayed = !Revision0 && (main[column] & 128) != 0;
                     int within = dot - (delayed ? 1 : 0);
                     lit = within < 0
-                        ? column != 0 && (main[column - 1] & 0x40) != 0
+                        ? ShownHiresDot(main, switches, row, column * 7 - 1)
                         : ((main[column] >> (within / 2)) & 1) != 0;
                 }
 
@@ -382,12 +414,99 @@ public sealed class Apple2Video : IVideoSource
 
     private static bool HiresBit(ReadOnlySpan<byte> bytes, int position) =>
         position is >= 0 and < 280 && (bytes[position / 7] & (1 << (position % 7))) != 0;
+    private bool HiresHigh(ReadOnlySpan<byte> bytes, int position) => !Revision0 && (bytes[position / 7] & 128) != 0;
+
+    // The palette color an RGB card shows for hi-res dot 0-279 of a line. The card turns the dot pattern into colors
+    // with no color fringing:
+    //
+    //  - A lit dot beside another lit dot is white. A run of lit dots is white to its exact edges, with no colored
+    //    fringe at either end, so a white line or a white area is white throughout.
+    //  - A lone lit dot (dark on both sides) is its color: violet or blue on an even dot, green or orange on an odd
+    //    one, blue and orange when bit 7 of its byte is set. A one-dot-wide line, such as a steep HPLOT diagonal,
+    //    therefore stays colored, as it does on the real cards: a lone dot carries no white.
+    //  - A dark dot between two lone lit dots (the middle of 10101) takes their color, so the alternating patterns
+    //    that draw colored areas ($55 and $2A, $D5 and $AA) fill solid instead of striped.
+    //  - Any other dark dot is black. That includes the gap in 11011, between two white runs; AppleWin colors it, and
+    //    neither the Video-7 nor Apple's card manual says which is right.
+    //
+    // Only dots of columns shown as hi-res count as lit (see ShownHiresDot): where a scanned line changes mode partway, the
+    // hi-res stretch ends as it does at the screen's edges, whatever bytes the text, lo-res or double hi-res beside it
+    // hold.
+    private int RgbHiresColor(
+        ReadOnlySpan<byte> bytes,
+        ReadOnlySpan<Apple2Switches> switches,
+        int row,
+        int position)
+    {
+        if (ShownHiresDot(bytes, switches, row, position))
+        {
+            bool inRun = ShownHiresDot(bytes, switches, row, position - 1) || ShownHiresDot(bytes, switches, row, position + 1);
+            return inRun ? RgbWhite : RgbLoneDotColor(bytes, position);
+        }
+
+        return IsLoneShownHiresDot(bytes, switches, row, position - 1) && IsLoneShownHiresDot(bytes, switches, row, position + 1)
+            ? RgbLoneDotColor(bytes, position - 1)
+            : RgbBlack;
+    }
+
+    // Whether hi-res dot 0-279 is lit, for working out its neighbours' colors: its bit is set and its column is shown
+    // as hi-res. A column shown as text, lo-res or double hi-res holds other bytes, so its bits are not hi-res dots, and
+    // a scanned line's hi-res stretch ends at a mid-line mode change as it does at the screen's edges.
+    private static bool ShownHiresDot(ReadOnlySpan<byte> bytes, ReadOnlySpan<Apple2Switches> switches, int row, int position)
+    {
+        return HiresBit(bytes, position) && IsHires(switches[position / 7], row);
+    }
+
+    // A lit dot with dark dots on both sides, counting only dots shown as hi-res.
+    private static bool IsLoneShownHiresDot(
+        ReadOnlySpan<byte> bytes,
+        ReadOnlySpan<Apple2Switches> switches,
+        int row,
+        int position)
+    {
+        bool lit = ShownHiresDot(bytes, switches, row, position);
+        bool before = ShownHiresDot(bytes, switches, row, position - 1);
+        bool after = ShownHiresDot(bytes, switches, row, position + 1);
+        return lit && !before && !after;
+    }
+
+    // Whether a column is shown as single hi-res: not text, not lo-res and not double hi-res.
+    private static bool IsHires(Apple2Switches switches, int row)
+    {
+        bool doubleHires = Has(switches, Apple2Switches.Column80) && Has(switches, Apple2Switches.DoubleHiRes);
+        return Has(switches, Apple2Switches.HiRes) && !IsText(switches, row) && !doubleHires;
+    }
+
+    // A lone hi-res dot's color on an RGB card: its column (even or odd) and its byte's bit 7 pick one of four.
+    private int RgbLoneDotColor(ReadOnlySpan<byte> bytes, int position) =>
+        ((position & 1) == 0, HiresHigh(bytes, position)) switch
+        {
+            (true, false) => RgbViolet,
+            (true, true) => RgbBlue,
+            (false, false) => RgbGreen,
+            _ => RgbOrange
+        };
+
+    // The lo-res palette entries that an RGB card shows hi-res and text in.
+    private const int RgbBlack = 0;
+    private const int RgbViolet = 3;
+    private const int RgbBlue = 6;
+    private const int RgbOrange = 9;
+    private const int RgbGreen = 12;
+    private const int RgbWhite = 15;
     private static bool Has(Apple2Switches switches, Apple2Switches flag) => (switches & flag) != 0;
     private static bool IsText(Apple2Switches switches, int row) =>
         Has(switches, Apple2Switches.Text) || (Has(switches, Apple2Switches.Mixed) && row is >= 160 and < 192);
 
-    private static void SetTextPixel(Span<byte> pixels, int position, bool lit)
+    // A text dot: white on black on an RGB card (its text color switches set to white), else the composite monitor's text color.
+    private static void SetTextPixel(Span<byte> pixels, int position, bool lit, bool rgb)
     {
+        if (rgb)
+        {
+            SetPixel(pixels, position, lit ? RgbWhite : RgbBlack);
+            return;
+        }
+
         Span<byte> pixel = pixels.Slice(position * 4, 4);
         pixel[0] = lit ? (byte)182 : (byte)16;
         pixel[1] = lit ? (byte)243 : (byte)21;

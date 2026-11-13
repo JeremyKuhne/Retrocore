@@ -129,6 +129,53 @@ if (!z80Image.Success
 
 Console.WriteLine("Z80: Native AOT T-state execution, mid-instruction restore, assembly and disassembly passed.");
 
+// The 8080 and 8085: native assembly, state-stepped execution with mid-instruction restore, and disassembly.
+foreach (I8080Variant variant in Enum.GetValues<I8080Variant>())
+{
+    Retrocore.Isa.InstructionSet intelSet = I8080Isa.Get(variant);
+    AssemblyResult intelImage = new NativeAssembler().Assemble(
+        new AssemblySource(
+            $"""
+            .cpu {intelSet.Name}
+                    MVI B,$10
+                    LXI H,$3000
+            Loop:   INR M
+                    PUSH PSW
+                    POP PSW
+                    DCR B
+                    JNZ Loop
+                    HLT
+            """),
+        new(intelSet.Name, origin: 0, imageSize: 13));
+
+    byte[] intelMemory = new byte[0x10000];
+    intelImage.Sections[0].Bytes.Span.CopyTo(intelMemory);
+    I8080Processor<Z80RamBus> intel = new(new Z80RamBus(intelMemory), variant);
+    for (int index = 0; index < 40; index++) { intel.StepCycle(); }
+    I8080Snapshot intelSnapshot = intel.CaptureState();
+    while (!intel.IsHalted) { intel.StepCycle(); }
+    ulong intelCycles = intel.CycleCount;
+    intelMemory[0x3000] = 1;
+    intel.RestoreState(intelSnapshot);
+    while (!intel.IsHalted) { intel.StepCycle(); }
+    DisassemblyResult intelDisassembly = Disassembler.Disassemble(intelImage.Sections[0].Bytes.Span, 0, intelSet);
+    AssemblyResult intelRoundTrip = new NativeAssembler().Assemble(
+        new AssemblySource(intelDisassembly.ExportSource()),
+        intelDisassembly.Options);
+
+    if (!intelImage.Success
+        || intelMemory[0x3000] != 0x10
+        || intel.CycleCount != intelCycles
+        || intel.Registers.B != 0
+        || !intelRoundTrip.Success
+        || !intelRoundTrip.Sections[0].Bytes.Span.SequenceEqual(intelImage.Sections[0].Bytes.Span))
+    {
+        throw new InvalidOperationException($"Native AOT {variant} execution, restore, assembly or disassembly failed.");
+    }
+}
+
+Console.WriteLine("8080 and 8085: Native AOT state execution, mid-instruction restore, assembly and disassembly passed.");
+
 // The MC6809: native assembly, cycle-stepped execution with mid-instruction restore, and 5-byte round-trip disassembly.
 AssemblyResult m6809Image = new NativeAssembler().Assemble(
     new AssemblySource(
@@ -227,3 +274,45 @@ if (coco.Bus.Peek(0x0400) != 0x0F || coco.Bus.Peek(0x0401) != 0x0B || coco.Proce
 }
 
 Console.WriteLine("Color Computer: Native AOT machine, SAM, VDG and rendering passed.");
+
+// The Altair 8800: an 8080 program prints through the 88-2SIO's ACIA to the terminal, which renders.
+AssemblyResult altairImage = new NativeAssembler().Assemble(
+    new AssemblySource(
+        """
+        .cpu I8080
+                lxi sp,$1000
+                mvi a,3
+                out $10
+                mvi a,$15
+                out $10
+                lxi h,Text
+        Print:  in $10
+                ani 2
+                jz Print
+                mov a,m
+                ora a
+                jz Done
+                out $11
+                inx h
+                jmp Print
+        Done:   hlt
+        Text:   .byte "ALTAIR", 0
+        """),
+    new(I8080Isa.Name, origin: 0, imageSize: 64));
+
+Retrocore.Machines.Altair.AltairMachine altair = new(new Retrocore.Machines.Altair.AltairConfiguration());
+for (int index = 0; index < altairImage.Sections[0].Bytes.Length; index++)
+{
+    altair.Bus.Write((ushort)index, altairImage.Sections[0].Bytes.Span[index]);
+}
+
+while (!altair.Processor.IsHalted && altair.Processor.CycleCount < 1_000_000) { altair.StepCycle(); }
+altair.Run(5000);
+byte[] altairPixels = new byte[altair.Terminal.Width * altair.Terminal.Height * 4];
+altair.Terminal.Render(altairPixels, scanned: false);
+if (!altairImage.Success || altair.Terminal.Line(0).TrimEnd() != "ALTAIR" || !altairPixels.Any(value => value == 0xFF))
+{
+    throw new InvalidOperationException("Native AOT Altair execution failed.");
+}
+
+Console.WriteLine("Altair 8800: Native AOT machine, ACIA and terminal passed.");

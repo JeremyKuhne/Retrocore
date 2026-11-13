@@ -200,6 +200,213 @@ public class Apple2VideoTests
     }
 
     /// <summary>
+    ///  Checks that where a scanned line changes from text to hi-res partway, the RGB monitor's first hi-res dot keeps
+    ///  its color: the text column's byte is not read as hi-res dots.
+    /// </summary>
+    [TestMethod]
+    public void RgbHiresStartsCleanAfterMidLineText()
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.ColorRgb;
+        bus.Read(0xC051);
+        bus.Read(0xC057);
+
+        // Column 0 is fetched as text, a character code with bit 6 set; column 1 as hi-res, its lone dot 7 lit.
+        bus.SetRam(auxiliary: false, address: 0x400, value: 0xC0);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x01);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(0xC050);
+        bus.Video.ScanCycle();
+
+        byte[] pixels = bus.Video.RenderScannedBitmap();
+        Pixel(pixels, x: 14, y: 0).Should().Equal(17, 221, 0, 255);
+        Pixel(pixels, x: 15, y: 0).Should().Equal(17, 221, 0, 255);
+    }
+
+    /// <summary>
+    ///  Checks that where a scanned line changes from hi-res to text partway, the RGB monitor's last hi-res dot keeps
+    ///  its color: the text column's byte is not read as hi-res dots.
+    /// </summary>
+    [TestMethod]
+    public void RgbHiresEndsCleanBeforeMidLineText()
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.ColorRgb;
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+
+        // Column 0 is fetched as hi-res, its lone dot 6 lit; column 1 as text, a character code with bit 0 set.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x40);
+        bus.SetRam(auxiliary: false, address: 0x401, value: 0x01);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(0xC051);
+        bus.Video.ScanCycle();
+
+        byte[] pixels = bus.Video.RenderScannedBitmap();
+        Pixel(pixels, x: 12, y: 0).Should().Equal(221, 34, 221, 255);
+        Pixel(pixels, x: 13, y: 0).Should().Equal(221, 34, 221, 255);
+    }
+
+    /// <summary>
+    ///  Checks that where a scanned line changes between text and hi-res partway, the composite monitor reads only
+    ///  hi-res columns as hi-res dots: the boundary dots keep their colors, and a delayed byte carries over no dot from
+    ///  a text column before it.
+    /// </summary>
+    [TestMethod]
+    public void CompositeHiresIgnoresMidLineTextNeighbours()
+    {
+        byte[] green = [1, 255, 1, 255];
+        byte[] violet = [255, 1, 255, 255];
+        byte[] black = [0, 0, 0, 255];
+
+        // Text, a character code with bit 6 set, then hi-res with its lone dot 7 lit: green, not white.
+        byte[] pixels = ScanModeChange(textFirst: true, (0x400, 0xC0), (0x2001, 0x01));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(green);
+        Pixel(pixels, x: 15, y: 0).Should().Equal(green);
+
+        // Text, bit 6 set, then a delayed hi-res byte with no dots: no dot carried over into its first half dot.
+        pixels = ScanModeChange(textFirst: true, (0x400, 0x40), (0x2001, 0x80));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(black);
+
+        // Hi-res with its lone dot 6 lit, then text, a character code with bit 0 set: violet, not white.
+        pixels = ScanModeChange(textFirst: false, (0x2000, 0x40), (0x401, 0x01));
+        Pixel(pixels, x: 12, y: 0).Should().Equal(violet);
+        Pixel(pixels, x: 13, y: 0).Should().Equal(violet);
+    }
+
+    /// <summary>
+    ///  Checks that where a scanned line changes from text to hi-res partway, a monochrome monitor's delayed hi-res byte
+    ///  carries over no dot from the text column before it, while one after a hi-res column does.
+    /// </summary>
+    [TestMethod]
+    public void MonochromeHiresCarriesNoDotFromMidLineText()
+    {
+        byte[] white = [240, 240, 240, 255];
+        byte[] black = [0, 0, 0, 255];
+
+        // Text, a character code with bit 6 set, then a delayed hi-res byte with no dots: its first half dot is dark.
+        byte[] pixels = ScanModeChange(textFirst: true, Apple2Monitor.White, (0x400, 0x40), (0x2001, 0x80));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(black);
+
+        // Both columns hi-res: the previous column's dot 6 carries over into the delayed byte's first half dot.
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.White;
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x40);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x80);
+        Pixel(bus.Video.RenderBitmap(), x: 14, y: 0).Should().Equal(white);
+    }
+
+    // Scans line 0's first column in one mode and its second in the other, text and hi-res, after writing the given
+    // main memory bytes.
+    private static byte[] ScanModeChange(bool textFirst, params (ushort Address, byte Value)[] memory) =>
+        ScanModeChange(textFirst, Apple2Monitor.Color, memory);
+
+    private static byte[] ScanModeChange(
+        bool textFirst,
+        Apple2Monitor monitor,
+        params (ushort Address, byte Value)[] memory)
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = monitor;
+        foreach ((ushort address, byte value) in memory)
+        {
+            bus.SetRam(auxiliary: false, address, value);
+        }
+
+        bus.Read(0xC057);
+        bus.Read(textFirst ? (ushort)0xC051 : (ushort)0xC050);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(textFirst ? (ushort)0xC050 : (ushort)0xC051);
+        bus.Video.ScanCycle();
+        return bus.Video.RenderScannedBitmap();
+    }
+
+    /// <summary>
+    ///  Checks the RGB monitor's hi-res has no fringing: a run of lit dots is white to its exact edges, alternate dots
+    ///  fill solid with their color, a lone dot is its color, a gap between white runs is black, there is no half-dot
+    ///  delay, and text is white.
+    /// </summary>
+    [TestMethod]
+    public void RgbHiresDrawsWithoutFringing()
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.ColorRgb;
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+        byte[] violet = [221, 34, 221, 255];
+        byte[] white = [255, 255, 255, 255];
+        byte[] black = [0, 0, 0, 255];
+
+        // Bit 0 alone: a violet dot at x 0 and 1, and black after.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x01);
+        byte[] pixels = bus.Video.RenderBitmap();
+        Pixel(pixels, x: 0, y: 0).Should().Equal(violet);
+        Pixel(pixels, x: 1, y: 0).Should().Equal(violet);
+        Pixel(pixels, x: 2, y: 0).Should().Equal(black);
+
+        // Bit 7 makes it blue, still from x 0: no half-dot delay.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x81);
+        Pixel(bus.Video.RenderBitmap(), x: 0, y: 0).Should().Equal(34, 34, 255, 255);
+
+        // HCOLOR=2's alternate dots fill solid violet, with no black stripes, and stop where they end.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x55);
+        pixels = bus.Video.RenderBitmap();
+        for (int x = 0; x < 14; x++)
+        {
+            Pixel(pixels, x, y: 0).Should().Equal(violet, "x {0} is inside the violet run", x);
+        }
+
+        Pixel(pixels, x: 14, y: 0).Should().Equal(black);
+
+        // A run of lit dots is white to its edges, with no colored dot at either end: dots 0 to 7, x 0 to 15.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x7F);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x01);
+        pixels = bus.Video.RenderBitmap();
+        for (int x = 0; x < 16; x++)
+        {
+            Pixel(pixels, x, y: 0).Should().Equal(white, "x {0} is inside the white run", x);
+        }
+
+        Pixel(pixels, x: 16, y: 0).Should().Equal(black);
+
+        // Two neighbouring dots are white even across a pair's boundary.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x06);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x00);
+        pixels = bus.Video.RenderBitmap();
+        Pixel(pixels, x: 1, y: 0).Should().Equal(black);
+        Pixel(pixels, x: 2, y: 0).Should().Equal(white);
+        Pixel(pixels, x: 5, y: 0).Should().Equal(white);
+        Pixel(pixels, x: 6, y: 0).Should().Equal(black);
+
+        // The dark dot between two white runs (11011) stays black; only a gap between lone dots takes their color.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x1B);
+        pixels = bus.Video.RenderBitmap();
+        Pixel(pixels, x: 2, y: 0).Should().Equal(white);
+        Pixel(pixels, x: 4, y: 0).Should().Equal(black);
+        Pixel(pixels, x: 5, y: 0).Should().Equal(black);
+        Pixel(pixels, x: 6, y: 0).Should().Equal(white);
+
+        // A lone odd dot is green, or orange with bit 7 of its own byte.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x02);
+        Pixel(bus.Video.RenderBitmap(), x: 2, y: 0).Should().Equal(17, 221, 0, 255);
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x00);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x81);
+        Pixel(bus.Video.RenderBitmap(), x: 14, y: 0).Should().Equal(255, 102, 0, 255);
+
+        // Text is white, not the composite monitor's phosphor; the blank test ROM lights every dot.
+        bus.Read(0xC051);
+        Pixel(bus.Video.RenderBitmap(), x: 0, y: 0).Should().Equal(255, 255, 255, 255);
+    }
+
+    /// <summary>
     ///  Checks reusable host buffers produce identical output with no frame allocation.
     /// </summary>
     [TestMethod]

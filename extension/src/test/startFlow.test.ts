@@ -90,5 +90,5 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.ok(!isUsable({ machineId: "apple4", kind: "machine", options: {} }), "an unknown machine");
     assert.ok(!isUsable({ machineId: "trs80-model1-level1", kind: "disk", path: "x.dsk", options: {} }), "Level I has no disks");
     assert.ok(!isUsable({ machineId: "apple2-iie", kind: "source", options: {} }), "a source needs its file");
-    assert.equal(machines.length, 11);
+    assert.equal(machines.length, 18);
 });

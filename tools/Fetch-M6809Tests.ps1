@@ -1,7 +1,9 @@
 # Requires PowerShell 7, gh, and git. Downloads only the approved MC6809 test programs and license
 # into the external processor-test cache; GPL files are never copied into the workspace.
+# The cache follows the tests' precedence: RETROCORE_TEST_CACHE, then RETROCORE_CACHE\processor-tests, then the
+# user profile's Retrocore\processor-tests.
 param(
-    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'processor-tests')
+    [string] $Cache = $(if ($env:RETROCORE_TEST_CACHE) { $env:RETROCORE_TEST_CACHE } else { Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'processor-tests' })
 )
 
 $ErrorActionPreference = 'Stop'

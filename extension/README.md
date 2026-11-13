@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -94,15 +94,15 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 ## Starting a machine
 
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
-Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
+TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
 their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II), TRS-80 Model I (Level I), Apple-1, and the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it
-is. **Debug: Select and Start Debugging** lists them too.
+Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model 4, Model 4P,
+Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -142,6 +142,8 @@ one. The sections below describe each machine's launch options.
 - From a `.cpu Z80` line to the next `.cpu` of another CPU, the Z80's mnemonics
   (including `SLL`), its registers anywhere in an operand (`AF'` included) and
   the condition after a jump, call or return.
+- From a `.cpu I8080` or `.cpu I8085` line to the next `.cpu` of another CPU,
+  Intel's mnemonics and registers, `M` and `PSW` included.
 - Instructions only at the start of a statement or after its label. A label
   named `LDA:`, an operand named `LDA` and `LDA` in a comment are not opcodes.
 - Flow instructions separately from other instructions.
@@ -252,8 +254,9 @@ The native dialect, Retrocore's own, is specified in
 
 - Labels end with a colon, constants are `Name = value`, and data is `.byte`, `.word`, `.res` and the like.
 - Expressions use `$hex`, `%binary` and `'c'` with C's operator precedence, and `*` is the current address.
-- `.cpu` selects `Mos6502`, `Wdc65C02`, `Rockwell65C02`, `65SC02` or `Z80`; one source may switch between
-  families.
+- `.cpu` selects `Mos6502`, `Wdc65C02`, `Rockwell65C02`, `65SC02`, `Z80`, `M6809`, `I8080` or `I8085`; one
+  source may switch between families.
+- 8080 and 8085 operands are Intel's: `MOV A,M`, `LXI H,Table`, `PUSH PSW`, and `RST` with its number 0-7.
 - The 6502 chooses zero page by value, with `a:`, `!`, `.w` and `z:` to force a width.
 - Z80 memory and port operands are written in brackets (`LD A,[HL]`, `LD [IX+5],A`, `IN A,[$FE]`), so
   parentheses always group an expression.
@@ -790,8 +793,9 @@ the panel's width instead; sharp falls back to it when the panel is too small fo
 The panel remembers the choice.
 
 **Screen** picks the machine's monitor: **Color** on the Apple II family and the Apple
-III, or a monochrome monitor of the time, **Black and white**, **Green** or **Amber**, on
-any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
+III, **Color RGB** on a IIe (an RGB card's monitor: hi-res in solid colors with no
+fringing, and white text), or a monochrome monitor of the time, **Black and white**,
+**Green** or **Amber**, on any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
 own, so double hi-res text and the mouse desktops are sharp instead of smeared into
 color; on the others it lights the picture in the phosphor's color. The `screen` launch
 option sets where a session starts; once you pick one in the panel, the panel keeps it
@@ -962,6 +966,25 @@ Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's ro
 the [Drives](#machine-and-drives) view; a recording is saved as a WAV file when it is
 ejected.
 
+## Debugging on the Altair 8800
+
+`"machine": "altair"` debugs a MITS Altair 8800 with the same source debugging, cycle
+counts, `Keeps:` checks and I/O port watchpoints; the call stack follows `CALL`, the
+conditional calls, `RST` and interrupts. The machine is configured by:
+
+- `ramKilobytes`: 1 to 64 from `$0000` (64 by default);
+- `switches`: the front panel's 16 switches, whose high 8 are the sense switches
+  `IN $FF` reads;
+- `baudRate`: the 88-2SIO's, 9600 by default.
+
+The Altair has no ROM. A program (`source` or `program`, loaded at `$0100` by default)
+starts there; it sets up the 88-2SIO's first ACIA (`$03`, then `$15`, to port `$10`)
+and talks to the terminal through ports `$10` and `$11`. The panel shows the 80x24
+terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
+control character, the arrow keys send ^H, ^J, ^K and ^L, and **Ctrl+F12** or
+**Ctrl+Break** is RESET; the key bar has **Esc**, **Reset** and **Clear Screen**.
+[The Altair guide](../docs/Altair8800.md) covers the hardware.
+
 ## Debugging on the TRS-80 Color Computer
 
 `"machine": "coco"` debugs a Color Computer 1, 2 or 3, chosen by `model` (`coco1`,
@@ -991,6 +1014,22 @@ The panel shows the screen and takes keys: arrows, **Home** for CLEAR, **Escape*
 BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key bar. The
 TRS-80 cassette and disk commands work as on the Model I. See the
 [Color Computer guide](../docs/Coco.md) for what is emulated.
+
+## Debugging on the TRS-80 Model III, 4 and II
+
+`"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
+`"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
+Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
+builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
+generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TRS80_ROMS`
+can hold MAME's dumps instead. When the running ROM is one the sources build, its source
+debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
+does. The options are `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
+`diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
+`bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
+panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
+BREAK and buttons for HOLD, F1 and F2. See the
+[Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
 
 ## Breakpoints
 

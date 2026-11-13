@@ -48,7 +48,12 @@ type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settin
     | { basic: BasicSummary };
 
 /** The machines whose screens the media folder draws, by the launch's machine option. */
-const screens: Record<string, string> = { apple2: "apple2", apple3: "apple2", apple1: "apple1", "trs80-model1": "trs80-model1", coco: "coco" };
+// As the display panel picks them: the Model III, 4 and the Altair's terminal glow white like the Model I, and the
+// Model II green like the IIe.
+const screens: Record<string, string> = {
+    apple2: "apple2", apple3: "apple2", apple1: "apple1", coco: "coco", "trs80-model1": "trs80-model1",
+    "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2"
+};
 
 /** The icons of the Machine view's rows, by hardware id, when the row is not a slot. */
 const hardwareIcons: Record<string, string> = {

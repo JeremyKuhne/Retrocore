@@ -10,14 +10,16 @@ using Retrocore.Debug;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Verifies the SDK's native sources for the Model I ROMs: Level II 1.2 and 1.3, Level I and the character
-///  generator.
+///  Verifies the SDK's native sources for the TRS-80 ROMs: the Model I's Level II 1.2 and 1.3, Level I and character
+///  generator; the Model III's and Model 4's ROM and character generator; the 4P's boot ROM and character generator;
+///  and the Model II's boot ROMs and character generator.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   Digests pin each build, so no ROM is needed. With the dumps in <c>RETROCORE_TRS80_ROMS</c> or
 ///   <c>%USERPROFILE%\Retrocore\trs80-roms\extract</c> (Level II 1.2 is <c>rom-a.z1</c>-<c>rom-c.z3</c>,
-///   1.3 the <c>_alt</c> parts), each also compares byte for byte, which names the first difference.
+///   1.3 the <c>_alt</c> parts, and the others are under MAME's names), each also compares byte for byte, which names
+///   the first difference.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -94,6 +96,59 @@ public sealed partial class Trs80RomSourceTests
     }
 
     /// <summary>
+    ///  The Model III's ROM builds byte-identically with either revision of ROM C, and the Model 4's.
+    /// </summary>
+    /// <param name="model">3 or 4.</param>
+    /// <param name="romC">The Model III's ROM C revision.</param>
+    /// <param name="expectedHash">The SHA-256 of the 14K ROM.</param>
+    [TestMethod]
+    [DataRow(3, 'C', "010FD04E1A7B48583685A5554F12ECFF8DB681C926CAA1814F148D552CA53708")]
+    [DataRow(3, 'B', "2B3AAB007C784128941B71AD72E2FA669FE9584EC9E93C432DE46C306649EDE5")]
+    [DataRow(4, 'C', "89AB093F1B4234B8265122ECD4F45D7CDA5C1A0B26EC929BCE32C1756E826133")]
+    public void Model3MatchesTheRom(int model, char romC, string expectedHash)
+    {
+        AssemblyResult result = Trs80SdkModules.AssembleModel3(Source("Model3.asm"), model, romC);
+        result.Diagnostics.Should().BeEmpty();
+        Hash(result).Should().Be(expectedHash);
+    }
+
+    /// <summary>
+    ///  Each Model II boot ROM builds byte-identically.
+    /// </summary>
+    /// <param name="version">The version.</param>
+    /// <param name="fill11Be">Whether to build <c>cpu_11be</c>.</param>
+    /// <param name="expectedHash">The SHA-256 of the 2K ROM.</param>
+    [TestMethod]
+    [DataRow(1, false, "6F211D269F490C50DEDF0733B8531C272AF10E3F6D88A0F7D0EA6CC8924293A8")]
+    [DataRow(2, false, "3FBFCC68E8DE9CF9E84663A33661FAE9969190C139B954548256A5C01A9662FB")]
+    [DataRow(3, false, "95E326C1DDB703177B1CFF3DDE696B800CD14A01F1027505DE60E1A2CFF0FE71")]
+    [DataRow(3, true, "2D0CA46374211C25751FF57BF01FCAAACB7044982B1E50E075BD60D4A6159B8E")]
+    [DataRow(5, false, "D6DD67F601A6E1B4D99F6FD729AAA9BC3F628D39B9ADF25261D2ED95622B09C1")]
+    public void Model2BootMatchesTheRom(int version, bool fill11Be, string expectedHash)
+    {
+        AssemblyResult result = Trs80SdkModules.AssembleModel2Boot(Source("Model2Boot.asm"), version, fill11Be);
+        result.Diagnostics.Should().BeEmpty();
+        Hash(result).Should().Be(expectedHash);
+    }
+
+    /// <summary>
+    ///  The 4P's boot ROM and the Model III's, 4P's and Model II's character generators build byte-identically.
+    /// </summary>
+    [TestMethod]
+    public void Model4PBootAndCharacterGeneratorsMatch()
+    {
+        string boot = Hash(Trs80SdkModules.AssembleModel4PBoot(Source("Model4PBoot.asm")));
+        boot.Should().Be("6C1E5D5CCD280EE01D9F852B60DDEC07E719A45699A6220EABD50DF9999632C6");
+        string model3 = Source("Model3CharacterGenerator.asm");
+        string characters = Hash(Trs80SdkModules.AssembleModel3CharacterGenerator(model3, model4P: false));
+        characters.Should().Be("BA09F130D24E17DCBBC16290A2F357C731F0D96BF76530F5B80EFFF84376BB01");
+        string model4P = Hash(Trs80SdkModules.AssembleModel3CharacterGenerator(model3, model4P: true));
+        model4P.Should().Be("F567F196D93E4C169B3DEFF9EF923A1B41D91ACB3F0D91AB350AD41FE59E6273");
+        string model2 = Hash(Trs80SdkModules.AssembleModel2CharacterGenerator(Source("Model2CharacterGenerator.asm")));
+        model2.Should().Be("1F38CF71BAB4C66BF9BBCB1D3019515971640325FCAA771F32B2AA7CA5AE8232");
+    }
+
+    /// <summary>
     ///  Without REVISION, Level II builds 1.3, and the revision check knows both builds.
     /// </summary>
     [TestMethod]
@@ -113,25 +168,49 @@ public sealed partial class Trs80RomSourceTests
     ///  With the dumps, each source compares byte for byte.
     /// </summary>
     /// <param name="file">The source.</param>
-    /// <param name="revision">The Level II revision, or 0.</param>
+    /// <param name="variant">
+    ///  The Level II revision; the Model III's ROM C revision, or 4 for the Model 4; the Model II boot ROM's version,
+    ///  or 4 for <c>cpu_11be</c>; 1 for the 4P's character generator; or 0.
+    /// </param>
     /// <param name="dumps">The dump files, concatenated.</param>
     [TestMethod]
     [DataRow("Level2.asm", 12, "rom-a.z1,rom-b.z2,rom-c.z3")]
     [DataRow("Level2.asm", 13, "rom-a_alt.z1,rom-b_alt.z2,rom-c_alt.z3")]
     [DataRow("Level1.asm", 0, "level1.rom")]
     [DataRow("CharacterGenerator.asm", 0, "mcm6670p.z29")]
-    public void SourceMatchesTheDumps(string file, int revision, string dumps)
+    [DataRow("Model3.asm", (int)'C', "8041364.u104,8040332.u105,8040316c.u106")]
+    [DataRow("Model3.asm", (int)'B', "8041364.u104,8040332.u105,8040316b.u106")]
+    [DataRow("Model3.asm", 4, "trs80m4.rom")]
+    [DataRow("Model4PBoot.asm", 0, "8075332.u69")]
+    [DataRow("Model2Boot.asm", 1, "8043216.u11")]
+    [DataRow("Model2Boot.asm", 2, "8047316.u11")]
+    [DataRow("Model2Boot.asm", 3, "cpu_2119.u11")]
+    [DataRow("Model2Boot.asm", 4, "cpu_11be.u11")]
+    [DataRow("Model2Boot.asm", 5, "u54.u11")]
+    [DataRow("Model3CharacterGenerator.asm", 0, "8044316a.u36")]
+    [DataRow("Model3CharacterGenerator.asm", 1, "8049007.u103")]
+    [DataRow("Model2CharacterGenerator.asm", 0, "8043316.u9")]
+    public void SourceMatchesTheDumps(string file, int variant, string dumps)
     {
         string directory = Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS")
             ?? Path.Join(ExternalTestData.Root, "trs80-roms", "extract");
 
         string[] paths = [.. dumps.Split(',').Select(name => Path.Join(directory, name))];
-        if (!paths.All(File.Exists)) { Assert.Inconclusive($"The Model I dumps ({dumps}) are missing."); }
+        if (!paths.All(File.Exists)) { Assert.Inconclusive($"The dumps ({dumps}) are missing."); }
         byte[] expected = [.. paths.SelectMany(File.ReadAllBytes)];
         AssemblyResult result = file switch
         {
-            "Level2.asm" => Trs80SdkModules.AssembleLevel2(Source(file), revision),
+            "Level2.asm" => Trs80SdkModules.AssembleLevel2(Source(file), variant),
             "Level1.asm" => Trs80SdkModules.AssembleLevel1(Source(file)),
+            "Model3.asm" => variant == 4
+                ? Trs80SdkModules.AssembleModel3(Source(file), 4)
+                : Trs80SdkModules.AssembleModel3(Source(file), 3, (char)variant),
+            "Model4PBoot.asm" => Trs80SdkModules.AssembleModel4PBoot(Source(file)),
+            "Model2Boot.asm" => variant == 4
+                ? Trs80SdkModules.AssembleModel2Boot(Source(file), 3, fill11Be: true)
+                : Trs80SdkModules.AssembleModel2Boot(Source(file), variant),
+            "Model3CharacterGenerator.asm" => Trs80SdkModules.AssembleModel3CharacterGenerator(Source(file), variant == 1),
+            "Model2CharacterGenerator.asm" => Trs80SdkModules.AssembleModel2CharacterGenerator(Source(file)),
             _ => Trs80SdkModules.AssembleCharacterGenerator(Source(file))
         };
 

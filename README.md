@@ -15,13 +15,16 @@ straight into the ROM or DOS source.
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
+| TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C), the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 baud |
+| TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Five boot ROM versions and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
+| MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs with an 80x24 ADM-3A-style terminal, sense switches, the front panel's EXAMINE and DEPOSIT |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
-[TRS-80 Model I](docs/Trs80ModelI.md) and [Color Computer](docs/Coco.md) guides for hardware details and launch
-options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
+[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md),
+[Color Computer](docs/Coco.md) and [Altair 8800](docs/Altair8800.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
 model runs with nothing external.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
@@ -106,7 +109,7 @@ Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II
 Every machine appears in VS Code's **Run and Debug** dropdown, and **Retrocore: Start Machine…** starts one bare
 or with an assembly source, binary, BASIC file, disk image, or tape—with no `launch.json` required
 ([Starting a machine](extension/README.md#starting-a-machine)). In `launch.json`, a configuration names a machine
-(`"apple2"` or `"trs80-model1"`) and can boot the machine on its own, assemble `source` (directly into RAM or
+(such as `"apple2"`, `"trs80-model1"`, `"trs80-model3"` or `"trs80-model2"`) and can boot the machine on its own, assemble `source` (directly into RAM or
 onto a fresh bootable DOS 3.3 or 3.2 disk), load a `program` binary (with optional cc65 `.dbg` or VICE labels),
 run a `basic` file, or mount media.
 
@@ -166,6 +169,10 @@ machine.
 | [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Model I Level I BASIC. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGenerator.asm) | The Model I's stock MCM6670P character generator. |
 | [`CharacterGeneratorKit.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm) | The Radio Shack lowercase kit's character generator, following xtrs's reconstruction (no chip dump is known). |
+| [`Model3.asm`](src/Retrocore.Machines.Trs80/Roms/Model3.asm), [`Model3Equates.asm`](src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm) | The TRS-80 Model III's 14K ROM (both revisions of ROM C) and the Model 4's, including `Level2.asm` for the BASIC they share with the Model I. |
+| [`Model4PBoot.asm`](src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The Model 4P's boot ROM. |
+| [`Model2Boot.asm`](src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs, five versions. |
+| [`Model3CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm), [`Model2CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model III's and 4's, the 4P's, and the Model II's character generators. |
 | [`ColorBasic.asm`](src/Retrocore.Machines.Coco/Roms/ColorBasic.asm) | TRS-80 Color Computer Color BASIC, versions 1.0 to 1.3. |
 | [`ExtendedBasic.asm`](src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm) | TRS-80 Color Computer Extended Color BASIC, versions 1.0 and 1.1. |
 | [`DiskBasic.asm`](src/Retrocore.Machines.Coco/Roms/DiskBasic.asm) | TRS-80 Color Computer Disk Extended Color BASIC, versions 1.0 and 1.1. |
@@ -178,6 +185,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | Project | What it holds |
 | --- | --- |
 | [`Retrocore.Core`](src/Retrocore.Core) | Shared instruction-set (`Isa`), CPU, bus, and machine/device abstractions. |
+| [`Retrocore.Cpu.I8080`](src/Retrocore.Cpu.I8080) | State-exact Intel 8080 and 8085, with the 8085's interrupts, `RIM`/`SIM` and undocumented instructions and flags, and their [instruction set](src/Retrocore.Cpu.I8080/I8080Isa.txt). |
 | [`Retrocore.Cpu.M6502`](src/Retrocore.Cpu.M6502) | Cycle-exact 6502 family: NMOS 6502, WDC 65C02, and Rockwell 65C02, with their [opcode tables](src/Retrocore.Cpu.M6502/OpcodeTables.txt). |
 | [`Retrocore.Cpu.M6809`](src/Retrocore.Cpu.M6809) | Cycle-exact Motorola MC6809 with indexed postbytes, interrupts, `SYNC`/`CWAI`, and its [instruction set](src/Retrocore.Cpu.M6809/M6809Isa.txt). |
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
@@ -189,7 +197,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Machines.Apple1`](src/Retrocore.Machines.Apple1) | The Apple-1: its 6821 PIA, video terminal, keyboard, Apple Cassette Interface, and SDK ROM sources. |
 | [`Retrocore.Machines.Apple2`](src/Retrocore.Machines.Apple2) | The Apple II, II Plus, and IIe (original and enhanced), peripheral cards, and SDK ROM sources. |
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
-| [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface, floppy/doubler hardware, cassette, and SDK ROM sources. |
+| [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface, floppy/doubler hardware, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family with its Z80 CTC, PIO, SIO and DMA. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
 | [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--disassemble` CLI, in one host. |
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
@@ -214,13 +222,13 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
-| `RETROCORE_TRS80_ROMS` | Model I ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for debugging. |
+| `RETROCORE_TRS80_ROMS` | TRS-80 ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for every TRS-80, whose ROMs the SDK's sources build. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
 | `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources). |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III and Color Computer oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
-| `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), and `tools\Fetch-M6809Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
+| `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), `tools\Fetch-M6809Tests.ps1`, and `tools\Fetch-I8080Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |
 | `RETROCORE_MERLIN32`, `RETROCORE_MERLIN_CORPUS` | Merlin 32 executable and approved source corpus for the Merlin differential tests. |
@@ -242,6 +250,7 @@ dotnet build Retrocore.slnx -c Release
 dotnet test Retrocore.slnx -c Release --no-build
 
 node tools/Test-Trs80Dap.mjs          # needs nothing external
+node tools/Test-Trs80Model3Dap.mjs    # needs nothing external; it writes stand-in ROMs
 node tools/Test-Apple1Dap.mjs         # needs nothing external
 node tools/Test-Apple1BasicDap.mjs    # needs nothing external
 node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps in RETROCORE_COCO_ROMS when set
@@ -317,6 +326,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III](docs/backlog/Apple3.md);
+- [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its BASIC, disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md).

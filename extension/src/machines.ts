@@ -84,6 +84,28 @@ const lowercase: MachineChoice = {
     default: false
 };
 
+const model4Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [{ label: "128 KB", value: 128 }, { label: "64 KB", value: 64 }],
+    default: 128
+};
+
+const model2Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "64 KB", value: 64 },
+        { label: "128 KB", value: 128 },
+        { label: "256 KB", value: 256 },
+        { label: "512 KB", value: 512 },
+        { label: "32 KB", value: 32 }
+    ],
+    default: 64
+};
+
+const model2Disks = ["imd", "dmk", "jv3", "dsk"];
+
 const cocoSound: MachineChoice = {
     option: "sound",
     label: "Sound",
@@ -209,7 +231,7 @@ export const machines: readonly Machine[] = [
         label: "TRS-80 Model I (Level II)",
         detail: "Z80, Level II BASIC, 48 KB and the Expansion Interface",
         configuration: { machine: "trs80-model1" },
-        diskFormats: ["dsk", "jv1", "jv3"],
+        diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
         tapeFormats: ["cas"],
         basicDialects: ["level2"],
         dos: false,
@@ -236,6 +258,81 @@ export const machines: readonly Machine[] = [
         basicDialects: [],
         dos: false,
         choices: [lowercase]
+    },
+    // The Model III family and the Model II run the SDK's builds of their ROMs, or dumps from romDirectory (or
+    // RETROCORE_TRS80_ROMS). The Model III's and Model 4's BASIC is Level II's.
+    {
+        id: "trs80-model3",
+        label: "TRS-80 Model III",
+        detail: "Z80 at 2 MHz, the Model III ROM, 48 KB and the FD1793",
+        configuration: { machine: "trs80-model3", model: "3" },
+        diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["level2"],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [{ label: "48 KB", value: 48 }, { label: "32 KB", value: 32 }, { label: "16 KB", value: 16 }],
+                default: 48
+            }
+        ]
+    },
+    {
+        id: "trs80-model4",
+        label: "TRS-80 Model 4",
+        detail: "Z80 at 4 MHz, the Model III ROM, 128 KB, 80x24 and the FD1793",
+        configuration: { machine: "trs80-model3", model: "4" },
+        diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["level2"],
+        dos: false,
+        choices: [model4Ram]
+    },
+    {
+        id: "trs80-model4p",
+        label: "TRS-80 Model 4P",
+        detail: "Z80 at 4 MHz, the 4P's boot ROM, 128 KB, 80x24 and the FD1793",
+        configuration: { machine: "trs80-model3", model: "4p" },
+        diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model4Ram]
+    },
+    {
+        id: "trs80-model2",
+        label: "TRS-80 Model II",
+        detail: "Z80 at 4 MHz, 64 KB, 80x24 and 8-inch disks",
+        configuration: { machine: "trs80-model2", model: "2" },
+        diskFormats: model2Disks,
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model2Ram]
+    },
+    {
+        id: "trs80-model12",
+        label: "TRS-80 Model 12",
+        detail: "The Model II's successor: Z80 at 4 MHz, 80x24 and 8-inch disks",
+        configuration: { machine: "trs80-model2", model: "12" },
+        diskFormats: model2Disks,
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model2Ram]
+    },
+    {
+        id: "trs80-model16",
+        label: "TRS-80 Model 16 (Z80 side)",
+        detail: "The Model 16, 16B or Tandy 6000 running Model II software; the 68000 board is not emulated",
+        configuration: { machine: "trs80-model2", model: "16" },
+        diskFormats: model2Disks,
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model2Ram]
     },
     {
         id: "apple1",
@@ -354,6 +451,31 @@ export const machines: readonly Machine[] = [
             cocoDisk,
             cocoSound
         ]
+    },
+    // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
+    {
+        id: "altair",
+        label: "MITS Altair 8800",
+        detail: "8080, the 88-2SIO's terminal and 64 KB",
+        configuration: { machine: "altair" },
+        diskFormats: [],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [
+                    { label: "64 KB", value: 64 },
+                    { label: "48 KB", value: 48 },
+                    { label: "32 KB", value: 32 },
+                    { label: "16 KB", value: 16 },
+                    { label: "4 KB", detail: "As the first Altairs shipped", value: 4 }
+                ],
+                default: 64
+            }
+        ]
     }
 ];
 
@@ -373,7 +495,15 @@ export function launchConfiguration(machine: Machine, name = `${machine.label} (
 // The models a launch option names, as the debug host reads them, by machine: an alias, or none for its default.
 const models: Record<string, Record<string, string>> = {
     apple2: { "": "iie-enhanced", enhanced: "iie-enhanced", original: "iie" },
-    coco: { "": "coco2" }
+    coco: { "": "coco2" },
+    "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
+    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
+};
+
+// The machine names the debug host takes for another: the Model 4 is the Model III's machine, a 4 unless it says.
+const machineAliases: Record<string, { machine: string; model: string }> = {
+    apple2e: { machine: "apple2", model: "" },
+    "trs80-model4": { machine: "trs80-model3", model: "4" }
 };
 
 /**
@@ -381,8 +511,9 @@ const models: Record<string, Record<string, string>> = {
  * launch.json entry that leaves the model to its default is still its machine; none for a machine the catalog lacks.
  */
 export function catalogMachine(configuration: Record<string, unknown>): Machine | undefined {
-    const kind = configuration.machine === "apple2e" ? "apple2" : String(configuration.machine ?? "");
-    const named = typeof configuration.model === "string" ? configuration.model : "";
+    const alias = machineAliases[String(configuration.machine ?? "")];
+    const kind = alias?.machine ?? String(configuration.machine ?? "");
+    const named = typeof configuration.model === "string" ? configuration.model : alias?.model ?? "";
     const model = models[kind]?.[named] ?? named;
     const rom = kind === "trs80-model1" ? String(configuration.rom ?? "level2") : "";
     return machines.find(machine => machine.configuration.machine === kind

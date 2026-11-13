@@ -79,6 +79,12 @@ internal interface IDebugTarget : IDebugMemory
     bool IsIdle => false;
 
     /// <summary>
+    ///  Gets whether a device holds the CPU part way through an instruction, as a Z80's WAIT line does, for as long
+    ///  as the device decides. The instruction finishes once the device lets go.
+    /// </summary>
+    bool IsHeld => false;
+
+    /// <summary>
     ///  Gets the cycles run since power-up.
     /// </summary>
     ulong CycleCount { get; }

@@ -1,7 +1,7 @@
 # Native assembly language reference
 
-The native dialect is Retrocore's own assembly language. It reads the same on every CPU: 6502-family sources and
-Z80 sources share their directives, expressions, preprocessing and scopes, and differ only in their
+The native dialect is Retrocore's own assembly language. It reads the same on every CPU: 6502-family, Z80, 6809,
+8080 and 8085 sources share their directives, expressions, preprocessing and scopes, and differ only in their
 instructions. The SDK's ROM sources are written in it.
 
 Native borrows ca65's preprocessing (macros, `.define`, `.struct`, `.charmap` and its functions) but has its own
@@ -20,6 +20,7 @@ checks them.
 - [6502 operands](#6502-operands)
 - [Z80 operands](#z80-operands)
 - [6809 operands](#6809-operands)
+- [8080 and 8085 operands](#8080-and-8085-operands)
 - [Macros](#macros)
 - [Conditionals](#conditionals)
 - [Repeats](#repeats)
@@ -295,6 +296,8 @@ applies to any instructions before it; without one, the host's CPU applies.
 | `65SC02` | The 65SC02: the WDC set without `WAI`, `STP` and the bit instructions. |
 | `Z80` | The Z80, documented and undocumented instructions alike. |
 | `M6809` | The Motorola MC6809, with page-`$10` and page-`$11` instructions, indexed postbytes, register pairs and stack register lists. |
+| `I8080` | The Intel 8080. Its undocumented opcodes disassemble as the `NOP`, `JMP`, `RET` and `CALL` they act as. |
+| `I8085` | The Intel 8085: the 8080's instructions with `RIM` and `SIM`, and the undocumented `DSUB`, `ARHL`, `RDEL`, `LDHI`, `LDSI`, `RSTV`, `SHLX`, `LHLX`, `JNK` and `JK`. |
 
 An instruction is a mnemonic and its operand. Where one instruction has several encodings, such as the Z80's
 duplicate `NEG`s, the documented one is used.
@@ -437,6 +440,65 @@ Done:   puls d,x,y,pc
 Table:  .dbyt $1234
 ```
 
+## 8080 and 8085 operands
+
+Mnemonics, registers and operand order are Intel's, so 8080 source reads as Intel wrote it:
+
+| Operand | Means |
+| --- | --- |
+| `A` `B` `C` `D` `E` `H` `L` | Registers. |
+| `M` | Memory at HL, where a register may go: `MOV A,M`, `INR M`, `ADD M`, `MVI M,5`. |
+| `B` `D` `H` `SP` | Register pairs BC, DE, HL and the stack pointer, in `LXI`, `DAD`, `INX` and `DCX`; `STAX` and `LDAX` take `B` and `D`. |
+| `B` `D` `H` `PSW` | Register pairs in `PUSH` and `POP`; `PSW` is A with the flags. |
+| `e` | An immediate byte (`MVI`, `ADI`, `CPI`, `IN`, `OUT`), word (`LXI`), or address (`LDA`, `STA`, `LHLD`, `SHLD`, jumps and calls). |
+
+The condition is part of the mnemonic, as Intel writes it: `JNZ`, `CC`, `RPE` and so on, where `CP` is call if
+plus and `CPI` is compare immediate. `RST` takes the restart number 0-7, not its address. `IN` and `OUT` put the
+port number on both halves of the address bus.
+
+```asm
+.cpu I8080
+Count = 8
+Start:  lxi sp,$F000
+        lxi h,Table
+        mvi b,Count
+Loop:   mov a,m
+        adi 1
+        mov m,a
+        inx h
+        dcr b
+        jnz Loop
+        push psw
+        lda Table
+        sta Table+1
+        lhld Table
+        dad d
+        xchg
+        cpi 'A'
+        cc Start
+        rst 7
+        out $10
+        hlt
+Table:  .byte 0, 0
+.cpu I8085
+        rim
+        sim
+        dsub
+        ldhi 4
+        jnk Start
+```
+
+### From Intel syntax
+
+| Intel | Native |
+| --- | --- |
+| `1234H`, `1010B`, `17Q` | `$1234`, `%1010`, `15` |
+| `$` (current address) | `*` |
+| `LABEL EQU 5`, `LABEL SET 5` | `LABEL = 5` |
+| `DB`, `DW`, `DS` | `.byte`, `.word`, `.res` |
+| `ORG` | `.org` |
+| Labels without colons | Labels with colons |
+
 ## Macros
 
 ```asm
@@ -485,8 +547,8 @@ again:  dex
 | `.ifconst e` / `.ifnconst e` | `e` is a constant known at that point (or is not). |
 | `.ifp02`, `.ifpsc02`, `.ifpc02`, `.ifpwc02` | The CPU is `Mos6502`, `65SC02`, `Rockwell65C02` or `Wdc65C02`. |
 
-The CPU tests follow the latest `.cpu` before them, or the host's CPU before the first `.cpu`. On the Z80
-none of them is true.
+The CPU tests follow the latest `.cpu` before them, or the host's CPU before the first `.cpu`. On the Z80, the
+6809, the 8080 and the 8085 none of them is true.
 
 A condition's value must be known at that point in the source: constants and variables count, labels and `*`
 do not. Inactive blocks are skipped without being read, and every file closes the conditionals it opens.

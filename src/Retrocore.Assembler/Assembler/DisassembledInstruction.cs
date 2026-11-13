@@ -204,7 +204,7 @@ public readonly struct DisassembledInstruction
             OperandFieldKind.Relative16 => unchecked((ushort)(Address + Size + Word(set, offset))),
             OperandFieldKind.Displacement8 => unchecked((ushort)(sbyte)GetByte(offset)),
             OperandFieldKind.BitNumber => (ushort)((LastOpcodeByte(encoding, form) >> 3) & 7),
-            OperandFieldKind.Restart => (ushort)(LastOpcodeByte(encoding, form) & 0x38),
+            OperandFieldKind.Restart or OperandFieldKind.RestartNumber => (ushort)(LastOpcodeByte(encoding, form) & 0x38),
             OperandFieldKind.IndexedPostbyte
                 or OperandFieldKind.RegisterPair
                 or OperandFieldKind.SystemStackMask
@@ -254,7 +254,7 @@ public readonly struct DisassembledInstruction
         if (form.FieldCount != 1) { return null; }
         OperandFieldKind field = form.Field(0);
         bool address = form is { Role: OperandRole.Memory, IsIndexed: false } && field == OperandFieldKind.Word;
-        return address || field == OperandFieldKind.Restart ? Operand : null;
+        return address || field is OperandFieldKind.Restart or OperandFieldKind.RestartNumber ? Operand : null;
     }
 
     /// <summary>

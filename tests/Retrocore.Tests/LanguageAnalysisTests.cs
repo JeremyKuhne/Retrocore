@@ -226,6 +226,35 @@ public sealed class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  8080 and 8085 help lists canonical encodings with their fields and states, for the CPU <c>.cpu</c> selects,
+    ///  and every mnemonic of both has a summary.
+    /// </summary>
+    [TestMethod]
+    public void InstructionHelpDescribesThe8080And8085()
+    {
+        Retrocore.Isa.InstructionSet i8080 = Retrocore.Cpu.I8080.I8080Isa.InstructionSet;
+        Retrocore.Isa.InstructionSet i8085 = Retrocore.Cpu.I8080.I8080Isa.InstructionSet8085;
+        InstructionDocs.Describe("MOV", i8080).Should().Contain("| `MOV A,M` | `7E` | 7 |").And.Contain("| `MOV A,B` | `78` | 5 |");
+        InstructionDocs.Describe("MOV", i8085).Should().Contain("| `MOV A,B` | `78` | 4 |");
+        InstructionDocs.Describe("RST", i8080).Should().Contain("`C7+8n`");
+        InstructionDocs.Describe("CC", i8085).Should().Contain("| 18/9 |");
+        InstructionDocs.Describe("DSUB", i8085).Should().Contain("(undocumented)");
+        InstructionDocs.Describe("DSUB", i8080).Should().NotContain("| `DSUB");
+        InstructionDocs.MnemonicsFor(i8085).Should().Contain(["RIM", "SIM", "LDHI"]);
+        InstructionDocs.MnemonicsFor(i8080).Should().NotContain("RIM");
+        foreach (Retrocore.Isa.InstructionSet set in (Retrocore.Isa.InstructionSet[])[i8080, i8085])
+        {
+            foreach (string mnemonic in InstructionDocs.MnemonicsFor(set))
+            {
+                InstructionDocs.Describe(mnemonic, set).Should().NotBeNull(mnemonic);
+            }
+        }
+
+        string[] lines = [".cpu I8085", "    rim"];
+        SourceText.InstructionSetOf(lines, 1).Should().BeSameAs(i8085);
+    }
+
+    /// <summary>
     ///  References to a constant, a label and a macro: in code across includes and in documentation links, not in
     ///  strings or ordinary comments, and not another assembly's name spelled the same.
     /// </summary>

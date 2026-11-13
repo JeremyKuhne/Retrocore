@@ -431,12 +431,15 @@ public class DocumentationTests
     [TestMethod]
     public void FlagsHaveWordsAndDescriptions()
     {
-        foreach (Retrocore.Isa.IsaDescription description in (Retrocore.Isa.IsaDescription[])[
-            Retrocore.Cpu.M6502.M6502Isa.Description,
-            Retrocore.Cpu.Z80.Z80Isa.Description,
-            Retrocore.Cpu.M6809.M6809Isa.Description])
+        // The undocumented flags, the Z80's X and Y and the 8085's K and V, have no words.
+        foreach ((Retrocore.Isa.IsaDescription description, string[] undocumented) in
+            (ValueTuple<Retrocore.Isa.IsaDescription, string[]>[])[
+                (Retrocore.Cpu.M6502.M6502Isa.Description, []),
+                (Retrocore.Cpu.Z80.Z80Isa.Description, ["X", "Y"]),
+                (Retrocore.Cpu.M6809.M6809Isa.Description, []),
+                (Retrocore.Cpu.I8080.I8080Isa.Description, ["K", "V"])])
         {
-            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => flag.Name is not ("X" or "Y")))
+            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => !undocumented.Contains(flag.Name)))
             {
                 flag.Words.Should().NotBeEmpty(flag.Name);
                 flag.Description.Should().NotBeEmpty(flag.Name);

@@ -368,6 +368,7 @@ public static partial class IsaParser
                         "disp8" => OperandFieldKind.Displacement8,
                         "bit" => OperandFieldKind.BitNumber,
                         "rst" => OperandFieldKind.Restart,
+                        "rstn" => OperandFieldKind.RestartNumber,
                         "indexed" => OperandFieldKind.IndexedPostbyte,
                         "pair" => OperandFieldKind.RegisterPair,
                         "sysmask" => OperandFieldKind.SystemStackMask,
@@ -460,14 +461,23 @@ public static partial class IsaParser
         return (undocumented, cycles, taken);
     }
 
-    // Leading two-digit hex tokens are the opcode bytes; one '*' among them marks where the operand bytes go.
+    // Leading two-digit hex tokens are the opcode bytes; one '*' among them marks where the operand bytes go. A
+    // mnemonic and a form always follow them, before any options, so a mnemonic that reads as hex, such as the
+    // 8080's CC, is not taken for an opcode byte.
     private static (uint Opcode, byte Length, byte SplitAt, int Next) Opcode(List<string> tokens, int number)
     {
+        int options = tokens.Count;
+        while (options > 0 && (tokens[options - 1] == "undocumented" || tokens[options - 1].StartsWith("t=", StringComparison.Ordinal)))
+        {
+            options--;
+        }
+
+        int limit = options - 2;
         uint opcode = 0;
         int length = 0;
         int splitAt = 0;
         int index = 0;
-        for (; index < tokens.Count; index++)
+        for (; index < limit; index++)
         {
             if (tokens[index] == "*" && splitAt == 0 && length > 0)
             {

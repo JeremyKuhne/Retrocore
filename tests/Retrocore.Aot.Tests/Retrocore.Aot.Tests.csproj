@@ -10,6 +10,7 @@
   <ItemGroup>
     <Using Include="Retrocore.Cpu" />
     <Using Include="Retrocore.Cpu.M6502" />
+    <Using Include="Retrocore.Cpu.I8080" />
     <Using Include="Retrocore.Cpu.M6809" />
     <Using Include="Retrocore.Cpu.Z80" />
     <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />

@@ -47,6 +47,23 @@ public class IsaFormatTests
     }
 
     /// <summary>
+    ///  A mnemonic made of hex digits, such as the 8080's <c>CC</c>, follows the opcode bytes rather than joining
+    ///  them.
+    /// </summary>
+    [TestMethod]
+    public void MnemonicsThatReadAsHexAreNotOpcodeBytes()
+    {
+        // The 8080's CC (call if carry) at $DC, with and without options after its form.
+        foreach (string line in (string[])["DC CC Word", "DC CC Word t=17/11", "DC CC Word t=17/11 undocumented"])
+        {
+            InstructionSet set = Parse(line);
+            set.TryDecode([0xDC, 0x34, 0x12], out int encoding).Should().BeTrue(line);
+            set.MnemonicName(set.GetEncoding(encoding).Mnemonic).Should().Be("CC", line);
+            set.GetEncoding(encoding).OpcodeLength.Should().Be(1, line);
+        }
+    }
+
+    /// <summary>
     ///  A bit-number field makes all eight values of opcode bits 3-5 decode to one encoding.
     /// </summary>
     [TestMethod]

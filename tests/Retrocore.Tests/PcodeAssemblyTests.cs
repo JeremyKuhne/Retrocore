@@ -105,6 +105,100 @@ public class PcodeAssemblyTests
     }
 
     /// <summary>
+    ///  Calls of the system's procedures and PASCALIO's are written by <c>Pcode.asm</c>'s names for them, and a real
+    ///  constant has its value beside it; two words that read as no real a source would write have none.
+    /// </summary>
+    [TestMethod]
+    public void SystemCallsAndRealsAreNamed()
+    {
+        PcodeSource p1 = PcodeSourceWriter.Write(PascalDecompilerTests.P1Bytes, include: "\"Pcode.asm\"");
+        p1.Text.Should().Contain("CXP 0, Pascalsy::FWRITEINT").And.Contain("CXP PascalIo::Segment, PascalIo::FWRITEREAL");
+
+        PcodeSource mixed = PcodeSourceWriter.Write(Assemble(MixedSource), include: "\"Pcode.asm\"");
+        mixed.Text.Should().Contain("; 0.5 as a real");
+        mixed.Text.Split("as a real").Should().HaveCount(2, "the second constant's words are a set's");
+        Assemble(p1.Text).Should().Equal(PascalDecompilerTests.P1Bytes);
+    }
+
+    /// <summary>
+    ///  Hints name a segment's and procedure's scopes and a place in a procedure, by offset from its entry, and put
+    ///  comments above them; a call names the scope it calls.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameAndComment()
+    {
+        byte[] original = Assemble(MixedSource);
+        PcodeSource source = PcodeSourceWriter.Write(original, Options("\"Pcode.asm\"") with
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["mixed"] = "Mixed",
+                ["MIXED.2"] = "Load",
+                ["MIXED.2+$4"] = "Value"
+            },
+            Comments = new Dictionary<string, string>
+            {
+                ["MIXED.2"] = "Loads a word of its own.",
+                ["MIXED.2+4"] = "The word"
+            }
+        });
+
+        string text = source.Text;
+        text.Should().Contain(".scope Mixed").And.Contain(".scope Load");
+        text.Should().Contain(";; Loads a word of its own.").And.Contain(";; The word\nValue:");
+        text.Should().Contain("lda.w Value - Entry");
+        text.Should().MatchRegex(@"CLP 2 +; Mixed::Load");
+        Assemble(text).Should().Equal(original);
+    }
+
+    /// <summary>
+    ///  A compiler listing names segments and procedures by their headings, and puts each statement's source line
+    ///  above its p-code.
+    /// </summary>
+    [TestMethod]
+    public void AListingNamesAndPlacesSourceLines()
+    {
+        PascalListing listing = PascalListing.Parse("""
+                 1   1    1:D     1 PROGRAM MIXED;
+                 2   1    2:D     1 PROCEDURE LOAD; EXTERNAL;
+                 3   1    1:0     0 BEGIN
+                 4   1    1:1     0 LOAD;
+                 5   1    1:1     2 X := 0.5
+                 6   1    1:0    13 END.
+            """);
+
+        byte[] original = Assemble(MixedSource);
+        string text = PcodeSourceWriter.Write(original, Options("\"Pcode.asm\"") with { Listing = listing }).Text;
+
+        text.Should().Contain(".scope MIXED").And.Contain(".scope LOAD");
+        text.Should().MatchRegex(@";    4: LOAD;\n(\w+:\n)? *CLP 2 +; MIXED::LOAD");
+        text.Should().MatchRegex(@";    5: X := 0.5\n(\w+:\n)? *LDC 2");
+        Assemble(text).Should().Equal(original);
+    }
+
+    /// <summary>
+    ///  A call of a unit in the library names the unit's segment and procedure, from its interface, and the source
+    ///  defines the unit's scope.
+    /// </summary>
+    [TestMethod]
+    public void UnitCallsAreNamedFromTheLibrary()
+    {
+        string samples = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_3.dsk");
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        if (!File.Exists(samples) || !File.Exists(boot))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        byte[] original = PascalVolume.Read(File.ReadAllBytes(samples), proDosOrder: false).ReadFile("HILBERT.CODE");
+        PascalLibrary library = PascalLibrary.Read(PascalVolume.Read(File.ReadAllBytes(boot), proDosOrder: false).ReadFile("SYSTEM.LIBRARY"));
+        string text = PcodeSourceWriter.Write(original, Options("\"Pcode.asm\"") with { Library = library }).Text;
+
+        text.Should().Contain(".scope TURTLEGR").And.Contain("CXP TURTLEGR::Segment, TURTLEGR::TURN");
+        Assemble(text).Should().Equal(original);
+    }
+
+    /// <summary>
     ///  Every code file on Apple Pascal's disks is written as source that assembles back to the same bytes; a system
     ///  segment whose procedures are elsewhere is written as data.
     /// </summary>
@@ -175,6 +269,10 @@ public class PcodeAssemblyTests
                 .cpu Pcode
         .scope P1
         Entry:  CLP 2
+                LDC 2, 0
+                .word $3F00, $0000
+                LDC 2, 0
+                .word $0001, $0002
         Exit:   RBP 0
                 .word 4, 0
                 .word * - Exit, * - Entry
@@ -187,6 +285,8 @@ public class PcodeAssemblyTests
         Segment0End:
                 .align 512, 0
         """;
+
+    private static PcodeSourceOptions Options(string include) => new() { Include = include };
 
     // The whole 64K from address 0, so blocks and words align as the code file's do, with Pcode.asm from Inputs.
     private static AssemblyOptions Options() => new(ProcessorVariant.Mos6502, origin: 0, imageSize: 0x10000)

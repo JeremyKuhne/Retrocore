@@ -36,7 +36,35 @@ internal static class EmulatedPascalCompiler
     /// <exception cref="TimeoutException">The system never booted, or the Compiler never finished.</exception>
     internal static (byte[]? Code, string Screen) Compile(string source, string bootDisk, string compilerDisk, string? roms = null)
     {
+        (byte[]? code, string screen, _) = CompileWithListing(source, bootDisk, compilerDisk, listing: null, roms);
+        return (code, screen);
+    }
+
+    /// <summary>
+    ///  Compiles a source, and reads back the listing it asks for.
+    /// </summary>
+    /// <param name="source">The program, as plain text.</param>
+    /// <param name="bootDisk">APPLE1's image, as a 140K <c>.dsk</c>.</param>
+    /// <param name="compilerDisk">APPLE2's image, with <c>SYSTEM.COMPILER</c>.</param>
+    /// <param name="listing">
+    ///  The listing file the source's <c>(*$L APPLE1:NAME.TEXT*)</c> names, on APPLE1, to read back; null for none.
+    /// </param>
+    /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <returns>
+    ///  The code file, or null on an error; the screen when it finished; and the listing's text, or null.
+    /// </returns>
+    /// <exception cref="TimeoutException">The system never booted, or the Compiler never finished.</exception>
+    internal static (byte[]? Code, string Screen, string? Listing) CompileWithListing(
+        string source,
+        string bootDisk,
+        string compilerDisk,
+        string? listing,
+        string? roms = null)
+    {
         byte[] boot = File.ReadAllBytes(bootDisk);
+        // A listing takes a free area of its own besides the code file's: APPLE1 has one, so the Editor, which a
+        // compile does not need, makes room.
+        if (listing is not null) { PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.EDITOR"); }
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
 
         Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, roms, autostart: true));
@@ -62,15 +90,20 @@ internal static class EmulatedPascalCompiler
             ?? throw new TimeoutException($"The Compiler never finished:\n{Screen(machine)}");
 
         string screen = Screen(machine);
-        if (ended != "SMALLEST AVAILABLE") { return (null, screen); }
+        if (ended != "SMALLEST AVAILABLE") { return (null, screen, null); }
 
-        // The code file is closed as the system comes back to its command line.
-        machine.Run(cycles: CyclesPerTenth * 50);
+        // The code file and listing are closed as the system comes back to its command line; its line is still on the
+        // screen from before, so the wait is long enough for both.
+        machine.Run(cycles: (ulong)(CyclesPerTenth * (listing is null ? 50 : 300)));
         WozDisk disk = machine.Drives[0].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
         PascalVolume volume = PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
+        string? text = listing is not null && volume.Files.Any(file => string.Equals(file.Name, listing, StringComparison.OrdinalIgnoreCase))
+            ? PascalTextFile.Read(volume.ReadFile(listing))
+            : null;
+
         return volume.Files.Any(file => file.Name == "SYSTEM.WRK.CODE")
-            ? (volume.ReadFile("SYSTEM.WRK.CODE"), screen)
-            : (null, screen);
+            ? (volume.ReadFile("SYSTEM.WRK.CODE"), screen, text)
+            : (null, screen, text);
     }
 
     // Runs until the screen shows one of the texts, and says which.

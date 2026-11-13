@@ -199,6 +199,30 @@ public sealed class PascalVolume
         int last = data.Length == 0 ? 0 : data.Length - ((blocks - 1) * DiskBlocks.BlockSize);
         files.Insert(position, new PascalFileEntry(name, start, start + blocks, kind, last, modified));
 
+        WriteDirectory(image, proDosOrder, volume, files);
+    }
+
+    /// <summary>
+    ///  Removes a file from a Pascal volume in an image, freeing its blocks, as the Filer's R(emove) does.
+    /// </summary>
+    /// <param name="image">The 140K image, which is changed.</param>
+    /// <param name="proDosOrder">Whether its sectors are in ProDOS order.</param>
+    /// <param name="name">The file's name, in any case.</param>
+    /// <returns>Whether the volume had the file.</returns>
+    /// <exception cref="InvalidDataException">The image holds no Pascal volume.</exception>
+    public static bool DeleteFile(byte[] image, bool proDosOrder, string name)
+    {
+        PascalVolume volume = Read(image, proDosOrder);
+        List<PascalFileEntry> files = [.. volume.Files.Where(file => !string.Equals(file.Name, name, StringComparison.OrdinalIgnoreCase))];
+        if (files.Count == volume.Files.Count) { return false; }
+
+        WriteDirectory(image, proDosOrder, volume, files);
+        return true;
+    }
+
+    // Rewrites a volume's directory with its files.
+    private static void WriteDirectory(byte[] image, bool proDosOrder, PascalVolume volume, List<PascalFileEntry> files)
+    {
         byte[] directory = new byte[DirectoryBlocks * DiskBlocks.BlockSize];
         for (int block = 0; block < DirectoryBlocks; block++)
         {

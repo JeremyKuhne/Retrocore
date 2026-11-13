@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Media;
 
 namespace Retrocore.Pascal;
 
@@ -14,7 +15,7 @@ public static partial class PcodeSourceWriter
 
     // An assembled procedure: 6502 code from its entry, its data, its four relocation lists, its entry pointer and its
     // attributes (procedure 0). An operand the procedure-relative list names is an offset from the entry.
-    private static void NativeProcedure(List<string> lines, byte[] code, int number, int start, int attributes)
+    private static void NativeProcedure(List<string> lines, byte[] code, int number, int start, int attributes, PascalSegment segment, PcodeNaming naming)
     {
         int entry = (attributes - 2) - Word(code, attributes - 2);
 
@@ -48,6 +49,12 @@ public static partial class PcodeSourceWriter
         // Its code: 6502 instructions from the entry until data, which a relocated word, an instruction that does
         // not decode, or the end of a routine that no branch goes past marks.
         Dictionary<int, string> labels = new() { [entry] = "Entry" };
+        (Dictionary<int, string> givenNames, Dictionary<int, string> givenComments) = naming.Places(segment, number);
+        foreach ((int offset, string name) in givenNames)
+        {
+            if (offset != 0) { labels[entry + offset] = name; }
+        }
+
         List<(int At, DisassembledInstruction Instruction)> instructions = [];
         int at = entry;
         HashSet<int> targets = [];
@@ -115,11 +122,12 @@ public static partial class PcodeSourceWriter
         }
 
         lines.Add("        .cpu Mos6502");
-        lines.Add($";; Procedure {number}, assembled: 6502 code whose relocated operands are offsets from Entry.");
-        lines.Add($".scope P{number}");
+        lines.Add($";; {naming.Comment($"{segment.Name}.{number}") ?? $"Procedure {number}, assembled"}: 6502 code whose relocated operands are offsets from Entry.");
+        lines.Add($".scope {naming.Procedure(segment, number)}");
         DataWithWords(start, entry);
         foreach ((int instructionAt, DisassembledInstruction instruction) in instructions)
         {
+            if (givenComments.TryGetValue(instructionAt - entry, out string? given)) { lines.Add($";; {given}"); }
             if (labels.TryGetValue(instructionAt, out string? label)) { lines.Add($"{label}:"); }
             lines.Add($"        {Instruction(instructionAt, instruction)}");
         }
@@ -198,6 +206,7 @@ public static partial class PcodeSourceWriter
             int position = from;
             while (position < to)
             {
+                if (givenComments.TryGetValue(position - entry, out string? given)) { lines.Add($";; {given}"); }
                 if (relocated.TryGetValue(position, out int list) && position + 1 < to)
                 {
                     if (labels.TryGetValue(position, out string? wordLabel)) { lines.Add($"{wordLabel}:"); }

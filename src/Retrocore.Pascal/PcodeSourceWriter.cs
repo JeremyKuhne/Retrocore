@@ -43,15 +43,27 @@ public static partial class PcodeSourceWriter
     /// <param name="include">The include that defines the p-code macros, as <c>.include</c> names it.</param>
     /// <returns>The source, and notes on what it writes as data.</returns>
     /// <exception cref="InvalidDataException">The file is not a code file.</exception>
-    public static PcodeSource Write(ReadOnlySpan<byte> data, string include = "<Pascal/Pcode.asm>")
+    public static PcodeSource Write(ReadOnlySpan<byte> data, string include = "<Pascal/Pcode.asm>") =>
+        Write(data, new PcodeSourceOptions { Include = include ?? throw new ArgumentNullException(nameof(include)) });
+
+    /// <summary>
+    ///  Writes a code file as source, naming its parts from a library, a listing and given names.
+    /// </summary>
+    /// <param name="data">The code file's contents.</param>
+    /// <param name="options">The include, and where names come from.</param>
+    /// <returns>The source, and notes on what it writes as data.</returns>
+    /// <exception cref="InvalidDataException">The file is not a code file.</exception>
+    public static PcodeSource Write(ReadOnlySpan<byte> data, PcodeSourceOptions options)
     {
-        ArgumentNullException.ThrowIfNull(include);
+        ArgumentNullException.ThrowIfNull(options);
         PascalCodeFile file = PascalCodeFile.Read(data);
+        PcodeNaming naming = new(options, file);
         List<string> lines = [];
         List<string> notes = [];
         byte[] bytes = data.ToArray();
-        lines.Add($"        .include {include}");
+        lines.Add($"        .include {options.Include}");
         lines.Add("");
+        int units = lines.Count;
         Dictionary();
 
         int at = BlockSize;
@@ -64,7 +76,7 @@ public static partial class PcodeSourceWriter
             int mark = lines.Count;
             try
             {
-                Segment(lines, bytes, segment);
+                Segment(lines, bytes, segment, naming);
             }
             catch (InvalidDataException exception)
             {
@@ -83,6 +95,28 @@ public static partial class PcodeSourceWriter
         }
 
         Data(lines, bytes.AsSpan(at), at, labels: null);
+
+        // The units the calls name, each a scope of its segment and its procedures' numbers.
+        List<string> definitions = [];
+        foreach ((int segmentNumber, PascalUnit unit) in naming.Units)
+        {
+            string scope = PcodeNaming.UnitScope(unit);
+            definitions.Add($";; {unit.UsesName}, a unit in the library: its segment and its procedures' numbers.");
+            definitions.Add($".scope {scope}");
+            definitions.Add($"Segment = {segmentNumber}");
+            definitions.Add("Initialize = 1");
+            HashSet<string> named = new(StringComparer.OrdinalIgnoreCase) { "Segment", "Initialize" };
+            for (int index = 0; index < unit.Procedures.Count; index++)
+            {
+                string name = unit.Procedures[index].Name;
+                if (named.Add(name)) { definitions.Add($"{name} = {index + 2}"); }
+            }
+
+            definitions.Add(".endscope");
+            definitions.Add("");
+        }
+
+        lines.InsertRange(units, definitions);
         return new PcodeSource(string.Join('\n', lines) + "\n", notes);
 
         // The segment dictionary: each slot's block and length, its name, kind, interface text, and information.
@@ -105,16 +139,30 @@ public static partial class PcodeSourceWriter
                 lines.Add(Printable(name) ? $"        .byte \"{Encoding.ASCII.GetString(name)}\"" : Bytes(name));
             }
 
-            foreach (int table in (int[])[192, 224, 256])
+            foreach (int table in (int[])[192, 224])
             {
                 lines.Add("        .word " + string.Join(", ", Enumerable.Range(0, 16).Select(slot => Hex4(Word(bytes, table + (slot * 2))))));
+            }
+
+            // Each slot's information: its version, machine type and segment number.
+            for (int slot = 0; slot < 16; slot++)
+            {
+                int information = Word(bytes, 256 + (slot * 2));
+                int number = information & 0xFF;
+                int machine = (information >> 8) & 0xF;
+                int version = (information >> 13) & 7;
+                PascalSegment? segment = file.Segments.FirstOrDefault(segment => segment.Slot == slot);
+                bool exact = ((version << 13) | (machine << 8) | number) == information;
+                lines.Add(segment is null || !exact
+                    ? $"        .word {Hex4(information)}"
+                    : $"        .word ({version} << 13) | ({machine} << 8) | {number}      ; {segment.Name}: version {version}, {(PascalMachineType)machine}, segment {number}, {segment.Kind}");
             }
 
             Data(lines, bytes.AsSpan(288, BlockSize - 288), 288, labels: null);
         }
     }
 
-    private static void Segment(List<string> lines, byte[] bytes, PascalSegment segment)
+    private static void Segment(List<string> lines, byte[] bytes, PascalSegment segment, PcodeNaming naming)
     {
         byte[] code = segment.Code;
         int length = code.Length;
@@ -141,7 +189,8 @@ public static partial class PcodeSourceWriter
         lines.Add("");
         lines.Add($";; Segment {segment.Slot}: {segment.Name}, segment {segment.Number}, {segment.Kind}, {segment.MachineType}.");
         lines.Add($"Segment{segment.Slot}:");
-        lines.Add($".scope {ScopeName(segment)}");
+        if (naming.Comment(segment.Name) is { } comment) { lines.Add($";; {comment}"); }
+        lines.Add($".scope {naming.Segment(segment)}");
         int start = 0;
         HashSet<int> written = [];
         foreach ((int number, int attributes) in procedures)
@@ -158,11 +207,11 @@ public static partial class PcodeSourceWriter
 
             if (code[attributes] == 0)
             {
-                NativeProcedure(lines, code, number, start, attributes);
+                NativeProcedure(lines, code, number, start, attributes, segment, naming);
             }
             else
             {
-                PcodeProcedure(lines, code, number, start, attributes);
+                PcodeProcedure(lines, code, number, start, attributes, segment, naming);
             }
 
             start = attributes + 2;
@@ -174,7 +223,7 @@ public static partial class PcodeSourceWriter
         {
             int value = Word(code, length - 2 - (number * 2));
             lines.Add(value != 0 && procedures.Any(procedure => procedure.Number == number)
-                ? $"        .word * - P{number}::Attributes"
+                ? $"        .word * - {naming.Procedure(segment, number)}::Attributes"
                 : $"        .word {Hex4(value)}");
         }
 
@@ -185,8 +234,6 @@ public static partial class PcodeSourceWriter
         int end = (segment.Block * BlockSize) + length;
         Data(lines, bytes.AsSpan(end, Math.Min(padding, bytes.Length - end)), end, labels: null);
     }
-
-    private static string ScopeName(PascalSegment segment) => $"Seg{segment.Slot}";
 
     private static int Word(ReadOnlySpan<byte> data, int offset) => data[offset] | (data[offset + 1] << 8);
 

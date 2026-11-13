@@ -45,6 +45,42 @@ MEMA = 40
 code = 41
 .endscope
 
+;; The system segment's procedures, for CXP 0: the I/O, strings and screen that programs call.
+.scope Pascalsy
+FINIT = 3
+FRESET = 4
+FOPEN = 5
+FCLOSE = 6
+FGET = 7
+FPUT = 8
+FEOF = 10
+FEOLN = 11
+FREADINT = 12
+FWRITEINT = 13
+FREADCHAR = 16
+FWRITECHAR = 17
+FREADSTRING = 18
+FWRITESTRING = 19
+FWRITEBYTES = 20
+FREADLN = 21
+FWRITELN = 22
+SCONCAT = 23
+SINSERT = 24
+SCOPY = 25
+SDELETE = 26
+SPOS = 27
+FBLOCKIO = 28
+FGOTOXY = 29
+.endscope
+
+;; PASCALIO, which the system loads for SEEK and reals' I/O.
+.scope PascalIo
+Segment = 31
+FSEEK = 2
+FREADREAL = 3
+FWRITEREAL = 4
+.endscope
+
 ;; A "big" number: one byte below 128, otherwise two, the first with bit 7 set holding the high bits.
 .macro Big value
 .if (value) < 128

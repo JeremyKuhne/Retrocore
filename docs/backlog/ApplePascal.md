@@ -73,7 +73,9 @@ Built 2026-11-13, the second round:
   `retro/device` with `writeProtect`), so the Editor and Compiler can save in a debug session. Writes stay in memory.
 - **Listings:** `PascalListing` reads a compiler listing: each line's segment, procedure, depth or declaration and
   offset, the segments' and procedures' names, and the words of declared variables where their types' sizes are
-  known; `PascalListingTests`.
+  known; `PascalListingTests`. **Fixed 2026-11-13:** the words were numbered backwards within an identifier list
+  and across parameters; the Compiler allocates a list from its last name (`VAR A, B` puts B at the lower word) and
+  numbers parameters in stack order (the last is lowest), as the p-code source's variable names showed.
 - **Source lines:** breakpoints in `.pas`, `.pascal` and `.text` sources bind through `NAME.LST.TEXT`, on a disk in a
   drive (read again when it changes) or beside the source, to the first p-code of the line's statement. Frames show
   source lines and procedure names; Step Over and Step Into go by line. `Test-PascalDap.mjs` compiles HELLO in the

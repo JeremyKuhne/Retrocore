@@ -126,13 +126,14 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal extract disk NAME output` copies one out, a text file as plain text (`--raw` keeps Pascal's format);
 - `--pascal segments code` lists a code file's segments and procedures;
 - `--pascal disassemble code [SEGMENT[.PROCEDURE]]` lists its p-code, and its assembled procedures as 6502 code;
-- `--pascal disassemble code output.asm` writes the whole code file as source that assembles back to the same bytes,
-  and checks it does (below); `--pascal assemble source.asm output.code` assembles such a source;
+- `--pascal disassemble code output.asm [--library library] [--listing listing] [--hints hints.json]` writes the
+  whole code file as source that assembles back to the same bytes, and checks it does (below); `--pascal assemble source.asm output.code` assembles such a source;
 - `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
   above.
 - `--pascal decompile code [--library library] [output.text]` decompiles a program back to Pascal (below);
-- `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code` compiles a source with Apple Pascal's own Compiler,
-  on an emulated Apple II;
+- `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]` compiles a source with Apple
+  Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
+  `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`;
 - `--pascal compare code code` compares two code files' segments, and says where their code first differs.
 
 A code file is a file's path, or a disk and the file's name: `--pascal disassemble APPLE3.dsk HILBERT.CODE HILBERT.2`.
@@ -206,8 +207,37 @@ The source says every byte of the file, from address 0:
 - **What it cannot read** it writes as data, with a note: the system's stub segments, whose procedures are elsewhere.
   The byte the Compiler skips to put an operand on a word is kept as it is.
 
+### Names
+
+Unnamed, segments are named as their dictionary names them, procedures `P2`, and places by their offset, `L059A`.
+Calls and constants are named whatever is at hand:
+
+- **The system's procedures** by `Pcode.asm`'s scopes: `CXP 0, Pascalsy::FWRITESTRING`, and PASCALIO's
+  `CXP PascalIo::Segment, PascalIo::FWRITEREAL`.
+- **Units** from the library's interface text (`--library`, by default `SYSTEM.LIBRARY` on the code file's disk):
+  the source defines each unit's scope, `TURTLEGR::Segment = 20` and its procedures, and calls
+  `CXP TURTLEGR::Segment, TURTLEGR::TURN`.
+- **Calls** within the file have their callee beside them: `CGP 2 ; HILBERT::HIL`.
+- **A real constant** has its value beside it, where its two words read as a number a source would write.
+- **A listing** (`--listing`, the Compiler's listing of the program) names segments and procedures by their
+  headings, names variables beside each load and store (`STL 3 ; A`, `SLDO5 ; SIZE`), and puts each statement's
+  source line above its p-code (`;   12: HIL(I-1,...)`).
+- **Hints** (`--hints`, a JSON file) name and comment anything else, keyed as `pascal` breakpoints name code:
+  `SEGMENT` for a segment, `SEGMENT.N` for procedure N, and `SEGMENT.N+$OFFSET` for a place in it, by its offset
+  from the procedure's entry. A name is a segment's or procedure's scope, or a label; a comment goes above it.
+
+```json
+{
+  "names": { "FORMATTE.2": "FormatDisk", "FORMATTE.2+$40": "Iob" },
+  "comments": { "FORMATTE.2+$40": "RWTS's input/output block" }
+}
+```
+
+A listing or a hint wins over a name the file has; a name the assembler cannot take is made one (letters, digits and
+`_`), and two the same are made different.
+
 Every code file on Apple Pascal's and Apple III Pascal's disks, the system's own programs among them, is written so
-and assembles back byte-identically. Hovers in the editor show a p-code's macro on a p-code line and the 6502's
+and assembles back byte-identically, named or not. Hovers in the editor show a p-code's macro on a p-code line and the 6502's
 instruction on a 6502 line.
 
 ## Testing
@@ -219,8 +249,9 @@ instruction on a 6502 line.
   1.2 on the IIe. Apple III Pascal's disks are with the other Apple III disks
   (`RETROCORE_APPLE3_DISKS`), and Apple Pascal's in `RETROCORE_APPLE2_PASCAL_DISKS` (by default
   `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk` and `1.2_0.DSK` to `1.2_3.DSK`).
-- `PcodeAssemblyTests` assemble p-code source: a small code file of the tests' own with an assembled procedure, and,
-  with Apple Pascal's disks, every code file on them, written by `--pascal disassemble`'s writer.
+- `PcodeAssemblyTests` assemble p-code source: a small code file of the tests' own with an assembled procedure, named
+  from hints and from a listing, and, with Apple Pascal's disks, HILBERT with the library's names and every code file
+  on them, written by `--pascal disassemble`'s writer.
 - `PascalDecompilerTests` decompile two small programs kept as code files; with Apple Pascal's disks, each sample
   program on APPLE3 is decompiled, compiled again on an emulated Apple II, and compared with the original.
 - `node tools/Test-PascalDap.mjs` drives the debug host on both machines, and on the Apple III compiles a program

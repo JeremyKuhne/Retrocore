@@ -64,9 +64,17 @@ assembles P1's whole code file this way.
 - **Found:** a relocated operand can point inside a data word (FORMATTER's RWTS call reads its IOB pointer's high
   byte), so such a target is named from the word (`L0598 + 1`); and a target inside an instruction, as in the
   damaged code of Apple Pascal 1.2's `SYSTEM.EDITOR`, is too, in parentheses where it is subtracted.
-- **Not done:** names beyond `L0598` and `P2`: the library's unit names, `CXP 0, 19` as `FWRITESTRING`, a listing's
-  names, and hints as the 6502 disassembler takes; a macro's errors at the line that called it; writing to a disk
-  image.
+- **Names** (the same day, "work on what is still bare"): the system's and PASCALIO's procedures by `Pcode.asm`'s
+  `Pascalsy` and `PascalIo` scopes; units' procedures from the library, with a scope the source defines for each
+  unit; a call's callee and a real constant's value beside it; a listing's segment, procedure and variable names and
+  its source lines; and a hints file of names and comments keyed as `pascal` breakpoints are
+  ([Pascal.md](../Pascal.md#names)). `--pascal compile` writes the listing a source asks for.
+- **Found:** a Pascal file's name is at most 15 letters: the Compiler writes no listing to `HILBERT.LST.TEXT`, and
+  APPLE1 has room for a listing only once the Editor is off it. `PascalListing` numbered variables backwards: the
+  Compiler allocates an identifier list from its last name, and parameters in stack order, so in `VAR A, B: INTEGER`
+  B is the lower word; the debugger's variable names were wrong the same way.
+- **Not done:** a macro's errors at the line that called it; writing to a disk image; a unit's own variables
+  (`LDE`) by name.
 
 ## The pieces
 
@@ -90,9 +98,7 @@ A dialect for the native assembler, or a format of its own, that says all of a c
 
 - Write the whole code file as source, every byte accounted for, as `--disassemble` does for 6502 code, and report
   what was left as data.
-- Name procedures and calls: `CXP 0, 19` as `FWRITESTRING`, a unit's procedures from the library's interface text (as
-  the decompiler does), `CSP` by name, and a listing's names where a `.LST.TEXT` is at hand (`PascalListing`).
-- A hints file, as for 6502 disassembly, for names and comments.
+- ~~Name procedures and calls~~ and ~~a hints file~~: done (see Built).
 
 ### 3. The assembler
 

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Globalization;
 using System.Text;
+using Retrocore.Media;
 
 namespace Retrocore.Pascal;
 
@@ -10,7 +12,7 @@ public static partial class PcodeSourceWriter
 {
     // A p-code procedure: its p-codes from where the one before it ended, its jump table, then its words below its
     // attributes (data size, parameter size, exit and entry) and the attributes (number and lexical level).
-    private static void PcodeProcedure(List<string> lines, byte[] code, int number, int start, int attributes)
+    private static void PcodeProcedure(List<string> lines, byte[] code, int number, int start, int attributes, PascalSegment segment, PcodeNaming naming)
     {
         int entry = (attributes - 2) - Word(code, attributes - 2);
         int exit = (attributes - 4) - Word(code, attributes - 4);
@@ -23,6 +25,14 @@ public static partial class PcodeSourceWriter
         }
 
         Dictionary<int, string> labels = new() { [entry] = "Entry" };
+        (Dictionary<int, string> givenNames, Dictionary<int, string> givenComments) = naming.Places(segment, number);
+        foreach ((int offset, string name) in givenNames)
+        {
+            if (offset != 0) { labels[entry + offset] = name; }
+        }
+
+        Dictionary<int, List<string>> source = naming.SourceLines(segment, number);
+        Dictionary<int, string> notes = [];
         HashSet<int> inline = [];
         List<(int At, int End, string? Text, Func<string>? Late)> items = [];
         int tableLow = attributes - 8;
@@ -183,6 +193,7 @@ public static partial class PcodeSourceWriter
 
             // A form the macros would write otherwise, such as a two-byte number below 128, is written as its bytes.
             if (long_) { (text, late) = (null, null); }
+            if (Note(code, instruction, segment, number, naming, ref text) is { } note) { notes[instruction] = note; }
             items.Add((instruction, at, text, late));
         }
 
@@ -210,7 +221,8 @@ public static partial class PcodeSourceWriter
             labels.Remove(target);
         }
 
-        lines.Add($".scope P{number}");
+        if (naming.Comment($"{segment.Name}.{number}") is { } comment) { lines.Add($";; {comment}"); }
+        lines.Add($".scope {naming.Procedure(segment, number)}");
         Dictionary<string, string> texts = [];
         foreach ((int itemAt, int end, string? text, Func<string>? late) in items)
         {
@@ -222,6 +234,8 @@ public static partial class PcodeSourceWriter
 
         foreach ((int itemAt, int end, string? text, Func<string>? _) in items)
         {
+            if (source.TryGetValue(itemAt - entry, out List<string>? statements)) { lines.AddRange(statements); }
+            if (givenComments.TryGetValue(itemAt - entry, out string? given)) { lines.Add($";; {given}"); }
             if (labels.TryGetValue(itemAt, out string? label)) { lines.Add($"{label}:"); }
             if (itemAt == exit && exit != entry) { lines.Add("Exit:"); }
             string? written = text ?? (texts.TryGetValue(Invariant(itemAt), out string? delayed) ? delayed : null);
@@ -233,7 +247,7 @@ public static partial class PcodeSourceWriter
             {
                 // The first line is the p-code; any after it are written in full.
                 string[] parts = written.Split('\n');
-                lines.Add($"        {parts[0]}");
+                lines.Add(notes.TryGetValue(itemAt, out string? note) ? $"        {parts[0],-32} ; {note}" : $"        {parts[0]}");
                 lines.AddRange(parts.Skip(1));
             }
         }
@@ -265,6 +279,62 @@ public static partial class PcodeSourceWriter
     }
 
     private static string Label(int offset) => $"L{offset:X4}";
+
+    // A p-code's comment: what a call calls, the variable a load or store names, or a real constant's value; and a
+    // CXP's operands by name where they have them.
+    private static string? Note(byte[] code, int at, PascalSegment segment, int number, PcodeNaming naming, ref string? text)
+    {
+        byte op = code[at];
+        int Operand()
+        {
+            int first = code[at + 1];
+            return first < 0x80 ? first : ((first & 0x7F) << 8) | code[at + 2];
+        }
+
+        switch (op)
+        {
+            case Pcode.Clp or Pcode.Cgp or Pcode.Cip or Pcode.Cbp:
+                return naming.Callee(segment.Number, code[at + 1]);
+            case Pcode.Cxp:
+                if (text is not null && naming.External(code[at + 1], code[at + 2]) is { } operands)
+                {
+                    text = $"CXP {operands}";
+                    return null;
+                }
+
+                return naming.Callee(code[at + 1], code[at + 2]);
+            case 202 or 204 or 198: // LDL, STL, LLA
+                return naming.Variable(segment.Number, number, Operand());
+            case >= 216 and <= 231: // SLDL1-16
+                return naming.Variable(segment.Number, number, op - 215);
+            case 169 or 171 or 165: // LDO, SRO, LAO
+                return naming.Global(Operand());
+            case >= 232 and <= 247: // SLDO1-16
+                return naming.Global(op - 231);
+            case 179 when code[at + 1] == 2: // LDC of a real
+                {
+                    int data = at + 2 + ((at + 2) & 1);
+                    float value = BitConverter.Int32BitsToSingle((Word(code, data) << 16) | Word(code, data + 2));
+                    return Real(value) is { } real ? $"{real} as a real" : null;
+                }
+
+            default:
+                return null;
+        }
+    }
+
+    // A two-word constant as a real, where it reads as one a source would write: not zero, between a millionth and
+    // a billion, and of six digits at most. A set's or a packed array's two words are as often a tiny denormal, or a
+    // number such as 2.0000002.
+    private static string? Real(float value)
+    {
+        float size = Math.Abs(value);
+        if (!float.IsNormal(value) || size < 1e-6f || size > 1e9f) { return null; }
+
+        string text = value.ToString("R", CultureInfo.InvariantCulture);
+        string digits = text.Split('E')[0].Replace("-", "", StringComparison.Ordinal).Replace(".", "", StringComparison.Ordinal);
+        return digits.Trim('0').Length <= 6 ? text : null;
+    }
 
     // A reference as the operand of a subtraction: in parentheses when it is a sum, such as L0565 + 33.
     private static string Operand(string reference) => reference.Contains(' ', StringComparison.Ordinal) ? $"({reference})" : reference;

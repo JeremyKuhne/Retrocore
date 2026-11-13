@@ -306,6 +306,25 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
+    ///  A file deleted from a Pascal volume leaves its directory and its blocks free; one that is not there is not
+    ///  deleted.
+    /// </summary>
+    [TestMethod]
+    public void FilesDeleteFromAPascalVolume()
+    {
+        byte[] image = EmptyVolume("TEST");
+        PascalVolume.WriteFile(image, proDosOrder: false, "A.TEXT", PascalFileKind.Text, new byte[1100]);
+        PascalVolume.WriteFile(image, proDosOrder: false, "B.CODE", PascalFileKind.Code, [1, 2, 3]);
+
+        PascalVolume.DeleteFile(image, proDosOrder: false, "a.text").Should().BeTrue();
+        PascalVolume.DeleteFile(image, proDosOrder: false, "C.CODE").Should().BeFalse();
+        PascalVolume.Read(image, proDosOrder: false).Files.Select(file => file.Name).Should().Equal("B.CODE");
+
+        PascalVolume.WriteFile(image, proDosOrder: false, "D.TEXT", PascalFileKind.Text, [4]);
+        PascalVolume.Read(image, proDosOrder: false).Files.Single(file => file.Name == "D.TEXT").FirstBlock.Should().Be(6);
+    }
+
+    /// <summary>
     ///  Each sample program with its source on APPLE3, and the BINDER utility, decompile to source that Apple Pascal
     ///  1.1's Compiler compiles to the same code; only the byte a word-aligned operand skips may differ.
     /// </summary>

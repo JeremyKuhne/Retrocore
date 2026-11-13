@@ -35,17 +35,18 @@ namespace Retrocore.Debug;
 ///   as Apple III Pascal 1.2's update disks are copied onto 1.1's.
 ///  </para>
 /// </remarks>
-internal static class PascalCommand
+internal static partial class PascalCommand
 {
     private const string Usage = """
         Usage: --pascal catalog disk [--json]
                --pascal extract disk NAME output [--raw]
                --pascal segments (file.code | disk NAME)
-               --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE] | output.asm]
+               --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
+               --pascal disassemble (file.code | disk NAME) [--library L] [--listing L] [--hints file.json] output.asm
                --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [output.text]
-               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code
+               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]
                --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
 
@@ -68,7 +69,8 @@ internal static class PascalCommand
                 ["assemble", string source, string output] => Assemble(source, output),
                 ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
                 ["decompile", .. string[] rest] => Decompile(rest),
-                ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output),
+                ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null),
+                ["compile", string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing),
                 ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
                 _ => Fail(Usage, code: 2)
             };
@@ -179,7 +181,10 @@ internal static class PascalCommand
     private static int DisassembleToSource(string[] args)
     {
         string output = args[^1];
-        string[] input = args[..^1];
+        List<string> input = [.. args[..^1]];
+        byte[]? library = Option(input, "--library");
+        byte[]? listing = Option(input, "--listing");
+        byte[]? hints = Option(input, "--hints");
         byte[] data = input switch
         {
             [string disk, string name] when IsDisk(disk) => Open(disk).Read(name),
@@ -187,7 +192,24 @@ internal static class PascalCommand
             _ => throw new ArgumentException(Usage)
         };
 
-        PcodeSource source = PcodeSourceWriter.Write(data);
+        // Units are named from the library on the code file's disk unless another is given.
+        if (library is null && input is [string onDisk, _] && IsDisk(onDisk))
+        {
+            PascalDisk disk = Open(onDisk);
+            if (disk.Files.Any(file => string.Equals(file.Name, "SYSTEM.LIBRARY", StringComparison.OrdinalIgnoreCase)))
+            {
+                library = disk.Read("SYSTEM.LIBRARY");
+            }
+        }
+
+        PcodeSourceOptions options = new()
+        {
+            Library = library is null ? null : PascalLibrary.Read(library),
+            Listing = listing is null ? null : PascalListing.Parse(Text(listing))
+        };
+
+        if (hints is not null) { options = Hints(options, hints); }
+        PcodeSource source = PcodeSourceWriter.Write(data, options);
         File.WriteAllText(output, source.Text);
         foreach (string note in source.Notes) { Console.WriteLine($"note: {note}"); }
 
@@ -202,6 +224,46 @@ internal static class PascalCommand
         int first = Enumerable.Range(0, Math.Min(data.Length, assembled.Length)).FirstOrDefault(index => data[index] != assembled[index]);
         Console.WriteLine($"Wrote {output}, but it assembles to {assembled.Length} bytes for {data.Length}, {differences} differing, the first at ${first:X4}.");
         return 1;
+    }
+
+    // An option's file, a host file's path or a disk and a file's name, taken out of the arguments.
+    private static byte[]? Option(List<string> args, string option)
+    {
+        int at = args.IndexOf(option);
+        if (at < 0) { return null; }
+        if (at + 1 >= args.Count) { throw new ArgumentException($"{option} names no file."); }
+
+        bool disk = IsDisk(args[at + 1]);
+        if (disk && at + 2 >= args.Count) { throw new ArgumentException($"{option} names a disk but no file on it."); }
+        byte[] data = disk ? Open(args[at + 1]).Read(args[at + 2]) : File.ReadAllBytes(args[at + 1]);
+        args.RemoveRange(at, disk ? 3 : 2);
+        return data;
+    }
+
+    // A text file's text: a Pascal text file's lines, or a host file's as it is.
+    private static string Text(byte[] data) =>
+        data.Length >= 1024 && data.Length % 1024 == 0 && Array.IndexOf(data, (byte)'\n') < 0
+            ? PascalTextFile.Read(data)
+            : System.Text.Encoding.ASCII.GetString(data);
+
+    // A hints file: { "names": { "FORMATTE.2": "Format", "FORMATTE.2+$3E": "Return" }, "comments": { ... } }.
+    private static PcodeSourceOptions Hints(PcodeSourceOptions options, byte[] data)
+    {
+        JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
+        return options with { Names = Strings(root["names"]), Comments = Strings(root["comments"]) };
+
+        static Dictionary<string, string> Strings(JsonNode? node)
+        {
+            Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+            if (node is not JsonObject entries) { return values; }
+
+            foreach ((string key, JsonNode? value) in entries)
+            {
+                values[key] = value?.GetValue<string>() ?? throw new InvalidDataException($"The hint {key} has no text.");
+            }
+
+            return values;
+        }
     }
 
     // Assembles p-code source into a code file.
@@ -278,9 +340,19 @@ internal static class PascalCommand
     }
 
     // Compiles a source with Apple Pascal's Compiler on an emulated Apple II.
-    private static int Compile(string source, string boot, string compiler, string output)
+    private static int Compile(string source, string boot, string compiler, string output, string? listing)
     {
-        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(File.ReadAllText(source), boot, compiler);
+        // A listing the source asks for, (*$L APPLE1:NAME.TEXT*), is read back from APPLE1 to the host.
+        string text = File.ReadAllText(source);
+        System.Text.RegularExpressions.Match asked = ListingName().Match(text);
+        string? listed = listing is not null && asked.Success ? asked.Groups["name"].Value : null;
+        if (listing is not null && listed is null)
+        {
+            return Fail("The source asks for no listing: (*$L APPLE1:NAME.TEXT*).", code: 2);
+        }
+
+
+        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed);
         if (code is null)
         {
             Console.Error.WriteLine(screen);
@@ -289,8 +361,22 @@ internal static class PascalCommand
 
         File.WriteAllBytes(output, code);
         Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        if (listing is not null && listingText is not null)
+        {
+            File.WriteAllText(listing, listingText);
+            Console.WriteLine($"Wrote the listing to {listing}.");
+        }
+        else if (listing is not null)
+        {
+            // The Compiler writes no listing whose name it cannot make, such as one longer than 15 characters.
+            return Fail($"The Compiler wrote no listing {listed}{(listed?.Length > 15 ? ": a file's name is at most 15 characters" : "")}.");
+        }
+
         return 0;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\(\*\$L\s*(?:[A-Z0-9]+:)?(?<name>[^*\s]+)\s*\*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ListingName();
 
     // Compares two code files' segments: their dictionary entries and code.
     private static int Compare(PascalCodeFile first, PascalCodeFile second)

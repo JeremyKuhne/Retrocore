@@ -5,7 +5,7 @@
 namespace Retrocore.Media;
 
 /// <summary>
-///  Reads an Apple Pascal text file (<c>.TEXT</c>) as plain text.
+///  Reads and writes an Apple Pascal text file (<c>.TEXT</c>) as plain text.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -47,5 +47,61 @@ public static class PascalTextFile
         }
 
         return new string(text, 0, length);
+    }
+
+    /// <summary>
+    ///  Writes text as a text file, as the Editor saves it: an empty header page, then the lines in pages, each line
+    ///  ending with RETURN and its leading spaces packed.
+    /// </summary>
+    /// <param name="text">The text; lines end with a line feed, a RETURN or both.</param>
+    /// <returns>The file's contents, a whole number of pages.</returns>
+    /// <exception cref="ArgumentException">A line is longer than a page.</exception>
+    public static byte[] Write(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
+        int count = lines.Length;
+        if (count > 0 && lines[^1].Length == 0) { count--; }
+
+        List<byte> file = [.. new byte[PageSize]];
+        List<byte> page = new(PageSize);
+        for (int index = 0; index < count; index++)
+        {
+            string line = lines[index].TrimEnd();
+            int spaces = line.Length - line.TrimStart(' ').Length;
+            List<byte> encoded = [];
+            if (spaces > 0)
+            {
+                encoded.Add(Dle);
+                encoded.Add((byte)(32 + Math.Min(spaces, 223)));
+                line = new string(' ', Math.Max(0, spaces - 223)) + line[spaces..];
+            }
+
+            foreach (char character in line) { encoded.Add((byte)(character & 0x7F)); }
+            encoded.Add(0x0D);
+
+            // A page ends with at least one zero, and a line never crosses into the next page.
+            if (encoded.Count >= PageSize)
+            {
+                throw new ArgumentException($"Line {index + 1} is longer than a page.", nameof(text));
+            }
+
+            if (page.Count + encoded.Count >= PageSize)
+            {
+                Flush(file, page);
+            }
+
+            page.AddRange(encoded);
+        }
+
+        if (page.Count > 0 || file.Count == PageSize) { Flush(file, page); }
+        return [.. file];
+    }
+
+    private static void Flush(List<byte> file, List<byte> page)
+    {
+        file.AddRange(page);
+        file.AddRange(new byte[PageSize - page.Count]);
+        page.Clear();
     }
 }

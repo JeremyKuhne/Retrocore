@@ -7,7 +7,7 @@ using System.Text;
 namespace Retrocore.Media;
 
 /// <summary>
-///  An Apple Pascal volume, read-only: the UCSD file system the Apple II's Pascal uses, from a 140K disk image in
+///  An Apple Pascal volume: the UCSD file system the Apple II's Pascal uses, from a 140K disk image in
 ///  either sector order.
 /// </summary>
 /// <remarks>
@@ -145,6 +145,89 @@ public sealed class PascalVolume
     }
 
     /// <summary>
+    ///  Writes a file onto a Pascal volume in an image, replacing any file of the same name, in the first run of free
+    ///  blocks long enough for it, as the Filer does.
+    /// </summary>
+    /// <param name="image">The 140K image, which is changed.</param>
+    /// <param name="proDosOrder">Whether its sectors are in ProDOS order.</param>
+    /// <param name="name">The file's name, up to 15 characters, such as <c>SYSTEM.WRK.TEXT</c>.</param>
+    /// <param name="kind">What the file holds.</param>
+    /// <param name="data">Its contents.</param>
+    /// <param name="modified">The date to give it, or none.</param>
+    /// <exception cref="InvalidDataException">The image holds no Pascal volume.</exception>
+    /// <exception cref="IOException">The volume has no room for the file, or its directory is full.</exception>
+    public static void WriteFile(byte[] image, bool proDosOrder, string name, PascalFileKind kind, ReadOnlySpan<byte> data, DateOnly? modified = null)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (name.Length is 0 or > 15)
+        {
+            throw new ArgumentException("A file's name is 1-15 characters.", nameof(name));
+        }
+
+        PascalVolume volume = Read(image, proDosOrder);
+        name = name.ToUpperInvariant();
+        List<PascalFileEntry> files = [.. volume.Files.Where(file => !string.Equals(file.Name, name, StringComparison.OrdinalIgnoreCase))];
+        int maximum = (DirectoryBlocks * DiskBlocks.BlockSize / EntrySize) - 1;
+        if (files.Count >= maximum) { throw new IOException($"The directory of {volume.Name}: is full."); }
+
+        int blocks = Math.Max(1, (data.Length + DiskBlocks.BlockSize - 1) / DiskBlocks.BlockSize);
+        int start = DirectoryBlock + DirectoryBlocks;
+        int position = 0;
+        while (position < files.Count && files[position].FirstBlock - start < blocks)
+        {
+            start = Math.Max(start, files[position].NextBlock);
+            position++;
+        }
+
+        if (start + blocks > volume.Blocks)
+        {
+            throw new IOException($"{volume.Name}: has no {blocks} free blocks in a row for {name}.");
+        }
+
+        for (int block = 0; block < blocks; block++)
+        {
+            byte[] content = new byte[DiskBlocks.BlockSize];
+            int offset = block * DiskBlocks.BlockSize;
+            if (offset < data.Length)
+            {
+                data[offset..Math.Min(data.Length, offset + DiskBlocks.BlockSize)].CopyTo(content);
+            }
+
+            DiskBlocks.Write(image, proDosOrder, start + block, content);
+        }
+
+        int last = data.Length == 0 ? 0 : data.Length - ((blocks - 1) * DiskBlocks.BlockSize);
+        files.Insert(position, new PascalFileEntry(name, start, start + blocks, kind, last, modified));
+
+        byte[] directory = new byte[DirectoryBlocks * DiskBlocks.BlockSize];
+        for (int block = 0; block < DirectoryBlocks; block++)
+        {
+            volume.Block(DirectoryBlock + block).CopyTo(directory, block * DiskBlocks.BlockSize);
+        }
+
+        // The header keeps all but its count of files; the entries after it are rewritten.
+        directory.AsSpan(EntrySize).Clear();
+        SetWord(directory, 16, files.Count);
+        for (int index = 0; index < files.Count; index++)
+        {
+            PascalFileEntry file = files[index];
+            int offset = (index + 1) * EntrySize;
+            SetWord(directory, offset, file.FirstBlock);
+            SetWord(directory, offset + 2, file.NextBlock);
+            SetWord(directory, offset + 4, (int)file.Kind);
+            directory[offset + 6] = (byte)file.Name.Length;
+            Encoding.ASCII.GetBytes(file.Name).CopyTo(directory, offset + 7);
+            SetWord(directory, offset + 22, file.BytesInLastBlock);
+            SetWord(directory, offset + 24, file.Modified is { } date ? date.Month | (date.Day << 4) | ((date.Year - 1900) << 9) : 0);
+        }
+
+        for (int block = 0; block < DirectoryBlocks; block++)
+        {
+            DiskBlocks.Write(image, proDosOrder, DirectoryBlock + block, directory.AsSpan(block * DiskBlocks.BlockSize, DiskBlocks.BlockSize));
+        }
+    }
+
+    /// <summary>
     ///  Reads a block.
     /// </summary>
     /// <param name="block">The block number, 0-279.</param>
@@ -165,4 +248,10 @@ public sealed class PascalVolume
     }
 
     private static int Word(ReadOnlySpan<byte> data, int offset) => data[offset] | (data[offset + 1] << 8);
+
+    private static void SetWord(byte[] data, int offset, int value)
+    {
+        data[offset] = (byte)value;
+        data[offset + 1] = (byte)(value >> 8);
+    }
 }

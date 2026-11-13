@@ -38,6 +38,9 @@ internal static class PascalCommand
                --pascal segments (file.code | disk NAME)
                --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
+               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [output.text]
+               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code
+               --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
 
     /// <summary>
@@ -56,6 +59,9 @@ internal static class PascalCommand
                 ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
                 ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
+                ["decompile", .. string[] rest] => Decompile(rest),
+                ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output),
+                ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
                 _ => Fail(Usage, code: 2)
             };
         }
@@ -156,6 +162,85 @@ internal static class PascalCommand
         }
 
         return PascalCodeFile.Read(data);
+    }
+
+    // Two code files, each a path or a disk and a name.
+    private static (PascalCodeFile First, PascalCodeFile Second)? CodeFiles(string[] args)
+    {
+        int split = args.Length > 0 && IsDisk(args[0]) ? 2 : 1;
+        return args.Length < split + 1 || CodeFile(args[..split], out _) is not { } first || CodeFile(args[split..], out _) is not { } second
+            ? null
+            : (first, second);
+    }
+
+    // Decompiles a code file to Pascal: from a path or a disk, with its units from a library, by default the
+    // SYSTEM.LIBRARY on the code file's disk.
+    private static int Decompile(string[] args)
+    {
+        List<string> rest = [.. args];
+        byte[]? library = null;
+        int at = rest.IndexOf("--library");
+        if (at >= 0)
+        {
+            if (at + 1 >= rest.Count) { return Fail(Usage, code: 2); }
+            bool disk = IsDisk(rest[at + 1]);
+            if (disk && at + 2 >= rest.Count) { return Fail(Usage, code: 2); }
+            library = disk ? Open(rest[at + 1]).Read(rest[at + 2]) : File.ReadAllBytes(rest[at + 1]);
+            rest.RemoveRange(at, disk ? 3 : 2);
+        }
+
+        if (rest.Count == 0) { return Fail(Usage, code: 2); }
+        bool onDisk = IsDisk(rest[0]);
+        int inputs = onDisk ? 2 : 1;
+        if (rest.Count < inputs) { return Fail(Usage, code: 2); }
+
+        byte[] data = onDisk ? Open(rest[0]).Read(rest[1]) : File.ReadAllBytes(rest[0]);
+        if (library is null && onDisk)
+        {
+            PascalDisk disk = Open(rest[0]);
+            if (disk.Files.Any(file => string.Equals(file.Name, "SYSTEM.LIBRARY", StringComparison.OrdinalIgnoreCase)))
+            {
+                library = disk.Read("SYSTEM.LIBRARY");
+            }
+        }
+
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(data), library is null ? null : PascalLibrary.Read(library));
+        foreach (string warning in result.Warnings) { Console.Error.WriteLine($"warning: {warning}"); }
+        if (rest.Count > inputs)
+        {
+            File.WriteAllText(rest[inputs], result.Source);
+            Console.WriteLine($"Wrote {rest[inputs]}.");
+        }
+        else
+        {
+            Console.Write(result.Source);
+        }
+
+        return result.Warnings.Count == 0 ? 0 : 1;
+    }
+
+    // Compiles a source with Apple Pascal's Compiler on an emulated Apple II.
+    private static int Compile(string source, string boot, string compiler, string output)
+    {
+        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(File.ReadAllText(source), boot, compiler);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Compiler stopped with an error.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        return 0;
+    }
+
+    // Compares two code files' segments: their dictionary entries and code.
+    private static int Compare(PascalCodeFile first, PascalCodeFile second)
+    {
+        IReadOnlyList<string> differences = PascalCodeComparison.Compare(first, second);
+        foreach (string difference in differences) { Console.WriteLine(difference); }
+        if (differences.Count == 0) { Console.WriteLine("The code files' segments are the same."); }
+        return differences.Count == 0 ? 0 : 1;
     }
 
     private static int Catalog(string path, bool json)

@@ -95,11 +95,11 @@ MAME's drivers are the oracle: `coco` (1 and 2, with BASIC 1.0-1.2 as BIOS choic
 
 Phases 0-6 are built (2026-11-12) and await review: fixtures, the CoCo 1 and 2, the VDG, cassette, sound,
 joysticks and cartridges, the CoCo 3's GIME, the disk controller with the 6809's HALT input, and the debugger and
-extension. [Coco.md](../Coco.md) describes what they emulate. What is left:
+extension. [Coco.md](../Coco.md) describes what they emulate. Phase 7 followed:
 
 7. **Native ROM sources** for Color, Extended, Disk and Super Extended BASIC, byte-identical and pinned by digest,
-   maintained by hand: [CocoRomSources.md](CocoRomSources.md), a draft awaiting decisions. Until then the ROMs
-   debug as disassembly and the machine needs the dumps.
+   maintained by hand: [CocoRomSources.md](CocoRomSources.md). Built: every model runs and debugs on the sources,
+   with nothing external.
 
 Known gaps in what is built:
 

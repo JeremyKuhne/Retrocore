@@ -93,7 +93,6 @@
             "name": "Color Computer: 6809 sample",
             "preLaunchTask": "Build debug host",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "source": "${workspaceFolder}/sample/coco/hello.asm",
             "stopOnEntry": true
         },

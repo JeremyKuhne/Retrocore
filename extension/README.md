@@ -100,7 +100,7 @@ their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model 4, Model 4P,
+Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, and the TRS-80 Color Computer,
 Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
@@ -1005,7 +1005,8 @@ builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the 
 generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TRS80_ROMS`
 can hold MAME's dumps instead. When the running ROM is one the sources build, its source
 debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
-does. The options are `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
+does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
+build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
 `diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
 panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for

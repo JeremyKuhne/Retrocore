@@ -41,13 +41,15 @@ public sealed partial class Trs80RomSourceTests
     }
 
     /// <summary>
-    ///  Level I and the character generator build byte-identically.
+    ///  Level I, the Model I's and the Model III's, and the character generator build byte-identically.
     /// </summary>
     [TestMethod]
     public void Level1AndCharacterGeneratorMatch()
     {
         string level1 = Hash(Trs80SdkModules.AssembleLevel1(Source("Level1.asm")));
         level1.Should().Be("74040B583672571038C8239695148194B073333CC7808C952CFECF2A78A20F8C");
+        string model3Level1 = Hash(Trs80SdkModules.AssembleLevel1(Source("Level1.asm"), model: 3));
+        model3Level1.Should().Be("DEF1E136F0231C9D0A4293B49BA192B02A85EE9C6F097FEDA6A72C3CFC7397C9");
         string characters = Hash(Trs80SdkModules.AssembleCharacterGenerator(Source("CharacterGenerator.asm")));
         characters.Should().Be("6DD67D0FDAF689E92BFE4DD78615A709BCE88CB3831427DA0E39D062BA9D9A23");
     }
@@ -170,13 +172,14 @@ public sealed partial class Trs80RomSourceTests
     /// <param name="file">The source.</param>
     /// <param name="variant">
     ///  The Level II revision; the Model III's ROM C revision, or 4 for the Model 4; the Model II boot ROM's version,
-    ///  or 4 for <c>cpu_11be</c>; 1 for the 4P's character generator; or 0.
+    ///  or 4 for <c>cpu_11be</c>; 1 for the 4P's character generator; 3 for the Model III's Level I; or 0.
     /// </param>
     /// <param name="dumps">The dump files, concatenated.</param>
     [TestMethod]
     [DataRow("Level2.asm", 12, "rom-a.z1,rom-b.z2,rom-c.z3")]
     [DataRow("Level2.asm", 13, "rom-a_alt.z1,rom-b_alt.z2,rom-c_alt.z3")]
     [DataRow("Level1.asm", 0, "level1.rom")]
+    [DataRow("Level1.asm", 3, "8040032.u104")]
     [DataRow("CharacterGenerator.asm", 0, "mcm6670p.z29")]
     [DataRow("Model3.asm", (int)'C', "8041364.u104,8040332.u105,8040316c.u106")]
     [DataRow("Model3.asm", (int)'B', "8041364.u104,8040332.u105,8040316b.u106")]
@@ -201,7 +204,7 @@ public sealed partial class Trs80RomSourceTests
         AssemblyResult result = file switch
         {
             "Level2.asm" => Trs80SdkModules.AssembleLevel2(Source(file), variant),
-            "Level1.asm" => Trs80SdkModules.AssembleLevel1(Source(file)),
+            "Level1.asm" => Trs80SdkModules.AssembleLevel1(Source(file), variant == 3 ? 3 : 1),
             "Model3.asm" => variant == 4
                 ? Trs80SdkModules.AssembleModel3(Source(file), 4)
                 : Trs80SdkModules.AssembleModel3(Source(file), 3, (char)variant),

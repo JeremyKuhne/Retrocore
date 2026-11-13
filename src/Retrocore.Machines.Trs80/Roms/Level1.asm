@@ -1,7 +1,10 @@
-;; TRS-80 MODEL I LEVEL I BASIC ($0000-$0FFF)
+;; TRS-80 LEVEL I BASIC ($0000-$0FFF), FOR THE MODEL I AND MODEL III
 ;;
 ;; Level I is the Model I's first BASIC: 4K of ROM derived from Li-Chen Wang's Palo Alto Tiny BASIC,
-;; with Radio Shack's floating point, screen graphics and cassette routines.
+;; with Radio Shack's floating point, screen graphics and cassette routines. The Model III offered it too,
+;; in a ROM of its own (8040032) that MODEL = 3 builds: the same BASIC, with LPRINT and LLIST for the
+;; printer, the Model III's ports for the cassette and the reset button's NMI at $0066, and its restarts
+;; moved so that RST $18 skips blanks, RST $28 prints on the screen and EXPR is a call.
 ;;
 ;; Like Tiny BASIC it uses the restarts as one-byte calls: TSTC tests for a character, OUTC prints one,
 ;; EXPR evaluates an expression, COMP compares HL with DE, IGNBLK skips blanks, FINISH ends a statement and
@@ -10,14 +13,35 @@
 ;; handler's address, high byte first with bit 7 set; EXEC looks a word up, allowing abbreviations that
 ;; end in a period, and an entry with no word is the table's default.
 ;;
-;; Assembles byte-identically to the Level I ROM. Labels keep Wang's names from Palo Alto Tiny BASIC where
-;; Level I keeps his routine instruction for instruction (EXPR2, FNDLN, QTSTG, MVUP); keyword handlers are
-;; named after their word, other routines after what they do, and their inner labels after the routine.
-;; The comments are our own, written with trs-80.com's annotated disassembly of Level I as a reference.
+;; Assembles byte-identically to the Level I ROM, and with MODEL = 3 to the Model III's. Labels keep Wang's names from
+;; Palo Alto Tiny BASIC where Level I keeps his routine instruction for instruction (EXPR2, FNDLN, QTSTG, MVUP); keyword
+;; handlers are named after their word, other routines after what they do, and their inner labels after the routine. The
+;; comments are our own, written with trs-80.com's annotated disassembly of Level I as a reference.
 ;;
-;; Maintained by hand. Trs80RomSourceTests check that it assembles byte-identically to the ROM.
+;; Maintained by hand. Trs80RomSourceTests check that each model's build assembles byte-identically to its ROM.
 
 .cpu Z80
+
+.ifndef MODEL
+MODEL = 1
+.endif
+.assert MODEL = 1 || MODEL = 3, "MODEL is 1 or 3."
+
+; The restarts that moved on the Model III: IGNBLK took RST $18, and EXPR became a call.
+.if MODEL = 1
+IGNBLK_RST = $28
+.else
+IGNBLK_RST = $18
+.endif
+
+;; Evaluates the expression at DE: RST $18 on the Model I, a call on the Model III.
+.macro EVALUATE
+.if MODEL = 1
+    RST $18
+.else
+    CALL EXPR
+.endif
+.endmacro
 
 ;; TSTC: tests whether the next nonblank character is the given one. On a match it steps past it and
 ;; continues after the test; otherwise it continues at the mismatch label.
@@ -47,7 +71,11 @@ CURSOR = $4068                      ;; the cursor's address in video RAM
 MEMTOP = $406A                      ;; the top of memory; the array grows down from it
 TXTUNF = $406C                      ;; the end of the program text
 LOPLMT = $406E                      ;; the innermost FOR loop's limit
+.if MODEL = 1
 PORT_FF_IMAGE = $4090               ;; the last value written to port $FF
+.else
+LPRINTING = $4090                   ;; nonzero while LPRINT or LLIST sends OUTC's characters to the printer
+.endif
 LOPINC = $4091                      ;; its STEP
 LOPLN = $4093                       ;; the line holding its FOR
 LOPPT = $4095                       ;; the text position after its FOR statement
@@ -62,6 +90,7 @@ LOPVAR = $40A5                      ;; the innermost FOR loop's variable, or 0 f
 
 .org $0000
 
+.if MODEL = 1
 ;; Power-up and reset: interrupts off, then the cold start.
 START:
     DI
@@ -73,7 +102,7 @@ START:
 ;; DE past it and returns past both inline bytes; otherwise it returns to the inline offset's target.
 TSTC:
     EX [SP],HL                      ; HL = return address, pointing at the inline character
-    RST $28
+    RST IGNBLK_RST
     CP [HL]                         ; compare with the character TSTC is looking for
     JP TSTC_RESOLVE
 
@@ -120,9 +149,81 @@ FINISH:
     JP QWHAT
     .byte $00
 
+.else
+;; Power-up and reset: interrupts off, then the cold start.
+START:
+    DI
+    LD HL,$00FF                     ; with the DEC H in COLD_START, the probe starts at $FFFF
+
+;; Finds the top of RAM by stepping down a page at a time until a byte can be changed. The probe goes on at
+;; COLD_START_1, in the room TSTV leaves for the NMI's entry.
+COLD_START:
+    DEC H                           ; next page down
+    LD A,[HL]                       ; try to change the byte
+    JR COLD_START_1
+
+;; RST $08: compares the next nonblank character at DE with the byte after the RST. On a match it steps
+;; DE past it and returns past both inline bytes; otherwise it returns to the inline offset's target.
+TSTC:
+    EX [SP],HL                      ; HL = return address, pointing at the inline character
+    RST IGNBLK_RST
+    CP [HL]                         ; compare with the character TSTC is looking for
+    JP TSTC_RESOLVE
+
+;; Prints a carriage return, falling into OUTC.
+CRLF:
+    LD A,$0D
+
+;; RST $10: prints the character in A on the screen, or the printer while LPRINTING is set, and to tape while
+;; the cassette motor runs. Keeps every register.
+OUTC:
+    EX AF,AF'
+    IN A,[$FF]
+    AND $02                         ; the cassette motor, as port $EC set it
+    JP OUTC_TAPE
+
+;; RST $18: skips spaces at DE and returns the next character in A.
+IGNBLK:
+    LD A,[DE]
+    CP $20                          ; a space?
+    RET NZ
+    INC DE
+    JP IGNBLK
+
+;; RST $20: compares HL with DE, setting Z and C as for CP.
+COMP:
+    LD A,H                          ; high bytes first, low bytes only when they are equal
+    CP D
+    RET NZ
+    LD A,L
+    CP E
+    RET
+
+;; Prints a carriage return on the screen, falling into SCREEN_OUTC.
+SCREEN_CRLF:
+    LD A,$0D
+
+;; RST $28: prints the character in A on the screen, ending any LPRINT or LLIST.
+;; Keeps: AF, BC, DE, HL
+SCREEN_OUTC:
+    PUSH AF
+    XOR A
+    LD [LPRINTING],A
+    POP AF
+    JR OUTC
+
+;; RST $30: ends a statement: the line must end here, or it is a WHAT? error.
+FINISH:
+    POP AF
+    CALL FIN
+    JP QWHAT
+    .byte $00
+
+.endif
+
 ;; RST $38: tests for a variable at DE (A-Z, or A(n)), returning its address in HL; carry when there is none.
 TSTV:
-    RST $28
+    RST IGNBLK_RST
     SUB $41                         ; letter number, 0 for A
     RET C                           ; below A: not a variable
     CP $1A                          ; past Z also sets carry
@@ -139,6 +240,42 @@ TSTV:
     JP C,AHOW                       ; subscript too large to address
     PUSH HL                         ; save the element offset
     TSTC ')', TSTV_WHAT
+.if MODEL = 3
+    JR TSTV_ROOM                    ; over the cold start's end and the NMI's entry, which must be at $0066
+
+;; The cold start's probe, continued: when a byte takes its complement, HL is the top of memory, and BASIC
+;; starts with an empty program, through the NMI's entry.
+COLD_START_1:
+    CPL
+    LD [HL],A
+    CP [HL]                         ; zero when it took the new value: RAM found
+    CPL
+    LD [HL],A                       ; put the byte back
+    JR NZ,COLD_START                ; ROM or nothing there: keep looking
+    LD [MEMTOP],HL                  ; the top of memory
+    LD HL,$4200                     ; an empty program
+    LD [TXTUNF],HL
+
+    .assert * = $0066, "The NMI's entry is at $0066."
+
+;; The NMI, which the reset button raises: back to READY with a clean stack, the interrupts and NMIs masked,
+;; the cassette's output quiet and the screen cleared.
+NMI:
+    DI
+    LD SP,$4200
+    XOR A
+    OUT [$E0],A                     ; mask the interrupts
+    OUT [$FF],A                     ; the cassette's output
+    OUT [$E4],A                     ; mask the NMIs
+    LD A,$20                        ; options: video wait, the cassette motor off
+    OUT [$EC],A
+    LD A,$0C                        ; clear the screen
+    RST $28
+    JP RSTART
+
+;; Room for A(n)'s element: the free bytes, from the top of memory down to the program.
+TSTV_ROOM:
+.endif
     POP HL
     PUSH DE                         ; keep the text pointer
     PUSH HL
@@ -148,6 +285,7 @@ TSTV:
     SBC HL,DE
     POP DE                          ; DE = the element offset
     RST $20                         ; carry when the array would reach the program
+.if MODEL = 1
     JP TSTV_ARRAY_ADDR
     DI                              ; NMI (reset button) entry: back to READY with a clean stack
     LD SP,$4200
@@ -157,6 +295,7 @@ TSTV:
     LD A,$0C                        ; clear the screen
     RST $10
     JP RSTART
+.endif
 ;; Finishes A(n): SORRY? when the element would reach the program, otherwise returns its
 ;; address, counted down from the top of memory.
 TSTV_ARRAY_ADDR:
@@ -180,7 +319,7 @@ TSTV_SIMPLE:
     RET
 ;; Jumps to QWHAT when the closing parenthesis of A(n) is missing.
 TSTV_WHAT:
-    .byte $C3, $C9, $08
+    JP QWHAT
 
 ;; Tests the character at DE for a digit; returns its value in A, or carry when it is not one.
 TSTDIG:
@@ -217,7 +356,7 @@ FP_PARSE_CONST:
     CALL FP_PARSE_RESET
     LD B,$00                        ; no flags: no digits, point, exponent or overflow yet
     LD C,B                          ; C = power of ten adjustment, starting at zero
-    RST $28
+    RST IGNBLK_RST
 
 ;; Handles characters one at a time until a handler leaves the loop.
 FP_PARSE_LOOP:
@@ -280,10 +419,13 @@ FP_PARSE_END:
     LD BC,$000A
     ADD IX,BC                       ; two entries up, as FP_STORE_RESULT fills one and drops one
     POP DE
-    LD BC,$00FB                     ; return address $00FB: the POP BC just past this jump
+    LD BC,FP_PARSE_EXPONENT         ; the return address: just past this jump
     PUSH BC
     PUSH DE
     JP FP_STORE_RESULT
+
+;; Goes on to the exponent, if any, after FP_STORE_RESULT stores the mantissa.
+FP_PARSE_EXPONENT:
     POP BC                          ; recover the parse flags and power of ten
     PUSH DE                         ; keep the position in case E is not an exponent
     TSTC 'E', FP_NO_EXP             ; no E: the number has no exponent
@@ -420,6 +562,7 @@ MUL10:
     RET
 ;; Finds the top of RAM by stepping down a page at a time until a byte can be changed, then
 ;; starts BASIC with an empty program.
+.if MODEL = 1
 COLD_START:
     DEC H                           ; next page down
     LD A,[HL]                       ; try to change the byte
@@ -432,6 +575,7 @@ COLD_START:
     LD [PORT_FF_IMAGE],A
     LD SP,$4200
     JP ST_NEW_CLEAR
+.endif
 
 ;; HOW? error: a number or line outside its range.
 AHOW:
@@ -442,8 +586,9 @@ AHOW_1:
 
 ;; Holds the HOW? message, ending in a carriage return.
 HOW_MSG:
-    .byte $48, $4F, $57, $3F, $0D
+    .byte "HOW?", $0D
 
+.if MODEL = 1
 READY_MSG:
     .byte "READY", $0D
 
@@ -452,6 +597,7 @@ WHAT_MSG:
 
 SORRY_MSG:
     .byte "SORRY", $0D
+.endif
 
 BREAK_MSG:
     .byte "BREAK AT", $00
@@ -460,7 +606,11 @@ BREAK_MSG:
 RSTART:
     LD SP,$4200
     CALL CASSETTE_OFF               ; stop any tape motor left running
+.if MODEL = 1
     CALL CRLF
+.else
+    CALL SCREEN_CRLF
+.endif
     LD DE,READY_MSG
     CALL PRTSTG
 ;; Resets the stack and the run state, then reads the next line.
@@ -541,11 +691,16 @@ CLEAR_RUN_LOOP:
 ;; Lists the statement keywords and their handlers; a statement with no keyword is a LET.
 TABLE1:
     ENTRY "LIST", ST_LIST
+.if MODEL = 3
+    ENTRY "LLIST", ST_LLIST
+.endif
     ENTRY "RUN", ST_RUN
     ENTRY "NEW", ST_NEW
     ENTRY "CONT", ST_CONT
     ENTRY "CLOAD", ST_CLOAD
     ENTRY "CSAVE", ST_CSAVE
+;; The statements a program can run; those before are direct only.
+TABLE1_PROGRAM:
     ENTRY "NEXT", ST_NEXT
     ENTRY "LET", ST_LET
     ENTRY "INPUT", ST_INPUT
@@ -565,6 +720,9 @@ TABLE1:
     ENTRY "STOP", ST_STOP
     ENTRY "END", ST_END
     ENTRY "CLS", ST_CLS
+.if MODEL = 3
+    ENTRY "LPRINT", ST_LPRINT
+.endif
     DEFAULT IMPLIED_LET
 
 TABLE2:
@@ -588,12 +746,15 @@ TABLE5:
     ENTRY "STEP", FOR_STEP
     DEFAULT FOR_NO_STEP
 
+.if MODEL = 1
 TABLE6:
     ENTRY "TAB", PRINT_TAB
     ENTRY "AT", PRINT_AT
     ENTRY "A$", PRINT_ASTRING
     ENTRY "B$", PRINT_BSTRING
     DEFAULT PRINT_ITEM
+
+.endif
 
 TABLE7:
     ENTRY ">", REL_GREATER
@@ -607,12 +768,12 @@ TABLE8:
 
 ;; Runs a line typed without a line number, looking its keyword up in TABLE1.
 DIRECT:
-    LD HL,$0248                     ; one before TABLE1, as EXEC steps first
+    LD HL,TABLE1 - 1                ; one before TABLE1, as EXEC steps first
 
 ;; Looks the word at DE up in the keyword table at HL, allowing abbreviations that end in a period, and
 ;; jumps to its handler, or to the table's default when nothing matches.
 EXEC:
-    RST $28
+    RST IGNBLK_RST
     PUSH DE                         ; keep the word's start to retry with the next entry
     LD A,[DE]
     INC DE
@@ -658,6 +819,7 @@ EXEC_6:
     LD H,A
     POP AF                          ; drop the saved word start
     JP [HL]                         ; to the handler, DE past the word
+.if MODEL = 1
 ;; Handles NEW: clears the screen and the program, then returns to READY.
 ST_NEW:
     CALL ENDCHK
@@ -695,7 +857,7 @@ ST_RUN_4:
     JR Z,ST_STOP
     CALL CASSETTE_OFF
     LD IX,$40F4                     ; empty the FP stack
-    LD HL,$026C                     ; TABLE1 from NEXT: LIST, RUN, NEW and the like are direct only
+    LD HL,TABLE1_PROGRAM - 1        ; TABLE1 from NEXT: LIST, RUN, NEW and the like are direct only
     JR EXEC
 ;; Handles GOTO: runs from the given line, HOW? if there is no such line.
 ST_GOTO:
@@ -775,6 +937,130 @@ ST_PRINT:
     LD HL,$40AC                     ; output collects in the buffer until a CR writes it
     LD [INPPTR],HL                  ; the tape line buffer pointer
     CALL CASSETTE_ON                ; output goes to tape while the motor runs
+.else
+;; Handles NEW: restarts, as at power-up, which clears the program and the screen.
+ST_NEW:
+    CALL ENDCHK
+    RST $00
+
+;; Handles END: returns to READY.
+ST_END:
+    CALL ENDCHK
+ST_NEW_2:
+    JP RSTART
+
+;; Handles RUN: clears the run state and runs from the given line, or from the first.
+ST_RUN:
+    CALL LINENUM_ENDCHK
+    CALL CLEAR_RUN_STATE            ; forget STOP, GOSUB, FOR and READ state
+    JR ST_RUN_2
+
+;; Runs the line after the one at DE, or returns to READY at the end of the program.
+RUNNXL:
+    LD HL,START                     ; line 0: the first line at or after DE
+ST_RUN_2:
+    CALL FNDLP                      ; find the line to run
+    JR C,ST_NEW_2                   ; past the last line: READY
+ST_RUN_3:
+    LD [CURRNT],DE                  ; the current line
+    INC DE                          ; skip the line number to the text
+    INC DE
+ST_RUN_4:
+    CALL KBD_SCAN                   ; check for a key between statements
+    CP $03                          ; BREAK?
+    JR Z,ST_STOP
+    CALL CASSETTE_OFF
+    LD IX,$40F4                     ; empty the FP stack
+    LD HL,TABLE1_PROGRAM - 1        ; TABLE1 from NEXT: LIST, RUN, NEW and the like are direct only
+    JR EXEC
+
+;; Handles GOTO: runs from the given line, HOW? if there is no such line.
+ST_GOTO:
+    CALL READ_LINENUM
+    PUSH DE                         ; keep the text pointer for an error
+ST_GOTO_1:
+    CALL FNDLN
+    JP NZ,AHOW_1                    ; no such line: HOW?
+    POP AF                          ; drop the saved text pointer
+    JR ST_RUN_3
+
+;; Handles STOP and BREAK: prints BREAK AT and the line number on the screen, keeping the place for CONT.
+ST_STOP:
+    LD [STOPPT],DE                  ; where CONT resumes
+    CALL SCREEN_CRLF
+    LD DE,BREAK_MSG
+    CALL PRTSTG
+    LD HL,[CURRNT]                  ; the stopped line
+    LD [STOPLN],HL                  ; also kept for CONT
+    LD E,[HL]                       ; DE = its line number
+    INC HL
+    LD D,[HL]
+    LD HL,START                     ; no current line: back in direct mode
+    LD [CURRNT],HL
+    EX DE,HL
+    CALL PRTNUM
+    LD A,$0D
+    RST $10
+ST_STOP_1:
+    JP RSTART_2                     ; read lines without READY, keeping CONT's state
+
+;; Handles CONT: resumes after the last STOP or BREAK, or returns to READY if there is none.
+ST_CONT:
+    CALL ENDCHK
+    LD HL,[STOPPT]                  ; the resume point saved by STOP
+    LD A,H
+    OR L
+    JR Z,ST_NEW_2                   ; nothing to continue
+    EX DE,HL
+    LD HL,[STOPLN]                  ; the line that was stopped
+    LD [CURRNT],HL
+    CALL FIN                        ; at a statement end, move on to the next one
+ST_CONT_1:
+    JR ST_RUN_4
+
+;; Handles LLIST: lists on the printer.
+ST_LLIST:
+    LD A,$01
+    LD [LPRINTING],A
+
+;; Handles LIST: lists from the given line, pausing while a key is held, until BREAK or the end.
+ST_LIST:
+    CALL LINENUM_ENDCHK             ; the first line to list, or 0
+    CALL FNDLN
+    JR C,ST_LIST_4                  ; past the end of the program
+ST_LIST_1:
+    CALL PRTLN
+    CALL KBD_SCAN
+    JR Z,ST_LIST_3                  ; no key: on to the next line
+    CP $03                          ; BREAK stops the listing
+    JR Z,ST_LIST_4
+ST_LIST_2:
+    CALL KBD_SCAN                   ; any other key pauses until the next
+    JR Z,ST_LIST_2
+    CP $03
+    JR Z,ST_LIST_4
+ST_LIST_3:
+    CALL FNDLP
+    JR NC,ST_LIST_1
+ST_LIST_4:
+    JR ST_STOP_1
+
+;; Handles LPRINT: prints on the printer.
+ST_LPRINT:
+    LD A,$01
+    JR ST_PRINT_1
+
+;; Handles PRINT; after PRINT # the output goes to tape.
+ST_PRINT:
+    XOR A                           ; the screen
+ST_PRINT_1:
+    LD [LPRINTING],A
+    TSTC '#', PRINT_COLON
+    LD HL,$40AC                     ; output collects in the buffer until a CR writes it
+    LD [INPPTR],HL                  ; the tape line buffer pointer
+    CALL CASSETTE_ON                ; output goes to tape while the motor runs
+
+.endif
 ;; Checks for a colon: prints a new line and runs the next statement.
 PRINT_COLON:
     TSTC ':', PRINT_ENTER
@@ -787,7 +1073,7 @@ PRINT_ENTER:
     JP RUNNXL                       ; run the next line
 ;; Looks the next item up in TABLE6: TAB, AT, A$, B$, or else a string or expression.
 PRINT_NEXT_ITEM:
-    LD HL,$0319                     ; one before TABLE6, as EXEC steps first
+    LD HL,TABLE6 - 1                ; one before TABLE6, as EXEC steps first
     JP EXEC
 ;; Prints a quoted string, or else evaluates and prints an expression.
 PRINT_ITEM:
@@ -835,7 +1121,7 @@ PRINT_AT_4:
     CALL CRLF                       ; no separator: end the line, and the statement must end
     RST $30
 PRINT_AT_5:
-    RST $18                         ; evaluate the expression
+    EVALUATE                        ; evaluate the expression
     CALL FP_PRINT
     JR PRINT_BSTRING_2
 PRINT_TAB:
@@ -904,7 +1190,7 @@ ST_ON:
     OR L
     JR Z,ST_ON_1                    ; ON 0 does nothing
     PUSH HL                         ; keep N for ON_SELECT
-    LD HL,$02DF                     ; one before TABLE2: GOTO or GOSUB
+    LD HL,TABLE2 - 1                ; one before TABLE2: GOTO or GOSUB
     JR ST_FOR_1
 ST_ON_1:
     CALL SKIP_STATEMENT             ; skip the rest of the ON statement
@@ -960,13 +1246,13 @@ ST_FOR:
     CALL PUSHA                      ; save the enclosing loop's state
     CALL SETVAL                     ; assign the start value
     LD [LOPVAR],HL                  ; the loop variable
-    LD HL,$030B                     ; one before TABLE4: TO
+    LD HL,TABLE4 - 1                ; one before TABLE4: TO
 ST_FOR_1:
     JP EXEC
 FOR_TO:
     CALL EXPR_INT                   ; the limit
     LD [LOPLMT],HL
-    LD HL,$0311                     ; one before TABLE5: STEP
+    LD HL,TABLE5 - 1                ; one before TABLE5: STEP
     JR ST_FOR_1
 FOR_STEP:
     CALL EXPR_INT
@@ -1077,7 +1363,7 @@ ST_IF_1:
     JP RSTART
 ;; Continues a true IF by looking for THEN in TABLE8.
 IF_TRUE:
-    LD HL,$0337                     ; one before TABLE8: THEN
+    LD HL,TABLE8 - 1                ; one before TABLE8: THEN
     JP EXEC
 ;; Handles THEN: a line number after it works as GOTO, otherwise the statement after it runs.
 IF_THEN:
@@ -1110,7 +1396,7 @@ INPUT_KEYBOARD:
 ST_INPUT_2:
     LD HL,[CURRNT]                  ; keep the real current line
     PUSH HL
-    LD HL,$0630                     ; a fake current line whose number reads negative
+    LD HL,INPUT_KEYBOARD            ; a fake current line: its first bytes read as a negative number
     LD [CURRNT],HL                  ; so ERROR knows the input was bad and retries
     LD [SCRATCH],SP                 ; the stack for INPERR to restore
     PUSH DE
@@ -1126,7 +1412,7 @@ ST_INPUT_3:
 ;; In: HL = the variable, zero = numeric, DE = the value
 STORE_VALUE:
     JP Z,SETVAL_EXPR                ; a numeric variable: evaluate
-    RST $28                         ; skip leading spaces
+    RST IGNBLK_RST                  ; skip leading spaces
 
 ;; Copies unquoted text up to a comma, quote or carriage return.
 STORE_STR_COPY:
@@ -1304,7 +1590,11 @@ ST_READ_7:
 READ_NO_DATA:
     POP AF
     JP AHOW_1
-    .byte $AF, $C9
+;; The DATA table's match: a DATA statement found.
+;; Out: carry = clear
+DATA_FOUND:
+    XOR A
+    RET
 ;; Skips the rest of a line that does not start with DATA, then searches on.
 DATA_SKIP_LINE:
     LD A,[DE]
@@ -1320,64 +1610,102 @@ FIND_DATA:
     LD HL,[TXTUNF]                  ; past the end of the program?
     RST $20
     RET C
-    LD HL,$0BBA                     ; the DATA keyword table
+    LD HL,DATA_TABLE - 1            ; one before the DATA table, as EXEC steps first
     JR EXEC_JUMP
+
+.if MODEL = 3
+;; Evaluates the expression at DE onto the FP stack, as EVALUATE calls it, then EXPR_RELOP.
+EXPR:
+    CALL EXPR2
+.endif
 
 ;; Finishes EXPR: applies a relational operator if one follows, pushing 1 or 0.
 EXPR_RELOP:
     CALL REL_LOOKUP                 ; HL = 1 or 0 when an operator follows
+.if MODEL = 3
+    LD H,$00                        ; the operators set only L
+.endif
     JP FP_PUSH_INT                  ; push the truth value
-;; Handles > and >=, leaving HL = 1 when true and 0 when false.
+
+;; Handles > and >=, leaving 1 when true and 0 when false.
 REL_GREATER:
     TSTC '=', REL_GT                ; no = after >: plain >
     CALL REL_COMPARE
     RET C                           ; left less: false
     JR REL_TRUE
+
 ;; Handles > alone: true when the left value is the larger.
 REL_GT:
     CALL REL_COMPARE
     RET Z                           ; equal or less: false
     RET C
     JR REL_TRUE
-;; Handles <, <= and <>, leaving HL = 1 when true and 0 when false.
+
+;; Handles <, <= and <>, leaving 1 when true and 0 when false.
 REL_LESS:
     TSTC '=', REL_LT_OR_NE          ; no = after <: < or <>
     CALL REL_COMPARE
+.if MODEL = 1
     LD HL,$0001                     ; true when equal or less
     RET Z
     RET C
     LD HL,START                     ; greater: false
+.else
+    LD L,$01                        ; true when equal or less
+    RET Z
+    RET C
+    DEC L                           ; greater: false
+.endif
     RET
-;; Handles < without =: checks for <> (not equal), otherwise tests for less than.
+
+;; Handles < without =: <> is not equal, otherwise less than.
 REL_LT_OR_NE:
-    .byte $CF, $3E, $0C, $CD, $99, $07, $C8, $18, $18
-;; Handles =, leaving HL = 1 when the values are equal and 0 otherwise.
+    TSTC '>', REL_LT
+    CALL REL_COMPARE
+    RET Z                           ; equal: false
+    JR REL_TRUE
+
+;; Handles =, leaving 1 when the values are equal and 0 otherwise.
 REL_EQUAL:
     CALL REL_COMPARE
     RET NZ                          ; unequal: false
     JR REL_TRUE
-    .byte $CD, $99, $07, $D0, $18, $0C
+
+;; Handles < alone: true when the left value is the smaller.
+REL_LT:
+    CALL REL_COMPARE
+    RET NC                          ; equal or greater: false
+    JR REL_TRUE
+
 ;; Returns from EXPR when no relational operator follows, leaving the value as it is.
 REL_NONE:
     POP AF                          ; drop the return to EXPR_RELOP, so nothing is pushed
     RET
 
 ;; Evaluates the right side and compares it with the left, popping both from the FP stack.
-;; Out: HL = 0, zero = equal, carry = the left value is less
+;; Out: HL = 0 (on the Model III, L), zero = equal, carry = the left value is less
 REL_COMPARE:
     CALL EXPR2                      ; the right side
     CALL FP_COMPARE
+.if MODEL = 1
     LD HL,START                     ; false unless the caller changes it
+.else
+    LD L,$00
+.endif
     RET
 
-;; Returns HL = 1, true.
+;; Returns 1, true: in HL, or on the Model III in L.
 REL_TRUE:
+.if MODEL = 1
     LD HL,$0001
+.else
+    LD L,$01
+.endif
     RET
 
 ;; Looks for a relational operator in TABLE7.
 REL_LOOKUP:
-    LD HL,$032C                     ; one before TABLE7
+    LD HL,TABLE7 - 1                ; one before TABLE7
 
 ;; Jumps to EXEC to look the word at DE up in the table at HL.
 EXEC_JUMP:
@@ -1436,7 +1764,7 @@ XP34:
 
 ;; Evaluates a factor at DE, first looking for a function name in TABLE3.
 EXPR4:
-    LD HL,$02EE                     ; one before TABLE3
+    LD HL,TABLE3 - 1                ; one before TABLE3
     JR EXEC_JUMP
 ;; Evaluates a factor that is not a function: a variable, a constant, or an expression in
 ;; parentheses.
@@ -1452,7 +1780,7 @@ XP41:
 ;; Evaluates an expression in parentheses at DE, WHAT? when a parenthesis is missing.
 PARN:
     TSTC '(', XP43
-    RST $18                         ; the expression inside
+    EVALUATE                        ; the expression inside
     TSTC ')', XP43
 
 ;; Returns to the caller.
@@ -1461,12 +1789,12 @@ XP42:
 
 ;; Jumps to QWHAT.
 XP43:
-    .byte $C3, $C9, $08
+    JP QWHAT
 
 ;; Evaluates the expression at DE as an integer.
 ;; Out: HL = the integer
 EXPR_INT:
-    RST $18
+    EVALUATE
 
 ;; Pops the value on the FP stack as an integer.
 ;; Out: HL = the integer
@@ -1604,7 +1932,7 @@ SETVAL:
 ;; In: HL = the variable
 SETVAL_EXPR:
     PUSH HL                         ; the variable, for FP_STORE_PUSHED
-    RST $18
+    EVALUATE
     JP FP_STORE_PUSHED
 
 ;; Ends a statement at a colon or carriage return by running the next statement or line;
@@ -1631,7 +1959,7 @@ LINENUM_ENDCHK:
 
 ;; Requires a carriage return as the next nonblank character at DE, WHAT? otherwise.
 ENDCHK:
-    RST $28
+    RST IGNBLK_RST
     CP $0D
     RET Z
 
@@ -1643,6 +1971,10 @@ QWHAT_1:
 
 ;; Prints the message at DE and, while a program runs, the line it stopped at; then RSTART.
 ERROR:
+.if MODEL = 3
+    XOR A                           ; errors print on the screen
+    LD [LPRINTING],A
+.endif
     CALL PRTSTG
     LD DE,[CURRNT]                  ; the current line
     LD A,D
@@ -1683,7 +2015,11 @@ GETLN:
 ;; In: A = the prompt
 ;; Out: DE = past the carriage return
 GETLN_PROMPT:
+.if MODEL = 1
     RST $10
+.else
+    RST $28                         ; the prompt goes to the screen, ending any LPRINT
+.endif
     LD DE,$40AC                     ; the line input buffer
 
 ;; Waits for a key and handles ENTER, backspace and BREAK; other control keys are ignored.
@@ -2126,7 +2462,12 @@ PU1:
 ;; Continues OUTC: while the motor runs, adds the character to the tape line buffer and
 ;; writes the line at a carriage return; otherwise shows it.
 OUTC_TAPE:
+.if MODEL = 1
     JR Z,OUTC_SCREEN                ; cassette motor off: the character goes to the screen
+.else
+    EXX                             ; work in the alternate registers so callers keep theirs
+    JR Z,OUTC_PRINTER               ; cassette motor off: the printer or the screen
+.endif
     EX AF,AF'                       ; the character
     LD DE,[INPPTR]                  ; the next free place in the tape line buffer
     LD [DE],A
@@ -2141,6 +2482,23 @@ OUTC_TAPE:
     CALL TAPE_WRITE_BLOCK
     POP DE
     RET
+
+.if MODEL = 3
+;; Sends the character to the printer while LPRINTING is set, once it is ready; otherwise to the screen.
+OUTC_PRINTER:
+    LD A,[LPRINTING]
+    AND A
+    JR Z,OUTC_SCREEN
+OUTC_PRINTER_1:
+    IN A,[$F8]
+    AND $F0                         ; busy, paper, select and fault
+    CP $30                          ; ready: not busy, paper in, selected, no fault
+    JR NZ,OUTC_PRINTER_1
+    EX AF,AF'                       ; the character
+    OUT [$F8],A
+    EXX                             ; back to the caller's registers
+    RET
+.endif
 
 ;; Puts a printable character at the cursor, or handles a control character.
 OUTC_SCREEN:
@@ -2241,7 +2599,7 @@ KEY_DECODE:
 ;; Waits a moment for the key to settle.
 KEY_DEBOUNCE:
     DJNZ KEY_DEBOUNCE
-    LD DE,$0BAC                     ; each row's first code less one, one byte per row
+    LD DE,KEY_ROW_CODES             ; each row's first code less one, one byte per row
     LD HL,KEYBOARD_ROW0
     LD A,$00
 
@@ -2256,7 +2614,7 @@ KEY_FIND_ROW:
     POP AF
     JR KBD_SCAN
 
-;; Starts from the row's first code in the table at $0BAC.
+;; Starts from the row's first code in KEY_ROW_CODES.
 KEY_FOUND:
     EX DE,HL
     LD B,[HL]                       ; the row's first code less one
@@ -2273,9 +2631,9 @@ KEY_FIND_BIT:
     JR NC,KEY_PUNCT
     CP $30                          ; digits, colon and semicolon
     JR NC,KEY_DIGIT
-    LD HL,$0BB2                     ; just before the special key table
+    LD HL,KEY_SPECIAL_CODES - 1     ; just before the special key table
 
-;; Looks an ENTER, CLEAR, BREAK, arrow or space key up in the table at $0BB3.
+;; Looks an ENTER, CLEAR, BREAK, arrow or space key up in KEY_SPECIAL_CODES.
 KEY_SPECIAL:
     INC HL
     DEC B
@@ -2316,9 +2674,31 @@ KEY_SHIFT:
     AND A
     LD A,B
     RET
-    .byte $C9, "?GOW/7", $00
-    .byte $0D, $0C, $03, "[\]^ DATA"
-    .byte $87, $49, $87, $4B
+
+.if MODEL = 1
+    .byte $C9                       ; left over: a second RET
+
+;; Each keyboard row's first code less one, for rows 0-6.
+KEY_ROW_CODES:
+    .byte "?GOW/7", $00
+
+;; Row 6's codes: ENTER, CLEAR, BREAK, the up, down, left and right arrows, and SPACE.
+KEY_SPECIAL_CODES:
+    .byte $0D, $0C, $03, "[\]^ "
+.else
+TABLE6:
+    ENTRY "TAB", PRINT_TAB
+    ENTRY "AT", PRINT_AT
+    ENTRY "A$", PRINT_ASTRING
+    ENTRY "B$", PRINT_BSTRING
+    DEFAULT PRINT_ITEM
+
+.endif
+
+;; Tells a line that starts with DATA from one that does not.
+DATA_TABLE:
+    ENTRY "DATA", DATA_FOUND
+    DEFAULT DATA_SKIP_LINE
 
 ;; Pushes the 4-byte variable at HL onto the FP stack, unpacking its sign into a fifth byte.
 ;; In: HL = the variable
@@ -2547,7 +2927,9 @@ FP_SUB_NEGATE:
     XOR D                           ; A is $80: flip the subtrahend's sign, then add
     LD D,A
     JR FP_ADD_ALIGN
-    .byte $CD, $C3, $0B
+.if MODEL = 1
+    CALL FP_PUSH_VAR                ; left over: nothing reaches it
+.endif
 
 ;; Replaces the top two FP stack entries with their sum.
 FP_ADD:
@@ -3022,7 +3404,7 @@ TSTNUM:
     CALL FP_PARSE_RESET             ; clear the accumulator in C'H'L'
     LD HL,START                     ; the number and the digit count start at zero
     LD B,L
-    RST $28
+    RST IGNBLK_RST
 TSTNUM_1:
     CALL TSTDIG
     JR C,TSTNUM_DONE                ; no more digits
@@ -3051,6 +3433,7 @@ ST_CLOAD:
     CALL TAPE_READ_BLOCK
     LD [TXTUNF],HL                  ; the program now ends where the block ended
     JR NZ,LINENUM_WHAT              ; a bad checksum
+ST_CLOAD_1:
     JP RSTART
 
 ;; Starts the motor, waits for the $A5 sync byte, then reads the start and end addresses
@@ -3111,8 +3494,13 @@ ST_CSAVE:
     LD HL,$4200                     ; from the program's start to its end
     LD DE,[TXTUNF]
     CALL TAPE_WRITE_BLOCK
+.if MODEL = 1
     JP RSTART
+.else
+    JP ST_CLOAD_1
+.endif
 
+.if MODEL = 1
 ;; Writes 128 zero bytes, $A5, the addresses in HL and DE, the bytes from HL up to DE
 ;; and a checksum, then stops the motor.
 ;; In: HL = the start, DE = the end
@@ -3234,6 +3622,127 @@ CASSETTE_WRITE_BIT_3:
     DJNZ CASSETTE_WRITE_BIT_3
     RET
 
+.else
+;; Writes 128 zero bytes, $A5, the addresses in HL and DE, the bytes from HL up to DE
+;; and a checksum, then stops the motor.
+;; In: HL = the start, DE = the end
+TAPE_WRITE_BLOCK:
+    LD B,$80                        ; 128 leader bytes
+
+;; Writes one zero byte of the leader per pass.
+TAPE_LEADER:
+    XOR A
+    CALL CASSETTE_WRITE
+    DJNZ TAPE_LEADER
+    LD A,$A5                        ; the sync byte
+    CALL CASSETTE_WRITE
+    LD A,H                          ; the start address, high byte first
+    CALL CASSETTE_WRITE
+    LD A,L
+    CALL CASSETTE_WRITE
+    LD A,D                          ; the end address
+    CALL CASSETTE_WRITE
+    LD A,E
+    CALL CASSETTE_WRITE
+    LD C,$00                        ; the checksum covers only the data
+
+;; Writes one data byte per pass.
+TAPE_WRITE_LOOP:
+    LD A,[HL]
+    CALL CASSETTE_WRITE
+    INC HL
+    RST $20
+    JR NZ,TAPE_WRITE_LOOP           ; until HL reaches the end
+    LD A,C                          ; a last byte that makes the data sum to zero
+    NEG
+    CALL CASSETTE_WRITE
+    JR CASSETTE_OFF
+
+;; Waits for a clock pulse on the tape, then samples the data bit and shifts it into A.
+;; In: A = the bits so far
+;; Out: A = shifted left, with the new bit in bit 0
+CASSETTE_READ_BIT:
+    EXX
+    LD C,A                          ; the bits so far
+CASSETTE_READ_BIT_1:
+    IN A,[$FF]
+    RLA                             ; bit 7 latches a pulse: wait for the clock pulse
+    JR NC,CASSETTE_READ_BIT_1
+    LD B,$BB                        ; wait out the clock pulse
+CASSETTE_READ_BIT_2:
+    DJNZ CASSETTE_READ_BIT_2
+    OUT [$FF],A                     ; clear the latch
+    LD B,$00                        ; wait for where a data pulse would come
+CASSETTE_READ_BIT_3:
+    DJNZ CASSETTE_READ_BIT_3
+    IN A,[$FF]                      ; a data pulse there has latched a 1
+    RLA
+    LD A,C                          ; the latched bit into the bottom of the bits so far
+    RLA
+    OUT [$FF],A                     ; clear the latch
+    EXX
+    RET
+
+;; Reads a byte from the tape into A.
+CASSETTE_READ:
+    LD B,$08
+CASSETTE_READ_1:
+    CALL CASSETTE_READ_BIT
+    DJNZ CASSETTE_READ_1
+    RET
+
+;; Writes the byte in A to the tape, adding it to the checksum in C.
+CASSETTE_WRITE:
+    EXX                             ; keeps the caller's registers
+    LD C,$08                        ; eight bits
+    LD D,A
+CASSETTE_WRITE_1:
+    CALL CASSETTE_WRITE_BIT         ; the clock pulse
+    RLC D                           ; the next data bit, top bit first
+    JR NC,CASSETTE_WRITE_GAP        ; a 0 bit has no data pulse
+    CALL CASSETTE_WRITE_BIT         ; a 1 bit has a data pulse
+CASSETTE_WRITE_2:
+    DEC C
+    JR NZ,CASSETTE_WRITE_1
+    LD A,D                          ; D has rotated back to the byte
+    EXX
+    ADD A,C                         ; add it to the checksum in the caller's C
+    LD C,A
+    RET
+
+;; Waits out the data pulse's time for a 0 bit.
+CASSETTE_WRITE_GAP:
+    LD B,$34
+CASSETTE_WRITE_3:
+    DJNZ CASSETTE_WRITE_3
+CASSETTE_WRITE_4:
+    DJNZ CASSETTE_WRITE_4           ; and 256 more loops
+    JR CASSETTE_WRITE_2
+
+;; Writes one pulse to the tape: a short swing up, then down, then a pause.
+CASSETTE_WRITE_BIT:
+    LD A,$01                        ; drive the cassette output to one level
+    OUT [$FF],A
+    LD B,$12
+CASSETTE_WRITE_BIT_1:
+    DJNZ CASSETTE_WRITE_BIT_1
+    INC A                           ; then the other
+    OUT [$FF],A
+    LD B,$12
+CASSETTE_WRITE_BIT_2:
+    DJNZ CASSETTE_WRITE_BIT_2
+    XOR A                           ; then back to rest
+    OUT [$FF],A
+    LD B,$0D                        ; the gap after the pulse
+CASSETTE_WRITE_BIT_3:
+    DJNZ CASSETTE_WRITE_BIT_3
+CASSETTE_WRITE_BIT_4:
+    DJNZ CASSETTE_WRITE_BIT_4       ; and 256 more loops
+    RET
+
+.endif
+
+.if MODEL = 1
 ;; Turns the cassette motor off.
 CASSETTE_OFF:
     LD HL,$FB00                     ; clear bit 2, the motor relay
@@ -3259,3 +3768,37 @@ SET_PORT_FF:
     LD [PORT_FF_IMAGE],A
     BIT 2,A                         ; NZ while the motor is on
     RET
+.else
+    .byte $00, $00, $00             ; unused
+
+;; Each keyboard row's first code less one, for rows 0-6.
+KEY_ROW_CODES:
+    .byte "?GOW/7", $00
+
+;; Row 6's codes: ENTER, CLEAR, BREAK, the up, down, left and right arrows, and SPACE.
+KEY_SPECIAL_CODES:
+    .byte $0D, $0C, $03, "[\]^ "
+
+;; Turns the cassette motor off, with the video wait back on.
+CASSETTE_OFF:
+    LD A,$20
+    JR CASSETTE_OPTIONS
+
+;; Turns the cassette motor on, with no video wait to upset the tape's timing.
+CASSETTE_ON:
+    LD A,$02
+
+;; Writes the options port: bit 1 the cassette motor, bit 5 the video wait.
+CASSETTE_OPTIONS:
+    OUT [$EC],A
+    RET
+
+READY_MSG:
+    .byte "READY", $0D
+
+WHAT_MSG:
+    .byte "WHAT?", $0D
+
+SORRY_MSG:
+    .byte "SORRY", $0D
+.endif

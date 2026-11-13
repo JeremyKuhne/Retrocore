@@ -50,9 +50,9 @@ test("each choice sets a launch option to values it allows, and its default is o
 test("the machines are the ones agreed, each with its own id and name, in order", () => {
     assert.deepEqual(machines.map(machine => machine.label), [
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
-        "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model 4", "TRS-80 Model 4P", "TRS-80 Model II",
-        "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer", "TRS-80 Color Computer 2",
-        "TRS-80 Color Computer 3"
+        "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
+        "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
+        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3"
     ]);
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.deepEqual(machineById("apple3")?.basicDialects, ["business"]);
@@ -86,6 +86,8 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("trs80-model4p")?.tapeFormats, [], "the 4P has no cassette port");
     assert.deepEqual(machineById("trs80-model4")?.configuration, { machine: "trs80-model3", model: "4" });
     assert.deepEqual(machineById("trs80-model3")?.basicDialects, ["level2"], "Model III BASIC is Level II's");
+    assert.deepEqual(machineById("trs80-model3-level1")?.configuration,
+        { machine: "trs80-model3", model: "3", rom: "level1" });
     assert.deepEqual(machineById("trs80-model4p")?.basicDialects, [], "the 4P boots from disk");
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);

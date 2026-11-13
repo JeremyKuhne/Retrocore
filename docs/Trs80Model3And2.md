@@ -109,20 +109,26 @@ hand and assemble byte-identically to each chip:
 | Source | ROM |
 | --- | --- |
 | [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
+| [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm) | With `MODEL = 3`, the Model III's Level I ROM (`8040032`): the Model I's Level I with `LPRINT` and `LLIST`, the Model III's ports and NMI, and its restarts moved. |
 | [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
 | [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). |
 | [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
 | [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
 
-Without a ROM directory, a launch runs the SDK's builds: the Model III's revision C ROM, the Model 4's, the 4P's boot ROM
-and the Model II's newest boot ROM (version 5). `sdkRoms` names another copy of the sources.
+Without a ROM directory, a launch runs the SDK's builds: the Model III's revision C ROM (or with `"rom": "level1"` its
+Level I ROM), the Model 4's, the 4P's boot ROM and the Model II's newest boot ROM (version 5). `sdkRoms` names another
+copy of the sources.
+
+**Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
+250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has no BASIC thread, as Level I on the
+Model I has none.
 
 Dumps are under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_ROMS`), or its `trs80m3`, `trs80m4`,
 `trs80m4p`, `trs80m2` or `trs80m16` folder:
 
 | Machine | System ROM | Character generator |
 | --- | --- | --- |
-| Model III | `8041364.u104`, `8040332.u105` and `8040316c.u106` (or `8040316b.u106`), or one 14K `trs80m3.rom` | `8044316a.u36` |
+| Model III | `8041364.u104`, `8040332.u105` and `8040316c.u106` (or `8040316b.u106`), or one 14K `trs80m3.rom`; Level I's is `8040032.u104` | `8044316a.u36` |
 | Model 4 | `trs80m4.rom`, or the Model III's | `8044316a.u36` |
 | Model 4P | `8075332.u69` | `8049007.u103` |
 | Model II, 12, 16 | The newest of `u54.u11`, `cpu_fc86.u11`, `cpu_2119.u11`, `cpu_11be.u11`, `8047316.u11` and `8043216.u11`, or the one `bootRom` names | `8043316.u9` |
@@ -148,7 +154,7 @@ The machines are in the Run and Debug dropdown and **Retrocore: Start Machine…
 }
 ```
 
-The options are `romDirectory`, `sdkRoms`, `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
+The options are `romDirectory`, `sdkRoms`, `rom` (Model III: `level2`, the default, or `level1`), `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
 given), `cassette` and `fastCassette` (Model III and 4), `fastDisk` (Model II: flat out while the controller works),
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. A `source` or `program` loads at `$7000`.
 
@@ -168,7 +174,7 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 | --- | --- |
 | `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, and a hand-written 1500 baud CAS image loading. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; and Level I booting to `READY` and saving and loading at 250 baud. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 

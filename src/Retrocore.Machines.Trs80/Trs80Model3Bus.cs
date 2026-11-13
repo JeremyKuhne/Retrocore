@@ -77,7 +77,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         _controller = configuration.DiskController;
         Video = new(roms.CharacterGenerator, _model4);
         Keyboard = new(Trs80Model3Timing.ClockHertz);
-        Cassette = new(500, Trs80Model3Timing.ClockHertz, highSpeed: true);
+        bool level1 = configuration.Rom == Trs80Rom.Level1;
+        Cassette = new(level1 ? 250 : 500, Trs80Model3Timing.ClockHertz, highSpeed: !level1);
         Disks = new(Trs80Doubler.None, Trs80Model3Timing.ClockHertz, wd179x: true);
     }
 
@@ -152,7 +153,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         switch (Area(address))
         {
             case Trs80Model3MemoryArea.Rom:
-                return _rom[address];
+                // Level I's 4K ROM leaves the ROM space above it empty.
+                return address < _rom.Length ? _rom[address] : (byte)0xFF;
             case Trs80Model3MemoryArea.Printer:
                 return PrinterIdle;
             case Trs80Model3MemoryArea.Keyboard:

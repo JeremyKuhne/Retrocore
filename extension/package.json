@@ -786,7 +786,7 @@
                   "level1"
                 ],
                 "default": "level2",
-                "description": "Model I: Level II or Level I BASIC."
+                "description": "Model I and Model III: Level II or Level I BASIC."
               },
               "bootRom": {
                 "type": "string",

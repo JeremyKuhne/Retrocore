@@ -160,6 +160,12 @@ try {
     await launch({ machine: "trs80-model2" }, [], null);
     await screen("INSERT DISKETTE");
 
+    // The Model III with Level I BASIC, from Level1.asm's Model III build, with no BASIC thread.
+    await launch({ machine: "trs80-model3", rom: "level1" }, [], null);
+    await screen("READY");
+    assert.ok(!filters().includes("basicStart"), "Level I has no BASIC thread");
+    await assert.rejects(request("launch", { machine: "trs80-model4", rom: "level1" }), /Only the Model III has Level I/);
+
     if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("reset");
     // Machine reset stops at power-on, at $0000, and the Model II's reset switch restarts the boot ROM there too.
     await launch({ machine: "trs80-model2" }, ["machineReset"]);

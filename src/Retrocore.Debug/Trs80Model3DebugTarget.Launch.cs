@@ -13,6 +13,7 @@ internal sealed partial class Trs80Model3DebugTarget
 {
     private const string CharacterGeneratorDump = "8044316a.u36";
     private const string Model4PCharacterGeneratorDump = "8049007.u103";
+    private const string Level1Dump = "8040032.u104";
 
     // The path a recording is saved to when its tape is ejected.
     private string? _recordingPath;
@@ -24,7 +25,8 @@ internal sealed partial class Trs80Model3DebugTarget
     ///  <para>
     ///   The ROMs are dumps under MAME's names, in <c>romDirectory</c> (or <c>RETROCORE_TRS80_ROMS</c>) or its
     ///   <c>trs80m3</c>, <c>trs80m4</c> or <c>trs80m4p</c> folder: the Model III's <c>8041364.u104</c>,
-    ///   <c>8040332.u105</c> and <c>8040316c.u106</c> (or <c>8040316b.u106</c>), or one 14K <c>trs80m3.rom</c>; the
+    ///   <c>8040332.u105</c> and <c>8040316c.u106</c> (or <c>8040316b.u106</c>), or one 14K <c>trs80m3.rom</c>, or
+    ///   with <c>rom</c> <c>level1</c> its Level I ROM, <c>8040032.u104</c>; the
     ///   Model 4's <c>trs80m4.rom</c>, or the Model III's parts; the 4P's <c>8075332.u69</c>; and the character
     ///   generator, <c>8044316a.u36</c> (the 4P's <c>8049007.u103</c>). Without a ROM directory the machine runs
     ///   ROMs built from the SDK's sources (<c>sdkRoms</c>, or the copy beside the debug host), which are
@@ -45,9 +47,18 @@ internal sealed partial class Trs80Model3DebugTarget
             _ => throw new ArgumentException("model must be 3, 4 or 4p.")
         };
 
+        bool level1 = (args.String("rom") ?? "level2") switch
+        {
+            "level2" => false,
+            "level1" when variant == Trs80Model3Variant.Model3 => true,
+            "level1" => throw new ArgumentException("Only the Model III has Level I BASIC."),
+            _ => throw new ArgumentException("rom must be level2 or level1.")
+        };
+
         Trs80Model3Configuration configuration = new()
         {
             Variant = variant,
+            Rom = level1 ? Trs80Rom.Level1 : Trs80Rom.Level2,
             RamKilobytes = args.Int("ramKilobytes") ?? Trs80Model3Configuration.DefaultRam(variant),
 
             // With a controller and no disk the ROM waits for a disk, as a real machine does until BREAK.
@@ -56,7 +67,7 @@ internal sealed partial class Trs80Model3DebugTarget
 
         string? directory = args.String("romDirectory") ?? Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS");
         string sdk = Trs80DebugTarget.SdkDirectory(args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null);
-        byte[] system = directory is null ? SdkSystemRom(sdk, variant) : SystemRom(directory, variant);
+        byte[] system = directory is null ? SdkSystemRom(sdk, variant, level1) : SystemRom(directory, variant, level1);
         Trs80Model3Machine machine = new(configuration, new(system, CharacterGenerator(directory, sdk, variant)));
         Trs80Model3DebugTarget target = new(machine)
         {
@@ -102,8 +113,13 @@ internal sealed partial class Trs80Model3DebugTarget
     // trs80-model4 names the Model 4 without a model.
     private static string DefaultModel(JsonObject args) => args.String("machine") == DebugMachines.Trs80Model4 ? "4" : "3";
 
-    private static byte[] SystemRom(string directory, Trs80Model3Variant variant)
+    private static byte[] SystemRom(string directory, Trs80Model3Variant variant, bool level1)
     {
+        if (level1)
+        {
+            return Dump(directory, ["trs80m3"], Level1Dump, Trs80Model3Roms.BootSize);
+        }
+
         if (variant == Trs80Model3Variant.Model4P)
         {
             return Dump(directory, ["trs80m4p"], "8075332.u69", Trs80Model3Roms.BootSize);
@@ -128,8 +144,9 @@ internal sealed partial class Trs80Model3DebugTarget
         ];
     }
 
-    private static byte[] SdkSystemRom(string sdk, Trs80Model3Variant variant) => (variant switch
+    private static byte[] SdkSystemRom(string sdk, Trs80Model3Variant variant, bool level1) => (variant switch
     {
+        _ when level1 => Trs80SdkModules.AssembleLevel1(Path.Join(sdk, "Level1.asm"), 3),
         Trs80Model3Variant.Model4P => Trs80SdkModules.AssembleModel4PBoot(Path.Join(sdk, "Model4PBoot.asm")),
         Trs80Model3Variant.Model4 => Trs80SdkModules.AssembleModel3(Path.Join(sdk, "Model3.asm"), 4),
         _ => Trs80SdkModules.AssembleModel3(Path.Join(sdk, "Model3.asm"), 3)

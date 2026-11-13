@@ -280,6 +280,24 @@ export const machines: readonly Machine[] = [
         ]
     },
     {
+        id: "trs80-model3-level1",
+        label: "TRS-80 Model III (Level I)",
+        detail: "Z80 at 2 MHz, the Model III's Level I BASIC and 250 baud tapes",
+        configuration: { machine: "trs80-model3", model: "3", rom: "level1" },
+        diskFormats: [],
+        tapeFormats: ["cas"],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [{ label: "16 KB", value: 16 }, { label: "32 KB", value: 32 }, { label: "48 KB", value: 48 }],
+                default: 16
+            }
+        ]
+    },
+    {
         id: "trs80-model4",
         label: "TRS-80 Model 4",
         detail: "Z80 at 4 MHz, the Model III ROM, 128 KB, 80x24 and the FD1793",

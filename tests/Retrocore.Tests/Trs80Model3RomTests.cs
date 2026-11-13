@@ -116,6 +116,48 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, and saves and loads a program on tape at
+    ///  250 baud, the leader zeros and the sync byte $A5.
+    /// </summary>
+    [TestMethod]
+    public void Level1BootsAndUsesTheTape()
+    {
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
+        byte[] system = Trs80SdkModules.AssembleLevel1(Path.Join(roms, "Level1.asm"), model: 3).Sections[0].Bytes.ToArray();
+        byte[] characters = Trs80SdkModules
+            .AssembleModel3CharacterGenerator(Path.Join(roms, "Model3CharacterGenerator.asm"), model4P: false)
+            .Sections[0].Bytes.ToArray();
+
+        Trs80Model3Machine machine = new(
+            new Trs80Model3Configuration { Rom = Trs80Rom.Level1, DiskController = false },
+            new Trs80Model3Roms(system, characters));
+
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Screen(machine).Should().Contain("READY");
+        Type(machine, "PRINT 6*7\r");
+        Screen(machine).Should().Contain("42");
+        Type(machine, "10 PRINT \"HI\";6*7\r");
+
+        CassetteImage tape = new();
+        machine.Bus.Cassette.Record(tape);
+        Type(machine, "CSAVE\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        machine.Bus.Cassette.Stop();
+        int sync = tape.Bytes.ToList().IndexOf(0xA5);
+        sync.Should().BePositive();
+        tape.Bytes.Take(sync).Should().AllSatisfy(value => value.Should().Be(0));
+
+        Type(machine, "NEW\r");
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        machine.Bus.Cassette.Play(tape);
+        Type(machine, "CLOAD\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "RUN\r");
+        Screen(machine).Should().Contain("HI 42");
+    }
+
+    /// <summary>
     ///  The 4P's boot ROM, with no disk in the drive, says so in English, German and French.
     /// </summary>
     [TestMethod]

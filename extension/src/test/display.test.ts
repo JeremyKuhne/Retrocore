@@ -52,9 +52,16 @@ class Element {
     readonly style: Record<string, string> = {};
     hidden = false;
     textContent = "";
+    value = "";
+    readonly classes = new Set<string>();
+    readonly classList = {
+        toggle: (name: string, on: boolean): void => { if (on) this.classes.add(name); else this.classes.delete(name); },
+        contains: (name: string): boolean => this.classes.has(name)
+    };
     width = 0;
     height = 0;
     clientWidth = 0;
+    clientHeight = 0;
     offsetHeight = 0;
     constructor(readonly dataset: Record<string, string> = {}) {}
     addEventListener(type: string, listener: Listener): void { this.listeners.set(type, [...this.listeners.get(type) ?? [], listener]); }
@@ -70,12 +77,16 @@ class Element {
 
 interface PanelWindow extends Element { innerHeight: number; devicePixelRatio: number }
 
+/** The panel's document, with the pointer lock the mouse card uses. */
+interface PanelDocument { pointerLockElement: Element | undefined; events: Element }
+
 function loadPanel(state?: unknown, audioContext?: unknown): {
     posted: unknown[]; screen: Element; byId: Map<string, Element>; buttons: Element[]; codes: Element[]; window: PanelWindow;
     body: Element; saved: () => unknown; sharpSize: (machine: string, width: number, height: number, ratio: number) => unknown;
+    document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -87,8 +98,13 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     body.offsetHeight = 1100;
     (byId.get("bezel") as Element).clientWidth = 1220;
     (byId.get("display") as Element).offsetHeight = 1000;
+    const events = new Element();
+    const frames: (() => void)[] = [];
     const document = {
         body,
+        events,
+        pointerLockElement: undefined as Element | undefined,
+        addEventListener: (type: string, listener: Listener) => events.addEventListener(type, listener),
         getElementById: (id: string) => byId.get(id),
         activeElement: undefined,
         querySelector: (selector: string) => buttons.find(button => selector === `[data-button="${button.dataset.button}"]`),
@@ -101,7 +117,13 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     let kept = state === undefined ? undefined : JSON.stringify(state);
     const getState = (): unknown => kept === undefined ? undefined : JSON.parse(kept);
     const setState = (value: unknown): void => { kept = JSON.stringify(value); };
-    const context = createContext({ window, document, Buffer, acquireVsCodeApi: () => ({ postMessage: post, getState, setState }) });
+    const screen = byId.get("screen") as Element & { requestPointerLock?: () => void };
+    screen.requestPointerLock = () => {
+        document.pointerLockElement = screen;
+        events.dispatch("pointerlockchange");
+    };
+    const requestAnimationFrame = (callback: () => void): number => frames.push(callback);
+    const context = createContext({ window, document, Buffer, Promise, requestAnimationFrame, acquireVsCodeApi: () => ({ postMessage: post, getState, setState }) });
     // Node lacks Uint8Array.prototype.setFromBase64, which VS Code's Chromium has; this one behaves the same.
     new Script(`Uint8Array.prototype.setFromBase64 ??= function (text) {
         const bytes = Buffer.from(text, "base64");
@@ -111,8 +133,75 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     };`).runInContext(context);
     new Script(panelScript()).runInContext(context);
     const sharpSize = context.sharpSize as (machine: string, width: number, height: number, ratio: number) => unknown;
-    return { posted, screen: byId.get("screen") as Element, byId, buttons, codes, window, body, saved: getState, sharpSize };
+    return { posted, screen, byId, buttons, codes, window, body, saved: getState, sharpSize, document, frames };
 }
+
+test("with a mouse card, a click locks the pointer and the mouse moves the card's mouse", () => {
+    const { posted, screen, window, document, frames, byId } = loadPanel();
+    screen.clientWidth = 560;
+    screen.clientHeight = 384;
+    const frame = (mouse: number): Record<string, unknown> => ({
+        machine: "apple2", rows: [""], cycles: 1, running: true, mouse,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    });
+    window.dispatch("message", { data: frame(0) });
+    screen.dispatch("mousedown", { button: 0 });
+    assert.equal(document.pointerLockElement, undefined, "without a mouse card a click only focuses the screen");
+    const state = byId.get("mouseState") as Element;
+    assert.equal(state.hidden, true, "no mouse card, no mouse strip");
+
+    window.dispatch("message", { data: frame(4) });
+    assert.equal(state.hidden, false);
+    assert.match(state.textContent, /click the screen to capture/);
+    posted.splice(0);
+    screen.dispatch("mousedown", { button: 0 });
+    assert.equal(document.pointerLockElement, screen, "the first click locks the pointer");
+    assert.match(state.textContent, /captured .*press Esc to release/);
+    assert.equal(state.classList.contains("captured"), true);
+    assert.equal(byId.get("bezel")?.classList.contains("captured"), true, "the screen's border lights");
+    assert.deepEqual(posted.splice(0), [], "and does not press the button");
+
+    // 560 by 384 pixels show 280 by 192 dots: two pixels a dot, and movement goes once a frame.
+    screen.dispatch("mousemove", { movementX: 5, movementY: -4 });
+    screen.dispatch("mousemove", { movementX: 2, movementY: 0 });
+    assert.deepEqual(posted.splice(0), []);
+    frames.splice(0).forEach(callback => callback());
+    assert.deepEqual(posted.splice(0), [{ mouse: { dx: 3, dy: -2 } }], "half a dot waits for the next movement");
+
+    screen.dispatch("mousedown", { button: 0 });
+    screen.dispatch("mouseup", { button: 0 });
+    assert.deepEqual(posted.splice(0), [{ mouse: { pressed: true } }, { mouse: { pressed: false } }]);
+
+    document.pointerLockElement = undefined;
+    document.events.dispatch("pointerlockchange");
+    assert.deepEqual(posted.splice(0), [{ mouse: { pressed: false } }], "letting go releases the button");
+    assert.match(state.textContent, /click the screen to capture/, "the strip says how to capture it again");
+    assert.equal(byId.get("bezel")?.classList.contains("captured"), false);
+});
+
+test("Screen follows the host's monitor, and the panel's choice is kept and sent to each new session", () => {
+    const frame = (screen: string): Record<string, unknown> => ({
+        machine: "apple2", rows: [""], cycles: 1, running: true, screen,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    });
+    const first = loadPanel();
+    const select = first.byId.get("screenType") as Element;
+    first.window.dispatch("message", { data: frame("amber") });
+    assert.equal(select.value, "amber", "the launch's monitor shows");
+    first.posted.splice(0);
+    select.value = "green";
+    select.dispatch("change");
+    assert.deepEqual(first.posted.splice(0), [{ command: "screen", screen: "green" }]);
+    assert.equal((first.saved() as { screen?: string }).screen, "green");
+
+    // A later session starts in color: the panel sends its choice once, and the host's frames then agree.
+    const later = loadPanel(first.saved());
+    later.window.dispatch("message", { data: frame("color") });
+    later.window.dispatch("message", { data: frame("color") });
+    assert.deepEqual(later.posted.filter(message => (message as { command?: string }).command === "screen"), [{ command: "screen", screen: "green" }]);
+    later.window.dispatch("message", { data: frame("green") });
+    assert.equal((later.byId.get("screenType") as Element).value, "green");
+});
 
 test("the panel sends control characters, the Apple keys and CONTROL-RESET", () => {
     const { posted, screen, byId, buttons } = loadPanel();

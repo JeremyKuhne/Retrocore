@@ -42,9 +42,9 @@ floating bus and writes go nowhere, so BASIC finds the top of memory where the R
 | Slot | II and II Plus | IIe |
 | --- | --- | --- |
 | 0 | The language card or a firmware card, or empty (`slot0`) | Built in: the IIe's language card |
-| 1, 2, 5 | Disk II controllers | Disk II controllers |
-| 3 | A Disk II controller | The 80-column firmware |
-| 4 | The Mockingboard or a Disk II controller | The Mockingboard or a Disk II controller |
+| 1, 2, 5 | Disk II controllers or the mouse card | Disk II controllers or the mouse card |
+| 3 | A Disk II controller or the mouse card | The 80-column firmware |
+| 4 | The Mockingboard, a Disk II controller or the mouse card | The Mockingboard, a Disk II controller or the mouse card |
 | 6 | The Disk II (`diskImage`, `dos`) | The Disk II (`diskImage`, `dos`) |
 | 7 | Block storage (a `.po` `diskImage`) or a Disk II | Block storage or a Disk II |
 
@@ -107,6 +107,37 @@ AppleSoft ROM bytes from the image Apple built it from. `SystemMasterBasicTests`
 
 Each model is in the Run and Debug dropdown, and **Retrocore: Start Machine…** starts one with a program, a BASIC
 file, a disk or a source on a fresh DOS disk, all without a launch.json; the extension README's
+**The mouse card** goes in any free slot (`mouse`, or Add Card), one per machine. Its 256-byte firmware (`Mouse.rom.asm`)
+is the SDK's own, not Apple's: it has the AppleMouse II's identification bytes ($38 at $Cn05, $18 at $Cn07, $01 and
+$20 at $Cn0B-$Cn0C, $D6 at $CnFB) and its routines at the offsets in $Cn12-$Cn19 (SETMOUSE, SERVEMOUSE, READMOUSE,
+CLEARMOUSE, POSMOUSE, CLAMPMOUSE, HOMEMOUSE and INITMOUSE), which use the slot's screen holes as Apple documents. Each
+routine hands the call to the card through its ports at $C080 plus 16 times the slot, as slot 7's block storage does,
+so it runs in any slot. Position starts clamped to 0-1023. Interrupts come as vertical blanking starts: every frame
+with mode bit 3, and when the mouse moved or its button changed with bits 1 and 2. After `IN#n`, BASIC's `INPUT X,Y,B`
+reads the position and the button (B 1 held, 2 pressed, 3 released, 4 up; negative when a key is waiting); after
+`PR#n`, `PRINT CHR$(1)` turns it on and `CHR$(0)` off. In the debugger, a click on the display locks the pointer to it
+until Escape, and a strip under the screen says which; in AppleSharp, where the card is in slot 2, a click on the screen
+does, until a right-click, and the status line says which. AppleSharp's **Shift+F11** steps the monitor through color,
+black and white, green and amber, and keeps the choice.
+
+**Apple's mouse firmware** (341-0270-C) is an SDK source too, `Roms/Mouse/MouseInterface.asm`, which assembles
+byte-identically to the EPROM (`MouseInterfaceSourceTests`). The emulator doesn't run it: it is eight 256-byte banks
+switched through $Cn00 by the card's 6821 PIA, passing bytes to a 68705 microcontroller that does the work. It is the
+reference the emulator's firmware follows:
+
+| | Apple's card | The emulator's |
+| --- | --- | --- |
+| Finding the slot | The mouse routines use X = $Cn and Y = $n0 as given; SERVEMOUSE writes an RTS at $06 and calls it, so it works with the language card's RAM over the Monitor; BASIC's entries call the Monitor's IORTS | The same |
+| BASIC input | Writes `+XXXXX,+YYYYY,+BB` into $0200 and returns a RETURN with X = $11, so nothing is echoed; with the mouse off, 0, 0 and B 1 | The same |
+| BASIC output | A RETURN does nothing; any other character's low bit turns the mouse on or off, and mode bit 7 marks BASIC | The same |
+| BASIC's registers | Keeps A, X and Y for output; input returns Y = $11; MSLOT is left at $Cn | Keeps Y for input too |
+| READMOUSE with the mouse off | Changes nothing | The same |
+| Pascal entries, $Cn1A-$Cn1F | Error 3; the factory's own commands (and the copyright message at $Cn1B) | Error 3; nothing, with carry set |
+| Mouse routines' registers | X and Y as given; A not kept; SERVEMOUSE returns X = $Cn, Y = $n0 | A, X and Y kept |
+| INITMOUSE | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
+| Screen holes $0678+n and $06F8+n, and MOUMODE's bits 4-6 | Its own scratch space | Not used |
+| Timing | Calls take hundreds of cycles, passing bytes to the microcontroller | About a hundred |
+
 [Starting a machine](../extension/README.md#starting-a-machine) explains both. The launch options for the family, besides those every machine has (`source`, `program`, `basic`, `speed` and the
 rest, in the [extension README](../extension/README.md)):
 
@@ -121,6 +152,8 @@ rest, in the [extension README](../extension/README.md)):
 | `firmwareCardRoms` | II, II Plus | The other model's dumps for the firmware card |
 | `romDirectory` | all | The model's ROM dumps, in place of the SDK's builds |
 | `mockingboard`, `sound` | all | The Mockingboard in slot 4 (defaulting on when `sound` is `mockingboard`), and what the panel plays (`speaker`, `mockingboard` or `off`; `speaker` by default) |
+| `mouse` | all | The mouse card in that slot, 1 to 7 (none by default) |
+| `screen` | all | The monitor: `color` (the default), or a monochrome `white` (black and white), `green` or `amber` one, which shows each of the 560 dots sharply; the panel's **Screen** menu changes it |
 | `diskImage`, `diskController`, `diskSectors` | all | A disk in slot 6 (`diskII`) or slot 7 (`slot7`, the default for `.po`), and 16- or 13-sector Disk II firmware |
 | `diskBootRom`, `diskSequencerRom`, `sequencerLayout` | all | Disk II P5/P6 ROM dumps in place of the SDK's ([DiskII.md](DiskII.md)) |
 | `dos`, `dosYear` | all | Boot a program from a fresh DOS `3.3` (`1983` or `1980`) or `3.2` disk ([Dos.md](Dos.md)) |
@@ -169,6 +202,7 @@ tokenizes it the same way.
 | `SystemSourceTests`, `AppleSoftTests`, `Apple2SourceTests` | Every Apple II, II Plus and IIe ROM source's digest, the ROMs built from them against the dumps, and each model starting BASIC |
 | `Apple2MachineTests`, `Apple2PlusTests`, `Apple2IITests`, `Apple2SlotTests`, `Apple2GamePortTests` | The IIe's soft switches and auxiliary memory, the hardware the II and II Plus lack next to the IIe, slot 0 and peripheral cards, memory sizes, the keyboard, the game port, both Monitors, revision 0, and booting from dumps |
 | `Apple2VideoTests`, `Apple2VideoOracleTests`, `Apple2AudioTests`, `Apple2MockingboardTests` | Text, lo-res, hi-res and double hi-res video (including against apple2ts), the speaker and the Mockingboard |
+| `Apple2MouseTests`, `MouseInterfaceSourceTests` | The mouse card's firmware run on each CPU: its identification, routines, screen holes, clamping, interrupts and BASIC's `IN#`/`PR#`; Apple's mouse firmware's source against the EPROM (from `mouse-roms` under `RETROCORE_CACHE`, or `RETROCORE_MOUSE_ROMS`) and its identification against the emulator's |
 | `Apple2DosTests`, `SystemMasterBasicTests` | DOS 3.3's System Master on the II and II Plus, switching BASIC with FP and INT through the language card and firmware cards, and the System Masters' `FPBASIC` and `INTBASIC` files |
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |

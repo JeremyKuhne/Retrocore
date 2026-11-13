@@ -34,12 +34,16 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 .off .title{font-size:16px;font-weight:600}
 .off .name{font-size:12px;color:#b0b0b0}
 .hint{margin-top:4px;font-size:11px;color:var(--vscode-descriptionForeground)}
+.bezel.captured{border-color:var(--vscode-focusBorder);box-shadow:0 0 0 1px var(--vscode-focusBorder)}
+.mouse{margin-top:6px;padding:3px 8px;border-radius:2px;font-size:12px;border:1px solid var(--vscode-panel-border);color:var(--vscode-descriptionForeground)}
+.mouse.captured{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-focusBorder)}
 </style></head>
 <body><div class="bezel" id="bezel"><div class="display" id="display"><canvas id="screen" tabindex="0" aria-label="The machine's display"></canvas></div>
 <div class="off" id="off" hidden role="status"><div class="title">Machine off</div><div class="name" id="offName"></div>
 <div class="keys"><button id="restart" title="Starts the same launch again, with the cards and disks it last had">Restart</button>
 <button id="startMachine" title="Picks a machine and what it runs: Retrocore: Start Machine">Start Machine…</button>
 <button id="close" title="Closes this panel">Close</button></div></div></div>
+<div class="mouse" id="mouseState" role="status" hidden></div>
 <div class="keys" id="keybar">
 <span class="keys" data-machine="apple2">
 <button id="ctrl" aria-pressed="false" title="Makes the next letter a control character, as holding CONTROL does (or hold Ctrl)">Ctrl</button>
@@ -68,6 +72,9 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <div class="strip"><div><div id="status"></div><div id="disk"></div></div>
 <span class="tools">
 <button id="scale" title="Sharp: each dot a whole number of screen pixels, as large as fits. Fit: fills the panel's width.">Scale: sharp</button>
+<label class="speed" data-machine="apple2" title="The monitor: color, or a monochrome monitor of the time, which shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
+<option value="color">Color</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
+</select></label>
 <label data-machine="apple2" title="Runs as fast as it can while a Disk II drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
 <label id="details" title="While stopped, marks where the video beam is drawing"><input id="overlay" type="checkbox"> Beam overlay</label>
 </span></div>
@@ -185,8 +192,31 @@ window.addEventListener('message',event=>{
     lastFrame=event.data;draw(lastFrame);
     if(typeof lastFrame?.mockingboard==='boolean')mockingboard=lastFrame.mockingboard;
     if(typeof lastFrame?.sound==='string')showSound(lastFrame.sound);
+    syncScreen(lastFrame);
+    showMouse();
     if(changed)showKeys();
 });
+// The monitor: the panel's choice, kept with its state, wins over the launch's, and is sent again to each new session.
+const screenSelect=document.getElementById('screenType');
+const chosenScreen=()=>api.getState?.()?.screen;
+if(typeof chosenScreen()==='string')screenSelect.value=chosenScreen();
+let sentScreen;
+screenSelect.addEventListener('change',()=>{
+    api.setState?.({...(api.getState?.()??{}),screen:screenSelect.value});
+    sentScreen=screenSelect.value;
+    api.postMessage({command:'screen',screen:screenSelect.value});
+    screen.focus();
+});
+function syncScreen(frame){
+    if(typeof frame?.screen!=='string')return;
+    const wanted=chosenScreen();
+    if(typeof wanted==='string'&&wanted!==frame.screen){
+        if(sentScreen!==wanted){sentScreen=wanted;api.postMessage({command:'screen',screen:wanted});}
+        return;
+    }
+    sentScreen=undefined;
+    if(document.activeElement!==screenSelect)screenSelect.value=frame.screen;
+}
 // Sound plays through Web Audio, which only starts after a click or key in the panel. Chunks are queued back to
 // back a little ahead of the clock; one that would queue too far ahead, as when running faster than real time, is
 // dropped rather than letting the delay grow.
@@ -408,6 +438,48 @@ for(const id of ['restart','startMachine','close']){
     document.getElementById(id).addEventListener('click',()=>api.postMessage({command:id}));
 }
 document.getElementById('basic').addEventListener('click',()=>api.postMessage({command:'basic'}));
+// The mouse card: a click on the screen locks the pointer to it, so the mouse moves the card's mouse and its left
+// button is the card's; Escape lets go. Movement goes at most once a frame, in the picture's 280 by 192 dots.
+let mouseX=0,mouseY=0,mouseQueued=false;
+const mouseCard=()=>lastFrame?.machine==='apple2'&&lastFrame?.mouse>0;
+const mouseLocked=()=>document.pointerLockElement===screen;
+function sendMouse(){
+    mouseQueued=false;
+    const dx=Math.trunc(mouseX),dy=Math.trunc(mouseY);
+    mouseX-=dx;mouseY-=dy;
+    if(dx||dy)api.postMessage({mouse:{dx,dy}});
+}
+screen.addEventListener('mousedown',event=>{
+    if(!mouseCard()||event.button!==0)return;
+    if(!mouseLocked()){Promise.resolve(screen.requestPointerLock()).catch(()=>{});return;}
+    api.postMessage({mouse:{pressed:true}});
+});
+screen.addEventListener('mouseup',event=>{if(mouseLocked()&&event.button===0)api.postMessage({mouse:{pressed:false}});});
+screen.addEventListener('mousemove',event=>{
+    if(!mouseLocked()||!mouseCard()||!screen.clientWidth||!screen.clientHeight)return;
+    mouseX+=event.movementX*280/screen.clientWidth;
+    mouseY+=event.movementY*192/screen.clientHeight;
+    if(!mouseQueued){mouseQueued=true;requestAnimationFrame(sendMouse);}
+});
+document.addEventListener('pointerlockchange',()=>{
+    if(!mouseLocked()&&mouseCard())api.postMessage({mouse:{pressed:false}});
+    showMouse();
+});
+// Whether the mouse card has the pointer, and how to give it or take it back: a strip under the screen, and the
+// screen's border, which lights while the pointer is captured.
+function showMouse(){
+    const state=document.getElementById('mouseState');
+    const card=mouseCard();
+    const captured=card&&mouseLocked();
+    state.hidden=!card;
+    state.classList.toggle('captured',captured);
+    document.getElementById('bezel').classList.toggle('captured',captured);
+    if(!card)return;
+    const text=captured
+        ?'Mouse captured by the mouse card in slot '+lastFrame.mouse+' · press Esc to release it'
+        :'Mouse card in slot '+lastFrame.mouse+' · click the screen to capture the mouse';
+    if(state.textContent!==text)state.textContent=text;
+}
 showKeys();
 screen.focus();
 </script></body></html>`;

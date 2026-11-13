@@ -246,6 +246,24 @@ export function activate(context: vscode.ExtensionContext): void {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("apple2/button", { button: input.button, pressed: input.pressed }).then(undefined, showError);
                                 }
+                            } else if (typeof input === "object" && input !== null && "mouse" in input
+                                && typeof input.mouse === "object" && input.mouse !== null) {
+                                // The mouse card's movement and button, from the display's locked pointer.
+                                const mouse = input.mouse as Record<string, unknown>;
+                                const args: Record<string, unknown> = {};
+                                for (const axis of ["dx", "dy"]) {
+                                    const value = mouse[axis];
+                                    if (typeof value === "number" && Number.isInteger(value) && Math.abs(value) <= 4096) args[axis] = value;
+                                }
+                                if (typeof mouse.pressed === "boolean") args.pressed = mouse.pressed;
+                                if (displaySession !== undefined && Object.keys(args).length !== 0) {
+                                    void displaySession.customRequest("apple2/mouse", args).then(undefined, showError);
+                                }
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "screen"
+                                && "screen" in input && (input.screen === "color" || input.screen === "white" || input.screen === "green" || input.screen === "amber")) {
+                                if (displaySession !== undefined) {
+                                    void displaySession.customRequest("apple2/screen", { screen: input.screen }).then(undefined, showError);
+                                }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "reset") {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/reset").then(undefined, showError);

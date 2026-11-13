@@ -25,7 +25,7 @@ public class Slot7RomTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         allocated.Should().Be(0);
         bytes.Length.Should().Be(256);
-        Convert.ToHexString(SHA256.HashData(bytes)).Should().Be("83EA6ECB07D0CACCEFD88E0594CDE3EBED34E4FDA6A54B75BB33C31D67D55836");
+        Convert.ToHexString(SHA256.HashData(bytes)).Should().Be("992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E");
         Slot7Rom.DriverEntry.Should().Be(0xC740);
         Slot7Rom.DeviceInfo.Should().Be(0xC7FE);
         typeof(Slot7Rom).TypeInitializer.Should().BeNull();
@@ -90,7 +90,39 @@ public class Slot7RomTests
 
         byte[] firmware = Enumerable.Range(0, 256).Select(offset => machine.Bus.Peek((ushort)(0xC700 + offset))).ToArray();
         Convert.ToHexString(SHA256.HashData(firmware)).Should().Be(readOnly
-            ? "83EA6ECB07D0CACCEFD88E0594CDE3EBED34E4FDA6A54B75BB33C31D67D55836"
-            : "8410DC635F05B3205156949A727E9EC8AEC7E86963B012085B3A3B20F951360D");
+            ? "992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E"
+            : "9ECC5E5C6E6F6D57788839ECB0133547D3B775E6704D6A129ACC149C64910459");
+    }
+    /// <summary>
+    ///  The device is one volume: $C7FE's volume field says so, and a command for drive two answers $28, no device
+    ///  connected, rather than reading drive one's image as a second volume.
+    /// </summary>
+    [TestMethod]
+    public void DeviceIsOneVolumeAndDriveTwoIsNotThere()
+    {
+        Slot7Rom.Bytes[Slot7Rom.DeviceInfo - Slot7Rom.Origin].Should().Be(0x03, "one volume: bits 5-4 are the count less one");
+        byte[] image = new byte[1024];
+        Array.Fill(image, (byte)0x5A);
+        Apple2Machine machine = new(Apple2Model.IIe, new Apple2Roms(new byte[16384], new byte[4096]), new MemoryBlockDevice(image, true));
+        machine.Bus.SetRam(auxiliary: false, address: 0x42, value: 1);
+        machine.Bus.SetRam(auxiliary: false, address: 0x43, value: 0xF0);
+        machine.Bus.SetRam(auxiliary: false, address: 0x45, value: 8);
+        machine.Bus.Read(0xC0F0).Should().Be(0x28);
+        machine.Bus.MainMemory[0x800].Should().Be(0, "drive two read nothing");
+
+        machine.Bus.SetRam(auxiliary: false, address: 0x43, value: 0x70);
+        machine.Bus.Read(0xC0F0).Should().Be(0);
+        machine.Bus.MainMemory[0x800].Should().Be(0x5A);
+    }
+
+    /// <summary>
+    ///  A 32 MiB image's 65536 blocks are reported as 65535, the most ProDOS's 16-bit count holds, not as 0.
+    /// </summary>
+    [TestMethod]
+    public void BlockCountStopsAtProDosLimit()
+    {
+        MemoryBlockDevice disk = new(new byte[65536 * 512], true);
+        Apple2Machine machine = new(Apple2Model.IIe, new Apple2Roms(new byte[16384], new byte[4096]), disk);
+        (machine.Bus.Peek(0xC0F1) | (machine.Bus.Peek(0xC0F2) << 8)).Should().Be(0xFFFF);
     }
 }

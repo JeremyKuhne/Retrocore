@@ -25,7 +25,7 @@ internal sealed class Application : DisposableBase
     private static readonly string[] s_labels =
     [
         "F1 ROMs", "F2 Mount", "F3 Eject", "F4 Pause", "F5 Reset", "F6 Boot", "F7 Model",
-        "F8 Writes", "F11 Full", "F9 P5", "F10 P6", "D2 Mount", "F12 Mute"
+        "F8 Writes", "F11 Full", "F9 P5", "F10 P6", "D2 Mount", "F12 Mute", "S-F11 Screen"
     ];
     private readonly AppOptions _options;
     private readonly byte[] _pixels = new byte[Apple2Video.Width * Apple2Video.Height * 4];
@@ -53,6 +53,17 @@ internal sealed class Application : DisposableBase
     private bool _smokeKeyAccepted;
     private ulong _smokePausedCycles;
     private IntPtr _smokeText;
+
+    // The emulated screen in render units, where a click captures the host's mouse for the mouse card.
+    private SDL.FRect _screen;
+    private bool _mouseCaptured;
+
+    // The movement not yet whole Apple units.
+    private float _mouseX;
+    private float _mouseY;
+
+    // The mouse card's slot, since the Mockingboard has slot 4.
+    private const int MouseSlot = 2;
 
     /// <summary>
     ///  Creates a host using saved settings and transient command-line overrides.
@@ -187,8 +198,9 @@ internal sealed class Application : DisposableBase
             if (next.DiskPath is { } path) { _disk = new(path, next.Writable); }
             _machine = new(next.Model, roms, _disk);
 
-            // The emulator plays the Mockingboard, so it is always in slot 4.
+            // The emulator plays the Mockingboard, so it is always in slot 4, and the host's mouse drives the mouse card.
             _machine.Bus.InstallMockingboard();
+            _machine.Bus.InstallMouse(MouseSlot);
             if (firmware is not null) { _machine.Bus.DiskII.SetFirmware(firmware); }
             if (next.Floppy1Path is { } first)
             {
@@ -203,6 +215,7 @@ internal sealed class Application : DisposableBase
             }
 
             _machine.Bus.Audio.Sink = _audio;
+            _machine.Bus.Video.Monitor = next.Screen;
         }
 
         _settings = next;
@@ -248,29 +261,99 @@ internal sealed class Application : DisposableBase
             case SDL.EventType.KeyDown:
                 HandleKey(input.Key);
                 break;
+            case SDL.EventType.MouseButtonDown when _mouseCaptured:
+                if (input.Button.Button == 1) { _machine?.Bus.Mouse.Button = true; }
+                else if (input.Button.Button == 3) { ReleaseMouse(); }
+                break;
+            case SDL.EventType.MouseButtonUp when _mouseCaptured && input.Button.Button == 1:
+                _machine?.Bus.Mouse.Button = false;
+                break;
+            case SDL.EventType.MouseMotion when _mouseCaptured:
+                MoveMouse(input.Motion.XRel, input.Motion.YRel);
+                break;
+            case SDL.EventType.WindowFocusLost:
+                ReleaseMouse();
+                break;
             case SDL.EventType.MouseButtonDown when input.Button.Button == 1:
-                Check(SDL.GetWindowSize(_window, out int windowWidth, out int windowHeight));
-                Check(SDL.GetRenderOutputSize(_renderer, out int outputWidth, out int outputHeight));
-                if (windowWidth <= 0 || windowHeight <= 0) { break; }
-                int scale = UiScale;
-                int width = outputWidth / scale;
-                float x = input.Button.X * outputWidth / windowWidth / scale;
-                float y = input.Button.Y * outputHeight / windowHeight / scale;
+                if (!RenderPoint(input.Button.X, input.Button.Y, out float x, out float y)) { break; }
+                int width = OutputWidth / UiScale;
                 for (int index = 0; index < s_labels.Length; index++)
                 {
                     SDL.FRect rect = WindowLayout.Button(index, width);
-                    if (x >= rect.X
-                        && x < rect.X + rect.W
-                        && y >= rect.Y
-                        && y < rect.Y + rect.H)
+                    if (Inside(rect, x, y))
                     {
                         UserAction(() => Invoke((Command)index));
-                        break;
+                        return;
                     }
                 }
 
+                // A click on the screen hands the host's mouse to the mouse card.
+                if (_machine is not null && Inside(_screen, x, y)) { CaptureMouse(); }
                 break;
         }
+    }
+
+    // A point in the window, in the render units the layout uses.
+    private bool RenderPoint(float windowX, float windowY, out float x, out float y)
+    {
+        Check(SDL.GetWindowSize(_window, out int windowWidth, out int windowHeight));
+        Check(SDL.GetRenderOutputSize(_renderer, out int outputWidth, out int outputHeight));
+        x = y = 0;
+        if (windowWidth <= 0 || windowHeight <= 0) { return false; }
+        int scale = UiScale;
+        x = windowX * outputWidth / windowWidth / scale;
+        y = windowY * outputHeight / windowHeight / scale;
+        return true;
+    }
+
+    private int OutputWidth
+    {
+        get
+        {
+            Check(SDL.GetRenderOutputSize(_renderer, out int outputWidth, out _));
+            return outputWidth;
+        }
+    }
+
+    private static bool Inside(SDL.FRect rect, float x, float y) =>
+        x >= rect.X && x < rect.X + rect.W && y >= rect.Y && y < rect.Y + rect.H;
+
+    private void CaptureMouse()
+    {
+        Check(SDL.SetWindowRelativeMouseMode(_window, true));
+        _mouseCaptured = true;
+        _mouseX = _mouseY = 0;
+        _message = $"The mouse drives the slot {MouseSlot} mouse card. Right-click to release it.";
+    }
+
+    private static string ScreenName(Apple2Monitor screen) => screen switch
+    {
+        Apple2Monitor.White => "black and white",
+        Apple2Monitor.Green => "green",
+        Apple2Monitor.Amber => "amber",
+        _ => "color"
+    };
+
+    private void ReleaseMouse()
+    {
+        if (!_mouseCaptured) { return; }
+        _mouseCaptured = false;
+        _machine?.Bus.Mouse.Button = false;
+        SDL.SetWindowRelativeMouseMode(_window, false);
+        _message = "Click the screen to use the mouse card.";
+    }
+
+    // Moves the mouse card by the host's movement, one Apple unit for each of the screen's 280 by 192 pixels.
+    private void MoveMouse(float windowDx, float windowDy)
+    {
+        if (_machine is null || _screen.W <= 0 || !RenderPoint(windowDx, windowDy, out float dx, out float dy)) { return; }
+        _mouseX += dx * 280 / _screen.W;
+        _mouseY += dy * 192 / _screen.H;
+        int x = (int)_mouseX;
+        int y = (int)_mouseY;
+        _mouseX -= x;
+        _mouseY -= y;
+        if (x != 0 || y != 0) { _machine.Bus.Mouse.Move(x, y); }
     }
 
     private void HandleKey(SDL.KeyboardEvent input)
@@ -316,6 +399,11 @@ internal sealed class Application : DisposableBase
         if (input.Key == SDL.Keycode.F2 && (input.Mod & SDL.Keymod.Shift) != 0)
         {
             command = Command.Floppy2;
+        }
+
+        if (input.Key == SDL.Keycode.F11 && (input.Mod & SDL.Keymod.Shift) != 0)
+        {
+            command = Command.Screen;
         }
 
         if (command is { } action)
@@ -403,6 +491,20 @@ internal sealed class Application : DisposableBase
             case Command.Fullscreen:
                 Check(SDL.SetWindowFullscreen(_window, !_settings.Fullscreen));
                 _settings = _settings with { Fullscreen = !_settings.Fullscreen };
+                if (!_options.SmokeTest) { _settings.Save(_options.SettingsPath); }
+                break;
+            case Command.Screen:
+                Apple2Monitor screen = _settings.Screen switch
+                {
+                    Apple2Monitor.Color => Apple2Monitor.White,
+                    Apple2Monitor.White => Apple2Monitor.Green,
+                    Apple2Monitor.Green => Apple2Monitor.Amber,
+                    _ => Apple2Monitor.Color
+                };
+
+                _settings = _settings with { Screen = screen };
+                _machine?.Bus.Video.Monitor = screen;
+                _message = "Screen: " + ScreenName(screen) + ". Shift+F11 shows the next.";
                 if (!_options.SmokeTest) { _settings.Save(_options.SettingsPath); }
                 break;
             case Command.Mute:
@@ -511,9 +613,12 @@ internal sealed class Application : DisposableBase
         string state = _dialogOpen ? "choosing media" : _machine is null ? "setup" : _paused ? "paused"
             : _machine.Processor.Status == Retrocore.Cpu.ProcessorExecutionStatus.Running ? "running" : _machine.Processor.Status.ToString();
 
-        string status = $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | 1.0205 MHz\n{_message}";
+        string status = $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | {ScreenName(_settings.Screen)} | 1.0205 MHz\n{_message}";
         if (_machine is not null)
         {
+            status += _mouseCaptured
+                ? $"\nMOUSE CAPTURED by the slot {MouseSlot} mouse card: right-click to release it."
+                : $"\nMouse card in slot {MouseSlot}: click the screen to capture the mouse.";
             for (int drive = 1; drive <= 2; drive++)
             {
                 DiskDriveState disk = _machine.Bus.DiskII.State(drive);
@@ -532,7 +637,18 @@ internal sealed class Application : DisposableBase
             _machine.Bus.Video.RenderScannedBitmap(_pixels);
             Check(SDL.UpdateTexture(_texture, IntPtr.Zero, _pixels.AsSpan(), Apple2Video.Width * 4));
             SDL.FRect screen = WindowLayout.Screen(width, height, toolbarHeight, statusHeight);
+            _screen = screen;
             Check(SDL.RenderTexture(_renderer, _texture, IntPtr.Zero, in screen));
+
+            // A captured mouse lights the screen's border.
+            if (_mouseCaptured)
+            {
+                SDL.FRect border = new() { X = screen.X - 3, Y = screen.Y - 3, W = screen.W + 6, H = screen.H + 6 };
+                Check(SDL.SetRenderDrawColor(_renderer, r: 0, g: 122, b: 204, a: 255));
+                Check(SDL.RenderRect(_renderer, in border));
+                border = new() { X = border.X + 1, Y = border.Y + 1, W = border.W - 2, H = border.H - 2 };
+                Check(SDL.RenderRect(_renderer, in border));
+            }
         }
 
         for (int index = 0; index < s_labels.Length; index++)
@@ -547,7 +663,7 @@ internal sealed class Application : DisposableBase
         if (_machine is null)
         {
             string[] help = WindowLayout.WrapText(
-                "AppleSharp - standalone Apple IIe\n\nF1: select your CD, EF and video ROM folder.\nF2: .po block disk or .woz/.dsk floppy; Shift+F2: drive two.\nF9/F10: caller-supplied Disk II P5/P6 ROMs.\nCtrl +/-: UI zoom; Ctrl 0: automatic.",
+                "AppleSharp - standalone Apple IIe\n\nF1: select your CD, EF and video ROM folder.\nF2: .po block disk or .woz/.dsk floppy; Shift+F2: drive two.\nF9/F10: caller-supplied Disk II P5/P6 ROMs.\nClick the screen: the mouse card in slot 2 (right-click releases).\nCtrl +/-: UI zoom; Ctrl 0: automatic.",
                 width - 24);
 
             for (int line = 0; line < help.Length; line++)

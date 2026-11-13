@@ -754,6 +754,28 @@
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "screen": {
+                "type": "string",
+                "enum": [
+                  "color",
+                  "white",
+                  "green",
+                  "amber"
+                ],
+                "enumDescriptions": [
+                  "A color monitor or television (the default).",
+                  "A black and white monochrome monitor: every dot sharp, as double hi-res desktops need.",
+                  "A green-phosphor monochrome monitor.",
+                  "An amber-phosphor monochrome monitor."
+                ],
+                "description": "Apple II: the monitor the video is shown on. The display panel's Screen menu changes it, and its choice is kept for later launches."
+              },
+              "mouse": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of an AppleMouse II-compatible mouse card, which a click on the display drives until Escape. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
               "logpointLimit": {
                 "type": "integer",
                 "minimum": 0,

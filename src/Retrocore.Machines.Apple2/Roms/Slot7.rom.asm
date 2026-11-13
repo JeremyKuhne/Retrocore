@@ -91,10 +91,11 @@
 ;
 ; ProDOS mailbox ABI:
 ;   $42 command: 0=status, 1=read, 2=write.
-;   $43 unit: drive bit 7 and slot bits 6..4 ($70 is slot seven, drive one).
+;   $43 unit: drive bit 7 and slot bits 6..4 ($70 is slot seven, drive one). The
+;   device is one volume, drive one; drive two answers $28, no device connected.
 ;   $44/$45 buffer address, $46/$47 block number, both little endian.
 ;   Reading $C0F0 performs the mailbox command and returns its error code.
-;   $C0F1/$C0F2 report the device's 16-bit block count.
+;   $C0F1/$C0F2 report the device's 16-bit block count, at most 65535, ProDOS's limit.
 ;
 ; Driver return ABI:
 ;   A=0 and carry clear on success; A=error and carry set on failure.
@@ -123,7 +124,7 @@ BlockCountHigh = $C0F2
 ; ProDOS device-capability bits at $CnFE.
 RemovableMask = %10000000
 InterruptibleMask = %01000000
-VolumeField1 = %00010000             ; bits 5-4 hold the volume-count field; this card stores 1
+OneVolume = %00000000                ; bits 5-4: the number of volumes less one (ProDOS Technical Note #21)
 FormatCapabilityMask = %00001000
 WriteCapabilityMask = %00000100      ;; The capability bit the C# card sets in <DeviceInfo> for a writable device.
 ReadCapabilityMask = %00000010
@@ -196,6 +197,6 @@ Success:
 .org $C7FE
 ;; The ProDOS device-capability byte at $CnFE, followed by the low byte of <DriverEntry> at $CnFF.
 DeviceInfo:
-    .byte VolumeField1 | ReadCapabilityMask | StatusCapabilityMask ; Base read-only capabilities ($13).
+    .byte OneVolume | ReadCapabilityMask | StatusCapabilityMask ; Base read-only capabilities ($03).
     .byte <DriverEntry       ; C7FF: ProDOS command-entry offset within the slot ROM.
 .assert * == $C800           ; Verify the complete image ends exactly after 256 bytes.

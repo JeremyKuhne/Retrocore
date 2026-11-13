@@ -461,6 +461,7 @@ function showOff(ended){
     document.getElementById('basic').hidden=true;
     document.getElementById('status').textContent='Stopped';
     off.hidden=false;
+    showMouse();
 }
 for(const id of ['restart','startMachine','close']){
     document.getElementById(id).addEventListener('click',()=>api.postMessage({command:id}));
@@ -469,7 +470,8 @@ document.getElementById('basic').addEventListener('click',()=>api.postMessage({c
 // The mouse card: a click on the screen locks the pointer to it, so the mouse moves the card's mouse and its left
 // button is the card's; Escape lets go. Movement goes at most once a frame, in the picture's 280 by 192 dots.
 let mouseX=0,mouseY=0,mouseQueued=false;
-const mouseCard=()=>lastFrame?.machine==='apple2'&&lastFrame?.mouse>0;
+// A machine that has ended keeps its last frame, but no longer its mouse card.
+const mouseCard=()=>off.hidden&&lastFrame?.machine==='apple2'&&lastFrame?.mouse>0;
 const mouseLocked=()=>document.pointerLockElement===screen;
 function sendMouse(){
     mouseQueued=false;
@@ -498,6 +500,12 @@ document.addEventListener('pointerlockchange',()=>{
 function showMouse(){
     const state=document.getElementById('mouseState');
     const card=mouseCard();
+    // Without a card to drive, as when it is taken out or the session ends, the pointer is the user's again.
+    if(!card&&mouseLocked()){
+        mouseX=mouseY=0;
+        document.exitPointerLock?.();
+    }
+
     const captured=card&&mouseLocked();
     state.hidden=!card;
     state.classList.toggle('captured',captured);

@@ -1287,6 +1287,13 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                         HardwareAction(id, "addMockingboard", []);
                         break;
                     case "mouse":
+                        // The machine has one mouse card: the saved slot wins over the launch's, whatever the order
+                        // the slots come in.
+                        if (_machine.Bus.MouseSlot is not 0 and var other && other != slot && _machine.Bus.IsSlotFree(slot))
+                        {
+                            HardwareAction($"slot{other}", "removeCard", []);
+                        }
+
                         HardwareAction(id, "addMouse", []);
                         break;
                     case "languageCard":

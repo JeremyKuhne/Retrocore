@@ -140,6 +140,7 @@ public sealed class Apple2MouseTests
         (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0x08);
         mouse.InterruptRequested.Should().BeFalse();
         Call(machine, MouseRom.SERVEMOUSE).Status.HasFlag(StatusRegister.Carry).Should().BeTrue();
+        (machine.Bus.Peek(0x077C) & 0x0E).Should().Be(0, "the cause bits always take the answer, as on Apple's card");
     }
 
     /// <summary>

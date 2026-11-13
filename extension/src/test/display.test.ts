@@ -111,6 +111,10 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
         body,
         events,
         pointerLockElement: undefined as Element | undefined,
+        exitPointerLock: (): void => {
+            document.pointerLockElement = undefined;
+            events.dispatch("pointerlockchange");
+        },
         addEventListener: (type: string, listener: Listener) => events.addEventListener(type, listener),
         getElementById: (id: string) => byId.get(id),
         activeElement: undefined,
@@ -184,6 +188,34 @@ test("with a mouse card, a click locks the pointer and the mouse moves the card'
     assert.deepEqual(posted.splice(0), [{ mouse: { pressed: false } }], "letting go releases the button");
     assert.match(state.textContent, /click the screen to capture/, "the strip says how to capture it again");
     assert.equal(byId.get("bezel")?.classList.contains("captured"), false);
+});
+
+test("taking the mouse card out, or the session ending, gives the pointer back", () => {
+    const { screen, window, document, byId } = loadPanel();
+    screen.clientWidth = 560;
+    screen.clientHeight = 384;
+    const frame = (mouse: number): Record<string, unknown> => ({
+        machine: "apple2", rows: [""], cycles: 1, running: true, mouse,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    });
+    const state = byId.get("mouseState") as Element;
+    window.dispatch("message", { data: frame(4) });
+    screen.dispatch("mousedown", { button: 0 });
+    assert.equal(document.pointerLockElement, screen);
+
+    window.dispatch("message", { data: frame(0) });
+    assert.equal(document.pointerLockElement, undefined, "the card was taken out");
+    assert.equal(state.hidden, true);
+    assert.equal(byId.get("bezel")?.classList.contains("captured"), false);
+
+    window.dispatch("message", { data: frame(4) });
+    screen.dispatch("mousedown", { button: 0 });
+    assert.equal(document.pointerLockElement, screen);
+    window.dispatch("message", { data: { ended: { name: "IIe" } } });
+    assert.equal(document.pointerLockElement, undefined, "the session ended");
+    assert.equal(state.hidden, true);
+    screen.dispatch("mousedown", { button: 0 });
+    assert.equal(document.pointerLockElement, undefined, "an ended machine's last frame does not capture the mouse");
 });
 
 test("Screen follows the host's monitor, and the panel's choice is kept and sent to each new session", () => {

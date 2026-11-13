@@ -210,12 +210,9 @@ public sealed class Apple2MouseCard
             case SetMouse: _carry = !SetMode(_value);
                 break;
             case ServeMouse:
-                if (_interrupts == 0)
-                {
-                    _carry = true;
-                    break;
-                }
-
+                // As Apple's firmware does, the status hole's cause bits always take the answer, none included, so
+                // a handler polling them never sees the last interrupt's cause again.
+                _carry = _interrupts == 0;
                 Hole(StatusHole, (byte)((Peek(StatusHole) & ~0x0E) | _interrupts));
                 _interrupts = 0;
                 break;

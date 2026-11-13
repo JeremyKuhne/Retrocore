@@ -31,7 +31,7 @@ FILL_11BE = 0
 .assert VERSION = 1 || VERSION = 2 || VERSION = 3 || VERSION = 5, "VERSION is 1, 2, 3 or 5."
 .assert FILL_11BE = 0 || VERSION = 3, "FILL_11BE is a version 3 ROM."
 
-;; Ports.
+; Ports.
 HD_CONTROL_PORT = $C1               ;; the hard disk board: bit 4 resets it, bits 0-3 enable it
 HD_BOARD_PORT = $C2                 ;; versions 2 and 3 take zero in bits 0-3 as no hard disk
 HD_DATA_PORT = $C8                  ;; the WD1010 hard disk controller's registers
@@ -61,24 +61,24 @@ CRTC_ADDRESS_PORT = $FC
 CRTC_DATA_PORT = $FD
 CONTROL_PORT = $FF                  ;; write: bit 7 maps video RAM at $F800; read: bit 7 set when a key is ready
 
-;; Hard disk commands.
+; Hard disk commands.
 HD_RESTORE = $1F                    ;; to cylinder 0, stepping at the slowest rate
 HD_READ = $20
 
-;; Floppy disk controller commands.
+; Floppy disk controller commands.
 FDC_READ = $80                      ;; one sector
 FDC_FORCE_INTERRUPT = $D0           ;; stops a command
 FDC_INTERRUPT_NOW = $D8             ;; stops a command and interrupts
 
-;; Drive select: drive 0, side 0, single density; and no drive.
-DRIVE_0 = $4E
-NO_DRIVE = $4F
+; Drive select.
+DRIVE_0 = $4E                       ;; drive 0, side 0, single density
+NO_DRIVE = $4F                      ;; no drive
 
-;; Keys that skip a hard disk boot.
+; Keys that skip a hard disk boot.
 ESC = $1B
 BREAK = $03
 
-;; Memory.
+; Memory.
 VIDEO = $F800                       ;; 80 columns by 24 lines, when CONTROL_PORT maps it
 VIDEO_END = $10000
 MESSAGE_SCREEN = VIDEO + 11 * 80 + 30 ;; where messages show, in the middle of the screen

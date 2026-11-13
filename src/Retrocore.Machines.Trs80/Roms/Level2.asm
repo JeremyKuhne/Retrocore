@@ -66,8 +66,8 @@ MODEL = 1
     .byte name
 .endmacro
 
-;; Error codes: the code in E when a routine jumps to ERROR, twice the index of its two letters in
-;; ERROR_CODES.
+; Error codes: the code in E when a routine jumps to ERROR, twice the index of its two letters in
+; ERROR_CODES.
 ERR_NF = $00                        ;; NF: NEXT without FOR
 ERR_SN = $02                        ;; SN: syntax error
 ERR_RG = $04                        ;; RG: RETURN without GOSUB
@@ -92,7 +92,7 @@ ERR_MO = $28                        ;; MO: missing operand
 ERR_FD = $2A                        ;; FD: bad file data
 ERR_L3 = $2C                        ;; L3: Disk BASIC only
 
-;; Tokens: a keyword in a program line is stored as one byte, $80 plus its place in KEYWORDS.
+; Tokens: a keyword in a program line is stored as one byte, $80 plus its place in KEYWORDS.
 TK_END = $80                        ;; END
 TK_FOR = $81                        ;; FOR
 TK_RESET = $82                      ;; RESET
@@ -370,8 +370,8 @@ HOOK_SYSTEM = $41E2                 ;; dOS exit at SYSTEM
 BOOT_SECTOR = $4200                 ;; where the disk boot sector is read to and run
 USING_SKIP_OPERAND = $D1EB          ;; not an address: operand of a never-taken JP Z in PRINT USING's exponent check
 
-;; Where BASIC's work areas start. The Model III keeps its RS-232 and cassette state at $41E5-$4224, so its input
-;; buffer, program text and free memory start $100 higher than the Model I's.
+; Where BASIC's work areas start. The Model III keeps its RS-232 and cassette state at $41E5-$4224, so its input
+; buffer, program text and free memory start $100 higher than the Model I's.
 .if MODEL = 1
 INPUT_PREFIX = $41E5                ;; a colon, a zero and a comma just before the input buffer
 INIT_STACK = $41F8                  ;; the stack while BASIC starts

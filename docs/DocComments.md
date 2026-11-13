@@ -61,6 +61,15 @@ Rules:
 - **Trailing comments** document the definition on their own line when they start with `;;`: a constant in
   an equate list, or a member of an `.enum` or `.struct`. For example, `KEY_CR = $8D ;; Control-M, Return`.
   The SDK sources' trailing address comments (`; $F800`) stay ordinary comments.
+- **Headings over a group** are plain `;` comments. A `;;` block above a definition that has its own trailing
+  `;;` comment is a lint error, because it reads as the group's heading but would document only the first
+  definition:
+
+  ```text
+  ; Ports.
+  DATA_PORT = $10                     ;; the data
+  STATUS_PORT = $11                   ;; the status
+  ```
 - **The file comment** is a `;;` block at the top of the file, after any `; retrocore:` pragma, followed by a
   blank line. It becomes the file's topic and is exempt from the blank-line error.
 - **Explicit topics.** A `;;` block whose first line is a Natural Docs keyword line (`Section: Title`,

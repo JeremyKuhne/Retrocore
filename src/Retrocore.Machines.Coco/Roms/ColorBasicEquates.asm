@@ -975,7 +975,7 @@ VIDRAM = $0400
 ; Tokens and error codes
 ; ----------------------------------------------------------------------------------------------------------------
 
-;; Tokens: a reserved word in a program line is stored as one byte, $80 plus its place in <COMWRD>.
+; Tokens: a reserved word in a program line is stored as one byte, $80 plus its place in <COMWRD>.
 TK_FOR = $80                        ;; FOR
 TK_GO = $81                         ;; GO, as in GOTO and GOSUB
 TK_REM = $82                        ;; REM
@@ -1030,7 +1030,7 @@ TK_GREATER = $B2                    ;; >
 TK_EQUAL = $B3                      ;; =
 TK_LESS = $B4                       ;; <
 
-;; Function tokens: $FF, then $80 plus the function's place in <FUNWRD>.
+; Function tokens: $FF, then $80 plus the function's place in <FUNWRD>.
 TK_SGN = $80                        ;; SGN
 TK_INT = $81                        ;; INT
 TK_ABS = $82                        ;; ABS
@@ -1052,7 +1052,7 @@ TK_POINT = $91                      ;; POINT
 TK_INKEY = $92                      ;; INKEY$
 TK_MEM = $93                        ;; MEM
 
-;; Error codes: the code in B when a routine jumps to the error handler, twice the error's place in <ERRTAB>.
+; Error codes: the code in B when a routine jumps to the error handler, twice the error's place in <ERRTAB>.
 ERR_NF = 0                          ;; NF: NEXT without FOR
 ERR_SN = 2                          ;; SN: syntax error
 ERR_RG = 4                          ;; RG: RETURN without GOSUB

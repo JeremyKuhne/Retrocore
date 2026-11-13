@@ -4,7 +4,7 @@
 ;; blocks of Level2.asm. The RAM names are those of Radio Shack's Model III source; the ports, vectors and device
 ;; control blocks have names that say what they are, as in Level2.asm.
 
-;; Ports.
+; Ports.
 MEMORY_MAP_PORT = $84               ;; Model 4: bits 0-1 the memory map, 2 80x24, 3 inverse video, 4-6 paging, 7 the video page
 CRTC_ADDRESS_PORT = $88             ;; Model 4: selects a 6845 register
 CRTC_DATA_PORT = $89                ;; Model 4: writes the selected 6845 register
@@ -24,40 +24,39 @@ DRIVE_SELECT_PORT = $F4             ;; bits 0-3 the drive, 4 the side, 6 wait fo
 PRINTER_PORT = $F8                  ;; read: the printer's status; write: the byte to print
 CASSETTE_PORT = $FF                 ;; read: bit 7 the 500 baud latch, bit 0 the 1500 baud level; write: bits 0-1 the output
 
-;; Bits of INTERRUPT_PORT, read active low and written to enable.
+; Bits of INTERRUPT_PORT, read active low and written to enable.
 INT_CASSETTE_RISE = $01             ;; a 1500 baud tape's signal rose
 INT_CASSETTE_FALL = $02             ;; a 1500 baud tape's signal fell
 INT_CLOCK = $04                     ;; the real-time clock, 30 times a second
 
-;; Bits of NMI_PORT.
+; Bits of NMI_PORT.
 NMI_DISK = $80                      ;; the disk controller's INTRQ
 NMI_RESET = $20                     ;; the reset button, when read
 
-;; Drive select: drive 0, side 0, double density.
-DRIVE_0_DOUBLE = $81
+; Drive select.
+DRIVE_0_DOUBLE = $81                ;; drive 0, side 0, double density
 DRIVE_WAIT = $40                    ;; hold the Z80 until the controller asks for data
 
-;; 1500 baud tapes: SEEK's counts for a cycle of the signal.
+; 1500 baud tapes: SEEK's counts for a cycle of the signal.
 LOWCT = 15                          ;; shorter is not a cycle
 HIGHCT = 62                         ;; longer is not a cycle
 HALF = 34                           ;; shorter is a 1, longer a 0
 HALF_DIFFERENCE = 13                ;; a leader's cycles timed from the right edge differ by less
 
-;; Model 4: the function keys' codes, kept where the Model III's RS-232 blocks keep their names, and the last
-;; reading of row 7's CTRL, CAPS and function keys.
-FKEY1 = $41EB
-FKEY2 = $41EC
-FKEY3 = $41F3
-FKEYS = $41F4
+; Model 4: the function keys, kept where the Model III's RS-232 blocks keep their names.
+FKEY1 = $41EB                       ;; F1's code
+FKEY2 = $41EC                       ;; F2's code
+FKEY3 = $41F3                       ;; F3's code
+FKEYS = $41F4                       ;; the last reading of row 7's CTRL, CAPS and function keys
 
-;; Keyboard.
+; Keyboard.
 KBROW = KEYBOARD_ROW0               ;; the first row; each row's address is twice the last's
 DNAROW = KEYBOARD_ROW6              ;; the row of the arrow keys
 SHFKEY = KEYBOARD_ROW7              ;; the row of the shift keys
 DARW = 4                            ;; the down arrow's bit in DNAROW
 SKEY = 0                            ;; the left shift's bit in SHFKEY
 
-;; RAM: the keyboard and video drivers' state in their device control blocks.
+; RAM: the keyboard and video drivers' state in their device control blocks.
 SKROB = $4018                       ;; the right shift key as last read, to see it go down
 SHFLCK = $4019                      ;; nonzero while shift lock (shift and 0) is on
 BLKCNT = $401A                      ;; clock ticks until the cursor blinks again
@@ -67,7 +66,7 @@ CURCAR = $4022                      ;; the character under the cursor, or zero w
 CURSOR_CHAR = $4023                 ;; the character the cursor shows
 CURSWT = $4024                      ;; bit 0: codes $C0-$FF show as characters rather than space compression
 
-;; RAM: the vectors and devices the Model III adds.
+; RAM: the vectors and devices the Model III adds.
 DOS_EXIT_VECTOR = $402D             ;; JP: where a DOS's exit goes
 DOS_ABORT_VECTOR = $4030            ;; RST $00: where a DOS's abort goes
 IO_BUS_VECTOR = $403D               ;; JP: the I/O bus's interrupt

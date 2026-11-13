@@ -47,6 +47,9 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
   above its label: a summary line, then compact sections such as `;; In: A = the character`, `;; Out:`,
   `;; Uses:` and `;; Keeps: X, Y`. The debugger checks `Keeps:` when the routine returns, so only list what
   the routine really preserves. [DocComments.md](../../../docs/DocComments.md) has the format.
+- `;;` documents exactly one definition. A heading over a group of constants or a stretch of code is a plain `;`
+  comment, with each constant documented by its own trailing `;;`. The lint fails a `;;` block above a definition
+  that has a trailing `;;` of its own.
 - Name registers by the CPU's letters and flags by word on every CPU, in `In:` and `Out:` (there is no
   `Flags:` section): `;; Out: A = the key, carry = set for Return`, `zero = found`. Never `C`, `Z` or `NZ` for
   a flag: on the Z80 `C` is the register. The words are `carry`, `zero`, `negative`, `overflow`, `parity`,

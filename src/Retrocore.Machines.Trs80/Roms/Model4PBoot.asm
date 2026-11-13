@@ -18,11 +18,11 @@
 
 .cpu Z80
 
-;; Message lists: a word of $FFFE comes before a new screen offset, and $FFFF ends the list.
-NEXT_LINE = $FFFE
-END_LIST = $FFFF
+; Message lists.
+NEXT_LINE = $FFFE                   ;; comes before a new screen offset
+END_LIST = $FFFF                    ;; ends the list
 
-;; Ports.
+; Ports.
 MEMORY_MAP_PORT = $84               ;; bit 7 the video page, bits 0-1 the memory map
 CRTC_ADDRESS_PORT = $88
 CRTC_DATA_PORT = $89
@@ -49,12 +49,12 @@ FDC_SECTOR_PORT = $F2
 FDC_DATA_PORT = $F3
 DRIVE_SELECT_PORT = $F4
 
-;; A Model III ROM image in the RAM under the boot ROM: its jump table, and Level II's POP HL and JP [HL] at $000B.
-MODEL3_JUMP_TABLE = $3000
-IMAGE_SIGNATURE_ADDRESS = $000B
-IMAGE_SIGNATURE = $E9E1
+; A Model III ROM image in the RAM under the boot ROM.
+MODEL3_JUMP_TABLE = $3000           ;; its jump table
+IMAGE_SIGNATURE_ADDRESS = $000B     ;; where Level II has POP HL and JP [HL]
+IMAGE_SIGNATURE = $E9E1             ;; those instructions as a word
 
-;; The keyboard's rows and video RAM.
+; The keyboard's rows and video RAM.
 KEYBOARD_ROW0 = $3801
 KEYBOARD_ROW1 = $3802
 KEYBOARD_ROW2 = $3804
@@ -64,7 +64,7 @@ KEYBOARD_ROW6 = $3840
 KEYBOARD_ROW7 = $3880
 VIDEO = $3C00
 
-;; RAM: the restarts' vectors and RAM_BLOCK's copy.
+; RAM: the restarts' vectors and RAM_BLOCK's copy.
 RST08_VECTOR = $4000
 RST10_VECTOR = $4003
 RST18_VECTOR = $4006
@@ -80,7 +80,7 @@ EXIT_ADDRESS = EXIT_RAM + 4         ;; its JP's address
 HALT_RAM = NMI_VECTOR + 18          ;; HALT_FDIV's copy
 READ_WORD_RAM = NMI_VECTOR + 41     ;; READ_IMAGE_WORD's copy
 
-;; RAM: the boot's variables, cleared at reset. Those marked are left for the booted program.
+; RAM: the boot's variables, cleared at reset. Those marked are left for the booted program.
 BOOT_TYPE = $4055                   ;; left: 1 floppy, 2 hard disk, 4 RS-232
 BOOT_SIZE = $4056                   ;; left: the boot sector's 256-byte blocks
 BAUD_CODE = $4057                   ;; left: the RS-232 baud rate

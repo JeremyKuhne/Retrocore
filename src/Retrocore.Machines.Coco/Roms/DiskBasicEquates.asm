@@ -324,7 +324,7 @@ FDCREG = $FF48
 ; Tokens and error codes
 ; ----------------------------------------------------------------------------------------------------------------
 
-;; Command tokens: Disk BASIC's follow Extended BASIC's, from $CE.
+; Command tokens: Disk BASIC's follow Extended BASIC's, from $CE.
 TK_DIR = $CE                        ;; DIR
 TK_DRIVE = $CF                      ;; DRIVE
 TK_FIELD = $D0                      ;; FIELD
@@ -346,7 +346,7 @@ TK_DSKI = $DF                       ;; DSKI$
 TK_DSKO = $E0                       ;; DSKO$
 TK_DOS = $E1                        ;; DOS, in 1.1
 
-;; Function tokens: $FF, then Disk BASIC's functions follow Extended BASIC's, from $A2.
+; Function tokens: $FF, then Disk BASIC's functions follow Extended BASIC's, from $A2.
 TK_CVN = $A2                        ;; CVN
 TK_FREE = $A3                       ;; FREE
 TK_LOC = $A4                        ;; LOC
@@ -354,7 +354,7 @@ TK_LOF = $A5                        ;; LOF
 TK_MKN = $A6                        ;; MKN$
 TK_AS = $A7                         ;; AS, which FIELD reads
 
-;; Error codes: Disk BASIC's follow Extended BASIC's, twice the error's place in its table, plus 54.
+; Error codes: Disk BASIC's follow Extended BASIC's, twice the error's place in its table, plus 54.
 ERR_BR = 54                         ;; BR: bad record
 ERR_DF = 56                         ;; DF: disk full
 ERR_OB = 58                         ;; OB: out of buffer space

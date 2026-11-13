@@ -118,8 +118,8 @@ The debugger supports:
   and Level II BASIC, with `GOSUB` call stacks, Variables/Arrays/Loops inspection and editing, BASIC expression
   watches, Jump to Cursor, and Step Into from `CALL`, `USR`, or `&` straight into machine code;
 - **Apple Pascal debugging:** a **Pascal** thread for Apple Pascal on the Apple II and Apple III Pascal, with the
-  p-machine's procedures as its call stack, their locals, p-code stepping and `pascal` breakpoints
-  ([Pascal.md](docs/Pascal.md));
+  p-machine's procedures as its call stack, breakpoints and steps by source line through the compiler's listing,
+  named variables, and `pascal` breakpoints on p-code ([Pascal.md](docs/Pascal.md));
 - **Live memory views:** side-effect-free inspection and editing in Microsoft's Hex Editor or Memory Inspector,
   kept current while the machine runs, with Apple II language-card banks, firmware/slot ROMs, and IIe auxiliary
   RAM addressable directly regardless of active soft switches ([Memory.md](docs/Memory.md));

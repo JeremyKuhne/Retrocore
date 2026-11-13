@@ -195,8 +195,8 @@ first line), with labels if it likes. It is tokenized by the ROM's own matcher r
 `*** SYNTAX ERR` at the place it stopped. **Open as BASIC Listing** opens a CiderPress2 `#fa` file as text, and saving
 tokenizes it the same way.
 
-**Apple Pascal** 1.1 boots on a 64K II Plus (the language card holds its interpreter), and its programs debug on a
-Pascal thread, with `pascal` breakpoints on their procedures: see [Pascal.md](Pascal.md).
+**Apple Pascal** 1.1 and 1.2 boot on a 64K II Plus (the language card holds the interpreter) and on the IIe, and
+their programs debug on a Pascal thread, by source line through the compiler's listing: see [Pascal.md](Pascal.md).
 
 ## Testing
 

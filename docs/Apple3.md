@@ -90,7 +90,7 @@ A program calls SOS with `BRK`, a call number and its parameters' address:
 
 [Breakpoints.md](Breakpoints.md#sos-call-breakpoints) has the details.
 
-Apple III Pascal's programs debug on a Pascal thread, with `pascal` breakpoints on their procedures: see
+Apple III Pascal's programs debug on a Pascal thread, by source line through the compiler's listing: see
 [Pascal.md](Pascal.md).
 
 SOS itself debugs at its source: the SDK has SOS 1.3's kernel, its bootstrap loader and Apple's drivers, each

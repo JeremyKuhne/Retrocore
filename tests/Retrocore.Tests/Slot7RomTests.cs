@@ -20,10 +20,8 @@ public class Slot7RomTests
     [TestMethod]
     public void GeneratedRomMatchesOriginalAndAllocatesNothingOnAccess()
     {
-        long before = GC.GetAllocatedBytesForCurrentThread();
+        Allocations.During(() => _ = Slot7Rom.Bytes.Length).Should().Be(0);
         ReadOnlySpan<byte> bytes = Slot7Rom.Bytes;
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
         bytes.Length.Should().Be(256);
         Convert.ToHexString(SHA256.HashData(bytes)).Should().Be("992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E");
         Slot7Rom.DriverEntry.Should().Be(0xC740);

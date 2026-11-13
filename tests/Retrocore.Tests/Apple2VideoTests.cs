@@ -214,7 +214,7 @@ public class Apple2VideoTests
         pixels.Should().Equal(bus.Video.RenderBitmap());
         bus.Video.RenderScannedBitmap(pixels);
         pixels.Should().Equal(bus.Video.RenderScannedBitmap());
-        Allocations.Fewest(Render).Should().Be(0);
+        Allocations.During(Render).Should().Be(0);
         Action invalid = () => bus.Video.RenderBitmap(new byte[1]);
         invalid.Should().Throw<ArgumentException>();
 

@@ -25,10 +25,8 @@ public class OpcodeTableTests
     [DataRow(ProcessorVariant.Rockwell65C02, "757C8CF8F61EF1608F287360FE8FA8BB69CFB24849FD2A909C47F3EFDF1D41A4")]
     public void PackedMapsMatchOriginalWithoutAllocation(ProcessorVariant variant, string expectedHash)
     {
-        long before = GC.GetAllocatedBytesForCurrentThread();
+        Allocations.During(() => _ = OpcodeTable.Get(variant).Length).Should().Be(0);
         ReadOnlySpan<OpCode> table = OpcodeTable.Get(variant);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
         table.Length.Should().Be(256);
         for (int i = 0; i < table.Length; i++)
         {

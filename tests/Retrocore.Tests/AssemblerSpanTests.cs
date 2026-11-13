@@ -64,20 +64,22 @@ public class AssemblerSpanTests
             warmup.TryEvaluate(out _).Should().BeTrue();
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
         long total = 0;
-        for (int index = 0; index < 1000; index++)
+        long allocated = Allocations.During(() =>
         {
-            GeneratorAssembly.ExpressionEvaluator evaluator = new(expression, symbols, address: 0, line: 0);
-            if (!evaluator.TryEvaluate(out long value))
+            total = 0;
+            for (int index = 0; index < 1000; index++)
             {
-                throw new InvalidOperationException("Linked symbol lookup failed.");
+                GeneratorAssembly.ExpressionEvaluator evaluator = new(expression, symbols, address: 0, line: 0);
+                if (!evaluator.TryEvaluate(out long value))
+                {
+                    throw new InvalidOperationException("Linked symbol lookup failed.");
+                }
+
+                total += value;
             }
+        });
 
-            total += value;
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         total.Should().Be(168000);
         allocated.Should().Be(0);
     }
@@ -700,20 +702,22 @@ public class AssemblerSpanTests
             warmup.TryEvaluate(out _).Should().BeTrue();
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
         long total = 0;
-        for (int index = 0; index < 1000; index++)
+        long allocated = Allocations.During(() =>
         {
-            ExpressionEvaluator evaluator = new(expression, symbols, address: 0, line: 0);
-            if (!evaluator.TryEvaluate(out long value))
+            total = 0;
+            for (int index = 0; index < 1000; index++)
             {
-                throw new InvalidOperationException("Symbol lookup failed.");
+                ExpressionEvaluator evaluator = new(expression, symbols, address: 0, line: 0);
+                if (!evaluator.TryEvaluate(out long value))
+                {
+                    throw new InvalidOperationException("Symbol lookup failed.");
+                }
+
+                total += value;
             }
+        });
 
-            total += value;
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         total.Should().Be(168000);
         allocated.Should().Be(0);
         ExpressionEvaluator missing = new("value".AsMemory(), symbols, address: 0, line: 0);
@@ -729,10 +733,13 @@ public class AssemblerSpanTests
         ReadOnlyMemory<char> lines = "one\r\ntwo\rthree\n".AsMemory();
         ReadOnlyMemory<char> operands = "(1 + 2), ',', ';', (4+(5)), ' '".AsMemory();
         CountSlices(lines, operands).Should().Be(9);
-        long before = GC.GetAllocatedBytesForCurrentThread();
         int count = 0;
-        for (int index = 0; index < 1000; index++) { count += CountSlices(lines, operands); }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = Allocations.During(() =>
+        {
+            count = 0;
+            for (int index = 0; index < 1000; index++) { count += CountSlices(lines, operands); }
+        });
+
         count.Should().Be(9000);
         allocated.Should().Be(0);
     }

@@ -74,14 +74,7 @@ public class DisassemblerTests
     /// <summary>
     ///  Checks warmed full-image analysis allocates output plus compact flags, not another decoded list or owner map.
     /// </summary>
-    /// <remarks>
-    ///  <para>
-    ///   The JIT can allocate on this thread as it recompiles the analysis at a higher tier during the measured run;
-    ///   that happens once, so a retry measures the analysis alone.
-    ///  </para>
-    /// </remarks>
     [TestMethod]
-    [Retry(1)]
     public void FullImageAnalysisAllocatesOnlyOutputAndCompactFlags()
     {
         const int FixedMetadataBudget = 4096;
@@ -90,10 +83,9 @@ public class DisassemblerTests
         // Vectors would turn the final six bytes into data; this measures a full code decode.
         AnalysisProject project = new(image, origin: 0, ProcessorVariant.Mos6502) { FollowVectors = false };
         Disassembler.Analyze(project);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        DisassemblyResult result = Disassembler.Analyze(project);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        result.Instructions.Count.Should().Be(image.Length);
+        DisassemblyResult? result = null;
+        long allocated = Allocations.During(() => result = Disassembler.Analyze(project));
+        result?.Instructions.Count.Should().Be(image.Length);
         // Output entries and two byte-wide flag arrays dominate; the allowance covers fixed result metadata.
         long budget = (long)image.Length * (Unsafe.SizeOf<DisassembledInstruction>() + (2 * sizeof(byte))) + FixedMetadataBudget;
         allocated.Should().BeLessThanOrEqualTo(budget);
@@ -641,39 +633,42 @@ public class DisassemblerTests
     ///  Checks warmed decoding, formatting and cross-reference queries allocate no temporary objects.
     /// </summary>
     [TestMethod]
-    [Ignore("On CI (ARM64 Linux) the measured loop sometimes counts a few hundred bytes the decoding does not allocate; disabled until that is understood.")]
     public void SpanDecodingAndFormattingAllocateNothing()
     {
-        ReadOnlySpan<byte> image = [0xA9, 0x42, 0x8D, 0x00, 0x20, 0xD0, 0xF9];
-        Span<DisassembledInstruction> output = stackalloc DisassembledInstruction[3];
-        Span<char> text = stackalloc char[32];
+        // Arrays made before the measurement, as spans over them, since the measured work is a lambda.
+        byte[] image = [0xA9, 0x42, 0x8D, 0x00, 0x20, 0xD0, 0xF9];
+        DisassembledInstruction[] output = new DisassembledInstruction[3];
+        char[] text = new char[32];
         DisassemblyResult analysis = Disassembler.Disassemble(image, origin: 0x2000, ProcessorVariant.Mos6502);
         Disassembler.Decode(image, address: 0x2000, ProcessorVariant.Mos6502, output, out _, out _);
         foreach (DisassembledInstruction instruction in output) { instruction.TryFormat(text, out _); }
-        long before = GC.GetAllocatedBytesForCurrentThread();
+        _ = analysis.GetReferencesTo(0x2000);
         int count = 0;
-        for (int iteration = 0; iteration < 1000; iteration++)
+        long allocated = Allocations.During(() =>
         {
-            if (Disassembler.Decode(image, address: 0x2000, ProcessorVariant.Mos6502, output, out _, out int written)
-                != OperationStatus.Done)
+            count = 0;
+            for (int iteration = 0; iteration < 1000; iteration++)
             {
-                throw new InvalidOperationException("The instruction stream was not completely decoded.");
-            }
-
-            count += written;
-            count += analysis.GetReferencesTo(0x2000).Length;
-            foreach (DisassembledInstruction instruction in output)
-            {
-                if (!instruction.TryFormat(text, out int length))
+                if (Disassembler.Decode(image, address: 0x2000, ProcessorVariant.Mos6502, output, out _, out int written)
+                    != OperationStatus.Done)
                 {
-                    throw new InvalidOperationException("Formatting failed.");
+                    throw new InvalidOperationException("The instruction stream was not completely decoded.");
                 }
 
-                count += length;
-            }
-        }
+                count += written;
+                count += analysis.GetReferencesTo(0x2000).Length;
+                foreach (DisassembledInstruction instruction in output)
+                {
+                    if (!instruction.TryFormat(text, out int length))
+                    {
+                        throw new InvalidOperationException("Formatting failed.");
+                    }
 
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                    count += length;
+                }
+            }
+        });
+
         count.Should().BeGreaterThan(3000);
         allocated.Should().Be(0);
     }

@@ -307,6 +307,13 @@ public static partial class PcodeSourceWriter
                 return naming.Variable(segment.Number, number, Operand());
             case >= 216 and <= 231: // SLDL1-16
                 return naming.Variable(segment.Number, number, op - 215);
+            case 182 or 184 or 178: // LOD, STR, LDA
+                {
+                    int first = code[at + 2];
+                    int word = first < 0x80 ? first : ((first & 0x7F) << 8) | code[at + 3];
+                    return naming.Intermediate(segment, number, code[at + 1], word);
+                }
+
             case 169 or 171 or 165: // LDO, SRO, LAO
                 return naming.Global(Operand());
             case >= 232 and <= 247: // SLDO1-16

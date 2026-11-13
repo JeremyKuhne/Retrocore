@@ -222,13 +222,17 @@ Calls and constants are named whatever is at hand:
 - **A listing** (`--listing`, the Compiler's listing of the program) names segments and procedures by their
   headings, names variables beside each load and store (`STL 3 ; A`, `SLDO5 ; SIZE`), and puts each statement's
   source line above its p-code (`;   12: HIL(I-1,...)`).
+- **The system's files**, INPUT, OUTPUT and KEYBOARD, beside the `LOD`s that reach them in the system's outer block,
+  and a program's globals beside an `LOD`, `STR` or `LDA` that reaches them from a nested procedure.
 - **Hints** (`--hints`, a JSON file) name and comment anything else, keyed as `pascal` breakpoints name code:
   `SEGMENT` for a segment, `SEGMENT.N` for procedure N, and `SEGMENT.N+$OFFSET` for a place in it, by its offset
-  from the procedure's entry. A name is a segment's or procedure's scope, or a label; a comment goes above it.
+  from the procedure's entry; and `SEGMENT.N@WORD` for a variable, by its word in procedure N's frame, as `LDL`
+  numbers it (a program's globals are its procedure 1's, as `LDO` numbers them). A name is a segment's or
+  procedure's scope, a label, or a variable's, written beside each load and store of it; a comment goes above.
 
 ```json
 {
-  "names": { "FORMATTE.2": "FormatDisk", "FORMATTE.2+$40": "Iob" },
+  "names": { "FORMATTE.2": "FormatDisk", "FORMATTE.2+$40": "Iob", "FORMATTE.1@1038": "DataFile" },
   "comments": { "FORMATTE.2+$40": "RWTS's input/output block" }
 }
 ```

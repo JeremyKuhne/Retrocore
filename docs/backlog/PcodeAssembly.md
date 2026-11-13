@@ -67,7 +67,8 @@ assembles P1's whole code file this way.
 - **Names** (the same day, "work on what is still bare"): the system's and PASCALIO's procedures by `Pcode.asm`'s
   `PASCALSY` and `PASCALIO` scopes; units' procedures from the library, with a scope the source defines for each
   unit; a call's callee and a real constant's value beside it; a listing's segment, procedure and variable names and
-  its source lines; and a hints file of names and comments keyed as `pascal` breakpoints are
+  its source lines; and a hints file of names and comments keyed as `pascal` breakpoints are, with
+  `SEGMENT.N@WORD` for variables
   ([Pascal.md](../Pascal.md#names)). `--pascal compile` writes the listing a source asks for.
 - **Found:** a Pascal file's name is at most 15 letters: the Compiler writes no listing to `HILBERT.LST.TEXT`, and
   APPLE1 has room for a listing only once the Editor is off it. `PascalListing` numbered variables backwards: the

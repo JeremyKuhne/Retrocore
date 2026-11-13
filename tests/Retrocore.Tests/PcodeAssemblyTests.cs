@@ -152,6 +152,29 @@ public class PcodeAssemblyTests
     }
 
     /// <summary>
+    ///  Hints name variables by their word in a procedure's frame, a program's globals as its procedure 1's; a load of
+    ///  the system's standard files names them.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameVariables()
+    {
+        byte[] original = PascalDecompilerTests.P1Bytes;
+        string text = PcodeSourceWriter.Write(original, Options("\"Pcode.asm\"") with
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["P1.1@4"] = "Total",
+                ["p1.1@$3"] = "Count"
+            }
+        }).Text;
+
+        text.Should().MatchRegex(@"SRO 4 +; Total\n");
+        text.Should().MatchRegex(@"SLDO3 +; Count\n");
+        text.Should().MatchRegex(@"LOD 1, 3 +; OUTPUT\n");
+        Assemble(text).Should().Equal(original);
+    }
+
+    /// <summary>
     ///  A compiler listing names segments and procedures by their headings, and puts each statement's source line
     ///  above its p-code.
     /// </summary>

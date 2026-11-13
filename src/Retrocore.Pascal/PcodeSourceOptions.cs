@@ -11,8 +11,9 @@ namespace Retrocore.Pascal;
 ///  <para>
 ///   Names and comments are keyed as <c>pascal</c> breakpoints name code: <c>SEGMENT</c> for a segment,
 ///   <c>SEGMENT.N</c> for its procedure N, and <c>SEGMENT.N+$OFFSET</c> for a place in it, the offset from the
-///   procedure's entry (hexadecimal with <c>$</c>, or decimal). A segment is named as its dictionary names it, in any
-///   case.
+///   procedure's entry (hexadecimal with <c>$</c>, or decimal). <c>SEGMENT.N@WORD</c> names the variable at a word of
+///   procedure N's frame, as LDL numbers it; a program's globals are its procedure 1's. A segment is named as its
+///   dictionary names it, in any case.
 ///  </para>
 /// </remarks>
 public sealed record PcodeSourceOptions
@@ -34,7 +35,7 @@ public sealed record PcodeSourceOptions
     public PascalListing? Listing { get; init; }
 
     /// <summary>
-    ///  Gets names to give, by key: a segment's or procedure's scope, or a label.
+    ///  Gets names to give, by key: a segment's or procedure's scope, a label, or a variable.
     /// </summary>
     public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
 

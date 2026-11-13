@@ -37,6 +37,14 @@ internal sealed class PcodeNaming
         [4] = "FWRITEREAL"
     };
 
+    // The system's outer block's variables a program reaches, its standard files.
+    private static readonly Dictionary<int, string> s_systemVariables = new()
+    {
+        [2] = "INPUT",
+        [3] = "OUTPUT",
+        [4] = "KEYBOARD"
+    };
+
     private readonly PcodeSourceOptions _options;
     private readonly PascalCodeFile _file;
     private readonly Dictionary<PascalSegment, string> _segments = [];
@@ -182,7 +190,7 @@ internal sealed class PcodeNaming
     }
 
     /// <summary>
-    ///  Gets the name of the variable at a word of a procedure, from the listing.
+    ///  Gets the name of the variable at a word of a procedure: given as <c>SEGMENT.N@WORD</c>, or from the listing.
     /// </summary>
     /// <param name="segment">The segment's number.</param>
     /// <param name="number">The procedure's number.</param>
@@ -190,6 +198,12 @@ internal sealed class PcodeNaming
     /// <returns>The name, with the word's place in it after a plus where it is not the first; or null.</returns>
     public string? Variable(int segment, int number, int word)
     {
+        if (_file.Segments.FirstOrDefault(own => own.Number == segment && own.Code.Length > 0) is { } named
+            && Words(_options.Names, $"{named.Name}.{number}@").TryGetValue(word, out string? given))
+        {
+            return given;
+        }
+
         if (_options.Listing is not { } listing) { return null; }
 
         foreach (PascalVariable variable in listing.Variables(segment, number))
@@ -214,6 +228,23 @@ internal sealed class PcodeNaming
         return program is null ? null : Variable(program.Number, 1, word);
     }
 
+    /// <summary>
+    ///  Gets the name of an intermediate variable, one LOD, STR and LDA reach in an enclosing procedure: the
+    ///  program's globals, and the system's standard files.
+    /// </summary>
+    /// <param name="segment">The segment of the procedure that reaches it.</param>
+    /// <param name="number">The procedure's number.</param>
+    /// <param name="levels">How many levels out the variable is.</param>
+    /// <param name="word">The word, in the enclosing procedure's frame.</param>
+    /// <returns>The name, or null where the enclosing procedure is not known without the source's nesting.</returns>
+    public string? Intermediate(PascalSegment segment, int number, int levels, int word) =>
+        (segment.Procedure(number)?.LexicalLevel - levels) switch
+        {
+            -1 => s_systemVariables.GetValueOrDefault(word),
+            0 => Global(word),
+            _ => null
+        };
+
     // The program's segment: its procedure 1 is p-code at lexical level 0 (or -1, the system's).
     private static bool IsProgram(PascalSegment segment) =>
         segment.Procedure(1) is PascalProcedure main && main.LexicalLevel <= 0 && !main.IsNative;
@@ -222,6 +253,10 @@ internal sealed class PcodeNaming
 
     private static string? Lookup(IReadOnlyDictionary<string, string> values, string key) =>
         values.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value;
+
+    // The words given names, keyed as a prefix and a word: FORMATTE.1@1038, or @$40E.
+    private static Dictionary<int, string> Words(IReadOnlyDictionary<string, string> values, string prefix) =>
+        Offsets(values, prefix, identifiers: false);
 
     private static Dictionary<int, string> Offsets(IReadOnlyDictionary<string, string> values, string prefix, bool identifiers)
     {

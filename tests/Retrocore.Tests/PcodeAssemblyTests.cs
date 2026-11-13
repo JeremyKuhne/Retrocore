@@ -112,7 +112,7 @@ public class PcodeAssemblyTests
     public void SystemCallsAndRealsAreNamed()
     {
         PcodeSource p1 = PcodeSourceWriter.Write(PascalDecompilerTests.P1Bytes, include: "\"Pcode.asm\"");
-        p1.Text.Should().Contain("CXP 0, Pascalsy::FWRITEINT").And.Contain("CXP PascalIo::Segment, PascalIo::FWRITEREAL");
+        p1.Text.Should().Contain("CXP 0, PASCALSY::FWRITEINT").And.Contain("CXP PASCALIO::Segment, PASCALIO::FWRITEREAL");
 
         PcodeSource mixed = PcodeSourceWriter.Write(Assemble(MixedSource), include: "\"Pcode.asm\"");
         mixed.Text.Should().Contain("; 0.5 as a real");

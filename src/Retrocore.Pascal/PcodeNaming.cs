@@ -16,11 +16,11 @@ internal sealed class PcodeNaming
     private static readonly HashSet<string> s_reserved = new(StringComparer.OrdinalIgnoreCase)
     {
         "Csp",
-        "Pascalsy",
-        "PascalIo"
+        "PASCALSY",
+        "PASCALIO"
     };
 
-    // The system segment's procedures a program calls, as Pcode.asm's Pascalsy scope names them.
+    // The system segment's procedures a program calls, as Pcode.asm's PASCALSY scope names them.
     private static readonly Dictionary<int, string> s_system = new()
     {
         [3] = "FINIT", [4] = "FRESET", [5] = "FOPEN", [6] = "FCLOSE", [7] = "FGET", [8] = "FPUT", [10] = "FEOF",
@@ -121,12 +121,12 @@ internal sealed class PcodeNaming
     {
         if (segment == 0)
         {
-            return s_system.TryGetValue(number, out string? system) ? $"0, Pascalsy::{system}" : null;
+            return s_system.TryGetValue(number, out string? system) ? $"0, PASCALSY::{system}" : null;
         }
 
         if (segment == 31)
         {
-            return s_pascalIo.TryGetValue(number, out string? io) ? $"PascalIo::Segment, PascalIo::{io}" : null;
+            return s_pascalIo.TryGetValue(number, out string? io) ? $"PASCALIO::Segment, PASCALIO::{io}" : null;
         }
 
         if (_options.Library?.Unit(segment) is not { } unit || _file.Segments.Any(own => own.Number == segment && own.Code.Length > 0))

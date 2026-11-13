@@ -212,8 +212,8 @@ The source says every byte of the file, from address 0:
 Unnamed, segments are named as their dictionary names them, procedures `P2`, and places by their offset, `L059A`.
 Calls and constants are named whatever is at hand:
 
-- **The system's procedures** by `Pcode.asm`'s scopes: `CXP 0, Pascalsy::FWRITESTRING`, and PASCALIO's
-  `CXP PascalIo::Segment, PascalIo::FWRITEREAL`.
+- **The system's procedures** by `Pcode.asm`'s scopes: `CXP 0, PASCALSY::FWRITESTRING`, and PASCALIO's
+  `CXP PASCALIO::Segment, PASCALIO::FWRITEREAL`.
 - **Units** from the library's interface text (`--library`, by default `SYSTEM.LIBRARY` on the code file's disk):
   the source defines each unit's scope, `TURTLEGR::Segment = 20` and its procedures, and calls
   `CXP TURTLEGR::Segment, TURTLEGR::TURN`.

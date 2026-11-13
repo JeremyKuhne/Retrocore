@@ -65,7 +65,7 @@ assembles P1's whole code file this way.
   byte), so such a target is named from the word (`L0598 + 1`); and a target inside an instruction, as in the
   damaged code of Apple Pascal 1.2's `SYSTEM.EDITOR`, is too, in parentheses where it is subtracted.
 - **Names** (the same day, "work on what is still bare"): the system's and PASCALIO's procedures by `Pcode.asm`'s
-  `Pascalsy` and `PascalIo` scopes; units' procedures from the library, with a scope the source defines for each
+  `PASCALSY` and `PASCALIO` scopes; units' procedures from the library, with a scope the source defines for each
   unit; a call's callee and a real constant's value beside it; a listing's segment, procedure and variable names and
   its source lines; and a hints file of names and comments keyed as `pascal` breakpoints are
   ([Pascal.md](../Pascal.md#names)). `--pascal compile` writes the listing a source asks for.

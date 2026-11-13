@@ -46,7 +46,7 @@ code = 41
 .endscope
 
 ;; The system segment's procedures, for CXP 0: the I/O, strings and screen that programs call.
-.scope Pascalsy
+.scope PASCALSY
 FINIT = 3
 FRESET = 4
 FOPEN = 5
@@ -74,7 +74,7 @@ FGOTOXY = 29
 .endscope
 
 ;; PASCALIO, which the system loads for SEEK and reals' I/O.
-.scope PascalIo
+.scope PASCALIO
 Segment = 31
 FSEEK = 2
 FREADREAL = 3

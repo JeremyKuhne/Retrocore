@@ -82,15 +82,20 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
-    ///  The Model I's ROM sources pass the lint as the editor runs it, Z80 registers and conditions included.
+    ///  The TRS-80's ROM sources pass the lint as the editor runs it, Z80 registers and conditions included.
+    ///  <c>Model3.asm</c> includes <c>Level2.asm</c>, so the editor reads Level II with the Model III's blocks; it is
+    ///  checked on its own too, as the Model I's ROM.
     /// </summary>
     [TestMethod]
     public void Trs80DocumentationIsCleanInTheEditor()
     {
         string folder = Path.Join(s_inputs, "Trs80");
-        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
-        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
-        names.Should().Contain(["Level1.asm", "Level2.asm"]);
+        List<string> roots = SourceIncludes.Roots(folder);
+        string[] names = [.. roots.Select(root => Path.GetFileName(root))];
+        names.Should().Contain(["Level1.asm", "Model3.asm", "Model4PBoot.asm", "Model2Boot.asm"]);
+        names.Should().NotContain("Level2.asm");
+        roots.Add(Path.GetFullPath(Path.Join(folder, "Level2.asm")));
+        List<SourceAnalysis> sdk = [.. roots.Select(file => SourceAnalysis.Assemble(file, _ => null))];
         List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }

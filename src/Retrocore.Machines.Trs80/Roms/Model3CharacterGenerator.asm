@@ -32,7 +32,7 @@ MODEL4P = 0
 
 .org $0000
 
-;; The international characters: accented letters and symbols.
+; The international characters: accented letters and symbols.
 .if MODEL4P
     GLYPH $00
     ROW "..#..#.."
@@ -675,7 +675,7 @@ MODEL4P = 0
     ROW "........"
 .endif
 
-;; ASCII.
+; ASCII.
     GLYPH $20
     ROW "........"
     ROW "........"
@@ -1636,7 +1636,7 @@ MODEL4P = 0
     ROW "..#####."
     ROW "........"
 
-;; The alternate set: what codes $C0-$FF show when port $EC bit 3 is set.
+; The alternate set: what codes $C0-$FF show when port $EC bit 3 is set.
     GLYPH $80
     ROW "....#..."
     ROW "...###.."
@@ -2277,7 +2277,7 @@ MODEL4P = 0
     ROW "..##.##."
     ROW "..#...#."
 
-;; What codes $C0-$FF show otherwise.
+; What codes $C0-$FF show otherwise.
 .if MODEL4P
     GLYPH $C0
     ROW "....#..."

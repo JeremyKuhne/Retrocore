@@ -1043,7 +1043,7 @@ DIAG_TEXT:
 CRTC_TABLE:
     .byte $63, $50, $55, $08, $19, $00, $18, $18, $00, $09, $65, $09, $00, $00, $03, $E9
 
-;; The version, then what reads as a date and time in BCD.
+; The version, then what reads as a date and time in BCD.
 .if VERSION = 1
     .byte VERSION, $FF, $FF, $FF, $FF
 CHECKSUM_BYTE:

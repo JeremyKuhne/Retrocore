@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Text.Json.Nodes;
+using Retrocore.Assembler;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
 using Retrocore.Machines.Trs80;
@@ -210,12 +211,33 @@ internal sealed partial class Trs80Model2DebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The SDK has no source for the Model II's boot ROM yet, so nothing is added.
+    ///   The source is the build of <c>Model2Boot.asm</c> whose bytes are the running boot ROM's, so a dump the
+    ///   source does not build (MAME's <c>cpu_fc86</c>) gets none.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
+        string source = Path.Join(Trs80DebugTarget.SdkDirectory(directory), "Model2Boot.asm");
+        if (!File.Exists(source)) { return; }
+        Func<AssemblyResult>[] builds =
+        [
+            () => Trs80SdkModules.AssembleModel2Boot(source, 5),
+            () => Trs80SdkModules.AssembleModel2Boot(source, 3),
+            () => Trs80SdkModules.AssembleModel2Boot(source, 3, fill11Be: true),
+            () => Trs80SdkModules.AssembleModel2Boot(source, 2),
+            () => Trs80SdkModules.AssembleModel2Boot(source, 1)
+        ];
+
+        if (Trs80SdkModules.Matching(BootRomImage, builds) is { } result)
+        {
+            debug.Add(new SourceMapModule(result, Trs80Model2MemoryArea.Rom));
+        }
     }
+
+    /// <summary>
+    ///  Gets the boot ROM the machine was launched with.
+    /// </summary>
+    internal byte[] BootRomImage { get; init; } = [];
 
     /// <inheritdoc/>
     public bool InRom(ushort address) => _machine.Bus.Area(address) == Trs80Model2MemoryArea.Rom;

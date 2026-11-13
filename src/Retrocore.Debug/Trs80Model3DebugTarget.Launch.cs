@@ -26,7 +26,10 @@ internal sealed partial class Trs80Model3DebugTarget
     ///   <c>trs80m3</c>, <c>trs80m4</c> or <c>trs80m4p</c> folder: the Model III's <c>8041364.u104</c>,
     ///   <c>8040332.u105</c> and <c>8040316c.u106</c> (or <c>8040316b.u106</c>), or one 14K <c>trs80m3.rom</c>; the
     ///   Model 4's <c>trs80m4.rom</c>, or the Model III's parts; the 4P's <c>8075332.u69</c>; and the character
-    ///   generator, <c>8044316a.u36</c> (the 4P's <c>8049007.u103</c>).
+    ///   generator, <c>8044316a.u36</c> (the 4P's <c>8049007.u103</c>). Without a ROM directory the machine runs
+    ///   ROMs built from the SDK's sources (<c>sdkRoms</c>, or the copy beside the debug host), which are
+    ///   byte-identical to the Model III's revision C ROM, the Model 4's and the 4P's; a character generator missing
+    ///   from the ROM directory is built from its source too.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
@@ -51,16 +54,13 @@ internal sealed partial class Trs80Model3DebugTarget
             DiskController = args.Bool("diskController") ?? (args["disks"] is JsonArray { Count: > 0 })
         };
 
-        string directory = args.String("romDirectory")
-            ?? Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS")
-            ?? throw new ArgumentException(
-                "The Model III, 4 and 4P need ROM dumps: give romDirectory, or set RETROCORE_TRS80_ROMS, to a directory "
-                    + "holding MAME's trs80m3, trs80m4 or trs80m4p files.");
-
-        Trs80Model3Roms roms = new(SystemRom(directory, variant), CharacterGenerator(directory, variant));
-        Trs80Model3Machine machine = new(configuration, roms);
+        string? directory = args.String("romDirectory") ?? Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS");
+        string sdk = Trs80DebugTarget.SdkDirectory(args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null);
+        byte[] system = directory is null ? SdkSystemRom(sdk, variant) : SystemRom(directory, variant);
+        Trs80Model3Machine machine = new(configuration, new(system, CharacterGenerator(directory, sdk, variant)));
         Trs80Model3DebugTarget target = new(machine)
         {
+            SystemRomImage = system,
             FastCassette = args.Bool("fastCassette") ?? true
         };
 
@@ -128,10 +128,27 @@ internal sealed partial class Trs80Model3DebugTarget
         ];
     }
 
-    private static byte[] CharacterGenerator(string directory, Trs80Model3Variant variant) =>
-        variant == Trs80Model3Variant.Model4P
-            ? Dump(directory, ["trs80m4p"], Model4PCharacterGeneratorDump, Trs80Model3Roms.CharacterGeneratorSize)
-            : Dump(directory, ["trs80m3", "trs80m4"], CharacterGeneratorDump, Trs80Model3Roms.CharacterGeneratorSize);
+    private static byte[] SdkSystemRom(string sdk, Trs80Model3Variant variant) => (variant switch
+    {
+        Trs80Model3Variant.Model4P => Trs80SdkModules.AssembleModel4PBoot(Path.Join(sdk, "Model4PBoot.asm")),
+        Trs80Model3Variant.Model4 => Trs80SdkModules.AssembleModel3(Path.Join(sdk, "Model3.asm"), 4),
+        _ => Trs80SdkModules.AssembleModel3(Path.Join(sdk, "Model3.asm"), 3)
+    }).Sections[0].Bytes.ToArray();
+
+    private static byte[] CharacterGenerator(string? directory, string sdk, Trs80Model3Variant variant)
+    {
+        bool model4P = variant == Trs80Model3Variant.Model4P;
+        string? dump = directory is null
+            ? null
+            : model4P
+                ? Find(directory, ["trs80m4p"], Model4PCharacterGeneratorDump)
+                : Find(directory, ["trs80m3", "trs80m4"], CharacterGeneratorDump);
+
+        return dump is not null
+            ? Sized(dump, Trs80Model3Roms.CharacterGeneratorSize)
+            : Trs80SdkModules.AssembleModel3CharacterGenerator(Path.Join(sdk, "Model3CharacterGenerator.asm"), model4P)
+                .Sections[0].Bytes.ToArray();
+    }
 
     /// <summary>
     ///  Reads a dump from a directory or one of its folders, checking its size.

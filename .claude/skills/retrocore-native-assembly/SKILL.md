@@ -1,6 +1,6 @@
 ---
 name: retrocore-native-assembly
-description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
+description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Level2.asm, Level1.asm, Model3.asm, Model2Boot.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
 license: MIT
 compatibility: Requires the .NET SDK to assemble and test. The full reference is docs/NativeAssembly.md.
 metadata:
@@ -64,8 +64,10 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 ## Editing the SDK's ROM sources
 
 The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms` and
-`src/Retrocore.Machines.Trs80/Roms` must assemble byte-identically to the ROMs, for every variant (`ENHANCED` for the IIe, `REVISION` 12 or 13 for Level II). They
-are maintained by hand: change names, comments and structure only in ways that keep the bytes.
+`src/Retrocore.Machines.Trs80/Roms` must assemble byte-identically to the ROMs, for every variant: `ENHANCED` for the
+IIe; `REVISION` 12 or 13 for Level II; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for
+`Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and
+structure only in ways that keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks.
 - **Rewriting data as macros:** check that the macro emits exactly the bytes it replaces.

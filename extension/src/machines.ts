@@ -259,16 +259,16 @@ export const machines: readonly Machine[] = [
         dos: false,
         choices: [lowercase]
     },
-    // The Model III family and the Model II run from ROM dumps in romDirectory (or RETROCORE_TRS80_ROMS) until the SDK
-    // has their sources.
+    // The Model III family and the Model II run the SDK's builds of their ROMs, or dumps from romDirectory (or
+    // RETROCORE_TRS80_ROMS). The Model III's and Model 4's BASIC is Level II's.
     {
         id: "trs80-model3",
         label: "TRS-80 Model III",
-        detail: "Z80 at 2 MHz, the Model III ROM, 48 KB and the FD1793 (needs ROM dumps)",
+        detail: "Z80 at 2 MHz, the Model III ROM, 48 KB and the FD1793",
         configuration: { machine: "trs80-model3", model: "3" },
         diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level2"],
         dos: false,
         choices: [
             {
@@ -282,18 +282,18 @@ export const machines: readonly Machine[] = [
     {
         id: "trs80-model4",
         label: "TRS-80 Model 4",
-        detail: "Z80 at 4 MHz, the Model III ROM, 128 KB, 80x24 and the FD1793 (needs ROM dumps)",
+        detail: "Z80 at 4 MHz, the Model III ROM, 128 KB, 80x24 and the FD1793",
         configuration: { machine: "trs80-model3", model: "4" },
         diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level2"],
         dos: false,
         choices: [model4Ram]
     },
     {
         id: "trs80-model4p",
         label: "TRS-80 Model 4P",
-        detail: "Z80 at 4 MHz, the 4P's boot ROM, 128 KB, 80x24 and the FD1793 (needs ROM dumps)",
+        detail: "Z80 at 4 MHz, the 4P's boot ROM, 128 KB, 80x24 and the FD1793",
         configuration: { machine: "trs80-model3", model: "4p" },
         diskFormats: ["dsk", "jv1", "jv3", "dmk", "imd"],
         tapeFormats: [],
@@ -304,7 +304,7 @@ export const machines: readonly Machine[] = [
     {
         id: "trs80-model2",
         label: "TRS-80 Model II",
-        detail: "Z80 at 4 MHz, 64 KB, 80x24 and 8-inch disks (needs ROM dumps)",
+        detail: "Z80 at 4 MHz, 64 KB, 80x24 and 8-inch disks",
         configuration: { machine: "trs80-model2", model: "2" },
         diskFormats: model2Disks,
         tapeFormats: [],
@@ -315,7 +315,7 @@ export const machines: readonly Machine[] = [
     {
         id: "trs80-model12",
         label: "TRS-80 Model 12",
-        detail: "The Model II's successor: Z80 at 4 MHz, 80x24 and 8-inch disks (needs ROM dumps)",
+        detail: "The Model II's successor: Z80 at 4 MHz, 80x24 and 8-inch disks",
         configuration: { machine: "trs80-model2", model: "12" },
         diskFormats: model2Disks,
         tapeFormats: [],
@@ -326,7 +326,7 @@ export const machines: readonly Machine[] = [
     {
         id: "trs80-model16",
         label: "TRS-80 Model 16 (Z80 side)",
-        detail: "The Model 16, 16B or Tandy 6000 running Model II software; the 68000 board is not emulated (needs ROM dumps)",
+        detail: "The Model 16, 16B or Tandy 6000 running Model II software; the 68000 board is not emulated",
         configuration: { machine: "trs80-model2", model: "16" },
         diskFormats: model2Disks,
         tapeFormats: [],

@@ -94,7 +94,7 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 ## Starting a machine
 
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
-Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
+TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
 their sources.
 
@@ -102,9 +102,7 @@ The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists eac
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, and the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3. The Model III family and the Model II family need
-ROM dumps in `RETROCORE_TRS80_ROMS` (see below). Pick one and press F5, and it boots as it
-is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette, and it is the ▶ button on the **Retro Devices** view while no
@@ -987,9 +985,12 @@ TRS-80 cassette and disk commands work as on the Model I. See the
 
 `"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
 `"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
-Z80 side of a Model 16 (`model` `2`, `12` or `16`). The SDK has no sources for their ROMs
-yet, so `romDirectory` or `RETROCORE_TRS80_ROMS` must hold MAME's dumps, and debugging
-is at the Z80 level. The options are `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
+Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
+builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
+generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TRS80_ROMS`
+can hold MAME's dumps instead. When the running ROM is one the sources build, its source
+debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
+does. The options are `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
 `diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
 panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for

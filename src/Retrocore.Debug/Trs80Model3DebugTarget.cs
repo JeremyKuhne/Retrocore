@@ -3,6 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using System.Text.Json.Nodes;
+using Retrocore.Assembler;
+using Retrocore.Basic;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
 using Retrocore.Machines.Trs80;
@@ -15,6 +17,9 @@ namespace Retrocore.Debug;
 /// </summary>
 internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
 {
+    // Where Level II keeps the stack pointer as each statement begins.
+    private const ushort SavedStack = 0x40E8;
+
     private static readonly DebugRegisters s_registers = new(Z80Isa.Description);
 
     private readonly Trs80Model3Machine _machine;
@@ -24,6 +29,8 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     private DebugFrame _beforeInstruction;
     private bool _instruction;
     private bool _resetPending;
+    private BasicRom? _basicRom;
+
 
     /// <summary>
     ///  Creates the target for a launched machine.
@@ -215,12 +222,60 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The SDK has no sources for the Model III family's ROMs yet, so nothing is added.
+    ///   The source is the build of <c>Model3.asm</c> or <c>Model4PBoot.asm</c> whose bytes are the running ROM's,
+    ///   so a dump of another revision gets none. The Model III's and Model 4's BASIC is Level II's, at Level II's
+    ///   addresses, so the BASIC debugger reads it as it reads the Model I's.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
+        string roms = Trs80DebugTarget.SdkDirectory(directory);
+        if (_machine.Configuration.Variant == Trs80Model3Variant.Model4P)
+        {
+            string boot = Path.Join(roms, "Model4PBoot.asm");
+            if (File.Exists(boot)
+                && Trs80SdkModules.Matching(SystemRomImage, [() => Trs80SdkModules.AssembleModel4PBoot(boot)]) is { } result)
+            {
+                debug.Add(new SourceMapModule(result, Trs80Model3MemoryArea.Rom));
+            }
+
+            return;
+        }
+
+        string source = Path.Join(roms, "Model3.asm");
+        if (!File.Exists(source)) { return; }
+        Func<AssemblyResult>[] builds = _machine.Configuration.Variant == Trs80Model3Variant.Model4
+            ? [() => Trs80SdkModules.AssembleModel3(source, 4), () => Trs80SdkModules.AssembleModel3(source, 3)]
+            : [() => Trs80SdkModules.AssembleModel3(source, 3), () => Trs80SdkModules.AssembleModel3(source, 3, 'B')];
+
+        if (Trs80SdkModules.Matching(SystemRomImage, builds) is { } basic)
+        {
+            debug.Add(new SourceMapModule(basic, Trs80Model3MemoryArea.Rom));
+            _basicRom = BasicRom.From(
+                basic.Symbols,
+                "READY",
+                run: "ST_RUN",
+                resume: "ST_CONT",
+                [("CONSTP", "CONSTP"), ("PRGEND", "PRGEND")]);
+        }
     }
+
+    /// <summary>
+    ///  Gets the ROM the machine was launched with: the 14K system ROM, or the 4P's boot ROM.
+    /// </summary>
+    internal byte[] SystemRomImage { get; init; } = [];
+
+    /// <inheritdoc/>
+    public BasicDialect? Basic => _machine.Configuration.Variant == Trs80Model3Variant.Model4P ? null : BasicDialect.Level2;
+
+    /// <inheritdoc/>
+    public BasicRom? BasicRom => _basicRom;
+
+    /// <inheritdoc/>
+    public int BasicTextPointer => _machine.Processor.Registers.HL;
+
+    /// <inheritdoc/>
+    public int BasicStack => Peek(SavedStack) | (Peek((ushort)(SavedStack + 1)) << 8);
 
     /// <inheritdoc/>
     public bool InRom(ushort address) => _machine.Bus.Area(address) == Trs80Model3MemoryArea.Rom;

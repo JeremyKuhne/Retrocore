@@ -84,6 +84,8 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("trs80-model1-level1")?.diskFormats, [], "Level I has no disks");
     assert.deepEqual(machineById("trs80-model4p")?.tapeFormats, [], "the 4P has no cassette port");
     assert.deepEqual(machineById("trs80-model4")?.configuration, { machine: "trs80-model3", model: "4" });
+    assert.deepEqual(machineById("trs80-model3")?.basicDialects, ["level2"], "Model III BASIC is Level II's");
+    assert.deepEqual(machineById("trs80-model4p")?.basicDialects, [], "the 4P boots from disk");
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
     assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");

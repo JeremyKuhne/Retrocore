@@ -40,7 +40,7 @@ ROMC = 'C'
 .include "Level2.asm"
 .assert * = $3000, "ROM C starts at $3000."
 
-;; The entries programs and ROM A call, three bytes apart.
+; The entries programs and ROM A call, three bytes apart.
 
 ;; Writes the leader and sync byte at 500 baud.
 WSYNCZ:
@@ -1344,7 +1344,7 @@ RSOFF2:
     JR RSN02
 
 ;; The RS-232 input driver: a byte received, or zero, waiting for one if the block says to. BREAK gives up.
-;; Out:   A and the block's buffer = the byte
+;; Out:   A = the byte, also left in the block's buffer
 RSIN:
     LD IX,RS232_INPUT_DCB
     XOR A

@@ -11,6 +11,8 @@ namespace Retrocore.Debug;
 
 internal sealed partial class Trs80Model2DebugTarget
 {
+    private const string CharacterGeneratorDump = "8043316.u9";
+
     // MAME's names for the boot ROM's versions, newest first: the newest boots from a hard disk too.
     private static readonly string[] s_bootDumps =
         ["u54.u11", "cpu_fc86.u11", "cpu_2119.u11", "cpu_11be.u11", "8047316.u11", "8043216.u11"];
@@ -25,7 +27,10 @@ internal sealed partial class Trs80Model2DebugTarget
     ///   The ROMs are dumps under MAME's names, in <c>romDirectory</c> (or <c>RETROCORE_TRS80_ROMS</c>) or its
     ///   <c>trs80m2</c> or <c>trs80m16</c> folder: the boot ROM, the newest of <c>u54.u11</c>, <c>cpu_fc86.u11</c>,
     ///   <c>cpu_2119.u11</c>, <c>cpu_11be.u11</c>, <c>8047316.u11</c> and <c>8043216.u11</c> found (or the one
-    ///   <c>bootRom</c> names), and the character generator, <c>8043316.u9</c>.
+    ///   <c>bootRom</c> names), and the character generator, <c>8043316.u9</c>. Without a ROM directory the machine
+    ///   runs ROMs built from the SDK's sources (<c>sdkRoms</c>, or the copy beside the debug host), byte-identical
+    ///   to <c>u54.u11</c> and the character generator; a character generator missing from the ROM directory is
+    ///   built from its source too.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
@@ -47,22 +52,21 @@ internal sealed partial class Trs80Model2DebugTarget
             RamKilobytes = args.Int("ramKilobytes") ?? 64
         };
 
-        string directory = args.String("romDirectory")
-            ?? Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS")
-            ?? throw new ArgumentException(
-                "The Model II, 12 and 16 need ROM dumps: give romDirectory, or set RETROCORE_TRS80_ROMS, to a directory "
-                    + "holding MAME's trs80m2 files.");
+        string? directory = args.String("romDirectory") ?? Environment.GetEnvironmentVariable("RETROCORE_TRS80_ROMS");
+        string sdk = Trs80DebugTarget.SdkDirectory(args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null);
+        byte[] bootRom = directory is null
+            ? Trs80SdkModules.AssembleModel2Boot(Path.Join(sdk, "Model2Boot.asm"), 5).Sections[0].Bytes.ToArray()
+            : DumpBoot(directory, args.String("bootRom"));
 
-        string[] boots = args.String("bootRom") is { } named ? [named] : s_bootDumps;
-        string boot = boots.Select(name => Trs80Model3DebugTarget.Find(directory, s_folders, name)).FirstOrDefault(path => path is not null)
-            ?? throw new ArgumentException(
-                $"The boot ROM is missing from {directory}; romDirectory needs one of {string.Join(", ", boots)}.");
+        byte[] characters = directory is not null && Trs80Model3DebugTarget.Find(directory, s_folders, CharacterGeneratorDump) is not null
+            ? Trs80Model3DebugTarget.Dump(directory, s_folders, CharacterGeneratorDump, Trs80Model2Roms.CharacterGeneratorSize)
+            : Trs80SdkModules.AssembleModel2CharacterGenerator(Path.Join(sdk, "Model2CharacterGenerator.asm"))
+                .Sections[0].Bytes.ToArray();
 
-        byte[] bootRom = File.ReadAllBytes(boot);
-        byte[] characters = Trs80Model3DebugTarget.Dump(directory, s_folders, "8043316.u9", Trs80Model2Roms.CharacterGeneratorSize);
         Trs80Model2Machine machine = new(configuration, new(bootRom, characters));
         Trs80Model2DebugTarget target = new(machine)
         {
+            BootRomImage = bootRom,
             FastDisk = args.Bool("fastDisk") ?? true
         };
 
@@ -83,6 +87,16 @@ internal sealed partial class Trs80Model2DebugTarget
         }
 
         return target;
+    }
+
+    private static byte[] DumpBoot(string directory, string? named)
+    {
+        string[] boots = named is not null ? [named] : s_bootDumps;
+        string boot = boots.Select(name => Trs80Model3DebugTarget.Find(directory, s_folders, name)).FirstOrDefault(path => path is not null)
+            ?? throw new ArgumentException(
+                $"The boot ROM is missing from {directory}; romDirectory needs one of {string.Join(", ", boots)}.");
+
+        return File.ReadAllBytes(boot);
     }
 
     /// <summary>

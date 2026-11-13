@@ -3,8 +3,10 @@
 // See LICENSE file in the project root for full license information
 
 // Model III, 4, 4P and II DAP integration: launches each from stand-in ROM dumps under MAME's names, which show READY
-// on the screen, and checks the display, the thread, the hardware rows, the reset stop and the error a launch without
-// dumps gives. The stand-ins are a few hand-assembled instructions, so the script needs no real ROMs.
+// on the screen, and checks the display, the thread, the hardware rows, the reset stop and the error a launch with a
+// dump missing gives. The stand-ins are a few hand-assembled instructions, so the script needs no real ROMs. Without a
+// ROM directory, the Model III and Model II boot the SDK's builds of their real ROMs, with source and, on the Model
+// III, the BASIC thread.
 
 import { resolve, join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -13,6 +15,9 @@ import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+
+// The launches without romDirectory must not find the user's dumps.
+delete process.env.RETROCORE_TRS80_ROMS;
 const { request, event, events, fail, close, failure } = startDap(root);
 const timeout = setTimeout(() => fail(new Error("Model III and II DAP integration timed out.")), Number(process.env.RETROCORE_DAP_TIMEOUT ?? 120000));
 
@@ -46,11 +51,15 @@ function drop(name) {
     }
 }
 
-async function launch(args, filters) {
+async function launch(args, filters, directory = roms) {
     events.length = 0;
     await request("setExceptionBreakpoints", { filters: filters ?? [] });
-    await request("launch", { romDirectory: roms, stopOnEntry: false, speed: "max", ...args });
+    await request("launch", { ...(directory ? { romDirectory: directory } : {}), stopOnEntry: false, speed: "max", ...args });
     await request("configurationDone");
+}
+
+async function type(text) {
+    for (const character of text) await request("retro/key", { code: character === "\r" ? 13 : character.charCodeAt(0) });
 }
 
 async function screen(text) {
@@ -88,6 +97,37 @@ try {
         assert.equal(hardware.model.name, `TRS-80 ${test.model}`);
     }
 
+    // Without dumps, the SDK's builds boot: the Model III to its first prompt, stepping in Model3.asm's source, and
+    // the Model II to its boot ROM's request for a disk.
+    if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("SDK ROMs");
+    await launch({ machine: "trs80-model3" }, [], null);
+    await screen("Cass?");
+    drop("stopped");
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    const frames = (await request("stackTrace", { threadId: 1 })).stackFrames;
+    assert.ok(frames.some(frame => /Model3\.asm|Level2\.asm/.test(frame.source?.path ?? "")), "a frame in the ROM's source");
+
+    // Model III BASIC is Level II's, so RUN stops on the BASIC thread at its first statement.
+    await request("setExceptionBreakpoints", { filters: ["basicStart"] });
+    await request("continue", { threadId: 1 });
+    for (const keys of ["\r", "\r"]) {
+        await type(keys);
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    await screen("READY");
+    await type("10 A=1\r");
+    await screen(">10 A=1");
+    drop("stopped");
+    await type("RUN\r");
+    const basic = await event("stopped");
+    assert.equal(basic.threadId, 2, "RUN stops on the BASIC thread");
+    assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: A=1");
+    await request("continue", { threadId: 2 });
+    await launch({ machine: "trs80-model2" }, [], null);
+    await screen("INSERT DISKETTE");
+
     if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("reset");
     // Machine reset stops at power-on, at $0000, and the Model II's reset switch restarts the boot ROM there too.
     await launch({ machine: "trs80-model2" }, ["machineReset"]);
@@ -104,7 +144,7 @@ try {
     assert.equal(top.instructionPointerReference, "0x0000");
 
     await request("disconnect");
-    console.log("Model III, 4, 4P, II and 16 DAP passed: missing dumps, each machine's boot from stand-in dumps, threads, hardware and the Model II's reset stop.");
+    console.log("Model III, 4, 4P, II and 16 DAP passed: missing dumps, each machine's boot from stand-in dumps and the SDK's ROMs, BASIC's thread, threads, hardware and the Model II's reset stop.");
 } finally {
     clearTimeout(timeout);
     close();

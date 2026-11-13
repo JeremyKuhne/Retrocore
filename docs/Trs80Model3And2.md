@@ -7,9 +7,9 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
 - [`Trs80Model2Machine`](../src/Retrocore.Machines.Trs80/Trs80Model2Machine.cs): the **Model II** and **Model 12**,
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
-The SDK has no sources for these machines' ROMs yet, so they need dumps of them (see [ROMs](#roms)). The hardware is
-tested with ROMs the tests assemble, and no real ROM, DOS or program has been run on these machines yet; see
-[What is not done yet](#what-is-not-done-yet).
+The SDK has native sources for all of these machines' ROMs, byte-identical to the chips (see [ROMs](#roms)), so they
+run with nothing external, or from dumps. The real ROMs boot to their prompts, but no DOS or program has been run on
+these machines yet; see [What is not done yet](#what-is-not-done-yet).
 
 ## The Model III, 4 and 4P
 
@@ -94,7 +94,21 @@ Writing changed disks back to their image files is not emulated yet, as on the M
 
 ## ROMs
 
-The ROMs are dumps under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_ROMS`), or its `trs80m3`, `trs80m4`,
+The SDK's sources, in [`src/Retrocore.Machines.Trs80/Roms`](../src/Retrocore.Machines.Trs80/Roms), are maintained by
+hand and assemble byte-identically to each chip:
+
+| Source | ROM |
+| --- | --- |
+| [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
+| [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
+| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). |
+| [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
+| [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
+
+Without a ROM directory, a launch runs the SDK's builds: the Model III's revision C ROM, the Model 4's, the 4P's boot ROM
+and the Model II's newest boot ROM (version 5). `sdkRoms` names another copy of the sources.
+
+Dumps are under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_ROMS`), or its `trs80m3`, `trs80m4`,
 `trs80m4p`, `trs80m2` or `trs80m16` folder:
 
 | Machine | System ROM | Character generator |
@@ -104,7 +118,8 @@ The ROMs are dumps under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_RO
 | Model 4P | `8075332.u69` | `8049007.u103` |
 | Model II, 12, 16 | The newest of `u54.u11`, `cpu_fc86.u11`, `cpu_2119.u11`, `cpu_11be.u11`, `8047316.u11` and `8043216.u11`, or the one `bootRom` names | `8043316.u9` |
 
-A launch without them fails and names the file it is missing.
+A launch with a ROM directory that lacks a system ROM fails and names the file it is missing; a character generator
+missing from it is built from its source.
 
 ## Debugging
 
@@ -124,7 +139,7 @@ The machines are in the Run and Debug dropdown and **Retrocore: Start Machine…
 }
 ```
 
-The options are `romDirectory`, `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
+The options are `romDirectory`, `sdkRoms`, `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
 given), `cassette` and `fastCassette` (Model III and 4), `fastDisk` (Model II: flat out while the controller works),
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. A `source` or `program` loads at `$7000`.
 
@@ -133,22 +148,24 @@ Model II (Esc is BREAK, the arrows `$1C`-`$1F`), with buttons for BREAK, HOLD, F
 `$0066` on the Model III family, whose reset button raises the NMI, and at `$0000` on the Model II, whose reset switch
 resets the Z80. The Retro Devices view shows the cassette and drives.
 
-Debugging is at the Z80 level: the call stack, registers, ports, memory and breakpoints work as on the Model I, but
-with no ROM sources there is no source to step into, and no BASIC thread for the Model III's BASIC.
+The call stack, registers, ports, memory and breakpoints work as on the Model I. When the running ROM is one the SDK's
+sources build (whether from the sources or a dump), its source debugs as a ROM module, so stepping into the ROM shows
+`Model3.asm`, `Level2.asm`, `Model4PBoot.asm` or `Model2Boot.asm`. The Model III's and Model 4's BASIC is Level II's,
+at Level II's addresses, so they have the BASIC thread as the Model I has.
 
 ## Testing
 
 | Test | Checks |
 | --- | --- |
 | `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI; the cassette motor. |
+| `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; the Model II asks for a diskette. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
-| [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
+| [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## What is not done yet
 
-- **ROM sources.** These machines need dumps; the Model III ROM (largely Level II), the 4P's boot ROM and the Model
-  II's boot ROM could become SDK sources as the Model I's did ([the backlog](backlog/Trs80Model3AndModel2.md)).
-- **Real software.** No real ROM, TRSDOS, LDOS, NEWDOS or TRSDOS-II has been run; the hardware follows the technical
+- **Real software.** No TRSDOS, LDOS, NEWDOS or TRSDOS-II has been run; the hardware follows the technical
   references and MAME's drivers, and needs checking against them.
 - **1500 baud cassettes** on the Model III and 4, which interrupt on the tape's edges.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the

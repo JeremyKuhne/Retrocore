@@ -1915,7 +1915,7 @@ RAM_ADDRESS_TEXT:
 RAM_STACK_TEXT:
     .byte "Stack", $00
 
-;; Not used.
+; Not used.
     .res 83, $00
 
 COPYRIGHT:

@@ -9,8 +9,9 @@ namespace Retrocore.Tests;
 /// </summary>
 internal static class Allocations
 {
-    // Room for the work's own allocations and for what the tests running beside it allocate meanwhile.
-    private const long RegionSize = 64 * 1024 * 1024;
+    // Room for the work's own allocations and for what the tests running beside it allocate meanwhile, which in a
+    // full run with the machines' fixtures used up 64 MB during a measurement that rendered 32 frames.
+    private const long RegionSize = 256 * 1024 * 1024;
 
     // A measurement whose region a GC broke into is taken again, up to this many times in all.
     private const int Attempts = 5;
@@ -21,7 +22,10 @@ internal static class Allocations
     /// <summary>
     ///  Gets the bytes the work allocates on this thread, measured while no GC can run.
     /// </summary>
-    /// <param name="work">The work, already run once so its code, types and pooled buffers are ready.</param>
+    /// <param name="work">
+    ///  The work, already run once so its code, types and pooled buffers are ready. Keep it short: the tests running
+    ///  beside it allocate meanwhile, and once the region is used up a GC ends it.
+    /// </param>
     /// <returns>The bytes allocated, which is 0 for allocation-free work.</returns>
     /// <exception cref="InvalidOperationException">A GC ran during every attempt.</exception>
     /// <remarks>

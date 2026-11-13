@@ -220,7 +220,7 @@ public class Apple2VideoTests
 
         void Render()
         {
-            for (int pass = 0; pass < 16; pass++)
+            for (int pass = 0; pass < 2; pass++)
             {
                 bus.Video.RenderBitmap(pixels);
                 bus.Video.RenderScannedBitmap(pixels);

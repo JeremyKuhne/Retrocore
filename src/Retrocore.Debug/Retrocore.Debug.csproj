@@ -36,9 +36,11 @@
     <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\*.asm" Link="Sdk\Roms\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Sdk\Roms\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple3\Roms\BusinessBasic\*.asm" Link="Sdk\Roms\Apple3\BusinessBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\Kernel\*.asm" Link="Sdk\Roms\Apple3\Sos\Kernel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\Drivers\**\*.asm" Link="Sdk\Roms\Apple3\Sos\Drivers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple1\Roms\*.asm" Link="Sdk\Roms\Apple1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple1\Roms\Basic\*.asm" Link="Sdk\Roms\Apple1\Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Coco\Roms\*.asm" Link="Sdk\Roms\Coco\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

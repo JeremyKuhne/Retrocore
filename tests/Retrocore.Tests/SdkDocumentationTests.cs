@@ -109,6 +109,27 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  The Apple-1's sources pass the lint as the editor runs it: the Woz Monitor, the cassette interface, the
+    ///  character generator and Apple-1 BASIC.
+    /// </summary>
+    [TestMethod]
+    public void Apple1DocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Apple1");
+        List<SourceAnalysis> sdk =
+        [
+            .. SourceIncludes.Roots(folder)
+                .Concat(SourceIncludes.Roots(Path.Join(folder, "Basic")))
+                .Select(file => SourceAnalysis.Assemble(file, _ => null))
+        ];
+
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain(["WozMonitor.asm", "Aci.asm", "Basic.asm"]);
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
     ///  The Color Computer's ROM sources pass the lint as the editor runs it, 6809 registers and flags included.
     /// </summary>
     [TestMethod]
@@ -272,6 +293,20 @@ public class SdkDocumentationTests
         sets.Add(Set(SdkModules.AssembleDos(SdkModules.DosPath("Dos32.asm", s_inputs), master: true), "Dos32"));
         sets.Add(Set(SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)), "IntegerBasic"));
         sets.Add(Set(SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)), "ProgrammersAid"));
+
+        // Apple's 3.5 controller's EPROM: the host's code, the diagnostics and the card's 65C02 firmware.
+        string disk35 = Path.GetFullPath(Path.Join(s_inputs, "Disk35", "Disk35Controller.asm"));
+        AssemblyOptions options = new(ProcessorVariant.Wdc65C02, 0x8000, 0x8000)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyResult controller = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(File.ReadAllText(disk35), disk35),
+            options);
+
+        controller.Success.Should().BeTrue();
+        sets.Add(Set(controller, "Disk35"));
         return sets;
     }
 

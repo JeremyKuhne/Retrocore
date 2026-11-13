@@ -38,6 +38,8 @@ export interface Machine {
     tapeFormats: string[];
     /** The BASIC dialects a basic launch runs on it. */
     basicDialects: string[];
+    /** The disk a basic launch boots for its BASIC, as the open dialog asks for it; none when BASIC is in ROM. */
+    basicDisk?: string;
     /** Whether a launch can put a program on a fresh DOS disk (dos). */
     dos: boolean;
     /** What the Start Machine command can set up, with its defaults. */
@@ -186,7 +188,8 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "apple3" },
         diskFormats: ["dsk", "do", "po", "woz"],
         tapeFormats: [],
-        basicDialects: [],
+        basicDialects: ["business"],
+        basicDisk: "The Business BASIC disk",
         dos: false,
         choices: [
             {
@@ -241,7 +244,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "apple1" },
         diskFormats: [],
         tapeFormats: ["wav"],
-        basicDialects: [],
+        basicDialects: ["apple1"],
         dos: false,
         choices: [
             {
@@ -270,8 +273,8 @@ export const machines: readonly Machine[] = [
             }
         ]
     },
-    // The Color Computer 1 and 2 build Color, Extended and Disk BASIC from the SDK's sources without dumps; the CoCo 3
-    // needs the ROM dumps: romDirectory, or RETROCORE_COCO_ROMS.
+    // Without dumps, every Color Computer builds its ROMs from the SDK's sources: Color, Extended and Disk BASIC, and
+    // the CoCo 3's ROM.
     {
         id: "coco1",
         label: "TRS-80 Color Computer",
@@ -279,7 +282,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "coco", model: "coco1" },
         diskFormats: ["dsk"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["colorbasic"],
         dos: false,
         choices: [
             {
@@ -304,7 +307,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "coco", model: "coco2" },
         diskFormats: ["dsk"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["colorbasic"],
         dos: false,
         choices: [
             {

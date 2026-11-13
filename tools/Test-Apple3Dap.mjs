@@ -5,11 +5,12 @@
 // Apple III DAP integration: stops at a breakpoint in the SDK's boot ROM source at power-on, runs the diagnostics to
 // RETRY, lists the hardware, drives and memory banks, reads memory through a bank and an X-byte, and boots SOS 1.3's
 // System Utilities to their menu when the disk is present, stopping at an sos function breakpoint's call, tracing
-// another's, and stopping at a BRK that is no SOS call.
+// another's, and stopping at a BRK that is no SOS call. With Business BASIC 1.23's disk, it stops in the
+// interpreter's source as HELLO runs.
 // The ROM is assembled from the SDK's BootRom.asm unless RETROCORE_APPLE3_ROMS names MAME's apple3 set.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from "node:fs";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -18,6 +19,8 @@ const sdkRoms = join(root, "src", "Retrocore.Machines.Apple3", "Roms");
 const bootRom = join(sdkRoms, "BootRom.asm");
 const utilities = process.env.RETROCORE_APPLE3_UTILITIES
     ?? join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "apple3-disks", "Apple3SOS1.3SysUtils.dsk");
+const businessBasic = process.env.RETROCORE_APPLE3_BUSINESS_BASIC
+    ?? join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "apple3-disks", "Apple3BusBasic1.23.dsk");
 
 const { request, event, events, fail, close, failure } = startDap(root);
 let last = "";
@@ -82,9 +85,34 @@ try {
 
     const devices = await request("retro/devices");
     const hardware = Object.fromEntries(devices.hardware.map(row => [row.id, row]));
-    assert.deepEqual(Object.keys(hardware), ["model", "memory", "rom", "disk", "environment"]);
+    assert.deepEqual(Object.keys(hardware),
+        ["model", "memory", "rom", "disk", "environment", "slot1", "slot2", "slot3", "slot4"]);
     assert.equal(hardware.memory.value, "256 KB, 7 switchable banks");
     assert.deepEqual(devices.devices.map(device => device.id), ["disk1", "disk2", "disk3", "disk4"]);
+
+    // A ProFile card goes in a slot while the session runs, its ProFile takes an image, the configuration keeps both,
+    // and Remove Card empties the slot again.
+    assert.deepEqual(hardware.slot4.actions, ["addCard"]);
+    const slotRow = (body, id) => body.hardware.find(row => row.id === id);
+    let changed = await request("retro/hardware", { id: "slot4", action: "addProFile" });
+    assert.equal(slotRow(changed, "slot4").value, "ProFile interface card");
+    assert.deepEqual(slotRow(changed, "slot4").devices, ["slot4profile"]);
+    await assert.rejects(request("retro/hardware", { id: "slot4", action: "addProFile" }), /does not support/);
+    const profile = join(root, "artifacts", `profile-${process.pid}.po`);
+    writeFileSync(profile, Buffer.alloc(512 * 280));
+    try {
+        changed = await request("retro/device", { id: "slot4profile", action: "insert", path: profile });
+        const drive = changed.devices.find(device => device.id === "slot4profile");
+        assert.equal(drive.media.format, "PO");
+        assert.equal(drive.blocks.count, 280);
+        assert.equal(changed.configuration.cards["4"], "proFile");
+        assert.equal(changed.configuration.media.slot4profile.path, profile);
+    } finally {
+        unlinkSync(profile);
+    }
+    changed = await request("retro/hardware", { id: "slot4", action: "removeCard" });
+    assert.equal(slotRow(changed, "slot4").value, "empty");
+    assert.ok(!changed.devices.some(device => device.id === "slot4profile"), "its ProFile is gone");
 
     // The display panel's requests: the Apple keys, sound, fast disk and the drive lights.
     assert.deepEqual(await request("apple3/button", { button: 0, pressed: true }), { button: 0, pressed: true });
@@ -168,9 +196,28 @@ try {
         console.log(`Skipped the SOS boot: ${utilities} is missing.`);
     }
 
+    // Business BASIC debugs at its source where SOS loaded it: HELLO's first statement passes through GONE.
+    if (existsSync(businessBasic)) {
+        events.length = 0;
+        await request("launch", { machine: "apple3", sdkRoms, stopOnEntry: false, speed: "max", disks: [businessBasic] });
+        await request("setExceptionBreakpoints", { filters: [] });
+        const listd = join(sdkRoms, "BusinessBasic", "B3ListD.asm");
+        const basicSet = await request("setBreakpoints", { source: { path: listd }, breakpoints: [{ line: lineOf("GONE", listd) }] });
+        assert.equal(basicSet.breakpoints[0].verified, true, "Business BASIC's source maps where SOS loads it");
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "breakpoint");
+        const basicFrame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+        assert.equal(basicFrame.source.path.toLowerCase(), listd.toLowerCase());
+        assert.equal(basicFrame.line, lineOf("GONE", listd));
+        assert.equal((await request("evaluate", { expression: "PC" })).result, "$683E (26686)");
+    } else {
+        console.log(`Skipped Business BASIC: ${businessBasic} is missing.`);
+    }
+
     await request("disconnect");
     console.log("Apple III DAP passed: a power-on breakpoint in BootRom.asm, the diagnostics to RETRY, the hardware, "
-        + "drives and memory banks" + (existsSync(utilities) ? ", SOS 1.3's System Utilities, SOS call breakpoints and trace points, the BRK filter, and breakpoints in SOS's kernel and driver sources." : "."));
+        + "drives and memory banks" + (existsSync(utilities) ? ", SOS 1.3's System Utilities, SOS call breakpoints and trace points, the BRK filter, and breakpoints in SOS's kernel and driver sources" : "")
+        + (existsSync(businessBasic) ? ", and a breakpoint in Business BASIC's source." : "."));
 } finally {
     clearTimeout(timeout);
     close();

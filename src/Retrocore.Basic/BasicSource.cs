@@ -134,7 +134,7 @@ public sealed partial class BasicSource
     public static string Describe(BasicSite site, BasicDialect? dialect = null)
     {
         if (site.Kind == BasicSiteKind.Function) { return "function"; }
-        if (dialect == BasicDialect.Integer)
+        if (dialect is IntegerBasicDialect)
         {
             return site.Key.EndsWith('$') ? "string variable" : site.Subscripted ? "integer array" : "integer variable";
         }
@@ -143,6 +143,7 @@ public sealed partial class BasicSource
         {
             '$' => "string",
             '%' => "integer",
+            '&' when dialect == BasicDialect.BusinessBasic => "long integer",
             '!' => "single-precision",
             '#' => "double-precision",
             _ => "numeric"

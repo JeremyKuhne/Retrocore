@@ -65,11 +65,13 @@ jobs:
         run: |
           node tools/Test-Trs80Dap.mjs
           node tools/Test-Apple1Dap.mjs
+          node tools/Test-Apple1BasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
           node tools/Test-Memory.mjs
           node tools/Test-IIeDap.mjs
           node tools/Test-Apple3Dap.mjs
+          node tools/Test-BusinessBasicDap.mjs
           node tools/Test-CocoDap.mjs
 
       - name: Extension tests

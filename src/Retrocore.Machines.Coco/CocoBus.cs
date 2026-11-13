@@ -208,6 +208,11 @@ public sealed partial class CocoBus : IProcessorBus
     internal ReadOnlySpan<byte> ExtendedBasicRom => _extendedBasic;
 
     /// <summary>
+    ///  Gets the CoCo 3's 32 KB ROM, empty on a CoCo 1 or 2, for the debugger to match against its source.
+    /// </summary>
+    internal ReadOnlySpan<byte> Coco3Rom => _rom3;
+
+    /// <summary>
     ///  Gets the VDG's mode bits as PIA 1's port B drives them: CSS in bit 3, GM0-GM2 in bits 4-6 and A/G in bit 7.
     /// </summary>
     public byte VideoMode => (byte)(Pia1.PortBOutput & 0xF8);

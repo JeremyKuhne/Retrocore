@@ -122,7 +122,7 @@ internal sealed partial class DebugSession
         {
             int reference = BasicChildren + _basicChildren.Count;
             _basicChildren[reference] = () => Elements(array, 0, array.Count, reference);
-            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1));
+            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1 + array.LowerBound));
             list.Add(new JsonObject
             {
                 ["name"] = array.Name,
@@ -149,7 +149,7 @@ internal sealed partial class DebugSession
                 _basicChildren[chunk] = () => Elements(array, from, stop, chunk);
                 list.Add(new JsonObject
                 {
-                    ["name"] = $"[{start}..{stop - 1}]",
+                    ["name"] = $"[{start + array.LowerBound}..{stop - 1 + array.LowerBound}]",
                     ["value"] = "",
                     ["variablesReference"] = chunk
                 });
@@ -214,7 +214,7 @@ internal sealed partial class DebugSession
     {
         string line = BasicDirect ? "direct mode" : CurrentLine.ToString(CultureInfo.InvariantCulture);
         string Span(int from, int to) => $"${from:X4}-${Math.Max(from, to - 1):X4} ({Math.Max(0, to - from)} bytes)";
-        if (Basic == BasicDialect.Integer)
+        if (Basic is IntegerBasicDialect)
         {
             // Integer BASIC's variables grow up from LOMEM to PV, and its program down from HIMEM to PP.
             int lomem = Word(IntegerBasicDialect.LoMem);
@@ -230,6 +230,7 @@ internal sealed partial class DebugSession
             ];
         }
 
+        if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -247,6 +248,37 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // Business BASIC's memory, in its order: the program, then the arrays and the simple variables, then free space
+    // up to the strings; its pointers reach banked memory, so each span gives its X-byte.
+    private List<JsonNode?> BusinessProgramVariables(string line)
+    {
+        TargetBasicMemory memory = new(Target);
+        BasicPointers pointers = Basic.Pointers;
+        int Pointer(int address) => BusinessBasicDialect.Pointer(memory, address);
+        string Span(int from, int to)
+        {
+            string first = BusinessBasicDialect.Describe(from);
+            string last = BusinessBasicDialect.Describe(Math.Max(from, to - 1));
+            return $"{first}-{last} ({Math.Max(0, to - from)} bytes)";
+        }
+
+        int start = Pointer(pointers.ProgramStart);
+        int arrays = Pointer(pointers.Arrays);
+        int variables = Pointer(pointers.Variables);
+        int free = Pointer(pointers.FreeStart);
+        int strings = Pointer(pointers.StringBottom);
+        int top = Pointer(pointers.MemoryTop);
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = Span(start, arrays), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Arrays", ["value"] = Span(arrays, variables), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Variables", ["value"] = Span(variables, free), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free", ["value"] = Span(free, strings), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 }
         ];
     }
 
@@ -273,6 +305,7 @@ internal sealed partial class DebugSession
         BasicVariableKind.String => "string",
         BasicVariableKind.Single => "single",
         BasicVariableKind.Double => "double",
+        BasicVariableKind.Long => "long integer",
         _ => "real"
     };
 
@@ -311,7 +344,7 @@ internal sealed partial class DebugSession
     // Sets a BASIC variable or array element from a BASIC expression: setExpression, and setVariable by name.
     private JsonObject SetBasic(string target, string value)
     {
-        Match match = Assignable().Match(target);
+        Match match = Assignable.Match(target);
         if (!match.Success) { throw new ArgumentException($"'{target}' is not a BASIC variable or array element."); }
         BasicEvaluator evaluator = Evaluator;
         BasicResult result = evaluator.Evaluate(value);
@@ -366,7 +399,7 @@ internal sealed partial class DebugSession
     private JsonObject? BasicDataBreakpointInfo(int reference, string name)
     {
         string? expression = reference != 0 ? _basicNames.GetValueOrDefault((reference, name)) : name;
-        if (expression is null || !Assignable().IsMatch(expression)) { return null; }
+        if (expression is null || !Assignable.IsMatch(expression)) { return null; }
         return new JsonObject
         {
             ["dataId"] = BasicDataPrefix + expression.ToUpperInvariant(),
@@ -501,5 +534,12 @@ internal sealed partial class DebugSession
     private static partial Regex Definition();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*[$%!#]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
-    private static partial Regex Assignable();
+    private static partial Regex MicrosoftAssignable();
+
+    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9.]*[$%&]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
+    private static partial Regex BusinessAssignable();
+
+    // A variable or array element that can be set: Business BASIC's names hold periods and may end in & for a long
+    // integer.
+    private Regex Assignable => Target.Basic == BasicDialect.BusinessBasic ? BusinessAssignable() : MicrosoftAssignable();
 }

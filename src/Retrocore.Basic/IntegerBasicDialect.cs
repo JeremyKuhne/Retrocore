@@ -8,7 +8,8 @@ using System.Text;
 namespace Retrocore.Basic;
 
 /// <summary>
-///  The Apple II's Integer BASIC: Steve Wozniak's BASIC of 16-bit integers, in the II's ROM.
+///  The Apple II's Integer BASIC: Steve Wozniak's BASIC of 16-bit integers, in the II's ROM; and Apple-1 BASIC, the
+///  same BASIC as it first was, for the Apple-1.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -23,6 +24,10 @@ namespace Retrocore.Basic;
 ///   analysis the other dialects share (sites, labels, statements, expressions), <see cref="Crunch"/> gives the same
 ///   line in the Microsoft form instead: each reserved word or operator as a token from $80, in the order of
 ///   <see cref="Keywords"/>, and everything else as plain characters.
+///  </para>
+///  <para>
+///   Apple-1 BASIC keeps a program the same way, at the same page-zero locations, with tokens from its own syntax
+///   table (<see cref="Apple1Basic"/>). Its variables and FOR stack are laid out differently.
 ///  </para>
 /// </remarks>
 internal sealed class IntegerBasicDialect : BasicDialect
@@ -98,6 +103,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
     internal const int GosubIndex = 0xFC;
 
 
+    // The reserved words and operators of Crunch's Microsoft form, in token order from $80.
     private static readonly string[] s_keywords =
     [
         "HIMEM:", "LOMEM:", "LOAD", "SAVE", "CON", "RUN", "DEL", "NEW", "CLR", "AUTO", "MAN",
@@ -108,24 +114,75 @@ internal sealed class IntegerBasicDialect : BasicDialect
         "DSP", "TRACE", "PR#", "IN#"
     ];
 
-    private static readonly Dictionary<string, int> s_keywordIndex = s_keywords
-        .Select((word, index) => (word, index))
-        .ToDictionary(entry => entry.word, entry => entry.index, StringComparer.Ordinal);
+    // Apple-1 BASIC's, the same way.
+    private static readonly string[] s_apple1Keywords =
+    [
+        "HIMEM=", "LOMEM=", "LIST", "RUN", "DEL", "SCR", "CLR", "AUTO", "OFF",
+        "+", "-", "*", "/", "=", "#", ">=", ">", "<=", "<>", "<", "AND", "OR", "MOD", "^", "NOT",
+        "THEN", "PEEK", "RND", "SGN", "ABS", "USR", "RNDX", "LEN", "COLOR", "HIMEM", "LOMEM", "CALL", "DIM",
+        "TAB", "END", "INPUT", "FOR", "TO", "STEP", "NEXT", "RETURN", "GOSUB", "REM", "LET", "GOTO", "IF",
+        "PRINT", "POKE", "COLOR=", "PLOT", "HLIN", "AT"
+    ];
 
-    private IntegerBasicDialect()
+    private readonly string[] _keywords;
+    private readonly Dictionary<string, int> _keywordIndex;
+    private readonly string[] _spellings;
+
+    private IntegerBasicDialect(string name, string displayName, string[] keywords, string[] spellings, IntegerSyntaxTables tables)
     {
+        Name = name;
+        DisplayName = displayName;
+        _keywords = keywords;
+        _keywordIndex = keywords
+            .Select((word, index) => (word, index))
+            .ToDictionary(entry => entry.word, entry => entry.index, StringComparer.Ordinal);
+
+        _spellings = spellings;
+        Tables = tables;
     }
 
     /// <summary>
-    ///  Gets the dialect.
+    ///  Gets the Apple II's Integer BASIC.
     /// </summary>
-    internal static IntegerBasicDialect Instance { get; } = new();
+    internal static IntegerBasicDialect Instance { get; } = new(
+        "integer",
+        "Integer BASIC",
+        s_keywords,
+        IntegerBasic.Spellings,
+        IntegerBasicSyntax.Integer);
+
+    /// <summary>
+    ///  Gets Apple-1 BASIC.
+    /// </summary>
+    internal static IntegerBasicDialect Apple1Basic { get; } = new(
+        "apple1",
+        "Apple-1 BASIC",
+        s_apple1Keywords,
+        IntegerBasic.Apple1Spellings,
+        IntegerBasicSyntax.Apple1);
 
     /// <inheritdoc/>
-    public override string Name => "integer";
+    public override string Name { get; }
 
     /// <inheritdoc/>
-    public override string DisplayName => "Integer BASIC";
+    public override string DisplayName { get; }
+
+    /// <summary>
+    ///  Gets whether this is Apple-1 BASIC, whose variables and FOR stack are laid out differently.
+    /// </summary>
+    internal bool IsApple1 => ReferenceEquals(this, Apple1Basic);
+
+    /// <summary>
+    ///  Gets the syntax tables the tokenizer matches lines against.
+    /// </summary>
+    internal IntegerSyntaxTables Tables { get; }
+
+    /// <summary>
+    ///  Gets how LIST spells a token.
+    /// </summary>
+    /// <param name="token">The token, below $80.</param>
+    /// <returns>Its spelling, such as <c>PRINT</c> or <c>,</c>; <c>?</c> for a token the BASIC does not have.</returns>
+    internal string Spelling(byte token) => (token & 0x7F) < _spellings.Length ? _spellings[token & 0x7F] : "?";
 
     /// <inheritdoc/>
     /// <remarks>
@@ -134,7 +191,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
     ///   several stand for each word.
     ///  </para>
     /// </remarks>
-    public override IReadOnlyList<string> Keywords => s_keywords;
+    public override IReadOnlyList<string> Keywords => _keywords;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -191,7 +248,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
     internal override int LineOverhead => 4;
 
     /// <inheritdoc/>
-    internal override byte RemToken => (byte)(FirstToken + s_keywordIndex["REM"]);
+    internal override byte RemToken => (byte)(FirstToken + _keywordIndex["REM"]);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -280,7 +337,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
                 continue;
             }
 
-            string word = IntegerBasic.Spelling(token);
+            string word = Spelling(token);
             bool keyword = char.IsAsciiLetter(word[0]);
             if (keyword && text.Length > 0 && text[^1] != ' ') { text.Append(' '); }
             text.Append(word);
@@ -308,7 +365,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
         int end = BasicProgram.Word(memory, HiMem);
         if (start == 0 || end < start)
         {
-            throw new InvalidDataException($"Integer BASIC is not set up: its program is at ${start:X4} and HIMEM is ${end:X4}.");
+            throw new InvalidDataException($"{DisplayName} is not set up: its program is at ${start:X4} and HIMEM is ${end:X4}.");
         }
 
         byte[] bytes = new byte[end - start];
@@ -452,7 +509,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
                 continue;
             }
 
-            string word = IntegerBasic.Spelling(token);
+            string word = Spelling(token);
             if (token == Remark)
             {
                 output.Add(RemToken, Math.Max(0, source - 2));
@@ -576,21 +633,21 @@ internal sealed class IntegerBasicDialect : BasicDialect
     }
 
     /// <summary>
-    ///  Gets what Integer BASIC prints for an error, less its *** and ERR.
+    ///  Gets the message for a line the tokenizer refuses: what the BASIC prints, and what it means.
     /// </summary>
     /// <param name="error">The error.</param>
     /// <returns>The message.</returns>
-    internal static string Message(IntegerSyntaxError error) => error switch
+    internal string Message(IntegerSyntaxError error) => error switch
     {
         IntegerSyntaxError.TooLarge => "*** >32767 ERR: a number is above 32767.",
         IntegerSyntaxError.TooLong => "*** TOO LONG ERR: the line is too long or too deeply nested.",
-        _ => "*** SYNTAX ERR: Integer BASIC refuses this statement."
+        _ => $"*** SYNTAX ERR: {DisplayName} refuses this statement."
     };
 
     // Tokenizes statements as they would be typed after a line number, the number 0. The tokenizer skips blanks
     // outside strings and remarks, so they are left out, leaving the most room in the input buffer for a line a
     // listing has spaced out; the positions it reports are mapped back to the statements' own.
-    private static IntegerSyntaxResult Typed(ReadOnlySpan<int> text)
+    private IntegerSyntaxResult Typed(ReadOnlySpan<int> text)
     {
         List<int> line = new(text.Length + 1) { '0' };
         List<int> map = new(text.Length + 1) { 0 };
@@ -606,7 +663,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
             remark |= !quoted && line.Count >= 4 && IsRem(line[^3], line[^2], line[^1]);
         }
 
-        IntegerSyntaxResult result = IntegerBasicSyntax.Tokenize(line.ToArray());
+        IntegerSyntaxResult result = IntegerBasicSyntax.Tokenize(line.ToArray(), Tables);
         int end = text.Length + 1;
         int Back(int at) => at < map.Count ? map[at] : end;
         return result with
@@ -619,7 +676,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
     }
 
     // A refused line's statements in the Microsoft form, by its words alone, so a line being typed still has sites.
-    private static CrunchOutput Approximate(ReadOnlySpan<int> text)
+    private CrunchOutput Approximate(ReadOnlySpan<int> text)
     {
         CrunchOutput output = new(text.Length);
         int at = 0;
@@ -641,7 +698,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
             }
 
             string? matched = null;
-            foreach (string word in s_keywords)
+            foreach (string word in _keywords)
             {
                 if (Starts(text, at, word) && word.Length > (matched?.Length ?? 0)) { matched = word; }
             }
@@ -652,7 +709,7 @@ internal sealed class IntegerBasicDialect : BasicDialect
                 continue;
             }
 
-            output.Add(FirstToken + s_keywordIndex[matched], at);
+            output.Add(FirstToken + _keywordIndex[matched], at);
             at += matched.Length;
             if (matched == "REM")
             {
@@ -676,11 +733,11 @@ internal sealed class IntegerBasicDialect : BasicDialect
 
     // A reserved word or operator as its token, or punctuation as itself; a word ending in a parenthesis is the word
     // then the parenthesis.
-    private static void AddWord(CrunchOutput output, string word, int source)
+    private void AddWord(CrunchOutput output, string word, int source)
     {
         int start = Math.Max(0, source - word.Length + 1);
         string bare = word.Length > 1 && word[^1] == '(' ? word[..^1] : word;
-        if (s_keywordIndex.TryGetValue(bare, out int index))
+        if (_keywordIndex.TryGetValue(bare, out int index))
         {
             output.Add(FirstToken + index, start);
             if (bare.Length != word.Length) { output.Add('(', source); }

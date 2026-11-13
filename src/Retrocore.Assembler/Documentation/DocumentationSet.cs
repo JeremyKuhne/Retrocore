@@ -71,14 +71,35 @@ public sealed class DocumentationSet
     /// <param name="result">The assembly, for values; null when it has none.</param>
     /// <param name="module">The module name links may use, or null.</param>
     /// <param name="model">The model the assembly was built for, or null.</param>
+    /// <param name="relocation">
+    ///  How far the code runs from where it was assembled, added to its labels but not its constants.
+    /// </param>
     /// <returns>The set.</returns>
     public static DocumentationSet Create(
         IEnumerable<DocumentationFile> files,
         AssemblyResult? result,
         string? module = null,
-        string? model = null)
+        string? model = null,
+        int relocation = 0)
     {
-        DocumentationSet set = Create(files, result?.Symbols ?? new Dictionary<string, long>(), module, model, result?.SourceMap);
+        IReadOnlyDictionary<string, long> symbols = result?.Symbols ?? new Dictionary<string, long>();
+        if (result is not null && relocation != 0)
+        {
+            // Code that runs away from where it was assembled moves its labels; its constants stay.
+            Dictionary<string, long> moved = new(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, long> symbol in symbols) { moved[symbol.Key] = symbol.Value; }
+            foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+            {
+                if (!symbol.IsConstant && moved.ContainsKey(symbol.Name))
+                {
+                    moved[symbol.Name] = symbol.Value + relocation;
+                }
+            }
+
+            symbols = moved;
+        }
+
+        DocumentationSet set = Create(files, symbols, module, model, result?.SourceMap);
         if (result is not null)
         {
             List<(string, string, int)> exports = [];

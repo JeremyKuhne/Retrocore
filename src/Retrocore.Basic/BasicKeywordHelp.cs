@@ -20,7 +20,15 @@ public static class BasicKeywordHelp
     public static (string Syntax, string Summary)? Describe(BasicDialect dialect, string keyword)
     {
         ArgumentNullException.ThrowIfNull(dialect);
-        char code = dialect == BasicDialect.Level2 ? '2' : dialect == BasicDialect.Integer ? 'i' : 'a';
+        char code = dialect.Name switch
+        {
+            "level2" => '2',
+            "integer" or "apple1" => 'i',
+            "business" => 'b',
+            "colorbasic" => 'c',
+            _ => 'a'
+        };
+
         foreach ((string word, string dialects, string syntax, string summary) in s_entries.Value)
         {
             if (word == keyword && dialects.Contains(code, StringComparison.Ordinal)) { return (syntax, summary); }

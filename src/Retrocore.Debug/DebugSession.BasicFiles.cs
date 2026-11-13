@@ -13,7 +13,6 @@ namespace Retrocore.Debug;
 // labels and no line numbers debugs as written.
 internal sealed partial class DebugSession
 {
-    private const double BootSeconds = 10;
     private const string NoBasicSource = "The debugger has no source for this machine's BASIC ROM, so it cannot load a BASIC file.";
 
     private readonly Dictionary<string, BasicFile> _basicFiles = new(StringComparer.OrdinalIgnoreCase);
@@ -64,6 +63,12 @@ internal sealed partial class DebugSession
     ///  Loads a BASIC file for a launch: boots the machine to BASIC's prompt, answering the Model I's MEMORY SIZE?,
     ///  writes the program, and types RUN unless told not to.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The Apple III's Business BASIC comes from its disk: SOS boots, loads it and runs the disk's HELLO, which must
+    ///   end at the prompt, as Apple's does.
+    ///  </para>
+    /// </remarks>
     /// <param name="path">The file.</param>
     /// <param name="run">Whether to RUN it.</param>
     /// <exception cref="ArgumentException">The file does not compile.</exception>
@@ -71,10 +76,9 @@ internal sealed partial class DebugSession
     private void LaunchBasic(string path, bool run)
     {
         string full = Path.GetFullPath(path);
+        if (!Target.HasBasicSource) { throw new InvalidOperationException(NoBasicSource); }
+        ReachPrompt();
         BasicDialect dialect = Basic;
-        BasicRom rom = Target.BasicRom
-            ?? throw new InvalidOperationException(NoBasicSource);
-
         BasicFile file = Load(full);
         if (file.Source.Parse.Program is not { } program)
         {
@@ -92,7 +96,6 @@ internal sealed partial class DebugSession
             throw new ArgumentException($"{name} is {program.Dialect.DisplayName}, and the machine runs {dialect.DisplayName}.");
         }
 
-        ReachPrompt(rom);
         program.Write(new TargetBasicMemory(Target));
         _basicLaunched = full;
         _basicLaunchedInSync = true;
@@ -102,21 +105,32 @@ internal sealed partial class DebugSession
         }
     }
 
-    // Runs the machine from power-up to BASIC's prompt, pressing ENTER for the Model I's MEMORY SIZE?.
-    private void ReachPrompt(BasicRom rom)
+    // Runs the machine from power-up to BASIC's prompt, pressing ENTER for the Model I's MEMORY SIZE?. BASIC's hooks
+    // are looked for as it runs, as a BASIC loaded from disk has none until it is in memory.
+    private void ReachPrompt()
     {
-        ulong end = Target.CycleCount + (ulong)(Target.ClockHertz * BootSeconds);
+        ulong end = Target.CycleCount + (ulong)(Target.ClockHertz * Target.BasicBootSeconds);
         ulong press = Target.CycleCount + (ulong)Target.ClockHertz;
+        BasicRom? rom = Target.BasicRom;
+        ulong look = Target.CycleCount;
         while (Target.CycleCount < end)
         {
             // Once a second until the prompt, as the ROM may not be reading the keyboard yet.
-            if (Target.CycleCount >= press)
+            if (Target.PressesReturnForPrompt && Target.CycleCount >= press)
             {
                 Target.Key('\r');
                 press += (ulong)Target.ClockHertz;
             }
 
-            if (Target.IsInstructionBoundary && Target.ProgramCounter == rom.Prompt)
+            // A BASIC loaded from disk is looked for each tenth of a second of the machine's time, as the check reads
+            // memory.
+            if (rom is null && Target.IsInstructionBoundary && Target.CycleCount >= look)
+            {
+                rom = Target.BasicRom;
+                look += (ulong)(Target.ClockHertz / 10);
+            }
+
+            if (rom is not null && Target.IsInstructionBoundary && Target.ProgramCounter == rom.Prompt)
             {
                 // The prompt's own code sets up the line BASIC waits on; a little more and BASIC is waiting.
                 ulong settle = Target.CycleCount + (ulong)(Target.ClockHertz / 10);
@@ -127,7 +141,8 @@ internal sealed partial class DebugSession
             Target.StepCycle();
         }
 
-        throw new InvalidOperationException("BASIC did not reach its prompt within ten seconds of the machine's time.");
+        throw new InvalidOperationException(
+            $"BASIC did not reach its prompt within {Target.BasicBootSeconds} seconds of the machine's time.");
     }
 
     // Reads and analyzes a BASIC file, as it is on disk.
@@ -152,8 +167,8 @@ internal sealed partial class DebugSession
     // The version the program in memory would have were it this program, at BASIC's program pointer.
     private string VersionOf(BasicProgram program)
     {
-        int start = Word(Basic.Pointers.ProgramStart);
-        byte[] image = program.ToImage(start);
+        int start = Basic.ProgramBounds(new TargetBasicMemory(Target)).Start;
+        byte[] image = Basic.MemoryImage(program, start);
         ulong hash = HashBasis;
         hash = (hash ^ (ulong)start) * HashPrime;
         foreach (byte value in image) { hash = (hash ^ value) * HashPrime; }

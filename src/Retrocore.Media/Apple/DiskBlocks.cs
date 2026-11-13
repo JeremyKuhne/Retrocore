@@ -47,4 +47,31 @@ internal static class DiskBlocks
 
         return data;
     }
+
+    /// <summary>
+    ///  Writes a block.
+    /// </summary>
+    /// <param name="image">The 140K image.</param>
+    /// <param name="proDosOrder">Whether the image's sectors are in ProDOS order rather than DOS order.</param>
+    /// <param name="block">The block number, 0-279.</param>
+    /// <param name="data">Its 512 bytes.</param>
+    internal static void Write(byte[] image, bool proDosOrder, int block, ReadOnlySpan<byte> data)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(block);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(block, DiskSize / BlockSize);
+        ArgumentOutOfRangeException.ThrowIfNotEqual(data.Length, BlockSize);
+        if (proDosOrder)
+        {
+            data.CopyTo(image.AsSpan(block * BlockSize, BlockSize));
+            return;
+        }
+
+        int track = block / 8;
+        int half = block % 8;
+        for (int part = 0; part < 2; part++)
+        {
+            int sector = DosSectors[(half * 2) + part];
+            data.Slice(part * 256, 256).CopyTo(image.AsSpan(((track * 16) + sector) * 256, 256));
+        }
+    }
 }

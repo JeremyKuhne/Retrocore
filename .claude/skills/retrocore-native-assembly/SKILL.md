@@ -1,6 +1,6 @@
 ---
 name: retrocore-native-assembly
-description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
+description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, WozMonitor.asm, Apple-1 BASIC, Level2.asm, Level1.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, or checking that a ROM source still assembles byte-identically.
 license: MIT
 compatibility: Requires the .NET SDK to assemble and test. The full reference is docs/NativeAssembly.md.
 metadata:

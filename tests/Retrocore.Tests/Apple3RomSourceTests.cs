@@ -78,7 +78,11 @@ public sealed class Apple3RomSourceTests
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
-    private static AssemblyResult Assemble()
+    /// <summary>
+    ///  Assembles the boot ROM from the SDK's source.
+    /// </summary>
+    /// <returns>The assembly, its one section the ROM's 4K.</returns>
+    internal static AssemblyResult Assemble()
     {
         string path = SourcePath();
         return new Assembler.Assembler().Assemble(

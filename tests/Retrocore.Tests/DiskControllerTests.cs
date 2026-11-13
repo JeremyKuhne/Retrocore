@@ -144,9 +144,11 @@ public class DiskControllerTests
         controller.Mount(drive: 1, disk);
         controller.Read(offset: 9, floatingBus: 0);
         controller.Tick();
-        long start = GC.GetAllocatedBytesForCurrentThread();
-        for (int clock = 0; clock < 4082; clock++) { controller.Tick(); }
-        (GC.GetAllocatedBytesForCurrentThread() - start).Should().Be(0);
+        Allocations.During(() =>
+        {
+            for (int clock = 0; clock < 4082; clock++) { controller.Tick(); }
+        }).Should().Be(0);
+
         controller.State(1).BitPosition.Should().BeGreaterThan(0);
     }
 

@@ -13,7 +13,7 @@ namespace Retrocore.Debug;
 ///  The Apple-1 as the debugger sees it: a 6502, the Apple-1's memory areas, its 40x24 terminal, keyboard and
 ///  cassette interface.
 /// </summary>
-internal sealed class Apple1DebugTarget : IDebugTarget
+internal sealed partial class Apple1DebugTarget : IDebugTarget
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -64,6 +64,10 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     ///   assembled from the SDK's sources. The character generator always comes from the SDK, as no dump of the 2513
     ///   is published.
     ///  </para>
+    ///  <para>
+    ///   With the $E000 bank, Apple-1 BASIC is put in it as its tape would load it, unless <c>loadBasic</c> is false:
+    ///   <c>basic.bin</c> from the same directory, or the SDK's build. E000R then starts it.
+    ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
     /// <returns>The target, its 6502 through the reset sequence and at the Monitor's first instruction.</returns>
@@ -89,10 +93,17 @@ internal sealed class Apple1DebugTarget : IDebugTarget
                 ?? Image(Apple1SdkModules.AssembleCassette(Path.Join(sdk, "Aci.asm")));
 
         Apple1Machine machine = new(configuration, new(monitor, characters, cassette));
+        string basicSource = Apple1SdkModules.BasicPath(sdk);
+        Assembler.AssemblyResult? basic = configuration.HighRam && File.Exists(basicSource)
+            ? Apple1SdkModules.AssembleBasic(basicSource)
+            : null;
+
+        if (args.Bool("loadBasic") ?? configuration.HighRam) { LoadBasic(machine, dumps, basic); }
 
         // Power-up's reset sequence takes seven cycles, after which the Monitor's first instruction is next.
         machine.Run(7);
         Apple1DebugTarget target = new(machine) { FastCassette = args.Bool("fastCassette") ?? true };
+        target.SetBasicSymbols(basic?.Symbols);
         if (args.String("cassette") is { } tape)
         {
             if (machine.CassetteDrive is null)
@@ -214,7 +225,14 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public byte Peek(ushort address) => _machine.Bus.Peek(address);
 
     /// <inheritdoc/>
-    public Enum ReadArea(ushort address) => _machine.Bus.Area(address);
+    /// <remarks>
+    ///  <para>
+    ///   The $E000 bank is <see cref="Apple1BasicArea.Basic"/> while Apple-1 BASIC is in it.
+    ///  </para>
+    /// </remarks>
+    public Enum ReadArea(ushort address) => address is >= Apple1SdkModules.BasicOrigin and < 0xF000 && BasicActive
+        ? Apple1BasicArea.Basic
+        : _machine.Bus.Area(address);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -249,8 +267,14 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public string? Trap(ushort address) => Peek(address) == BrkOpcode ? $"BRK at ${address:X4}." : null;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Apple-1 BASIC counts as ROM while it is in memory, as it does on a machine whose tape loaded it.
+    ///  </para>
+    /// </remarks>
     public bool InRom(ushort address) =>
-        _machine.Bus.Area(address) is Apple1MemoryArea.Monitor or Apple1MemoryArea.CassetteRom;
+        _machine.Bus.Area(address) is Apple1MemoryArea.Monitor or Apple1MemoryArea.CassetteRom
+            || (address is >= Apple1SdkModules.BasicOrigin and < 0xF000 && BasicActive);
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address is not RAM.</exception>
@@ -289,6 +313,14 @@ internal sealed class Apple1DebugTarget : IDebugTarget
         if (_machine.Configuration.CassetteInterface && File.Exists(cassette))
         {
             debug.Add(new SourceMapModule(Apple1SdkModules.AssembleCassette(cassette), Apple1MemoryArea.CassetteRom));
+        }
+
+        string basic = Apple1SdkModules.BasicPath(roms);
+        if (_machine.Configuration.HighRam && File.Exists(basic))
+        {
+            Assembler.AssemblyResult result = Apple1SdkModules.AssembleBasic(basic);
+            debug.Add(new SourceMapModule(result, Apple1BasicArea.Basic));
+            SetBasicSymbols(result.Symbols);
         }
     }
 
@@ -370,8 +402,9 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public IReadOnlyList<HardwareRow> Hardware()
     {
         Apple1Configuration configuration = _machine.Configuration;
+        string bank = BasicActive ? "4 KB at $E000 with BASIC" : "4 KB at $E000";
         string memory = configuration.HighRam
-            ? $"{configuration.RamKilobytes} KB at $0000, 4 KB at $E000"
+            ? $"{configuration.RamKilobytes} KB at $0000, {bank}"
             : $"{configuration.RamKilobytes} KB at $0000";
 
         return
@@ -381,7 +414,7 @@ internal sealed class Apple1DebugTarget : IDebugTarget
                 "memory",
                 "Memory",
                 memory,
-                "The launch's ramKilobytes (4 or 8) and highRam options; BASIC loads and runs at $E000."),
+                "The launch's ramKilobytes (4 or 8) and highRam options; BASIC loads and runs at $E000, and loadBasic puts it there."),
             new(
                 "terminal",
                 "Terminal",

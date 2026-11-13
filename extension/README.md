@@ -74,7 +74,7 @@ a separate VS Code window running the in-repo extension, on
 `sample\trs80\hello.asm` or the files given with `-File`. That window has its own
 profile under `artifacts\self-host`, so your VS Code profile is unchanged.
 Highlighting and IntelliSense need no ROMs, and neither does a launch: without dumps
-the IIe, the Model I and the CoCo 1 and 2 run ROMs assembled from the SDK's sources. `-RomDirectory` (or
+the IIe, the Model I and every Color Computer run ROMs assembled from the SDK's sources. `-RomDirectory` (or
 `RETROCORE_IIE_ROMS`) lets the IIe launch configurations use your IIe dumps instead, and
 `tools\Start-IIeDevelopment.ps1 <rom directory>` opens the IIe sample with them.
 `-SkipBuild` relaunches without building. After a change, rebuild and run
@@ -95,8 +95,8 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
-Color Computer 1 and 2 run Color, Extended and Disk BASIC from their sources, and need ROM
-dumps in `RETROCORE_COCO_ROMS` only for the CoCo 3.
+Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
+their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
@@ -834,7 +834,9 @@ aren't letters:
 To paste, right-click the screen and choose **Paste**, or press **Shift+Insert**.
 This works on every machine. The clipboard's text is typed into the machine as if
 you typed it, waiting for the program to read each key, so a pasted BASIC listing
-enters line by line. Each line ending is RETURN. Typographic quotes, dashes and
+enters line by line. On the Apple II and the Apple III keys go in at a typist's pace,
+with a pause after each line, so a program with its own type-ahead, such as Apple
+Pascal's Editor, doesn't lose them as it scrolls. Each line ending is RETURN. Typographic quotes, dashes and
 ellipses become their ASCII forms. Control characters and anything else without a
 key are left out. The II Plus types capitals, as its keyboard does. **Ctrl+V** is
 CONTROL-V, like any other Ctrl letter, and doesn't paste.
@@ -933,13 +935,23 @@ stack, cycle counts and `Keeps:` checks. The machine is configured by:
 - `cassetteInterface`: the Apple Cassette Interface, started with `C100R` (on by
   default);
 - `cassette` (a `.wav` tape, which plays from the start of the session) and
-  `fastCassette` (on by default: run unthrottled while a tape plays or records).
+  `fastCassette` (on by default: run unthrottled while a tape plays or records);
+- `loadBasic`: Apple-1 BASIC in the `$E000` bank at power-on, as if its tape had
+  been loaded, so `E000R` starts it (on by default with `highRam`).
 
-The Monitor and the cassette interface's PROM are `wozmon.bin` and `aci.bin` from
-`romDirectory` or `RETROCORE_APPLE1_ROMS` when they are there. Otherwise they are
-assembled from the SDK's sources, as the terminal's character generator always is,
-so the Apple-1 needs no external files. `WozMonitor.asm` and `Aci.asm` also debug as
-ROM modules: a breakpoint on `ECHO` stops as each character goes to the screen.
+The Monitor, the cassette interface's PROM and BASIC are `wozmon.bin`, `aci.bin` and
+`basic.bin` from `romDirectory` or `RETROCORE_APPLE1_ROMS` when they are there.
+Otherwise they are assembled from the SDK's sources, as the terminal's character
+generator always is, so the Apple-1 needs no external files. `WozMonitor.asm` and
+`Aci.asm` also debug as ROM modules: a breakpoint on `ECHO` stops as each character
+goes to the screen. So does Apple-1 BASIC's `Basic.asm`, while BASIC is in memory.
+
+A `basic` launch runs an Apple-1 BASIC file: `.apple1.bas`, or a `.bas` whose first
+line is `REM retrocore apple1`. It starts BASIC, puts the program in and types `RUN`,
+and the **BASIC** thread debugs it by statement, as on the other machines: breakpoints
+and stepping in the file's lines, GOSUBs in the call stack, the variables and FOR
+loops, and the program in memory as text. A key typed while the program runs stops
+it, as on the machine; **Program stops** reports that as `A key in` its line.
 
 A program (`source` or `program`, loaded at `$0300` by default) runs after the
 Monitor has set up the PIA, so it can print through `ECHO` ($FFEF) and return to the
@@ -968,10 +980,11 @@ interrupts on the 6809's S stack. The machine is configured by:
 - `cassette`, `fastCassette` and `sound` (`speaker` or `off`).
 
 Color, Extended and Disk BASIC are the SDK sources `ColorBasic.asm`, `ExtendedBasic.asm`
-and `DiskBasic.asm`, so a CoCo 1 or 2 needs nothing else, disk controller included, and
-debugging steps into the sources. The CoCo 3's ROM is a dump from `romDirectory` or
-`RETROCORE_COCO_ROMS`, under MAME's name (`coco3.rom`), and debugs as disassembly; dumps,
-when given, replace the sources' ROMs too. A program
+and `DiskBasic.asm`, and the CoCo 3's ROM is those with its patches and `Coco3.asm`, so
+every model needs nothing else, disk controller included, and debugging steps into the
+sources, on a CoCo 3 in the copy of its ROM it runs from RAM. Dumps from `romDirectory`
+or `RETROCORE_COCO_ROMS`, under MAME's names (such as `coco3.rom`), replace the sources'
+ROMs when given. A program
 (`source` or `program`, loaded at `$3000` by default) runs after BASIC has started for
 `bootSeconds` (2 by default); [the sample](../sample/coco/hello.asm) prints through
 Color BASIC's `CHROUT` vector.
@@ -1024,7 +1037,7 @@ while the machine runs. Eclipse CDT Cloud's Memory Inspector works too.
 
 The IIe's soft switches map one address to several stores, so a memory reference
 can name a bank: `main`, `aux`, `bank1`, `auxbank1` (the language cards' bank 1),
-`rom`, and `slot6` or `slot7` when those slots have ROMs. `aux:$0400` is auxiliary
+`rom`, and `slot1` to `slot7` while those slots' cards have ROMs. `aux:$0400` is auxiliary
 RAM's text page whatever the switches map, and `[aux:$0400]` reads it in
 expressions, conditions and data breakpoints. A function breakpoint such as
 `bank1:$D000` stops only while the CPU runs that bank's code. The
@@ -1036,8 +1049,9 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I. Level I is not supported yet. It is in three places besides the Command
-Palette:
+Model I, and Color BASIC on the Color Computer 1 and 2, with Extended and Disk
+Extended Color BASIC's words when their ROMs are fitted. Level I and the CoCo 3's
+BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
 - the **BASIC program** row at the top of the Retro Devices view, which shows the
@@ -1066,8 +1080,8 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC or Level II has a **BASIC** thread beside
-the CPU's.
+A session running AppleSoft, Integer BASIC, Level II or Color BASIC has a **BASIC**
+thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
 
@@ -1089,8 +1103,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   default) stops at the first statement RUN runs and where CONT resumes; **BASIC
   errors** (on by default) at errors no ONERR GOTO or ON ERROR GOTO will take;
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
-  END, the end of the program and Ctrl-C or BREAK. Integer BASIC has no error
-  handler, so its errors, such as `*** BAD BRANCH ERR`, always stop.
+  END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
+  have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
+  always stop.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1103,13 +1118,22 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   gave room for. Expressions follow Integer BASIC: `/` drops the remainder, `MOD`
   and `#` (not equal) work, a comparison is 1 or 0, and `A$(2,4)` is characters 2 to
   4. Its Program scope shows its variables from LOMEM, and its program up to HIMEM.
+- **Color BASIC** finds reserved words only in capitals, and never inside a name: a
+  name runs from a capital through the letters and digits after it, so `IFA=BTHEN10`
+  compares A with the variable BTHEN10. GOTO and GOSUB are stored as GO and then TO or
+  SUB, and its numbers and pointers are high byte first, as the 6809 keeps them.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas` and `.level2.bas` files are AppleSoft, Integer BASIC
-and Level II BASIC. A plain `.bas` file takes its dialect from a first line such as
-`REM retrocore applesoft` or `' retrocore level2`, else the `retrocore.basic.dialect`
-setting, else the BASIC of the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas` and
+`.colorbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC, Business BASIC,
+Level II BASIC and Color BASIC. Business BASIC takes a reserved word only between
+separators, so its highlighting leaves `PRINTER` a name, and its names count in full,
+dots included. A Color BASIC file may use every word of Disk Extended Color BASIC; a
+machine without those ROMs stores the words they add as letters. A plain `.bas` file
+takes its dialect from a first line such as `REM retrocore applesoft` or
+`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of
+the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and
@@ -1136,7 +1160,10 @@ A launch configuration's `basic` names a file to debug: the machine boots to BAS
 prompt, the file is compiled into memory and RUN (`"run": false` leaves it at the
 prompt), and `stopOnEntry` stops on its first statement. While the program in memory
 is what the file compiles to, its frames, breakpoints, inline breakpoints and Jump to
-Cursor are in the file itself, labels and all. BASIC files, the machine's program and opened listings
+Cursor are in the file itself, labels and all. On the Apple III, a `.business.bas` file
+(or one with `REM retrocore business`) needs the Business BASIC disk in `disks`, which
+**Retrocore: Start Machine** asks for: SOS boots it, BASIC runs the disk's HELLO, and the
+program goes in once BASIC is at its prompt. BASIC files, the machine's program and opened listings
 get:
 
 - highlighting that finds reserved words where the ROM does, inside names too;
@@ -1184,7 +1211,16 @@ and a reset's startup scan finds it. Its two drives take disks like any other, a
 **Remove Card** takes it out again, asking first if it has disks in. Slot 4 also
 takes the Mockingboard; slot 3 belongs to the 80-column firmware. Any free slot
 takes the mouse card (one per machine), as the `mouse` launch option does: click the
-display to move it with your mouse, and press Escape to let go.
+display to move it with your mouse, and press Escape to let go. Any free slot also takes
+a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
+insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
+`disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
+Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
+MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
+in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
+from it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you
@@ -1197,7 +1233,10 @@ the launch makes them again. Each device shows its media, its
 track, side and sector or its tape position, whether it is write-protected or
 changed, and whether it is seeking, reading or writing. Expanding a device lists
 its state and what it is (its controller, formats and geometry). Its inline
-buttons insert, record, eject and write-protect, as the device allows.
+buttons insert, record, eject and write-protect, as the device allows. What the
+machine writes to an Apple disk stays in memory until you save it: **Save to Its
+Image** (the disk icon on a changed drive) replaces the image it came from, after
+asking, and **Save Disk As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po`.
 
 [Devices.md](../docs/Devices.md) describes the device model and the
 `retro/devices` and `retro/device` requests behind the view.

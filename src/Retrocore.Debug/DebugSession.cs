@@ -87,6 +87,10 @@ internal sealed partial class DebugSession
     // past reset at the prompt.
     private string? _powerOn;
     private readonly Dictionary<string, JsonObject> _requested = new(StringComparer.OrdinalIgnoreCase);
+
+    // Pasted keys still to type, on a machine with a typing pace, and the cycle the next may go at.
+    private readonly Queue<int> _typing = new();
+    private ulong _typingDue;
     private readonly Dictionary<(string Path, int Line), ulong> _lineCycles = [];
     private (string Path, int Line)? _cycleSource;
 
@@ -358,6 +362,19 @@ internal sealed partial class DebugSession
         {
             int code = (args.Int("code") ?? 0);
             if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+
+            // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
+            // goes now and drops the rest of the paste.
+            if (code == 3)
+            {
+                _typing.Clear();
+            }
+            else if (_typing.Count != 0)
+            {
+                _typing.Enqueue(code);
+                return [];
+            }
+
             Target.Key(code);
             return [];
         }));
@@ -368,6 +385,14 @@ internal sealed partial class DebugSession
         {
             string text = args.String("text") ?? throw new ArgumentException("text is required.");
             List<int> codes = TypedText.Codes(text, out int skipped);
+
+            // A machine with a typing pace takes the keys as the run reaches each one's time.
+            if (Target.TypingPace is not null)
+            {
+                foreach (int code in codes) { _typing.Enqueue(code); }
+                return new JsonObject { ["typed"] = codes.Count, ["skipped"] = skipped };
+            }
+
             int typed = 0;
             foreach (int code in codes)
             {
@@ -538,7 +563,7 @@ internal sealed partial class DebugSession
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
-            DebugMachines.Apple1 => LaunchApple1(args, loads),
+            DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
@@ -565,6 +590,8 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         _basicStarting = null;
         _basicView = null;
+        _typing.Clear();
+        _typingDue = 0;
         ForgetPascal();
         _basicEnded = false;
         _lineCycles.Clear();
@@ -651,6 +678,9 @@ internal sealed partial class DebugSession
                 StartIntegerBasic(apple2, basicFile);
             }
 
+            // Apple-1 BASIC is loaded with the machine: E000R starts it.
+            if (Target is Apple1DebugTarget apple1) { apple1.StartBasic(); }
+
             LaunchBasic(basicFile, args.Bool("run") ?? true);
         }
 
@@ -700,7 +730,8 @@ internal sealed partial class DebugSession
         return [];
     }
 
-    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO reaches the terminal.
+    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches
+    // the terminal: it runs briefly first when a program or a BASIC file loads.
     private static Apple1DebugTarget LaunchApple1(JsonObject args, bool loads)
     {
         Apple1DebugTarget target = Apple1DebugTarget.Launch(args);
@@ -1138,6 +1169,9 @@ internal sealed partial class DebugSession
     private bool Execute()
     {
         Invalidate();
+
+        // Pasted keys go in as the machine runs, whether continuing or stepping.
+        if (_typing.Count != 0) { TypeNext(); }
         bool instruction = Target.InInstruction;
         for (int count = 0; count < InstructionCycleBudget; count++)
         {
@@ -1215,6 +1249,21 @@ internal sealed partial class DebugSession
         }
 
         return true;
+    }
+
+    // Types the next pasted key once its time has come, and sets the time of the one after: longer after a RETURN.
+    private void TypeNext()
+    {
+        if (Target.TypingPace is not { } pace)
+        {
+            while (_typing.TryDequeue(out int code)) { Target.Key(code); }
+            return;
+        }
+
+        if (Target.CycleCount < _typingDue) { return; }
+        int next = _typing.Dequeue();
+        Target.Key(next);
+        _typingDue = Target.CycleCount + (next == '\r' ? pace.Line : pace.Key);
     }
 
     private void Continue()

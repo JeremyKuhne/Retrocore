@@ -15,8 +15,11 @@ export interface HardwareRow {
     actions?: string[];
 }
 
-/** A card Add Card offers, the retro/hardware arguments that add it, and the slots it goes in, if not slots 1 to 7. */
-export interface Card { label: string; detail: string; args: Record<string, unknown>; slots?: string[] }
+/**
+ * A card Add Card offers, the retro/hardware arguments that add it, the slots it goes in, if not any but slot 0, and the
+ * machines that take it, if not only the Apple II.
+ */
+export interface Card { label: string; detail: string; args: Record<string, unknown>; slots?: string[]; machines?: string[] }
 
 /** The cards Add Card offers. */
 export const cards: Card[] = [
@@ -31,6 +34,14 @@ export const cards: Card[] = [
         args: { action: "addMouse" }
     },
     {
+        label: "ProFile interface card", detail: "Apple's ProFile hard disk; insert a .po or .hdv image",
+        args: { action: "addProFile" }, machines: ["apple2", "apple3"]
+    },
+    {
+        label: "3.5 disk controller", detail: "Two SuperDrives: 400K and 800K Apple disks, 720K and 1.44 MB MFM disks",
+        args: { action: "addDisk35" }
+    },
+    {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
         args: { action: "addLanguageCard" }, slots: ["slot0"]
     },
@@ -40,9 +51,10 @@ export const cards: Card[] = [
     }
 ];
 
-/** The cards a slot takes: slot 0 the language or firmware card, slots 1 to 7 the others. */
-export function cardsFor(slot: string): Card[] {
-    return cards.filter(card => card.slots === undefined ? slot !== "slot0" : card.slots.includes(slot));
+/** The cards a machine's slot takes: on the Apple II, slot 0 the language or firmware card, slots 1 to 7 the others. */
+export function cardsFor(slot: string, machine = "apple2"): Card[] {
+    return cards.filter(card => (card.machines ?? ["apple2"]).includes(machine)
+        && (card.slots === undefined ? slot !== "slot0" : card.slots.includes(slot)));
 }
 
 /** The view's top level: the hardware rows, each with the devices on it, then any devices no row claims. */
@@ -66,8 +78,8 @@ export function group<T extends { id: string }>(hardware: HardwareRow[] | undefi
 export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
-    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "sound", "slot0", "monitor", "boardRevision",
-    "firmwareCardRoms", "programmersAid"
+    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */

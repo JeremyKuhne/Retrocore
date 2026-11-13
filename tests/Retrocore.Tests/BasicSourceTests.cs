@@ -32,6 +32,16 @@ public sealed class BasicSourceTests
         40 G O T O 10
         """;
 
+    private const string Business = """
+        REM retrocore business
+        10 COUNT.TOTAL& = 0: PRINTER = 1
+        20 FOR I% = 1 TO 10: GOSUB 100: NEXT I%
+        30 IF COUNT.TOTAL& > 5 THEN 10 ELSE 20
+        40 ON X GOTO 10,20,99
+        50 X = FNA(2) + EXFN.SUM(1): ! A NOTE
+        100 A$ = TIME$: RETURN
+        """;
+
     private const string IntegerJumps = """
         10 GOTO 1000+K*10
         20 GOSUB 30: IF K THEN 10
@@ -96,6 +106,55 @@ public sealed class BasicSourceTests
     }
 
     /// <summary>
+    ///  Color BASIC's functions are $FF and a token, so ABS's $82 is not REM, and its apostrophe remark runs to the
+    ///  line's end: the remark's words are no variables and its colons start no statements.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicStatementsSkipFunctionsAndRemarks()
+    {
+        BasicSource source = BasicSource.Analyze("10 A=ABS(1):STOP\n20 B=1 ' C:D\n", BasicDialect.ColorBasic);
+        source.Diagnostics.Should().BeEmpty();
+        source.NumberedLines[0].Statements.Should().HaveCount(2);
+        source.NumberedLines[1].Statements.Should().HaveCount(2);
+        string[] keys = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Distinct()];
+        keys.Should().Equal("A", "B");
+    }
+
+    /// <summary>
+    ///  Business BASIC keeps whole names, with dots in them and &amp; for a long integer; its words need separators,
+    ///  so PRINTER is a name; and the words after $FF, such as THEN, ELSE's line and FN, are read as BASIC reads them.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicNamesAndWords()
+    {
+        BasicSource source = BasicSource.Analyze(Business);
+        source.Dialect.Should().Be(BasicDialect.BusinessBasic);
+        Lines(source).Should().Equal("2:100", "3:10", "3:20", "4:10", "4:20", "4:99");
+        source.Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal("There is no line 99.");
+
+        string[] keys = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Distinct()];
+        keys.Should().Equal("COUNT.TOTAL&", "PRINTER", "I%", "X", "A$");
+        BasicSite total = source.Sites.First(site => site.Key == "COUNT.TOTAL&");
+        BasicSource.Describe(total, BasicDialect.BusinessBasic).Should().Be("long integer variable");
+        source.Sites.Should().Contain(site => site.Kind == BasicSiteKind.Keyword && site.Word == "THEN" && site.Line == 3);
+        source.Sites.Should().Contain(site => site.Kind == BasicSiteKind.Function && site.Key == "A");
+        source.Sites.Should().Contain(site => site.Kind == BasicSiteKind.Keyword && site.Word == "TIME$");
+    }
+
+    /// <summary>
+    ///  Renumbering Business BASIC follows THEN and ELSE, which it stores in different lists.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicRenumbers()
+    {
+        string text = BasicRenumber.Renumber(Business, start: 1000, step: 10).Text ?? throw new AssertFailedException("No text.");
+        string[] lines = text.ReplaceLineEndings("\n").Split('\n');
+        lines[2].Should().Be("1010 FOR I% = 1 TO 10: GOSUB 1050: NEXT I%");
+        lines[3].Should().Be("1020 IF COUNT.TOTAL& > 5 THEN 1000 ELSE 1010");
+        lines[4].Should().Be("1030 ON X GOTO 1000,1010,99");
+    }
+
+    /// <summary>
     ///  Integer BASIC has one variable for a name: A and A(3) are one array, and A$ and A$(2,5) one string.
     /// </summary>
     [TestMethod]
@@ -131,10 +190,14 @@ public sealed class BasicSourceTests
     [DataRow("applesoft")]
     [DataRow("level2")]
     [DataRow("integer")]
+    [DataRow("business")]
+    [DataRow("colorbasic")]
     public void EveryKeywordHasHelp(string name)
     {
+        // Business BASIC keeps its lists' placeholders empty.
         BasicDialect dialect = BasicDialect.FromName(name) ?? throw new AssertFailedException(name);
-        dialect.Keywords.Where(keyword => BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
+        IEnumerable<string> words = dialect.AllKeywords.Where(keyword => keyword.Length > 0);
+        words.Where(keyword => BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
         BasicKeywordHelp.Markdown(dialect, "PRINT").Should().Contain("PRINT");
     }
 

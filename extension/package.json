@@ -21,7 +21,10 @@
     "onLanguage:retrocore-applesoft",
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
+    "onLanguage:retrocore-business",
+    "onLanguage:retrocore-apple1",
     "onLanguage:retrocore-level1",
+    "onLanguage:retrocore-colorbasic",
     "onLanguage:retrocore-basic"
   ],
   "scripts": {
@@ -121,6 +124,36 @@
         }
       },
       {
+        "id": "retrocore-business",
+        "aliases": [
+          "Business BASIC",
+          "business"
+        ],
+        "extensions": [
+          ".business.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-apple1",
+        "aliases": [
+          "Apple-1 BASIC",
+          "apple1"
+        ],
+        "extensions": [
+          ".apple1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -128,6 +161,21 @@
         ],
         "extensions": [
           ".level1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-colorbasic",
+        "aliases": [
+          "Color BASIC",
+          "colorbasic"
+        ],
+        "extensions": [
+          ".colorbasic.bas"
         ],
         "configuration": "./basic-language-configuration.json",
         "icon": {
@@ -157,7 +205,8 @@
         ],
         "extensions": [
           ".pas",
-          ".pascal"
+          ".pascal",
+          ".text"
         ],
         "configuration": "./pascal-language-configuration.json"
       }
@@ -187,6 +236,21 @@
         "language": "retrocore-integer",
         "scopeName": "source.retrocore-integer",
         "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-business",
+        "scopeName": "source.retrocore-business",
+        "path": "./syntaxes/business.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-apple1",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-colorbasic",
+        "scopeName": "source.retrocore-colorbasic",
+        "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
         "language": "retrocore-level1",
@@ -231,7 +295,10 @@
             "",
             "applesoft",
             "integer",
-            "level2"
+            "business",
+            "apple1",
+            "level2",
+            "colorbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -269,6 +336,15 @@
       },
       {
         "language": "retrocore-integer"
+      },
+      {
+        "language": "retrocore-business"
+      },
+      {
+        "language": "retrocore-apple1"
+      },
+      {
+        "language": "retrocore-colorbasic"
       },
       {
         "language": "retrocore-basic"
@@ -369,6 +445,16 @@
           "command": "retrocore.device.unprotect",
           "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
           "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
+          "group": "1_save"
         }
       ],
       "webview/context": [
@@ -412,6 +498,14 @@
           "when": "false"
         },
         {
+          "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "false"
+        },
+        {
           "command": "retrocore.device.list",
           "when": "false"
         },
@@ -449,7 +543,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -538,6 +632,15 @@
         "command": "retrocore.device.unprotect",
         "title": "Allow Writes",
         "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.save",
+        "title": "Save to Its Image",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveAs",
+        "title": "Save Disk As..."
       },
       {
         "command": "retrocore.device.refresh",
@@ -653,7 +756,7 @@
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them, but for the CoCo 3's, which needs its dump: the Color Computer's are under MAME's names (coco3.rom, and extbas11.rom or disk11.rom to replace the sources'), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -664,6 +767,11 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
+              },
+              "loadBasic": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
               },
               "rom": {
                 "enum": [
@@ -830,6 +938,42 @@
                 "minimum": 1,
                 "maximum": 7,
                 "description": "Apple II: the slot of an AppleMouse II-compatible mouse card, which a click on the display drives until Escape. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of a 3.5 disk controller that answers as Apple's Apple II 3.5 Disk Controller Card: a SmartPort with two SuperDrives. Slot 5 is the usual one. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35Images": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Apple II: the disks in the 3.5 controller's drives 1 and 2: 400K or 800K Apple disks or 720K or 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. Drive 1 boots. Needs disk35."
+              },
+              "proFiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "slot"
+                  ],
+                  "properties": {
+                    "slot": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7,
+                      "description": "The card's slot: 1 to 7 on the Apple II (not 3 on a IIe), 1 to 4 on the Apple III."
+                    },
+                    "image": {
+                      "type": "string",
+                      "description": "A ProDOS-order image (.po or .hdv) of up to 65535 blocks for the ProFile; changes stay in memory."
+                    }
+                  }
+                },
+                "description": "Apple II and Apple III: ProFile interface cards, each with Apple's ProFile hard disk. The Apple II card boots ProDOS from it; on the Apple III, SOS reaches it through .PROFILE in SOS.DRIVER (the System Utilities disk's is set for slot 4). None by default; the Retro Devices view's Add Card puts one in while debugging."
               },
               "logpointLimit": {
                 "type": "integer",
@@ -1024,7 +1168,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -1068,7 +1212,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm), or the Color Computer's (ColorBasic.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
               },
               "breakpoints": {
                 "type": "array",
@@ -1155,7 +1299,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
@@ -1165,7 +1308,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

@@ -30,10 +30,19 @@
 VERSION = 12
 .endif
 .assert (VERSION = 10) | (VERSION = 11) | (VERSION = 12) | (VERSION = 13), "VERSION is 10, 11, 12 or 13."
+.ifndef COCO3
+COCO3 = 0
+.endif
+.assert (COCO3 = 0) | (VERSION = 12), "The CoCo 3's Color BASIC is 1.2, patched."
 
 .cpu M6809
 
 .include "ColorBasicEquates.asm"
+.if COCO3
+.include "Coco3Equates.asm"
+.include "ExtendedBasicEntries.asm"
+.include "Coco3Entries.asm"
+.endif
 
 .org $A000
 
@@ -185,6 +194,44 @@ RESVEC:
 ;; In:   Y = where to go next
 ;; Out:  DP = 0
 INITHW:
+.if COCO3
+    LDA #BLOCK7_2
+    STA MMUREG+2                    ; logical block 2 back to its own RAM: the start-up used it for the ROM's copy
+    LDX #PIA1
+    LDD #$FF34
+    CLR 1,X                         ; PIA 1's control registers: reach the direction registers
+    CLR 3,X
+    DECA                            ; A = $FE
+    STA ,X                          ; port A: bit 0, the cassette, in; the DAC and serial out
+    LDA #$F8
+    STA 2,X                         ; port B: bits 0-2 in, the VDG's mode bits out
+    STB 1,X                         ; both control registers: data registers, interrupts off, CA2 and CB2
+    STB 3,X                         ;   outputs, low
+    CLR 2,X                         ; the VDG in its text mode
+    LDA #$02
+    STA ,X                          ; serial output marking
+    LDA #$FF
+    LDX #PIA0
+    CLR 1,X                         ; PIA 0's control registers: reach the direction registers
+    CLR 3,X
+    CLR ,X                          ; port A, the rows, all inputs
+    STA 2,X                         ; port B, the columns, all outputs
+    STB 1,X                         ; both control registers as for PIA 1
+    STB 3,X
+    JMP INITHW_DONE                 ; the GIME has set the memory up: the SAM's bits stay as they are
+
+;; Starts a ROM pack by hand, for EXEC &HE010 (<EXECCARTVEC>): maps the cartridge's ROM in and jumps to it.
+EXECCART:
+    JSR CARTROM
+    JMP ROMPAK
+    ; the rest of 1.2's memory size check, left in place and never run
+    BITB 2,X
+    BEQ INITHW_DONE
+    CLR -2,X
+    BITB 2,X
+    BEQ INITHW_64K
+    LEAU -2,U
+.else
     LDX #PIA1
     CLR -3,X                        ; PIA 0's control registers: reach the direction registers
     CLR -1,X
@@ -232,6 +279,7 @@ INITHW_SAM:
     BEQ INITHW_64K                  ; low with the columns low: 64K chips
     LEAU -2,U                       ; 16K chips: set M0 rather than M1
 .endif
+.endif
 INITHW_64K:
     STA -3,U                        ; set the SAM's memory size bit
 INITHW_DONE:
@@ -249,6 +297,13 @@ COLDST_CLEAR:
     JSR CLRSCN                      ; X = the screen
     CLR ,X+                         ; the zero byte before the program, which starts at $0401
     STX TXTTAB
+.if COCO3
+    LDX #$7FFF                      ; BASIC has the bottom 32K: the GIME maps the rest
+    BRA COLDST_TOP
+    .repeat 10
+    NOP                             ; where the RAM test was
+    .endrepeat
+.else
 COLDST_SIZE:
     LDA 2,X                         ; RAM if a complemented byte reads back complemented
     COMA
@@ -258,6 +313,7 @@ COLDST_SIZE:
     LEAX 1,X
     COM 1,X                         ; put the byte back
     BRA COLDST_SIZE
+.endif
 COLDST_TOP:
     STX TOPRAM
     STX MEMSIZ
@@ -284,6 +340,24 @@ COLDST_HOOKS:
     STA LINHDR-1                    ; RTS, an end for the line before the input buffer
 .endif
     JSR ERASEP
+.if COCO3
+    JMP EXBAS+2                     ; Extended BASIC is always there, and signs on
+
+;; Waits for a key, blinking the cursor, then blanks it, on the hi-res text screen when one is in use; the
+;; start-up patches <WAITKY> to come here.
+;;
+;; Out:  A = the key
+WAITKY3:
+    PSHS B,X
+    TST HRWIDTH
+    LBNE WAITKY20                    ; a hi-res text screen
+WAITKY3_LOOP:
+    JSR BLINK
+    JSR KEYIN
+    BEQ WAITKY3_LOOP
+    JMP WAITKY_BLANK
+    .byte RSTVEC                    ; the last byte of 1.2's STX RSTVEC, left in place
+.else
     LDX #$4558                      ; "EX": the start of Extended BASIC's ROM?
     CMPX EXBAS
     LBEQ EXBAS+2                    ; then it signs on instead
@@ -292,6 +366,7 @@ COLDST_HOOKS:
     JSR STROUT1
     LDX #BAWMST
     STX RSTVEC                      ; RESET now warm starts here
+.endif
 COLDST_RSTFLG:
     LDA #$55
     STA RSTFLG
@@ -305,7 +380,11 @@ BAWMST:
     CLR DEVNUM                      ; output to the screen
     JSR RSTSTK
     ANDCC #$AF                      ; clear the interrupt and fast-interrupt masks
+.if COCO3
+    JSR CLS                         ; through its hook, which clears the hi-res text screen in use
+.else
     JSR CLRSCN
+.endif
 BAWMST_OK:
     JMP OKPRMT
 
@@ -318,7 +397,11 @@ FIRQSV:
 ;; Starts the ROM pack in the cartridge port: waits a moment, then sets up the hardware and jumps to $C000 with
 ;; <RSTFLG> cleared, so RESET cold starts.
 CARTST:
+.if COCO3
+    JSR CARTFIRQ                    ; the CoCo 3's interrupt vectors invalid, and the ROM mapped in
+.else
     JSR DELAY
+.endif
     JSR DELAY
 .if VERSION = 10
     LDU #CARTGO
@@ -466,6 +549,7 @@ WAITKY_LOOP:
     BSR BLINK
     BSR KEYIN
     BEQ WAITKY_LOOP
+WAITKY_BLANK:
     LDB #$60                        ; a space, as the screen stores it
     STB [CURPOS]
 WAITKY_DONE:
@@ -476,11 +560,18 @@ WAITKY_DONE:
 ;;
 ;; Out:  A = the key, or zero, zero = set when none
 KEYCHK:
+.if COCO3
+    JMP KEYIN                       ; always scan the whole keyboard
+    .repeat 7
+    RTS
+    .endrepeat
+.else
     CLR PIA0+2                      ; strobe every column
     LDA PIA0
     COMA
     ASLA                            ; drop the joystick comparator
     BEQ KEYRD_DONE                  ; nothing down
+.endif
 ;; Scans the keyboard for a key newly pressed, debounces it and turns it into ASCII.
 ;;
 ;; Each column is strobed in turn and its rows compared with what <KEYBUF> held, so only a key that has just gone
@@ -993,6 +1084,7 @@ CRDLY:
 ;; In:   A = the character
 SCRCHR:
     PSHS A,B,X
+SCRCHR_SAVED:
     LDX CURPOS
     CMPA #$08
     BNE SCRCHR_ENTER
@@ -2132,6 +2224,7 @@ CKRPAR:
 ;; Calls: RVEC22
 CLS:
     JSR RVEC22
+CLS_HOOKED:
     BEQ CLRSCN
     JSR GETBYT
     CMPB #8
@@ -6148,8 +6241,21 @@ UNUSED:
     .byte $8F, $52, $43, $89, $CD
 
 ;; The 6809's interrupt vectors: each points to page 1's JMP, which later ROMs can change, except RESET's.
+;;
+;; On the CoCo 3 they point to the GIME's constant page, <INT_SWI3> to <INT_NMI>, whose jumps start-up copies from
+;; <INTIMAGE>, and RESET goes to $8C1B, in the patched Extended BASIC, which maps the whole ROM in and starts the
+;; CoCo 3 at <COCO3RESET>.
 VECTRS:
     .dbyt SEARCH                    ; reserved
+.if COCO3
+    .dbyt INT_SWI3                  ; SWI3
+    .dbyt INT_SWI2                  ; SWI2
+    .dbyt INT_FIRQ                  ; FIRQ
+    .dbyt INT_IRQ                   ; IRQ
+    .dbyt INT_SWI                   ; SWI
+    .dbyt INT_NMI                   ; NMI
+    .dbyt INTRESET                  ; RESET
+.else
     .dbyt SW3VEC                    ; SWI3
     .dbyt SW2VEC                    ; SWI2
     .dbyt FRQVEC                    ; FIRQ
@@ -6157,3 +6263,4 @@ VECTRS:
     .dbyt SWIVEC                    ; SWI
     .dbyt NMIVEC                    ; NMI
     .dbyt RESVEC                    ; RESET
+.endif

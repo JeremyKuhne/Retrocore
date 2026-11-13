@@ -616,7 +616,7 @@ public class M6809CoreTests
         }
 
         StepAndSnapshot();
-        Allocations.Fewest(StepAndSnapshot).Should().Be(0);
+        Allocations.During(StepAndSnapshot).Should().Be(0);
     }
 
     /// <summary>

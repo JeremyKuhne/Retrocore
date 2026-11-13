@@ -68,7 +68,7 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && dialect == BasicDialect.Level2) { break; }
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
             if (StartsWord(text, index, "REM")) { break; }
             if (StartsWord(text, index, "DATA"))
             {
@@ -76,13 +76,13 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (Jump(text, index, out int after) is not { } jump) { continue; }
+            if (Jump(dialect, text, index, out int after) is not { } jump) { continue; }
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
         // Integer BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only when one of
         // that name is defined.
-        if (dialect == BasicDialect.Integer)
+        if (dialect is IntegerBasicDialect)
         {
             references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
             for (int index = 0; index < references.Count; index++)
@@ -130,28 +130,43 @@ public sealed partial class BasicProgram
         return text;
     }
 
-    // The jump word starting at an index, and where the text after it starts.
-    private static (string Word, bool List, bool Required)? Jump(string text, int index, out int after)
+    // The jump word starting at an index, and where the text after it starts. Business BASIC takes a word only with
+    // a separator before and after it, a period being part of a name, so GOTOCOUNT=1 is an assignment there.
+    private static (string Word, bool List, bool Required)? Jump(BasicDialect dialect, string text, int index, out int after)
     {
         after = index;
-        if (index > 0 && char.IsAsciiLetterOrDigit(text[index - 1])) { return null; }
+        bool business = dialect == BasicDialect.BusinessBasic;
+        if (index > 0 && InName(text[index - 1], business)) { return null; }
+        int end = -1;
+        (string Word, bool List, bool Required)? found = null;
         if (GoTo().Match(text, index) is { Success: true } go && go.Index == index)
         {
-            after = index + go.Length;
-            return s_jumps[1];
+            // GO TO, and Color BASIC's GO SUB, with spaces between.
+            end = index + go.Length;
+            found = go.Groups["word"].Value.Equals("SUB", StringComparison.OrdinalIgnoreCase) ? s_jumps[0] : s_jumps[1];
         }
-
-        foreach ((string word, bool list, bool required) jump in s_jumps)
+        else
         {
-            if (string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0)
+            foreach ((string word, bool list, bool required) jump in s_jumps)
             {
-                after = index + jump.word.Length;
-                return jump;
+                if (string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    end = index + jump.word.Length;
+                    found = jump;
+                    break;
+                }
             }
         }
 
-        return null;
+        if (found is null) { return null; }
+        if (business && end < text.Length && InName(text[end], business)) { return null; }
+        after = end;
+        return found;
     }
+
+    // Whether a character can be part of a name; Business BASIC's names hold periods.
+    private static bool InName(char character, bool business) =>
+        char.IsAsciiLetterOrDigit(character) || (business && character == '.');
 
     // Reads the line numbers and labels after a jump word: one, or a list after GOTO and GOSUB.
     private static int Targets(
@@ -170,11 +185,13 @@ public sealed partial class BasicProgram
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
                 bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
-                if (jump.Required || (labels.ContainsKey(label) && alone))
+                if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
-                    references.Add((at, end, label, jump.Required, jump.Word));
+                    // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.
+                    return at;
                 }
 
+                references.Add((at, end, label, jump.Required, jump.Word));
                 at = end;
             }
             else
@@ -211,7 +228,7 @@ public sealed partial class BasicProgram
         (index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
             && string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
 
-    [GeneratedRegex(@"GO\s+TO", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"GO\s+(?<word>TO|SUB)", RegexOptions.IgnoreCase)]
     private static partial Regex GoTo();
 
     [GeneratedRegex(@"@?(?<name>[A-Za-z_][A-Za-z0-9_]*)")]

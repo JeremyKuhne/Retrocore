@@ -63,7 +63,10 @@ public sealed partial class BasicEvaluator
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
-    private double True => LevelTwo ? -1 : 1;
+    // Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
+    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect;
+
+    private double True => Bitwise ? -1 : 1;
 
     /// <summary>
     ///  Evaluates an expression.
@@ -76,9 +79,14 @@ public sealed partial class BasicEvaluator
     public BasicResult Evaluate(string expression)
     {
         ArgumentNullException.ThrowIfNull(expression);
-        if (_dialect == BasicDialect.Integer)
+        if (_dialect is IntegerBasicDialect)
         {
             return new IntegerBasicExpression(_variables, _memory).Evaluate(expression);
+        }
+
+        if (_dialect == BasicDialect.BusinessBasic)
+        {
+            return new BusinessBasicExpression(_variables).Evaluate(expression);
         }
 
         if (BareName().IsMatch(expression.Trim())) { return Variable(expression.Trim(), subscripts: null); }
@@ -115,7 +123,8 @@ public sealed partial class BasicEvaluator
     /// <returns>The text.</returns>
     public string Format(BasicResult result)
     {
-        if (_dialect == BasicDialect.Integer) { return IntegerBasicExpression.Format(result.Value); }
+        if (_dialect is IntegerBasicDialect) { return IntegerBasicExpression.Format(result.Value); }
+        if (_dialect == BasicDialect.BusinessBasic) { return BusinessBasicExpression.Format(result.Value); }
         if (result.Value.Text is { } text)
         {
             StringBuilder builder = new("\"");
@@ -144,7 +153,7 @@ public sealed partial class BasicEvaluator
     {
         if (!Take("NOT")) { return Relation(); }
         double value = Number(Not());
-        return new(new(LevelTwo ? ~ToInteger(value) : (value == 0 ? 1 : 0)));
+        return new(new(Bitwise ? ~ToInteger(value) : (value == 0 ? 1 : 0)));
     }
 
     private BasicResult Relation()
@@ -209,7 +218,7 @@ public sealed partial class BasicEvaluator
             {
                 BasicResult right = Unary();
                 double divisor = Number(right);
-                if (divisor == 0) { throw new FormatException(LevelTwo ? "?/0 ERROR." : "?DIVISION BY ZERO ERROR."); }
+                if (divisor == 0) { throw new FormatException(Bitwise ? "?/0 ERROR." : "?DIVISION BY ZERO ERROR."); }
                 left = new(new(Number(left) / divisor), left.Double || right.Double);
             }
             else
@@ -257,9 +266,9 @@ public sealed partial class BasicEvaluator
 
         if (value == '"') { return StringLiteral(); }
         if (char.IsAsciiDigit((char)value) || value == '.') { return NumberLiteral(); }
-        if (_dialect.Keyword(value) is { } word)
+        if (_dialect.KeywordAt(_bytes, _at, out int length) is { } word)
         {
-            _at++;
+            _at += length;
             return word == "FN" ? Function() : Call(word);
         }
 
@@ -489,7 +498,7 @@ public sealed partial class BasicEvaluator
     }
 
     private BasicResult Logic(BasicResult left, BasicResult right, Func<int, int, int> bits, Func<bool, bool, bool> logic) =>
-        LevelTwo
+        Bitwise
             ? new(new(bits(ToInteger(Number(left)), ToInteger(Number(right)))))
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
 
@@ -515,8 +524,8 @@ public sealed partial class BasicEvaluator
     private bool Take(string keyword)
     {
         Skip();
-        if (_at >= _bytes.Length || _dialect.Keyword(_bytes[_at]) != keyword) { return false; }
-        _at++;
+        if (_at >= _bytes.Length || _dialect.KeywordAt(_bytes, _at, out int length) != keyword) { return false; }
+        _at += length;
         return true;
     }
 

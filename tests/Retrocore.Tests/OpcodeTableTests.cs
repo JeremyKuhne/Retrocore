@@ -25,11 +25,22 @@ public class OpcodeTableTests
     [DataRow(ProcessorVariant.Rockwell65C02, "757C8CF8F61EF1608F287360FE8FA8BB69CFB24849FD2A909C47F3EFDF1D41A4")]
     public void PackedMapsMatchOriginalWithoutAllocation(ProcessorVariant variant, string expectedHash)
     {
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        ReadOnlySpan<OpCode> table = OpcodeTable.Get(variant);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
-        table.Length.Should().Be(256);
+        // The measured read is copied out and checked, so optimized code cannot drop it; it runs once first, so
+        // what its first use loads is not counted.
+        OpCode[] copy = new OpCode[256];
+        int length = 0;
+        void Read()
+        {
+            ReadOnlySpan<OpCode> measured = OpcodeTable.Get(variant);
+            length = measured.Length;
+            measured.TryCopyTo(copy);
+        }
+
+        Read();
+        Array.Clear(copy);
+        Allocations.During(Read).Should().Be(0);
+        length.Should().Be(256);
+        ReadOnlySpan<OpCode> table = copy;
         for (int i = 0; i < table.Length; i++)
         {
             table[i].Code.Should().Be((byte)i);

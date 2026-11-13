@@ -50,11 +50,11 @@ floating bus and writes go nowhere, so BASIC finds the top of memory where the R
 | Slot | II and II Plus | IIe |
 | --- | --- | --- |
 | 0 | The language card or a firmware card, or empty (`slot0`) | Built in: the IIe's language card |
-| 1, 2, 5 | Disk II controllers or the mouse card | Disk II controllers or the mouse card |
-| 3 | A Disk II controller or the mouse card | The 80-column firmware |
-| 4 | The Mockingboard, a Disk II controller or the mouse card | The Mockingboard, a Disk II controller or the mouse card |
-| 6 | The Disk II (`diskImage`, `dos`) | The Disk II (`diskImage`, `dos`) |
-| 7 | Block storage (a `.po` `diskImage`) or a Disk II | Block storage or a Disk II |
+| 1, 2, 5 | Disk II controllers, the mouse card, ProFile cards or the 3.5 disk controller | The same as the II Plus |
+| 3 | A Disk II controller, the mouse card, a ProFile card or the 3.5 disk controller | The 80-column firmware |
+| 4 | The Mockingboard, a Disk II controller, the mouse card, a ProFile card or the 3.5 disk controller | The same as the II Plus |
+| 6 | The Disk II (`diskImage`, `dos`), a ProFile card or the 3.5 disk controller | The same as the II Plus |
+| 7 | Block storage (a `.po` `diskImage`), a Disk II, a ProFile card or the 3.5 disk controller | The same as the II Plus |
 
 **The language card** is 16 KB of RAM at $D000-$FFFF, its first 4 KB in two banks, switched at $C080-$C08F. The II
 Plus has one unless `slot0` says otherwise; DOS 3.3's System Master loads the other BASIC into it.
@@ -98,6 +98,16 @@ the tests pin every build by digest.
 | [`CharacterGenerator.asm`](../src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | `IIBOARD` 1: the II and II Plus's 7341-0036; else the IIe's video ROM, with `ENHANCED` |
 | [`Firmware.Original.asm`, `Firmware.Enhanced.asm`](../src/Retrocore.Machines.Apple2/Roms/System) | The IIe's internal firmware, $C100-$CFFF |
 | [`Slot7.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's firmware, $C700-$C7FF |
+| [`Mouse.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Mouse.rom.asm) | The emulated mouse card's firmware, $Cn00-$CnFF in any slot |
+| [`ProFile.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/ProFile.rom.asm) | The emulated ProFile card's firmware, $Cn00-$CnFF in any slot |
+| [`Disk35.rom.asm`](../src/Retrocore.Machines.Apple2/Roms/Disk35.rom.asm) | The emulated 3.5 disk controller's firmware, $Cn00-$CnFF in any slot |
+| [`Disk35/Disk35Controller.asm`](../src/Retrocore.Machines.Apple2/Roms/Disk35/Disk35Controller.asm) | Apple's Apple II 3.5 Disk Controller Card EPROM (341-0438-A, 32 KB): the host's slot page and $CA00-$CFFF code, the diagnostics, the card's start-up self-test and its 65C02 firmware |
+
+Each of the emulated cards' firmware debugs at its source: a breakpoint in it stops there, and the call stack shows its
+lines. The mouse, ProFile and 3.5 controller cards' firmware reaches nothing inside itself by an absolute address, so
+the same bytes work in any slot, and the debugger maps the source to whichever slot holds the card, its labels (such
+as `SETMOUSE`, `Driver` or `SMARTPORT`) resolving to that slot's page. Apple's 3.5 controller EPROM is a reference;
+the emulator doesn't run it.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978
 ([archive.org](https://archive.org/details/Apple_II_Redbook)) for the original Monitor, the Mini-Assembler, SWEET16
@@ -128,6 +138,33 @@ until Escape, and a strip under the screen says which; in AppleSharp, where the 
 does, until a right-click, and the status line says which. AppleSharp's **Shift+F11** steps the monitor through color,
 black and white, green and amber, and keeps the choice.
 
+**The ProFile card** goes in any free slot (`proFiles`, or Add Card), as many as there are slots, each with Apple's
+ProFile hard disk cabled to it. The ProFile takes a ProDOS-order image (`.po` or `.hdv`) of up to 65535 blocks, inserted
+from the Retro Devices view or the launch; the machine can write to it, and the changes stay in memory. The card's
+256-byte firmware (`ProFile.rom.asm`) is the SDK's own, not Apple's: it is a ProDOS block device ($20, $00 and $03 at
+$Cn01-$Cn05, its driver's offset at $CnFF), so ProDOS lists it and the startup scan boots it, from the highest slot
+first. The firmware talks to the ProFile as Apple's SOS driver does on the Apple III: CMD and BSY handshakes, the
+six-byte command, four status bytes and the block, a byte at a time through the card's ports at $C080 plus 16 times the
+slot. `ProFileDrive` plays the ProFile's Z8 controller, shared with the [Apple III](Apple3.md#the-profile)'s card.
+
+| Port | What it does |
+| --- | --- |
+| +0 | Write: a byte to the ProFile |
+| +1 | Read: a byte from the ProFile |
+| +2 | Read: bit 7 set while BSY is low (ready), bit 0 set when no ProFile answers |
+| +3 | Write: clears a parity error (there are none) |
+| +4, +5 | Any access: CMD low, CMD high |
+| +6, +7 | Any access: the ProFile's reset on, off |
+| +8, +9 | Read: the ProFile's size in blocks, for STATUS; Retrocore's own |
+
+The first four are the Apple III card's. Its lines are an addressable latch in its $Cn00 page, which this card keeps for
+its firmware, so they are ports here. Apple's ProFile gives its size only in its identification block ($FFFFFF, which
+the drive answers), and reading that through the handshakes does not fit in 256 bytes beside the driver, so the card
+reports it. FORMAT succeeds and does nothing. A boot that fails, as from a ProFile with no image, goes on with the
+Autostart Monitor's startup scan from the next lower slot, as an empty Disk II drive does; with the II's original
+Monitor, which has no scan, it stops. The emulated ProFile answers at once, with no seek or rotation time, and
+keeps no block tags.
+
 **Apple's mouse firmware** (341-0270-C) is an SDK source too, `Roms/Mouse/MouseInterface.asm`, which assembles
 byte-identically to the EPROM (`MouseInterfaceSourceTests`). The emulator doesn't run it: it is eight 256-byte banks
 switched through $Cn00 by the card's 6821 PIA, passing bytes to a 68705 microcontroller that does the work. It is the
@@ -146,6 +183,52 @@ reference the emulator's firmware follows:
 | Screen holes $0678+n and $06F8+n, and MOUMODE's bits 4-6 | Its own scratch space | Not used |
 | Timing | Calls take hundreds of cycles, passing bytes to the microcontroller | About a hundred |
 
+**The 3.5 disk controller** goes in any free slot (`disk35`, or Add Card), one per machine, and answers as Apple's Apple
+II 3.5 Disk Controller Card (1991, the "SuperDrive card") does: a SmartPort with two SuperDrives, `disk35d1` and
+`disk35d2`, which take 400K and 800K Apple disks and 720K and 1440K MFM disks as `.po`, `.2mg` (ProDOS order; a locked
+image is write-protected), `.hdv`, `.img` or 3.5-inch `.dsk` images. `disk35Images` puts disks in them. `PR#n` or the
+startup scan boots drive 1, as Apple's card does, so `"disk35": 5` with ProDOS's 800K disk starts ProDOS, which finds
+both drives as slot 5's. Its 256-byte firmware (`Disk35.rom.asm`) is the SDK's own: it has the card's identification
+($20, $00, $03 and $00 at $Cn01-$Cn07, $C0 at $CnFB, $BF at $CnFE) and its entries at the same places (boot at $Cn00,
+ProDOS at $Cn1C, SmartPort at $Cn1F), and hands each call to the card through its ports at $C080 plus 16 times the
+slot, as the mouse card does. Writes change the disks in memory; the images are not written back.
+
+**Apple's card's EPROM** (341-0438-A, 32 KB) is an SDK source too, `Roms/Disk35/Disk35Controller.asm`, which assembles
+byte-identically to the chip (`Apple2Disk35Tests`). The card is two computers: its own 65C02 at 2 MHz with 32 KB of RAM
+drives a SWIM through its I/O page at $0A00, and copies the host's code out of the EPROM into the RAM the Apple II sees
+at $Cn00, $C800-$CBFF (one of 16 banks, latched through $C080+$n0) and $CC00-$CFFF. The host spins on branches in its
+slot page whose offsets the card rewrites when it is ready, and passes each call through the card's page zero. The
+parts:
+
+| File | ROM | What it is |
+| --- | --- | --- |
+| `Disk35Host.asm` | $8100-$87FF | The host's slot page, its call, boot and transfer code at $CA00-$CFFF, with 65816 paths for the IIgs |
+| `Disk35Diagnostics.asm` | $8800-$8EFF | The diagnostics, which three Control-Ds at boot or `Cn0DG` start |
+| `Disk35SelfTest.asm` | $8F00-$99FF | The card's start-up self-test of its EPROM, SWIM and RAM, and the diagnostics' card side |
+| `Disk35Card.asm`, `Disk35ZeroPage.asm` | $D000-$FFFF, $8000 | The card's firmware: the commands, the drives, GCR and MFM tracks, the track cache and the SmartPort bus for a UniDisk 3.5 |
+
+The emulator doesn't run it; it is the reference the emulated card follows:
+
+| | Apple's card | The emulator's |
+| --- | --- | --- |
+| Drives | Two Apple 3.5 Drives or SuperDrives, and UniDisk 3.5s on its SmartPort bus, up to four units | Two SuperDrives, always units 1 and 2 |
+| Parameter counts, bad commands | The host checks each command's count ($04) and refuses $0C and up ($01) | The same |
+| ProDOS | Unit numbers in its slot are units 1-2, in slot 2 units 3-4, elsewhere 5-6; STATUS gives the block count in X and Y and $2B for a write-protected disk; errors other than 0, $2B, $28 and $2F become $27, and $11 becomes $28 | The same |
+| Unit 0's STATUS | Code 0: the unit count, 0, then $01 $00 $00 $01 $00 $00; code 1: "APPLE UNIVERSAL 3.5 CONTROLLER" | The same |
+| A drive's STATUS | Code 0: $E8, +$10 with a disk, +$04 write-protected, +$01 a changed disk (extended calls only), and the block count; code 3: the DIB, length 8 and "DISK 3.5HD" (an FDHD's), type $01, subtype $C1, version $1010; code 5: the last call's details; others $21 | The same, with code 5 all zero |
+| A changed disk | The first extended call after a disk goes in returns $2E; standard calls take the new disk | The same |
+| CONTROL | 0 forgets the disk, 4 ejects, 9 and $0A set a format's sides and interleave, $0C-$13 reach into the card's RAM and run code there; a list of $400 bytes or more is $22 | 0 and 4 the same; 9 and $0A checked and ignored; $0C-$13 taken and ignored but $12 (run code), which is $21 |
+| FORMAT | Writes and verifies every track, 800K or 1440K by the drive and disk; a failed format ejects the disk | Clears every block |
+| READ and WRITE ($08, $09) | A tagged 524-byte block of a GCR disk | The same, with tags read as zero and not kept |
+| Commands $0A and $0B | Choose a format from up to four bytes in the buffer; list the formats a drive can write | $0A checks the bytes as Apple's does and formats every disk as its own kind; $0B is $21 |
+| OPEN, CLOSE | $01 | The same |
+| Boot | Unit 1's block 0 at $0800; it runs at $0801 with X = $n0 if it starts with $01 and a nonzero byte; otherwise the next slot when the scan brought it, or UNABLE TO BOOT and BASIC | The same |
+| Timing | A block from a new track takes a revolution, about 100-150 ms; one cached from the same track, none | Every call at once |
+| Diagnostics, $CnFB-$CnFF before the card is ready, the IIgs paths | Present | Not modeled: `Cn0DG` returns |
+
+A mode that runs Apple's EPROM on an emulated 65C02 and SWIM, closing these differences, is planned in
+[the backlog](backlog/Disk35Hardware.md).
+
 [Starting a machine](../extension/README.md#starting-a-machine) explains both. The launch options for the family, besides those every machine has (`source`, `program`, `basic`, `speed` and the
 rest, in the [extension README](../extension/README.md)):
 
@@ -161,6 +244,8 @@ rest, in the [extension README](../extension/README.md)):
 | `romDirectory` | all | The model's ROM dumps, in place of the SDK's builds |
 | `mockingboard`, `sound` | all | The Mockingboard in slot 4 (defaulting on when `sound` is `mockingboard`), and what the panel plays (`speaker`, `mockingboard` or `off`; `speaker` by default) |
 | `mouse` | all | The mouse card in that slot, 1 to 7 (none by default) |
+| `disk35`, `disk35Images` | all | The 3.5 disk controller in that slot, 1 to 7 (none by default), and the disks in its drives 1 and 2 |
+| `proFiles` | all | ProFile cards, each `{ "slot": 5, "image": "hd.po" }`; the image is optional (none by default) |
 | `screen` | all | The monitor: `color` (the default), `rgb` on a IIe (an RGB card's color monitor, without fringing), or a monochrome `white` (black and white), `green` or `amber` one, which shows each of the 560 dots sharply; the panel's **Screen** menu changes it |
 | `diskImage`, `diskController`, `diskSectors` | all | A disk in slot 6 (`diskII`) or slot 7 (`slot7`, the default for `.po`), and 16- or 13-sector Disk II firmware |
 | `diskBootRom`, `diskSequencerRom`, `sequencerLayout` | all | Disk II P5/P6 ROM dumps in place of the SDK's ([DiskII.md](DiskII.md)) |
@@ -191,8 +276,8 @@ BASIC shows their source wherever the bytes match. The display panel follows the
 buttons, which are the Apple keys on the IIe and the game port's buttons 0 and 1 on the II and II Plus.
 
 **AppleSoft** debugs on its own BASIC thread on every model that runs it: breakpoints and stepping by statement, GOSUBs
-in the call stack, variables, arrays, `DEF FN` functions, `FOR` loops and AppleSoft expressions. The II Plus's
-AppleSoft is the original IIe's but for its last byte.
+in the call stack, variables, arrays, `DEF FN` functions, `FOR` loops and AppleSoft expressions, under DOS 3.3 and
+under ProDOS's BASIC.SYSTEM alike. The II Plus's AppleSoft is the original IIe's but for its last byte.
 
 **Integer BASIC** runs on the II, a II Plus's firmware card, or a language card DOS 3.3's INT loaded, and debugs on
 its own BASIC thread as AppleSoft does: breakpoints, stepping by statement, GOSUBs in the call stack, its variables,
@@ -213,11 +298,14 @@ their programs debug on a Pascal thread, by source line through the compiler's l
 | `SystemSourceTests`, `AppleSoftTests`, `Apple2SourceTests` | Every Apple II, II Plus and IIe ROM source's digest, the ROMs built from them against the dumps, and each model starting BASIC |
 | `Apple2MachineTests`, `Apple2PlusTests`, `Apple2IITests`, `Apple2SlotTests`, `Apple2GamePortTests` | The IIe's soft switches and auxiliary memory, the hardware the II and II Plus lack next to the IIe, slot 0 and peripheral cards, memory sizes, the keyboard, the game port, both Monitors, revision 0, and booting from dumps |
 | `Apple2VideoTests`, `Apple2VideoOracleTests`, `Apple2AudioTests`, `Apple2MockingboardTests` | Text, lo-res, hi-res and double hi-res video (including against apple2ts), the speaker and the Mockingboard |
+| `Apple2Disk35Tests` | Apple's 3.5 controller EPROM's source against its digest and the dump (from `superdrive-roms` under `RETROCORE_CACHE`, or `RETROCORE_SUPERDRIVE_ROMS`), the emulator's firmware's identification against Apple's slot page, booting through the startup scan and a failed boot, SmartPort and ProDOS calls run on the CPU, and ProDOS 8 booting from A2DeskTop's 800K disk (from `disks2desktop` under `RETROCORE_CACHE`) |
 | `Apple2MouseTests`, `MouseInterfaceSourceTests` | The mouse card's firmware run on each CPU: its identification, routines, screen holes, clamping, interrupts and BASIC's `IN#`/`PR#`; Apple's mouse firmware's source against the EPROM (from `mouse-roms` under `RETROCORE_CACHE`, or `RETROCORE_MOUSE_ROMS`) and its identification against the emulator's |
+| `Apple2ProFileTests` | The ProFile card's firmware run on each CPU against the emulated ProFile: STATUS, READ, WRITE, FORMAT and their errors, the startup scan booting it, and ProDOS booting from it with A2DeskTop's first disk (in `<cache>\disks\a2desktop`) |
 | `Apple2DosTests`, `SystemMasterBasicTests` | DOS 3.3's System Master on the II and II Plus, switching BASIC with FP and INT through the language card and firmware cards, and the System Masters' `FPBASIC` and `INTBASIC` files |
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |
 | `tools/Test-IIeDap.mjs`, `tools/Test-IIDap.mjs`, `tools/Test-IIPlusDap.mjs`, `tools/Test-IntegerBasicDap.mjs` | Each model and Integer BASIC through the debug adapter, from dumps and from the SDK's ROMs |
+| `tools/Test-ProDosBasicDap.mjs` | AppleSoft's BASIC thread under ProDOS's BASIC.SYSTEM, which runs statements past `GONE`: breakpoints, stepping, Set Next Statement, errors and interrupts, on the ProDOS 2.4.3 image from `Fetch-M1Dependencies.ps1` |
 
 Dumps are looked for in `RETROCORE_IIE_ROMS`, `RETROCORE_IIPLUS_ROMS` and `RETROCORE_II_ROMS` (or `apple2-roms` under
 `RETROCORE_CACHE`, default `%USERPROFILE%\Retrocore`, for the II and II Plus); without them dump-dependent tests are

@@ -86,6 +86,25 @@ internal static class Apple3SdkModules
     /// </summary>
     internal const int SosBootSize = 512;
 
+    /// <summary>
+    ///  Assembles Business BASIC 1.23's interpreter, the SOS.INTERP file, from its header at <c>$51F2</c>.
+    /// </summary>
+    /// <param name="path">The <c>BusinessBasic.asm</c> source.</param>
+    /// <returns>The file.</returns>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static AssemblyResult AssembleBusinessBasic(string path) =>
+        Assemble(path, BusinessBasicOrigin, BusinessBasicSize);
+
+    /// <summary>
+    ///  Where Business BASIC 1.23's SOS.INTERP starts: its 14-byte header, before the code it loads at <c>$5200</c>.
+    /// </summary>
+    internal const int BusinessBasicOrigin = 0x51F2;
+
+    /// <summary>
+    ///  The size of Business BASIC 1.23's SOS.INTERP file.
+    /// </summary>
+    internal const int BusinessBasicSize = 25963;
+
     private static AssemblyResult Assemble(string path, int origin, int size, string? text = null)
     {
         string full = Path.GetFullPath(path);

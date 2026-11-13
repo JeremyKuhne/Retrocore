@@ -1,7 +1,7 @@
 # Backlog: Apple Pascal
 
-Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Steps
-1-4 and most of Later are built for both machines; see Built. [Pascal.md](../Pascal.md) is the user guide.
+Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Built
+for both machines, every version: see Built. Writing Pascal (Apple II) volumes is what remains. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -12,8 +12,8 @@ Both machines share the p-code, the code file format and most of the operating s
 | --- | --- | --- |
 | Interpreter | `SYSTEM.APPLE`, loaded into the language card | `SOS.INTERP`, a SOS interpreter file |
 | Files | Pascal volumes: a flat directory in blocks 2-5 | SOS volumes, through SOS's file calls |
-| Code file version | 2 (II.1) | 4 (1.1) and 6 (1.2) |
-| Memory | 64K: the language card holds the interpreter | Banks; the interpreter sits below `$B800` in the system bank |
+| Code file version | 1 (1.0), 2 (1.1), 5 (1.2) and 6 (1.3) | 3 (1.0), 4 (1.1) and 6 (1.2) |
+| Memory | 64K: the language card holds the interpreter; 1.3 needs 128K and keeps code in the auxiliary 64K | Banks; the interpreter sits below `$B800` in the system bank |
 
 So everything above the interpreter is written once, and each machine supplies its interpreter's addresses and its
 file system.
@@ -30,6 +30,7 @@ file system.
 | `Apple3Pascal1.2UpdateDisk1.dsk`, `…Disk2.dsk` | `05319655…daaf`, `334710c2…2ab9` | 1.2's interpreter, system and tools |
 | `UCSD Pascal 1.1_0.dsk` … `1.1_3.dsk` | `4e6b4792…cf4b`, `d6e7509a…4229`, `88b67683…1adf`, `86141693…3058` | Apple Pascal 1.1: APPLE0-APPLE3, with sample programs as source and code |
 | `UCSD Pascal 1.2_0.DSK` … `1.2_3.DSK` | `6f8fd3bd…16ab`, `25daeefe…1da0`, `6576fccb…9f21`, `488bc4bd…d275` | Apple Pascal 1.2 |
+| `UCSD Pascal 1.3_0.DSK` … `1.3_3.DSK` | `fb72505d…41a8`, `70296fd0…d00b`, `873b9e41…05a9`, `fea7dd59…fac0` | Apple Pascal 1.3, dated 3 September 1985, from the Internet Archive (items `211`-`214_Apple_II_Pascal_1.3_*`, whose labels swap APPLE0 and APPLE1) |
 
 **Already in Retrocore:** `SosVolume` reads SOS volumes, and `SosDriverCodeFile` reads a Pascal code file with one
 native segment (Titan's RAM disk driver). Apple III Pascal 1.1 boots on the emulator, edits, compiles with a
@@ -89,6 +90,40 @@ Built 2026-11-13, the second round:
 - **Not done:** Apple III Pascal 1.2, whose disks are updates to copy onto 1.1's (that needs SOS volumes the media
   library can write); `.TEXT` files open as plain text unless associated with `retrocore-pascal`; pacing pasted
   text to what the program takes.
+
+Built 2026-11-13, the third round:
+
+- **Every version at hand:** Apple Pascal 1.0 on the II Plus and Apple III Pascal 1.0 boot, compile and run, and
+  their frames read (`Apple2PascalTests`, `Apple3PascalTests`). 1.0's R(un) runs no code its C(ompile) wrote, so
+  the tests X(ecute) it; its Compiler leaves the code file open when it also writes a listing, so 1.0 compiles
+  without one; and Apple III Pascal 1.0's first disk has its known damaged Filer.
+- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings and
+  saplings), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
+- **Apple III Pascal 1.2** boots from disks built from 1.1's and the update's, compiles and runs HELLO (code
+  version 6), and its frames read. Its larger `SYSTEM.PASCAL` leaves no room on the boot disk for 1.1's Filer and
+  Library, so they go on the second. Its Editor asks `Edit what file?` and its Quit asks `Write to what file?`.
+- **Saving disks:** an Apple drive's `save` writes its disk to its image or another, as WOZ or as sectors in either
+  order; the Retro Devices view's **Save to Its Image** and **Save Disk As...**. `Test-PascalDap.mjs` saves the
+  disk the Compiler wrote both ways and lists HELLO.CODE on each.
+- **Paced pasting:** on the Apple II and III, `retro/type` keys go in a typist's pace apart (30,000 cycles a key and
+  300,000 a line on the II, twice that on the III), so the Editor takes a pasted program whole.
+- **`.text` sources** open as Apple Pascal.
+- **Not done:** writing Pascal volumes for the Apple II, and SOS trees (files over 128K, which a 140K disk barely
+  needs). Apple Pascal 1.3 had no image on an allowed host then; the fourth round adds it.
+
+Built 2026-11-13, the fourth round:
+
+- **Apple Pascal 1.3** on a 128K IIe boots, its Filer lists APPLE1, it compiles HELLO with a listing (code version
+  6) and runs it, and its frames read (`Apple2PascalTests`); `Test-PascalDap.mjs` stops in its Filer, steps and
+  steps out. Every code file on its disks decodes (`PascalMediaTests`, `PcodeTests`).
+- **Found:**
+  - 1.3 keeps code in the IIe's auxiliary 64K, read with RAMRD on at the fetch, and its mark stack and variables in
+    main memory. `PascalInterpreter.CodeBank` says where SEG, JTAB and IPC point; the debugger sets it from RAMRD at
+    each fetch, and `Apple2PascalMemory` reads bank 1 from auxiliary memory and bank 0 from main.
+  - Its APPLE1 needs 128K, so it doesn't run on the II Plus.
+  - Its Editor loses keys typed faster than a typist, more readily than 1.2's: the test types at the debugger's
+    paste pace. It asks `Edit what file?`, stays in its Quit menu after U(pdate), and its Compiler asks for a
+    listing file whatever the program says.
 
 ## The pieces
 
@@ -158,10 +193,9 @@ registers, found by its bytes, as `SosDriverModules` finds a driver.
 ### 5. Later
 
 - ~~A Pascal language and grammar in the extension~~ and ~~named variables~~: built in the second round.
-- Writing Pascal volumes and SOS volumes, with the media library ([Media.md](Media.md)), which Apple III Pascal 1.2
-  needs, and saving a disk the machine wrote back to its image.
-- Pasted text paced to what the program takes.
-- Apple Pascal 1.3, and Apple III Pascal 1.0.
+- ~~SOS volumes~~, ~~saving a disk~~, ~~paced pasting~~ and ~~Apple III Pascal 1.0~~: built in the third round.
+- Writing Pascal volumes, with the media library ([Media.md](Media.md)).
+- ~~Apple Pascal 1.3~~: built in the fourth round.
 
 ## Order
 

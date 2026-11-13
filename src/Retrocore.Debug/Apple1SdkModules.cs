@@ -8,7 +8,7 @@ namespace Retrocore.Debug;
 
 /// <summary>
 ///  The SDK's native sources for the Apple-1's firmware: the Monitor, the Apple Cassette Interface's PROM and the
-///  terminal's Signetics 2513 character generator.
+///  terminal's Signetics 2513 character generator; and Apple-1 BASIC, which loads from tape.
 /// </summary>
 internal static class Apple1SdkModules
 {
@@ -50,6 +50,31 @@ internal static class Apple1SdkModules
     /// <returns>The 512-byte assembly.</returns>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static AssemblyResult AssembleCharacterGenerator(string path) => Assemble(path, 0, 0x200);
+
+    /// <summary>
+    ///  Gets where Apple-1 BASIC loads and starts.
+    /// </summary>
+    internal const int BasicOrigin = 0xE000;
+
+    /// <summary>
+    ///  Gets the size of Apple-1 BASIC, the 4K bank at <c>$E000</c>.
+    /// </summary>
+    internal const int BasicSize = 0x1000;
+
+    /// <summary>
+    ///  Gets the root of Apple-1 BASIC's source in a ROM source directory.
+    /// </summary>
+    /// <param name="roms">The directory that holds the Apple-1's sources.</param>
+    /// <returns>The path of <c>Basic/Basic.asm</c>.</returns>
+    internal static string BasicPath(string roms) => Path.Join(roms, "Basic", "Basic.asm");
+
+    /// <summary>
+    ///  Assembles Apple-1 BASIC.
+    /// </summary>
+    /// <param name="path">The <c>Basic.asm</c> source, which includes its modules.</param>
+    /// <returns>The 4K assembly at <c>$E000</c>.</returns>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static AssemblyResult AssembleBasic(string path) => Assemble(path, BasicOrigin, BasicSize);
 
     private static AssemblyResult Assemble(string path, int origin, int size)
     {

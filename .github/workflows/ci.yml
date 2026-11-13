@@ -78,6 +78,9 @@ jobs:
         working-directory: Retrocore/extension
         run: |
           npm ci
+          # Check the committed grammars before compile regenerates them, so a
+          # stale grammar (an *Isa.txt or keyword change not regenerated) fails.
+          npm run check:grammar
           npm run compile
           npm run test:grammar
 

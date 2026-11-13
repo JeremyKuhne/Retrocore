@@ -123,7 +123,8 @@ The debugger supports:
   watches, Jump to Cursor, and Step Into from `CALL`, `USR`, or `&` straight into machine code;
 - **Apple Pascal debugging:** a **Pascal** thread for Apple Pascal on the Apple II and Apple III Pascal, with the
   p-machine's procedures as its call stack, breakpoints and steps by source line through the compiler's listing,
-  named variables, and `pascal` breakpoints on p-code ([Pascal.md](docs/Pascal.md));
+  named variables, and `pascal` breakpoints on p-code, and a decompiler that turns a code file back into Pascal that
+  Apple's Compiler compiles to the same p-code ([Pascal.md](docs/Pascal.md));
 - **Live memory views:** side-effect-free inspection and editing in Microsoft's Hex Editor or Memory Inspector,
   kept current while the machine runs, with Apple II language-card banks, firmware/slot ROMs, and IIe auxiliary
   RAM addressable directly regardless of active soft switches ([Memory.md](docs/Memory.md));

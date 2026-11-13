@@ -129,12 +129,55 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   code;
 - `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
   above.
+- `--pascal decompile code [--library library] [output.text]` decompiles a program back to Pascal (below);
+- `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code` compiles a source with Apple Pascal's own Compiler,
+  on an emulated Apple II;
+- `--pascal compare code code` compares two code files' segments, and says where their code first differs.
 
 A code file is a file's path, or a disk and the file's name: `--pascal disassemble APPLE3.dsk HILBERT.CODE HILBERT.2`.
 
 The libraries behind them are `PascalVolume`, `PascalCodeFile`, `PascalTextFile` and `SosVolumeBuilder` in
 `Retrocore.Media`, and the
 p-code and its disassembler in `Retrocore.Pascal`.
+
+## Decompiling
+
+`--pascal decompile` turns a program's code file back into Pascal, written so that Apple Pascal's Compiler compiles
+it to the same p-code:
+
+```text
+Retrocore.Debug --pascal decompile APPLE3.dsk HILBERT.CODE HILBERT.TEXT
+Retrocore.Debug --pascal compile HILBERT.TEXT APPLE1.dsk APPLE2.dsk HILBERT.CODE
+Retrocore.Debug --pascal compare APPLE3.dsk HILBERT.CODE HILBERT.CODE
+```
+
+The Compiler translates a statement at a time, without optimizing, so each IF, WHILE, REPEAT, FOR, CASE and WITH
+leaves its own pattern of jumps, and the stack holds each expression whole. What the code does not keep is made up:
+
+- **Names** come from offsets: `G3` for the program's variable at word 3, `A3` for a level-1 procedure's, `B3` a
+  level-2 one's, `PROC2` and `FUNC2` for procedure 2, `T1` for a type, `F4` for a record's field at word 4.
+- **Types** are inferred from how the code uses each word: arithmetic makes an integer, character I/O and a string's
+  elements a character, AND, OR and NOT a boolean; a range check gives a subrange, `IXA` an array, `INC` a record,
+  `SAS` a string's length. Where a use disagrees with the type chosen, `ORD`, `CHR`, `ODD`, `SUCC` and `PRED`, which
+  compile to nothing, convert it; a word used both as an integer and a pointer (or as bytes) is a variant record.
+- **Declarations** are one variable to a line, in the order of their offsets, as the Compiler allocates them, with
+  padding where the code never uses a word; files are grouped so they are opened in the same order.
+- **Procedures** nest as the order of their code shows, and one numbered before another whose code comes first is
+  declared FORWARD.
+- **Options**: `(*$I-*)`, `(*$R-*)`, `(*$G+*)` and `(*$V-*)` are written where the code shows unchecked I/O, unchecked
+  indexes, GOTO, or a string passed to a VAR string of another length.
+
+A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
+`--library disk NAME`); the source `USES` them as the program did. Where some code cannot be decompiled, the
+procedure says so in a comment, the command lists it as a warning, and exits with 1.
+
+Apple Pascal 1.1's sample programs (HILBERT, TREE, BALANCED, CROSSREF, DISKIO, GRAFDEMO, GRAFCHARS, SPIRODEMO,
+LINEFEED) and the BINDER utility decompile to sources that compile to the same code, but for the byte the Compiler
+skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
+decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
+units of a program's own (they need the Linker); a unit's variables; assembled procedures, which are declared
+`EXTERNAL`; and `SCAN`, `IDSEARCH` and `TREESEARCH`. A code file from another version's Compiler decompiles, but
+compiles the same only with that Compiler.
 
 ## Testing
 
@@ -145,6 +188,8 @@ p-code and its disassembler in `Retrocore.Pascal`.
   1.2 on the IIe. Apple III Pascal's disks are with the other Apple III disks
   (`RETROCORE_APPLE3_DISKS`), and Apple Pascal's in `RETROCORE_APPLE2_PASCAL_DISKS` (by default
   `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk` and `1.2_0.DSK` to `1.2_3.DSK`).
+- `PascalDecompilerTests` decompile two small programs kept as code files; with Apple Pascal's disks, each sample
+  program on APPLE3 is decompiled, compiled again on an emulated Apple II, and compared with the original.
 - `node tools/Test-PascalDap.mjs` drives the debug host on both machines, and on the Apple III compiles a program
   and stops in its source.
 

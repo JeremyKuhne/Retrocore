@@ -111,6 +111,26 @@ Built 2026-11-13, the third round:
 - **Not done:** Apple Pascal 1.3 (no image on an allowed host), writing Pascal volumes for the Apple II, and SOS
   trees (files over 128K, which a 140K disk barely needs).
 
+Built 2026-11-13, the fourth round (asked for: "a disassembler for Apple II/III compiled Pascal", then "Decompile to
+Pascal, ideally to something that can be recompiled into the exact same p-code"):
+
+- **Decompiler:** `PascalDecompiler` and `--pascal decompile`: a code file back to Pascal that the Compiler compiles to
+  the same code ([Pascal.md](../Pascal.md#decompiling)). Units are named from `PascalLibrary`, the library's
+  interface text.
+- **Checking it:** `EmulatedPascalCompiler` and `--pascal compile` run Apple Pascal 1.1's Compiler on an emulated
+  Apple II with the source as the workfile (`PascalTextFile.Write`, `PascalVolume.WriteFile`), in about four seconds;
+  `PascalCodeComparison` and `--pascal compare` compare code files. Apple's own sources on APPLE3 recompile to their
+  code files, but for BALANCED's and DISKIO's alignment bytes, which hold stale bytes and are not compared.
+- **Round trips:** the nine samples with sources and BINDER, without one, recompile to the same code
+  (`PascalDecompilerTests`).
+- **Found:** the Compiler allocates an identifier list from its last name, gives a function's result the first two
+  words, initializes units in the reverse of USES and files in the reverse of their declarations, keeps a WITH's
+  record (but a whole variable's) in a temporary, reaches a record variable's fields by their own offsets, writes
+  negative constants as their magnitude and NGI, folds no constant expression, and passes FILE OF records' sizes in
+  words; an untyped FILE is 40 words, a TEXT 301.
+- **Not done:** see [PcodeAssembly.md](PcodeAssembly.md), the backlog of p-code disassembly and reassembly, with the
+  decompiler's own next steps.
+
 ## The pieces
 
 ### 1. Media: volumes, sectors and code files

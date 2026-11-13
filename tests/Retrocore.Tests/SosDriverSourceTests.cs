@@ -165,7 +165,14 @@ public sealed class SosDriverSourceTests
         return (bytes.Slice(start, length).ToArray(), comment);
     }
 
-    private static AssemblyResult Assemble(string folder, string define, int origin)
+    /// <summary>
+    ///  Assembles a driver from the SDK's source.
+    /// </summary>
+    /// <param name="folder">The driver's folder, which holds its root of the same name.</param>
+    /// <param name="define">A symbol to set for a build other than the default, or empty.</param>
+    /// <param name="origin">Where the driver's code starts, after its comment record.</param>
+    /// <returns>The assembly.</returns>
+    internal static AssemblyResult Assemble(string folder, string define, int origin)
     {
         string root = SourcePath(folder);
         string text = File.ReadAllText(root);

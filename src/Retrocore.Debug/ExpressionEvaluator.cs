@@ -173,7 +173,7 @@ internal sealed partial class ExpressionEvaluator
         }
 
         if (char.IsDigit(token[0])) { return long.Parse(token, CultureInfo.InvariantCulture); }
-        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token);
+        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token, _target);
     }
 
     private void Expect(string token)

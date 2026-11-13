@@ -18,6 +18,37 @@ own programs, assembled procedures, and code no Pascal source gives. It is what 
 - `EmulatedPascalCompiler` compiles a source with Apple Pascal 1.1's Compiler on an emulated Apple II, in about four
   seconds, so a source's bytes can be checked against the original's. Only the Apple II's 1.1 Compiler is wired up.
 
+## Decided: p-code as macros (2026-11-13)
+
+P-code is written with the native assembler's macros rather than as a CPU of its own:
+[`Pcode.asm`](../../src/Retrocore.Pascal/Pcode.asm) defines one macro for each p-code under `.cpu Pcode`, and a
+code file's source includes it and lays out the whole file itself from address 0: the segment dictionary in block 0
+(`.word Segment1 / 512, Segment1End - Segment1`), each segment from a block boundary, `.scope`s for segments and
+procedures, jumps to labels, jump tables and the procedure dictionary as self-relative `.word * - label`s, and the
+attributes. `Pcode` is a macro-only CPU: the macros defined under its `.cpu` expand only under it, so p-code's `LDA`,
+`INC`, `NOP` and `STP` leave an assembled procedure's 6502 code, under `.cpu Mos6502`, alone
+([NativeAssembly.md](../NativeAssembly.md#macros)); under `.cpu Pcode` an instruction no macro writes is an error.
+
+**The prototype** (a script, not in the repository) wrote every code file on the Apple II and Apple III disks at hand
+as such a source: 63 of 69 assemble back byte-identically, among them every Compiler, Editor, Filer, Linker and
+Assembler, both machines' libraries, and the samples. Of the other six, three are the system itself
+(`SYSTEM.PASCAL`, twice, and `128K.PASCAL`), whose stub segments declare procedures that are elsewhere, and one is
+Apple Pascal 1.2's `SYSTEM.EDITOR`, a byte off in the code the Asimov image has damaged. `PcodeAssemblyTests`
+assembles P1's whole code file this way.
+
+**Found:**
+
+- `.if` is the preprocessor's, before addresses are known: a macro cannot test `*`. The byte `LDC` and `XJP` skip to
+  reach a word is `.align 2, pad`, with the byte the code file has (the Compiler leaves a stale one there).
+- In a `.byte` list, `*` is the address of that byte, so a jump's operand is `target - (* + 1)`.
+- A jump back, and any jump too far for a byte, goes through the procedure's jump table: `UJPT entry` names the
+  table's word, and `Attributes`, the label each procedure scope has, resolves the offset.
+- `XJP`'s own `UJP` is written as its own line, with a label, because a case table's missing entries point at it.
+- `.word` takes 0-$FFFF, so negative words are written `& $FFFF`; and a label cannot be defined qualified
+  (`::Name:`), so each segment's start and end labels sit just outside its scope.
+- `--assemble` writes the image to `$FFFF`; `--pascal assemble` should write only the code file's bytes.
+- An error inside a macro names the macro's line, not the line that called it, which makes a bad p-code hard to find.
+
 ## The pieces
 
 ### 1. A p-code source format
@@ -46,8 +77,9 @@ A dialect for the native assembler, or a format of its own, that says all of a c
 
 ### 3. The assembler
 
-- Assemble the source back to a code file: dictionaries, jump tables, alignment, relocation lists, interface text,
-  blocks. Check every sample, the system's programs and the Apple III's disks assemble byte-identically.
+- `--pascal assemble source code`: the native assembler with `Pcode.asm`, from address 0, writing the bytes to the
+  last block (or to a disk image and a file's name). Done but for the command: the macros and `.cpu Pcode`.
+- Report a macro's errors at the line that called it.
 - Language server support: hovers for p-codes (the opcode table has a summary for each), go to definition for labels
   and procedures.
 

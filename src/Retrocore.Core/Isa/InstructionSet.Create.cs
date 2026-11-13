@@ -9,6 +9,22 @@ namespace Retrocore.Isa;
 public sealed partial class InstructionSet
 {
     /// <summary>
+    ///  Builds an instruction set with no instructions: a CPU a source writes only with macros, such as Apple
+    ///  Pascal's p-code, whose <c>.cpu</c> turns its macros on.
+    /// </summary>
+    /// <param name="name">The set's name, as <c>.cpu</c> selects it.</param>
+    /// <param name="description">The description it shares, whose sets a source can switch between.</param>
+    /// <returns>The set.</returns>
+    public static InstructionSet MacroOnly(string name, IsaDescription description)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(description);
+        InstructionSet set = new(name, description);
+        set.Freeze();
+        return set;
+    }
+
+    /// <summary>
     ///  Builds an instruction set from its encodings, in opcode order.
     /// </summary>
     /// <param name="name">The set's name.</param>

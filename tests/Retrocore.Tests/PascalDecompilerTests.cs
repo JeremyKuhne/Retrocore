@@ -25,6 +25,11 @@ public class PascalDecompilerTests
 {
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
 
+    /// <summary>
+    ///  Gets P1's code file, as Apple Pascal 1.1's Compiler wrote it.
+    /// </summary>
+    internal static byte[] P1Bytes => Convert.FromBase64String(P1Code);
+
     // P1, compiled by Apple Pascal 1.1:
     //
     //   PROGRAM P1;

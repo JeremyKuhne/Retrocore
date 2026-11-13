@@ -207,6 +207,36 @@ public partial class AssemblyPreprocessorTests
     }
 
     /// <summary>
+    ///  Macros defined under a macro-only CPU, as p-code's are under <c>.cpu Pcode</c>, expand only under it: an
+    ///  instruction of the same name under another CPU is that CPU's, and the macro-only CPU has no instructions.
+    /// </summary>
+    [TestMethod]
+    public void MacroOnlyCpusOwnTheirMacros()
+    {
+        AssemblyResult result = Assemble("""
+            .cpu Pcode
+            .macro LDA level, offset
+            .byte 178, level, offset
+            .endmacro
+            LDA 1, 4
+            .cpu Mos6502
+            LDA #1
+            .cpu Pcode
+            LDA 2, 5
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.Span[..8].ToArray().Should().Equal(178, 1, 4, 0xA9, 1, 178, 2, 5);
+
+        AssemblyResult stray = Assemble("""
+            .cpu Pcode
+            lda #1
+            """);
+
+        stray.Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("Unknown instruction");
+    }
+
+    /// <summary>
     ///  Optional arguments, .paramcount and .exitmacro control expansion without compiler statement kinds.
     /// </summary>
     [TestMethod]

@@ -94,6 +94,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Language\InstructionDocs.Z80.cs" Link="Language\InstructionDocs.Z80.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\DirectiveDocs.cs" Link="Language\DirectiveDocs.cs" />
     <None Include="..\..\src\Retrocore.Cpu.M6502\OpcodeTables.txt" Link="Inputs\OpcodeTables.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Inputs\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -17,7 +17,8 @@ public static class CpuCatalog
     private static readonly Dictionary<string, InstructionSet> s_sets = Create();
 
     /// <summary>
-    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c>, <c>Z80</c> or <c>M6809</c>; names ignore case.
+    ///  Gets every instruction set by name, such as <c>Mos6502</c>, <c>65SC02</c>, <c>Z80</c>, <c>M6809</c> or <c>Pcode</c>; names
+    ///  ignore case.
     /// </summary>
     public static IReadOnlyDictionary<string, InstructionSet> InstructionSets => s_sets;
 
@@ -43,6 +44,8 @@ public static class CpuCatalog
             }
         }
 
+        // Apple Pascal's p-code has no instructions here: Pcode.asm's macros write it, and only under .cpu Pcode.
+        sets.Add(MacroCpus.Pcode, InstructionSet.MacroOnly(MacroCpus.Pcode, M6502Isa.Description));
         return sets;
     }
 }

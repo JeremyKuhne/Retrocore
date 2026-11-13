@@ -34,6 +34,27 @@ public static class Jv3Format
     private static readonly int[] s_sizes = [256, 128, 1024, 512];
 
     /// <summary>
+    ///  Gets whether an image looks like JV3: its first table lists at least one sector, and the sectors it lists fit
+    ///  in the file. A JV1 image's first bytes, read as a table, list far more sectors than follow them.
+    /// </summary>
+    /// <param name="image">The file's bytes.</param>
+    /// <returns>Whether it is JV3.</returns>
+    public static bool IsJv3(ReadOnlySpan<byte> image)
+    {
+        if (image.Length < TableSize) { return false; }
+        long data = 0;
+        bool any = false;
+        for (int entry = 0; entry < EntriesPerTable; entry++)
+        {
+            if (image[entry * 3] == Free) { continue; }
+            any = true;
+            data += s_sizes[image[(entry * 3) + 2] & SizeMask];
+        }
+
+        return any && TableSize + data <= image.Length;
+    }
+
+    /// <summary>
     ///  Reads an image.
     /// </summary>
     /// <param name="image">The file's bytes.</param>

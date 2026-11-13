@@ -714,7 +714,7 @@ internal sealed partial class DebugSession
                 ["supportsSetVariable"] = HasBasicThread,
                 ["supportsSetExpression"] = HasBasicThread,
                 ["supportsGotoTargetsRequest"] = HasBasicThread,
-                ["exceptionBreakpointFilters"] = FilterJson(ExceptionFilters(machine, _contracts is not null))
+                ["exceptionBreakpointFilters"] = FilterJson(ExceptionFilters(machine, _contracts is not null, HasBasicThread))
 }
         });
 
@@ -1211,6 +1211,10 @@ internal sealed partial class DebugSession
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
             // made its writes, so the watchpoints they hit stop now.
             if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
+
+            // A held CPU may stay so for any time too. Its instruction has not finished, so the watchpoints it hit
+            // wait for the instruction's end.
+            if (Target.IsHeld) { return true; }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");

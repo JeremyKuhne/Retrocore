@@ -38,11 +38,15 @@ public static class Trs80DiskImage
         return (disk, format);
     }
 
-    // JV1 is whole 10-sector tracks of 256 bytes, which neither IMD's signature nor DMK's header matches.
+    // IMD has a signature, JV3 a table whose sectors fit the file, and DMK a header whose tracks are the whole file.
+    // JV1 is any whole number of 256-byte sectors, a last track cut short included. A DMK image with more after its
+    // tracks comes last, as JV1's sector data can pass for its loose header.
     private static string Detect(ReadOnlySpan<byte> image)
     {
         if (ImdFormat.IsImd(image)) { return "IMD"; }
-        if (image.Length % 2560 == 0) { return "JV1"; }
+        if (Jv3Format.IsJv3(image)) { return "JV3"; }
+        if (DmkFormat.IsDmk(image) && DmkFormat.ImageLength(image) == image.Length) { return "DMK"; }
+        if (image.Length != 0 && image.Length % Jv1Format.SectorSize == 0) { return "JV1"; }
         return DmkFormat.IsDmk(image) ? "DMK" : "JV3";
     }
 }

@@ -9,7 +9,7 @@
 // III, the BASIC thread.
 
 import { resolve, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -45,6 +45,14 @@ writeFileSync(join(roms, "8049007.u103"), image(0x800, []));
 writeFileSync(join(roms, "u54.u11"), image(0x800, model2));
 writeFileSync(join(roms, "8043316.u9"), image(0x800, []));
 
+// Sets drive select's wait bit with no disk command, which holds the Z80 until the controller asks for data or
+// finishes: here, for good.
+const held = join(roms, "held");
+mkdirSync(held);
+writeFileSync(join(held, "8041364.u104"), image(0x2000, [0xF3, 0x3E, 0xC1, 0xD3, 0xF4, 0x18, 0xFE]));
+writeFileSync(join(held, "8040332.u105"), image(0x1000, []));
+writeFileSync(join(held, "8040316c.u106"), image(0x800, []));
+
 function drop(name) {
     for (let index = events.length - 1; index >= 0; index--) {
         if (events[index].event === name) events.splice(index, 1);
@@ -60,6 +68,12 @@ async function launch(args, filters, directory = roms) {
 
 async function type(text) {
     for (const character of text) await request("retro/key", { code: character === "\r" ? 13 : character.charCodeAt(0) });
+}
+
+// The exception filters the launch's capabilities event lists.
+function filters() {
+    const capabilities = events.filter(message => message.event === "capabilities").at(-1);
+    return capabilities.body.capabilities.exceptionBreakpointFilters.map(filter => filter.filter);
 }
 
 async function screen(text) {
@@ -95,12 +109,30 @@ try {
         assert.equal((await request("threads")).threads[0].name, test.thread);
         const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
         assert.equal(hardware.model.name, `TRS-80 ${test.model}`);
+        assert.ok(!filters().includes("basicStart"), `the ${test.model}'s stand-in ROM has no BASIC to stop in`);
     }
 
     // Without dumps, the SDK's builds boot: the Model III to its first prompt, stepping in Model3.asm's source, and
     // the Model II to its boot ROM's request for a disk.
+    // A Z80 held by the disk controller's wait for longer than an instruction can take runs on, and pauses where it
+    // is held, inside its instruction.
+    if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("held by the wait");
+    await launch({ machine: "trs80-model3", diskController: true }, [], held);
+    for (let frame = 0; frame < 5; frame++) {
+        drop("retro/frame");
+        assert.ok((await event("retro/frame")).running, "the held machine runs on");
+    }
+    drop("stopped");
+    await request("pause", { threadId: 1 });
+    const paused = await event("stopped");
+    assert.equal(paused.reason, "pause", `the held machine pauses (${paused.description ?? paused.reason})`);
+    assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x0005",
+        "it pauses at the instruction it is held in, after OUT");
+
     if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("SDK ROMs");
     await launch({ machine: "trs80-model3" }, [], null);
+    assert.deepEqual(filters(), ["machineReset", "contracts", "basicStart", "basicErrors", "basicHandledErrors", "basicStop"],
+        "the Model III's BASIC offers its stops");
     await screen("Cass?");
     drop("stopped");
     await request("pause", { threadId: 1 });

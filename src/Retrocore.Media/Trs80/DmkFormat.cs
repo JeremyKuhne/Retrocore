@@ -14,6 +14,7 @@ namespace Retrocore.Media.Trs80;
 ///   table) and options: bit 4 single-sided, bit 6 single density only, bit 7 ignore density. Each of a track's 64
 ///   table entries is an offset into the track, bit 15 set for a double-density ID mark, ending at 0. Unless the
 ///   image is single density only, a single-density byte is stored twice. Sides alternate within a cylinder.
+///   A sector whose data field's stored CRC does not match its bytes reads with a CRC error, as on the disk.
 ///  </para>
 /// </remarks>
 public static class DmkFormat
@@ -35,6 +36,14 @@ public static class DmkFormat
         int tracks = image[1] * ((image[4] & 0x10) != 0 ? 1 : 2);
         return length > TableEntries * 2 && tracks > 0 && image.Length >= HeaderSize + (length * tracks);
     }
+
+    /// <summary>
+    ///  Gets the length a DMK image's header gives it: the header and its tracks.
+    /// </summary>
+    /// <param name="image">The file's bytes, at least the header.</param>
+    /// <returns>The length.</returns>
+    public static int ImageLength(ReadOnlySpan<byte> image) =>
+        HeaderSize + ((image[2] | (image[3] << 8)) * image[1] * ((image[4] & 0x10) != 0 ? 1 : 2));
 
     /// <summary>
     ///  Reads an image.
@@ -87,7 +96,41 @@ public static class DmkFormat
             byte mark = track[data];
             byte[] bytes = new byte[size];
             for (int index = 0; index < size; index++) { bytes[index] = track[data + ((index + 1) * step)]; }
-            disk.Add(cylinder, side, new(trackNumber, sideNumber, sectorNumber, bytes, doubleDensity, mark));
+
+            // The data field's CRC follows it, high byte first; a track cut short before it is taken as good.
+            int crcAt = data + ((size + 1) * step);
+            bool crcError = crcAt + step < track.Length
+                && ((track[crcAt] << 8) | track[crcAt + step]) != DataCrc(mark, bytes, doubleDensity);
+
+            FloppySector sector = new(trackNumber, sideNumber, sectorNumber, bytes, doubleDensity, mark)
+            {
+                CrcError = crcError
+            };
+
+            disk.Add(cylinder, side, sector);
         }
+    }
+
+    // CRC-CCITT of a data field: double density includes the three A1 sync bytes before the mark.
+    private static ushort DataCrc(byte mark, ReadOnlySpan<byte> data, bool doubleDensity)
+    {
+        ushort crc = 0xFFFF;
+        if (doubleDensity) { crc = Crc(crc, [0xA1, 0xA1, 0xA1]); }
+        crc = Crc(crc, [mark]);
+        return Crc(crc, data);
+    }
+
+    private static ushort Crc(ushort crc, ReadOnlySpan<byte> bytes)
+    {
+        foreach (byte value in bytes)
+        {
+            crc ^= (ushort)(value << 8);
+            for (int bit = 0; bit < 8; bit++)
+            {
+                crc = (crc & 0x8000) != 0 ? (ushort)((crc << 1) ^ 0x1021) : (ushort)(crc << 1);
+            }
+        }
+
+        return crc;
     }
 }

@@ -195,6 +195,29 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
+    ///  A <c>.dsk</c> is read by its contents: JV1 for any whole number of 256-byte sectors, a last track cut short
+    ///  included, and JV3 by its sector table, even when its length is whole JV1 tracks.
+    /// </summary>
+    [TestMethod]
+    public void DetectsTheFormatOfADsk()
+    {
+        Trs80DiskImage.Read(new byte[256], ".dsk").Format.Should().Be("JV1", "one sector is a JV1 track cut short");
+        Trs80DiskImage.Read(new byte[2560 + 512], ".dsk").Format.Should().Be("JV1");
+        Trs80DiskImage.Read(new byte[2560 * 4], ".dsk").Format.Should().Be("JV1");
+
+        FloppyDisk disk = new();
+        for (int sector = 0; sector < 10; sector++)
+        {
+            disk.Add(0, 0, new FloppySector(0, 0, (byte)sector, new byte[256], doubleDensity: false));
+        }
+
+        byte[] jv3 = Jv3Format.Write(disk);
+        (FloppyDisk read, string format) = Trs80DiskImage.Read(jv3, ".dsk");
+        format.Should().Be("JV3");
+        read.Track(0, 0).Should().HaveCount(10);
+    }
+
+    /// <summary>
     ///  IMD images read their sectors, compressed and deleted records among them.
     /// </summary>
     [TestMethod]
@@ -217,7 +240,8 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
-    ///  DMK images read each ID mark the track's table points to, and the data field after it.
+    ///  DMK images read each ID mark the track's table points to, and the data field after it, with a CRC error when
+    ///  the data field's stored CRC does not match.
     /// </summary>
     [TestMethod]
     public void ReadsDmk()
@@ -240,6 +264,20 @@ public class Trs80Model2Tests
         int data = id + 7 + 22;
         image[data] = 0xFB;
         for (int index = 0; index < 256; index++) { image[data + 1 + index] = (byte)(255 - index); }
+
+        // CRC-CCITT over the three A1 sync bytes, the mark and the data, high byte first.
+        ushort crc = 0xFFFF;
+        foreach (byte value in (byte[])[0xA1, 0xA1, 0xA1, .. image.AsSpan(data, 257)])
+        {
+            crc ^= (ushort)(value << 8);
+            for (int bit = 0; bit < 8; bit++)
+            {
+                crc = (crc & 0x8000) != 0 ? (ushort)((crc << 1) ^ 0x1021) : (ushort)(crc << 1);
+            }
+        }
+
+        image[data + 257] = (byte)(crc >> 8);
+        image[data + 258] = (byte)crc;
         (FloppyDisk disk, string format) = Trs80DiskImage.Read(image, ".dmk");
         format.Should().Be("DMK");
         FloppySector sector = disk.Track(0, 0).Should().ContainSingle().Subject;
@@ -247,6 +285,10 @@ public class Trs80Model2Tests
         sector.DoubleDensity.Should().BeTrue();
         sector.Data[0].Should().Be(255);
         sector.Data[255].Should().Be(0);
+        sector.CrcError.Should().BeFalse();
+
+        image[data + 100] ^= 0x01;
+        Trs80DiskImage.Read(image, ".dmk").Disk.Track(0, 0).Single().CrcError.Should().BeTrue("a data byte no longer matches the CRC");
     }
 
     private static Trs80Model2Machine Create(Trs80Model2Configuration configuration)

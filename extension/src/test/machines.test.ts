@@ -53,6 +53,8 @@ test("the machines are the ten agreed, each with its own id and name, in order",
         "TRS-80 Model I (Level I)", "Apple-1", "TRS-80 Color Computer", "TRS-80 Color Computer 2", "TRS-80 Color Computer 3"
     ]);
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
+    assert.deepEqual(machineById("apple3")?.basicDialects, ["business"]);
+    assert.equal(machineById("apple3")?.basicDisk, "The Business BASIC disk");
     assert.equal(new Set(machines.map(machine => machine.id)).size, machines.length);
     assert.equal(machineById("apple2-iiplus")?.configuration.model, "iiplus");
     assert.equal(machineById("nothing"), undefined);

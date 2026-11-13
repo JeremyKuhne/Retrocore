@@ -13,7 +13,8 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   In the Microsoft BASICs' memory and tokenized files each line is a two-byte link to the next line, a two-byte line
 ///   number, the tokenized statements and a zero byte; a zero link ends the program. Both words are low byte first.
-///   Integer BASIC's lines are a length byte, the number, the tokens and $01 (<see cref="BasicDialect.Integer"/>).
+///   Integer BASIC's lines are a length byte, the number, the tokens and $01 (<see cref="BasicDialect.Integer"/>);
+///   Business BASIC's are a length byte, the number, the tokens and a zero (<see cref="BasicDialect.BusinessBasic"/>).
 ///  </para>
 /// </remarks>
 public sealed partial class BasicProgram
@@ -61,6 +62,7 @@ public sealed partial class BasicProgram
     {
         ArgumentNullException.ThrowIfNull(dialect);
         if (dialect is IntegerBasicDialect integer) { return integer.FromImage(bytes); }
+        if (dialect is BusinessBasicDialect business) { return business.FromImage(bytes); }
         if (dialect == BasicDialect.Level2 && bytes.Length > 0 && bytes[0] == 0xFF)
         {
             // A program at $42E9 can begin with $FF too, so the links decide.
@@ -88,6 +90,7 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(dialect);
         ArgumentNullException.ThrowIfNull(memory);
         if (dialect is IntegerBasicDialect integer) { return integer.Read(memory); }
+        if (dialect is BusinessBasicDialect business) { return business.Read(memory); }
         int start = Word(memory, dialect.Pointers.ProgramStart);
         int end = Word(memory, dialect.Pointers.Variables);
         if (start == 0 || end < start + 2)
@@ -129,6 +132,7 @@ public sealed partial class BasicProgram
     public byte[] ToImage(int? address = null)
     {
         if (Dialect is IntegerBasicDialect) { return IntegerBasicDialect.Image(this); }
+        if (Dialect is BusinessBasicDialect) { return BusinessBasicDialect.Image(this); }
         int at = address ?? Dialect.DefaultLoadAddress;
         List<byte> bytes = [];
         foreach (BasicLine line in Lines)
@@ -164,6 +168,12 @@ public sealed partial class BasicProgram
         if (Dialect is IntegerBasicDialect integer)
         {
             integer.Write(this, memory);
+            return;
+        }
+
+        if (Dialect is BusinessBasicDialect business)
+        {
+            business.Write(this, memory);
             return;
         }
 

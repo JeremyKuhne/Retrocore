@@ -1,26 +1,26 @@
-# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC) | syntax | what it does.
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC) | syntax | what it does.
 # Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
-END|a2|END|Stops the program and returns to the prompt; CONT continues after it.
-FOR|a2|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
-NEXT|a2|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
+END|a2b|END|Stops the program and returns to the prompt; CONT continues after it.
+FOR|a2b|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
+NEXT|a2b|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
 DATA|a2|DATA item [, item ...]|Holds constants for READ. Items are numbers or strings; quotes are needed only around commas, colons or leading spaces.
 INPUT|a2|INPUT ["prompt";] v [, v ...]|Reads values typed at the keyboard into variables, asking again when they do not fit.
-DIM|a2|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from 0 to its size. An array used without DIM has 11 elements per dimension (0-10).
+DIM|a2b|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from 0 to its size. An array used without DIM has 11 elements per dimension (0-10).
 READ|a2|READ v [, v ...]|Takes the next items from DATA statements into variables.
-LET|a2|[LET] v = expression|Assigns a value; LET itself can be left out.
-GOTO|a2|GOTO line|Continues at a line.
+LET|a2b|[LET] v = expression|Assigns a value; LET itself can be left out.
+GOTO|a2b|GOTO line|Continues at a line.
 RUN|a2|RUN [line]|Clears the variables and runs the program, from its first line or from the line given.
 IF|a2|IF condition THEN statements|Runs the rest of the line when the condition is not zero; otherwise goes on with the next line.
-RESTORE|a2|RESTORE|Makes READ start again at the program's first DATA item.
-GOSUB|a2|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
-RETURN|a2|RETURN|Returns from a GOSUB to the statement after it.
-REM|a2|REM text|A remark: the rest of the line is ignored.
+RESTORE|a2b|RESTORE|Makes READ start again at the program's first DATA item.
+GOSUB|a2b|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
+RETURN|a2b|RETURN|Returns from a GOSUB to the statement after it.
+REM|a2b|REM text|A remark: the rest of the line is ignored.
 STOP|a2|STOP|Stops the program with a BREAK message; CONT continues after it.
 ON|a2|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...]|Jumps to, or calls, the nth line of the list; goes on with the next statement when n is 0 or past the list.
 WAIT|a|WAIT address, mask [, flip]|Waits until the byte at the address, exclusive-ored with flip and then anded with mask, is not zero.
 LOAD|a|LOAD [name]|Loads a program from cassette, or under DOS from disk.
 SAVE|a|SAVE [name]|Saves the program to cassette, or under DOS to disk.
-DEF|a2|DEF FN f(x) = expression|Defines a one-line function of one parameter, called as FN f(value).
+DEF|a2b|DEF FN f(x) = expression|Defines a one-line function of one parameter, called as FN f(value).
 POKE|a2|POKE address, value|Stores a byte in memory.
 PRINT|a2|PRINT [items]|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next print zone, and no punctuation at the end starts a new line. ? is short for PRINT.
 CONT|a2|CONT|Continues a program after STOP, END or BREAK, if it has not been changed.
@@ -28,14 +28,14 @@ LIST|a2|LIST [first] [- last]|Lists the program, or the lines given.
 CLEAR|a|CLEAR|Clears every variable, array and string, and BASIC's stack.
 GET|a|GET v|Waits for one key and puts it in a string variable, or its digit in a numeric one, without echoing it.
 NEW|a2|NEW|Erases the program and its variables.
-TAB(|a2|TAB(column)|In PRINT: moves to a column.
+TAB(|a2b|TAB(column)|In PRINT: moves to a column.
 TO|a2|FOR v = start TO end|Gives the end value of a FOR loop.
-FN|a2|FN f(value)|Calls a function DEF FN defined.
-SPC(|a|SPC(count)|In PRINT: prints that many spaces.
-THEN|a2|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
+FN|a2b|FN f(value)|Calls a function DEF FN defined.
+SPC(|ab|SPC(count)|In PRINT: prints that many spaces.
+THEN|a2b|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
 AT|a|HLIN x1, x2 AT y / VLIN y1, y2 AT x / DRAW n AT x, y|Gives the row, column or position of a line or shape.
 NOT|a2|NOT x|Logical not: 1 when x is 0, else 0 in AppleSoft; the bitwise complement of an integer in Level II.
-STEP|a2|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
+STEP|a2b|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
 +|a2|a + b|Adds numbers, or joins strings.
 -|a2|a - b, -a|Subtracts, or negates.
 *|a2|a * b|Multiplies.
@@ -88,17 +88,17 @@ HPLOT|a|HPLOT x, y [TO x, y ...] / HPLOT TO x, y|Plots high-resolution points an
 DRAW|a|DRAW shape [AT x, y]|Draws a shape from the shape table in the current color.
 XDRAW|a|XDRAW shape [AT x, y]|Draws a shape by inverting the points under it, so drawing it again erases it.
 HTAB|a|HTAB column|Moves the cursor to a column, 1-40.
-HOME|a|HOME|Clears the text window and puts the cursor at its top left.
+HOME|ab|HOME|Clears the text window and puts the cursor at its top left.
 ROT=|a|ROT= n|Sets the rotation DRAW and XDRAW use, 0-255; 16 is a quarter turn.
 SCALE=|a|SCALE= n|Sets the scale DRAW and XDRAW use, 1-255; 0 is 256.
 SHLOAD|a|SHLOAD|Loads a shape table from cassette.
-TRACE|a|TRACE|Prints each line number as it runs.
-NOTRACE|a|NOTRACE|Turns TRACE off.
+TRACE|ab|TRACE|Prints each line number as it runs.
+NOTRACE|ab|NOTRACE|Turns TRACE off.
 NORMAL|a|NORMAL|Prints white on black.
 INVERSE|a|INVERSE|Prints black on white.
 FLASH|a|FLASH|Prints flashing characters.
 COLOR=|a|COLOR= n|Sets the low-resolution color, 0-15.
-POP|a|POP|Drops the latest GOSUB's return, so the next RETURN goes to the one before.
+POP|ab|POP|Drops the latest GOSUB's return, so the next RETURN goes to the one before.
 VTAB|a|VTAB row|Moves the cursor to a row, 1-24.
 HIMEM:|a|HIMEM: address|Sets the top of the memory BASIC uses; strings are cleared.
 LOMEM:|a|LOMEM: address|Sets where the variables start; they are cleared.
@@ -113,7 +113,7 @@ SET|2|SET(x, y)|Turns on a graphics block, 0-127 across and 0-47 down.
 CLS|2|CLS|Clears the screen and puts the cursor at the top left.
 CMD|2|CMD "command"|Disk BASIC: runs a DOS command; CMD "S" returns to DOS.
 RANDOM|2|RANDOM|Seeds RND from the refresh register, so each run gives other numbers.
-ELSE|2|IF condition THEN statements ELSE statements|Gives what IF runs when its condition does not hold; a line number alone jumps there.
+ELSE|2b|IF condition THEN statements ELSE statements|Gives what IF runs when its condition does not hold; a line number alone jumps there.
 TRON|2|TRON|Prints each line number, in angle brackets, as it runs.
 TROFF|2|TROFF|Turns TRON off.
 DEFSTR|2|DEFSTR letter [- letter] [, ...]|Makes variables starting with those letters strings, without a $.
@@ -226,9 +226,9 @@ LEN|i|LEN (a$)|The number of characters in a string.
 ASC|i|ASC (a$)|The code of a string's first character, with bit 7 set.
 SCRN|i|SCRN (x, y)|The color of a low-resolution block, 0 to 15.
 MOD|i|a MOD b|The remainder of a divided by b, with the sign of a.
-AND|i|a AND b|1 when both are not zero, else 0.
-OR|i|a OR b|1 when either is not zero, else 0.
-NOT|i|NOT a|1 when a is zero, else 0.
+AND|ib|a AND b|1 when both are not zero, else 0.
+OR|ib|a OR b|1 when either is not zero, else 0.
+NOT|ib|NOT a|1 when a is zero, else 0.
 +|i|a + b / +a|Adds numbers.
 -|i|a - b / -a|Subtracts, or negates.
 *|i|a * b|Multiplies.
@@ -242,3 +242,96 @@ NOT|i|NOT a|1 when a is zero, else 0.
 <=|i|a <= b|1 when a is less than or equal to b, else 0.
 >=|i|a >= b|1 when a is greater than or equal to b, else 0.
 RNDX|i|RNDX name|A word the syntax tables accept but no routine runs; a program should not use it.
+# Business BASIC: reals of 4 bytes, % integers, & long integers of 8 bytes, $ strings of up to 255 characters, names of any length, and files numbered 1 to 10.
+INPUT|b|INPUT ["prompt";] v [, v ...] / INPUT# n [, record]; v [, v ...]|Reads a line from the keyboard, or from file n, and assigns its items, separated by commas, to the variables; a string variable last in the list takes the rest of the line. The prompt, when given, replaces the ?.
+OUTPUT|b|OUTPUT# n|Sends what PRINT prints to text file n; OUTPUT# 0 sends it back to the console.
+READ|b|READ v [, v ...] / READ# n [, record] [; v [, v ...]]|Takes the next DATA items into variables; READ# takes items from a data file's records instead, each into a variable of its kind.
+WRITE|b|WRITE# n [, record] [; expression [, expression ...]]|Writes values as items into a data file's records, from the record given or the current one.
+OPEN|b|OPEN# n [AS INPUT / AS OUTPUT / AS EXTENSION], "path" [, record length]|Opens a file as file n, closing any file open under that number. A file that does not exist is created, unless it is opened AS INPUT.
+CLOSE|b|CLOSE [# n]|Closes file n, or every file, first writing a record that is waiting.
+TEXT|b|TEXT|Puts the console back in its text mode: the whole screen, normal video and the screen on.
+BYE|b|BYE|Closes the files and restarts the Apple III.
+WINDOW|b|WINDOW x1, y1 TO x2, y2|Sets the text viewport to the rectangle between two corners; columns and lines count from 1.
+INVOKE|b|INVOKE ["path" [, "path" ...]]|Loads invokable modules, replacing any loaded before; with no names, removes them.
+PERFORM|b|PERFORM name [(argument [, argument ...])]|Calls a procedure in an invoked module. An argument @v passes a variable's address, %x an integer and &x a long integer; any other passes a real.
+FRE|b|FRE|The free memory in bytes, after unused strings are collected.
+HPOS|b|HPOS / HPOS = column|The cursor's column, counting from 1; assigning it moves the cursor.
+VPOS|b|VPOS / VPOS = line|The cursor's line, counting from 1; assigning it moves the cursor.
+ERRLIN|b|ERRLIN|The number of the line the last error happened in.
+ERR|b|ERR / ON ERR statements / OFF ERR|The number of the last error, 255 for CONTROL-C. ON ERR makes the statements after it the error handler, and OFF ERR turns it off.
+KBD|b|KBD / ON KBD statements / OFF KBD|The last key read. ON KBD makes the statements after it a handler that runs, as a GOSUB, when a key is pressed; OFF KBD turns it off.
+EOF|b|EOF / ON EOF# n statements / OFF EOF# n|The number of the file that last reached its end. ON EOF# makes the statements after it the handler for the end of file n, and OFF EOF# turns it off.
+TIME$|b|TIME$|The time from the clock, as HH:MM:SS.
+DATE$|b|DATE$|The date from the clock, as YY/MM/DD.
+PREFIX$|b|PREFIX$ / PREFIX$ = path|SOS's prefix, as a string; assigning it sets the prefix.
+EXFN.|b|EXFN.name [(argument [, argument ...])]|Calls a function in an invoked module and gives the real it returns; the arguments are passed as PERFORM passes them.
+EXFN%.|b|EXFN%.name [(argument [, argument ...])]|Calls a function in an invoked module and gives the integer it returns; the arguments are passed as PERFORM passes them.
+OUTREC|b|OUTREC / OUTREC = n|The column LIST wraps program lines at, 0 for none; assigning it sets the column.
+INDENT|b|INDENT / INDENT = n|How many spaces LIST indents each level of FOR loop by; assigning it sets the number.
+SUB$(|b|SUB$(s$, start [, length]) = t$|Writes t$'s characters over s$'s from position start on, at most length of them; s$ grows, padded with spaces, when they run past its end.
+OFF|b|OFF ERR / OFF KBD / OFF EOF# n|Turns off the ON ERR, ON KBD or ON EOF# handler.
+NORMAL|b|NORMAL|Sets normal video.
+INVERSE|b|INVERSE|Sets inverse video.
+SCALE(|b|PRINT USING image; SCALE(n, x)|In PRINT USING: prints x as though multiplied by 10 to the power n.
+RESUME|b|RESUME|In an ON ERR handler: runs the statement that failed again.
+IF|b|IF condition THEN statements [ELSE statements] / IF condition GOTO line|Runs what follows THEN or GOTO when the condition is not zero; otherwise runs what follows the matching ELSE, or goes on with the next line. A line number alone jumps there.
+SWAP|b|SWAP v1, v2|Exchanges the values of two variables, or array elements, of the same type.
+STOP|b|STOP|Stops the program with PROGRAM INTERRUPTED; CONT continues after it.
+ON|b|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...] / ON ERR, ON KBD, ON EOF# n statements|Jumps to, or calls, the nth line of the list, going on with the next statement when n is 0 or past the list. ON ERR, ON KBD and ON EOF# set handlers.
+LOAD|b|LOAD path|Loads a BASIC program and returns to the prompt; the variables are cleared but open files stay open.
+SAVE|b|SAVE path|Saves the program to a BASIC program file, making the file if need be.
+DELETE|b|DELETE path|Deletes a file.
+RUN|b|RUN [line] / RUN path [, line]|Clears the variables and runs the program, from its first line or the line given; with a path, loads that program first.
+RENAME|b|RENAME old, new|Renames a file.
+LOCK|b|LOCK path|Lets a file only be read, so it cannot be written, renamed or deleted.
+UNLOCK|b|UNLOCK path|Lets a file be written, renamed and deleted again.
+CREATE|b|CREATE path, TEXT / DATA / CATALOG [, size]|Makes a text file, a data file whose records are size bytes (512 when it is left out), or a subdirectory.
+EXEC|b|EXEC path|Takes BASIC's input from a text file, a line at a time, as though it were typed.
+CHAIN|b|CHAIN path [, line]|Loads and runs another program, from its first line or the line given, keeping the variables.
+CATALOG|b|CATALOG [path]|Lists a directory, or the prefix's when no path is given.
+DATA|b|DATA item [, item ...]|Holds constants, numbers or strings, for READ.
+IMAGE|b|IMAGE format|Holds a format for PRINT USING, which names its line; it is skipped when it runs.
+CAT|b|CAT [path]|Lists a directory, or the prefix's when no path is given; the same as CATALOG.
+PRINT|b|PRINT [items] / PRINT# n [, record]; items / PRINT USING image; items|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next 16-column zone, and no punctuation at the end starts a new line. PRINT# prints to a file.
+DEL|b|DEL first [, last]|Deletes a line, or the lines from first to last; a dash or TO may stand for the comma.
+CONT|b|CONT|Continues a program from where STOP, END, CONTROL-C or an error stopped it, if it has not been changed.
+LIST|b|LIST [first] [- last]|Lists the program, or the lines given, indenting FOR loops by INDENT and wrapping at OUTREC.
+CLEAR|b|CLEAR|Closes all files and clears every variable, array and string, and BASIC's stack.
+GET|b|GET v [, v ...] / GET# n; v [, v ...]|Reads one key for each variable without echoing it: the character into a string, or its value into a number. GET# reads from a file.
+NEW|b|NEW|Erases the program and its variables, and closes all files.
+TO|b|FOR v = start TO end / WINDOW x1, y1 TO x2, y2|Gives a FOR loop's end value, or WINDOW's second corner; LIST and DEL take it in place of a dash.
+USING|b|PRINT USING image; expression [, expression ...]|Prints values through the number and string fields of an image: a string, a string variable, or the line number of an IMAGE statement.
+MOD|b|a MOD b|The remainder of long integer a divided by b, negative when exactly one of them is. Reals are a type mismatch.
+EXTENSION|b|OPEN# n AS EXTENSION, "path"|Opens a file to write at its end.
+DIV|b|a DIV b|Long integer a divided by b, the fraction dropped. Reals are a type mismatch.
+AS|b|OPEN# n AS INPUT / AS OUTPUT / AS EXTENSION, "path"|Gives how OPEN opens a file: to read only, to write only, or to write at its end. Without AS it can be read and written.
+SGN(|b|SGN(x)|-1, 0 or 1 as x is negative, zero or positive.
+INT(|b|INT(x)|The greatest whole number not greater than x.
+ABS(|b|ABS(x)|The absolute value of x.
+TYP(|b|TYP(n)|What the next item read from file n is: 1 a real, 2 an integer, 3 a long integer, 4 a string, 5 the end of the data; 0 for a file of unknown type and 8 for a text file.
+REC(|b|REC(n)|The number of the record file n is at.
+PDL(|b|PDL(n)|Reads a joystick axis, 0-255: 0 and 1 are one joystick's X and Y, 2 and 3 the other's.
+BUTTON(|b|BUTTON(n)|255 when joystick button n, 0-3, is pressed, else 0.
+SQR(|b|SQR(x)|The square root of x.
+RND(|b|RND(x)|A random number between 0 and 1; a negative x starts a new sequence, and 0 repeats the last.
+LOG(|b|LOG(x)|The natural logarithm of x.
+EXP(|b|EXP(x)|e raised to the power x.
+COS(|b|COS(x)|The cosine of an angle in radians.
+SIN(|b|SIN(x)|The sine of an angle in radians.
+TAN(|b|TAN(x)|The tangent of an angle in radians.
+ATN(|b|ATN(x)|The arctangent of x, in radians.
+STR$(|b|STR$(x)|A number as a string, as PRINT would write it.
+HEX$(|b|HEX$(x)|A 16-bit number as four hexadecimal digits; TEN( is the reverse.
+CHR$(|b|CHR$(code)|A one-character string with that code, 0-255.
+LEN(|b|LEN(s$)|The number of characters in a string.
+VAL(|b|VAL(s$)|The number a string's characters spell, as INPUT would read it.
+ASC(|b|ASC(s$)|The code of a string's first character, or -1 for an empty string.
+TEN(|b|TEN(s$)|The value of a string of hexadecimal digits, as a signed 16-bit number: TEN("FFFF") is -1. Only the last four characters count.
+CONV(|b|CONV(x)|A value as a real; a string is read as VAL reads it.
+CONV&(|b|CONV&(x)|A value as a long integer; a real is rounded to the nearest whole number, and a string is read as a number.
+CONV$(|b|CONV$(x)|A value as a string, as STR$ writes it.
+CONV%(|b|CONV%(x)|A value rounded to the nearest whole number.
+LEFT$(|b|LEFT$(s$, n)|A string's first n characters, or all of it when it is shorter.
+RIGHT$(|b|RIGHT$(s$, n)|A string's last n characters, or all of it when it is shorter.
+MID$(|b|MID$(s$, start [, n])|n characters from position start on (1 is the first), or the rest of the string; empty when start is past the end.
+INSTR(|b|INSTR(s$, t$ [, start])|Where t$ first appears in s$, looking from position start (1 by default) on, or 0.

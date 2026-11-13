@@ -21,6 +21,7 @@
     "onLanguage:retrocore-applesoft",
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
+    "onLanguage:retrocore-business",
     "onLanguage:retrocore-level1",
     "onLanguage:retrocore-basic"
   ],
@@ -121,6 +122,21 @@
         }
       },
       {
+        "id": "retrocore-business",
+        "aliases": [
+          "Business BASIC",
+          "business"
+        ],
+        "extensions": [
+          ".business.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -189,6 +205,11 @@
         "path": "./syntaxes/integer.tmLanguage.json"
       },
       {
+        "language": "retrocore-business",
+        "scopeName": "source.retrocore-business",
+        "path": "./syntaxes/business.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -231,6 +252,7 @@
             "",
             "applesoft",
             "integer",
+            "business",
             "level2"
           ],
           "default": "",
@@ -269,6 +291,9 @@
       },
       {
         "language": "retrocore-integer"
+      },
+      {
+        "language": "retrocore-business"
       },
       {
         "language": "retrocore-basic"

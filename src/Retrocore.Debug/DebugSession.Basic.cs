@@ -225,19 +225,21 @@ internal sealed partial class DebugSession
     // Identifies the program in memory: a hash of where it is and its bytes, or "none" when BASIC is not set up.
     private string BasicVersion()
     {
-        BasicPointers pointers = Basic.Pointers;
-        int start = Word(pointers.ProgramStart);
-        int end = Word(pointers.Variables);
+        (int start, int end) = Basic.ProgramBounds(new TargetBasicMemory(Target));
         if (start == 0 || end < start + 2) { return "none"; }
+        IBasicMemory text = TextMemory;
         ulong hash = HashBasis;
         hash = (hash ^ (ulong)start) * HashPrime;
         for (int address = start; address < end; address++)
         {
-            hash = (hash ^ Target.Peek((ushort)address)) * HashPrime;
+            hash = (hash ^ text.Read(address)) * HashPrime;
         }
 
         return hash.ToString("X16", CultureInfo.InvariantCulture);
     }
 
     private int Word(int address) => Target.Peek((ushort)address) | (Target.Peek((ushort)(address + 1)) << 8);
+
+    // The machine's memory by the addresses BASIC's program and text pointers hold, which may reach banked memory.
+    private IBasicMemory TextMemory => Basic.Text(new TargetBasicMemory(Target));
 }

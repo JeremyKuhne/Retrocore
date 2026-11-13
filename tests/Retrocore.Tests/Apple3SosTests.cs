@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
 
@@ -79,9 +80,70 @@ public class Apple3SosTests
         Type(machine, "HOME\r10 PRINT 6*7;\"!\"\rRUN\r");
         RunUntil(machine, "42!", seconds: 10);
 
+        // HELLO ends with NEW, so the program in memory, read through BASIC's banked pointers, is the typed line.
+        BasicProgram typed = BasicProgram.Read(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        typed.ToText().Should().Be("10 PRINT 6*7;\"!\"\n");
+
         Type(machine, "UNLOCK RENUMBER.DOC\rDELETE RENUMBER.DOC\rSAVE SIX\rCATALOG\r");
         RunUntil(machine, "BLOCKS FREE", seconds: 30);
         Screen(machine).Should().Contain(" SIX ");
+    }
+
+    /// <summary>
+    ///  The variables a program sets read back from banked memory: each kind, an array element, and a string set
+    ///  from outside, which BASIC then prints.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicVariablesReadAndWrite()
+    {
+        Apple3Machine machine = Boot(BusinessBasic);
+        RunUntil(machine, "TOTAL BLOCKS", seconds: 90);
+        machine.Run(TimeSpan.FromSeconds(2));
+        Type(machine, "HOME\r10 A=1.5:B%=-7:C&=1234567890123:N$=\"HELLO\":DIM X(2,3):X(1,2)=9\rRUN\r");
+        RunUntil(machine, ")RUN", seconds: 10);
+        machine.Run(TimeSpan.FromSeconds(1));
+
+        BasicVariables variables = new(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        variables.Simple().Select(variable => variable.Name).Should().Equal("A", "B%", "C&", "N$");
+        BasicValue Read(string name)
+        {
+            BasicVariable variable = variables.Find(name) ?? throw new AssertFailedException($"{name} is missing");
+            return variables.Read(variable.Kind, variable.ValueAddress);
+        }
+
+        Read("A").Number.Should().Be(1.5);
+        Read("B%").Number.Should().Be(-7);
+        Read("C&").Long.Should().Be(1234567890123);
+        Read("N$").Text.Should().Equal("HELLO"u8.ToArray());
+
+        BasicArray array = variables.FindArray("X").Should().NotBeNull().And.Subject.As<BasicArray>();
+        array.Dimensions.Should().Equal(3, 4);
+        variables.Read(array.Kind, array.ElementAddress([1, 2])).Number.Should().Be(9);
+
+        // Expressions read the variables, with long integers exact, and numbers format as BASIC prints them.
+        BasicEvaluator evaluator = new(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        string Evaluate(string expression) => evaluator.Format(evaluator.Evaluate(expression));
+        Evaluate("A*2+B%").Should().Be("-4");
+        Evaluate("C&+1").Should().Be("1234567890124");
+        Evaluate("C& DIV 1000").Should().Be("1234567890");
+        Evaluate("X(1,2)*2").Should().Be("18");
+        Evaluate("N$+\"!\"").Should().Be("\"HELLO!\"");
+        Evaluate("LEN(N$)=5 AND NOT A=0").Should().Be("1", "NOT takes one value: (NOT A)=0");
+        Evaluate("MID$(N$,2,3)").Should().Be("\"ELL\"");
+        Evaluate("UNSET").Should().Be("0");
+        Action mixed = () => evaluator.Evaluate("C&+0.5");
+        mixed.Should().Throw<FormatException>().WithMessage("?TYPE MISMATCH*");
+        Type(machine, "PRINT 1/3;\"/\";2^31;\"/\"\r");
+        RunUntil(machine, "/", seconds: 10);
+        machine.Run(TimeSpan.FromSeconds(1));
+        string printed = Screen(machine).Split('\n').Last(row => row.Contains('/', StringComparison.Ordinal)).Trim();
+        printed.Should().Be($"{Evaluate("1/3")}/{Evaluate("2^31")}/");
+
+        // A string set from outside goes into string space, where BASIC finds it.
+        BasicVariable n = variables.Find("N$") ?? throw new AssertFailedException("N$ is missing");
+        variables.Write(n.Kind, n.ValueAddress, BasicValue.Of("CHANGED"u8.ToArray()));
+        Type(machine, "PRINT N$;LEN(N$)\r");
+        RunUntil(machine, "CHANGED7", seconds: 10);
     }
 
     private static Apple3Machine Boot(string disk)

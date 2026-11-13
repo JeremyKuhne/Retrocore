@@ -21,7 +21,7 @@ namespace Retrocore.Debug;
 ///   <c>bank2:$2000</c> stops only while bank 2 is switched in.
 ///  </para>
 /// </remarks>
-internal sealed class Apple3DebugTarget : IDebugTarget
+internal sealed partial class Apple3DebugTarget : IDebugTarget
 {
     private const byte BrkOpcode = 0x00;
     private const byte JsrOpcode = 0x20;
@@ -255,12 +255,45 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     public string? DescribeSystemCall(ushort address) =>
         SystemCall(address) is { } call ? SosCalls.Describe(call.Number, address, ReadFar) : null;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Extended addressing applies above the zero page; with X-byte 0, or below $0100, the address is as mapped now.
+    ///  </para>
+    /// </remarks>
+    public byte PeekFar(byte xByte, ushort address) => ReadFar(xByte, address);
+
+    /// <inheritdoc/>
+    public void PokeFar(byte xByte, ushort address, byte value)
+    {
+        if ((xByte & 0x80) != 0 && address >= 0x100)
+        {
+            _machine.Bus.Ram[_machine.Bus.ExtendedOffset(xByte, address)] = value;
+        }
+        else
+        {
+            Poke(address, value);
+        }
+    }
+
     // Reads through an X-byte, as extended addressing does above the zero page, or with X-byte 0 as mapped now.
     private byte ReadFar(byte xByte, ushort address) =>
         (xByte & 0x80) != 0 && address >= 0x100 ? _machine.Bus.Ram[_machine.Bus.ExtendedOffset(xByte, address)] : Peek(address);
 
     /// <inheritdoc/>
-    public bool InRom(ushort address) => ReadArea(address) is Apple3MemoryArea.Rom;
+    /// <remarks>
+    ///  <para>
+    ///   What plays the ROM's part: the boot ROM, SOS's kernel from $B800 up, and Business BASIC's interpreter, from
+    ///   $5200, while it is in memory. Invokable modules and drivers, in the switchable banks, are machine code: below
+    ///   <c>$A000</c> the interpreter counts only while its own bank is in the window, not a module's that PERFORM or
+    ///   EXFN switched in.
+    ///  </para>
+    /// </remarks>
+    public bool InRom(ushort address) => ReadArea(address) is Apple3MemoryArea.Rom
+        || address >= SosKernelStart
+        || (address is >= Apple3SdkModules.BusinessBasicOrigin and < BusinessBasicEnd
+            && BusinessBasicActive
+            && (address >= SwitchableEnd || BusinessBasicInWindow));
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address reads ROM, I/O or nothing.</exception>
@@ -291,7 +324,9 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     ///  <para>
     ///   The boot ROM's source, <c>BootRom.asm</c>, applies where the ROM is mapped. SOS 1.3's kernel,
     ///   <c>Sos/SosKernel.asm</c>, applies wherever memory holds its bytes: the loader and INIT while they run, and
-    ///   the rest of the kernel in the system bank once the loader has moved it there.
+    ///   the rest of the kernel in the system bank once the loader has moved it there. Business BASIC 1.23's
+    ///   interpreter, <c>BusinessBasic/BusinessBasic.asm</c>, applies where SOS loaded it, at <c>$5200</c> in the bank
+    ///   the window shows while it runs.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
@@ -320,6 +355,15 @@ internal sealed class Apple3DebugTarget : IDebugTarget
             AssemblyResult sos = Apple3SdkModules.AssembleSosKernel(kernel);
             debug.Add(new SourceMapModule(sos, area: null));
             _sosDrivers = new SosDriverModules(_machine.Bus, sos, Path.Join(roms, "Sos", "Drivers"));
+        }
+
+        // Business BASIC runs where SOS loaded it, at $5200 in the bank the window shows while it runs.
+        string basic = Path.Join(roms, "BusinessBasic", "BusinessBasic.asm");
+        if (File.Exists(basic))
+        {
+            AssemblyResult business = Apple3SdkModules.AssembleBusinessBasic(basic);
+            debug.Add(new SourceMapModule(business, area: null));
+            AddBusinessBasic(business);
         }
     }
 

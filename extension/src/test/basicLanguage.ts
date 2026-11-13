@@ -149,6 +149,19 @@ export async function testBasicLanguage(root: string): Promise<void> {
     assert.match(await integerHover(0, "GOSUB"), /expression/);
     assert.match(await integerHover(2, "MOD"), /remainder/);
 
+    // A Business BASIC file: its own language, a long integer with a dot in its name, and help for a word it stores
+    // after $FF.
+    const businessFile = path.join(folder, "program.business.bas");
+    fs.writeFileSync(businessFile, "10 COUNT.TOTAL& = 1: PRINTER = 2\n20 IF COUNT.TOTAL& > 0 THEN 10\n");
+    const businessDocument = await vscode.workspace.openTextDocument(businessFile);
+    await vscode.window.showTextDocument(businessDocument);
+    assert.equal(businessDocument.languageId, "retrocore-business");
+    const businessHover = async (line: number, text: string): Promise<string> => hoverText(await vscode.commands.executeCommand<vscode.Hover[]>(
+        "vscode.executeHoverProvider", businessDocument.uri, new vscode.Position(line, businessDocument.lineAt(line).text.indexOf(text))));
+    assert.match(await until("Business BASIC's hover", async () => (await businessHover(1, "THEN")) || undefined), /THEN/);
+    assert.match(await businessHover(0, "COUNT.TOTAL&"), /long integer/);
+    assert.match(await businessHover(0, "PRINTER"), /PRINTER/);
+
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    console.log("BASIC language passed: diagnostics, hover, definition, references, completion, outline, pragma dialects, renumbering, tape listings, Integer BASIC listings and Integer BASIC files.");
+    console.log("BASIC language passed: diagnostics, hover, definition, references, completion, outline, pragma dialects, renumbering, tape listings, Integer BASIC listings, Integer BASIC files and Business BASIC files.");
 }

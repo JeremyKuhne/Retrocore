@@ -314,7 +314,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III](docs/backlog/Apple3.md);
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
-- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md).
+- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
+- [debugging Business BASIC](docs/backlog/BusinessBasic.md).
 
 ## License
 

@@ -231,6 +231,37 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A conditional section applies to a build whose symbol values make its condition hold, as the TRS-80's
+    ///  MODEL, ROMC and VERSION switches select; the IIe's model switch still goes by the launched model, and a
+    ///  condition that cannot be evaluated applies.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsApplyByTheBuildsSymbols()
+    {
+        Dictionary<string, long> model1 = new() { ["MODEL"] = 1, ["REVISION"] = 13 };
+        Dictionary<string, long> model3 = new() { ["MODEL"] = 3, ["ROMC"] = 'B' };
+        long? One(string name) => model1.TryGetValue(name, out long value) ? value : null;
+        long? Three(string name) => model3.TryGetValue(name, out long value) ? value : null;
+
+        DocumentationResolver.Applies(condition: null, "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL = 1", "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("not MODEL = 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL != 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("REVISION = 13 and not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = 'B'", "Model3", Three).Should().BeTrue();
+        long? Version2(string name) => name == "VERSION" ? 2 : null;
+        long? Version5(string name) => name == "VERSION" ? 5 : null;
+        DocumentationResolver.Applies("VERSION = 1 || VERSION = 2", "Model2", Version2).Should().BeTrue();
+        DocumentationResolver.Applies("VERSION >= 2 && VERSION <= 3", "Model2", Version5).Should().BeFalse();
+        DocumentationResolver.Applies("MODEL4P", "Model4", name => name == "MODEL4P" ? 0 : null).Should().BeFalse();
+        DocumentationResolver.Applies("UNKNOWN = 2", "Level2", One).Should().BeTrue("a symbol the build lacks cannot rule it out");
+        DocumentationResolver.Applies("defined NAME", "Level2", One).Should().BeTrue("a test it cannot read applies");
+        DocumentationResolver.Applies("not ENHANCED", "Enhanced", One).Should().BeFalse("the IIe's switch goes by model");
+        DocumentationResolver.Applies("MODEL = 1", "Level2").Should().BeTrue("without symbols, conditions apply as before");
+    }
+
+    /// <summary>
     ///  Links resolve through scopes, modules, addresses, models and sections, and report what they cannot.
     /// </summary>
     [TestMethod]

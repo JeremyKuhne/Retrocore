@@ -76,7 +76,10 @@ Rules:
   `Group: Title`, `Topic: Title`) is a free-standing topic, kept as written, and is followed by a blank line.
   Use `Group:` to divide a long file in the reference's menu.
 - **Conditional code.** A definition documented in more than one branch of an `.if` is one topic. Each
-  branch's sections apply to the models that branch assembles for; the tools label them by model.
+  branch's sections apply to the builds that branch assembles for: the IIe's `ENHANCED` switch by the launched
+  model, and any other condition by the symbol values the running build was assembled with, so `MODEL = 1`'s
+  `Keeps:` is checked in the Model I's Level II and not in the Model III's. A condition the debugger cannot
+  evaluate, such as one on a symbol the build lacks, applies. The tools label sections by model or condition.
 - **MACRO-10 sources** follow the same rules. Overlay markers (`;@REPLACE`, `;@END`) are plain comments and
   never part of a documentation comment. Microsoft's `m6502.asm` is pinned and can't gain `;;` lines, so its
   routines are documented from the overlay (an `;@INSERT BEFORE` block holding the `;;` comment) or with

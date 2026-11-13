@@ -70,6 +70,95 @@ public sealed partial class DocumentationResolver
     }
 
     /// <summary>
+    ///  Gets whether a conditional section applies to a build: one the IIe model switch selects for its model, or one
+    ///  whose condition holds for the symbol values the build was assembled with, such as <c>MODEL = 1</c>.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The condition is as the parser records it: tests joined by <c>and</c>, each perhaps after <c>not</c>, and
+    ///   each test an <c>.if</c> operand of comparisons (<c>=</c>, <c>==</c>, <c>!=</c>, <c>&lt;</c>, <c>&lt;=</c>,
+    ///   <c>&gt;</c>, <c>&gt;=</c>) between symbols, numbers and character literals, joined by <c>&amp;&amp;</c> and
+    ///   <c>||</c>. A test that cannot be evaluated, such as one on a symbol the build does not define, counts as
+    ///   holding, so the section applies.
+    ///  </para>
+    /// </remarks>
+    /// <param name="condition">The section's condition, or null for one that always applies.</param>
+    /// <param name="model">The launched model, such as <c>Enhanced</c>, for the IIe's model switch.</param>
+    /// <param name="symbol">The build's value of a symbol, or null when it does not define it.</param>
+    /// <returns>Whether the section applies.</returns>
+    public static bool Applies(string? condition, string model, Func<string, long?>? symbol = null)
+    {
+        if (condition is null) { return true; }
+        if (ModelOf(condition) is { } only) { return only == model; }
+        if (symbol is null) { return true; }
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool not = part.StartsWith("not ", StringComparison.OrdinalIgnoreCase);
+            if (Holds(not ? part[4..].Trim() : part, symbol) is { } holds && holds == not) { return false; }
+        }
+
+        return true;
+    }
+
+    // Evaluates an .if operand of comparisons joined by && and ||, or null when it cannot.
+    private static bool? Holds(string test, Func<string, long?> symbol)
+    {
+        bool? any = false;
+        foreach (string either in test.Split("||", StringSplitOptions.TrimEntries))
+        {
+            bool? all = true;
+            foreach (string both in either.Split("&&", StringSplitOptions.TrimEntries))
+            {
+                bool? one = Comparison(both.Trim('(', ')', ' '), symbol);
+                all = all == false || one == false ? false : all is null || one is null ? null : true;
+            }
+
+            any = any == true || all == true ? true : any is null || all is null ? null : false;
+        }
+
+        return any;
+    }
+
+    private static bool? Comparison(string text, Func<string, long?> symbol)
+    {
+        foreach (string op in (string[])["!=", "<=", ">=", "==", "=", "<", ">"])
+        {
+            int at = text.IndexOf(op, StringComparison.Ordinal);
+            if (at <= 0) { continue; }
+            if (Operand(text[..at], symbol) is not { } left || Operand(text[(at + op.Length)..], symbol) is not { } right)
+            {
+                return null;
+            }
+
+            return op switch
+            {
+                "!=" => left != right,
+                "<=" => left <= right,
+                ">=" => left >= right,
+                "<" => left < right,
+                ">" => left > right,
+                _ => left == right
+            };
+        }
+
+        // A bare symbol holds when it is nonzero.
+        return Operand(text, symbol) is { } value ? value != 0 : null;
+    }
+
+    private static long? Operand(string text, Func<string, long?> symbol)
+    {
+        string trimmed = text.Trim();
+        if (trimmed.Length == 3 && trimmed[0] == '\'' && trimmed[2] == '\'') { return trimmed[1]; }
+        if (trimmed.StartsWith('$') && long.TryParse(trimmed[1..], System.Globalization.NumberStyles.HexNumber, provider: null, out long hex))
+        {
+            return hex;
+        }
+
+        if (long.TryParse(trimmed, out long number)) { return number; }
+        return trimmed.Length != 0 && (char.IsLetter(trimmed[0]) || trimmed[0] == '_') ? symbol(trimmed) : null;
+    }
+
+    /// <summary>
     ///  Resolves a link target written in a topic.
     /// </summary>
     /// <param name="from">The topic the link is in.</param>

@@ -88,7 +88,7 @@ public class Apple2PascalTests
         PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("SYSTEM.WRK.CODE")).Segments.Should().ContainSingle().Subject;
         segment.Name.Should().Be("HELLO");
         segment.Version.Should().Be(2);
-        PcodeDisassembler.Disassemble(segment, segment.Procedure(2)!).Select(instruction => instruction.ToString())
+        PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())
             .Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
 
         PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT")).Should().MatchRegex(@" 1:2 +\d+ SHOW\(I\)");

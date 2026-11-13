@@ -95,7 +95,7 @@ public class Apple3PascalTests
         PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("HELLO.CODE")).Segments.Should().ContainSingle().Subject;
         segment.Name.Should().Be("HELLO");
         segment.Version.Should().Be(4);
-        string[] show = [.. PcodeDisassembler.Disassemble(segment, segment.Procedure(2)!).Select(instruction => instruction.ToString())];
+        string[] show = [.. PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())];
         show.Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
 
         string listing = PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT"));

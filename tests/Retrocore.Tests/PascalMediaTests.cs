@@ -141,11 +141,11 @@ public class PascalMediaTests
         segment.Version.Should().Be(2);
         segment.Code.Should().HaveCount(code.Count);
 
-        PascalProcedure pcode = segment.Procedure(1)!;
+        PascalProcedure pcode = segment.Procedures.Single(procedure => procedure.Index == 1);
         pcode.IsNative.Should().BeFalse();
         (pcode.Entry, pcode.Exit, pcode.ParameterSize, pcode.DataSize, pcode.LexicalLevel).Should().Be((0, 2, 2, 8, 0));
 
-        PascalProcedure native = segment.Procedure(2)!;
+        PascalProcedure native = segment.Procedures.Single(procedure => procedure.Index == 2);
         native.IsNative.Should().BeTrue();
         native.Entry.Should().Be(4);
         native.LexicalLevel.Should().Be(-1);
@@ -224,7 +224,7 @@ public class PascalMediaTests
         segment.MachineType.Should().Be(PascalMachineType.PcodeLeastFirst);
         segment.Version.Should().Be(2);
         segment.Procedures.Should().NotBeEmpty();
-        segment.Procedure(1)!.LexicalLevel.Should().Be(0);
+        segment.Procedures.Single(procedure => procedure.Index == 1).LexicalLevel.Should().Be(0);
     }
 
     /// <summary>

@@ -104,7 +104,7 @@ public class PcodeTests
     {
         PascalVolume volume = PascalMediaTests.Apple2Volume("UCSD Pascal 1.1_3.dsk");
         PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("HILBERT.CODE")).Segments[0];
-        PascalProcedure hil = segment.Procedure(2)!;
+        PascalProcedure hil = segment.Procedures.Single(procedure => procedure.Index == 2);
         string[] text = [.. PcodeDisassembler.Disassemble(segment, hil).Select(instruction => instruction.ToString())];
         text.Should().StartWith(["SLDL1", "SLDC 0", "EQUI", "FJP $005B", "LDCI 180", "CXP 20, 3", "UJP $0079"]);
         text.Should().EndWith(["CLP 3", "CLP 4", "CLP 3", "RNP 0"]);

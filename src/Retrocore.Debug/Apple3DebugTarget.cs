@@ -89,7 +89,8 @@ internal sealed class Apple3DebugTarget : IDebugTarget
         (0x2000, 0xC000),
         extended: true,
         () => (ushort)(_machine.Bus.ZeroPage << 8),
-        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>());
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount);
 
     /// <summary>
     ///  Gets or sets whether running outpaces the clock while a drive's motor turns.

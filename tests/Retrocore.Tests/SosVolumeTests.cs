@@ -77,6 +77,29 @@ public class SosVolumeTests
     }
 
     /// <summary>
+    ///  A volume directory whose blocks link back to one already read is refused rather than read forever.
+    /// </summary>
+    [TestMethod]
+    public void DirectoryThatLoopsIsRefused()
+    {
+        byte[] image = Volume(next: 2, keyBlock: 7);
+        Action read = () => SosVolume.Read(image, proDosOrder: true);
+        read.Should().Throw<InvalidDataException>().WithMessage("*loop*");
+    }
+
+    /// <summary>
+    ///  A file whose blocks are past the end of the volume reads as damaged, not as an argument out of range.
+    /// </summary>
+    [TestMethod]
+    public void FilePastTheVolumeIsDamaged()
+    {
+        SosVolume volume = SosVolume.Read(Volume(next: 0, keyBlock: 300), proDosOrder: true);
+        volume.Files.Should().ContainSingle().Which.Name.Should().Be("F");
+        Action read = () => volume.ReadFile("F");
+        read.Should().Throw<InvalidDataException>().WithMessage("*past the end*");
+    }
+
+    /// <summary>
     ///  A driver file without its signature is refused.
     /// </summary>
     [TestMethod]
@@ -103,5 +126,25 @@ public class SosVolumeTests
         drivers.Drivers[0].Name.Should().Be(".ABC");
         drivers.Drivers[0].Comment.Should().Be("c");
         drivers.Drivers[0].Relocations.Should().Equal(3);
+    }
+
+    // A ProDOS-order volume named V whose directory's first block links to another, with one seedling file, F.
+    private static byte[] Volume(int next, int keyBlock)
+    {
+        byte[] image = new byte[280 * 512];
+        Span<byte> directory = image.AsSpan(2 * 512, 512);
+        directory[2] = (byte)next;
+        directory[4] = 0xF1;
+        directory[5] = (byte)'V';
+        directory[0x23] = 0x27;
+        directory[0x24] = 0x0D;
+        Span<byte> entry = directory[(4 + 0x27)..];
+        entry[0] = 0x11;
+        entry[1] = (byte)'F';
+        entry[0x10] = 0x06;
+        entry[0x11] = (byte)keyBlock;
+        entry[0x12] = (byte)(keyBlock >> 8);
+        entry[0x15] = 10;
+        return image;
     }
 }

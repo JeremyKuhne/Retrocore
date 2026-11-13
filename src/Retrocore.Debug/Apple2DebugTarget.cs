@@ -116,7 +116,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         (0xD000, 0x10000),
         extended: false,
         () => 0,
-        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>());
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount);
 
     /// <summary>
     ///  Launches a IIe from a launch request's arguments.

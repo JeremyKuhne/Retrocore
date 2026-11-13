@@ -37,15 +37,37 @@ internal sealed partial class DebugSession
 
     private bool OnPascal(JsonObject args) => args.Int("threadId") == PascalThread && _target is not null && HasPascalThread;
 
-    // Looks for the interpreter about once a second until it is found, and tells VS Code of the thread then.
+    // Looks for the interpreter about once a second until it is found, and tells VS Code of the thread then. Once
+    // something else replaces the interpreter, the thread ends, and a step on it is given up.
     private void ScanPascal()
     {
         if (Pascal is not { } pascal) { return; }
         if (pascal.Interpreter is null && Stopwatch.GetElapsedTime(_pascalScanned).TotalSeconds < 1) { return; }
         _pascalScanned = Stopwatch.GetTimestamp();
-        if (!pascal.Scan() || _pascalAnnounced) { return; }
-        _pascalAnnounced = true;
-        Notify("thread", new JsonObject { ["reason"] = "started", ["threadId"] = PascalThread });
+        bool known = pascal.Scan();
+        if (known == _pascalAnnounced) { return; }
+
+        _pascalAnnounced = known;
+        _pascalFrames = null;
+        Notify("thread", new JsonObject { ["reason"] = known ? "started" : "exited", ["threadId"] = PascalThread });
+        if (!known && _pascalGoal is not null)
+        {
+            _pascalGoal = null;
+            Notify("output", new JsonObject
+            {
+                ["category"] = "console",
+                ["output"] = "Apple Pascal's interpreter is no longer in memory, so the Pascal thread's step ended.\n"
+            });
+        }
+    }
+
+    // Starts a launch with no Pascal thread, step or frames from the one before.
+    private void ForgetPascal()
+    {
+        _pascalGoal = null;
+        _pascalFrames = null;
+        _pascalAnnounced = false;
+        _pascalScanned = 0;
     }
 
     // Notes the p-machine's registers at each fetch, for the Pascal thread's frames.

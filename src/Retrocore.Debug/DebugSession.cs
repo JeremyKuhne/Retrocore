@@ -355,6 +355,8 @@ internal sealed partial class DebugSession
         transport.On("retro/reset", _ => Reply(() =>
         {
             Target.Reset();
+            Pascal?.Reset();
+            _pascalFrames = null;
             Invalidate();
             if (_run is not { IsCancellationRequested: false })
             {
@@ -511,6 +513,7 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         _basicStarting = null;
         _basicView = null;
+        ForgetPascal();
         _basicEnded = false;
         _lineCycles.Clear();
         _callCycles.Clear();
@@ -1372,7 +1375,6 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         _pascalGoal = null;
         _pascalFrames = null;
-        Pascal?.Forget();
         ForgetBasicReferences();
         _unchecked = false;
         AddLoadedModules();

@@ -24,8 +24,12 @@ internal sealed class PascalRuntime
     private readonly bool _extended;
     private readonly Func<ushort> _zeroPage;
     private readonly Func<IEnumerable<WozDisk>> _disks;
+    private readonly Func<ulong> _cycles;
     private readonly PascalCodeLibrary _library = new();
-    private readonly Dictionary<(ushort, byte, ulong), (string File, PascalSegment Segment)?> _names = [];
+
+    // When the interpreter's fetch was last seen, and when its bytes were first found missing since.
+    private ulong _lastFetch;
+    private ulong? _missingSince;
 
     // The disks the library was read from, each with its version, to read them again once one changes.
     private List<(WozDisk Disk, long Version)>? _libraryDisks;
@@ -40,6 +44,7 @@ internal sealed class PascalRuntime
     /// <param name="extended">Whether its pointers have X-bytes.</param>
     /// <param name="zeroPage">Gets where zero page is now.</param>
     /// <param name="disks">Gets the disks in the drives.</param>
+    /// <param name="cycles">Gets the machine's cycle count.</param>
     internal PascalRuntime(
         string name,
         IPascalMemory memory,
@@ -47,7 +52,8 @@ internal sealed class PascalRuntime
         (int Start, int End) range,
         bool extended,
         Func<ushort> zeroPage,
-        Func<IEnumerable<WozDisk>> disks)
+        Func<IEnumerable<WozDisk>> disks,
+        Func<ulong> cycles)
     {
         Name = name;
         Memory = memory;
@@ -56,7 +62,14 @@ internal sealed class PascalRuntime
         _extended = extended;
         _zeroPage = zeroPage;
         _disks = disks;
+        _cycles = cycles;
     }
+
+    /// <summary>
+    ///  How long the interpreter's fetch may be missing, with no p-code run, before it counts as gone: a few seconds
+    ///  of the machine's time, longer than SOS keeps the interpreter's bank switched out for a disk.
+    /// </summary>
+    internal const ulong LostCycles = 4_000_000;
 
     /// <summary>
     ///  Gets what the interpreter is, such as <c>Apple III Pascal</c>.
@@ -79,20 +92,43 @@ internal sealed class PascalRuntime
     internal PascalRegisters? Registers { get; private set; }
 
     /// <summary>
-    ///  Looks for the interpreter's fetch, if it has not been found where it still is.
+    ///  Looks for the interpreter's fetch, if it has not been found where it still is, and lets it go once something
+    ///  else has replaced it.
     /// </summary>
     /// <returns>Whether the interpreter is known.</returns>
     internal bool Scan()
     {
-        if (Interpreter is { } known && PascalInterpreter.IsFetch(_peek, known.Fetch)) { return true; }
-        if (PascalInterpreter.FindFetch(_peek, _range.Start, _range.End) is { } fetch)
+        if (Interpreter is { } known && PascalInterpreter.IsFetch(_peek, known.Fetch))
         {
-            Interpreter = new PascalInterpreter(Name, fetch, 0, _extended);
-            Registers = null;
+            _missingSince = null;
+            return true;
         }
 
-        return Interpreter is not null;
+        if (PascalInterpreter.FindFetch(_peek, _range.Start, _range.End) is { } fetch)
+        {
+            if (Interpreter?.Fetch != fetch) { Registers = null; }
+            Interpreter = new PascalInterpreter(Name, fetch, Interpreter?.ZeroPage ?? 0, _extended);
+            _missingSince = null;
+            return true;
+        }
+
+        if (Interpreter is null) { return false; }
+
+        // Its bank can be switched out for a while; it is gone only once missing for longer, with no p-code run.
+        ulong now = _cycles();
+        _missingSince ??= now;
+        if (now - _missingSince.Value < LostCycles || now - _lastFetch < LostCycles) { return true; }
+
+        Interpreter = null;
+        Registers = null;
+        _missingSince = null;
+        return false;
     }
+
+    /// <summary>
+    ///  Forgets the registers, which a reset makes stale until the next fetch.
+    /// </summary>
+    internal void Reset() => Registers = null;
 
     /// <summary>
     ///  Says whether an instruction is the interpreter's fetch of the next p-code.
@@ -113,6 +149,7 @@ internal sealed class PascalRuntime
         if (interpreter.ZeroPage != zeroPage) { Interpreter = interpreter = interpreter with { ZeroPage = zeroPage }; }
         PascalRegisters registers = PascalRegisters.Read(Memory, interpreter);
         Registers = registers;
+        _lastFetch = _cycles();
         return PascalMachine.Frame(Memory, registers.Segment, registers.JumpTable, registers.Code, registers.Mark);
     }
 
@@ -125,35 +162,16 @@ internal sealed class PascalRuntime
 
     /// <summary>
     ///  Finds the code file segment a frame's procedure belongs to, from the code files on the disks in the drives,
-    ///  which it reads again when a disk has changed.
+    ///  which it reads again when a disk has changed. Each look compares the segment's end with every code file's, as
+    ///  another segment can be loaded where one was.
     /// </summary>
     /// <param name="frame">The frame.</param>
     /// <returns>The file and segment, or null when no disk has it.</returns>
     internal (string File, PascalSegment Segment)? Segment(PascalFrame frame)
     {
-        // A segment is known by where it is and how it ends, as another can be loaded in the same place later.
-        ulong tail = 0;
-        for (int index = 0; index < 8; index++)
-        {
-            tail = (tail << 8) | Memory.Read((ushort)(frame.Segment.Address + 1 - index), frame.Segment.Bank);
-        }
-
-        (ushort, byte, ulong) key = (frame.Segment.Address, frame.Segment.Bank, tail);
-        if (_names.TryGetValue(key, out (string, PascalSegment)? known) && (known is not null || !DisksChanged()))
-        {
-            return known;
-        }
-
         if (DisksChanged()) { ReadLibrary(); }
-        (string File, PascalSegment Segment)? found = _library.Find(Memory, frame.Segment);
-        _names[key] = found;
-        return found;
+        return _library.Find(Memory, frame.Segment);
     }
-
-    /// <summary>
-    ///  Forgets the segments found, so the next look checks the disks again: the system may have loaded others.
-    /// </summary>
-    internal void Forget() => _names.Clear();
 
     /// <summary>
     ///  Names a frame's procedure, such as <c>HELLO.2</c>, or by number, <c>1.2</c>, when no code file has its segment.
@@ -216,17 +234,18 @@ internal sealed class PascalRuntime
         _libraryDisks = [.. _disks().Select(disk => (disk, disk.Version))];
         foreach ((WozDisk disk, _) in _libraryDisks)
         {
-            byte[] image;
+            // A disk that does not read as a volume has no code to name, and a code file that does not read is left out.
+            List<(string Name, byte[] Data)> files;
             try
             {
-                image = SectorDiskReader.Read(disk, proDosOrder: false);
+                files = CodeFiles(SectorDiskReader.Read(disk, proDosOrder: false));
             }
             catch (InvalidDataException)
             {
                 continue;
             }
 
-            foreach ((string name, byte[] data) in CodeFiles(image))
+            foreach ((string name, byte[] data) in files)
             {
                 try
                 {
@@ -240,35 +259,41 @@ internal sealed class PascalRuntime
         }
     }
 
-    // The files on a Pascal or SOS volume that might be code files.
-    private static IEnumerable<(string Name, byte[] Data)> CodeFiles(byte[] image)
+    // The code files on a Pascal or SOS volume, leaving out any file whose blocks cannot be read.
+    private static List<(string Name, byte[] Data)> CodeFiles(byte[] image)
     {
+        List<(string Name, Func<byte[]> Read)> files = [];
         if (PascalVolume.IsPascalVolume(image, proDosOrder: false))
         {
             PascalVolume volume = PascalVolume.Read(image, proDosOrder: false);
             foreach (PascalFileEntry file in volume.Files.Where(file => file.Kind is PascalFileKind.Code or PascalFileKind.Data))
             {
-                byte[] data = volume.ReadFile(file);
-                if (PascalCodeFile.IsCodeFile(data)) { yield return ($"{volume.Name}:{file.Name}", data); }
+                files.Add(($"{volume.Name}:{file.Name}", () => volume.ReadFile(file)));
             }
-
-            yield break;
         }
-
-        SosVolume sos;
-        try
+        else
         {
-            sos = SosVolume.Read(image, proDosOrder: false);
-        }
-        catch (InvalidDataException)
-        {
-            yield break;
+            SosVolume sos = SosVolume.Read(image, proDosOrder: false);
+            foreach (SosFileEntry file in sos.Files.Where(file => file.FileType is 0x02 or 0x05 && file.StorageType is >= 1 and <= 3))
+            {
+                files.Add(($"/{sos.Name}/{file.Name}", () => sos.ReadFile(file.Name)));
+            }
         }
 
-        foreach (SosFileEntry file in sos.Files.Where(file => file.FileType is 0x02 or 0x05 && file.StorageType is >= 1 and <= 3))
+        List<(string Name, byte[] Data)> code = [];
+        foreach ((string name, Func<byte[]> read) in files)
         {
-            byte[] data = sos.ReadFile(file.Name);
-            if (PascalCodeFile.IsCodeFile(data)) { yield return ($"/{sos.Name}/{file.Name}", data); }
+            try
+            {
+                byte[] data = read();
+                if (PascalCodeFile.IsCodeFile(data)) { code.Add((name, data)); }
+            }
+            catch (InvalidDataException)
+            {
+                // A damaged file; the volume's others may still read.
+            }
         }
+
+        return code;
     }
 }

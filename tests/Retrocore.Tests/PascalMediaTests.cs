@@ -168,6 +168,22 @@ public class PascalMediaTests
     }
 
     /// <summary>
+    ///  A text file reads as its lines after the header page, with packed leading spaces expanded and the pages'
+    ///  padding dropped.
+    /// </summary>
+    [TestMethod]
+    public void TextFileReadsItsLines()
+    {
+        byte[] file = new byte[3072];
+        file[0] = 0x55;
+        byte[] first = [.. "BEGIN"u8, 0x0D, 0x10, 32 + 2, .. "X"u8, 0x0D];
+        first.CopyTo(file, 1024);
+        byte[] second = [.. "END."u8, 0x0D];
+        second.CopyTo(file, 2048);
+        PascalTextFile.Read(file).Should().Be("BEGIN\n  X\nEND.\n");
+    }
+
+    /// <summary>
     ///  A disk made from a sector image reads back to the same image, in either sector order.
     /// </summary>
     [TestMethod]

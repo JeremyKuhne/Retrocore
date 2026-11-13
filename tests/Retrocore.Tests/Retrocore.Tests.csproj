@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Basic\Retrocore.Basic.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Pascal\Retrocore.Pascal.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />

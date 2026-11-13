@@ -24,6 +24,7 @@
   <Project Path="src/Retrocore.Assembler/Retrocore.Assembler.csproj" />
   <Project Path="src/Retrocore.Basic/Retrocore.Basic.csproj" />
   <Project Path="src/Retrocore.Media/Retrocore.Media.csproj" />
+  <Project Path="src/Retrocore.Pascal/Retrocore.Pascal.csproj" />
   <Project Path="src/Retrocore.Machines.Apple2/Retrocore.Machines.Apple2.csproj" />
   <Project Path="src/Retrocore.Machines.Apple3/Retrocore.Machines.Apple3.csproj" />
   <Project Path="src/Retrocore.Machines.Trs80/Retrocore.Machines.Trs80.csproj" />

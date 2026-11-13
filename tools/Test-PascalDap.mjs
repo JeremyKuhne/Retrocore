@@ -13,7 +13,8 @@
 // whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
 
 import { resolve, join } from "node:path";
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -163,6 +164,24 @@ async function sourceBreakpoints(machine) {
         await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
         await request("continue", { threadId: 1 });
         await screen(text => /\n21 /.test(text), "the program's output");
+
+        // The disk the Editor and Compiler wrote saves to an image, as WOZ or as sectors, and lists the new files.
+        const disk2 = () => request("retro/devices").then(body => body.devices.find(device => device.id === "disk2"));
+        assert.equal((await disk2()).media.changed, true);
+        assert.ok((await disk2()).operations.includes("save"));
+        const woz = join(folder, "PASCAL2.woz");
+        const sectors = join(folder, "PASCAL2.dsk");
+        await request("retro/device", { id: "disk2", action: "save", path: woz });
+        await request("retro/device", { id: "disk2", action: "save", path: sectors });
+        const saved = await disk2();
+        assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
+        assert.equal(statSync(sectors).size, 143360);
+        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+        for (const image of [woz, sectors]) {
+            const catalog = execFileSync("dotnet", [host, "--pascal", "catalog", image], { encoding: "utf8" });
+            assert.match(catalog, /HELLO\.CODE/i, image);
+            assert.match(catalog, /HELLO\.LST\.TEXT/i, image);
+        }
     } finally {
         rmSync(folder, { recursive: true, force: true });
     }

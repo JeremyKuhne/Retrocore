@@ -432,9 +432,10 @@ internal interface IDebugTarget : IDebugMemory
     ///  Carries out a <c>retro/device</c> action on one of <see cref="Devices"/>.
     /// </summary>
     /// <param name="device">The device.</param>
-    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c> or <c>writeProtect</c>.</param>
+    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c> or <c>save</c>.</param>
     /// <param name="args">
-    ///  The request: <c>path</c> for insert and record, <c>writeProtected</c> for writeProtect.
+    ///  The request: <c>path</c> for insert and record, and for save when not the media's own image;
+    ///  <c>writeProtected</c> for writeProtect.
     /// </param>
     /// <exception cref="ArgumentException">
     ///  The device does not support the action, or an argument is missing.

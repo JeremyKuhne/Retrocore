@@ -947,6 +947,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
+            case (Apple2FloppyDrive drive, "save"):
+                Apple2Loader.Save(drive, args.String("path"));
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }

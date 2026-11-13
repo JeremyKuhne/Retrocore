@@ -1198,7 +1198,10 @@ the launch makes them again. Each device shows its media, its
 track, side and sector or its tape position, whether it is write-protected or
 changed, and whether it is seeking, reading or writing. Expanding a device lists
 its state and what it is (its controller, formats and geometry). Its inline
-buttons insert, record, eject and write-protect, as the device allows.
+buttons insert, record, eject and write-protect, as the device allows. What the
+machine writes to an Apple disk stays in memory until you save it: **Save to Its
+Image** (the disk icon on a changed drive) replaces the image it came from, after
+asking, and **Save Disk As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po`.
 
 [Devices.md](../docs/Devices.md) describes the device model and the
 `retro/devices` and `retro/device` requests behind the view.

@@ -370,6 +370,16 @@
           "command": "retrocore.device.unprotect",
           "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
           "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
+          "group": "1_save"
         }
       ],
       "webview/context": [
@@ -410,6 +420,14 @@
         },
         {
           "command": "retrocore.device.unprotect",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveAs",
           "when": "false"
         },
         {
@@ -539,6 +557,15 @@
         "command": "retrocore.device.unprotect",
         "title": "Allow Writes",
         "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.save",
+        "title": "Save to Its Image",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveAs",
+        "title": "Save Disk As..."
       },
       {
         "command": "retrocore.device.refresh",

@@ -112,10 +112,15 @@ exists is reported in the Debug Console and skipped.
 { "id": "disk0", "action": "writeProtect", "writeProtected": true }
 { "id": "cassette", "action": "record", "path": "program.cas" }
 { "id": "cassette", "action": "eject" }
+{ "id": "disk2", "action": "save" }
+{ "id": "disk2", "action": "save", "path": "copy.woz" }
 ```
 
 An action the device does not support is an error. A recording is saved to its path when its tape is ejected.
-Disks the machine changes are not yet written back to their image files; `changed` shows that they differ.
+Disks the machine changes stay in memory, and `changed` shows that they differ from their images. An Apple drive's
+`save` writes its disk to its own image, or to `path`: a `.woz` keeps the disk's tracks as they are, and a `.dsk`,
+`.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
+drives don't save yet.
 
 ## The Retro Devices view
 
@@ -132,6 +137,7 @@ green while it reads, red while it writes and yellow while it seeks. Expanding a
 metadata, and hovering it shows them all.
 
 A device's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
-and protect or unprotect a disk, each as the device allows. A hardware row's inline buttons add or remove cards,
+protect or unprotect a disk, and save a changed disk to its image (**Save to Its Image**, which asks first; **Save Disk
+As...** in its menu saves to another), each as the device allows. A hardware row's inline buttons add or remove cards,
 and the view's title bar refreshes the list or resets a launch configuration's saved cards and media
 (**Retrocore: Reset Saved Machine...**). The view redraws at most ten times a second.

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1) and a 64K Apple II Plus (Apple Pascal 1.1):
+// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1), a 64K Apple II Plus (Apple Pascal 1.1) and a
+// 128K IIe (Apple Pascal 1.3):
 // boots Pascal, stops on the Pascal thread at a pascal function breakpoint on the Filer's main procedure, reads its
 // frames, scopes and the p-machine's registers, steps over a p-code, and steps out to the system once Q quits the
 // Filer. On the Apple III it then compiles a program with a listing, and stops at a source breakpoint in a copy of
 // its source on the host, reads the program's variable by name, steps by line, and stops there again on the loop's
 // next pass.
 // The disks are Apple3Pascal1.1Disk1.dsk and Disk2.dsk in RETROCORE_APPLE3_DISKS (by default <cache>\apple3-disks)
-// and UCSD Pascal 1.1_1.dsk in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
+// and UCSD Pascal 1.1_1.dsk and 1.3_1.DSK in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
 // whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
 
 import { resolve, join } from "node:path";
@@ -46,6 +47,18 @@ const machines = [
         command: "COMMAND: E(DIT, R(UN, F(ILE",
         filer: "FILEHAND",
         prompt: "FILER: G, S, N"
+    },
+    {
+        // 1.3 needs 128K, and keeps its code in the IIe's auxiliary 64K.
+        name: "Apple IIe (Apple Pascal 1.3)",
+        thread: "IIe CPU",
+        disks: [join(apple2Disks, "UCSD Pascal 1.3_1.DSK")],
+        launch: disks => ({ machine: "apple2", model: "enhanced", diskImage: disks[0] }),
+        title: "Welcome APPLE1, to Apple II Pascal 1.3",
+        start: "",
+        command: "Command: F(ile, E(dit, R(un",
+        filer: "FILEHAND",
+        prompt: "Filer: L(dir"
     }
 ];
 
@@ -242,6 +255,30 @@ try {
         assert.deepEqual(registers.map(register => register.name), ["IPC", "MP", "BASE", "JTAB", "SEG"]);
         assert.match(registers[0].value, /^(x8[0-9A-F]:)?\$[0-9A-F]{4}$/);
 
+        // On the Apple II a local's memory reference reads and writes the word the Locals show, wherever the interpreter
+        // has RAM switched: on the IIe, 1.3 runs with auxiliary reads on. The Apple III's locals are through X-bytes,
+        // which have no reference.
+        if (machine.name !== "Apple III") {
+            const locals = scopes.find(scope => scope.name === "Locals");
+            const word = (await request("variables", { variablesReference: locals.variablesReference })).variables
+                .find(variable => variable.memoryReference);
+            assert.ok(word, "a local has a memory reference");
+            assert.match(word.memoryReference, /^main:0x/);
+            const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
+            const original = await bytes();
+            const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");
+            assert.ok(word.value.endsWith(`($${hex})`), `${word.name} at ${word.memoryReference} shows ${word.value}, reads $${hex}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: Buffer.from([0x34, 0x12]).toString("base64") });
+
+            // Writing memory refreshes the views, so the scopes are read again.
+            const top = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+            const again = (await request("scopes", { frameId: top.id })).scopes.find(scope => scope.name === "Locals");
+            const written = (await request("variables", { variablesReference: again.variablesReference })).variables
+                .find(variable => variable.name === word.name);
+            assert.ok(written.value.endsWith("($1234)"), `${word.name} after writing its memory shows ${written.value}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: original.toString("base64") });
+        }
+
         // Step Over runs one p-code of the procedure.
         await request("next", { threadId: 3 });
         const step = await stop();
@@ -266,7 +303,7 @@ try {
     if (sources) { await sourceBreakpoints(machines[0]); }
 
     await request("disconnect");
-    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.join(" and ")}: the Pascal thread, `
+    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.length < 3 ? passed.join(" and ") : `${passed.slice(0, -1).join(", ")} and ${passed[passed.length - 1]}`}: the Pascal thread, `
         + "a pascal function breakpoint in the Filer, its frames, scopes and registers, Step Over and Step Out"
         + (sources ? "; and on the Apple III a source breakpoint through a listing the Compiler wrote, with line steps." : "."));
 } finally {

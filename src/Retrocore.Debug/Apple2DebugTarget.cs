@@ -108,7 +108,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <remarks>
     ///  <para>
     ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K. It uses both
-    ///   of the card's banks at <c>$D000</c>, and is looked for in each.
+    ///   of the card's banks at <c>$D000</c>, and is looked for in each. 1.3 on a 128K IIe fetches its code from the
+    ///   auxiliary 64K, which the interpreter's code bank follows at each fetch.
     ///  </para>
     /// </remarks>
     public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
@@ -120,7 +121,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         extended: false,
         () => 0,
         () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
-        () => CycleCount);
+        () => CycleCount,
+        () => (_machine.Bus.Switches & Apple2Switches.RamRead) != 0 ? (byte)1 : (byte)0);
 
     // The language card's RAM at an address, bank 1 below $E000 for that bank's area; the CPU's view elsewhere.
     private byte LanguageCard(Apple2MemoryArea area, ushort address)

@@ -11,15 +11,15 @@ namespace Retrocore.Tests;
 
 /// <summary>
 ///  Apple Pascal 1.0 (on the II Plus), 1.1 and 1.2 on a 64K Apple II Plus (with the language card) and an enhanced
-///  IIe, from Apple's disks:
+///  IIe, and 1.3 on a 128K enhanced IIe, from Apple's disks:
 ///  each boots from APPLE1, its Filer lists the disk, and a program is edited, compiled with a listing, and run.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c> and <c>1.2_1.DSK</c>, APPLE1, and the APPLE2 beside each,
+///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c>, <c>1.2_1.DSK</c> and <c>1.3_1.DSK</c>, APPLE1, and the APPLE2 beside each,
 ///   with the Compiler) are in <c>RETROCORE_APPLE2_PASCAL_DISKS</c>; the ROMs are the SDK's.
-///   The IIe shows lowercase, so the screen is compared in capitals. The Editor is typed a line at a time: keys queued
-///   faster than a typist can lose some while it scrolls.
+///   The IIe shows lowercase, so the screen is compared in capitals. The Editor is typed a key at a time, at a typist's
+///   pace: keys queued faster can be lost while it scrolls.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -31,13 +31,14 @@ public class Apple2PascalTests
     ///  Pascal boots to its command line, and the Filer lists APPLE1.
     /// </summary>
     /// <param name="model">The model.</param>
-    /// <param name="version">Apple Pascal's version, 1.1 or 1.2.</param>
+    /// <param name="version">Apple Pascal's version, 1.0 to 1.3.</param>
     [TestMethod]
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void PascalBootsAndTheFilerListsItsDisk(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -56,13 +57,14 @@ public class Apple2PascalTests
     ///  its code file and listing read back from the disk.
     /// </summary>
     /// <param name="model">The model.</param>
-    /// <param name="version">Apple Pascal's version, 1.1 or 1.2.</param>
+    /// <param name="version">Apple Pascal's version, 1.0 to 1.3.</param>
     [TestMethod]
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void PascalCompilesAndRunsAProgram(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -81,7 +83,7 @@ public class Apple2PascalTests
         PascalVolume volume = PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
         PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("SYSTEM.WRK.CODE")).Segments.Should().ContainSingle().Subject;
         segment.Name.Should().Be("HELLO");
-        segment.Version.Should().Be(version switch { "1.0" => 1, "1.1" => 2, _ => 5 });
+        segment.Version.Should().Be(version switch { "1.0" => 1, "1.1" => 2, "1.2" => 5, _ => 6 });
         PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())
             .Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
 
@@ -96,13 +98,14 @@ public class Apple2PascalTests
     ///  its caller in the program, and the system below them.
     /// </summary>
     /// <param name="model">The model.</param>
-    /// <param name="version">Apple Pascal's version, 1.1 or 1.2.</param>
+    /// <param name="version">Apple Pascal's version, 1.0 to 1.3.</param>
     [TestMethod]
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void FramesReadFromTheMarkStack(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -117,17 +120,21 @@ public class Apple2PascalTests
             machine.StepInstruction();
             ushort pc = machine.Processor.Registers.ProgramCounter;
             fetch ??= PascalInterpreter.IsFetch(machine.Bus.Peek, pc) ? pc : null;
-            if (pc == fetch) { top = PascalMachine.Top(memory, new PascalInterpreter("II", pc, 0, Extended: false)); }
+            if (pc == fetch) { top = PascalMachine.Top(memory, Interpreter(machine, pc)); }
         }
 
         fetch.Should().NotBeNull();
         top.Should().NotBeNull();
-        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, new PascalInterpreter("II", fetch.GetValueOrDefault(), 0, Extended: false));
+        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, Interpreter(machine, fetch.GetValueOrDefault()));
         frames.Select(frame => (frame.SegmentNumber, frame.Procedure)).Should().StartWith([(1, 2), (1, 1)]);
         frames[0].Offset.Should().Be(0);
         PascalMachine.Word(memory, frames[0].Local(1)).Should().Be(1, "N is 1 on the first call");
         frames[^1].SegmentNumber.Should().Be(0);
     }
+
+    // The interpreter at its fetch: 1.3 on a 128K IIe reads its code from the auxiliary 64K there.
+    private static PascalInterpreter Interpreter(Apple2Machine machine, ushort fetch) =>
+        new("II", fetch, 0, Extended: false, CodeBank: (machine.Bus.Switches & Apple2Switches.RamRead) != 0 ? (byte)1 : (byte)0);
 
     // Types HELLO into the Editor, asking for a listing, and keeps it as the workfile, ending at the command line.
     private static void EditHello(Apple2Machine machine, string version)
@@ -147,9 +154,11 @@ public class Apple2PascalTests
         }
 
         Type(machine, "E");
-        RunUntil(machine, "NO WORKFILE IS PRESENT", seconds: 20);
+        // 1.3's Editor asks for a file where the others say there is no workfile; RETURN starts a new one either way.
+        RunUntil(machine, "NO WORKFILE IS PRESENT", seconds: 20, orElse: "EDIT WHAT FILE?");
+        machine.Run(cycles: 204_096);
         Type(machine, "\r");
-        RunUntil(machine, ">EDIT: A(DJST", seconds: 10);
+        RunUntil(machine, ">EDIT:", seconds: 10);
         Type(machine, "I");
         RunUntil(machine, ">INSERT:", seconds: 10);
         string[] lines =
@@ -162,22 +171,37 @@ public class Apple2PascalTests
         // writes a listing, so 1.0 gets none.
         foreach (string line in version == "1.0" ? lines[1..] : lines)
         {
-            Type(machine, line + "\r");
+            // A key at a time, at the pace the debugger pastes: 1.3's Editor loses keys queued faster.
+            foreach (char key in line + "\r")
+            {
+                Type(machine, key.ToString());
+                machine.Run(cycles: 30_000);
+            }
+
             RunUntil(machine, line, seconds: 10);
             machine.Run(cycles: 204_096);
         }
 
         // CONTROL-C takes the place of any key still waiting, so it goes alone.
         Type(machine, "\u0003");
-        RunUntil(machine, ">EDIT: A(DJST", seconds: 10);
+        RunUntil(machine, ">EDIT:", seconds: 10);
         Type(machine, "Q");
-        RunUntil(machine, "U(PDATE THE WORKFILE", seconds: 10);
+        RunUntil(machine, "U(PDATE ", seconds: 10);
         Type(machine, "U");
-        RunUntil(machine, "COMMAND: E(DIT, R(UN", seconds: 20);
+
+        // 1.3's Editor writes the workfile and stays in its Quit menu, which E(xit) leaves.
+        if (version == "1.3")
+        {
+            RunUntil(machine, "BYTES LONG", seconds: 20);
+            Type(machine, "E");
+        }
+
+        // 1.3's command line starts with F(ile, the others' with E(dit.
+        RunUntil(machine, "COMMAND: ", seconds: 20);
         machine.Run(cycles: 1_020_480);
     }
 
-    // Runs the workfile: 1.1 and 1.2 compile it first, and 1.0 is told to.
+    // Runs the workfile: 1.1 to 1.3 compile it first, and 1.0 is told to.
     private static void Run(Apple2Machine machine, string version)
     {
         if (version == "1.0")
@@ -195,6 +219,14 @@ public class Apple2PascalTests
         }
 
         Type(machine, "R");
+
+        // 1.3's Compiler asks for a listing even with $L in the program.
+        if (version == "1.3")
+        {
+            RunUntil(machine, "LISTING FILE", seconds: 30);
+            machine.Run(cycles: 204_096);
+            Type(machine, "APPLE1:HELLO.LST.TEXT\r");
+        }
     }
 
     // What the system says once it has booted: 1.0 names only UCSD Pascal.

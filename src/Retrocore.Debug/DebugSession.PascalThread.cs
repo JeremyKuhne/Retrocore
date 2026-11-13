@@ -277,7 +277,7 @@ internal sealed partial class DebugSession
                         ["value"] = PascalValue(pascal.Memory, at, variable),
                         ["type"] = variable.Type,
                         ["variablesReference"] = 0,
-                        ["memoryReference"] = at.Bank == 0 ? Reference(bank: null, at.Address) : null
+                        ["memoryReference"] = PascalReference(at)
                     });
                 }
 
@@ -295,7 +295,7 @@ internal sealed partial class DebugSession
                         ["name"] = number.ToString(CultureInfo.InvariantCulture),
                         ["value"] = $"{(short)value} (${value:X4})",
                         ["variablesReference"] = 0,
-                        ["memoryReference"] = at.Bank == 0 ? Reference(bank: null, at.Address) : null
+                        ["memoryReference"] = PascalReference(at)
                     });
                 }
             }
@@ -308,8 +308,24 @@ internal sealed partial class DebugSession
             ["name"] = name,
             ["value"] = pointer.ToString(),
             ["variablesReference"] = 0,
-            ["memoryReference"] = pointer.Bank == 0 ? Reference(bank: null, pointer.Address) : null
+            ["memoryReference"] = PascalReference(pointer)
         };
+    }
+
+    // Where a Pascal pointer is, for the memory view. On the Apple II, RAM below $C000 is named by its bank, main or
+    // auxiliary, as Apple Pascal 1.3 keeps its code in the auxiliary 64K and reads it with RAMRD on, so memory as the
+    // CPU maps it at a fetch is not where the variables are. Elsewhere it is memory as the CPU maps it, and an Apple III
+    // pointer through an X-byte has none.
+    private string? PascalReference(PascalPointer pointer)
+    {
+        if (Pascal?.Memory is Apple2PascalMemory
+            && pointer.Address is >= 0x200 and < 0xC000
+            && Target.Banks.FirstOrDefault(bank => bank.Name == (pointer.Bank == 1 ? "aux" : "main")) is { } named)
+        {
+            return Reference(named, pointer.Address);
+        }
+
+        return pointer.Bank == 0 ? Reference(bank: null, pointer.Address) : null;
     }
 
     // A variable's value as its declared type shows it: an integer, a character, a boolean, a string, or words.

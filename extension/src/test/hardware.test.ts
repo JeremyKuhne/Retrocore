@@ -24,13 +24,19 @@ test("devices no row claims, or a host without hardware rows, are listed on thei
     assert.deepEqual(grouped.loose, [{ id: "cassette" }]);
 });
 
-test("the Mockingboard is offered only for slot 4, and Disk II cards, the mouse card and the 3.5 controller for any free slot", () => {
-    assert.deepEqual(cardsFor("slot4").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Mouse card", "3.5 disk controller"]);
+test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile and 3.5 controller cards for any free slot", () => {
+    assert.deepEqual(cardsFor("slot4").map(card => card.label), [
+        "Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Mouse card", "ProFile interface card",
+        "3.5 disk controller"
+    ]);
     assert.deepEqual(cardsFor("slot5").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mouse card", "3.5 disk controller"]);
+        ["Disk II controller", "Disk II controller, 13-sector", "Mouse card", "ProFile interface card", "3.5 disk controller"]);
     assert.deepEqual(cardsFor("slot0").map(card => card.label), ["Language card", "Firmware card"],
         "slot 0 takes the language and firmware cards");
+});
+
+test("the Apple III's slots are offered only the ProFile card", () => {
+    assert.deepEqual(cardsFor("slot4", "apple3").map(card => card.label), ["ProFile interface card"]);
 });
 
 test("a saved machine comes back only while the launch's hardware options are the ones it was saved under", () => {

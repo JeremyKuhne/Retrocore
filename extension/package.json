@@ -843,6 +843,28 @@
                 },
                 "description": "Apple II: the disks in the 3.5 controller's drives 1 and 2: 400K or 800K Apple disks or 720K or 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. Drive 1 boots. Needs disk35."
               },
+              "proFiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "slot"
+                  ],
+                  "properties": {
+                    "slot": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7,
+                      "description": "The card's slot: 1 to 7 on the Apple II (not 3 on a IIe), 1 to 4 on the Apple III."
+                    },
+                    "image": {
+                      "type": "string",
+                      "description": "A ProDOS-order image (.po or .hdv) of up to 65535 blocks for the ProFile; changes stay in memory."
+                    }
+                  }
+                },
+                "description": "Apple II and Apple III: ProFile interface cards, each with Apple's ProFile hard disk. The Apple II card boots ProDOS from it; on the Apple III, SOS reaches it through .PROFILE in SOS.DRIVER (the System Utilities disk's is set for slot 4). None by default; the Retro Devices view's Add Card puts one in while debugging."
+              },
               "logpointLimit": {
                 "type": "integer",
                 "minimum": 0,

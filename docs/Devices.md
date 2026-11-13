@@ -32,6 +32,7 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1 and JV3 images; write protection can be changed. Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
 | Apple II | Drive 1-2 | `disk1`, `disk2` (slot 6); `slotNdisk1`, `slotNdisk2` (other slots) | Present for each installed Disk II card: slot 6 from a floppy `diskImage`, `dos` or `diskController: "diskII"`, and any free slot via **Add Card**. Its ROMs are the SDK's 16- or 13-sector builds ([DiskII.md](DiskII.md)), or dumps given for slot 6 as `diskBootRom` and `diskSequencerRom`. Takes WOZ images, and DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or 13-sector (`.d13`) sector images converted to WOZ. A disk loads write-protected; taking the protection off lets the machine write it, in memory. The head reads while the motor turns and writes in the card's write mode; the track counts quarter tracks. |
 | Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
+| Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`) of up to 65535 blocks, which the machine can write; inserting and ejecting are allowed. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
 | Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed; a block command shows as reading or writing for a thirtieth of a second. |
 
 ## The debug protocol
@@ -65,20 +66,23 @@ option, empty ones included. Each row names the devices on it, by id:
 
 | Machine | Rows |
 | --- | --- |
-| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card or the 3.5 disk controller) |
+| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card or the 3.5 disk controller) |
 | II, II Plus | `model`, `memory`, `builtIn`, `gamePort`, `d0Socket` (the II only: Programmer's Aid #1 or empty, as the launch's `programmersAid` says), `slot0` (the language card, a firmware card with the other BASIC, or empty, as the launch's `slot0` says), `slot1` to `slot7` (as the IIe's, and slot 3 takes a card too) |
+| Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card or empty) |
 | Model I | `model`, `rom`, `memory`, `cassette`, `expansion`, `disk` (the controller and its doubler, with its drives), `lowercase` |
 
 An empty slot's `value` is `empty`, and its `description` says what installs something there. A row's `actions`
 say what `retro/hardware` can do to it: `addCard` on a free IIe slot (1, 2, 4 and 5, 6 without a Disk II, and 7
-without block storage) or II and II Plus slot (those, 3, and an empty 0), `removeCard` on a Disk II card, the
-Mockingboard, the mouse card, the 3.5 disk controller, or the language or firmware card in slot 0.
+without block storage) or II and II Plus slot (those, 3, and an empty 0) or Apple III slot (1 to 4), `removeCard` on a Disk II card, the
+Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, or the language or firmware card in slot 0. A ProFile card goes in any
+of them; the Apple III takes no other card.
 
 ```json
 { "id": "slot5", "action": "addDiskII", "sectors": 16 }
 { "id": "slot4", "action": "addMockingboard" }
 { "id": "slot2", "action": "addMouse" }
 { "id": "slot5", "action": "addDisk35" }
+{ "id": "slot4", "action": "addProFile" }
 { "id": "slot0", "action": "addLanguageCard" }
 { "id": "slot0", "action": "addFirmwareCard" }
 { "id": "slot5", "action": "removeCard" }
@@ -94,7 +98,7 @@ for the session; the launch configuration is unchanged. The session sends the sa
 state changes: on each stop, and with the running frames while the machine runs.
 
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
-slot 0 of a II or II Plus, `mockingboard`, `mouse`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
+slot 0 of a II or II Plus, `mockingboard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
 that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
 tape being recorded, is left out.

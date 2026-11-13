@@ -310,7 +310,7 @@ public sealed class Apple2Video : IVideoSource
                 // Each hi-res dot is two of the line's 560 pixels, in place: an RGB card has no half-dot delay.
                 for (int dot = start; dot < start + 14; dot++)
                 {
-                    SetPixel(pixels, dot, RgbHiresColor(main, dot >> 1));
+                    SetPixel(pixels, dot, RgbHiresColor(main, switches, row, dot >> 1));
                 }
             }
             else
@@ -414,17 +414,52 @@ public sealed class Apple2Video : IVideoSource
     //    that draw colored areas ($55 and $2A, $D5 and $AA) fill solid instead of striped.
     //  - Any other dark dot is black. That includes the gap in 11011, between two white runs; AppleWin colors it, and
     //    neither the Video-7 nor Apple's card manual says which is right.
-    private int RgbHiresColor(ReadOnlySpan<byte> bytes, int position)
+    //
+    // Only dots of columns shown as hi-res count as lit (see RgbDot): where a scanned line changes mode partway, the
+    // hi-res stretch ends as it does at the screen's edges, whatever bytes the text, lo-res or double hi-res beside it
+    // hold.
+    private int RgbHiresColor(
+        ReadOnlySpan<byte> bytes,
+        ReadOnlySpan<Apple2Switches> switches,
+        int row,
+        int position)
     {
-        if (HiresBit(bytes, position))
+        if (RgbDot(bytes, switches, row, position))
         {
-            bool inRun = HiresBit(bytes, position - 1) || HiresBit(bytes, position + 1);
+            bool inRun = RgbDot(bytes, switches, row, position - 1) || RgbDot(bytes, switches, row, position + 1);
             return inRun ? RgbWhite : RgbLoneDotColor(bytes, position);
         }
 
-        return IsLoneDot(bytes, position - 1) && IsLoneDot(bytes, position + 1)
+        return IsLoneRgbDot(bytes, switches, row, position - 1) && IsLoneRgbDot(bytes, switches, row, position + 1)
             ? RgbLoneDotColor(bytes, position - 1)
             : RgbBlack;
+    }
+
+    // Whether hi-res dot 0-279 is lit for the RGB rule: its bit is set and its column is shown as hi-res. A column
+    // shown as text, lo-res or double hi-res holds other bytes, so its bits are not hi-res dots.
+    private static bool RgbDot(ReadOnlySpan<byte> bytes, ReadOnlySpan<Apple2Switches> switches, int row, int position)
+    {
+        return HiresBit(bytes, position) && IsHires(switches[position / 7], row);
+    }
+
+    // A lit dot with dark dots on both sides, by the RGB rule's idea of lit.
+    private static bool IsLoneRgbDot(
+        ReadOnlySpan<byte> bytes,
+        ReadOnlySpan<Apple2Switches> switches,
+        int row,
+        int position)
+    {
+        bool lit = RgbDot(bytes, switches, row, position);
+        bool before = RgbDot(bytes, switches, row, position - 1);
+        bool after = RgbDot(bytes, switches, row, position + 1);
+        return lit && !before && !after;
+    }
+
+    // Whether a column is shown as single hi-res: not text, not lo-res and not double hi-res.
+    private static bool IsHires(Apple2Switches switches, int row)
+    {
+        bool doubleHires = Has(switches, Apple2Switches.Column80) && Has(switches, Apple2Switches.DoubleHiRes);
+        return Has(switches, Apple2Switches.HiRes) && !IsText(switches, row) && !doubleHires;
     }
 
     // A lone hi-res dot's color on an RGB card: its column (even or odd) and its byte's bit 7 pick one of four.
@@ -436,9 +471,6 @@ public sealed class Apple2Video : IVideoSource
             (false, false) => RgbGreen,
             _ => RgbOrange
         };
-
-    private static bool IsLoneDot(ReadOnlySpan<byte> bytes, int position) =>
-        HiresBit(bytes, position) && !HiresBit(bytes, position - 1) && !HiresBit(bytes, position + 1);
 
     // The lo-res palette entries that an RGB card shows hi-res and text in.
     private const int RgbBlack = 0;

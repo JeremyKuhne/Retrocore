@@ -200,6 +200,58 @@ public class Apple2VideoTests
     }
 
     /// <summary>
+    ///  Checks that where a scanned line changes from text to hi-res partway, the RGB monitor's first hi-res dot keeps
+    ///  its color: the text column's byte is not read as hi-res dots.
+    /// </summary>
+    [TestMethod]
+    public void RgbHiresStartsCleanAfterMidLineText()
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.ColorRgb;
+        bus.Read(0xC051);
+        bus.Read(0xC057);
+
+        // Column 0 is fetched as text, a character code with bit 6 set; column 1 as hi-res, its lone dot 7 lit.
+        bus.SetRam(auxiliary: false, address: 0x400, value: 0xC0);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x01);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(0xC050);
+        bus.Video.ScanCycle();
+
+        byte[] pixels = bus.Video.RenderScannedBitmap();
+        Pixel(pixels, x: 14, y: 0).Should().Equal(17, 221, 0, 255);
+        Pixel(pixels, x: 15, y: 0).Should().Equal(17, 221, 0, 255);
+    }
+
+    /// <summary>
+    ///  Checks that where a scanned line changes from hi-res to text partway, the RGB monitor's last hi-res dot keeps
+    ///  its color: the text column's byte is not read as hi-res dots.
+    /// </summary>
+    [TestMethod]
+    public void RgbHiresEndsCleanBeforeMidLineText()
+    {
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.ColorRgb;
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+
+        // Column 0 is fetched as hi-res, its lone dot 6 lit; column 1 as text, a character code with bit 0 set.
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x40);
+        bus.SetRam(auxiliary: false, address: 0x401, value: 0x01);
+        Advance(bus, cycles: 25);
+        bus.Video.ScanCycle();
+        bus.Tick();
+        bus.Read(0xC051);
+        bus.Video.ScanCycle();
+
+        byte[] pixels = bus.Video.RenderScannedBitmap();
+        Pixel(pixels, x: 12, y: 0).Should().Equal(221, 34, 221, 255);
+        Pixel(pixels, x: 13, y: 0).Should().Equal(221, 34, 221, 255);
+    }
+
+    /// <summary>
     ///  Checks the RGB monitor's hi-res has no fringing: a run of lit dots is white to its exact edges, alternate dots
     ///  fill solid with their color, a lone dot is its color, a gap between white runs is black, there is no half-dot
     ///  delay, and text is white.

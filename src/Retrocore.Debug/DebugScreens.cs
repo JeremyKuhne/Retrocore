@@ -16,6 +16,11 @@ internal static class DebugScreens
     internal const string Color = "color";
 
     /// <summary>
+    ///  An RGB color monitor, on a IIe's RGB card: colors without the composite signal's fringing.
+    /// </summary>
+    internal const string Rgb = "rgb";
+
+    /// <summary>
     ///  A black and white monochrome monitor.
     /// </summary>
     internal const string White = "white";
@@ -34,6 +39,11 @@ internal static class DebugScreens
     ///  Gets the monitors of a machine with color video, color first.
     /// </summary>
     internal static IReadOnlyList<string> WithColor { get; } = [Color, White, Green, Amber];
+
+    /// <summary>
+    ///  Gets the monitors of a machine with color video and an RGB card, composite color first.
+    /// </summary>
+    internal static IReadOnlyList<string> WithRgb { get; } = [Color, Rgb, White, Green, Amber];
 
     /// <summary>
     ///  Gets the monitors of a machine whose video has no color, green first, as its default.

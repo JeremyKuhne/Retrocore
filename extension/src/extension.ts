@@ -276,7 +276,7 @@ export function activate(context: vscode.ExtensionContext): void {
                                     void displaySession.customRequest("apple2/mouse", args).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "screen"
-                                && "screen" in input && (input.screen === "color" || input.screen === "white" || input.screen === "green" || input.screen === "amber")) {
+                                && "screen" in input && (input.screen === "color" || input.screen === "rgb" || input.screen === "white" || input.screen === "green" || input.screen === "amber")) {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/screen", { screen: input.screen }).then(undefined, showError);
                                 }

@@ -945,12 +945,14 @@
                 "type": "string",
                 "enum": [
                   "color",
+                  "rgb",
                   "white",
                   "green",
                   "amber"
                 ],
                 "enumDescriptions": [
                   "A color monitor or television (the default on the Apple II family, the Apple III and the Color Computer).",
+                  "Apple IIe: an RGB card and color monitor, without the composite signal's fringing: white runs stay white to their edges, colored areas are solid, and text is white.",
                   "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."

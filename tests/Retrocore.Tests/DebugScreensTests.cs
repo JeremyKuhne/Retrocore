@@ -58,5 +58,9 @@ public sealed class DebugScreensTests
             () => DebugScreens.Require(DebugScreens.Color, DebugScreens.Monochrome));
 
         Assert.AreEqual("screen must be green, white or amber on this machine.", error.Message);
+
+        // Only a IIe takes an RGB card.
+        Assert.AreEqual(DebugScreens.Rgb, DebugScreens.Require(DebugScreens.Rgb, DebugScreens.WithRgb));
+        Assert.ThrowsExactly<ArgumentException>(() => DebugScreens.Require(DebugScreens.Rgb, DebugScreens.WithColor));
     }
 }

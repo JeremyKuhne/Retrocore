@@ -34,5 +34,12 @@ public enum Apple2Monitor
     /// <summary>
     ///  A white-phosphor monochrome monitor, such as the Monitor /// or the IIc's.
     /// </summary>
-    White
+    White,
+
+    /// <summary>
+    ///  An RGB color monitor on a IIe's RGB card: no color fringing. In hi-res, neighbouring lit dots are white to
+    ///  their edges, a lone dot is its color, and the gap between lone dots is filled with their color, without the
+    ///  half-dot delay; text is white on black. Lo-res and double hi-res are as on <see cref="Color"/>.
+    /// </summary>
+    ColorRgb
 }

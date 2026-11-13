@@ -34,6 +34,14 @@ the board inverts codes below $40 and flashes those from $40 to $7F. A revision 
 byte, so it draws black, white, green and violet but not orange and blue (`"boardRevision": 0`). Its text's color
 fringes are not modeled: text is drawn white, as on later boards.
 
+**RGB.** A IIe can drive an RGB monitor through an RGB card in its auxiliary slot (`"screen": "rgb"`, or **Color
+RGB** in the panel's Screen menu). Without a composite signal there is no color fringing: in hi-res a dot lit beside
+another is white, to the run's exact edges; a lone dot is the even dot's violet or blue or the odd dot's green or
+orange, as bit 7 of its byte says; and the gap between two lone dots is filled with their color, so a colored area
+is solid, not striped. There is no half-dot delay. A line one dot wide, as HPLOT draws, is still colored, since each
+of its dots is alone. Text is white on black. Lo-res and double hi-res draw the same 16 colors as on a composite
+monitor.
+
 **Memory.** The II and II Plus came with 16, 32 or 48 KB on the board (`ramKilobytes`). Past it, reads see the
 floating bus and writes go nowhere, so BASIC finds the top of memory where the RAM ends.
 
@@ -238,7 +246,7 @@ rest, in the [extension README](../extension/README.md)):
 | `mouse` | all | The mouse card in that slot, 1 to 7 (none by default) |
 | `disk35`, `disk35Images` | all | The 3.5 disk controller in that slot, 1 to 7 (none by default), and the disks in its drives 1 and 2 |
 | `proFiles` | all | ProFile cards, each `{ "slot": 5, "image": "hd.po" }`; the image is optional (none by default) |
-| `screen` | all | The monitor: `color` (the default), or a monochrome `white` (black and white), `green` or `amber` one, which shows each of the 560 dots sharply; the panel's **Screen** menu changes it |
+| `screen` | all | The monitor: `color` (the default), `rgb` on a IIe (an RGB card's color monitor, without fringing), or a monochrome `white` (black and white), `green` or `amber` one, which shows each of the 560 dots sharply; the panel's **Screen** menu changes it |
 | `diskImage`, `diskController`, `diskSectors` | all | A disk in slot 6 (`diskII`) or slot 7 (`slot7`, the default for `.po`), and 16- or 13-sector Disk II firmware |
 | `diskBootRom`, `diskSequencerRom`, `sequencerLayout` | all | Disk II P5/P6 ROM dumps in place of the SDK's ([DiskII.md](DiskII.md)) |
 | `dos`, `dosYear` | all | Boot a program from a fresh DOS `3.3` (`1983` or `1980`) or `3.2` disk ([Dos.md](Dos.md)) |

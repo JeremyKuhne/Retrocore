@@ -15,7 +15,7 @@ namespace Retrocore.Tests;
 /// </summary>
 internal static class CocoTestRoms
 {
-    private static readonly ConcurrentDictionary<(string Source, int Version), byte[]> s_built = new();
+    private static readonly ConcurrentDictionary<(string Source, int Version), Lazy<byte[]>> s_built = new();
     private static readonly Lazy<byte[]> s_coco3 = new(() => CocoSdkModules.AssembleCoco3(SourceDirectory).Image);
 
     /// <summary>
@@ -58,15 +58,19 @@ internal static class CocoTestRoms
 
     private static string SourceDirectory => Path.Join(AppContext.BaseDirectory, "Inputs", "Coco");
 
-    // One of the 8 KB BASICs, built from its source once for each version.
-    private static byte[] Built(string source, int version) => s_built.GetOrAdd((source, version), key =>
+    // One of the 8 KB BASICs, built from its source once for each version, even when tests ask for it in parallel:
+    // GetOrAdd may make more than one Lazy, but only the one it keeps is evaluated.
+    private static byte[] Built(string source, int version) =>
+        s_built.GetOrAdd((source, version), key => new(() => Assemble(key.Source, key.Version))).Value;
+
+    private static byte[] Assemble(string source, int version)
     {
-        string path = Path.Join(SourceDirectory, key.Source);
-        return (key.Source switch
+        string path = Path.Join(SourceDirectory, source);
+        return (source switch
         {
-            "ColorBasic.asm" => CocoSdkModules.AssembleColorBasic(path, key.Version),
-            "ExtendedBasic.asm" => CocoSdkModules.AssembleExtendedBasic(path, key.Version),
-            _ => CocoSdkModules.AssembleDiskBasic(path, key.Version)
+            "ColorBasic.asm" => CocoSdkModules.AssembleColorBasic(path, version),
+            "ExtendedBasic.asm" => CocoSdkModules.AssembleExtendedBasic(path, version),
+            _ => CocoSdkModules.AssembleDiskBasic(path, version)
         }).Sections[0].Bytes.ToArray();
-    });
+    }
 }

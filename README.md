@@ -235,6 +235,7 @@ node tools/Test-Memory.mjs            # needs nothing external; also checks IIe 
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
 node tools/Test-IIeDap.mjs            # SDK-built ROMs, or the dumps in RETROCORE_IIE_ROMS
+node tools/Test-ProDosBasicDap.mjs    # needs the ProDOS 2.4.3 image from Fetch-M1Dependencies.ps1
 
 npm --prefix extension ci
 npm --prefix extension run compile

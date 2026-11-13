@@ -147,7 +147,8 @@ internal interface IDebugTarget : IDebugMemory
     /// <remarks>
     ///  <para>
     ///   The Microsoft BASICs start every statement at <see cref="Debug.BasicRom.Gone"/>. A BASIC that starts them in
-    ///   more than one place, or only sometimes at one, says so here.
+    ///   more than one place, or only sometimes at one, says so here, as AppleSoft does under ProDOS's BASIC.SYSTEM,
+    ///   which enters each statement past <c>GONE</c>.
     ///  </para>
     /// </remarks>
     /// <param name="pc">The instruction's address.</param>
@@ -196,7 +197,7 @@ internal interface IDebugTarget : IDebugMemory
 
     /// <summary>
     ///  Moves BASIC to another statement, at <see cref="Debug.BasicRom.Gone"/>: sets the current line and the text
-    ///  pointer the statement fetch continues from.
+    ///  pointer the statement fetch continues from. A statement start past <c>GONE</c> moves back to it.
     /// </summary>
     /// <param name="line">The line number.</param>
     /// <param name="textPointer">The address before the statement's first byte.</param>

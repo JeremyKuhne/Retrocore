@@ -98,7 +98,7 @@ internal sealed partial class Apple2DebugTarget
     public (int Line, int Address)? BasicStatementStart(ushort pc)
     {
         if (BasicRom is not { } rom) { return null; }
-        if (!IntegerActive) { return pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null; }
+        if (!IntegerActive) { return AppleSoftStatementStart(rom, pc); }
 
         int token = IntegerWord(IntegerBasicDialect.Px);
         if (pc == rom.Gone)

@@ -311,6 +311,11 @@ internal interface IDebugTarget : IDebugMemory
     bool AddLoadedModules(DebugInfo debug) => false;
 
     /// <summary>
+    ///  Gets Apple Pascal's p-machine on a machine that can run it, or null.
+    /// </summary>
+    PascalRuntime? Pascal => null;
+
+    /// <summary>
     ///  Gets whether a launched source's single-statement macros debug as their call line.
     /// </summary>
     /// <param name="dialect">The source's dialect.</param>

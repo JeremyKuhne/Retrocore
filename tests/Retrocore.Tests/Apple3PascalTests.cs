@@ -55,6 +55,70 @@ public class Apple3PascalTests
         Type(machine, "\r");
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
 
+        CompileHello(machine);
+
+        Type(machine, "X");
+        RunUntil(machine, "Execute what file?", seconds: 30);
+        Type(machine, "/PASCAL2/HELLO\r");
+        RunUntil(machine, "\n21 ", seconds: 60);
+        Screen(machine).Should().MatchRegex(@"\n7 +\n14 +\n21 ");
+
+        WozDisk disk = machine.Drives[1].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
+        SosVolume volume = SosVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
+        PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("HELLO.CODE")).Segments.Should().ContainSingle().Subject;
+        segment.Name.Should().Be("HELLO");
+        segment.Version.Should().Be(4);
+        string[] show = [.. PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())];
+        show.Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
+
+        string listing = PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT"));
+        listing.Should().Contain("    9   1    1:2    13 SHOW(I)");
+    }
+
+    /// <summary>
+    ///  At the interpreter's fetch in a procedure of a running program, the p-machine's frames read as the procedure,
+    ///  its caller in the program, and the system below them.
+    /// </summary>
+    [TestMethod]
+    public void FramesReadFromTheMarkStack()
+    {
+        Apple3Machine machine = Boot(System, Tools);
+        RunUntil(machine, "Based on  U.C.S.D. Pascal II.1", seconds: 60);
+        Type(machine, "\r");
+        RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        CompileHello(machine);
+
+        Type(machine, "X");
+        RunUntil(machine, "Execute what file?", seconds: 30);
+        Type(machine, "/PASCAL2/HELLO\r");
+        IPascalMemory memory = new Retrocore.Debug.Apple3PascalMemory(machine.Bus);
+        ushort? fetch = null;
+        PascalFrame? top = null;
+        for (long step = 0; step < 50_000_000 && top is not { SegmentNumber: 1, Procedure: 2 }; step++)
+        {
+            machine.StepInstruction();
+            ushort pc = machine.Processor.Registers.ProgramCounter;
+            fetch ??= PascalInterpreter.IsFetch(machine.Bus.Peek, pc) ? pc : null;
+            if (pc == fetch)
+            {
+                top = PascalMachine.Top(memory, new PascalInterpreter("III", pc, 0x1A00, Extended: true));
+            }
+        }
+
+        fetch.Should().NotBeNull();
+        top.Should().NotBeNull();
+        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, new PascalInterpreter("III", fetch.GetValueOrDefault(), 0x1A00, Extended: true));
+        frames.Select(frame => (frame.SegmentNumber, frame.Procedure)).Should().StartWith([(1, 2), (1, 1)]);
+        frames[0].Offset.Should().Be(0);
+        frames[1].Offset.Should().Be(0x10, "SHOW returns to the p-code after CLP 2, at 13 + 3");
+        PascalMachine.Word(memory, frames[0].Local(1)).Should().Be(1, "N is 1 on the first call");
+        frames.Should().HaveCountGreaterThan(2);
+        frames[^1].SegmentNumber.Should().Be(0);
+    }
+
+    // Types HELLO into the Editor, saves it to /PASCAL2 and compiles it with a listing, ending at the command line.
+    private static void CompileHello(Apple3Machine machine)
+    {
         Type(machine, "E");
         RunUntil(machine, "No workfile is present", seconds: 60);
         Type(machine, "\r");
@@ -83,23 +147,6 @@ public class Apple3PascalTests
         RunUntil(machine, "Smallest available space", seconds: 120);
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
         machine.Run(TimeSpan.FromSeconds(1));
-
-        Type(machine, "X");
-        RunUntil(machine, "Execute what file?", seconds: 30);
-        Type(machine, "/PASCAL2/HELLO\r");
-        RunUntil(machine, "\n21 ", seconds: 60);
-        Screen(machine).Should().MatchRegex(@"\n7 +\n14 +\n21 ");
-
-        WozDisk disk = machine.Drives[1].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
-        SosVolume volume = SosVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
-        PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("HELLO.CODE")).Segments.Should().ContainSingle().Subject;
-        segment.Name.Should().Be("HELLO");
-        segment.Version.Should().Be(4);
-        string[] show = [.. PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())];
-        show.Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
-
-        string listing = PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT"));
-        listing.Should().Contain("    9   1    1:2    13 SHOW(I)");
     }
 
     private static Apple3Machine Boot(params string[] disks)

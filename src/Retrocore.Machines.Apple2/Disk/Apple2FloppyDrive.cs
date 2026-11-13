@@ -131,6 +131,11 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     }
 
     /// <summary>
+    ///  Gets the disk in the drive, which stays in it; null when the drive is empty.
+    /// </summary>
+    public WozDisk? Disk => _controller.MediaIn(Drive);
+
+    /// <summary>
     ///  Ejects the disk, leaving any unsaved changes to the caller.
     /// </summary>
     /// <returns>The disk, or null when the drive was empty.</returns>

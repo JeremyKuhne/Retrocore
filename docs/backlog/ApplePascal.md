@@ -1,7 +1,7 @@
 # Backlog: Apple Pascal
 
-Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Plan
-first, then code files and p-code, then the debugger's p-machine, then booting and running both.
+Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Steps
+1-4 are built for both machines; see Built. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -34,6 +34,38 @@ file system.
 **Already in Retrocore:** `SosVolume` reads SOS volumes, and `SosDriverCodeFile` reads a Pascal code file with one
 native segment (Titan's RAM disk driver). Apple III Pascal 1.1 boots on the emulator, edits, compiles with a
 listing, and runs the program.
+
+## Built
+
+Built 2026-11-13:
+
+- **Media:** `SectorDiskReader`, `PascalVolume`, `PascalCodeFile` (with `SosDriverCodeFile` on it) and
+  `PascalTextFile`; `PascalMediaTests`. A procedure whose dictionary entry leads outside its segment is left out:
+  the system segment stubs at the head of Apple III Pascal's Editor and Linker only declare procedures, and Apple
+  Pascal 1.1's `PASCALSY` lists 57 in a segment that holds fewer.
+- **P-code:** `Retrocore.Pascal`'s opcode table and `PcodeDisassembler`, and `--pascal`; `PcodeTests`. Every p-code
+  procedure on the 1.1 disks and both Apple III versions decodes, with every jump landing on a p-code: the code on
+  Apple III Pascal's disks (versions 4 and 6) uses no opcode II.1 lacks. An `XJP`'s missing cases point at its own
+  `UJP`. The unnamed initialization segment in `SYSTEM.PASCAL` jumps into its jump table, and decoding stops there.
+  Apple Pascal 1.2's `SYSTEM.EDITOR` on the Asimov image has damaged code in `COPYFILE.1` (from `$055A`).
+- **Booting and running:** `Apple3PascalTests` and `Apple2PascalTests` boot, list the boot disk in the Filer, and
+  edit, compile with a listing and run a program, reading its code file and listing back from the disk.
+  - **Found:** the Apple III's keyboard sent control characters without CONTROL, so SOS made CONTROL-C a C
+    (fixed, `Apple3BusTests.ControlCharacterHoldsControl`).
+  - On the Apple II, CONTROL-C replaces the keys queued before it, as BASIC needs, so a test types it alone; and
+    keys queued faster than a typist can lose some while the Editor scrolls, so the test types a line at a time.
+- **The debugger's p-machine:** `PascalInterpreter`, `PascalMachine` and `PascalCodeLibrary`, `PascalRuntime` on
+  each Apple target, and the Pascal thread (`DebugSession.PascalThread.cs`); checked by the `FramesReadFromTheMarkStack`
+  tests and `tools/Test-PascalDap.mjs` on both machines.
+  - **The interpreters, as found:** both keep BASE, MP, JTAB, SEG and IPC at `$50-$59`, and fetch with
+    `LDA ($58),Y` (Apple III Pascal 1.1 at `$870E`, with zero page at `$1A00`; Apple Pascal 1.1 at `$D255`). An MSCW
+    is 12 bytes: the static and dynamic links, the caller's JTAB, SEG and IPC, the 6502 stack pointer, and on the
+    Apple III the caller's code X-byte. Locals follow it, local n at MSCW + 10 + 2n.
+  - The interpreter is found by its fetch's bytes, so other versions should be found too, but only 1.1 is checked.
+  - `WozDisk.Version` counts changes, so code files the Compiler writes while the machine runs are found.
+- **Not done:** line breakpoints in `.TEXT` sources from listings (a listing's offsets work as `pascal` breakpoints
+  today), named variables, Apple III Pascal 1.2 and Apple Pascal 1.2 booted, the IIe, and a language for `.TEXT`
+  files in the extension.
 
 ## The pieces
 

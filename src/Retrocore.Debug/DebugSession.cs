@@ -139,10 +139,20 @@ internal sealed partial class DebugSession
 
         transport.On("threads", args => Reply(() => new JsonObject { ["threads"] = Threads() }));
         transport.On("stackTrace", args => Reply(() =>
-            args.Int("threadId") == BasicThread ? BasicStackTrace() : StackTrace(args)));
+            args.Int("threadId") switch
+            {
+                BasicThread => BasicStackTrace(),
+                PascalThread => PascalStackTrace(),
+                _ => StackTrace(args)
+            }));
 
         transport.On("scopes", args => Reply(() =>
-            (args.Int("frameId") ?? 0) >= BasicFrameBase ? BasicScopes() : Scopes(args)));
+            (args.Int("frameId") ?? 0) switch
+            {
+                >= BasicFrameBase => BasicScopes(),
+                >= PascalFrameBase and var frame => PascalScopesOf(frame),
+                _ => Scopes(args)
+            }));
 
         transport.On("variables", args => Reply(() => Variables((args.Int("variablesReference") ?? 0))));
         transport.On("evaluate", args => Reply(() =>
@@ -150,6 +160,9 @@ internal sealed partial class DebugSession
             string expression = Required(args, "expression");
             int frameId = args.Int("frameId") ?? 1;
             if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
+
+            // A Pascal frame's expressions are the CPU's, as the machine is now.
+            if (frameId is >= PascalFrameBase and < BasicFrameBase) { frameId = 1; }
             long value;
             DebugMemoryBank? bank;
             try
@@ -191,6 +204,7 @@ internal sealed partial class DebugSession
         transport.On("continue", args => Reply(() =>
         {
             _basicGoal = null;
+            _pascalGoal = null;
             Continue();
             return new JsonObject
             {
@@ -207,6 +221,12 @@ internal sealed partial class DebugSession
                 return [];
             }
 
+            if (OnPascal(args))
+            {
+                StepPascal(PascalStep.Pause);
+                return [];
+            }
+
             _run?.Cancel();
             Stopped("pause");
             return [];
@@ -214,21 +234,24 @@ internal sealed partial class DebugSession
 
         transport.On("next", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Over); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Over); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Over); }
             else { Step(over: true, outOf: false, Instruction(args)); }
             return [];
         }));
 
         transport.On("stepIn", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Into); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Into); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Into); }
             else { Step(over: false, outOf: false, Instruction(args)); }
             return [];
         }));
 
         transport.On("stepOut", args => Reply(() =>
         {
-            if (OnBasic(args)) { StepBasic(BasicStep.Out); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Out); }
+            else if (OnBasic(args)) { StepBasic(BasicStep.Out); }
             else { Step(over: false, outOf: true, Instruction(args)); }
             return [];
         }));
@@ -854,6 +877,7 @@ internal sealed partial class DebugSession
 
     private JsonObject Variables(int reference)
     {
+        if (reference >= PascalReferences) { return PascalVariablesOf(reference); }
         if (reference >= BasicReferences) { return BasicVariablesOf(reference); }
         if (reference > DocumentationScope) { return DocumentationVariables(reference - DocumentationScope); }
         if (reference == BanksScope) { return BankVariables(); }
@@ -1053,6 +1077,7 @@ internal sealed partial class DebugSession
         DebugFrame before = Target.Frame;
         _instructionStart = before.ProgramCounter;
         ObserveBasic(before.ProgramCounter);
+        ObservePascal(before.ProgramCounter);
         FlushLineCycles();
         (string Path, int Line)? previous = _cycleSource;
         _cycleSource = _debug.Position(Target, before.ProgramCounter)?.Chain[0] is { } line
@@ -1132,6 +1157,7 @@ internal sealed partial class DebugSession
                             }
 
                             if (Target.IsInstructionBoundary && !first && BasicStops(pc)) { return; }
+                            if (Target.IsInstructionBoundary && !first && PascalStops(pc)) { return; }
 
                             // Continuing from a BRK stop runs the BRK.
                             if (Target.IsInstructionBoundary
@@ -1344,6 +1370,9 @@ internal sealed partial class DebugSession
     {
         Invalidate();
         _basicGoal = null;
+        _pascalGoal = null;
+        _pascalFrames = null;
+        Pascal?.Forget();
         ForgetBasicReferences();
         _unchecked = false;
         AddLoadedModules();

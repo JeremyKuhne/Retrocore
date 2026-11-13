@@ -744,6 +744,10 @@ optional). The library writes the same format through `AssemblyDebugFile.Write`.
 For ca65 sources it maps every address and line as ld65 does, including include
 files, macro body lines and BSS.
 
+`Retrocore.Debug --pascal catalog disk.dsk` lists the files on an Apple Pascal or
+SOS disk, `--pascal extract` copies one out, and `--pascal disassemble` lists a
+code file's p-code ([Pascal.md](../docs/Pascal.md#disks-and-code-files)).
+
 `Retrocore.Debug --dos catalog disk.dsk` lists a DOS 3.3 or 3.2 disk's files,
 with each binary file's address and length (`--json` for a machine to read), and
 `--dos extract disk.dsk "NAME" out.bin` copies one out. `Retrocore.Debug
@@ -907,8 +911,8 @@ Breakpoints view is supported:
 
 - **source** breakpoints in the gutter, in your program and the SDK's ROM sources;
 - **function** breakpoints on a label or address expression, such as `DISPLAY_CHAR`
-  or `$C600`, a scanline such as `scanline 192:0`, or an Apple III SOS call such
-  as `sos OPEN`;
+  or `$C600`, a scanline such as `scanline 192:0`, an Apple III SOS call such
+  as `sos OPEN`, or an Apple Pascal procedure such as `pascal HELLO.2`;
 - **instruction** breakpoints in the Disassembly view, which shows each
   instruction's bytes, label and source line;
 - **data** breakpoints that watch memory, or a Z80 I/O port, for reads, writes or

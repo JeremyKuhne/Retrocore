@@ -52,6 +52,57 @@ public class Apple2PascalTests
     {
         Apple2Machine machine = Boot();
         RunUntil(machine, "WELCOME APPLE1, TO APPLE II PASCAL 1.1", seconds: 30);
+        EditHello(machine);
+        Type(machine, "R");
+        RunUntil(machine, "RUNNING...", seconds: 60);
+        RunUntil(machine, "\n21 ", seconds: 20);
+        Screen(machine).Should().MatchRegex(@"\n7 +\n14 +\n21 ");
+
+        WozDisk disk = machine.Drives[0].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
+        PascalVolume volume = PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
+        PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("SYSTEM.WRK.CODE")).Segments.Should().ContainSingle().Subject;
+        segment.Name.Should().Be("HELLO");
+        segment.Version.Should().Be(2);
+        PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())
+            .Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
+
+        PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT")).Should().MatchRegex(@" 1:2 +\d+ SHOW\(I\)");
+    }
+
+    /// <summary>
+    ///  At the interpreter's fetch in a procedure of a running program, the p-machine's frames read as the procedure,
+    ///  its caller in the program, and the system below them.
+    /// </summary>
+    [TestMethod]
+    public void FramesReadFromTheMarkStack()
+    {
+        Apple2Machine machine = Boot();
+        RunUntil(machine, "WELCOME APPLE1, TO APPLE II PASCAL 1.1", seconds: 30);
+        EditHello(machine);
+        Type(machine, "R");
+        IPascalMemory memory = new Retrocore.Debug.Apple2PascalMemory(machine.Bus);
+        ushort? fetch = null;
+        PascalFrame? top = null;
+        for (long step = 0; step < 50_000_000 && top is not { SegmentNumber: 1, Procedure: 2 }; step++)
+        {
+            machine.StepInstruction();
+            ushort pc = machine.Processor.Registers.ProgramCounter;
+            fetch ??= PascalInterpreter.IsFetch(machine.Bus.Peek, pc) ? pc : null;
+            if (pc == fetch) { top = PascalMachine.Top(memory, new PascalInterpreter("II", pc, 0, Extended: false)); }
+        }
+
+        fetch.Should().NotBeNull();
+        top.Should().NotBeNull();
+        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, new PascalInterpreter("II", fetch.GetValueOrDefault(), 0, Extended: false));
+        frames.Select(frame => (frame.SegmentNumber, frame.Procedure)).Should().StartWith([(1, 2), (1, 1)]);
+        frames[0].Offset.Should().Be(0);
+        PascalMachine.Word(memory, frames[0].Local(1)).Should().Be(1, "N is 1 on the first call");
+        frames[^1].SegmentNumber.Should().Be(0);
+    }
+
+    // Types HELLO into the Editor, asking for a listing, and keeps it as the workfile, ending at the command line.
+    private static void EditHello(Apple2Machine machine)
+    {
         Type(machine, "E");
         RunUntil(machine, "NO WORKFILE IS PRESENT", seconds: 20);
         Type(machine, "\r");
@@ -78,20 +129,6 @@ public class Apple2PascalTests
         Type(machine, "U");
         RunUntil(machine, "COMMAND: E(DIT, R(UN", seconds: 20);
         machine.Run(cycles: 1_020_480);
-        Type(machine, "R");
-        RunUntil(machine, "RUNNING...", seconds: 60);
-        RunUntil(machine, "\n21 ", seconds: 20);
-        Screen(machine).Should().MatchRegex(@"\n7 +\n14 +\n21 ");
-
-        WozDisk disk = machine.Drives[0].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
-        PascalVolume volume = PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
-        PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("SYSTEM.WRK.CODE")).Segments.Should().ContainSingle().Subject;
-        segment.Name.Should().Be("HELLO");
-        segment.Version.Should().Be(2);
-        PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())
-            .Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
-
-        PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT")).Should().MatchRegex(@" 1:2 +\d+ SHOW\(I\)");
     }
 
     private static Apple2Machine Boot()

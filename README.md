@@ -119,6 +119,9 @@ The debugger supports:
 - **Statement-level BASIC debugging:** a **BASIC** thread alongside the CPU thread for AppleSoft, Integer BASIC,
   and Level II BASIC, with `GOSUB` call stacks, Variables/Arrays/Loops inspection and editing, BASIC expression
   watches, Jump to Cursor, and Step Into from `CALL`, `USR`, or `&` straight into machine code;
+- **Apple Pascal debugging:** a **Pascal** thread for Apple Pascal on the Apple II and Apple III Pascal, with the
+  p-machine's procedures as its call stack, their locals, p-code stepping and `pascal` breakpoints
+  ([Pascal.md](docs/Pascal.md));
 - **Live memory views:** side-effect-free inspection and editing in Microsoft's Hex Editor or Memory Inspector,
   kept current while the machine runs, with Apple II language-card banks, firmware/slot ROMs, and IIe auxiliary
   RAM addressable directly regardless of active soft switches ([Memory.md](docs/Memory.md));
@@ -166,12 +169,13 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
 | [`Retrocore.Assembler`](src/Retrocore.Assembler) | Multi-dialect assembler (native, ca65, Merlin, MACRO-10), disassembler, flow analysis, and `;;` documentation parser. |
 | [`Retrocore.Basic`](src/Retrocore.Basic) | AppleSoft, Integer BASIC, and Level II BASIC: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
-| [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, JV1 and JV3 floppies, and CAS tapes. |
+| [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, SOS and Apple Pascal volumes and code files, JV1 and JV3 floppies, and CAS tapes. |
+| [`Retrocore.Pascal`](src/Retrocore.Pascal) | Apple Pascal's p-code and its disassembler, and the p-machine's state as its interpreters keep it on the Apple II and Apple III. |
 | [`Retrocore.Input`](src/Retrocore.Input) | SDL3 game controller discovery and polling, mapped to emulated joysticks and paddles. |
 | [`Retrocore.Machines.Apple2`](src/Retrocore.Machines.Apple2) | The Apple II, II Plus, and IIe (original and enhanced), peripheral cards, and SDK ROM sources. |
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface, floppy/doubler hardware, cassette, and SDK ROM sources. |
-| [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--disassemble` CLI, in one host. |
+| [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--disassemble` CLI, in one host. |
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
 | [`AppleSharp`](src/AppleSharp) | Standalone SDL3 Native AOT desktop emulator for the Apple IIe (uses caller-supplied ROM dumps). |
 | [`tools/DosDisk`](tools/DosDisk) | CLI tool that builds bootable DOS 3.3 and 3.2 disk images from the SDK's DOS sources and a folder of files ([Dos.md](docs/Dos.md#building-disks)). |
@@ -285,6 +289,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [the media library and explorers](docs/backlog/Media.md);
+- [Apple Pascal](docs/backlog/ApplePascal.md) on the Apple II and Apple III;
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md);
 - [the Apple III](docs/backlog/Apple3.md);

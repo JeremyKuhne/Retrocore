@@ -8,15 +8,4 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <KnownILCompilerPack Update="@(KnownILCompilerPack)" ILCompilerPackVersion="$(RetrocoreILCompilerVersion)" />
   </ItemGroup>
-
-  <!-- Touki's runtime package can bring a published analyzer transitively; use only the local build. -->
-  <Target Name="_RemovePackagedToukiAnalyzers"
-          AfterTargets="ResolveLockFileAnalyzers"
-          BeforeTargets="CoreCompile">
-    <ItemGroup>
-      <_PackagedToukiAnalyzer Include="@(Analyzer)"
-                             Condition="'%(Analyzer.NuGetPackageId)' == 'KlutzyNinja.Touki.Analyzers'" />
-      <Analyzer Remove="@(_PackagedToukiAnalyzer)" />
-    </ItemGroup>
-  </Target>
 </Project>

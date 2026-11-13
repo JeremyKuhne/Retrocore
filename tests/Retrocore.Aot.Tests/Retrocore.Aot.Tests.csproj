@@ -10,14 +10,17 @@
   <ItemGroup>
     <Using Include="Retrocore.Cpu" />
     <Using Include="Retrocore.Cpu.M6502" />
+    <Using Include="Retrocore.Cpu.M6809" />
+    <Using Include="Retrocore.Cpu.Z80" />
     <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <Compile Include="..\Retrocore.Perf\RamBus.cs" Link="RamBus.cs" />
     <Compile Include="..\Retrocore.Perf\CpuWorkload.cs" Link="CpuWorkload.cs" />
     <Compile Include="..\Retrocore.Perf\Z80RamBus.cs" Link="Z80RamBus.cs" />
-    <Using Include="Retrocore.Cpu.Z80" />
   </ItemGroup>
 
 </Project>

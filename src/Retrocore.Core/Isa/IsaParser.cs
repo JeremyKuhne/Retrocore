@@ -29,9 +29,13 @@ public static partial class IsaParser
     ///  Parses a description.
     /// </summary>
     /// <param name="text">The file's text.</param>
+    /// <param name="postbytes">
+    ///  Supplies each instruction set's <see cref="PostbyteCodec"/> by set name, for a description whose forms
+    ///  have postbyte fields; without one, those forms do not decode.
+    /// </param>
     /// <returns>The description, with its instruction sets.</returns>
     /// <exception cref="FormatException">The text is malformed; the message names the line.</exception>
-    public static IsaDescription Parse(string text)
+    public static IsaDescription Parse(string text, Func<string, PostbyteCodec?>? postbytes = null)
     {
         Endianness endianness = Endianness.Little;
         int addressBits = 16;
@@ -125,13 +129,21 @@ public static partial class IsaParser
             Flags = flags,
             Forms = forms,
             Vectors = rules.Vectors,
-            EntryPoints = rules.EntryPoints
+            EntryPoints = rules.EntryPoints,
+            AngleWidths = rules.AngleWidths
         };
 
         Dictionary<string, InstructionSet> result = new(StringComparer.OrdinalIgnoreCase);
         foreach (string name in order)
         {
-            result[name] = InstructionSet.Create(name, description, sets[name].Entries, rules, excluded: null, message: null);
+            result[name] = InstructionSet.Create(
+                name,
+                description,
+                sets[name].Entries,
+                rules,
+                excluded: null,
+                message: null,
+                postbytes?.Invoke(name));
         }
 
         foreach ((string name, string baseName, HashSet<string> excluded, string message) in subsets)
@@ -141,7 +153,7 @@ public static partial class IsaParser
                 throw Error(0, $"Subset '{name}' names an unknown base '{baseName}'.");
             }
 
-            result[name] = InstructionSet.Create(name, description, source.Entries, rules, excluded, message);
+            result[name] = InstructionSet.Create(name, description, source.Entries, rules, excluded, message, postbytes?.Invoke(name));
         }
 
         description.InstructionSets = result;
@@ -278,6 +290,23 @@ public static partial class IsaParser
             case "indirect-page-wrap":
                 for (int index = 1; index < tokens.Count; index++) { rules.IndirectPageWrap.Add(tokens[index]); }
                 break;
+            case "angle-widths":
+                rules.AngleWidths = tokens.Count == 1 ? true : throw Error(number, "Expected 'angle-widths'.");
+                break;
+            case "alias":
+                if (tokens.Count < 2) { throw Error(number, "Expected 'alias Alias=Mnemonic ...'."); }
+                for (int index = 1; index < tokens.Count; index++)
+                {
+                    string[] parts = tokens[index].Split('=');
+                    if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0)
+                    {
+                        throw Error(number, $"Expected 'Alias=Mnemonic', not '{tokens[index]}'.");
+                    }
+
+                    rules.Aliases[parts[0]] = parts[1];
+                }
+
+                break;
             default:
                 throw Error(number, $"Unknown setting '{tokens[0]}'.");
         }
@@ -339,6 +368,10 @@ public static partial class IsaParser
                         "disp8" => OperandFieldKind.Displacement8,
                         "bit" => OperandFieldKind.BitNumber,
                         "rst" => OperandFieldKind.Restart,
+                        "indexed" => OperandFieldKind.IndexedPostbyte,
+                        "pair" => OperandFieldKind.RegisterPair,
+                        "sysmask" => OperandFieldKind.SystemStackMask,
+                        "usermask" => OperandFieldKind.UserStackMask,
                         _ => throw Error(number, $"Unknown field kind '{field}'.")
                     });
                 }

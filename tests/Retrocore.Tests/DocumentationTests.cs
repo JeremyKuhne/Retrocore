@@ -433,7 +433,8 @@ public class DocumentationTests
     {
         foreach (Retrocore.Isa.IsaDescription description in (Retrocore.Isa.IsaDescription[])[
             Retrocore.Cpu.M6502.M6502Isa.Description,
-            Retrocore.Cpu.Z80.Z80Isa.Description])
+            Retrocore.Cpu.Z80.Z80Isa.Description,
+            Retrocore.Cpu.M6809.M6809Isa.Description])
         {
             foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => flag.Name is not ("X" or "Y")))
             {

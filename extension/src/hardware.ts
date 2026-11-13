@@ -27,6 +27,10 @@ export const cards: Card[] = [
         args: { action: "addMockingboard" }, slots: ["slot4"]
     },
     {
+        label: "Mouse card", detail: "An AppleMouse II-compatible mouse; click the display to move it, Escape to let go",
+        args: { action: "addMouse" }
+    },
+    {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
         args: { action: "addLanguageCard" }, slots: ["slot0"]
     },
@@ -62,7 +66,7 @@ export function group<T extends { id: string }>(hardware: HardwareRow[] | undefi
 export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
-    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "sound", "slot0", "monitor", "boardRevision",
+    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "sound", "slot0", "monitor", "boardRevision",
     "firmwareCardRoms", "programmersAid"
 ] as const;
 

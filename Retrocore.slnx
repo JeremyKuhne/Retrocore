@@ -13,19 +13,18 @@
     <Project Path="tests/Retrocore.Aot.Tests/Retrocore.Aot.Tests.csproj" />
     <Project Path="tests/Retrocore.Perf/Retrocore.Perf.csproj" />
   </Folder>
-  <Folder Name="/Touki/">
-    <Project Path="../touki/touki.analyzers.bootstrap/touki.analyzers.bootstrap.csproj" />
-    <Project Path="../touki/touki.analyzers.codefixes/touki.analyzers.codefixes.csproj" />
-    <Project Path="../touki/touki.analyzers/touki.analyzers.csproj" />
-  </Folder>
   <Project Path="src/Retrocore.Core/Retrocore.Core.csproj" />
   <Project Path="src/Retrocore.Cpu.M6502/Retrocore.Cpu.M6502.csproj" />
+  <Project Path="src/Retrocore.Cpu.M6809/Retrocore.Cpu.M6809.csproj" />
   <Project Path="src/Retrocore.Cpu.Z80/Retrocore.Cpu.Z80.csproj" />
   <Project Path="src/Retrocore.Assembler/Retrocore.Assembler.csproj" />
   <Project Path="src/Retrocore.Basic/Retrocore.Basic.csproj" />
   <Project Path="src/Retrocore.Media/Retrocore.Media.csproj" />
+  <Project Path="src/Retrocore.Pascal/Retrocore.Pascal.csproj" />
+  <Project Path="src/Retrocore.Machines.Apple1/Retrocore.Machines.Apple1.csproj" />
   <Project Path="src/Retrocore.Machines.Apple2/Retrocore.Machines.Apple2.csproj" />
   <Project Path="src/Retrocore.Machines.Apple3/Retrocore.Machines.Apple3.csproj" />
+  <Project Path="src/Retrocore.Machines.Coco/Retrocore.Machines.Coco.csproj" />
   <Project Path="src/Retrocore.Machines.Trs80/Retrocore.Machines.Trs80.csproj" />
   <Project Path="tests/Retrocore.Tests/Retrocore.Tests.csproj" />
 </Solution>

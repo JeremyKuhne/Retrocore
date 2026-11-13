@@ -109,6 +109,10 @@ internal sealed partial class OperandFormMatcher
                 {
                     entries.Add(new(EntryKind.Exclusive, form.Id, pattern));
                 }
+                else if (form.HasPostbyte)
+                {
+                    entries.Add(new(EntryKind.Postbyte, form.Id, pattern));
+                }
                 else if (groups.TryGetValue(text, out Entry? group))
                 {
                     group.Group.Add(form.Id);
@@ -184,6 +188,13 @@ internal sealed partial class OperandFormMatcher
             {
                 // The table lookup is cheaper than the syntax test.
                 if (set.Has(mnemonic, entry.Form) && entry.Pattern.Matches(text)) { return entry.Form; }
+                continue;
+            }
+
+            if (entry.Kind == EntryKind.Postbyte)
+            {
+                // The instruction set's codec knows its postbyte syntax, such as the MC6809's [5,X] or Table,PCR.
+                if (set.Postbytes?.HasSyntax(set.Forms[entry.Form].Field(0), text) == true) { return entry.Form; }
                 continue;
             }
 

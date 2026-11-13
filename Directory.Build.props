@@ -79,13 +79,8 @@
     <CompilerVisibleProperty Include="RetrocoreSdkPaths" />
     <CompilerVisibleProperty Include="RetrocoreBuildTime" />
     <CompilerVisibleProperty Include="SOURCE_DATE_EPOCH" />
-    <!-- Use the sibling Touki checkout for current analyzer rules and IDE code fixes. -->
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\touki\touki.analyzers\touki.analyzers.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"
-                      AdditionalProperties="Configuration=$(Configuration);Platform=AnyCPU" />
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\touki\touki.analyzers.codefixes\touki.analyzers.codefixes.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"
-                      AdditionalProperties="Configuration=$(Configuration);Platform=AnyCPU" />
+    <!-- Touki's analyzer rules and IDE code fixes, from NuGet. -->
+    <PackageReference Include="KlutzyNinja.Touki.Analyzers" Version="0.11.1" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

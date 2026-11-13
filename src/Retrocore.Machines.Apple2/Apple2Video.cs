@@ -46,6 +46,7 @@ public sealed class Apple2Video : IVideoSource
     private readonly byte[] _auxiliary = new byte[40 * Height];
     private readonly Apple2Switches[] _switches = new Apple2Switches[40 * Height];
     private readonly bool[] _flash = new bool[40 * Height];
+    private Apple2Monitor _monitor;
     private ulong? _fetchCycle;
     private ushort _fetchAddress;
     private byte _floatingBus;
@@ -164,6 +165,21 @@ public sealed class Apple2Video : IVideoSource
     /// <param name="pixels">Exactly 560 * 192 * 4 destination bytes.</param>
     public void RenderBitmap(Span<byte> pixels) => Render(pixels, scanned: false);
 
+    /// <summary>
+    ///  Gets or sets the monitor the video is shown on: color, or a monochrome monitor that shows each of the 560 dots
+    ///  on its own.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a monitor.</exception>
+    public Apple2Monitor Monitor
+    {
+        get => _monitor;
+        set
+        {
+            if (!Enum.IsDefined(value)) { throw new ArgumentOutOfRangeException(nameof(value)); }
+            _monitor = value;
+        }
+    }
+
     /// <inheritdoc/>
     int IVideoSource.Width => Width;
 
@@ -214,7 +230,9 @@ public sealed class Apple2Video : IVideoSource
                 flash.Fill(FlashPhase);
             }
 
-            RenderLine(pixels.Slice(row * Width * 4, Width * 4), row, main, auxiliary, switches, flash);
+            Span<byte> line = pixels.Slice(row * Width * 4, Width * 4);
+            if (_monitor == Apple2Monitor.Color) { RenderLine(line, row, main, auxiliary, switches, flash); }
+            else { RenderMonochromeLine(line, row, main, auxiliary, switches, flash); }
         }
     }
 
@@ -290,6 +308,74 @@ public sealed class Apple2Video : IVideoSource
                     int color = white ? 3 : delayed ? (position & 1) == 0 ? 6 : 5 : (position & 1) == 0 ? 2 : 1;
                     HiresPalette.Slice(color * 4, 4).CopyTo(pixels.Slice((start + dot) * 4, 4));
                 }
+            }
+        }
+    }
+
+    // A monochrome monitor's line: each 14 MHz dot lit or dark, as the video signal has it, with no color.
+    private void RenderMonochromeLine(
+        Span<byte> pixels,
+        int row,
+        ReadOnlySpan<byte> main,
+        ReadOnlySpan<byte> auxiliary,
+        ReadOnlySpan<Apple2Switches> switches,
+        ReadOnlySpan<bool> flash)
+    {
+        ReadOnlySpan<byte> phosphor = _monitor switch
+        {
+            Apple2Monitor.Green => [51, 255, 102],
+            Apple2Monitor.Amber => [255, 176, 0],
+            _ => [240, 240, 240]
+        };
+
+        for (int column = 0; column < 40; column++)
+        {
+            Apple2Switches state = switches[column];
+            int start = column * 14;
+            bool doubleMode = Has(state, Apple2Switches.Column80) && Has(state, Apple2Switches.DoubleHiRes);
+            for (int dot = 0; dot < 14; dot++)
+            {
+                bool lit;
+                if (IsText(state, row))
+                {
+                    bool wide = Has(state, Apple2Switches.Column80);
+                    int code = wide && dot < 7 ? auxiliary[column] : main[column];
+                    if (code is >= 0x40 and < 0x80 && !Has(state, Apple2Switches.AlternateCharacters))
+                    {
+                        code = (code & 0x3F) | (flash[column] ? 0 : 0x80);
+                    }
+
+                    int bit = wide ? dot % 7 : dot / 2;
+                    lit = ((_roms.Characters[code * 8 + (row & 7)] >> bit) & 1) == 0;
+                }
+                else if (!Has(state, Apple2Switches.HiRes))
+                {
+                    // Lo-res colors are patterns of four dots repeating along the line.
+                    bool aux = doubleMode && dot < 7;
+                    int color = ((aux ? auxiliary[column] : main[column]) >> (row & 4)) & 15;
+                    lit = ((color >> ((start + dot) & 3)) & 1) != 0;
+                }
+                else if (doubleMode)
+                {
+                    // Double hi-res: the auxiliary byte's seven bits, then the main byte's, one dot each.
+                    byte source = dot < 7 ? auxiliary[column] : main[column];
+                    lit = ((source >> (dot % 7)) & 1) != 0;
+                }
+                else
+                {
+                    // Hi-res: each bit two dots wide, half a bit later when the byte's high bit is set.
+                    bool delayed = !Revision0 && (main[column] & 128) != 0;
+                    int within = dot - (delayed ? 1 : 0);
+                    lit = within < 0
+                        ? column != 0 && (main[column - 1] & 0x40) != 0
+                        : ((main[column] >> (within / 2)) & 1) != 0;
+                }
+
+                Span<byte> pixel = pixels.Slice((start + dot) * 4, 4);
+                pixel[0] = lit ? phosphor[0] : (byte)0;
+                pixel[1] = lit ? phosphor[1] : (byte)0;
+                pixel[2] = lit ? phosphor[2] : (byte)0;
+                pixel[3] = 255;
             }
         }
     }

@@ -22,6 +22,11 @@ internal sealed partial class OperandFormMatcher
         Exclusive,
 
         /// <summary>
+        ///  A postbyte field, whose syntax the instruction set's <see cref="Isa.PostbyteCodec"/> recognizes.
+        /// </summary>
+        Postbyte,
+
+        /// <summary>
         ///  The operand has the pattern's syntax, whatever the mnemonic has.
         /// </summary>
         Syntax

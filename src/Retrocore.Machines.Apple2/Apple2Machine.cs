@@ -126,7 +126,7 @@ public sealed class Apple2Machine : IMachine
     public Processor<Apple2Bus> Processor { get; }
 
     /// <summary>
-    ///  Gets or sets an external IRQ source ORed with the Mockingboard's interrupt output.
+    ///  Gets or sets an external IRQ source ORed with the Mockingboard's and mouse card's interrupt outputs.
     ///  Use this input rather than changing the CPU IRQ bit while a device owns that bit.
     /// </summary>
     public bool ExternalIrq { get; set; }
@@ -136,7 +136,7 @@ public sealed class Apple2Machine : IMachine
     /// </summary>
     public void StepCycle()
     {
-        bool irq = ExternalIrq || Bus.Mockingboard.InterruptRequested;
+        bool irq = ExternalIrq || Bus.Mockingboard.InterruptRequested || Bus.Mouse.InterruptRequested;
         if (irq || _deviceIrq)
         {
             Processor.Signals = (Processor.Signals & ~ProcessorSignals.InterruptRequest)

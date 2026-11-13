@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Apple2;
+using Retrocore.Machines;
 using SDL3;
 using System.Runtime.InteropServices;
 using Touki;

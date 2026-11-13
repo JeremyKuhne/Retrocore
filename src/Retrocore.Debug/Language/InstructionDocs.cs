@@ -3,13 +3,14 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.M6809;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
 
 namespace Retrocore.Debug.Language;
 
 /// <summary>
-///  What each 6502, 65C02 and Z80 instruction does, and its encodings for a CPU.
+///  What each 6502, 65C02, Z80 and MC6809 instruction does, and its encodings for a CPU.
 /// </summary>
 internal static partial class InstructionDocs
 {
@@ -94,7 +95,9 @@ internal static partial class InstructionDocs
     /// <summary>
     ///  Gets every documented mnemonic.
     /// </summary>
-    internal static IEnumerable<string> Mnemonics => s_docs.Keys.Union(s_z80.Keys, StringComparer.OrdinalIgnoreCase);
+    internal static IEnumerable<string> Mnemonics =>
+        s_docs.Keys.Union(s_z80.Keys, StringComparer.OrdinalIgnoreCase)
+            .Union(s_m6809.Keys, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     ///  Gets whether a name is a mnemonic of some CPU, including numbered bit instructions such as BBR3.
@@ -102,7 +105,9 @@ internal static partial class InstructionDocs
     /// <param name="name">The name.</param>
     /// <returns>Whether it is a mnemonic.</returns>
     internal static bool IsMnemonic(string name) =>
-        s_docs.ContainsKey(name.Length == 4 && char.IsAsciiDigit(name[3]) ? name[..3] : name) || s_z80.ContainsKey(name);
+        s_docs.ContainsKey(name.Length == 4 && char.IsAsciiDigit(name[3]) ? name[..3] : name)
+            || s_z80.ContainsKey(name)
+            || s_m6809.ContainsKey(name);
 
     /// <summary>
     ///  Gets an instruction's description, or null when the name is not a mnemonic.
@@ -121,7 +126,9 @@ internal static partial class InstructionDocs
     internal static string? Describe(string mnemonic, InstructionSet set) =>
         ReferenceEquals(set.Description, Z80Isa.Description)
             ? DescribeZ80(mnemonic, set)
-            : DescribeM6502(mnemonic, M6502Isa.VariantOf(set));
+            : ReferenceEquals(set.Description, M6809Isa.Description)
+                ? DescribeM6809(mnemonic, set)
+                : DescribeM6502(mnemonic, M6502Isa.VariantOf(set));
 
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
@@ -148,7 +155,10 @@ internal static partial class InstructionDocs
     internal static IEnumerable<string> MnemonicsFor(InstructionSet set) =>
         ReferenceEquals(set.Description, Z80Isa.Description)
             ? Enumerable.Range(0, set.MnemonicCount).Select(set.MnemonicName)
-            : MnemonicsFor(M6502Isa.VariantOf(set));
+            : ReferenceEquals(set.Description, M6809Isa.Description)
+                ? Enumerable.Range(0, set.MnemonicCount).Select(set.MnemonicName)
+                    .Concat(["LSL", "LSLA", "LSLB", "BHS", "BLO", "LBHS", "LBLO"])
+                : MnemonicsFor(M6502Isa.VariantOf(set));
 
     private static List<(AddressMode Mode, byte Code)> Encodings(ProcessorVariant variant, string mnemonic) =>
         Table(variant).TryGetValue(mnemonic, out List<(AddressMode Mode, byte Code)>? list) ? list : [];

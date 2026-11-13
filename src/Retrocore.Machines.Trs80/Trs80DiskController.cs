@@ -19,6 +19,10 @@ namespace Retrocore.Machines.Trs80;
 ///   Steps take the chip's step rate. Selecting a drive starts the motors, which stop 3 seconds after the last
 ///   select.
 ///  </para>
+///  <para>
+///   The Color Computer's disk controller cartridge uses it as its WD1793, ticked at its own clock, with its drive
+///   control register selecting the drive, side, density and motors through <see cref="Control"/>.
+///  </para>
 /// </remarks>
 public sealed partial class Trs80DiskController
 {
@@ -26,11 +30,6 @@ public sealed partial class Trs80DiskController
     ///  The drives.
     /// </summary>
     public const int DriveCount = 4;
-
-    private const int RotationCycles = 200 * Trs80Timing.CyclesPerMillisecond;
-    private const int IndexPulseCycles = 4 * Trs80Timing.CyclesPerMillisecond;
-    private const int MotorCycles = 3000 * Trs80Timing.CyclesPerMillisecond;
-    private const int SettleCycles = 15 * Trs80Timing.CyclesPerMillisecond;
 
     // Status bits.
     private const byte Busy = 0x01;
@@ -46,6 +45,12 @@ public sealed partial class Trs80DiskController
     private readonly int[] _cylinders = new int[DriveCount];
     private readonly bool[] _changed = new bool[DriveCount];
     private readonly Trs80Doubler _doubler;
+    private readonly int _clockHertz;
+    private readonly int _cyclesPerMillisecond;
+    private readonly int _rotationCycles;
+    private readonly int _indexPulseCycles;
+    private readonly int _settleCycles;
+    private bool _motorHeld;
     private int _selected = -1;
     private int _motorCycles;
     private long _rotation;
@@ -71,7 +76,16 @@ public sealed partial class Trs80DiskController
     ///  Creates the controller.
     /// </summary>
     /// <param name="doubler">The doubler that can select a WD1791 for double density.</param>
-    internal Trs80DiskController(Trs80Doubler doubler) => _doubler = doubler;
+    /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
+    internal Trs80DiskController(Trs80Doubler doubler, int clockHertz = Trs80Timing.ClockHertz)
+    {
+        _doubler = doubler;
+        _clockHertz = clockHertz;
+        _cyclesPerMillisecond = clockHertz / 1000;
+        _rotationCycles = 200 * _cyclesPerMillisecond;
+        _indexPulseCycles = 4 * _cyclesPerMillisecond;
+        _settleCycles = 15 * _cyclesPerMillisecond;
+    }
 
     /// <summary>
     ///  Gets the track register.
@@ -199,8 +213,30 @@ public sealed partial class Trs80DiskController
             _ => -1
         };
 
-        if (_selected >= 0) { _motorCycles = MotorCycles; }
+        if (_selected >= 0) { _motorCycles = 3000 * _cyclesPerMillisecond; }
     }
+
+    /// <summary>
+    ///  Selects a drive, its side, the motors and the density directly, for controllers with a drive control
+    ///  register such as the Color Computer's: the motors run while <paramref name="motor"/> is set.
+    /// </summary>
+    /// <param name="drive">The drive, 0-3, or -1 for none.</param>
+    /// <param name="side">The side, 0 or 1.</param>
+    /// <param name="motor">Whether the motors run.</param>
+    /// <param name="doubleDensity">Whether the controller reads and writes MFM.</param>
+    internal void Control(int drive, int side, bool motor, bool doubleDensity)
+    {
+        _selected = drive;
+        Side = side;
+        _doubleDensity = doubleDensity;
+        _motorHeld = motor;
+        _motorCycles = motor ? 1 : 0;
+    }
+
+    /// <summary>
+    ///  Gets whether the data register waits for the program (DRQ).
+    /// </summary>
+    public bool DataRequest => _request;
 
     /// <summary>
     ///  Reads a register.
@@ -269,9 +305,9 @@ public sealed partial class Trs80DiskController
     /// </summary>
     internal void Tick()
     {
-        if (_motorCycles > 0) { _motorCycles--; }
-        if (_motorCycles > 0) { _rotation = (_rotation + 1) % RotationCycles; }
-        bool index = Ready && _rotation < IndexPulseCycles;
+        if (_motorCycles > 0 && !_motorHeld) { _motorCycles--; }
+        if (_motorCycles > 0) { _rotation = (_rotation + 1) % _rotationCycles; }
+        bool index = Ready && _rotation < _indexPulseCycles;
         if (index && !_wasIndex) { _indexPulses++; }
         _wasIndex = index;
         if (_phase != Phase.Idle) { Run(); }
@@ -281,7 +317,7 @@ public sealed partial class Trs80DiskController
 
     private bool Ready => Current is not null && _motorCycles > 0;
 
-    private int ByteCycles => _doubleDensity ? Trs80Timing.ClockHertz / 31250 : Trs80Timing.ClockHertz / 15625;
+    private int ByteCycles => _doubleDensity ? _clockHertz / 31250 : _clockHertz / 15625;
 
     private byte Status()
     {
@@ -293,7 +329,7 @@ public sealed partial class Trs80DiskController
 
         // Type I status shows the index hole, track 0, write protect and ready as they are now.
         byte status = (byte)(_status & (Busy | CrcError | SeekError | HeadLoaded));
-        if (Ready && _rotation < IndexPulseCycles) { status |= IndexOrRequest; }
+        if (Ready && _rotation < _indexPulseCycles) { status |= IndexOrRequest; }
         if (_selected >= 0 && _cylinders[_selected] == 0) { status |= TrackZeroOrLost; }
         if (Current?.WriteProtected == true) { status |= WriteProtect; }
         if (!Ready) { status |= NotReady; }

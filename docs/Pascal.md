@@ -222,8 +222,10 @@ Calls and constants are named whatever is at hand:
 - **A listing** (`--listing`, the Compiler's listing of the program) names segments and procedures by their
   headings, names variables beside each load and store (`STL 3 ; A`, `SLDO5 ; SIZE`), and puts each statement's
   source line above its p-code (`;   12: HIL(I-1,...)`).
-- **The system's files**, INPUT, OUTPUT and KEYBOARD, beside the `LOD`s that reach them in the system's outer block,
-  and a program's globals beside an `LOD`, `STR` or `LDA` that reaches them from a nested procedure.
+- **Intermediate variables**, which `LOD`, `STR` and `LDA` reach in an enclosing procedure: the system's files,
+  INPUT, OUTPUT and KEYBOARD; a program's globals; and, with a listing, any other procedure's, as HILBERT's HIL1
+  reaches HIL's `A` (`LOD 1, 3 ; A`). The listing gives the nesting: a procedure is declared in the last procedure
+  a level out whose heading comes before its own.
 - **Hints** (`--hints`, a JSON file) name and comment anything else, keyed as `pascal` breakpoints name code:
   `SEGMENT` for a segment, `SEGMENT.N` for procedure N, and `SEGMENT.N+$OFFSET` for a place in it, by its offset
   from the procedure's entry; and `SEGMENT.N@WORD` for a variable, by its word in procedure N's frame, as `LDL`

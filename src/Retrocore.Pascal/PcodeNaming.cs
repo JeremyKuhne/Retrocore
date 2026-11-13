@@ -230,20 +230,64 @@ internal sealed class PcodeNaming
 
     /// <summary>
     ///  Gets the name of an intermediate variable, one LOD, STR and LDA reach in an enclosing procedure: the
-    ///  program's globals, and the system's standard files.
+    ///  system's standard files, the program's globals, and, with a listing, any other's.
     /// </summary>
     /// <param name="segment">The segment of the procedure that reaches it.</param>
     /// <param name="number">The procedure's number.</param>
     /// <param name="levels">How many levels out the variable is.</param>
     /// <param name="word">The word, in the enclosing procedure's frame.</param>
-    /// <returns>The name, or null where the enclosing procedure is not known without the source's nesting.</returns>
-    public string? Intermediate(PascalSegment segment, int number, int levels, int word) =>
-        (segment.Procedure(number)?.LexicalLevel - levels) switch
+    /// <returns>
+    ///  The name, or null where it has none; a procedure that is neither the program nor the system's is known from the
+    ///  listing's nesting.
+    /// </returns>
+    public string? Intermediate(PascalSegment segment, int number, int levels, int word)
+    {
+        switch (segment.Procedure(number)?.LexicalLevel - levels)
         {
-            -1 => s_systemVariables.GetValueOrDefault(word),
-            0 => Global(word),
-            _ => null
-        };
+            case -1:
+                return s_systemVariables.GetValueOrDefault(word);
+            case 0:
+                return Global(word);
+            case null:
+                return null;
+        }
+
+        // Further in, the enclosing procedure is the listing's: each step out is to the last heading before this one's
+        // a level out.
+        int? enclosing = number;
+        for (int level = 0; level < levels && enclosing is int inner; level++) { enclosing = Parent(segment, inner); }
+        return enclosing is int outer ? Variable(segment.Number, outer, word) : null;
+    }
+
+    // The procedure a procedure is declared in, from the order of the listing's headings and the code file's levels.
+    private int? Parent(PascalSegment segment, int number)
+    {
+        if (_options.Listing is not { } listing || segment.Procedure(number) is not { } procedure) { return null; }
+
+        Dictionary<int, int> headings = [];
+        for (int index = 0; index < listing.Lines.Count; index++)
+        {
+            PascalListingLine line = listing.Lines[index];
+            if (line.Segment == segment.Number) { headings.TryAdd(line.Procedure, index); }
+        }
+
+        if (!headings.TryGetValue(number, out int heading)) { return null; }
+
+        int? parent = null;
+        int closest = -1;
+        foreach (PascalProcedure outer in segment.Procedures)
+        {
+            if (outer.LexicalLevel == procedure.LexicalLevel - 1
+                && headings.TryGetValue(outer.Index, out int at)
+                && at < heading
+                && at > closest)
+            {
+                (parent, closest) = (outer.Index, at);
+            }
+        }
+
+        return parent;
+    }
 
     // The program's segment: its procedure 1 is p-code at lexical level 0 (or -1, the system's).
     private static bool IsProgram(PascalSegment segment) =>

@@ -200,6 +200,41 @@ public class PcodeAssemblyTests
     }
 
     /// <summary>
+    ///  With a listing, a variable a nested procedure reaches in the procedure it is declared in is named: the
+    ///  enclosing procedure is the last heading a level out before its own, not a sibling's before that.
+    /// </summary>
+    [TestMethod]
+    public void AListingNamesIntermediateVariables()
+    {
+        PascalListing listing = PascalListing.Parse("""
+                 1   1    1:D     1 PROGRAM NEST;
+                 2   1    4:D     1 PROCEDURE OTHER;
+                 3   1    4:D     1 VAR Q: INTEGER;
+                 4   1    4:0     0 BEGIN
+                 5   1    4:0     0 END;
+                 6   1    2:D     1 PROCEDURE OUTER;
+                 7   1    2:D     1 VAR X, Y: INTEGER;
+                 8   1    3:D     1 PROCEDURE INNER;
+                 9   1    3:0     0 BEGIN
+                10   1    3:1     0 Y := X
+                11   1    3:0     6 END;
+                12   1    2:0     0 BEGIN
+                13   1    2:1     0 INNER
+                14   1    2:0     2 END;
+                15   1    1:0     0 BEGIN
+                16   1    1:1     0 OUTER
+                17   1    1:0     2 END.
+            """);
+
+        byte[] original = Assemble(NestedSource);
+        string text = PcodeSourceWriter.Write(original, Options("\"Pcode.asm\"") with { Listing = listing }).Text;
+
+        text.Should().MatchRegex(@"LOD 1, 2 +; X\n");
+        text.Should().MatchRegex(@"STR 1, 1 +; Y\n");
+        Assemble(text).Should().Equal(original);
+    }
+
+    /// <summary>
     ///  A call of a unit in the library names the unit's segment and procedure, from its interface, and the source
     ///  defines the unit's scope.
     /// </summary>
@@ -310,6 +345,60 @@ public class PcodeAssemblyTests
         """;
 
     private static PcodeSourceOptions Options(string include) => new() { Include = include };
+
+    // A program whose procedure 3, INNER, is declared in procedure 2, OUTER, and reaches its variables; procedure 4,
+    // OTHER, is a sibling of OUTER's declared before it.
+    private const string NestedSource = """
+                .include "Pcode.asm"
+                .word Segment0 / 512, Segment0End - Segment0
+                .res 60, 0
+                .byte "NEST    "
+                .res 120, 0
+                .res 64, 0
+                .word (2 << 13) | (2 << 8) | 1
+                .res 254, 0
+        Segment0:
+        .scope Seg0
+                .cpu Pcode
+        .scope P3
+        Entry:  LOD 1, 2
+                STR 1, 1
+        Exit:   RNP 0
+                .word 0, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 3, 2
+        .endscope
+        .scope P2
+        Entry:  CLP 3
+        Exit:   RNP 0
+                .word 4, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 2, 1
+        .endscope
+        .scope P4
+        Entry:  SLDC 0
+        Exit:   RNP 0
+                .byte 0
+                .word 2, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 4, 1
+        .endscope
+        .scope P1
+        Entry:  CLP 2
+        Exit:   RBP 0
+                .word 0, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 1, 0
+        .endscope
+                .word * - P4::Attributes
+                .word * - P3::Attributes
+                .word * - P2::Attributes
+                .word * - P1::Attributes
+                .byte 1, 4
+        .endscope
+        Segment0End:
+                .align 512, 0
+        """;
 
     // The whole 64K from address 0, so blocks and words align as the code file's do, with Pcode.asm from Inputs.
     private static AssemblyOptions Options() => new(ProcessorVariant.Mos6502, origin: 0, imageSize: 0x10000)

@@ -160,6 +160,28 @@ export const machines: readonly Machine[] = [
         ]
     },
     {
+        id: "apple3",
+        label: "Apple III",
+        detail: "6502A at 1 or 2 MHz, 256 KB and the built-in drive",
+        configuration: { machine: "apple3" },
+        diskFormats: ["dsk", "do", "po", "woz"],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [
+                    { label: "256 KB", value: 256 },
+                    { label: "128 KB", detail: "The first Apple III", value: 128 },
+                    { label: "512 KB", detail: "With a third-party upgrade", value: 512 }
+                ],
+                default: 256
+            }
+        ]
+    },
+    {
         id: "trs80-model1-level2",
         label: "TRS-80 Model I (Level II)",
         detail: "Z80, Level II BASIC, 48 KB and the Expansion Interface",

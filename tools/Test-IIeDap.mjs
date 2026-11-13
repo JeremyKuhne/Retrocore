@@ -252,6 +252,42 @@ try {
         unlinkSync(contract);
     }
 
+    // Continuing from a BRK stop runs that BRK: the ROM's handler jumps through BRKV ($03F0) to the next one.
+    const brks = join(root, "artifacts", "iie-sample", "brk-continue.bin");
+    writeFileSync(brks, Buffer.from([0xA9,0x10,0x8D,0xF0,0x03,0xA9,0x60,0x8D,0xF1,0x03,0x00,0xEA,0xEA,0xEA,0xEA,0xEA,0x00,0xEA]));
+    try {
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, program: brks, loadAddress: 0x6000 });
+        await request("setExceptionBreakpoints", { filters: ["brk"] });
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "entry");
+        for (const address of ["$600A", "$6010"]) {
+            await request("continue", { threadId: 1 });
+            const stopped = await event("stopped");
+            assert.equal(stopped.reason, "exception");
+            assert.equal(stopped.description, `BRK at ${address}.`);
+        }
+
+        // A breakpoint's stop at a BRK has not reported it: continuing stops there for the BRK, then runs it.
+        events.length = 0;
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, program: brks, loadAddress: 0x6000 });
+        await request("setExceptionBreakpoints", { filters: ["brk"] });
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "entry");
+        await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: "0x600A" }] });
+        await request("continue", { threadId: 1 });
+        const hit = await event("stopped");
+        assert.equal(hit.reason, "instruction breakpoint", hit.description);
+        await request("setInstructionBreakpoints", { breakpoints: [] });
+        for (const address of ["$600A", "$6010"]) {
+            await request("continue", { threadId: 1 });
+            const stopped = await event("stopped");
+            assert.equal(stopped.reason, "exception");
+            assert.equal(stopped.description, `BRK at ${address}.`);
+        }
+    } finally {
+        unlinkSync(brks);
+    }
+
     const nested = join(root, "artifacts", "iie-sample", "nested-stack.bin");
     writeFileSync(nested, Buffer.from([0x20,0x04,0x60,0xEA,0x20,0x08,0x60,0x60,0xE8,0x60]));
     try {
@@ -477,6 +513,12 @@ try {
         await request("setExceptionBreakpoints", { filters: [] });
         await request("configurationDone");
         await waitFor(text => text.includes("]"), "AppleSoft's prompt");
+
+        // Pasted text is typed whole: line endings are RETURN, smart quotes plain ones, and what has no key is left out.
+        const pasted = await request("retro/type", { text: "PRINT “PASTED”; — 7☃\r\n" });
+        assert.deepEqual(pasted, { typed: 20, skipped: 1 });
+        await waitFor(text => text.includes("PASTED-7"), "the pasted line's output");
+
         await type("10 GOTO 10\r");
         await waitFor(text => text.includes("10 GOTO 10"), "the typed line");
         await request("setExceptionBreakpoints", { filters: ["machineReset"] });

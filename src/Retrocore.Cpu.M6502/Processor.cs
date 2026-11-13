@@ -12,6 +12,10 @@ namespace Retrocore.Cpu.M6502;
 /// <typeparam name="TBus">The memory and device bus implementation.</typeparam>
 public sealed partial class Processor<TBus> where TBus : IProcessorBus
 {
+    // The bus, when it is a class that wants to know its opcode fetches. A field, not a static: class buses share one
+    // copy of this generic code, where a static would be looked up on every fetch.
+    private readonly IOpcodeFetchBus? _opcodeFetchBus;
+
     // The variant's opcode table, resolved once rather than on every fetch.
     private readonly OpCode[] _opcodes;
     private TBus _bus;
@@ -31,6 +35,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         }
 
         _bus = bus;
+        _opcodeFetchBus = typeof(TBus).IsValueType ? null : bus as IOpcodeFetchBus;
         Variant = variant;
         _opcodes = OpcodeTable.Get(variant).ToArray();
         _state.Registers.StackPointer = 0xFD;
@@ -327,7 +332,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
             }
 
             ushort address = _state.Registers.ProgramCounter;
-            byte opcode = Read(address, isOpcodeFetch: true);
+            byte opcode = ReadSync(address, isOpcodeFetch: true);
             if (_state.LastCycle.IsStalled)
             {
                 return;
@@ -398,6 +403,9 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         switch (_state.Phase++)
         {
             case 1:
+                // The fetch the interrupt replaces with BRK still raises SYNC, though its opcode is discarded.
+                ReadSync(_state.Registers.ProgramCounter, isOpcodeFetch: false);
+                break;
             case 2:
                 Read(_state.Registers.ProgramCounter);
                 break;
@@ -733,6 +741,30 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
     {
         Write(StackAddress, value);
         _state.Registers.StackPointer--;
+    }
+
+    // A read with SYNC high: the opcode fetch, and the fetch an interrupt discards. Kept apart from Read, which runs
+    // every cycle.
+    private byte ReadSync(ushort address, bool isOpcodeFetch)
+    {
+        if (_opcodeFetchBus is not { } fetchBus)
+        {
+            return Read(address, isOpcodeFetch);
+        }
+
+        byte value = fetchBus.ReadOpcode(address);
+        _state.LastCycle = new()
+        {
+            Number = CycleCount,
+            Operation = BusOperation.Read,
+            Address = address,
+            Value = value,
+            IsOpcodeFetch = isOpcodeFetch,
+            IsStalled = _state.Sequence != ProcessorSequence.Reset
+                && (_state.PreviousSignals & ProcessorSignals.ReadStall) != 0
+        };
+
+        return value;
     }
 
     private byte Read(ushort address, bool isOpcodeFetch = false)

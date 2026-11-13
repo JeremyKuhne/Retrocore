@@ -33,6 +33,10 @@ internal sealed partial class DebugSession
         "apple2/mouse",
         "apple2/screen",
         "apple2/fastDisk",
+        "apple3/disk",
+        "apple3/sound",
+        "apple3/button",
+        "apple3/fastDisk",
         "retro/media"
     ];
 
@@ -311,6 +315,21 @@ internal sealed partial class DebugSession
             return [];
         }));
 
+        // retro/type: types text, as pasted into the display panel, through the keyboard's queue: line endings are
+        // RETURN, and characters with no key are left out and counted.
+        transport.On("retro/type", args => Reply(() =>
+        {
+            string text = args.String("text") ?? throw new ArgumentException("text is required.");
+            List<int> codes = TypedText.Codes(text, out int skipped);
+            int typed = 0;
+            foreach (int code in codes)
+            {
+                if (Target.Key(code)) { typed++; } else { skipped++; }
+            }
+
+            return new JsonObject { ["typed"] = typed, ["skipped"] = skipped };
+        }));
+
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", _ => Reply(() =>
         {
@@ -444,7 +463,12 @@ internal sealed partial class DebugSession
 
         bool loads = sourceFile is not null || program is not null;
         (_target as IDisposable)?.Dispose();
-        _target = machine == DebugMachines.Trs80Model1 ? LaunchModelI(args, loads) : Apple2DebugTarget.Launch(args);
+        _target = machine switch
+        {
+            DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
+            DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
+            _ => Apple2DebugTarget.Launch(args)
+        };
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -1070,6 +1094,9 @@ internal sealed partial class DebugSession
         _ = Task.Run(async () =>
         {
             bool first = !check;
+
+            // Only a stop at the BRK itself has reported it; resuming from any other stop there checks it.
+            bool trapReported = _exception is ("brk", _);
             long frameTime = Stopwatch.GetTimestamp();
 
             // Sound made while stopped would play as a burst; the panel hears only what runs from here.
@@ -1107,12 +1134,18 @@ internal sealed partial class DebugSession
                             }
 
                             if (Target.IsInstructionBoundary && !first && BasicStops(pc)) { return; }
-                            first = false;
-                            if (Target.IsInstructionBoundary && BreaksOn(BrkFilter) && Target.Traps(pc))
+
+                            // Continuing from a BRK stop runs the BRK.
+                            if (Target.IsInstructionBoundary
+                                && !(first && trapReported)
+                                && BreaksOn(BrkFilter)
+                                && Target.Trap(pc) is { } trap)
                             {
-                                Stopped("exception", description: $"BRK at ${pc:X4}.", exception: "brk");
+                                Stopped("exception", description: trap, exception: "brk");
                                 return;
                             }
+
+                            first = false;
 
                             if (!Execute()) { return; }
                         }
@@ -1120,6 +1153,7 @@ internal sealed partial class DebugSession
                         ahead = Target.CycleCount >= due;
                         if (Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
                         {
+                            AddLoadedModules();
                             Measure();
                             NotifyFrame(running: true);
                             if (Target.TakeAudio() is { } audio) { Notify("retro/audio", audio); }
@@ -1314,6 +1348,7 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         ForgetBasicReferences();
         _unchecked = false;
+        AddLoadedModules();
 
         // A stop where a reset reaches its handler is that reset's stop.
         if (_target is not null && Target.IsInstructionBoundary) { Target.TakeResetStop(); }

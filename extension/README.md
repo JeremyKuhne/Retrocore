@@ -97,8 +97,8 @@ No launch.json is needed to start a machine. Without dumps, every machine runs R
 assembled from the SDK's sources, so there is nothing else to set up.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
-machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, TRS-80 Model I
-(Level II) and TRS-80 Model I (Level I). Pick one and press F5, and it boots as it
+machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
+Model I (Level II) and TRS-80 Model I (Level I). Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -818,6 +818,14 @@ aren't letters:
 | Closed Apple | hold **right Alt** | **Closed Apple** likewise |
 | ESC, TAB, DELETE, arrows, RETURN | **Esc**, **Tab**, **Delete**, arrows, **Enter** | **Esc** |
 
+To paste, right-click the screen and choose **Paste**, or press **Shift+Insert**.
+This works on every machine. The clipboard's text is typed into the machine as if
+you typed it, waiting for the program to read each key, so a pasted BASIC listing
+enters line by line. Each line ending is RETURN. Typographic quotes, dashes and
+ellipses become their ASCII forms. Control characters and anything else without a
+key are left out. The II Plus types capitals, as its keyboard does. **Ctrl+V** is
+CONTROL-V, like any other Ctrl letter, and doesn't paste.
+
 Open Apple with CONTROL-RESET restarts the machine, as on the real keyboard, and
 Closed Apple runs the self-test. This works even when the debugger stops at the
 reset and you let go of the keys: an Apple key that is down at a reset stays down
@@ -854,6 +862,15 @@ only after a click or key, so if the button says to, click the screen.
 
 The key bar's **Volume** slider sets how loud it plays, 50% to start; the panel
 remembers it while it stays open.
+
+## Debugging on the Apple III
+
+`"machine": "apple3"` debugs an Apple III: `ramKilobytes` (128, 256 or 512), `disks` for
+.D1-.D4, `fastDisk` and `sound`. The boot ROM is `apple3.rom` from `romDirectory` or
+`RETROCORE_APPLE3_ROMS`, or else assembled from the SDK's `BootRom.asm`, which is
+byte-identical to it and debugs as a ROM module. Memory references can name a bank:
+`system`, `bank0` and up, `rom`, or an X-byte such as `x81` for SOS's extended
+addresses. See [the Apple III guide](../docs/Apple3.md).
 
 ## Debugging on the TRS-80 Model I
 
@@ -900,20 +917,22 @@ Breakpoints view is supported:
 
 - **source** breakpoints in the gutter, in your program and the SDK's ROM sources;
 - **function** breakpoints on a label or address expression, such as `DISPLAY_CHAR`
-  or `$C600`;
+  or `$C600`, a scanline such as `scanline 192:0`, or an Apple III SOS call such
+  as `sos OPEN`;
 - **instruction** breakpoints in the Disassembly view, which shows each
   instruction's bytes, label and source line;
 - **data** breakpoints that watch memory, or a Z80 I/O port, for reads, writes or
   both, from the Variables view, a watch expression such as `[$0400]`, or **Add
   Data Breakpoint at Address**;
 - **exception** filters: **Machine reset** (on by default) stops as the machine
-  powers on and at each reset after; others stop at a 6502 `BRK`, the video beam
-  reaching a scanline, broken `;; Keeps:` contracts, and BASIC's program start,
-  errors and program end.
+  powers on and at each reset after; others stop at a 6502 `BRK` (on the Apple III,
+  one that is not an SOS call), the video beam reaching a scanline, broken
+  `;; Keeps:` contracts, and BASIC's program start, errors and program end.
 
 Each can have a condition (`A == $0D`), a hit count (`5`, `>=5` or `%5`) and, apart
 from data breakpoints, a log message (`char {A,c} at {HL}`), which writes to the
-Debug Console instead of stopping. A breakpoint's hover shows how often it has been
+Debug Console instead of stopping. On the Apple III, `{sos}` describes the SOS call,
+so `sos` with the message `{sos}` traces every call. A breakpoint's hover shows how often it has been
 hit. **Retrocore: Show Breakpoint Hit Counts** and **Reset Breakpoint Hit Counts**
 are in the Breakpoints view's title bar. Stepping over a call stops at a breakpoint
 inside it, and the Disassembly view steps by instruction.

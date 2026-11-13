@@ -177,6 +177,9 @@ try {
     await request("setBreakpoints", { source: { path: level2 }, breakpoints: [] });
     await request("continue", { threadId: 1 });
 
+    // Pasting counts what the Model I has no key for, such as a bracket, as left out.
+    assert.deepEqual(await request("retro/type", { text: "[" }), { typed: 0, skipped: 1 });
+
     // A cassette: CSAVE records to a file when the tape is ejected, and CLOAD reads it back.
     await type("\r10 PRINT \"SAVED\";6*7\r");
     await screen(text => text.includes("10 PRINT \"SAVED\";6*7"), "the typed line");

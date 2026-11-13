@@ -54,6 +54,12 @@ internal sealed partial class DebugSession
     private const string ScanlineFilter = "scanline";
     private const string MachineResetFilter = "machineReset";
 
+    // SOS call breakpoints, such as sos OPEN: each with its call's number, or null for every call.
+    private readonly List<(byte? Number, BreakpointState State)> _systemCallBreakpoints = [];
+
+    // The sites at an address with none, so checking each instruction allocates nothing.
+    private static readonly List<BreakpointSite> s_noSites = [];
+
     /// <summary>
     ///  Gets the exception filters the Breakpoints view lists for a machine.
     /// </summary>
@@ -76,6 +82,14 @@ internal sealed partial class DebugSession
             "Stops before a 6502 BRK runs.",
             true);
 
+        // SOS calls are BRKs, so on the Apple III the BRK filter stops at the rest; an sos function breakpoint stops
+        // at calls.
+        (string, string, string, bool) sosBrk = (
+            BrkFilter,
+            "BRK instructions",
+            "Stops before a 6502 BRK runs that is not an SOS call, and at SOS's debug call, BRK $FE.",
+            true);
+
         (string, string, string, bool) scanline = (
             ScanlineFilter,
             "Video beam reaches a scanline",
@@ -90,9 +104,14 @@ internal sealed partial class DebugSession
             false);
 
         (string, string, string, bool)[] checks = contracts ? [keeps] : [];
-        return machine == DebugMachines.Trs80Model1
-            ? [reset, .. checks, .. BasicFilters]
-            : [reset, brk, scanline, .. checks, .. BasicFilters];
+        return machine switch
+        {
+            DebugMachines.Trs80Model1 => [reset, .. checks, .. BasicFilters],
+
+            // The Apple III has no BASIC in ROM to stop in, nor a beam position to stop at yet.
+            DebugMachines.Apple3 => [reset, sosBrk, .. checks],
+            _ => [reset, brk, scanline, .. checks, .. BasicFilters]
+        };
     }
 
     /// <summary>
@@ -168,10 +187,30 @@ internal sealed partial class DebugSession
 
     private bool BreaksOn(string filter) => _exceptionFilters.Contains(filter);
 
+    // Adds modules for code the machine has loaded, such as SOS's drivers, and binds the source breakpoints again so
+    // lines in that code stop; each binding the editor shows is updated.
+    private void AddLoadedModules()
+    {
+        if (_target is null || !Target.AddLoadedModules(_debug)) { return; }
+        foreach (JsonObject request in _requested.Values.ToArray())
+        {
+            JsonObject response = Breakpoints(request);
+            foreach (JsonObject breakpoint in (response["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                Notify("breakpoint", new JsonObject
+                {
+                    ["reason"] = "changed",
+                    ["breakpoint"] = breakpoint.DeepClone()
+                });
+            }
+        }
+    }
+
     // Binds every breakpoint again for a new launch, with no hits.
     private void RebindBreakpoints()
     {
         _beamBreakpoints.Clear();
+        _systemCallBreakpoints.Clear();
         _states.Clear();
         _breakpoints.Clear();
         _basicSites.Clear();
@@ -249,6 +288,7 @@ internal sealed partial class DebugSession
         _functionRequest = args;
         RemoveSites(FunctionGroup);
         _beamBreakpoints.Clear();
+        _systemCallBreakpoints.Clear();
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -260,6 +300,13 @@ internal sealed partial class DebugSession
             if (BeamPosition(name) is { } beam)
             {
                 BindBeam(state, beam.Position, beam.Problem);
+                responses.Add(Describe(state, changed: false));
+                continue;
+            }
+
+            if (SystemCallBreakpoint().Match(name.Trim()) is { Success: true } call)
+            {
+                BindSystemCall(state, call.Groups["call"].Success ? call.Groups["call"].Value : null);
                 responses.Add(Describe(state, changed: false));
                 continue;
             }
@@ -329,6 +376,33 @@ internal sealed partial class DebugSession
 
         if (state.Problem is null) { _beamBreakpoints.Add((position, state)); }
         state.Location = $"scanline {position / 65}:{position % 65} (video beam)";
+        state.Response = new JsonObject { ["id"] = state.Id, ["verified"] = state.Problem is null };
+    }
+
+    // An SOS call breakpoint, sos OPEN or sos $C8, stops before a program makes that call; sos alone, before any.
+    private void BindSystemCall(BreakpointState state, string? call)
+    {
+        byte? number = null;
+        if (call is not null)
+        {
+            number = SosCalls.Parse(call);
+            if (number is null)
+            {
+                state.Problem ??= $"'{call.Trim()}' is not an SOS call: use a name or number, such as OPEN or $C8.";
+            }
+        }
+
+        if (_target is null)
+        {
+            state.Problem ??= "Binds when the machine launches.";
+        }
+        else if (Target is not Apple3DebugTarget)
+        {
+            state.Problem ??= "Only the Apple III makes SOS calls.";
+        }
+
+        if (state.Problem is null) { _systemCallBreakpoints.Add((number, state)); }
+        state.Location = number is { } known ? $"sos {SosCalls.Name(known)} (SOS call ${known:X2})" : "sos (every SOS call)";
         state.Response = new JsonObject { ["id"] = state.Id, ["verified"] = state.Problem is null };
     }
 
@@ -791,7 +865,8 @@ internal sealed partial class DebugSession
     /// <returns>The stop, or null.</returns>
     private BreakpointStop? Hit(ushort pc)
     {
-        if (!_breakpoints.TryGetValue(pc, out List<BreakpointSite>? sites) || sites.Count == 0) { return null; }
+        List<BreakpointSite> sites = _breakpoints.GetValueOrDefault(pc) ?? s_noSites;
+        if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];
         int? hidden = null;
@@ -819,6 +894,22 @@ internal sealed partial class DebugSession
             stops.Add(site.Breakpoint);
             hidden ??= levels;
             description ??= error;
+        }
+
+        if (_systemCallBreakpoints.Count != 0 && Target.SystemCall(pc) is { } call)
+        {
+            foreach ((byte? number, BreakpointState state) in _systemCallBreakpoints)
+            {
+                if ((number is { } only && only != call.Number)
+                    || !seen.Add(state)
+                    || !Triggers(state, access: null, out string? error))
+                {
+                    continue;
+                }
+
+                stops.Add(state);
+                description ??= error ?? $"SOS call {call.Name} (${call.Number:X2}) at ${pc:X4}.";
+            }
         }
 
         return stops.Count == 0 ? null : new(stops[0].Kind, [.. stops.Select(state => state.Id)], hidden, description);
@@ -957,7 +1048,8 @@ internal sealed partial class DebugSession
     /// <summary>
     ///  Fills a log message's <c>{expression}</c> placeholders, with <c>{{</c> and <c>}}</c> for braces. A value
     ///  shows as hex like <c>$1F</c>; <c>{expression,d}</c> shows decimal, <c>,x</c> bare hex, <c>,b</c> binary
-    ///  and <c>,c</c> the ASCII character.
+    ///  and <c>,c</c> the ASCII character. <c>{sos}</c> describes the SOS call about to be made, such as
+    ///  <c>OPEN ".CONSOLE"</c>.
     /// </summary>
     /// <param name="message">The log message.</param>
     /// <returns>The text.</returns>
@@ -990,6 +1082,11 @@ internal sealed partial class DebugSession
 
     private string Placeholder(string placeholder)
     {
+        if (placeholder.Trim().Equals("sos", StringComparison.OrdinalIgnoreCase))
+        {
+            return Target.DescribeSystemCall(Target.ProgramCounter) ?? "{sos: no SOS call is made here}";
+        }
+
         int comma = placeholder.LastIndexOf(',');
         string format = comma < 0 ? "" : placeholder[(comma + 1)..].Trim().ToLowerInvariant();
         if (format is not ("d" or "x" or "b" or "c")) { format = ""; }
@@ -1026,6 +1123,9 @@ internal sealed partial class DebugSession
     [GeneratedRegex(@"^scanline\s+(?:(?<vbl>vbl)|(?<scanline>\d{1,3})(?::(?<column>\d{1,2}))?)$",
         RegexOptions.IgnoreCase)]
     private static partial Regex ScanlineBreakpoint();
+
+    [GeneratedRegex(@"^sos(?:\s+(?<call>.+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex SystemCallBreakpoint();
 
     [GeneratedRegex(@"^\[(.+)\](\.w)?$")]
     private static partial Regex MemoryExpression();

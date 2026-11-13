@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\src\Retrocore.Basic\Retrocore.Basic.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <ProjectReference Include="..\..\tools\DosDisk\DosDisk.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj" Aliases="Generator" />
@@ -95,6 +96,10 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\MonitorEntries.asm" Link="Inputs\Roms\System\MonitorEntries.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\FirmwareEquates.asm" Link="Inputs\Roms\System\FirmwareEquates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Trs80\Roms\*.asm" Link="Inputs\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\*.asm" Link="Inputs\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Inputs\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\Kernel\*.asm" Link="Inputs\Apple3\Sos\Kernel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\Drivers\**\*.asm" Link="Inputs\Apple3\Sos\Drivers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\NativeAssembly.md" Link="Inputs\Docs\NativeAssembly.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\.claude\skills\retrocore-native-assembly\*.md" Link="Inputs\Docs\Skill\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sample\iie\main.s" Link="Inputs\IIe\main.s" CopyToOutputDirectory="PreserveNewest" />

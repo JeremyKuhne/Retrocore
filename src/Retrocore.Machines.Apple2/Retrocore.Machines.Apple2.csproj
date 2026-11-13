@@ -9,6 +9,7 @@
     <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
     <InternalsVisibleTo Include="Retrocore.Tests" />
     <InternalsVisibleTo Include="Retrocore.Perf" />
+    <InternalsVisibleTo Include="Retrocore.Machines.Apple3" />
     <AdditionalFiles Include="..\Retrocore.Cpu.M6502\OpcodeTables.txt" />
     <AdditionalFiles Include="Roms\*.rom.asm" />
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />

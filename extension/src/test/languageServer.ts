@@ -120,7 +120,9 @@ export async function testLanguageServer(root: string): Promise<void> {
         const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "COUT");
         return found.some(symbol => symbol.name === "COUT") ? found : undefined;
     });
-    assert.equal(path.basename(cout.find(symbol => symbol.name === "COUT")?.location.uri.fsPath ?? ""), "Monitor.asm");
+    // The Apple III's boot ROM has a COUT too.
+    const homes = cout.filter(symbol => symbol.name === "COUT").map(symbol => path.basename(symbol.location.uri.fsPath));
+    assert.ok(homes.includes("Monitor.asm"), homes.join(", "));
 
     // MACRO-10 sources are a language of their own, for their own icon, and the server serves them as assembly.
     const overlayPath = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft", "applesoft.mac");

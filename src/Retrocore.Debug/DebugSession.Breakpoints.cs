@@ -245,6 +245,7 @@ internal sealed partial class DebugSession
         if (IsBasicDocument(requested)) { return BasicBreakpoints(args); }
         if (IsBasicFile(requested)) { return BasicFileBreakpoints(args, requested); }
         string path = Path.GetFullPath(requested);
+        if (IsPascalSource(path)) { return PascalSourceBreakpoints(args, path); }
 
         _requested[path] = args;
         string group = $"source\n{path.ToUpperInvariant()}";
@@ -294,7 +295,7 @@ internal sealed partial class DebugSession
         RemoveSites(FunctionGroup);
         _beamBreakpoints.Clear();
         _systemCallBreakpoints.Clear();
-        _pascalBreakpoints.Clear();
+        _pascalBreakpoints.RemoveAll(entry => entry.State.Line is null);
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())

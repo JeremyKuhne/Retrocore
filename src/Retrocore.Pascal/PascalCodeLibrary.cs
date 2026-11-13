@@ -35,6 +35,16 @@ public sealed class PascalCodeLibrary
     }
 
     /// <summary>
+    ///  Finds a code file's segment by its name and number.
+    /// </summary>
+    /// <param name="name">The segment's name, as the code file keeps it.</param>
+    /// <param name="number">Its number.</param>
+    /// <returns>The segment, or null.</returns>
+    public PascalSegment? Segment(string name, int number) => _segments
+        .Select(entry => entry.Segment)
+        .FirstOrDefault(segment => segment.Number == number && string.Equals(segment.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     ///  Forgets every segment.
     /// </summary>
     public void Clear() => _segments.Clear();

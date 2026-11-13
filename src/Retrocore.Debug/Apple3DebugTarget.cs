@@ -89,6 +89,7 @@ internal sealed class Apple3DebugTarget : IDebugTarget
         "Apple III Pascal",
         new Apple3PascalMemory(_machine.Bus),
         _machine.Bus.Peek,
+        [],
         (0x2000, 0xC000),
         extended: true,
         () => (ushort)(_machine.Bus.ZeroPage << 8),
@@ -402,6 +403,9 @@ internal sealed class Apple3DebugTarget : IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
+                break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");

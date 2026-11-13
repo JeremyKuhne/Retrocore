@@ -27,7 +27,7 @@
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
-    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
+    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -148,6 +148,18 @@
           "light": "./media/basic.svg",
           "dark": "./media/basic.svg"
         }
+      },
+      {
+        "id": "retrocore-pascal",
+        "aliases": [
+          "Apple Pascal",
+          "pascal"
+        ],
+        "extensions": [
+          ".pas",
+          ".pascal"
+        ],
+        "configuration": "./pascal-language-configuration.json"
       }
     ],
     "grammars": [
@@ -185,6 +197,11 @@
         "language": "retrocore-basic",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-pascal",
+        "scopeName": "source.retrocore-pascal",
+        "path": "./syntaxes/pascal.tmLanguage.json"
       }
     ],
     "configurationDefaults": {
@@ -255,6 +272,9 @@
       },
       {
         "language": "retrocore-basic"
+      },
+      {
+        "language": "retrocore-pascal"
       }
     ],
     "views": {
@@ -602,7 +622,8 @@
           "retrocore-asm",
           "retrocore-macro10",
           "asm",
-          "plaintext"
+          "plaintext",
+          "retrocore-pascal"
         ],
         "configurationAttributes": {
           "launch": {

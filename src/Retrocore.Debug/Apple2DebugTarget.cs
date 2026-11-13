@@ -107,18 +107,32 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K.
+    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K. It uses both
+    ///   of the card's banks at <c>$D000</c>, and is looked for in each.
     ///  </para>
     /// </remarks>
     public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
         "Apple Pascal",
         new Apple2PascalMemory(_machine.Bus),
         _machine.Bus.Peek,
+        [address => LanguageCard(Apple2MemoryArea.MainLanguageCard, address), address => LanguageCard(Apple2MemoryArea.MainLanguageCardBank1, address)],
         (0xD000, 0x10000),
         extended: false,
         () => 0,
         () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
         () => CycleCount);
+
+    // The language card's RAM at an address, bank 1 below $E000 for that bank's area; the CPU's view elsewhere.
+    private byte LanguageCard(Apple2MemoryArea area, ushort address)
+    {
+        Apple2Bus bus = _machine.Bus;
+        if (area == Apple2MemoryArea.MainLanguageCardBank1 && address >= 0xE000)
+        {
+            area = Apple2MemoryArea.MainLanguageCard;
+        }
+
+        return bus.PeekArea(area, address, out byte value) ? value : bus.Peek(address);
+    }
 
     /// <summary>
     ///  Launches a IIe from a launch request's arguments.
@@ -920,6 +934,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
+                break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");

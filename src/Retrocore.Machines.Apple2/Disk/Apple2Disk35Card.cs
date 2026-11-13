@@ -401,15 +401,20 @@ public sealed class Apple2Disk35Card
     }
 
     /// <summary>
-    ///  Command $0A, which chooses the next FORMAT's kind: 0 for the disk's own, or an even kind below $0D. This card
-    ///  checks the kind and formats every disk as the kind it is.
+    ///  Command $0A, which chooses the next FORMAT's kind. Its parameter is a count of bytes in the buffer, of which
+    ///  Apple's host firmware (COMMAND0A) passes up to four, the rest zero, and the card (SETFORMAT) takes the first as
+    ///  the kind (0 for the disk's own, or an even kind below $0D), wants the second 0, and takes a third below $0D as
+    ///  the interleave. This card checks them so and formats every disk as the kind it is.
     /// </summary>
-    /// <param name="call">The parameter list: the kind, then an interleave.</param>
-    /// <returns>The error: $21 for a kind Apple's card refuses.</returns>
-    private static byte SetFormat(SmartPortList call)
+    /// <param name="call">The parameter list: the buffer, then the count.</param>
+    /// <returns>The error: $21 for what Apple's card refuses.</returns>
+    private byte SetFormat(SmartPortList call)
     {
-        int kind = call.Parameter(0);
-        return kind == 0 || (kind < 0x0D && (kind & 1) == 0) ? NoError : BadControl;
+        Span<byte> payload = stackalloc byte[4];
+        ReadMemory(call.Buffer, payload[..Math.Min(call.Parameter(0), payload.Length)]);
+        byte kind = payload[0];
+        if (payload[1] != 0 || kind >= 0x0D || (kind & 1) != 0) { return BadControl; }
+        return kind != 0 && payload[2] >= 0x0D ? BadControl : NoError;
     }
 
     /// <summary>
@@ -492,7 +497,8 @@ public sealed class Apple2Disk35Card
 
     /// <summary>
     ///  CONTROL, whose list starts with its length, as Apple's card answers it. A drive takes 0 (forget the disk and
-    ///  look again) and 4 (eject); 9 (sides) and $0A (interleave), which take one byte, change nothing here. Codes $0C
+    ///  look again, which, as Apple's CTLRESET checks the disk, is $2F with no disk and takes a changed disk, with $2E
+    ///  for an extended call) and 4 (eject); 9 (sides) and $0A (interleave), which take one byte, change nothing here. Codes $0C
     ///  to $13, which reach into the card's own 65C02, are taken and do nothing, but for $12, which would run code
     ///  there. Unit 0 takes only $0C and $0E-$13.
     /// </summary>
@@ -512,7 +518,7 @@ public sealed class Apple2Disk35Card
         {
             case 0x00:
                 drive.Reset();
-                return NoError;
+                return DriveFor(call.Unit, call.Extended, out _);
             case 0x04:
                 drive.EjectByProgram();
                 return NoError;

@@ -1368,6 +1368,10 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public IEnumerable<string> RestoreCards(JsonObject cards)
     {
         List<string> problems = [];
+
+        // The 3.5 controller moves to its saved slot with its disks before any slot is emptied, which would otherwise
+        // take it out, and its disks with it, before its new slot comes up.
+        MoveDisk35To(cards, problems);
         foreach ((string key, JsonNode? node) in cards)
         {
             string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
@@ -1403,13 +1407,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                         HardwareAction(id, "addMouse", []);
                         break;
                     case "disk35":
-                        // One per machine, as the mouse card is; its drives keep their disks as it moves.
-                        if (_machine.Bus.Disk35Slot is not 0 and var from && from != slot && _machine.Bus.IsSlotFree(slot))
-                        {
-                            MoveDisk35(from, slot);
-                            break;
-                        }
-
                         HardwareAction(id, "addDisk35", []);
                         break;
                     case "languageCard":
@@ -1437,16 +1434,28 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
-    // Moves the 3.5 controller to another slot with its disks still in, as a saved machine puts it where it was.
-    private void MoveDisk35(int from, int to)
+    // Whether a saved slot holds the 3.5 controller.
+    private static bool IsDisk35(KeyValuePair<string, JsonNode?> entry) =>
+        entry.Value?.GetValueKind() == System.Text.Json.JsonValueKind.String && entry.Value.GetValue<string>() == "disk35";
+
+    // Moves the 3.5 controller, one per machine, to the slot the saved cards give it, taking out what is there unless
+    // the launch gave it.
+    private void MoveDisk35To(JsonObject cards, List<string> problems)
     {
-        Apple2Disk35Drive[] drives = [.. _machine.Bus.Disk35.Drives];
-        (Disk35Disk? Disk, Machines.Devices.MediaState? State)[] disks = [.. drives.Select(drive => (drive.Disk, drive.Media))];
-        HardwareAction($"slot{from}", "removeCard", []);
-        HardwareAction($"slot{to}", "addDisk35", []);
-        for (int i = 0; i < drives.Length; i++)
+        int from = _machine.Bus.Disk35Slot;
+        string? saved = cards.FirstOrDefault(IsDisk35).Key;
+        if (from == 0 || saved is null || !int.TryParse(saved, out int to) || to == from) { return; }
+
+        string current = CardIn(to);
+        if (current is "blockStorage" or "diskII" || to is < 1 or > 7) { return; }
+        try
         {
-            if (disks[i] is ({ } disk, { } state)) { drives[i].Insert(disk, state.Label, state.Format); }
+            if (current != "empty") { HardwareAction($"slot{to}", "removeCard", []); }
+            if (_machine.Bus.IsSlotFree(to)) { _machine.Bus.MoveDisk35(to); }
+        }
+        catch (ArgumentException error)
+        {
+            problems.Add(error.Message);
         }
     }
 

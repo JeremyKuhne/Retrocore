@@ -310,6 +310,25 @@ public sealed class Apple2Bus : IProcessorBus
     }
 
     /// <summary>
+    ///  Moves the 3.5 disk controller to another free slot, its disks still in its drives, as if it had been taken out
+    ///  and put back.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <exception cref="InvalidOperationException">The card is not in, or the slot is not free.</exception>
+    public void MoveDisk35(int slot)
+    {
+        if (Disk35Slot == 0) { throw new InvalidOperationException("The 3.5 controller is not in a slot."); }
+        if (slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a card.");
+        }
+
+        Disk35.Reset();
+        Disk35.Slot = slot;
+        CardChanges++;
+    }
+
+    /// <summary>
     ///  Takes the 3.5 disk controller out, ejecting its disks.
     /// </summary>
     /// <exception cref="InvalidOperationException">The card is not in.</exception>

@@ -173,23 +173,27 @@ try {
         assert.equal(slotRow(devices, "slot4").value, "empty", JSON.stringify(cards));
     }
 
-    // The 3.5 controller: the launch puts it in slot 5 with an 800K disk in drive 1, and a saved machine moves it,
-    // disk and all.
+    // The 3.5 controller: the launch puts it in a slot with an 800K disk in drive 1, and a saved machine moves it, disk
+    // and all, up or down. Moving down empties its launch slot first, which must not take its disks out.
     const disk35 = join(root, "artifacts", "iie-sample", "blank800k.po");
     mkdirSync(dirname(disk35), { recursive: true });
     writeFileSync(disk35, Buffer.alloc(800 * 1024));
     try {
-        for (const machineState of [undefined, { cards: { 2: "disk35", 5: "empty" } }]) {
+        const cases = [
+            { launch: 5, machineState: undefined, slot: "slot5" },
+            { launch: 5, machineState: { cards: { 2: "disk35", 5: "empty" } }, slot: "slot2" },
+            { launch: 2, machineState: { cards: { 2: "empty", 5: "disk35" } }, slot: "slot5" }
+        ];
+        for (const { launch, machineState, slot } of cases) {
             await request("launch", {
-                machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, disk35: 5,
+                machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, disk35: launch,
                 disk35Images: [disk35], machineState
             });
             const devices = await request("retro/devices");
-            const slot = machineState === undefined ? "slot5" : "slot2";
             assert.equal(slotRow(devices, slot).value, "3.5 disk controller");
             assert.deepEqual(slotRow(devices, slot).devices, ["disk35d1", "disk35d2"]);
             const drive = devices.devices.find(device => device.id === "disk35d1");
-            assert.equal(drive.media.label, disk35);
+            assert.equal(drive.media?.label, disk35, `the disk stays in from slot ${launch} to ${slot}`);
             assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect"]);
             assert.equal(devices.configuration.cards[slot.slice(4)], "disk35");
         }

@@ -177,7 +177,7 @@ The emulator doesn't run it; it is the reference the emulated card follows:
 | CONTROL | 0 forgets the disk, 4 ejects, 9 and $0A set a format's sides and interleave, $0C-$13 reach into the card's RAM and run code there; a list of $400 bytes or more is $22 | 0 and 4 the same; 9 and $0A checked and ignored; $0C-$13 taken and ignored but $12 (run code), which is $21 |
 | FORMAT | Writes and verifies every track, 800K or 1440K by the drive and disk; a failed format ejects the disk | Clears every block |
 | READ and WRITE ($08, $09) | A tagged 524-byte block of a GCR disk | The same, with tags read as zero and not kept |
-| Commands $0A and $0B | Choose a format; list the formats a drive can write | $0A checks its kind; $0B is $21 |
+| Commands $0A and $0B | Choose a format from up to four bytes in the buffer; list the formats a drive can write | $0A checks the bytes as Apple's does and formats every disk as its own kind; $0B is $21 |
 | OPEN, CLOSE | $01 | The same |
 | Boot | Unit 1's block 0 at $0800; it runs at $0801 with X = $n0 if it starts with $01 and a nonzero byte; otherwise the next slot when the scan brought it, or UNABLE TO BOOT and BASIC | The same |
 | Timing | A block from a new track takes a revolution, about 100-150 ms; one cached from the same track, none | Every call at once |

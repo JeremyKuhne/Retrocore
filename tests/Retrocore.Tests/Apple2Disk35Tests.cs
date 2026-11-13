@@ -234,6 +234,48 @@ public sealed class Apple2Disk35Tests
     }
 
     /// <summary>
+    ///  Command $0A takes the format from the buffer, as many bytes as its count says: the kind (0, or even and below
+    ///  $0D), a 0, then an interleave below $0D. A count of 0 is the disk's own format.
+    /// </summary>
+    [TestMethod]
+    public void SetFormatReadsItsBuffer()
+    {
+        Apple2Machine machine = Machine();
+        machine.Bus.Disk35.Drives[0].Insert(Disk35Disk.Blank(Disk35Format.Gcr800), "data", "PO");
+        byte SetFormat(byte[] payload)
+        {
+            Poke(machine, Buffer, payload);
+            return SmartPort(machine, command: 0x0A, [3, 1, Buffer & 0xFF, Buffer >> 8, payload.Length]).Accumulator;
+        }
+
+        SetFormat([]).Should().Be(0);
+        SetFormat([0x02]).Should().Be(0, "a one-byte buffer holds the kind");
+        SetFormat([0x04, 0x00, 0x0C]).Should().Be(0);
+        SetFormat([0x03]).Should().Be(0x21, "an odd kind");
+        SetFormat([0x0E]).Should().Be(0x21, "a kind past $0C");
+        SetFormat([0x04, 0x01]).Should().Be(0x21, "the second byte must be 0");
+        SetFormat([0x04, 0x00, 0x0D]).Should().Be(0x21, "an interleave of 13");
+    }
+
+    /// <summary>
+    ///  CONTROL $00 looks at the disk again, as Apple's checks it: $2F with no disk, and a disk that went in since
+    ///  taken, with $2E for an extended call.
+    /// </summary>
+    [TestMethod]
+    public void ControlResetChecksTheDisk()
+    {
+        Apple2Machine machine = Machine();
+        Poke(machine, Buffer, [0, 0]);
+        int[] reset = [3, 1, Buffer & 0xFF, Buffer >> 8, 0];
+        SmartPort(machine, command: 4, reset).Accumulator.Should().Be(0x2F, "no disk");
+
+        machine.Bus.Disk35.Drives[0].Insert(Disk35Disk.Blank(Disk35Format.Gcr800), "data", "PO");
+        SmartPort(machine, command: 0x44, [3, 1, Buffer & 0xFF, Buffer >> 8, 0, 0, 0]).Accumulator.Should().Be(0x2E);
+        SmartPort(machine, command: 0x44, [3, 1, Buffer & 0xFF, Buffer >> 8, 0, 0, 0]).Accumulator.Should().Be(0);
+        SmartPort(machine, command: 4, reset).Accumulator.Should().Be(0);
+    }
+
+    /// <summary>
     ///  ProDOS's calls: this slot's drive 2 is unit $D0; status gives the block count in X and Y, and $2B for a
     ///  write-protected disk; an empty drive is $2F; a unit ProDOS mapped to slot 2 is SmartPort's unit 3, which is
     ///  not there ($28).

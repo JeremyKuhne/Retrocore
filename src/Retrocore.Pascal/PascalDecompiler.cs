@@ -39,8 +39,8 @@ public sealed partial class PascalDecompiler
     private readonly Frame _system = new(owner: null, level: -1, parameterWords: 0, dataWords: 0);
     private readonly SortedSet<int> _units = [];
     private readonly List<int> _unitOrder = [];
-    private PascalSegment _main = null!;
-    private Procedure _program = null!;
+    private PascalSegment? _main;
+    private Procedure? _program;
 
     private PascalDecompiler(PascalCodeFile file, PascalLibrary? library)
     {
@@ -74,9 +74,7 @@ public sealed partial class PascalDecompiler
     // Finds the program's segment and its segment procedures, and each procedure's parent and frame.
     private void LoadProcedures()
     {
-        _main = _file.Segments.FirstOrDefault(segment => segment.Code.Length > 0
-                && segment.MachineType is PascalMachineType.PcodeLeastFirst or PascalMachineType.PcodeMostFirst or PascalMachineType.Unknown
-                && segment.Procedures.Any(procedure => procedure.Index == 1 && procedure.LexicalLevel <= 0 && procedure.Number != 0))
+        _main = _file.Segments.FirstOrDefault(IsProgram)
             ?? throw new InvalidDataException("The code file holds no p-code program.");
 
         foreach (PascalSegment segment in _file.Segments)
@@ -148,6 +146,17 @@ public sealed partial class PascalDecompiler
         }
     }
 
+    // Whether a segment holds the program: p-code, with a procedure 1 at the outer level.
+    private static bool IsProgram(PascalSegment segment) => segment.Code.Length > 0
+        && segment.MachineType is PascalMachineType.PcodeLeastFirst or PascalMachineType.PcodeMostFirst or PascalMachineType.Unknown
+        && segment.Procedures.Any(procedure => procedure.Index == 1 && procedure.LexicalLevel <= 0 && procedure.Number != 0);
+
+    // The program's segment, once the procedures are loaded.
+    private PascalSegment Main => _main ?? throw new InvalidOperationException("The procedures are not loaded.");
+
+    // The program, once the procedures are loaded.
+    private Procedure Program => _program ?? throw new InvalidOperationException("The procedures are not loaded.");
+
     // The frame a level difference reaches from a procedure: its own, an enclosing procedure's, or the system's.
     private Frame Enclosing(Procedure procedure, int levels)
     {
@@ -157,7 +166,7 @@ public sealed partial class PascalDecompiler
     }
 
     // The program's globals, which LDO and SRO reach.
-    private Frame Globals => _program.Frame;
+    private Frame Globals => Program.Frame;
 
     private Procedure? Find(PascalSegment segment, int number) =>
         _procedures.FirstOrDefault(procedure => procedure.Segment == segment && procedure.Number == number);

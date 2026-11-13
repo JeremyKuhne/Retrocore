@@ -26,7 +26,8 @@ public sealed partial class PascalDecompiler
         }
 
         // A word also read by bytes is a variant record's.
-        if (expression is Load { Designator: VariableDesignator { Variable: var viewed } } && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
+        if (expression is Load { Designator: VariableDesignator { Variable: var viewed } }
+            && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
         {
             return Convert($"{viewed.Name}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
         }
@@ -99,13 +100,18 @@ public sealed partial class PascalDecompiler
         Constant or Nil or Keyword => null,
         Checked check => Natural(check.Value),
         Written written => Natural(written.Value),
-        Binary { Op: Operator.Add or Operator.Subtract or Operator.Multiply or Operator.Divide or Operator.Modulo } => ScalarKind.Integer,
+        Binary
+        {
+            Op: Operator.Add or Operator.Subtract or Operator.Multiply or Operator.Divide or Operator.Modulo
+        } => ScalarKind.Integer,
         Binary { Op: Operator.And or Operator.Or } => ScalarKind.Boolean,
         Unary { Op: Operator.Negate or Operator.Absolute or Operator.Square } => ScalarKind.Integer,
         Unary { Op: Operator.Not } => ScalarKind.Boolean,
         Comparison => ScalarKind.Boolean,
-        Load { Designator: IndexDesignator { Array: VariableDesignator { Variable: var bytes } } } when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true } => ScalarKind.Char,
-        Load { Designator: IndexDesignator { Index: Constant { Value: 0 }, High: null } length } when length.Array.Type.Find().Kind == TypeKind.String => ScalarKind.Integer,
+        Load { Designator: IndexDesignator { Array: VariableDesignator { Variable: var bytes } } }
+            when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true } => ScalarKind.Char,
+        Load { Designator: IndexDesignator { Index: Constant { Value: 0 }, High: null } length }
+            when length.Array.Type.Find().Kind == TypeKind.String => ScalarKind.Integer,
         _ => Kind(expression.Type)
     };
 
@@ -177,7 +183,7 @@ public sealed partial class PascalDecompiler
             case Call call:
                 return (CallText(call), Factor);
             case StringFunction function:
-                return ($"{function.Name}({string.Join(", ", function.Arguments.Select((argument, index) => index > 0 && function.Name == "COPY" ? Expression(argument, TypeNode.Scalar(ScalarKind.Integer), 0) : Expression(argument, null, 0)))})", Factor);
+                return ($"{function.Name}({string.Join(", ", function.Arguments.Select((argument, index) => index > 0 && function.Name == "COPY" ? Expression(argument, TypeNode.Scalar(ScalarKind.Integer), 0) : Expression(argument, expected: null, 0)))})", Factor);
             default:
                 return ("?", Factor);
         }
@@ -197,8 +203,9 @@ public sealed partial class PascalDecompiler
                 return value switch { 0 => "FALSE", 1 => "TRUE", _ => $"ODD({value})" };
             case ScalarKind.Enumeration:
                 {
+                    string? enumeration = root.Enumeration;
                     IReadOnlyList<string>? names = _library?.Units
-                        .Select(unit => unit.Enumerations.TryGetValue(root.Enumeration!, out IReadOnlyList<string>? values) ? values : null)
+                        .Select(unit => enumeration is not null && unit.Enumerations.TryGetValue(enumeration, out IReadOnlyList<string>? values) ? values : null)
                         .FirstOrDefault(values => values is not null);
 
                     return names is not null && value >= 0 && value < names.Count ? names[value] : value.ToString(CultureInfo.InvariantCulture);
@@ -223,7 +230,7 @@ public sealed partial class PascalDecompiler
             Operator.Square => ($"SQR({Expression(unary.Operand, integer, 0)})", Factor),
             Operator.RealSquare => ($"SQR({Expression(unary.Operand, real, 0)})", Factor),
             Operator.Not => ($"NOT {Expression(unary.Operand, TypeNode.Scalar(ScalarKind.Boolean), Factor)}", Factor),
-            Operator.Float => Text(unary.Operand, integer) is var inner && Natural(unary.Operand) is { } kind && kind != ScalarKind.Integer
+            Operator.Float => Text(unary.Operand, integer) is var inner && Natural(unary.Operand) is { } kind and not ScalarKind.Integer
                 ? (Convert(inner.Text, inner.Level, kind, ScalarKind.Integer, out int level), level)
                 : Text(unary.Operand, integer),
             _ => ("?", Factor)
@@ -282,6 +289,7 @@ public sealed partial class PascalDecompiler
             Comparand.Word => comparison.Left is Constant ? comparison.Right.Type : comparison.Left.Type,
             _ => left
         };
+
         return ($"{Expression(comparison.Left, left, Adding)} {symbol} {Expression(comparison.Right, right, Adding)}", Relational);
     }
 
@@ -304,7 +312,7 @@ public sealed partial class PascalDecompiler
                 _ => ("*", Multiplying)
             };
 
-            return ($"{Expression(left, null, level)} {symbol} {Expression(right, null, level + 1)}", level);
+            return ($"{Expression(left, expected: null, level)} {symbol} {Expression(right, expected: null, level + 1)}", level);
         }
 
         if (set.Value is { } value)
@@ -313,22 +321,25 @@ public sealed partial class PascalDecompiler
             {
                 Constant constant => (SetText([(ushort)constant.Value], element), Factor),
                 WordsConstant words => (SetText(words.Values, element), Factor),
-                _ => Text(value, null)
+                _ => Text(value, expected: null)
             };
         }
 
         return ($"[{string.Join(", ", Members(set))}]", Factor);
     }
 
-    private static bool IsConstructor(SetValue set) =>
-        set.Op is null ? set.Value is null or Constant or WordsConstant : set.Op == Operator.Union && IsConstructor(set.Left!) && IsConstructor(set.Right!);
+    private static bool IsConstructor(SetValue set) => set.Op is null
+        ? set.Value is null or Constant or WordsConstant
+        : set is { Op: Operator.Union, Left: { } left, Right: { } right }
+            && IsConstructor(left)
+            && IsConstructor(right);
 
     private IEnumerable<string> Members(SetValue set)
     {
         TypeNode? element = set.Type.Find().Element;
-        if (set.Op is not null)
+        if (set is { Op: not null, Left: { } left, Right: { } right })
         {
-            foreach (string member in Members(set.Left!).Concat(Members(set.Right!))) { yield return member; }
+            foreach (string member in Members(left).Concat(Members(right))) { yield return member; }
             yield break;
         }
 
@@ -401,8 +412,15 @@ public sealed partial class PascalDecompiler
     private string CallText(Call call)
     {
         Callee callee = call.Callee;
-        if (callee.Procedure is { } procedure) { return Invocation(procedure.Name, Arguments(procedure, call.Arguments)); }
-        if (callee.UnitProcedure is { } declared) { return Invocation(declared.Name, UnitArguments(declared, call.Arguments)); }
+        if (callee.Procedure is { } procedure)
+        {
+            return Invocation(procedure.Name, Arguments(procedure, call.Arguments));
+        }
+
+        if (callee.UnitProcedure is { } declared)
+        {
+            return Invocation(declared.Name, UnitArguments(declared, call.Arguments));
+        }
 
         string name = callee.Builtin ?? "?";
         List<string> parts = name switch
@@ -410,7 +428,7 @@ public sealed partial class PascalDecompiler
             "EOF" or "EOLN" => [FileName(new Argument(call.Arguments[0]))],
             "TRUNC" or "ROUND" => [Expression(call.Arguments[0], TypeNode.Of(TypeKind.Real), 0)],
             "UNITBUSY" or "PWROFTEN" => [Expression(call.Arguments[0], TypeNode.Scalar(ScalarKind.Integer), 0)],
-            _ => [.. call.Arguments.Select(argument => Expression(argument, null, 0))]
+            _ => [.. call.Arguments.Select(argument => Expression(argument, expected: null, 0))]
         };
 
         return Invocation(name, parts);

@@ -13,7 +13,7 @@ public sealed partial class PascalDecompiler
         private int _concatLength;
 
         // A call of a procedure in the code file: its arguments fill its parameters' words.
-        private void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
+        private static void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
         {
             int words = callee.Frame.ParameterWords;
             if (callee.IsFunction)
@@ -90,10 +90,21 @@ public sealed partial class PascalDecompiler
             if (declared.IsFunction) { Placeholders(stack); }
 
             List<Expr> arguments = [];
-            for (int parameter = 0; parameter < declared.Parameters.Count; parameter++) { arguments.Insert(0, Pop(stack)); }
+            for (int parameter = 0; parameter < declared.Parameters.Count; parameter++)
+            {
+                arguments.Insert(0, Pop(stack));
+            }
 
             TypeNode result = declared.Result is null ? new TypeNode() : _owner.Named(declared.Result);
-            Callee callee = new() { Unit = unit, UnitProcedure = declared, Segment = segment, Number = number, ResultType = result };
+            Callee callee = new()
+            {
+                Unit = unit,
+                UnitProcedure = declared,
+                Segment = segment,
+                Number = number,
+                ResultType = result
+            };
+
             for (int index = 0; index < arguments.Count; index++)
             {
                 PascalUnitParameter parameter = declared.Parameters[index];
@@ -129,19 +140,24 @@ public sealed partial class PascalDecompiler
 
                         // The window is the file variable's last words; an untyped file's 40 words have none, and its
                         // window's address is past them.
-                        if (file is VariableDesignator { Variable: var variable } && window is Address { Designator: VariableDesignator { Variable: var buffer } })
+                        if (file is VariableDesignator { Variable: var variable }
+                            && window is Address { Designator: VariableDesignator { Variable: var buffer } })
                         {
                             buffer.Container = variable;
                             buffer.FieldOffset = buffer.Offset - variable.Offset;
                             if (variable.Type.Find().Kind == TypeKind.File && variable.Type.Find().RecordWords <= 0)
                             {
-                                if (buffer.Used is false || !buffer.LoadedAsWord) { buffer.Frame.Variables.Remove(buffer.Offset); }
+                                if (buffer.Used is false || !buffer.LoadedAsWord)
+                                {
+                                    buffer.Frame.Variables.Remove(buffer.Offset);
+                                }
                             }
                             else
                             {
                                 variable.BlockWords = Math.Max(variable.BlockWords, buffer.Offset - variable.Offset + 1);
                             }
                         }
+
                         break;
                     }
 
@@ -154,7 +170,8 @@ public sealed partial class PascalDecompiler
                         Expr old = Pop(stack);
                         Expr name = StringValue(Pop(stack));
                         Argument file = File(Pop(stack));
-                        Statement(statements, old is Constant { Value: 0 } ? "REWRITE" : "RESET", file, new Argument(name));
+                        string opener = old is Constant { Value: 0 } ? "REWRITE" : "RESET";
+                        Statement(statements, opener, file, new Argument(name));
                         break;
                     }
 
@@ -162,7 +179,10 @@ public sealed partial class PascalDecompiler
                     {
                         Expr mode = Pop(stack);
                         Argument file = File(Pop(stack));
-                        string? option = mode is Constant { Value: var value } ? value switch { 0 => null, 1 => "LOCK", 2 => "PURGE", 3 => "CRUNCH", _ => "?" } : "?";
+                        string? option = mode is Constant { Value: var value }
+                            ? value switch { 0 => null, 1 => "LOCK", 2 => "PURGE", 3 => "CRUNCH", _ => "?" }
+                            : "?";
+
                         if (option is null)
                         {
                             Statement(statements, "CLOSE", file);
@@ -221,7 +241,7 @@ public sealed partial class PascalDecompiler
                         if (array is not (PackedConstant or StringConstant) && length is Constant bytes)
                         {
                             TypeNode root = Designate(array).Type.Find();
-                            root.ByteElement(null, null);
+                            root.ByteElement(low: null, high: null);
                             if (root.IndexLow is { } low) { root.IndexHigh ??= low + bytes.Value - 1; }
                         }
 
@@ -242,7 +262,8 @@ public sealed partial class PascalDecompiler
                         {
                             // CONCAT empties its temporary first: its length, a word, is set to 0.
                             if (statements.Count == 0
-                                || statements[^1] is not Assignment { Target: VariableDesignator { Variable: Variable emptied }, Value: Constant { Value: 0 } }
+                                || statements[^1] is not Assignment { Value: Constant { Value: 0 } } emptying
+                                || emptying.Target is not VariableDesignator { Variable: Variable emptied }
                                 || emptied != temporary)
                             {
                                 throw new InvalidDataException("A CONCAT's temporary was not emptied first.");
@@ -257,7 +278,11 @@ public sealed partial class PascalDecompiler
                         // The lengths so far grow by each string's greatest length.
                         if (length is Constant total)
                         {
-                            if (source is Load { Designator: var designator }) { designator.Type.String(total.Value - _concatLength); }
+                            if (source is Load { Designator: var designator })
+                            {
+                                designator.Type.String(total.Value - _concatLength);
+                            }
+
                             _concatLength = total.Value;
                         }
 
@@ -313,8 +338,13 @@ public sealed partial class PascalDecompiler
                         Expr array = BytePointer(stack);
                         Argument file = File(Pop(stack));
                         List<Expr> arguments = [file.Value, array, count];
-                        if (block is not Unary { Op: Operator.Negate, Operand: Constant { Value: 1 } }) { arguments.Add(block); }
-                        stack.Add(Builtin(read is Constant { Value: 0 } ? "BLOCKWRITE" : "BLOCKREAD", ScalarKind.Integer, [.. arguments]));
+                        if (block is not Unary { Op: Operator.Negate, Operand: Constant { Value: 1 } })
+                        {
+                            arguments.Add(block);
+                        }
+
+                        string transfer = read is Constant { Value: 0 } ? "BLOCKWRITE" : "BLOCKREAD";
+                        stack.Add(Builtin(transfer, ScalarKind.Integer, [.. arguments]));
                         break;
                     }
 
@@ -331,7 +361,7 @@ public sealed partial class PascalDecompiler
         }
 
         // PASCALIO, which the system loads for reals' I/O and SEEK.
-        private void PascalIoCall(int number, List<Expr> stack, List<Statement> statements)
+        private static void PascalIoCall(int number, List<Expr> stack, List<Statement> statements)
         {
             switch (number)
             {
@@ -366,7 +396,7 @@ public sealed partial class PascalDecompiler
         }
 
         // CSP: the standard procedures the interpreter does itself.
-        private void Standard(int number, List<Expr> stack, List<Statement> statements)
+        private static void Standard(int number, List<Expr> stack, List<Statement> statements)
         {
             switch (number)
             {
@@ -395,7 +425,11 @@ public sealed partial class PascalDecompiler
                     {
                         Expr procedure = Pop(stack);
                         Expr segment = Pop(stack);
-                        if (segment is not Constant s || procedure is not Constant p) { throw new InvalidDataException("An EXIT names no procedure."); }
+                        if (segment is not Constant s || procedure is not Constant p)
+                        {
+                            throw new InvalidDataException("An EXIT names no procedure.");
+                        }
+
                         statements.Add(new ExitStatement(s.Value, p.Value));
                         break;
                     }
@@ -461,10 +495,14 @@ public sealed partial class PascalDecompiler
             Expr address = Pop(stack);
             if (address is ByteAddress or Address && offset is Constant { Value: 0 }) { return address; }
             if (address is ByteAddress) { return address; }
-            if (offset is Constant { Value: 0 }) { return address is StringConstant or PackedConstant ? address : new Address(Designate(address)); }
+            if (offset is Constant { Value: 0 })
+            {
+                return address is StringConstant or PackedConstant ? address : new Address(Designate(address));
+            }
 
             Designator array = Designate(address);
-            return new Address(new IndexDesignator(array, offset, 0, null, array.Type.ByteElement(0, null)) { Neutral = true });
+            TypeNode element = array.Type.ByteElement(0, high: null);
+            return new Address(new IndexDesignator(array, offset, 0, high: null, element) { Neutral = true });
         }
 
         // A WRITE's width: none when 0.
@@ -483,7 +521,7 @@ public sealed partial class PascalDecompiler
             new(new Callee { Builtin = name, ResultType = TypeNode.Of(TypeKind.Real) }, [.. arguments], 2);
 
         // A string temporary, which CONCAT and COPY build their results in.
-        private Variable Temporary(Expr address)
+        private static Variable Temporary(Expr address)
         {
             if (address is not Address { Designator: VariableDesignator { Variable: Variable temporary } })
             {

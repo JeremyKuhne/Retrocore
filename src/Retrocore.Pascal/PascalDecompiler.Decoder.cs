@@ -15,11 +15,31 @@ public sealed partial class PascalDecompiler
     ///   The patterns, where <c>c</c> is a condition's code:
     ///  </para>
     ///  <list type="bullet">
-    ///   <item><description>IF: <c>c FJP L1; then; UJP L2; L1: else; L2:</c>, the UJP and else left out without ELSE.</description></item>
-    ///   <item><description>WHILE: <c>L1: c FJP L2; body; UJP L1; L2:</c>.</description></item>
-    ///   <item><description>REPEAT: <c>L1: body; c FJP L1</c>, the jump back through the jump table.</description></item>
-    ///   <item><description>FOR: <c>v := a; t := b; L1: v t LEQI (GEQI for DOWNTO) FJP L2; body; v := v + 1 (- 1); UJP L1; L2:</c>.</description></item>
-    ///   <item><description>CASE: <c>selector UJP L1; arms, each ending UJP L2; L1: XJP table; L2:</c>.</description></item>
+    ///   <item>
+    ///    <description>
+    ///     IF: <c>c FJP L1; then; UJP L2; L1: else; L2:</c>, the UJP and else left out without ELSE.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     WHILE: <c>L1: c FJP L2; body; UJP L1; L2:</c>.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     REPEAT: <c>L1: body; c FJP L1</c>, the jump back through the jump table.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     FOR: <c>v := a; t := b; L1: v t LEQI (GEQI for DOWNTO) FJP L2; body; v := v + 1 (- 1); UJP L1; L2:</c>.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     CASE: <c>selector UJP L1; arms, each ending UJP L2; L1: XJP table; L2:</c>.
+    ///    </description>
+    ///   </item>
     ///  </list>
     ///  <para>
     ///   Any other jump is a GOTO.
@@ -37,6 +57,11 @@ public sealed partial class PascalDecompiler
         private readonly Dictionary<int, (List<Statement> List, int Position)> _boundaries = [];
         private readonly List<int> _gotos = [];
 
+        /// <summary>
+        ///  Prepares to decompile a procedure: indexes its p-code by offset and finds the jumps back.
+        /// </summary>
+        /// <param name="owner">The decompiler, which knows the code file's procedures and units.</param>
+        /// <param name="procedure">The procedure, with its p-code decoded.</param>
         public Decoder(PascalDecompiler owner, Procedure procedure)
         {
             _owner = owner;
@@ -67,6 +92,10 @@ public sealed partial class PascalDecompiler
         private int Index(int offset) =>
             _index.TryGetValue(offset, out int index) ? index : throw new InvalidDataException($"A jump to ${offset:X4} lands inside a p-code.");
 
+        /// <summary>
+        ///  Decompiles the procedure's body into its statements, and gives each GOTO's target a label.
+        /// </summary>
+        /// <exception cref="InvalidDataException">The p-code is not in a pattern the decompiler knows.</exception>
         public void Decode()
         {
             int start = 0;
@@ -85,7 +114,10 @@ public sealed partial class PascalDecompiler
                     while (start < end && start < 2 && _code[start].Opcode.Code is 210 or 215) { start++; }
                 }
 
-                while (start < end && _code[start] is { Opcode.Code: Pcode.Cxp } call && call.Operands[1] == 1 && _owner.IsUnit(call.Operands[0]))
+                while (start < end
+                    && _code[start] is { Opcode.Code: Pcode.Cxp } call
+                    && call.Operands[1] == 1
+                    && _owner.IsUnit(call.Operands[0]))
                 {
                     _owner.UseUnit(call.Operands[0]);
                     start++;
@@ -94,7 +126,10 @@ public sealed partial class PascalDecompiler
 
             List<Expr> stack = [];
             List<Statement> body = Block(start, end, stack);
-            if (stack.Count > 0) { throw new InvalidDataException($"{_procedure} ends with {stack.Count} values on the stack."); }
+            if (stack.Count > 0)
+            {
+                throw new InvalidDataException($"{_procedure} ends with {stack.Count} values on the stack.");
+            }
 
             Prologue(body);
             _procedure.Body = body;
@@ -113,7 +148,8 @@ public sealed partial class PascalDecompiler
                 int label = _procedure.Labels.Count + 1;
                 _procedure.Labels[target] = label;
                 int position = boundary.List.FindIndex(statement => statement.Offset >= target && statement is not LabelStatement);
-                boundary.List.Insert(position < 0 ? boundary.List.Count : position, new LabelStatement(target) { Offset = target });
+                LabelStatement labelStatement = new(target) { Offset = target };
+                boundary.List.Insert(position < 0 ? boundary.List.Count : position, labelStatement);
             }
         }
 
@@ -172,7 +208,10 @@ public sealed partial class PascalDecompiler
             {
                 List<Expr> stack = [];
                 List<Statement> body = Block(at, jump, stack);
-                if (stack.Count != 1) { throw new InvalidDataException($"The REPEAT at ${offset:X4} has no condition."); }
+                if (stack.Count != 1)
+                {
+                    throw new InvalidDataException($"The REPEAT at ${offset:X4} has no condition.");
+                }
 
                 statements.Add(new RepeatStatement(body, stack[0]) { Offset = offset });
                 at = jump + 1;
@@ -183,14 +222,22 @@ public sealed partial class PascalDecompiler
             int exit = jump + 1;
             for (int test = at; test < jump; test++)
             {
-                if (_code[test] is not { Opcode.Code: Pcode.Fjp } fjp || fjp.Targets[0] < 0 || Index(fjp.Targets[0]) != exit) { continue; }
+                if (_code[test] is not { Opcode.Code: Pcode.Fjp } fjp
+                    || fjp.Targets[0] < 0
+                    || Index(fjp.Targets[0]) != exit)
+                {
+                    continue;
+                }
 
                 List<Expr> stack = [];
                 List<Statement> condition = Block(at, test, stack);
                 if (condition.Count != 0 || stack.Count != 1) { break; }
 
                 List<Statement> body = Block(test + 1, jump, []);
-                statements.Add((Statement?)For(stack[0], body, statements, offset) ?? new WhileStatement(stack[0], body) { Offset = offset });
+                Statement loop = (Statement?)For(stack[0], body, statements, offset)
+                    ?? new WhileStatement(stack[0], body) { Offset = offset };
+
+                statements.Add(loop);
                 at = exit;
                 return true;
             }
@@ -202,13 +249,16 @@ public sealed partial class PascalDecompiler
         // FOR v := a TO b: the two assignments before the loop, its test, and the step at the end of its body.
         private static ForStatement? For(Expr condition, List<Statement> body, List<Statement> statements, int offset)
         {
-            if (condition is not Comparison { Comparand: Comparand.Word, Op: Operator.LessEqual or Operator.GreaterEqual } test
+            if (condition is not Comparison { Comparand: Comparand.Word } test
+                || test.Op is not (Operator.LessEqual or Operator.GreaterEqual)
                 || test.Left is not Load { Designator: VariableDesignator control }
                 || test.Right is not Load { Designator: VariableDesignator { Variable: Variable limit } }
                 || statements.Count < 2
-                || statements[^1] is not Assignment { Target: VariableDesignator { Variable: Variable limitTarget } } limitAssignment
+                || statements[^1] is not Assignment { Target: VariableDesignator limitDesignator } limitAssignment
+                || limitDesignator.Variable is not Variable limitTarget
                 || limitTarget != limit
-                || statements[^2] is not Assignment { Target: VariableDesignator { Variable: Variable start } } startAssignment
+                || statements[^2] is not Assignment { Target: VariableDesignator startDesignator } startAssignment
+                || startDesignator.Variable is not Variable start
                 || start != control.Variable
                 || body.Count == 0
                 || body[^1] is not Assignment { Target: VariableDesignator { Variable: Variable step } } stepAssignment
@@ -219,7 +269,8 @@ public sealed partial class PascalDecompiler
 
             bool down = test.Op == Operator.GreaterEqual;
             Expr stepValue = stepAssignment.Value is Checked checkedStep ? checkedStep.Value : stepAssignment.Value;
-            if (stepValue is not Binary { Left: Load { Designator: VariableDesignator { Variable: Variable stepped } }, Right: Constant { Value: 1 } } binary
+            if (stepValue is not Binary { Right: Constant { Value: 1 } } binary
+                || binary.Left is not Load { Designator: VariableDesignator { Variable: Variable stepped } }
                 || stepped != control.Variable
                 || binary.Op != (down ? Operator.Subtract : Operator.Add))
             {
@@ -229,7 +280,10 @@ public sealed partial class PascalDecompiler
             limit.Kind = VariableKind.Temporary;
             statements.RemoveRange(statements.Count - 2, 2);
             body.RemoveAt(body.Count - 1);
-            return new ForStatement(control, startAssignment.Value, limitAssignment.Value, down, body) { Offset = startAssignment.Offset };
+            return new ForStatement(control, startAssignment.Value, limitAssignment.Value, down, body)
+            {
+                Offset = startAssignment.Offset
+            };
         }
 
         // An FJP: IF, with ELSE where the THEN ends by jumping past it.
@@ -258,7 +312,8 @@ public sealed partial class PascalDecompiler
                 }
             }
 
-            statements.Add(new IfStatement(condition, Block(at + 1, target, []), null) { Offset = fjp.Offset });
+            List<Statement> only = Block(at + 1, target, []);
+            statements.Add(new IfStatement(condition, only, otherwise: null) { Offset = fjp.Offset });
             return target;
         }
 
@@ -270,7 +325,11 @@ public sealed partial class PascalDecompiler
         {
             PcodeInstruction ujp = _code[at];
             if (stack.Count > 0 && IsCaseJump(ujp)) { return Case(at, stack, statements); }
-            if (stack.Count > 0) { throw new InvalidDataException($"The UJP at ${ujp.Offset:X4} leaves a value on the stack."); }
+            if (stack.Count > 0)
+            {
+                throw new InvalidDataException($"The UJP at ${ujp.Offset:X4} leaves a value on the stack.");
+            }
+
             if (ujp.Targets[0] < 0) { throw new InvalidDataException($"The UJP at ${ujp.Offset:X4} jumps nowhere."); }
 
             _gotos.Add(ujp.Targets[0]);
@@ -316,7 +375,10 @@ public sealed partial class PascalDecompiler
                 int first = starts[arm];
                 int next = arm + 1 < starts.Count ? starts[arm + 1] : table;
                 int last = next;
-                if (last - 1 >= first && _code[last - 1] is { Opcode.Code: Pcode.Ujp } exit && exit.Targets[0] >= 0 && Index(exit.Targets[0]) == end)
+                if (last - 1 >= first
+                    && _code[last - 1] is { Opcode.Code: Pcode.Ujp } exit
+                    && exit.Targets[0] >= 0
+                    && Index(exit.Targets[0]) == end)
                 {
                     last--;
                 }
@@ -334,12 +396,10 @@ public sealed partial class PascalDecompiler
             Frame frame = _procedure.Frame;
             int copied = 0;
             while (copied < body.Count
-                && body[copied] is Assignment
-                {
-                    Block: true,
-                    Target: VariableDesignator { Variable: Variable copy },
-                    Value: Load { Designator: Dereference { Pointer: Load { Designator: VariableDesignator { Variable: Variable parameter } } } }
-                }
+                && body[copied] is Assignment { Block: true, Target: VariableDesignator copyTarget } assignment
+                && copyTarget.Variable is Variable copy
+                && assignment.Value is Load { Designator: Dereference { Pointer: Load pointer } }
+                && pointer.Designator is VariableDesignator { Variable: Variable parameter }
                 && copy.Frame == frame
                 && parameter.Frame == frame
                 && parameter.Kind == VariableKind.Parameter
@@ -395,7 +455,7 @@ public sealed partial class PascalDecompiler
             return new Address(new VariableDesignator(variable));
         }
 
-        private void Store(Variable variable, Expr value, List<Statement> statements)
+        private static void Store(Variable variable, Expr value, List<Statement> statements)
         {
             variable.LoadedAsWord = true;
             statements.Add(new Assignment(new VariableDesignator(variable), value));

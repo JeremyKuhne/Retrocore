@@ -28,14 +28,14 @@ public sealed partial class PascalDecompiler
         bool labels = _procedures.Any(procedure => procedure.Labels.Count > 0);
         if (labels) { Line("(*$G+*)"); }
 
-        Line($"PROGRAM {_program.Name};");
+        Line($"PROGRAM {Program.Name};");
         if (_unitOrder.Count > 0)
         {
             // The Compiler initializes the units a program uses in the reverse of their order in USES.
             Line($"USES {string.Join(", ", Enumerable.Reverse(_unitOrder).Select(segment => _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}"))};");
         }
 
-        Labels(_program);
+        Labels(Program);
         if (_types.Count > 0)
         {
             Line("TYPE");
@@ -44,10 +44,10 @@ public sealed partial class PascalDecompiler
             _indent--;
         }
 
-        Declarations(_program);
-        Nested(_program);
+        Declarations(Program);
+        Nested(Program);
         Line("BEGIN");
-        Statements(_program, _program.Body);
+        Statements(Program, Program.Body);
         Line("END.");
         return _source.ToString();
     }
@@ -177,7 +177,9 @@ public sealed partial class PascalDecompiler
     private void Visit(TypeNode type, bool parameter)
     {
         TypeNode root = type.Find();
-        bool named = root.Kind is TypeKind.Record or TypeKind.Pointer or TypeKind.Array or TypeKind.Set || (root.Kind == TypeKind.File && root.RecordWords > 0) || root.ByteView
+        bool named = root.Kind is TypeKind.Record or TypeKind.Pointer or TypeKind.Array or TypeKind.Set
+            || (root.Kind == TypeKind.File && root.RecordWords > 0)
+            || root.ByteView
             || (parameter && Simple(root) is null);
 
         if (named && root.Name is null)
@@ -190,7 +192,11 @@ public sealed partial class PascalDecompiler
                     if (root.Element is { } element) { Visit(element, parameter: root.Kind == TypeKind.Pointer); }
                     break;
                 case TypeKind.Record:
-                    foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>()) { Visit(field, parameter: false); }
+                    foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>())
+                    {
+                        Visit(field, parameter: false);
+                    }
+
                     break;
                 default:
                     break;
@@ -275,14 +281,21 @@ public sealed partial class PascalDecompiler
                 }
 
             case TypeKind.File:
-                return root.RecordWords > 0 && root.Element is { } component ? $"FILE OF {TypeName(component, parameter: true)}" : "FILE";
+                return root.RecordWords > 0 && root.Element is { } component
+                    ? $"FILE OF {TypeName(component, parameter: true)}"
+                    : "FILE";
+
             case TypeKind.Array:
                 {
                     int low = root.IndexLow ?? 0;
-                    int count = root.Words <= 0 ? 1
-                        : root.Bytes ? root.Words * 2
-                        : root.PerWord > 0 ? root.Words * root.PerWord
-                        : root.Words / Math.Max(1, root.ElementWords);
+                    int count = root.Words <= 0
+                        ? 1
+                        : root.Bytes
+                            ? root.Words * 2
+                            : root.PerWord > 0
+                                ? root.Words * root.PerWord
+                                : root.Words / Math.Max(1, root.ElementWords);
+
                     int high = root.IndexHigh ?? low + Math.Max(1, count) - 1;
                     TypeNode element = root.Element ?? TypeNode.Scalar(ScalarKind.Integer);
                     if (root.Bytes)
@@ -306,7 +319,6 @@ public sealed partial class PascalDecompiler
 
             case TypeKind.Record:
                 {
-                    StringBuilder fields = new("RECORD");
                     int words = SizeOf(root) ?? 0;
                     int offset = 0;
                     List<string> parts = [];
@@ -354,11 +366,11 @@ public sealed partial class PascalDecompiler
             Statement statement = statements[index];
 
             // A run of WRITEs to one file, perhaps ended by a WRITELN, is one statement; and so with READ.
-            if (statement is CallStatement { Callee.Builtin: "WRITE" or "READ" } io)
+            if (statement is CallStatement { Callee.Builtin: ("WRITE" or "READ") and { } ioName } io)
             {
                 int end = index;
                 List<Argument> arguments = [.. io.Arguments.Skip(1)];
-                string name = io.Callee.Builtin!;
+                string name = ioName;
                 string file = FileName(io.Arguments[0]);
                 while (end + 1 < statements.Count
                     && statements[end + 1] is CallStatement next
@@ -389,7 +401,11 @@ public sealed partial class PascalDecompiler
             }
 
             Separate(lines, first);
-            if (statement is CallStatement { Callee.Builtin: { } builtin } call && IsIo(builtin)) { Check(call.Checked, lines); }
+            if (statement is CallStatement { Callee.Builtin: { } builtin } call && IsIo(builtin))
+            {
+                Check(call.Checked, lines);
+            }
+
             if (RangeChecked(statement) is { } range) { CheckRange(range, lines); }
             WriteStatement(procedure, statement, lines);
         }
@@ -454,7 +470,10 @@ public sealed partial class PascalDecompiler
 
                 for (Designator? at = designator; at is not null;)
                 {
-                    if (at is IndexDesignator { Neutral: false } index && !(index.Index is Constant { Value: 0 } && index.High is null && index.Array.Type.Find().Kind == TypeKind.String))
+                    if (at is IndexDesignator { Neutral: false } index
+                        && !(index.Index is Constant { Value: 0 }
+                            && index.High is null
+                            && index.Array.Type.Find().Kind == TypeKind.String))
                     {
                         if (index.High is null) { result = false; } else { result ??= true; }
                     }
@@ -494,8 +513,16 @@ public sealed partial class PascalDecompiler
         foreach (Argument argument in arguments)
         {
             string value = argument.Value is Written written ? WrittenValue(written) : DesignatorText(Designate(argument.Value));
-            if (argument.Width is not null) { value += ":" + Expression(argument.Width, TypeNode.Scalar(ScalarKind.Integer), 0); }
-            if (argument.Decimals is not null) { value += ":" + Expression(argument.Decimals, TypeNode.Scalar(ScalarKind.Integer), 0); }
+            if (argument.Width is not null)
+            {
+                value += ":" + Expression(argument.Width, TypeNode.Scalar(ScalarKind.Integer), 0);
+            }
+
+            if (argument.Decimals is not null)
+            {
+                value += ":" + Expression(argument.Decimals, TypeNode.Scalar(ScalarKind.Integer), 0);
+            }
+
             parts.Add(value);
         }
 
@@ -505,9 +532,11 @@ public sealed partial class PascalDecompiler
     private string WrittenValue(Written written) => written.Procedure switch
     {
         13 => Expression(written.Value, TypeNode.Scalar(ScalarKind.Integer), 0),
-        17 => written.Value is Constant { Value: 12 } ? "CHR(12)" : Expression(written.Value, TypeNode.Scalar(ScalarKind.Char), 0),
+        17 => written.Value is Constant { Value: 12 }
+            ? "CHR(12)"
+            : Expression(written.Value, TypeNode.Scalar(ScalarKind.Char), 0),
         0 => Expression(written.Value, TypeNode.Of(TypeKind.Real), 0),
-        _ => Expression(written.Value, null, 0)
+        _ => Expression(written.Value, expected: null, 0)
     };
 
     private string FileName(Argument file) => file.Value switch
@@ -528,7 +557,8 @@ public sealed partial class PascalDecompiler
                     Expr value = Narrow(assignment.Value);
                     Designator target = Descend(assignment.Target, value is Constant ? null : value.Type);
                     string text = DesignatorText(target);
-                    if (target is VariableDesignator { Variable: var viewed } && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
+                    if (target is VariableDesignator { Variable: var viewed }
+                        && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
                     {
                         lines.Add(Indented($"{text}.I := {Expression(value, TypeNode.Scalar(ScalarKind.Integer), 0)}"));
                         break;
@@ -547,6 +577,7 @@ public sealed partial class PascalDecompiler
                     lines.Add(Indented($"{text} := {Expression(assignment.Value, expected, 0)}"));
                     break;
                 }
+
             case CallStatement call:
                 lines.Add(Indented(CallText(call)));
                 break;
@@ -587,7 +618,7 @@ public sealed partial class PascalDecompiler
                 }
 
             case CaseStatement choice:
-                lines.Add(Indented($"CASE {Expression(choice.Selector, null, 0)} OF"));
+                lines.Add(Indented($"CASE {Expression(choice.Selector, expected: null, 0)} OF"));
                 _indent++;
                 for (int arm = 0; arm < choice.Arms.Count; arm++)
                 {
@@ -614,7 +645,7 @@ public sealed partial class PascalDecompiler
                 break;
             case ExitStatement exit:
                 {
-                    Procedure? target = exit.Segment == _main.Number || exit.Segment == 1
+                    Procedure? target = exit.Segment == Main.Number || exit.Segment == 1
                         ? _procedures.FirstOrDefault(other => other.Segment == _main && other.Number == exit.Procedure)
                         : FindSegment(exit.Segment, exit.Procedure);
 
@@ -664,8 +695,15 @@ public sealed partial class PascalDecompiler
     private string CallText(CallStatement call)
     {
         Callee callee = call.Callee;
-        if (callee.Procedure is { } procedure) { return Invocation(procedure.Name, Arguments(procedure, [.. call.Arguments.Select(a => a.Value)])); }
-        if (callee.UnitProcedure is { } declared) { return Invocation(declared.Name, UnitArguments(declared, [.. call.Arguments.Select(a => a.Value)])); }
+        if (callee.Procedure is { } procedure)
+        {
+            return Invocation(procedure.Name, Arguments(procedure, [.. call.Arguments.Select(a => a.Value)]));
+        }
+
+        if (callee.UnitProcedure is { } declared)
+        {
+            return Invocation(declared.Name, UnitArguments(declared, [.. call.Arguments.Select(a => a.Value)]));
+        }
 
         string name = callee.Builtin ?? "?";
         List<string> parts = [];
@@ -683,8 +721,11 @@ public sealed partial class PascalDecompiler
                 Keyword keyword => keyword.Text,
                 Address address => DesignatorText(address.Designator),
                 ByteAddress address => DesignatorText(address.Designator),
-                Load { Designator: VariableDesignator { Variable.Kind: VariableKind.System } } file => FileName(new Argument(file)),
-                var value => Expression(value, null, 0)
+                Load
+                {
+                    Designator: VariableDesignator { Variable.Kind: VariableKind.System }
+                } file => FileName(new Argument(file)),
+                var value => Expression(value, expected: null, 0)
             });
         }
 
@@ -708,7 +749,7 @@ public sealed partial class PascalDecompiler
             if (parameter.IsReference || parameter.Copy is not null)
             {
                 TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
-                parts.Add(argument is StringConstant or StringFunction ? Expression(argument, null, 0) : DesignatorText(Descend(Designate(argument), formal)));
+                parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));
             }
             else
             {
@@ -750,31 +791,43 @@ public sealed partial class PascalDecompiler
             case VariableDesignator { Variable: var variable }:
                 return variable.Kind == VariableKind.Copy
                     ? variable.Frame.Variables.Values.FirstOrDefault(parameter => parameter.Copy == variable)?.Name ?? variable.Name
-                    : variable.Kind == VariableKind.Result && variable.Frame.Owner is { } owner ? owner.Name : variable.Name;
+                    : variable.Kind == VariableKind.Result && variable.Frame.Owner is { } owner
+                        ? owner.Name
+                        : variable.Name;
+
             case ResultDesignator result:
                 return result.Procedure.Name;
             case FieldDesignator field:
                 return $"{Record(field.Record)}F{field.Offset}";
             case PackedFieldDesignator field:
                 return $"{Record(field.Record)}F{field.Word}B{field.Bit}";
-            case IndexDesignator { Array: Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var file } } }, Index: Constant { Value: 0 } }
-                when file.Type.Find().Kind == TypeKind.Text:
+            case IndexDesignator
+            {
+                Array: Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var file } } },
+                Index: Constant { Value: 0 }
+            } when file.Type.Find().Kind == TypeKind.Text:
                 return $"{file.Name}^";
-            case IndexDesignator { Index: Constant { Value: 0 }, High: null } length when length.Array.Type.Find().Kind == TypeKind.String:
+            case IndexDesignator { Index: Constant { Value: 0 }, High: null } length
+                when length.Array.Type.Find().Kind == TypeKind.String:
                 return $"LENGTH({DesignatorText(length.Array)})";
-            case IndexDesignator { Array: VariableDesignator { Variable: var bytes } } byteIndex when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
-                return $"{bytes.Name}.B[{Expression(byteIndex.Index, null, 0)}]";
+            case IndexDesignator { Array: VariableDesignator { Variable: var bytes } } byteIndex
+                when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
+                return $"{bytes.Name}.B[{Expression(byteIndex.Index, expected: null, 0)}]";
             case IndexDesignator index:
                 {
                     string array = DesignatorText(index.Array);
-                    string value = Expression(index.Index, null, 0);
+                    string value = Expression(index.Index, expected: null, 0);
 
                     // Without range checks, the bound an index lost may not be the one the array has.
-                    if (index.Low is { } lost && index.Array.Type.Find().IndexLow is { } declared && lost != declared && !index.Neutral)
+                    if (index.Low is { } lost
+                        && index.Array.Type.Find().IndexLow is { } declared
+                        && lost != declared
+                        && !index.Neutral)
                     {
                         int difference = lost - declared;
-                        value = $"{Expression(index.Index, null, Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
+                        value = $"{Expression(index.Index, expected: null, Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
                     }
+
                     return array.EndsWith(']') && index.Array is IndexDesignator ? $"{array[..^1]}, {value}]" : $"{array}[{value}]";
                 }
 
@@ -790,7 +843,7 @@ public sealed partial class PascalDecompiler
                         if (pointer.Type.Find().Kind is TypeKind.Text or TypeKind.File) { return $"{pointer.Name}^"; }
                     }
 
-                    return $"{Expression(dereference.Pointer, null, 4)}^";
+                    return $"{Expression(dereference.Pointer, expected: null, 4)}^";
                 }
 
             case WindowDesignator window:
@@ -803,7 +856,8 @@ public sealed partial class PascalDecompiler
     // A record's designator before a field's name; nothing inside a WITH statement on it.
     private string Record(Designator record)
     {
-        if (record is Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var temporary } } } && _with.Contains(temporary))
+        if (record is Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var temporary } } }
+            && _with.Contains(temporary))
         {
             return "";
         }

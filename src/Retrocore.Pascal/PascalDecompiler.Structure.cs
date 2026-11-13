@@ -31,7 +31,10 @@ public sealed partial class PascalDecompiler
             // A candidate is used only as the address of the record it stands for.
             Walk(procedure.Body, _ => { }, expression =>
             {
-                if (expression is Address { Designator: VariableDesignator { Variable: var taken } }) { candidates[taken] = false; }
+                if (expression is Address { Designator: VariableDesignator { Variable: var taken } })
+                {
+                    candidates[taken] = false;
+                }
             });
 
             // A candidate's value is used only as an address: to reach the record, or as a VAR argument.
@@ -156,7 +159,9 @@ public sealed partial class PascalDecompiler
 
         for (int index = 0; index < statements.Count; index++)
         {
-            if (statements[index] is not Assignment { Target: VariableDesignator { Variable: var temporary } } assignment || !temporaries.Contains(temporary))
+            Statement current = statements[index];
+            if (current is not Assignment { Target: VariableDesignator { Variable: var temporary } } assignment
+                || !temporaries.Contains(temporary))
             {
                 continue;
             }
@@ -164,7 +169,12 @@ public sealed partial class PascalDecompiler
             int last = index;
             for (int next = index + 1; next < statements.Count; next++)
             {
-                if (statements[next] is Assignment { Target: VariableDesignator { Variable: var again } } && again == temporary) { break; }
+                if (statements[next] is Assignment { Target: VariableDesignator { Variable: var again } }
+                    && again == temporary)
+                {
+                    break;
+                }
+
                 if (Uses(statements[next], temporary)) { last = next; }
             }
 
@@ -200,7 +210,11 @@ public sealed partial class PascalDecompiler
         bool used = false;
         Walk([statement], _ => { }, expression =>
         {
-            if (expression is Load { Designator: VariableDesignator { Variable: var loaded } } && loaded == variable) { used = true; }
+            if (expression is Load { Designator: VariableDesignator { Variable: var loaded } } && loaded == variable)
+            {
+                used = true;
+            }
+
         });
 
         Walk([statement], inner =>
@@ -213,7 +227,10 @@ public sealed partial class PascalDecompiler
 
     private static bool Reaches(Designator designator, Variable variable) => designator switch
     {
-        Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var pointer } } } => pointer == variable,
+        Dereference
+        {
+            Pointer: Load { Designator: VariableDesignator { Variable: var pointer } }
+        } => pointer == variable,
         FieldDesignator field => Reaches(field.Record, variable),
         PackedFieldDesignator field => Reaches(field.Record, variable),
         IndexDesignator index => Reaches(index.Array, variable),
@@ -233,12 +250,22 @@ public sealed partial class PascalDecompiler
             {
                 int words = Math.Max(container.BlockWords, container.Kind == VariableKind.Copy ? container.BlockWords : 0);
                 if (words <= 1 || container.Container is not null) { continue; }
-                if (container.Type.Find().Kind is TypeKind.File or TypeKind.Text or TypeKind.Real or TypeKind.Set) { continue; }
+                if (container.Type.Find().Kind is TypeKind.File or TypeKind.Text or TypeKind.Real or TypeKind.Set)
+                {
+                    continue;
+                }
 
                 foreach (Variable field in variables)
                 {
-                    if (field.Offset <= container.Offset || field.Offset >= container.Offset + words || field.Container is not null) { continue; }
-                    if (field.Kind is VariableKind.Temporary or VariableKind.Parameter or VariableKind.Result) { continue; }
+                    if (field.Offset <= container.Offset || field.Offset >= container.Offset + words || field.Container is not null)
+                    {
+                        continue;
+                    }
+
+                    if (field.Kind is VariableKind.Temporary or VariableKind.Parameter or VariableKind.Result)
+                    {
+                        continue;
+                    }
 
                     field.Container = container;
                     field.FieldOffset = field.Offset - container.Offset;

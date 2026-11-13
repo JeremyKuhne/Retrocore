@@ -49,7 +49,9 @@ public sealed partial class PascalDecompiler
         {
             Fit(block, block.Words);
         }
-        else if (root.Kind == TypeKind.Pointer && root.Element?.Find() is { Kind: TypeKind.Scalar or TypeKind.Real, Words: > 1 } target && target.Words > (SizeOf(target) ?? 1))
+        else if (root.Kind == TypeKind.Pointer
+            && root.Element?.Find() is { Kind: TypeKind.Scalar or TypeKind.Real, Words: > 1 } target
+            && target.Words > (SizeOf(target) ?? 1))
         {
             int words = target.Words;
             target.Field(0);
@@ -91,7 +93,10 @@ public sealed partial class PascalDecompiler
         int end = frame.Words + 1;
         foreach (Variable variable in frame.Variables.Values)
         {
-            if (variable.Offset >= start && variable.Kind == VariableKind.Temporary) { end = Math.Min(end, variable.Offset); }
+            if (variable.Offset >= start && variable.Kind == VariableKind.Temporary)
+            {
+                end = Math.Min(end, variable.Offset);
+            }
         }
 
         // A record's fields are inside it.
@@ -211,7 +216,10 @@ public sealed partial class PascalDecompiler
                     int words = root.Words;
                     if (root.Fields is not null)
                     {
-                        foreach ((int offset, TypeNode field) in root.Fields) { words = Math.Max(words, offset + (SizeOf(field) ?? 1)); }
+                        foreach ((int offset, TypeNode field) in root.Fields)
+                        {
+                            words = Math.Max(words, offset + (SizeOf(field) ?? 1));
+                        }
                     }
 
                     if (root.PackedFields is not null)
@@ -224,12 +232,17 @@ public sealed partial class PascalDecompiler
 
             case TypeKind.Array:
                 {
-                    if (root.IndexLow is not { } low || root.IndexHigh is not { } high) { return root.Words == 0 ? null : root.Words; }
+                    if (root.IndexLow is not { } low || root.IndexHigh is not { } high)
+                    {
+                        return root.Words == 0 ? null : root.Words;
+                    }
 
                     int count = high - low + 1;
-                    int words = root.Bytes ? (count + 1) / 2
-                        : root.PerWord > 0 ? (count + root.PerWord - 1) / root.PerWord
-                        : count * Math.Max(1, root.ElementWords);
+                    int words = root.Bytes
+                        ? (count + 1) / 2
+                        : root.PerWord > 0
+                            ? (count + root.PerWord - 1) / root.PerWord
+                            : count * Math.Max(1, root.ElementWords);
 
                     return Math.Max(words, root.Words);
                 }

@@ -8,5 +8,7 @@ namespace Retrocore.Pascal;
 ///  A decompiled program.
 /// </summary>
 /// <param name="Source">The Pascal source.</param>
-/// <param name="Warnings">What could not be decompiled, or may not compile to the same code; empty when all could.</param>
+/// <param name="Warnings">
+///  What could not be decompiled, or may not compile to the same code; empty when all could.
+/// </param>
 public sealed record PascalDecompilation(string Source, IReadOnlyList<string> Warnings);

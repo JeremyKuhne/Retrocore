@@ -6,30 +6,6 @@ namespace Retrocore.Pascal;
 
 public sealed partial class PascalDecompiler
 {
-    // What a type is, as far as the code shows.
-    private enum TypeKind
-    {
-        Unknown,
-        Scalar,
-        Real,
-        Pointer,
-        Record,
-        Array,
-        String,
-        Set,
-        File,
-        Text
-    }
-
-    // What a one-word scalar is: an integer, a character, a boolean, or a unit's enumerated type.
-    private enum ScalarKind
-    {
-        Integer,
-        Char,
-        Boolean,
-        Enumeration
-    }
-
     /// <summary>
     ///  An inferred type: a union-find node, so that locations the code shows must share a type (a VAR parameter and
     ///  its argument, the two sides of an assignment or a comparison) end as one.
@@ -47,70 +23,136 @@ public sealed partial class PascalDecompiler
         private static int s_next;
         private TypeNode? _parent;
 
+        /// <summary>
+        ///  Initializes a new instance of the <see cref="TypeNode"/> class, of a kind not yet known.
+        /// </summary>
         public TypeNode() => Id = ++s_next;
 
+        /// <summary>
+        ///  Gets the order it was made in, from 1; where two nodes merge, the older one keeps its identity.
+        /// </summary>
         public int Id { get; }
 
+        /// <summary>
+        ///  Gets or sets what the type is, as far as the code shows.
+        /// </summary>
         public TypeKind Kind { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the votes, from how a one-word scalar is used, for its being an integer.
+        /// </summary>
         public int IntegerVotes { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the votes, from how a one-word scalar is used, for its being a character.
+        /// </summary>
         public int CharVotes { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the votes, from how a one-word scalar is used, for its being a boolean.
+        /// </summary>
         public int BooleanVotes { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the kind a one-word scalar must be, whatever the votes, such as READ's integer.
+        /// </summary>
         public ScalarKind? Forced { get; set; }
 
-        // A unit's enumerated type, by name.
+        /// <summary>
+        ///  Gets or sets a unit's enumerated type, by name.
+        /// </summary>
         public string? Enumeration { get; set; }
 
-        // A subrange a range check gives.
+        /// <summary>
+        ///  Gets or sets the low bound of a subrange a range check gives.
+        /// </summary>
         public int? Low { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the high bound of a subrange a range check gives.
+        /// </summary>
         public int? High { get; set; }
 
-        // A pointer's target, an array's element, a set's element, or a file's component.
+        /// <summary>
+        ///  Gets or sets a pointer's target, an array's element, a set's element, or a file's component.
+        /// </summary>
         public TypeNode? Element { get; set; }
 
-        // An array's index range.
+        /// <summary>
+        ///  Gets or sets the low bound of an array's index range.
+        /// </summary>
         public int? IndexLow { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the high bound of an array's index range.
+        /// </summary>
         public int? IndexHigh { get; set; }
 
-        // An array's element size in words; a packed array's elements to a word and bits.
+        /// <summary>
+        ///  Gets or sets an array's element size in words.
+        /// </summary>
         public int ElementWords { get; set; }
 
+        /// <summary>
+        ///  Gets or sets how many of a packed array's elements a word holds.
+        /// </summary>
         public int PerWord { get; set; }
 
+        /// <summary>
+        ///  Gets or sets the bits each of a packed array's elements takes.
+        /// </summary>
         public int Bits { get; set; }
 
-        // Whether a packed array of characters is read and written by byte.
+        /// <summary>
+        ///  Gets or sets a value indicating whether a packed array of characters is read and written by byte.
+        /// </summary>
         public bool Bytes { get; set; }
 
-        // A record's fields by word offset.
+        /// <summary>
+        ///  Gets or sets a record's fields by word offset.
+        /// </summary>
         public SortedDictionary<int, TypeNode>? Fields { get; set; }
 
-        // A record's packed fields by word and first bit, with their widths.
+        /// <summary>
+        ///  Gets or sets a record's packed fields by word and first bit, with their widths.
+        /// </summary>
         public SortedDictionary<(int Word, int Bit), (int Width, TypeNode Type)>? PackedFields { get; set; }
 
-        // Its size in words, where the code shows it: a record's, an array's, a set's or a string's.
+        /// <summary>
+        ///  Gets or sets its size in words, where the code shows it: a record's, an array's, a set's or a string's.
+        /// </summary>
         public int Words { get; set; }
 
-        // A string's greatest length.
+        /// <summary>
+        ///  Gets or sets a string's greatest length.
+        /// </summary>
         public int MaxLength { get; set; }
 
-        // A file's record size in words.
+        /// <summary>
+        ///  Gets or sets a file's record size in words.
+        /// </summary>
         public int RecordWords { get; set; }
 
-        // A word used both as a pointer and as an integer, as through a variant record.
+        /// <summary>
+        ///  Gets or sets a value indicating whether it is a word used both as a pointer and as an integer, as through a
+        ///  variant record.
+        /// </summary>
         public bool Punned { get; set; }
 
-        // A scalar word also read by bytes, as through a variant record.
+        /// <summary>
+        ///  Gets or sets a value indicating whether it is a scalar word also read by bytes, as through a variant record.
+        /// </summary>
         public bool ByteView { get; set; }
 
-        // The name the writer gives it, once declared.
+        /// <summary>
+        ///  Gets or sets the name the writer gives it, once declared.
+        /// </summary>
         public string? Name { get; set; }
 
+        /// <summary>
+        ///  Finds the node that stands for the type, the root of its set, compressing the path to it.
+        /// </summary>
+        /// <returns>The root.</returns>
         public TypeNode Find()
         {
             TypeNode root = this;
@@ -127,15 +169,27 @@ public sealed partial class PascalDecompiler
             return root;
         }
 
+        /// <summary>
+        ///  Makes a node of a kind.
+        /// </summary>
+        /// <param name="kind">The kind.</param>
+        /// <returns>The node.</returns>
         public static TypeNode Of(TypeKind kind) => new() { Kind = kind };
 
+        /// <summary>
+        ///  Makes a one-word scalar's node, forced to a kind.
+        /// </summary>
+        /// <param name="kind">The scalar's kind.</param>
+        /// <returns>The node.</returns>
         public static TypeNode Scalar(ScalarKind kind)
         {
             TypeNode node = new() { Kind = TypeKind.Scalar, Forced = kind };
             return node;
         }
 
-        // The scalar kind the votes choose.
+        /// <summary>
+        ///  Gets the scalar kind the votes choose.
+        /// </summary>
         public ScalarKind ScalarKind
         {
             get
@@ -143,11 +197,20 @@ public sealed partial class PascalDecompiler
                 TypeNode root = Find();
                 if (root.Enumeration is not null) { return ScalarKind.Enumeration; }
                 if (root.Forced is { } forced) { return forced; }
-                if (root.BooleanVotes > root.IntegerVotes && root.BooleanVotes >= root.CharVotes) { return ScalarKind.Boolean; }
+                if (root.BooleanVotes > root.IntegerVotes && root.BooleanVotes >= root.CharVotes)
+                {
+                    return ScalarKind.Boolean;
+                }
+
                 return root.CharVotes > root.IntegerVotes ? ScalarKind.Char : ScalarKind.Integer;
             }
         }
 
+        /// <summary>
+        ///  Votes for a one-word scalar's kind, as a use of it shows; a record's vote goes to its first field.
+        /// </summary>
+        /// <param name="kind">The kind the use shows.</param>
+        /// <param name="weight">How many votes the use counts for.</param>
         public void Vote(ScalarKind kind, int weight = 1)
         {
             TypeNode root = Find();
@@ -178,6 +241,10 @@ public sealed partial class PascalDecompiler
             }
         }
 
+        /// <summary>
+        ///  Forces a one-word scalar's kind, unless one is already forced; a record's goes to its first field.
+        /// </summary>
+        /// <param name="kind">The kind it must be.</param>
         public void Force(ScalarKind kind)
         {
             TypeNode root = Find();
@@ -192,6 +259,11 @@ public sealed partial class PascalDecompiler
             root.Forced ??= kind;
         }
 
+        /// <summary>
+        ///  Widens a scalar's subrange to take in a range check's bounds; a record's goes to its first field.
+        /// </summary>
+        /// <param name="low">The range check's low bound.</param>
+        /// <param name="high">The range check's high bound.</param>
         public void Range(int low, int high)
         {
             TypeNode root = Find();
@@ -206,7 +278,10 @@ public sealed partial class PascalDecompiler
             root.High = root.High is { } oldHigh ? Math.Max(oldHigh, high) : high;
         }
 
-        // Makes it a pointer, and gives its target.
+        /// <summary>
+        ///  Makes it a pointer, and gives its target.
+        /// </summary>
+        /// <returns>The pointer's target; for a record, its first field's; for a file, its window, F^.</returns>
         public TypeNode Target()
         {
             TypeNode root = Find();
@@ -223,7 +298,11 @@ public sealed partial class PascalDecompiler
 
             if (root.Kind is TypeKind.Unknown or TypeKind.Scalar)
             {
-                if (root.Kind == TypeKind.Scalar && (root.IntegerVotes > 0 || root.Low is not null)) { root.Punned = true; }
+                if (root.Kind == TypeKind.Scalar && (root.IntegerVotes > 0 || root.Low is not null))
+                {
+                    root.Punned = true;
+                }
+
                 root.Kind = TypeKind.Pointer;
             }
 
@@ -232,7 +311,11 @@ public sealed partial class PascalDecompiler
             return root.Element;
         }
 
-        // Makes it a record, and gives the field at a word offset.
+        /// <summary>
+        ///  Makes it a record, and gives the field at a word offset.
+        /// </summary>
+        /// <param name="offset">The field's word offset.</param>
+        /// <returns>The field's type.</returns>
         public TypeNode Field(int offset)
         {
             TypeNode root = Find();
@@ -248,6 +331,13 @@ public sealed partial class PascalDecompiler
             return field;
         }
 
+        /// <summary>
+        ///  Makes it a record, and gives the packed field at a word and bit.
+        /// </summary>
+        /// <param name="word">The word offset of the word that holds the field.</param>
+        /// <param name="bit">The field's first bit.</param>
+        /// <param name="width">The field's width in bits, kept where the field is first seen.</param>
+        /// <returns>The field's type.</returns>
         public TypeNode PackedField(int word, int bit, int width)
         {
             TypeNode root = Find();
@@ -263,7 +353,13 @@ public sealed partial class PascalDecompiler
             return field.Type;
         }
 
-        // Makes it an array, and gives its element.
+        /// <summary>
+        ///  Makes it an array, and gives its element.
+        /// </summary>
+        /// <param name="elementWords">The element's size in words.</param>
+        /// <param name="low">The index's low bound, if the code shows it.</param>
+        /// <param name="high">The index's high bound, if the code shows it.</param>
+        /// <returns>The element's type.</returns>
         public TypeNode ArrayElement(int elementWords, int? low, int? high)
         {
             TypeNode root = Find();
@@ -275,6 +371,14 @@ public sealed partial class PascalDecompiler
             return root.Element;
         }
 
+        /// <summary>
+        ///  Makes it a packed array, and gives its element.
+        /// </summary>
+        /// <param name="perWord">How many elements a word holds.</param>
+        /// <param name="bits">The bits each element takes.</param>
+        /// <param name="low">The index's low bound, if the code shows it.</param>
+        /// <param name="high">The index's high bound, if the code shows it.</param>
+        /// <returns>The element's type.</returns>
         public TypeNode PackedElement(int perWord, int bits, int? low, int? high)
         {
             TypeNode root = Find();
@@ -291,6 +395,13 @@ public sealed partial class PascalDecompiler
             return root.Element;
         }
 
+        /// <summary>
+        ///  Makes it a packed array read by byte, and gives its element; a scalar read by bytes becomes a variant record's
+        ///  two views of a word.
+        /// </summary>
+        /// <param name="low">The index's low bound, if the code shows it.</param>
+        /// <param name="high">The index's high bound, if the code shows it.</param>
+        /// <returns>The element's type.</returns>
         public TypeNode ByteElement(int? low, int? high)
         {
             TypeNode root = Find();
@@ -302,6 +413,7 @@ public sealed partial class PascalDecompiler
                 root.ByteView = true;
                 return root.Element ??= Scalar(ScalarKind.Char);
             }
+
             if (root.Kind == TypeKind.Unknown) { root.Kind = TypeKind.Array; }
             root.Element ??= new TypeNode();
             if (root.Kind == TypeKind.Array) { root.Bytes = true; }
@@ -309,6 +421,10 @@ public sealed partial class PascalDecompiler
             return root.Element;
         }
 
+        /// <summary>
+        ///  Makes it a string, and widens its greatest length; a record's goes to its first field.
+        /// </summary>
+        /// <param name="maxLength">A greatest length the code shows.</param>
         public void String(int maxLength)
         {
             TypeNode root = Find();
@@ -322,12 +438,22 @@ public sealed partial class PascalDecompiler
             if (root.Kind == TypeKind.String) { root.MaxLength = Math.Max(root.MaxLength, maxLength); }
         }
 
+        /// <summary>
+        ///  Widens its size in words.
+        /// </summary>
+        /// <param name="words">A size the code shows.</param>
         public void Size(int words)
         {
             TypeNode root = Find();
             root.Words = Math.Max(root.Words, words);
         }
 
+        /// <summary>
+        ///  Makes two types one, merging what each shows; where one is a record and the other is not, the other is the
+        ///  record's first field.
+        /// </summary>
+        /// <param name="first">One type.</param>
+        /// <param name="second">The other.</param>
         public static void Unify(TypeNode first, TypeNode second)
         {
             TypeNode a = first.Find();
@@ -440,8 +566,10 @@ public sealed partial class PascalDecompiler
             }
         }
 
-        // Makes a node the code used as one thing into a record of which that thing is the first field, as when a
-        // record's first field is reached at the record's own address before its others are.
+        /// <summary>
+        ///  Makes a node the code used as one thing into a record of which that thing is the first field, as when a
+        ///  record's first field is reached at the record's own address before its others are.
+        /// </summary>
         private void Promote()
         {
             TypeNode first = new()
@@ -479,7 +607,9 @@ public sealed partial class PascalDecompiler
             Fields = new SortedDictionary<int, TypeNode> { [0] = first };
         }
 
-        // Makes a byte array also used as an integer the integer read by bytes.
+        /// <summary>
+        ///  Makes a byte array also used as an integer the integer read by bytes.
+        /// </summary>
         private void View()
         {
             Kind = TypeKind.Scalar;
@@ -492,7 +622,10 @@ public sealed partial class PascalDecompiler
         private static void Bounds(TypeNode root, int? low, int? high)
         {
             if (low is { } newLow) { root.IndexLow = root.IndexLow is { } oldLow ? Math.Min(oldLow, newLow) : newLow; }
-            if (high is { } newHigh) { root.IndexHigh = root.IndexHigh is { } oldHigh ? Math.Max(oldHigh, newHigh) : newHigh; }
+            if (high is { } newHigh)
+            {
+                root.IndexHigh = root.IndexHigh is { } oldHigh ? Math.Max(oldHigh, newHigh) : newHigh;
+            }
         }
     }
 }

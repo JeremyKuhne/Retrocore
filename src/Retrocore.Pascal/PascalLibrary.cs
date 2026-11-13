@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text;
 using Retrocore.Media;
+using Touki.Text;
 
 namespace Retrocore.Pascal;
 
@@ -62,7 +62,7 @@ public sealed class PascalLibrary
     // Text pages, with DLE indentation, up to IMPLEMENTATION.
     private static string Text(ReadOnlySpan<byte> data)
     {
-        StringBuilder builder = new();
+        using ValueStringBuilder builder = new(stackalloc char[256]);
         for (int index = 0; index < data.Length; index++)
         {
             byte value = data[index];

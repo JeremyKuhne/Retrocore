@@ -176,7 +176,7 @@ public sealed partial class PascalDecompiler
                         {
                             // A packed array of characters takes a string constant's characters.
                             Designator array = Designate(Pop(stack));
-                            array.Type.ByteElement(null, null);
+                            array.Type.ByteElement(low: null, high: null);
                             Blocks(array, operands[0]);
                             statements.Add(new Assignment(array, from, block: true));
                             break;
@@ -294,7 +294,9 @@ public sealed partial class PascalDecompiler
                 case 206 or 207 or 174 or 194: // CLP, CGP, CIP, CBP
                     {
                         Procedure callee = _owner.Find(_procedure.Segment, operands[0])
-                            ?? throw new InvalidDataException($"{instruction} calls a procedure the segment does not have.");
+                            ?? throw new InvalidDataException(
+                                $"{instruction} calls a procedure the segment does not have.");
+
                         CallProcedure(callee, stack, statements);
                         break;
                     }
@@ -320,14 +322,21 @@ public sealed partial class PascalDecompiler
         // A variable a whole-variable operation moves has at least its words.
         private static void Blocks(Designator designator, int words)
         {
-            if (designator is VariableDesignator { Variable: var variable }) { variable.BlockWords = Math.Max(variable.BlockWords, words); }
+            if (designator is VariableDesignator { Variable: var variable })
+            {
+                variable.BlockWords = Math.Max(variable.BlockWords, words);
+            }
         }
 
         // An LDC's words, as they follow the opcode.
         private static ushort[] Words(byte[] data)
         {
             ushort[] words = new ushort[data.Length / 2];
-            for (int index = 0; index < words.Length; index++) { words[index] = (ushort)(data[index * 2] | (data[(index * 2) + 1] << 8)); }
+            for (int index = 0; index < words.Length; index++)
+            {
+                words[index] = (ushort)(data[index * 2] | (data[(index * 2) + 1] << 8));
+            }
+
             return words;
         }
 
@@ -349,7 +358,11 @@ public sealed partial class PascalDecompiler
                 low = subtracted.Value;
                 value = subtract.Left;
             }
-            else if (value is Binary { Op: Operator.Add, Right: Unary { Op: Operator.Negate, Operand: Constant added } } add)
+            else if (value is Binary
+                {
+                    Op: Operator.Add,
+                    Right: Unary { Op: Operator.Negate, Operand: Constant added }
+                } add)
             {
                 low = -added.Value;
                 value = add.Left;
@@ -395,14 +408,18 @@ public sealed partial class PascalDecompiler
                 throw new InvalidDataException("A packed field's width and position are not constants.");
             }
 
-            (Designator record, int word) = address is Address { Designator: FieldDesignator field } ? (field.Record, field.Offset) : (Designate(address), 0);
+            (Designator record, int word) = address is Address { Designator: FieldDesignator field }
+                ? (field.Record, field.Offset)
+                : (Designate(address), 0);
+
             return new PackedFieldDesignator(record, word, bit.Value, bits.Value);
         }
 
         // A string's value from its address: a constant, a variable, or a function's temporary.
         private Expr StringValue(Expr address)
         {
-            if (address is Address { Designator: VariableDesignator { Variable: Variable temporary } } && _strings.Remove(temporary, out StringFunction? function))
+            if (address is Address { Designator: VariableDesignator { Variable: Variable temporary } }
+                && _strings.Remove(temporary, out StringFunction? function))
             {
                 return function;
             }
@@ -469,7 +486,7 @@ public sealed partial class PascalDecompiler
             TypeNode root = designator.Type.Find();
             if (comparand == Comparand.Bytes)
             {
-                root.ByteElement(null, null);
+                root.ByteElement(low: null, high: null);
                 if (root.IndexLow is { } low) { root.IndexHigh ??= low + size - 1; }
             }
             else

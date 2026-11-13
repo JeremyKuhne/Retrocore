@@ -39,7 +39,11 @@ public sealed partial class PascalDecompiler
             default:
                 {
                     TypeNode node = new() { Kind = TypeKind.Scalar };
-                    if (_library?.Units.Any(unit => unit.Enumerations.ContainsKey(name)) == true) { node.Enumeration = name; }
+                    if (_library?.Units.Any(unit => unit.Enumerations.ContainsKey(name)) == true)
+                    {
+                        node.Enumeration = name;
+                    }
+
                     return node;
                 }
         }
@@ -83,7 +87,11 @@ public sealed partial class PascalDecompiler
                 }
             }, expression =>
             {
-                if (expression is Call { Callee.Procedure: { } callee } call) { Calls(calls, callee).Add(call.Arguments); }
+                if (expression is Call { Callee.Procedure: { } callee } call)
+                {
+                    Calls(calls, callee).Add(call.Arguments);
+                }
+
             });
         }
 
@@ -101,7 +109,11 @@ public sealed partial class PascalDecompiler
 
         // What expressions show of their own types goes first, then what statements show of how they meet.
         foreach (Procedure procedure in _procedures) { Walk(procedure.Body, _ => { }, Constrain); }
-        foreach (Procedure procedure in _procedures) { Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { }); }
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { });
+        }
+
         Settle();
     }
 
@@ -306,18 +318,21 @@ public sealed partial class PascalDecompiler
     {
         switch (statement)
         {
-            case Assignment { Value: PackedConstant or StringConstant } packed when packed.Target.Type.Find() is { Kind: TypeKind.Array, Bytes: true } array:
+            case Assignment { Value: PackedConstant or StringConstant } packed
+                when packed.Target.Type.Find() is { Kind: TypeKind.Array, Bytes: true } array:
                 {
                     int length = packed.Value is PackedConstant p ? p.Bytes.Length : ((StringConstant)packed.Value).Characters.Length;
                     if (array.IndexLow is { } low) { array.IndexHigh ??= low + length - 1; }
                     break;
                 }
 
-            case Assignment { Block: true, Value: Load whole } assignment when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
+            case Assignment { Block: true, Value: Load whole } assignment
+                when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
                 // A record or array moved whole is the same type at both ends.
                 TypeNode.Unify(assignment.Target.Type, whole.Type);
                 break;
-            case Assignment { Value: WordsConstant { Values.Length: 2 } } real when real.Target.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar:
+            case Assignment { Value: WordsConstant { Values.Length: 2 } } real
+                when real.Target.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar:
                 real.Target.Type.Find().Kind = TypeKind.Real;
                 break;
             case Assignment assignment:
@@ -363,7 +378,10 @@ public sealed partial class PascalDecompiler
             case Nil nil:
                 nil.Type.Find().Kind = TypeKind.Pointer;
                 break;
-            case Binary { Op: Operator.Add or Operator.Subtract or Operator.Multiply or Operator.Divide or Operator.Modulo } binary:
+            case Binary
+            {
+                Op: Operator.Add or Operator.Subtract or Operator.Multiply or Operator.Divide or Operator.Modulo
+            } binary:
                 binary.Left.Type.Vote(ScalarKind.Integer, 2);
                 binary.Right.Type.Vote(ScalarKind.Integer, 2);
                 binary.Type.Force(ScalarKind.Integer);
@@ -413,7 +431,10 @@ public sealed partial class PascalDecompiler
             case Call { Callee.UnitProcedure: { } declared } call:
                 PassUnit(declared, call.Arguments);
                 break;
-            case Call { Callee.Builtin: "TRUNC" or "ROUND" or "SIN" or "COS" or "LOG" or "ATAN" or "LN" or "EXP" or "SQRT" } call:
+            case Call
+            {
+                Callee.Builtin: "TRUNC" or "ROUND" or "SIN" or "COS" or "LOG" or "ATAN" or "LN" or "EXP" or "SQRT"
+            } call:
                 Real(call.Arguments[0]);
                 break;
             case Load { Designator: IndexDesignator index }:
@@ -560,9 +581,9 @@ public sealed partial class PascalDecompiler
             if (integer + character + boolean == 0) { continue; }
 
             root.Kind = TypeKind.Scalar;
-            root.Forced = boolean > integer && boolean >= character ? ScalarKind.Boolean
-                : character > integer ? ScalarKind.Char
-                : ScalarKind.Integer;
+            root.Forced = boolean > integer && boolean >= character
+                ? ScalarKind.Boolean
+                : character > integer ? ScalarKind.Char : ScalarKind.Integer;
         }
     }
 
@@ -675,7 +696,10 @@ public sealed partial class PascalDecompiler
             else if (type.Find() is { Kind: TypeKind.Scalar } scalar)
             {
                 TypeNode argument = arguments[index].Type;
-                if (scalar.Enumeration is not null && arguments[index] is Constant or Load or Call) { TypeNode.Unify(argument, type); }
+                if (scalar.Enumeration is not null && arguments[index] is Constant or Load or Call)
+                {
+                    TypeNode.Unify(argument, type);
+                }
                 else if (scalar.Forced is { } kind) { argument.Vote(kind, 2); }
             }
             else if (type.Find().Kind == TypeKind.Real)

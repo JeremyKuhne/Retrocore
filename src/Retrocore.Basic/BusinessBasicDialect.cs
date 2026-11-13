@@ -47,7 +47,12 @@ internal sealed partial class BusinessBasicDialect : BasicDialect
     /// </summary>
     internal const int Banked = 0x10000;
 
-    private const byte Escape = 0xFF;
+    /// <summary>
+    ///  The byte before a word of the second list.
+    /// </summary>
+    internal const byte SecondList = 0xFF;
+
+    private const byte Escape = SecondList;
     private const byte Rem = 0xC0;
     private const byte Data = 0xD4;
     private const byte PrintToken = 0xD9;

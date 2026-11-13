@@ -406,6 +406,15 @@ internal sealed partial class DebugSession
             byte value = text.Read(at);
             if (value == 0 || (value == ':' && !inString)) { break; }
             if (value == '"') { inString = !inString; }
+
+            // Business BASIC's $FF and the token after it are a word of its second list, none of which calls machine
+            // code; the token is no word of the first list, as REC('s $A2 would be EXFN.
+            if (!inString && value == BusinessBasicDialect.SecondList && dialect == BasicDialect.BusinessBasic)
+            {
+                at++;
+                continue;
+            }
+
             if (!inString && dialect.Keyword(value) is { } word && s_machineCalls.Contains(word)) { return true; }
         }
 

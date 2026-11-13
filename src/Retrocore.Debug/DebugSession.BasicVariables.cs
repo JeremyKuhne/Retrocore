@@ -344,7 +344,7 @@ internal sealed partial class DebugSession
     // Sets a BASIC variable or array element from a BASIC expression: setExpression, and setVariable by name.
     private JsonObject SetBasic(string target, string value)
     {
-        Match match = Assignable().Match(target);
+        Match match = Assignable.Match(target);
         if (!match.Success) { throw new ArgumentException($"'{target}' is not a BASIC variable or array element."); }
         BasicEvaluator evaluator = Evaluator;
         BasicResult result = evaluator.Evaluate(value);
@@ -399,7 +399,7 @@ internal sealed partial class DebugSession
     private JsonObject? BasicDataBreakpointInfo(int reference, string name)
     {
         string? expression = reference != 0 ? _basicNames.GetValueOrDefault((reference, name)) : name;
-        if (expression is null || !Assignable().IsMatch(expression)) { return null; }
+        if (expression is null || !Assignable.IsMatch(expression)) { return null; }
         return new JsonObject
         {
             ["dataId"] = BasicDataPrefix + expression.ToUpperInvariant(),
@@ -534,5 +534,12 @@ internal sealed partial class DebugSession
     private static partial Regex Definition();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*[$%!#]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
-    private static partial Regex Assignable();
+    private static partial Regex MicrosoftAssignable();
+
+    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9.]*[$%&]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
+    private static partial Regex BusinessAssignable();
+
+    // A variable or array element that can be set: Business BASIC's names hold periods and may end in & for a long
+    // integer.
+    private Regex Assignable => Target.Basic == BasicDialect.BusinessBasic ? BusinessAssignable() : MicrosoftAssignable();
 }

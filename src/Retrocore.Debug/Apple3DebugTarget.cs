@@ -284,12 +284,16 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     /// <remarks>
     ///  <para>
     ///   What plays the ROM's part: the boot ROM, SOS's kernel from $B800 up, and Business BASIC's interpreter, from
-    ///   $5200, while it is in memory. Invokable modules and drivers, in the switchable banks, are machine code.
+    ///   $5200, while it is in memory. Invokable modules and drivers, in the switchable banks, are machine code: below
+    ///   <c>$A000</c> the interpreter counts only while its own bank is in the window, not a module's that PERFORM or
+    ///   EXFN switched in.
     ///  </para>
     /// </remarks>
     public bool InRom(ushort address) => ReadArea(address) is Apple3MemoryArea.Rom
         || address >= SosKernelStart
-        || (address is >= Apple3SdkModules.BusinessBasicOrigin and < BusinessBasicEnd && BusinessBasicActive);
+        || (address is >= Apple3SdkModules.BusinessBasicOrigin and < BusinessBasicEnd
+            && BusinessBasicActive
+            && (address >= SwitchableEnd || BusinessBasicInWindow));
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address reads ROM, I/O or nothing.</exception>

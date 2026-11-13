@@ -36,6 +36,9 @@ internal sealed partial class Apple3DebugTarget
     private const int BusinessBasicEnd = Apple3SdkModules.BusinessBasicOrigin + Apple3SdkModules.BusinessBasicSize;
     private const int SosKernelStart = 0xB800;
 
+    // The end of the switchable banks' window.
+    private const int SwitchableEnd = 0xA000;
+
     // Business BASIC 1.23, from the SDK's source: its hooks, the bytes at GONE that say it is in memory, and its error
     // messages' table.
     private BasicRom? _businessRom;
@@ -221,6 +224,21 @@ internal sealed partial class Apple3DebugTarget
             for (int index = 0; index < _businessGone.Length; index++)
             {
                 if (_machine.Bus.PeekBank(bank, (ushort)(rom.Gone + index)) != _businessGone[index]) { return false; }
+            }
+
+            return true;
+        }
+    }
+
+    // Whether the bank in the $2000-$9FFF window now is BASIC's: GONE's bytes are there.
+    private bool BusinessBasicInWindow
+    {
+        get
+        {
+            if (_businessRom is not { } rom) { return false; }
+            for (int index = 0; index < _businessGone.Length; index++)
+            {
+                if (Peek((ushort)(rom.Gone + index)) != _businessGone[index]) { return false; }
             }
 
             return true;

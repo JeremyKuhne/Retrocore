@@ -45,6 +45,11 @@ internal static partial class BasicFeatures
     }
 
     // The reserved word a keyword site is, as the dialect spells it.
+    // A dialect's reserved words; Business BASIC's second list, after $FF, has THEN, TO and its functions.
+    private static IEnumerable<string> Words(BasicDialect dialect) => dialect == BasicDialect.BusinessBasic
+        ? dialect.Keywords.Concat(BusinessBasicDialect.Functions)
+        : dialect.Keywords;
+
     private static string KeywordOf(BasicDialect dialect, BasicSite site) =>
         site.Word.Length > 0 ? site.Word : dialect.Keyword(site.Token) ?? site.Text;
 
@@ -129,7 +134,7 @@ internal static partial class BasicFeatures
 
         List<CompletionItem> items =
         [
-            .. dialect.Keywords.Where(keyword => keyword.Length > 0 && char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
+            .. Words(dialect).Where(keyword => keyword.Length > 0 && char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
             {
                 Label = keyword,
                 Kind = CompletionItemKind.Keyword,

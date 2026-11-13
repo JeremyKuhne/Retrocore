@@ -135,6 +135,47 @@ public sealed class BusinessBasicDialectTests
     }
 
     /// <summary>
+    ///  A name runs to the 64 characters PTRGET takes, a type character among them, and its entry reads back; one
+    ///  longer is refused.
+    /// </summary>
+    [TestMethod]
+    public void NamesRunTo64Characters()
+    {
+        BasicVariables variables = new(Dialect, EmptyProgram(out _));
+        string real = "R" + new string('.', 62) + "L";
+        string integer = new string('I', 63) + "%";
+        variables.Create(real);
+        variables.Create(integer);
+        variables.Create("NEXT.ONE");
+        variables.Simple().Select(variable => variable.Name).Should().Equal(real, integer, "NEXT.ONE");
+        variables.Find(real).Should().NotBeNull();
+
+        Action tooLong = () => variables.Create(new string('I', 64) + "%");
+        tooLong.Should().Throw<ArgumentException>();
+    }
+
+    /// <summary>
+    ///  A string with no room for it leaves the variable's old string where it was, still in use.
+    /// </summary>
+    [TestMethod]
+    public void AStringThatDoesNotFitKeepsTheOld()
+    {
+        BasicVariables variables = new(Dialect, EmptyProgram(out BankedBasicMemory memory));
+        BasicVariable name = variables.Create("N$");
+        variables.Write(name.Kind, name.ValueAddress, BasicValue.Of("AB"u8.ToArray()));
+        int bottom = BusinessBasicDialect.Pointer(memory, 0x1A41);
+        byte information = memory.Read(bottom + 2);
+
+        // Leave room for only a few more characters below the string.
+        memory.SetPointer(0x1A3F, bottom - 6);
+        Action write = () => variables.Write(name.Kind, name.ValueAddress, BasicValue.Of("TOO LONG"u8.ToArray()));
+        write.Should().Throw<InvalidOperationException>().WithMessage("?OUT OF MEMORY*");
+
+        variables.Read(name.Kind, name.ValueAddress).Text.Should().Equal("AB"u8.ToArray());
+        memory.Read(bottom + 2).Should().Be(information, "the old string is not marked free");
+    }
+
+    /// <summary>
     ///  The programs on Apple's Business BASIC 1.23 disk read from their files and list as text that tokenizes back
     ///  to the same lines.
     /// </summary>
@@ -174,6 +215,21 @@ public sealed class BusinessBasicDialectTests
         }
 
         return words;
+    }
+
+    // Memory with an empty program in bank pair $81, string space up to HIMEM in the next.
+    private static BankedBasicMemory EmptyProgram(out BankedBasicMemory memory)
+    {
+        memory = new();
+        int start = BusinessBasicDialect.Flat(0x81, 0x2000);
+        int top = BusinessBasicDialect.Flat(0x82, 0x7000);
+        memory.SetPointer(0x1A39, start);
+        memory.SetPointer(0x1A3D, start + 3);
+        memory.SetPointer(0x1A3B, start + 3);
+        memory.SetPointer(0x1A3F, start + 3);
+        memory.SetPointer(0x1A41, top);
+        memory.SetPointer(0x1A49, top);
+        return memory;
     }
 
     private static AssemblyResult Interpreter()

@@ -27,6 +27,7 @@ public sealed partial class BasicVariables
     private const byte SimpleString = 0x41;
     private const byte ArrayString = 0x81;
     private const int StringInformation = 3;
+    private const int MaximumNameLength = 64;
     private const byte BusinessForToken = 0x81;
     private const byte BusinessGosubToken = 0xBE;
 
@@ -157,6 +158,14 @@ public sealed partial class BasicVariables
 
         int top = Pointer(Pointers.MemoryTop);
         int bottom = Pointer(Pointers.StringBottom);
+
+        // The new string must fit before the old one is let go, so a failed write leaves the variable as it was.
+        int start = bottom - text.Length - StringInformation;
+        if (text.Length > 0 && (start < Pointer(Pointers.FreeStart) || top - start > 0xFFFF))
+        {
+            throw new InvalidOperationException("?OUT OF MEMORY: there is no room for the string.");
+        }
+
         int oldLength = Flat.Read(address);
         int oldStart = top - (Flat.Read(address + 1) | (Flat.Read(address + 2) << 8));
         if (oldLength > 0 && oldStart >= bottom && oldStart + oldLength + StringInformation <= top)
@@ -169,12 +178,6 @@ public sealed partial class BasicVariables
         {
             for (int index = 0; index < 3; index++) { Flat.Write(address + index, 0); }
             return;
-        }
-
-        int start = bottom - text.Length - StringInformation;
-        if (start < Pointer(Pointers.FreeStart) || top - start > 0xFFFF)
-        {
-            throw new InvalidOperationException("?OUT OF MEMORY: there is no room for the string.");
         }
 
         for (int index = 0; index < text.Length; index++) { Flat.Write(start + index, text[index]); }
@@ -252,10 +255,11 @@ public sealed partial class BasicVariables
         return loops;
     }
 
-    // A name and type from an entry: the name's capitals, digits and periods, then the type byte.
+    // A name and type from an entry: the name's capitals, digits and periods, up to the 64 PTRGET takes, then the type
+    // byte.
     private BasicVariableKind? BusinessEntry(int at, out string name, out byte type)
     {
-        Span<char> letters = stackalloc char[64];
+        Span<char> letters = stackalloc char[MaximumNameLength + 1];
         for (int index = at, count = 0; count < letters.Length; index++, count++)
         {
             byte value = Flat.Read(index);
@@ -310,8 +314,10 @@ public sealed partial class BasicVariables
             _ => BasicVariableKind.Real
         };
 
+        // PTRGET takes 64 characters, a type character among them.
         string letters = kind == BasicVariableKind.Real ? text : text[..^1];
-        bool named = letters.Length is > 0 and < 64
+        bool named = letters.Length > 0
+            && text.Length <= MaximumNameLength
             && char.IsAsciiLetter(letters[0])
             && letters.All(character => char.IsAsciiLetterOrDigit(character) || character == '.');
 

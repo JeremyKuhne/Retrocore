@@ -76,6 +76,18 @@ public sealed class BasicLabelTests
     }
 
     /// <summary>
+    ///  Business BASIC takes GOTO only with a separator after it, so after THEN, GOTOCOUNT=1 is an assignment, and
+    ///  no label is wanted.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicGotoNeedsASeparator()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("REM retrocore business\n10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Should().Be("10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
+    }
+
+    /// <summary>
     ///  Lines without numbers are numbered after the line before them, labels become their lines' numbers, and the
     ///  program maps back to its text lines.
     /// </summary>

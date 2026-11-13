@@ -10,7 +10,7 @@
 // The ROM is assembled from the SDK's BootRom.asm unless RETROCORE_APPLE3_ROMS names MAME's apple3 set.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from "node:fs";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -85,9 +85,34 @@ try {
 
     const devices = await request("retro/devices");
     const hardware = Object.fromEntries(devices.hardware.map(row => [row.id, row]));
-    assert.deepEqual(Object.keys(hardware), ["model", "memory", "rom", "disk", "environment"]);
+    assert.deepEqual(Object.keys(hardware),
+        ["model", "memory", "rom", "disk", "environment", "slot1", "slot2", "slot3", "slot4"]);
     assert.equal(hardware.memory.value, "256 KB, 7 switchable banks");
     assert.deepEqual(devices.devices.map(device => device.id), ["disk1", "disk2", "disk3", "disk4"]);
+
+    // A ProFile card goes in a slot while the session runs, its ProFile takes an image, the configuration keeps both,
+    // and Remove Card empties the slot again.
+    assert.deepEqual(hardware.slot4.actions, ["addCard"]);
+    const slotRow = (body, id) => body.hardware.find(row => row.id === id);
+    let changed = await request("retro/hardware", { id: "slot4", action: "addProFile" });
+    assert.equal(slotRow(changed, "slot4").value, "ProFile interface card");
+    assert.deepEqual(slotRow(changed, "slot4").devices, ["slot4profile"]);
+    await assert.rejects(request("retro/hardware", { id: "slot4", action: "addProFile" }), /does not support/);
+    const profile = join(root, "artifacts", `profile-${process.pid}.po`);
+    writeFileSync(profile, Buffer.alloc(512 * 280));
+    try {
+        changed = await request("retro/device", { id: "slot4profile", action: "insert", path: profile });
+        const drive = changed.devices.find(device => device.id === "slot4profile");
+        assert.equal(drive.media.format, "PO");
+        assert.equal(drive.blocks.count, 280);
+        assert.equal(changed.configuration.cards["4"], "proFile");
+        assert.equal(changed.configuration.media.slot4profile.path, profile);
+    } finally {
+        unlinkSync(profile);
+    }
+    changed = await request("retro/hardware", { id: "slot4", action: "removeCard" });
+    assert.equal(slotRow(changed, "slot4").value, "empty");
+    assert.ok(!changed.devices.some(device => device.id === "slot4profile"), "its ProFile is gone");
 
     // The display panel's requests: the Apple keys, sound, fast disk and the drive lights.
     assert.deepEqual(await request("apple3/button", { button: 0, pressed: true }), { button: 0, pressed: true });

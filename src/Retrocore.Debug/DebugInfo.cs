@@ -52,19 +52,36 @@ internal sealed class DebugInfo
     }
 
     /// <summary>
-    ///  Resolves a symbol from the first module that defines it.
+    ///  Resolves a symbol: from the first module whose code is where the symbol names, installed and mapped, else from
+    ///  the first module that defines it.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A card's firmware that works in any slot is a module for each slot, so its routines resolve to the slot the
+    ///   card is in.
+    ///  </para>
+    /// </remarks>
     /// <param name="name">The name.</param>
+    /// <param name="memory">The machine's memory, or null to take the first module that defines the name.</param>
     /// <returns>The value.</returns>
     /// <exception cref="FormatException">No module defines the name.</exception>
-    internal long Resolve(string name)
+    internal long Resolve(string name, IDebugMemory? memory = null)
     {
+        long? first = null;
         foreach (IDebugModule module in _modules)
         {
-            if (module.TryResolve(name, out long value)) { return value; }
+            if (!module.TryResolve(name, out long value)) { continue; }
+            if (memory is null) { return value; }
+            first ??= value;
+            if (value is >= 0 and <= ushort.MaxValue
+                && Active(module, memory, (ushort)value)
+                && module.Position(memory, (ushort)value) is not null)
+            {
+                return value;
+            }
         }
 
-        throw new FormatException($"Unknown label '{name}'.");
+        return first ?? throw new FormatException($"Unknown label '{name}'.");
     }
 
     /// <summary>

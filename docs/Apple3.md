@@ -28,6 +28,7 @@ names it with `"machine": "apple3"`:
 | `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
 | `sound` | `speaker` (the default) or `off`. |
 | `screen` | The monitor: `color` (the default), or a monochrome `white`, `green` or `amber` one, which shows each pixel in the phosphor's color by its brightness. The display panel's **Screen** changes it. |
+| `proFiles` | ProFile cards, each `{ "slot": 4, "image": "profile.po" }` with slot 1-4 and an optional image ([The ProFile](#the-profile)). |
 
 With no disk, the boot ROM runs its diagnostics and shows RETRY. Press a key to try again once a disk is in.
 
@@ -64,6 +65,37 @@ an Apple II disk such as DOS 3.3 in the built-in drive (the **Retro Devices** vi
   - A 128-character set in RAM, loaded through the screen holes.
 - **Disks.** The Disk II's logic, built in, with three external drives.
 - **Other devices.** The keyboard with its Apple keys, the speaker and the 6-bit DAC, the clock and the serial port.
+- **Slots.** Four, for ProFile interface cards ([The ProFile](#the-profile)).
+
+## The ProFile
+
+Apple's ProFile is a 5 MB hard disk, cabled to a ProFile interface card in one of the four slots. SOS reaches it through
+the `.PROFILE` driver in `SOS.DRIVER`; the System Utilities disk's copy is configured for slot 4, so a card there (the
+launch's `proFiles`, or **Add Card** in the Retro Devices view) with an image in its ProFile works once SOS boots
+from the floppy. The boot ROM cannot boot from it. The image is a ProDOS-order (`.po` or `.hdv`) image of a SOS volume,
+up to 65535 blocks, of which `.PROFILE` as Apple shipped it uses the first 9728; the machine can write to it, and
+changes stay in memory.
+
+The card follows Apple's driver ([Sos.md](Sos.md)):
+
+- **Ports** at `$C080` plus 16 times the slot: `+0` writes a byte to the ProFile, `+1` reads one, `+2` is the status
+  (bit 7 set while BSY is low, bit 6 a parity error, bit 0 no ProFile), and a write to `+3` clears the parity error.
+- **Lines** are an addressable latch that any access to the card's `$Cn00` page sets: address bits 0, 1 and 3 pick
+  the line (CMD, the direction, the interrupt enable, the port's read/write line and the ProFile's reset) and bit 2 is
+  its level. So `$Cn04` raises CMD, `$Cn00` drops it, `$Cn0C` resets the ProFile.
+- **Pseudo-DMA** moves whole pages. The driver points the zero-page register at the buffer and calls the boot ROM's
+  chain of `SBC #$01`/`BEQ` at `$F800`. As the Service Reference Manual describes, each fetch from `$F800-$F8FF` lowers
+  DMA OK, and the card moves one byte between the ProFile and RAM at the zero page's page and the fetch's low byte,
+  while the CPU still reads the ROM. Every fetch counts, the dummy reads of the last, taken branch among them, which is
+  why the driver enters the chain at even addresses and keeps bytes 0 and `$FE` of a short last page aside. The card
+  that answers is the last one the CPU reached.
+- **The ProFile** (`ProFileDrive`, shared with the [Apple II's card](Apple2.md#slots-and-cards)) plays the Z8
+  controller's side of the CMD-BSY handshakes: response 1 for a command, 2 when a read's status and block are ready,
+  3 or 4 for a write's data and 6 to write it. It answers at once, keeps no tags, and gives its identification
+  block at `$FFFFFF`. The card's interrupt is not raised; the driver turns it off.
+
+`Apple3ProFileTests` runs Apple's `.PROFILE` 1.30, assembled from the SDK's source, against the card, reading and
+writing buffers at every alignment.
 
 Phase by phase, how this was built and checked against MAME and the manual is in the
 [backlog plan](backlog/Apple3.md).
@@ -112,4 +144,5 @@ CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid A
   (`RETROCORE_APPLE3_ROMS`, by default `<cache>\apple3-roms\mame\apple3`) and Apple's disks
   (`RETROCORE_APPLE3_DISKS`); the emulation test also needs the DOS 3.3 System Master in `<cache>\iie-disks`.
 - `Apple3OracleTests` runs MAME (`RETROCORE_MAME`).
+- `Apple3ProFileTests` needs no files: it runs Apple's `.PROFILE` driver from the SDK on the SDK's boot ROM.
 - `node tools/Test-Apple3Dap.mjs` drives the debug host.

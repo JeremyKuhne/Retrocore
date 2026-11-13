@@ -262,7 +262,8 @@ Built 2026-11-12, pinned by `Apple3EmulationTests` and `Apple3BusTests.ClearingT
 ## Later
 
 - The Apple III Plus (interlaced video, its keyboard, 256K standard), once the III is solid.
-- The ProFile hard disk and its card.
+- The ProFile hard disk and its card are built ([The ProFile](../Apple3.md#the-profile)) and run Apple's
+  `.PROFILE` driver; trying them under SOS itself, with the System Utilities listing a volume on the ProFile, is next.
 - Source-level SOS debugging from the SOS 1.3 listing.
 - Business BASIC debugging, like AppleSoft's: built, awaiting review ([BusinessBasic.md](BusinessBasic.md)).
 - Apple III Pascal: booting, code files and the Pascal thread are built ([Apple Pascal](ApplePascal.md)); line

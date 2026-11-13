@@ -451,6 +451,12 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
+            case (ProFileDrive drive, "insert"):
+                ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));
+                break;
+            case (ProFileDrive drive, "eject"):
+                drive.Eject();
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }
@@ -526,8 +532,85 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 "Environment register",
                 bus.AppleIIMode ? $"${bus.Environment:X2}, Apple II mode" : $"${bus.Environment:X2}",
                 "VIA 0 port A: 1 MHz, I/O, video, reset, write protection, the primary stack and the ROM. Apple II mode, "
-                    + "set by the Apple II Emulation disk, hides the VIAs, so only turning the machine off leaves it.")
+                    + "set by the Apple II Emulation disk, hides the VIAs, so only turning the machine off leaves it."),
+            Slot(1),
+            Slot(2),
+            Slot(3),
+            Slot(4)
         ];
+    }
+
+    // A slot: its ProFile card and the ProFile cabled to it, or empty.
+    private HardwareRow Slot(int slot)
+    {
+        if (_machine.Bus.ProFileIn(slot) is not { } card)
+        {
+            return HardwareRow.Empty(
+                slot,
+                "Add Card puts a ProFile interface card here; so does the launch's proFiles.",
+                free: true);
+        }
+
+        return new(
+            $"slot{slot}",
+            $"Slot {slot}",
+            "ProFile interface card",
+            "Apple's ProFile hard disk, which SOS reaches through the .PROFILE driver in SOS.DRIVER (the System "
+                + "Utilities disk's is set for slot 4). Insert a .po or .hdv image of a SOS volume, up to 65535 blocks; "
+                + ".PROFILE as Apple shipped it uses the first 9728. The launch's proFiles installs it; Remove Card takes "
+                + "it out.",
+            [card.Drive.Id],
+            ["removeCard"]);
+    }
+
+    /// <inheritdoc/>
+    public void HardwareAction(string id, string action, JsonObject args)
+    {
+        int slot = id is ['s', 'l', 'o', 't', >= '1' and <= '4' and var digit] ? digit - '0' : 0;
+        switch (action)
+        {
+            case "addProFile" when slot != 0 && _machine.Bus.ProFileIn(slot) is null:
+                _machine.Bus.InstallProFile(slot);
+                break;
+            case "removeCard" when slot != 0 && _machine.Bus.ProFileIn(slot) is not null:
+                _machine.Bus.RemoveProFile(slot);
+                break;
+            default:
+                throw new ArgumentException($"The {id} hardware does not support {action}.");
+        }
+    }
+
+    /// <inheritdoc/>
+    public JsonObject? Cards()
+    {
+        JsonObject cards = [];
+        for (int slot = 1; slot <= 4; slot++)
+        {
+            cards[$"{slot}"] = _machine.Bus.ProFileIn(slot) is null ? "empty" : "proFile";
+        }
+
+        return cards;
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<string> RestoreCards(JsonObject cards)
+    {
+        List<string> problems = [];
+        foreach ((string key, JsonNode? node) in cards)
+        {
+            string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
+            if (!int.TryParse(key, out int slot) || slot is < 1 or > 4 || card is not ("proFile" or "empty"))
+            {
+                problems.Add($"Slot {key} cannot take the saved card '{node}'.");
+                continue;
+            }
+
+            bool installed = _machine.Bus.ProFileIn(slot) is not null;
+            if (card == "proFile" && !installed) { _machine.Bus.InstallProFile(slot); }
+            if (card == "empty" && installed) { _machine.Bus.RemoveProFile(slot); }
+        }
+
+        return problems;
     }
 
     private JsonObject VideoState() => new JsonObject
@@ -696,6 +779,15 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         };
 
         target.SetSound(args.String("sound") ?? "speaker");
+        foreach ((int slot, string? image) in ProFileMedia.LaunchCards(args, "1 to 4"))
+        {
+            target.HardwareAction($"slot{slot}", "addProFile", []);
+            if (image is not null && machine.Bus.ProFileIn(slot) is { } card)
+            {
+                ProFileMedia.Insert(card.Drive, image);
+            }
+        }
+
         if (args["disks"] is JsonArray disks)
         {
             if (disks.Count > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }

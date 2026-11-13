@@ -109,7 +109,9 @@ async function sourceBreakpoints(machine) {
         await type("E", "No workfile is present");
         await type("\r", ">Edit: A(djst");
         await type("I", ">Insert:");
-        for (const line of hello) await type(`${line}\r`, line);
+        // Pasted whole: the machine's typing pace keeps the Editor from losing keys as it scrolls.
+        await request("retro/type", { text: hello.join("\n") + "\n" });
+        await screen(text => hello.every(line => text.includes(line)), "the pasted program");
         await request("retro/key", { code: 3 });
         await screen(text => text.includes(">Edit: A(djst"), "the Editor's prompt");
         await type("Q", "W(rite to a new file name");

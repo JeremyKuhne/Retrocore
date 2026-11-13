@@ -28,8 +28,8 @@ Disks load write-protected. For the Editor and Compiler to write, take the prote
 view (**Unprotect** on the drive). What the machine writes stays in memory, and the image file does not change.
 CONTROL-C, which ends an insertion in the Editor, is the panel's Ctrl+C.
 
-Paste a program into the Editor a few lines at a time: keys pasted faster than a typist types can be lost while the
-Editor scrolls, as Pascal's type-ahead overflows.
+Paste a program into the Editor whole: pasted keys go in at a typist's pace, with a pause after each line, so the
+Editor's type-ahead doesn't overflow as it scrolls.
 
 ## Debugging
 

@@ -389,6 +389,18 @@ internal interface IDebugTarget : IDebugMemory
     bool Key(int code);
 
     /// <summary>
+    ///  Gets how far apart pasted keys go, in the machine's cycles: between keys, and after a RETURN; null to queue
+    ///  them all at once, as the machine's keyboard holds them until a program takes each.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A program that keeps its own type-ahead, as Apple Pascal's Editor does, can lose keys that come faster than
+    ///   it empties it, such as while it scrolls after a line.
+    ///  </para>
+    /// </remarks>
+    (ulong Key, ulong Line)? TypingPace => null;
+
+    /// <summary>
     ///  Presses the machine's reset: CONTROL-RESET on the IIe, the reset button on the Model I.
     /// </summary>
     void Reset();

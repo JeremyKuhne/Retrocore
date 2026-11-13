@@ -341,6 +341,15 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
+    ///   About 30 ms a key and 300 ms after a line, at the III's 2 MHz: SOS takes each key into its type-ahead buffer
+    ///   at once, which overflows if a pasted program comes faster than Apple III Pascal's Editor reads it.
+    ///  </para>
+    /// </remarks>
+    public (ulong Key, ulong Line)? TypingPace => (60_000, 600_000);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
     ///   CONTROL-RESET: the processor and the devices a reset reaches restart, keeping RAM and the VIAs.
     ///  </para>
     /// </remarks>

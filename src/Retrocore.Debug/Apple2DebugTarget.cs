@@ -899,6 +899,15 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   About 30 ms a key and 300 ms after a line, at the II's 1.02 MHz: Apple Pascal's Editor takes keys into its
+    ///   own type-ahead, which overflows if a pasted program comes faster.
+    ///  </para>
+    /// </remarks>
+    public (ulong Key, ulong Line)? TypingPace => (30_000, 300_000);
+
+    /// <inheritdoc/>
     public void Reset()
     {
         _machine.Reset();

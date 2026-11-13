@@ -791,8 +791,9 @@ the panel's width instead; sharp falls back to it when the panel is too small fo
 The panel remembers the choice.
 
 **Screen** picks the machine's monitor: **Color** on the Apple II family and the Apple
-III, or a monochrome monitor of the time, **Black and white**, **Green** or **Amber**, on
-any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
+III, **Color RGB** on a IIe (an RGB card's monitor: hi-res in solid colors with no
+fringing, and white text), or a monochrome monitor of the time, **Black and white**,
+**Green** or **Amber**, on any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
 own, so double hi-res text and the mouse desktops are sharp instead of smeared into
 color; on the others it lights the picture in the phosphor's color. The `screen` launch
 option sets where a session starts; once you pick one in the panel, the panel keeps it

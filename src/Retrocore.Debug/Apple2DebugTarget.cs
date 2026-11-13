@@ -261,7 +261,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
         if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
-        if (args.String("screen") is { } screen) { machine.Bus.Video.Monitor = ParseScreen(screen); }
+        if (args.String("screen") is { } screen) { target.Screen = screen; }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
         target.FastDisk = args.Bool("fastDisk") ?? true;
         target.StartControllers(args);
@@ -389,7 +389,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> Screens => DebugScreens.WithColor;
+    /// <remarks>
+    ///  <para>
+    ///   The IIe adds an RGB monitor, through an RGB card in its auxiliary slot.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<string> Screens => _model.IsIIe() ? DebugScreens.WithRgb : DebugScreens.WithColor;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -399,18 +404,27 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// </remarks>
     public string Screen
     {
-        get => _machine.Bus.Video.Monitor.ToString().ToLowerInvariant();
-        set => _machine.Bus.Video.Monitor = ParseScreen(value);
+        get => _machine.Bus.Video.Monitor switch
+        {
+            Apple2Monitor.ColorRgb => DebugScreens.Rgb,
+            Apple2Monitor.Green => DebugScreens.Green,
+            Apple2Monitor.Amber => DebugScreens.Amber,
+            Apple2Monitor.White => DebugScreens.White,
+            _ => DebugScreens.Color
+        };
+
+        set => _machine.Bus.Video.Monitor = ParseScreen(DebugScreens.Require(value, Screens));
     }
 
     // The launch's and the panel's names for the monitors.
     private static Apple2Monitor ParseScreen(string screen) => screen switch
     {
-        "color" => Apple2Monitor.Color,
-        "green" => Apple2Monitor.Green,
-        "amber" => Apple2Monitor.Amber,
-        "white" => Apple2Monitor.White,
-        _ => throw new ArgumentException("screen must be color, white, green or amber.")
+        DebugScreens.Color => Apple2Monitor.Color,
+        DebugScreens.Rgb => Apple2Monitor.ColorRgb,
+        DebugScreens.Green => Apple2Monitor.Green,
+        DebugScreens.Amber => Apple2Monitor.Amber,
+        DebugScreens.White => Apple2Monitor.White,
+        _ => throw new ArgumentException("screen must be color, rgb, white, green or amber.")
     };
 
     // apple2/sound: changes what the panel hears while running, as the launch's sound option does.

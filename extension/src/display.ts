@@ -82,8 +82,8 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <div class="strip"><div><div id="status"></div><div id="disk"></div></div>
 <span class="tools">
 <button id="scale" title="Sharp: each dot a whole number of screen pixels, as large as fits. Fit: fills the panel's width.">Scale: sharp</button>
-<label class="speed" id="screenChoice" hidden title="The monitor: color, or a monochrome monitor of the time; on an Apple II it shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
-<option value="color">Color</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
+<label class="speed" id="screenChoice" hidden title="The monitor: color, a IIe's RGB card and monitor (Color RGB: solid colors without fringing), or a monochrome monitor of the time; on an Apple II it shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
+<option value="color">Color</option><option value="rgb">Color RGB</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
 </select></label>
 <label data-machine="apple2 apple3" title="Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
 <label id="details" title="While stopped, marks where the video beam is drawing"><input id="overlay" type="checkbox"> Beam overlay</label>
@@ -220,7 +220,7 @@ window.addEventListener('message',event=>{
 // The monitor: the panel's choice, kept with its state, wins over the launch's, and is sent again to each new session
 // whose machine has that monitor. The menu offers the machine's own monitors, so no color on a monochrome machine.
 const screenSelect=document.getElementById('screenType');
-const screenNames={color:'Color',white:'Black and white',green:'Green',amber:'Amber'};
+const screenNames={color:'Color',rgb:'Color RGB',white:'Black and white',green:'Green',amber:'Amber'};
 let offeredScreens='';
 const chosenScreen=()=>api.getState?.()?.screen;
 if(typeof chosenScreen()==='string')screenSelect.value=chosenScreen();

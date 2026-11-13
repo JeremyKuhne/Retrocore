@@ -86,6 +86,13 @@ try {
     assert.equal(hardware.memory.value, "256 KB, 7 switchable banks");
     assert.deepEqual(devices.devices.map(device => device.id), ["disk1", "disk2", "disk3", "disk4"]);
 
+    // The display panel's requests: the Apple keys, sound, fast disk and the drive lights.
+    assert.deepEqual(await request("apple3/button", { button: 0, pressed: true }), { button: 0, pressed: true });
+    await request("apple3/button", { button: 0, pressed: false });
+    assert.deepEqual(await request("apple3/sound", { mode: "off" }), { mode: "off" });
+    assert.deepEqual(await request("apple3/fastDisk", { enabled: true }), { fastDisk: true });
+    assert.equal(typeof await request("apple3/disk"), "object");
+
     // Banks: the system bank, the switchable ones, the ROM and each X-byte's 64K.
     const banks = (await request("retro/memoryBanks")).banks.map(bank => bank.name);
     assert.deepEqual(banks.slice(0, 10), [null, "system", "bank0", "bank1", "bank2", "bank3", "bank4", "bank5", "bank6", "rom"]);

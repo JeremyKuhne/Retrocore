@@ -31,6 +31,10 @@ internal sealed partial class DebugSession
         "apple2/sound",
         "apple2/button",
         "apple2/fastDisk",
+        "apple3/disk",
+        "apple3/sound",
+        "apple3/button",
+        "apple3/fastDisk",
         "retro/media"
     ];
 

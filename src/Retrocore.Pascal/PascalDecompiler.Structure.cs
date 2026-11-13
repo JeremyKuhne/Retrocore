@@ -78,11 +78,6 @@ public sealed partial class PascalDecompiler
                 }
             }
 
-            if (Environment.GetEnvironmentVariable("DECOMPILE_DEBUG") is not null)
-            {
-                Console.Error.WriteLine($"{procedure}: candidates {string.Join(",", candidates.Select(pair => $"{pair.Key.Offset}={pair.Value}"))} accepted {string.Join(",", accepted.Select(v => v.Offset))} vars {string.Join(",", frame.Variables.Values.Select(v => $"{v.Offset}:{v.Kind}"))}");
-            }
-
             foreach (Variable temporary in accepted) { temporary.Kind = VariableKind.Temporary; }
             if (accepted.Count > 0) { With(procedure.Body, accepted); }
         }

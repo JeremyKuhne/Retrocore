@@ -99,6 +99,9 @@ public sealed partial class PascalDecompiler
             Prologue(body);
             _procedure.Body = body;
 
+            // A GOTO may go to the end of the body: a label before its END.
+            _boundaries.TryAdd(_procedure.Code.Exit, (body, body.Count));
+
             // Each GOTO's target gets its label where a statement starts.
             foreach (int target in _gotos.Distinct().Order())
             {

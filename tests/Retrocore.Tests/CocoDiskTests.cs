@@ -86,6 +86,19 @@ public class CocoDiskTests
     }
 
     /// <summary>
+    ///  A disk with tracks of more sectors than a JVC track holds is not written, rather than losing the rest.
+    /// </summary>
+    [TestMethod]
+    public void JvcRefusesTracksItCannotKeep()
+    {
+        byte[] image = [19, .. new byte[19 * JvcFormat.SectorSize]];
+        FloppyDisk disk = JvcFormat.Read(image);
+        disk.Track(0, 0).Should().HaveCount(19);
+        Action write = () => JvcFormat.Write(disk);
+        write.Should().Throw<InvalidOperationException>().WithMessage("*19 sectors*");
+    }
+
+    /// <summary>
     ///  Runs until the screen's last line with text is OK.
     /// </summary>
     /// <param name="machine">The machine.</param>

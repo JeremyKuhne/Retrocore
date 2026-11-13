@@ -1052,6 +1052,9 @@ internal sealed partial class DebugSession
         for (int count = 0; count < 1_000_000; count++)
         {
             if (!Execute()) { return; }
+
+            // While the CPU is idle no instruction has finished, so the step neither ends nor meets a breakpoint.
+            if (!Target.IsInstructionBoundary) { continue; }
             DebugFrame r = Target.Frame;
             DebugPosition? now = _debug.Position(Target, r.ProgramCounter);
 
@@ -1138,8 +1141,9 @@ internal sealed partial class DebugSession
             if (instruction && Target.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
 
             // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
-            // instruction is observed once the CPU goes on.
-            if (Target.IsIdle) { return true; }
+            // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
+            // made its writes, so the watchpoints they hit stop now.
+            if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");

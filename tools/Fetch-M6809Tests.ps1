@@ -1,13 +1,13 @@
 # Requires PowerShell 7, gh, and git. Downloads only the approved MC6809 test programs and license
 # into the external processor-test cache; GPL files are never copied into the workspace.
 param(
-    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path $env:USERPROFILE 'Retrocore' }) 'processor-tests')
+    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'processor-tests')
 )
 
 $ErrorActionPreference = 'Stop'
 $Cache = [System.IO.Path]::GetFullPath($Cache)
 $repo = [System.IO.Path]::GetFullPath((Split-Path $PSScriptRoot))
-if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo\", [StringComparison]::OrdinalIgnoreCase)) {
+if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
     throw 'External GPL fixtures must not be cached in the workspace.'
 }
 
@@ -27,7 +27,7 @@ $files = @(($treeJson | ConvertFrom-Json).tree | Where-Object {
 if ($files.Count -ne 4) { throw "Unexpected MC6809 fixture manifest: $($files.Count) files." }
 
 foreach ($file in $files) {
-    $path = Join-Path $root ($file.path.Replace('/', '\'))
+    $path = Join-Path $root ($file.path.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
     New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
     if (-not (Test-Path -LiteralPath $path)) {
         $temporary = "$path.download"

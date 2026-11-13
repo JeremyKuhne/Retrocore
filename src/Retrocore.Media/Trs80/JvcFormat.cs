@@ -86,7 +86,9 @@ public static class JvcFormat
     /// </summary>
     /// <param name="disk">The disk.</param>
     /// <returns>The image.</returns>
-    /// <exception cref="InvalidOperationException">A track does not hold sectors 1-18 of 256 bytes.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  A track does not hold exactly sectors 1-18 of 256 bytes, so the image could not keep all of it.
+    /// </exception>
     public static byte[] Write(FloppyDisk disk)
     {
         ArgumentNullException.ThrowIfNull(disk);
@@ -101,6 +103,12 @@ public static class JvcFormat
             for (int side = 0; side < sides; side++)
             {
                 IReadOnlyList<FloppySector> sectors = disk.Track(cylinder, side);
+                if (sectors.Count != SectorsPerTrack)
+                {
+                    throw new InvalidOperationException(
+                        $"Track {cylinder} side {side} has {sectors.Count} sectors, not a JVC track's {SectorsPerTrack}.");
+                }
+
                 for (int number = 1; number <= SectorsPerTrack; number++)
                 {
                     FloppySector? sector = sectors.FirstOrDefault(candidate => candidate.Sector == number);

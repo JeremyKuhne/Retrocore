@@ -80,7 +80,7 @@ internal static class ExternalTestData
             throw new InvalidDataException($"Fixture missing from pinned manifest: {relativePath}.");
         }
 
-        string local = flatten ? relativePath[(relativePath.LastIndexOf('/') + 1)..] : relativePath.Replace('/', '\\');
+        string local = flatten ? relativePath[(relativePath.LastIndexOf('/') + 1)..] : relativePath.Replace('/', Path.DirectorySeparatorChar);
         byte[] bytes = File.ReadAllBytes(Path.Join(root, local));
         using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
         hash.AppendData(Encoding.UTF8.GetBytes($"blob {bytes.Length}\0"));

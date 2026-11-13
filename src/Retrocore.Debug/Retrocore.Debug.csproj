@@ -35,6 +35,7 @@
     <None Include="..\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Sdk\Roms\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\*.asm" Link="Sdk\Roms\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Pascal\Pcode.asm" Link="Sdk\Pascal\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Sdk\Roms\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\BusinessBasic\*.asm" Link="Sdk\Roms\Apple3\BusinessBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\Kernel\*.asm" Link="Sdk\Roms\Apple3\Sos\Kernel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

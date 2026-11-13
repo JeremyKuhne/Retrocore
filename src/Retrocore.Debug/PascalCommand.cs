@@ -18,6 +18,11 @@ namespace Retrocore.Debug;
 ///   A disk is an Apple II Pascal volume or an Apple III SOS volume, as a <c>.dsk</c>, <c>.po</c> or <c>.woz</c> image.
 ///  </para>
 ///  <para>
+///   <c>--pascal disassemble code output.asm</c> writes the code file as p-code source (see
+///   <see cref="PcodeSourceWriter"/>) and checks it assembles back to the same bytes; <c>--pascal assemble source
+///   output.code</c> assembles such a source.
+///  </para>
+///  <para>
 ///   <c>--pascal catalog disk [--json]</c> lists the files. <c>--pascal extract disk NAME output [--raw]</c> writes
 ///   one, a text file as plain text unless <c>--raw</c>. <c>--pascal segments code</c> lists a code file's segments
 ///   and procedures, and <c>--pascal disassemble code [SEGMENT[.PROCEDURE]]</c> disassembles them: p-code as p-code,
@@ -36,7 +41,8 @@ internal static class PascalCommand
         Usage: --pascal catalog disk [--json]
                --pascal extract disk NAME output [--raw]
                --pascal segments (file.code | disk NAME)
-               --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
+               --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE] | output.asm]
+               --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code
@@ -57,7 +63,9 @@ internal static class PascalCommand
                 ["catalog", string disk, .. string[] rest] => Catalog(disk, rest.Contains("--json")),
                 ["extract", string disk, string name, string output, .. string[] rest] => Extract(disk, name, output, rest.Contains("--raw")),
                 ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
+                ["disassemble", .. string[] rest] when rest.Length > 0 && IsSource(rest[^1]) => DisassembleToSource(rest),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
+                ["assemble", string source, string output] => Assemble(source, output),
                 ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
                 ["decompile", .. string[] rest] => Decompile(rest),
                 ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output),
@@ -162,6 +170,56 @@ internal static class PascalCommand
         }
 
         return PascalCodeFile.Read(data);
+    }
+
+    private static bool IsSource(string path) =>
+        Path.GetExtension(path).ToUpperInvariant() is ".ASM" or ".S";
+
+    // Writes a code file as p-code source, then assembles the source to check it gives the same bytes.
+    private static int DisassembleToSource(string[] args)
+    {
+        string output = args[^1];
+        string[] input = args[..^1];
+        byte[] data = input switch
+        {
+            [string disk, string name] when IsDisk(disk) => Open(disk).Read(name),
+            [string path] => File.ReadAllBytes(path),
+            _ => throw new ArgumentException(Usage)
+        };
+
+        PcodeSource source = PcodeSourceWriter.Write(data);
+        File.WriteAllText(output, source.Text);
+        foreach (string note in source.Notes) { Console.WriteLine($"note: {note}"); }
+
+        byte[] assembled = AssembleCodeFile(output);
+        int differences = Enumerable.Range(0, Math.Min(data.Length, assembled.Length)).Count(index => data[index] != assembled[index]);
+        if (differences == 0 && assembled.Length == data.Length)
+        {
+            Console.WriteLine($"Wrote {output}; it assembles to the same {data.Length} bytes.");
+            return 0;
+        }
+
+        int first = Enumerable.Range(0, Math.Min(data.Length, assembled.Length)).FirstOrDefault(index => data[index] != assembled[index]);
+        Console.WriteLine($"Wrote {output}, but it assembles to {assembled.Length} bytes for {data.Length}, {differences} differing, the first at ${first:X4}.");
+        return 1;
+    }
+
+    // Assembles p-code source into a code file.
+    private static int Assemble(string source, string output)
+    {
+        byte[] code = AssembleCodeFile(source);
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes in {code.Length / 512} blocks.");
+        return 0;
+    }
+
+    // A code file source's bytes: from address 0, to the last byte it writes.
+    private static byte[] AssembleCodeFile(string source)
+    {
+        AssemblyResult result = SourceBuild.Assemble(source, dialect: null, cpu: "Mos6502", origin: 0, linkerConfiguration: null);
+        (int address, ReadOnlyMemory<byte> bytes) = SourceBuild.Emitted(result).Single();
+        if (address != 0) { throw new InvalidDataException("A code file's source starts at address 0."); }
+        return bytes.ToArray();
     }
 
     // Two code files, each a path or a disk and a name.

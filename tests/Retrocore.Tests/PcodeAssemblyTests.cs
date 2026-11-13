@@ -3,6 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Media;
+using Retrocore.Pascal;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
 namespace Retrocore.Tests;
@@ -66,6 +68,125 @@ public class PcodeAssemblyTests
             0,
             172, 0xEE, 1, 0, 2, 0);
     }
+
+    /// <summary>
+    ///  P1's code file, written by <see cref="PcodeSourceWriter"/>, assembles back to the same bytes.
+    /// </summary>
+    [TestMethod]
+    public void WrittenSourceAssemblesBack()
+    {
+        byte[] original = PascalDecompilerTests.P1Bytes;
+        PcodeSource source = PcodeSourceWriter.Write(original, include: "\"Pcode.asm\"");
+
+        source.Notes.Should().BeEmpty();
+        source.Text.Should().Contain(".scope P2").And.Contain("Attributes: .byte 2, 1");
+        Assemble(source.Text).Should().Equal(original);
+    }
+
+    /// <summary>
+    ///  An assembled procedure is written as 6502 code under <c>.cpu Mos6502</c>: an operand its procedure-relative
+    ///  relocation list names is an offset from its entry, by label, and the list names the operand's instruction.
+    /// </summary>
+    [TestMethod]
+    public void AssembledProceduresAreWrittenAs6502()
+    {
+        byte[] original = Assemble(MixedSource);
+        PascalCodeFile.Read(original).Segments.Single().Procedure(2).Should().Match<PascalProcedure>(procedure => procedure.IsNative);
+
+        PcodeSource source = PcodeSourceWriter.Write(original, include: "\"Pcode.asm\"");
+
+        source.Notes.Should().BeEmpty();
+        string text = source.Text;
+        text.Should().Contain("        .cpu Mos6502");
+        text.Should().Contain("lda.w L0004 - Entry", "the operand is relocated: an offset from the entry");
+        text.Should().Contain(".word * - (Entry + 1)", "the relocation list names the operand's instruction");
+        text.Should().Contain("        .cpu Pcode");
+        Assemble(source.Text).Should().Equal(original);
+    }
+
+    /// <summary>
+    ///  Every code file on Apple Pascal's disks is written as source that assembles back to the same bytes; a system
+    ///  segment whose procedures are elsewhere is written as data.
+    /// </summary>
+    [TestMethod]
+    public void EveryCodeFileOnTheDisksAssemblesBack()
+    {
+        EnumerationOptions anyCase = new() { MatchCasing = MatchCasing.CaseInsensitive };
+        string[] disks = Directory.Exists(PascalMediaTests.Apple2Disks) ? Directory.GetFiles(PascalMediaTests.Apple2Disks, "*.dsk", anyCase) : [];
+        if (disks.Length == 0)
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal's disks.");
+        }
+
+
+        int files = 0;
+        foreach (string disk in disks)
+        {
+            PascalVolume volume = PascalVolume.Read(File.ReadAllBytes(disk), proDosOrder: false);
+            foreach (PascalFileEntry entry in volume.Files.Where(file => file.Kind == PascalFileKind.Code))
+            {
+                byte[] original = volume.ReadFile(entry);
+                if (!PascalCodeFile.IsCodeFile(original)) { continue; }
+
+                PcodeSource source = PcodeSourceWriter.Write(original, include: "\"Pcode.asm\"");
+                Assemble(source.Text).Should().Equal(original, $"{Path.GetFileName(disk)} {entry.Name} assembles back");
+                files++;
+            }
+        }
+
+        files.Should().BeGreaterThan(0);
+    }
+
+    // A code file's source assembled, to the last byte it writes.
+    private static byte[] Assemble(string text)
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(new AssemblySource(text, Path.Join(s_inputs, "code.asm")), Options());
+        result.Diagnostics.Should().BeEmpty();
+        int end = result.SourceMap.Where(entry => entry.Size != 0).Max(entry => entry.Offset + entry.Size);
+        return result.Sections[0].Bytes.Span[..end].ToArray();
+    }
+
+    // A code file of one segment: procedure 1, p-code, calls procedure 2, assembled 6502 code that loads a word of its
+    // own through a procedure-relative operand, and keeps a procedure-relative word as data.
+    private const string MixedSource = """
+                .include "Pcode.asm"
+                .word Segment0 / 512, Segment0End - Segment0
+                .res 60, 0
+                .byte "MIXED   "
+                .res 120, 0
+                .res 64, 0
+                .word (2 << 13) | (2 << 8) | 1
+                .res 254, 0
+        Segment0:
+        .scope Seg0
+                .cpu Mos6502
+        .scope P2
+        Entry:  lda.w Value - Entry
+                rts
+        Value:  .word Value - Entry
+                .word 0
+                .word * - (Entry + 1), * - Value
+                .word 2
+                .word 0
+                .word 0
+                .word * - Entry
+        Attributes: .byte 0, 1
+        .endscope
+                .cpu Pcode
+        .scope P1
+        Entry:  CLP 2
+        Exit:   RBP 0
+                .word 4, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 1, 0
+        .endscope
+                .word * - P2::Attributes
+                .word * - P1::Attributes
+                .byte 1, 2
+        .endscope
+        Segment0End:
+                .align 512, 0
+        """;
 
     // The whole 64K from address 0, so blocks and words align as the code file's do, with Pcode.asm from Inputs.
     private static AssemblyOptions Options() => new(ProcessorVariant.Mos6502, origin: 0, imageSize: 0x10000)

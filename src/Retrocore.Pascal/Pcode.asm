@@ -1,5 +1,8 @@
 ;; P-code for Apple Pascal (UCSD Pascal II.1): a macro for each p-code, which assembles to its bytes.
 ;;
+;; The debug host keeps it in its SDK folder, so a source includes it as .include <Pascal/Pcode.asm>; the sources
+;; --pascal disassemble writes do.
+;;
 ;; They are defined under .cpu Pcode, and expand only under it: an assembled procedure in the same file is written
 ;; under .cpu Mos6502, where p-code's LDA, INC, NOP and STP are the 6502's again.
 

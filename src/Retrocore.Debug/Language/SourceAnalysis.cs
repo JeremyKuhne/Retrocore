@@ -129,6 +129,7 @@ internal sealed partial class SourceAnalysis
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
             SourceResolver = resolver,
+            SdkPaths = [SdkModules.SdkDirectory],
             BuildTime = DateTimeOffset.UnixEpoch
         };
 

@@ -1,7 +1,8 @@
 # Backlog: p-code disassembly and reassembly
 
 Status: **asked for 2026-11-13**, as the backlog to follow the decompiler ("I want a backlog of p-code
-disassembly/reassembly"). Not started. [Pascal.md](../Pascal.md#decompiling) is the guide to what is built: the
+disassembly/reassembly"). **Built** the same day: `--pascal disassemble code output.asm` and `--pascal assemble`
+([Pascal.md](../Pascal.md#p-code-source)); see Built. [Pascal.md](../Pascal.md#decompiling) is the guide to what is built: the
 decompiler, `--pascal compile` and `--pascal compare`.
 
 A decompiled source compiles to the same code only where the Compiler's patterns cover the code. A p-code source
@@ -48,6 +49,24 @@ assembles P1's whole code file this way.
   (`::Name:`), so each segment's start and end labels sit just outside its scope.
 - `--assemble` writes the image to `$FFFF`; `--pascal assemble` should write only the code file's bytes.
 - An error inside a macro names the macro's line, not the line that called it, which makes a bad p-code hard to find.
+
+## Built
+
+- `PcodeSourceWriter` writes a code file as source: p-code with `Pcode.asm`'s macros, assembled procedures as 6502
+  code with their relocated operands and relocation lists by label, and data where it cannot read a segment.
+  `--pascal disassemble code output.asm` writes it and assembles it back to check; `--pascal assemble` writes a code
+  file from it, to the last byte the source writes.
+- `Pcode.asm` ships as `Sdk/Pascal/Pcode.asm`; the CLI and the language server search the host's SDK folder for
+  `.include <...>`.
+- **Checked:** all 69 code files on the Apple Pascal 1.0, 1.1 and 1.2 and Apple III Pascal 1.1 and 1.2 disks at hand
+  assemble back byte-identically; the system's stub segments (SYSTEM.PASCAL's and the `PASCALSY` stubs at the head of
+  Apple III Pascal's Editor and Linker) are written as data. `PcodeAssemblyTests`.
+- **Found:** a relocated operand can point inside a data word (FORMATTER's RWTS call reads its IOB pointer's high
+  byte), so such a target is named from the word (`L0598 + 1`); and a target inside an instruction, as in the
+  damaged code of Apple Pascal 1.2's `SYSTEM.EDITOR`, is too, in parentheses where it is subtracted.
+- **Not done:** names beyond `L0598` and `P2`: the library's unit names, `CXP 0, 19` as `FWRITESTRING`, a listing's
+  names, and hints as the 6502 disassembler takes; a macro's errors at the line that called it; writing to a disk
+  image.
 
 ## The pieces
 

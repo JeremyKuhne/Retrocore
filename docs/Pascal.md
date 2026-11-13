@@ -125,8 +125,9 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal catalog disk` lists the files;
 - `--pascal extract disk NAME output` copies one out, a text file as plain text (`--raw` keeps Pascal's format);
 - `--pascal segments code` lists a code file's segments and procedures;
-- `--pascal disassemble code [SEGMENT[.PROCEDURE]]` disassembles its p-code, and its assembled procedures as 6502
-  code;
+- `--pascal disassemble code [SEGMENT[.PROCEDURE]]` lists its p-code, and its assembled procedures as 6502 code;
+- `--pascal disassemble code output.asm` writes the whole code file as source that assembles back to the same bytes,
+  and checks it does (below); `--pascal assemble source.asm output.code` assembles such a source;
 - `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
   above.
 - `--pascal decompile code [--library library] [output.text]` decompiles a program back to Pascal (below);
@@ -179,6 +180,36 @@ units of a program's own (they need the Linker); a unit's variables; assembled p
 `EXTERNAL`; and `SCAN`, `IDSEARCH` and `TREESEARCH`. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
+## P-code source
+
+`--pascal disassemble code output.asm` writes a code file as source for the native assembler, and assembles it to
+check that it gives the same bytes, exiting 0 when it does. `--pascal assemble` turns such a source, edited or not,
+back into a code file:
+
+```text
+Retrocore.Debug --pascal disassemble APPLE3.dsk FORMATTER.CODE formatter.asm
+Retrocore.Debug --pascal assemble formatter.asm FORMATTER.CODE
+```
+
+The source says every byte of the file, from address 0:
+
+- **P-code** is written with the macros of [`Pcode.asm`](../src/Retrocore.Pascal/Pcode.asm), which the source
+  includes from the debug host's SDK as `.include <Pascal/Pcode.asm>`: `LDL 3`, `CXP 0, 19`, `CSP IOC`,
+  `LSA "TEXT"`, one macro to a p-code. They are defined under `.cpu Pcode`, which has no instructions of its own.
+- **Layout:** the segment dictionary in block 0, then each segment from its block, as a `.scope`, and each procedure
+  as a scope inside it. Jumps go to labels; a jump back, or one too far for a byte, goes through the procedure's jump
+  table (`UJPT T0542`). Jump tables, a procedure's entry and exit, and the procedure dictionary are self-relative
+  words written as label arithmetic (`.word * - Exit`), so code can move.
+- **Assembled procedures** are 6502 code under `.cpu Mos6502`, where p-code's `LDA`, `INC`, `NOP` and `STP` are the
+  6502's again. An operand the procedure's relocation list names is an offset from its entry, written
+  `lda.w L059A - Entry`, and the list names each such operand by its instruction's label.
+- **What it cannot read** it writes as data, with a note: the system's stub segments, whose procedures are elsewhere.
+  The byte the Compiler skips to put an operand on a word is kept as it is.
+
+Every code file on Apple Pascal's and Apple III Pascal's disks, the system's own programs among them, is written so
+and assembles back byte-identically. Hovers in the editor show a p-code's macro on a p-code line and the 6502's
+instruction on a 6502 line.
+
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.
@@ -188,6 +219,8 @@ compiles the same only with that Compiler.
   1.2 on the IIe. Apple III Pascal's disks are with the other Apple III disks
   (`RETROCORE_APPLE3_DISKS`), and Apple Pascal's in `RETROCORE_APPLE2_PASCAL_DISKS` (by default
   `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk` and `1.2_0.DSK` to `1.2_3.DSK`).
+- `PcodeAssemblyTests` assemble p-code source: a small code file of the tests' own with an assembled procedure, and,
+  with Apple Pascal's disks, every code file on them, written by `--pascal disassemble`'s writer.
 - `PascalDecompilerTests` decompile two small programs kept as code files; with Apple Pascal's disks, each sample
   program on APPLE3 is decompiled, compiled again on an emulated Apple II, and compared with the original.
 - `node tools/Test-PascalDap.mjs` drives the debug host on both machines, and on the Apple III compiles a program

@@ -79,4 +79,11 @@ internal struct LayoutContext
     ///  Gets or sets the .sizeof symbols that receive the size of the statement at a given line, when any exist.
     /// </summary>
     internal Dictionary<int, int>? LabelSizes { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the .res and .org statements this pass placed at their current address because their target
+    ///  was behind it, which instructions that later shrink can explain. Those still listed once the layout is
+    ///  stable are errors: the line and its message.
+    /// </summary>
+    internal List<(int Line, string Message)>? Clamped { get; set; }
 }

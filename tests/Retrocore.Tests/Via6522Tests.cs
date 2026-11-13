@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Chips;
 
 namespace Retrocore.Tests;
 
@@ -10,7 +10,7 @@ namespace Retrocore.Tests;
 ///  Directed VIA register, timer, interrupt, handshake and shift tests.
 /// </summary>
 [TestClass]
-public class Apple2ViaTests
+public class Via6522Tests
 {
     /// <summary>
     ///  Verifies timed one-shots expire at N+2 and remain masked until enabled.

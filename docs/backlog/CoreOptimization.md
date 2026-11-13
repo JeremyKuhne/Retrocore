@@ -82,6 +82,7 @@ and storing a record every cycle cost the Z80 about 30%. Keep new cores and loop
 | Move RDY's whole-state `before` copy into a separate stall path | 0% | The JIT already avoided it. |
 | Drop the per-cycle placeholder record (every running cycle reads or writes) | 0 to −5% | |
 | Record bus activity as plain fields, build `LastCycle` on request (the Z80's +32%) | +1.5–3% | Below the threshold; the 6502 builds one record per access, not per call. |
+| Tell `IOpcodeFetchBus` buses their fetches through a `static readonly` flag per bus type (2026-11-12, the Apple III) | −8% on a class bus in every read, −3.5% in the fetch alone | Class buses share one copy of the generic code, where the static is a lookup. Kept instead: an instance field holding the bus as `IOpcodeFetchBus`, checked only at the fetch, −0.6% (noise). |
 
 ### Headroom
 

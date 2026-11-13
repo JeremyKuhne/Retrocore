@@ -375,6 +375,57 @@ public class AssemblerSpanTests
     }
 
     /// <summary>
+    ///  Padding to an address with .res or .org works when the counter is past that address only until forward
+    ///  references to zero page shrink, as for a module placed in a file after one whose code ends there.
+    /// </summary>
+    /// <param name="padding">The padding statement.</param>
+    [TestMethod]
+    [DataRow(".res $2004 - *")]
+    [DataRow(".org $2004")]
+    public void PaddingAllowsCodeThatShrinks(string padding)
+    {
+        NativeAssembler assembler = new();
+        AssemblyResult result = assembler.Assemble(
+            new AssemblySource(string.Join(
+                '\n',
+                ".logicalorg $1E00",
+                "lda Later",
+                "lda Later",
+                ".logicalorg",
+                padding,
+                ".byte $EE",
+                "Later = $10")),
+            new(ProcessorVariant.Mos6502, origin: 0x2000, imageSize: 5));
+
+        result.Diagnostics.Should().BeEmpty();
+        result.Sections[0].Bytes.ToArray().Should().Equal(0xA5, 0x10, 0xA5, 0x10, 0xEE);
+    }
+
+    /// <summary>
+    ///  Padding to an address the final layout has already passed is still an error.
+    /// </summary>
+    /// <param name="padding">The padding statement.</param>
+    /// <param name="message">The expected diagnostic fragment.</param>
+    [TestMethod]
+    [DataRow(".res $2003 - *", "exceeds the current section")]
+    [DataRow(".org $2003", "cannot overlap or move backwards")]
+    public void PaddingBehindTheFinalLayoutIsDiagnosed(string padding, string message)
+    {
+        NativeAssembler assembler = new();
+        AssemblyResult result = assembler.Assemble(
+            new AssemblySource(string.Join(
+                '\n',
+                "lda Later",
+                "lda Later",
+                padding,
+                ".byte $EE",
+                "Later = $10")),
+            new(ProcessorVariant.Mos6502, origin: 0x2000, imageSize: 8));
+
+        result.Diagnostics.Single().Message.Should().Contain(message);
+    }
+
+    /// <summary>
     ///  Checks parsing reports every invalid line rather than stopping at the first.
     /// </summary>
     [TestMethod]

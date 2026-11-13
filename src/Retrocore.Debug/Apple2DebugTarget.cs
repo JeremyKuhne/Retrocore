@@ -560,7 +560,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public InstructionSet InstructionSet => M6502Isa.Get(_model.Processor());
 
     /// <inheritdoc/>
-    public bool Traps(ushort address) => Peek(address) == BrkOpcode;
+    public string? Trap(ushort address) => Peek(address) == BrkOpcode ? $"BRK at ${address:X4}." : null;
 
     /// <inheritdoc/>
     public bool HasBeam => true;
@@ -822,7 +822,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
-    public void Key(int code) => _machine.Bus.QueueKey((byte)code);
+    public bool Key(int code)
+    {
+        _machine.Bus.QueueKey((byte)code);
+        return true;
+    }
 
     /// <inheritdoc/>
     public void Reset()

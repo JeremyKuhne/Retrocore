@@ -95,6 +95,19 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
+    /// <summary>
+    ///  The Apple III's ROM source passes the lint as the editor runs it, with its equates file.
+    /// </summary>
+    [TestMethod]
+    public void Apple3DocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Apple3");
+        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        sdk.Select(analysis => Path.GetFileName(analysis.Root)).Should().Contain("BootRom.asm");
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
     private static readonly string[] s_sdkFolders = ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
 
     // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.

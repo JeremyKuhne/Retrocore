@@ -23,18 +23,40 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     /// <param name="drive">One or two.</param>
     /// <param name="slot">The slot of the card.</param>
     internal Apple2FloppyDrive(DiskIIController controller, int drive, int slot = 6)
+        : this(
+            controller,
+            drive,
+            // Slot six's drives keep the names they had when it was the only slot with a Disk II.
+            slot == 6 ? $"disk{drive}" : $"slot{slot}disk{drive}",
+            slot == 6 ? $"Drive {drive}" : $"Slot {slot}, drive {drive}",
+            "Disk II 5¼-inch floppy drive",
+            $"Disk II controller in slot {slot}") => Slot = slot;
+
+    /// <summary>
+    ///  Constructs a drive for a machine that names its drives itself, as the Apple III does.
+    /// </summary>
+    /// <param name="controller">The controller.</param>
+    /// <param name="drive">The drive, from one.</param>
+    /// <param name="id">The device's identifier.</param>
+    /// <param name="name">The drive's name.</param>
+    /// <param name="description">What the drive is.</param>
+    /// <param name="controllerName">What the controller is.</param>
+    internal Apple2FloppyDrive(
+        DiskIIController controller,
+        int drive,
+        string id,
+        string name,
+        string description,
+        string controllerName)
     {
         _controller = controller;
         Drive = drive;
-        Slot = slot;
-
-        // Slot six's drives keep the names they had when it was the only slot with a Disk II.
-        Id = slot == 6 ? $"disk{drive}" : $"slot{slot}disk{drive}";
+        Id = id;
         Info = new()
         {
-            Name = slot == 6 ? $"Drive {drive}" : $"Slot {slot}, drive {drive}",
-            Description = "Disk II 5¼-inch floppy drive",
-            Controller = $"Disk II controller in slot {slot}",
+            Name = name,
+            Description = description,
+            Controller = controllerName,
             Formats = ["woz", "dsk", "do", "po"],
             Operations = MediaOperations.Insert | MediaOperations.Eject,
             Tracks = 35,

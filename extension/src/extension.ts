@@ -100,6 +100,15 @@ export function activate(context: vscode.ExtensionContext): void {
         return vscode.debug.startDebugging(endedSession.folder, configuration as vscode.DebugConfiguration);
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.display.restart", restart));
+    // Types text into the machine on the display, the clipboard's unless the panel sent its own: Ctrl+V on the
+    // screen and the screen's Paste menu item.
+    const paste = async (text?: string): Promise<void> => {
+        const session = displaySession;
+        if (session === undefined) return;
+        const value = text ?? await vscode.env.clipboard.readText();
+        if (value !== "") await session.customRequest("retro/type", { text: value });
+    };
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.display.paste", () => paste().then(undefined, showError)));
     // For the tests: the name of the ended session the panel offers to restart, if it does.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.display.ended", () =>
         panel !== undefined && displaySession === undefined ? endedSession?.name : undefined));
@@ -244,8 +253,11 @@ export function activate(context: vscode.ExtensionContext): void {
                                 && Number.isInteger(input.button) && input.button >= 0 && input.button <= 1
                                 && "pressed" in input && typeof input.pressed === "boolean") {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("apple2/button", { button: input.button, pressed: input.pressed }).then(undefined, showError);
+                                    void displaySession.customRequest(`${applePrefix(displaySession)}/button`, { button: input.button, pressed: input.pressed }).then(undefined, showError);
                                 }
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "paste") {
+                                // Ctrl+V sends no text, and the clipboard is read here; a paste event sends its own.
+                                void paste("text" in input && typeof input.text === "string" ? input.text : undefined).then(undefined, showError);
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "reset") {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/reset").then(undefined, showError);
@@ -253,12 +265,12 @@ export function activate(context: vscode.ExtensionContext): void {
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "sound"
                                 && "mode" in input && (input.mode === "off" || input.mode === "speaker" || input.mode === "mockingboard")) {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("apple2/sound", { mode: input.mode }).then(undefined, showError);
+                                    void displaySession.customRequest(`${applePrefix(displaySession)}/sound`, { mode: input.mode }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "fastDisk"
                                 && "enabled" in input && typeof input.enabled === "boolean") {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("apple2/fastDisk", { enabled: input.enabled }).then(undefined, showError);
+                                    void displaySession.customRequest(`${applePrefix(displaySession)}/fastDisk`, { enabled: input.enabled }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "speed"
                                 && "speed" in input && (input.speed === "max" || input.speed === 1 || input.speed === 2 || input.speed === 4 || input.speed === 8)) {
@@ -291,6 +303,11 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 interface CycleLine { path: string; line: number; cycles: number; }
+
+/** The prefix of an Apple session's own requests: apple3 for the Apple III, apple2 for the II family. */
+function applePrefix(session: vscode.DebugSession): string {
+    return session.configuration.machine === "apple3" ? "apple3" : "apple2";
+}
 
 /**
  * The display panel's tab icon: a CRT monitor framed in the theme's tab text color, whose screen glows in the

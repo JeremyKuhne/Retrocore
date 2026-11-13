@@ -7,25 +7,48 @@ using Retrocore.Machines.Apple2;
 namespace Retrocore.Debug;
 
 /// <summary>
-///  Tracks observed subroutine and interrupt entry, rather than guessing callers from arbitrary stack bytes.
+///  Tracks observed subroutine and interrupt entry on a 6502, rather than guessing callers from arbitrary stack bytes.
 /// </summary>
+/// <remarks>
+///  <para>
+///   A machine can have more than one stack page, as the IIe's auxiliary zero page or the Apple III's movable stack.
+///   The machine names the stack in use when a call is made, and reads that stack's bytes when the call is checked.
+///  </para>
+/// </remarks>
 internal sealed class DebugCallStack : IDebugCallStack
 {
-    private readonly Apple2Bus _bus;
-    private readonly List<(ProcessorRegisters Caller, ushort Return, byte Stack, int Depth, bool Interrupt, bool Auxiliary)> _calls = [];
+    private readonly Func<int> _currentStack;
+    private readonly Func<int, byte, byte> _readStack;
+    private readonly List<(ProcessorRegisters Caller, ushort Return, byte Stack, int Depth, bool Interrupt, int Page)> _calls = [];
     private ProcessorRegisters _beforeInstruction;
     private ProcessorRegisters? _beforeInterrupt;
     private byte _opcode;
     private bool _instruction;
-    private bool _auxiliary;
+    private int _page;
     private int _interruptWrites;
     private int _depth;
 
     /// <summary>
-    ///  Creates the tracker for a IIe.
+    ///  Creates the tracker for an Apple II: the stack is main or auxiliary page one.
     /// </summary>
     /// <param name="bus">The machine's memory, whose stack page holds the return addresses.</param>
-    internal DebugCallStack(Apple2Bus bus) => _bus = bus;
+    internal DebugCallStack(Apple2Bus bus)
+        : this(
+            () => (bus.Switches & Apple2Switches.AltZeroPage) != 0 ? 1 : 0,
+            (page, offset) => (page == 1 ? bus.AuxiliaryMemory : bus.MainMemory)[0x100 | offset])
+    {
+    }
+
+    /// <summary>
+    ///  Creates the tracker for a machine that says which stack is in use and reads it.
+    /// </summary>
+    /// <param name="currentStack">Names the stack in use, as the machine numbers its stacks.</param>
+    /// <param name="readStack">Reads a byte of a stack: the stack's number, then the byte's offset in the page.</param>
+    internal DebugCallStack(Func<int> currentStack, Func<int, byte, byte> readStack)
+    {
+        _currentStack = currentStack;
+        _readStack = readStack;
+    }
 
     /// <inheritdoc/>
     public void Reset()
@@ -58,13 +81,13 @@ internal sealed class DebugCallStack : IDebugCallStack
             _beforeInstruction = before;
             _opcode = cycle.Value;
             _instruction = true;
-            _auxiliary = (_bus.Switches & Apple2Switches.AltZeroPage) != 0;
+            _page = _currentStack();
         }
         else if (!_instruction && wasBoundary && cycle.Operation == BusOperation.Read)
         {
             _beforeInterrupt = before;
             _interruptWrites = 0;
-            _auxiliary = (_bus.Switches & Apple2Switches.AltZeroPage) != 0;
+            _page = _currentStack();
         }
 
         if (!_instruction
@@ -171,7 +194,7 @@ internal sealed class DebugCallStack : IDebugCallStack
     private void Push(ProcessorRegisters caller, byte stack, ushort returnAddress, bool interrupt)
     {
         _depth += interrupt ? 3 : 2;
-        _calls.Add((caller, returnAddress, stack, _depth, interrupt, _auxiliary));
+        _calls.Add((caller, returnAddress, stack, _depth, interrupt, _page));
     }
 
     private void Prune()
@@ -179,10 +202,9 @@ internal sealed class DebugCallStack : IDebugCallStack
         for (int i = _calls.Count - 1; i >= 0; i--)
         {
             var call = _calls[i];
-            ReadOnlySpan<byte> memory = call.Auxiliary ? _bus.AuxiliaryMemory : _bus.MainMemory;
             int offset = call.Interrupt ? 2 : 1;
-            ushort stored = (ushort)(memory[0x100 | (byte)(call.Stack + offset)]
-                    | (memory[0x100 | (byte)(call.Stack + offset + 1)] << 8));
+            ushort stored = (ushort)(_readStack(call.Page, (byte)(call.Stack + offset))
+                    | (_readStack(call.Page, (byte)(call.Stack + offset + 1)) << 8));
 
             ushort expected = call.Interrupt ? call.Return : (ushort)(call.Return - 1);
             if (call.Depth > _depth || _depth - call.Depth >= 256 || stored != expected)

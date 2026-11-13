@@ -46,7 +46,7 @@ async function start(workspace: vscode.WorkspaceFolder, configuration: vscode.De
 export async function testMachineMenu(workspace: vscode.WorkspaceFolder): Promise<void> {
     const configurations = await vscode.commands.executeCommand<vscode.DebugConfiguration[]>("retrocore.machine.configurations");
     assert.deepEqual(configurations.map(configuration => configuration.name), [
-        "Apple IIe (enhanced) (Retrocore)", "Apple IIe (Retrocore)", "Apple II Plus (Retrocore)", "Apple II (Retrocore)",
+        "Apple IIe (enhanced) (Retrocore)", "Apple IIe (Retrocore)", "Apple II Plus (Retrocore)", "Apple II (Retrocore)", "Apple III (Retrocore)",
         "TRS-80 Model I (Level II) (Retrocore)", "TRS-80 Model I (Level I) (Retrocore)"
     ]);
     assert.ok(configurations.every(configuration => configuration.debugHost === undefined), "the packaged host runs them");

@@ -35,13 +35,13 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 .off .name{font-size:12px;color:#b0b0b0}
 .hint{margin-top:4px;font-size:11px;color:var(--vscode-descriptionForeground)}
 </style></head>
-<body><div class="bezel" id="bezel"><div class="display" id="display"><canvas id="screen" tabindex="0" aria-label="The machine's display"></canvas></div>
+<body><div class="bezel" id="bezel"><div class="display" id="display"><canvas id="screen" tabindex="0" aria-label="The machine's display" data-vscode-context='{"webviewSection":"screen","preventDefaultContextMenuItems":true}'></canvas></div>
 <div class="off" id="off" hidden role="status"><div class="title">Machine off</div><div class="name" id="offName"></div>
 <div class="keys"><button id="restart" title="Starts the same launch again, with the cards and disks it last had">Restart</button>
 <button id="startMachine" title="Picks a machine and what it runs: Retrocore: Start Machine">Start Machine…</button>
 <button id="close" title="Closes this panel">Close</button></div></div></div>
 <div class="keys" id="keybar">
-<span class="keys" data-machine="apple2">
+<span class="keys" data-machine="apple2 apple3">
 <button id="ctrl" aria-pressed="false" title="Makes the next letter a control character, as holding CONTROL does (or hold Ctrl)">Ctrl</button>
 <button data-code="3" title="CONTROL-C: stops a BASIC program (or Ctrl+C)">Ctrl-C</button>
 <button id="reset" title="CONTROL-RESET (or Ctrl+F12 or Ctrl+Break); with Open Apple down it restarts the machine">Ctrl-Reset</button>
@@ -60,7 +60,7 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2">
+<span class="keys" data-machine="apple2 apple3">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -68,7 +68,7 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <div class="strip"><div><div id="status"></div><div id="disk"></div></div>
 <span class="tools">
 <button id="scale" title="Sharp: each dot a whole number of screen pixels, as large as fits. Fit: fills the panel's width.">Scale: sharp</button>
-<label data-machine="apple2" title="Runs as fast as it can while a Disk II drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
+<label data-machine="apple2 apple3" title="Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
 <label id="details" title="While stopped, marks where the video beam is drawing"><input id="overlay" type="checkbox"> Beam overlay</label>
 </span></div>
 <div class="hint" id="hint"></div>
@@ -79,7 +79,7 @@ window.addEventListener('error',event=>api.postMessage({error:event.message}));
 const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 fills a 4:3 screen.
-const aspect={'apple2':'280/192','trs80-model1':'4/3'};
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -106,7 +106,7 @@ function draw(frame){
     if(!video||video.pixelFormat!=='rgba'||!(video.width>0)||!(video.height>0)){
         api.postMessage({error:'The display needs an updated debug host and an RGBA frame.'});return;
     }
-    const iie=frame.machine!=='trs80-model1';
+    const iie=frame.machine==='apple2';
     document.getElementById('display').style.aspectRatio=aspect[frame.machine]??aspect['apple2'];
     document.getElementById('text').textContent=frame.rows.join('\\n');
     const ctx=screen.getContext('2d');
@@ -126,6 +126,13 @@ function draw(frame){
     // While running, positions change every frame; they matter once stopped.
     const running=frame.running===true;
     document.getElementById('details').hidden=!iie;
+    if(frame.machine==='apple3'){
+        const drives=frame.disk?frame.disk.drives.filter(drive=>drive.mounted||drive.motor).map(drive=>'.D'+drive.drive
+            +' track '+drive.track.toFixed(0)+(drive.motor?' · motor on':'')):[];
+        document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[]).join(' · ');
+        document.getElementById('disk').textContent=drives.join(' | ');
+        return;
+    }
     if(!iie){
         const media=frame.media;
         const tape=media&&media.cassette.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
@@ -183,7 +190,8 @@ window.addEventListener('message',event=>{
     off.hidden=true;
     const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model;
     lastFrame=event.data;draw(lastFrame);
-    if(typeof lastFrame?.mockingboard==='boolean')mockingboard=lastFrame.mockingboard;
+    // A frame without it, as the Apple III's, is a machine with no Mockingboard.
+    mockingboard=lastFrame?.mockingboard===true;
     if(typeof lastFrame?.sound==='string')showSound(lastFrame.sound);
     if(changed)showKeys();
 });
@@ -268,11 +276,13 @@ overlay.addEventListener('change',()=>{
 // Each machine's codes for its special keys: the Model I has arrows, CLEAR (Home) and BREAK (Escape).
 const keys={
     'apple2':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
+    'apple3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
     'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
-    'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset'
+    'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
+    'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -283,7 +293,7 @@ const ctrl=document.getElementById('ctrl');
 // Sharp scaling: each dot a whole number of physical pixels across and down, keeping the screen's shape. The IIe's
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
 // screen (768x576). Sizes are in CSS pixels for the display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'trs80-model1':[768,576]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576]};
 function sharpSize(machine,width,height,ratio){
     const [w,h]=sharpBase[machine]??sharpBase['apple2'];
     const scale=Math.floor(Math.min(width*ratio/w,height*ratio/h));
@@ -317,11 +327,17 @@ function watchRatio(){
 watchRatio();
 function showKeys(){
     layout();
-    for(const group of document.querySelectorAll('[data-machine]'))group.hidden=group.dataset.machine!==machine();
+    for(const group of document.querySelectorAll('[data-machine]'))group.hidden=!group.dataset.machine.split(' ').includes(machine());
     const hint=board()?boardHint:(hints[machine()]??'');
-    document.getElementById('hint').textContent=hint+' · F1-F11 and Ctrl+Shift+P stay with VS Code';
-    // The Apple keys' buttons name what they are on this model.
-    const names=board()?['Button 0','Button 1']:['Open Apple','Closed Apple'];
+    document.getElementById('hint').textContent=hint+' · right-click or Shift+Insert: paste · F1-F11 and Ctrl+Shift+P stay with VS Code';
+    // The Apple keys' buttons name what they are on this model: the Apple III's second is Solid Apple, and its
+    // CONTROL-RESET has no Open Apple variant, nor its sound a Mockingboard.
+    const three=machine()==='apple3';
+    const names=board()?['Button 0','Button 1']:three?['Open Apple','Solid Apple']:['Open Apple','Closed Apple'];
+    document.getElementById('reset').title=three?'CONTROL-RESET (or Ctrl+F12 or Ctrl+Break)'
+        :'CONTROL-RESET (or Ctrl+F12 or Ctrl+Break); with Open Apple down it restarts the machine';
+    document.getElementById('sound').title=three?'What you hear while the machine runs at its real speed: off, or the speaker and the DAC'
+        :'What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)';
     for(const button of [0,1]){
         const element=document.querySelector('[data-button="'+button+'"]');
         if(!element)continue;
@@ -355,7 +371,7 @@ screen.addEventListener('keydown',event=>{
     if(forVsCode(event))return;
     event.stopPropagation();
     if(soundMode!=='off')startAudio();
-    if(machine()==='apple2'){
+    if(machine()==='apple2'||machine()==='apple3'){
         if(event.code==='AltLeft'||event.code==='AltRight'){
             const button=event.code==='AltLeft'?0:1;
             if(!apple[button].held){apple[button].held=true;setApple(button);}
@@ -365,6 +381,11 @@ screen.addEventListener('keydown',event=>{
     // Ctrl+F12 for keyboards without Break, which some laptops lack or hide behind Fn.
     if(event.key==='Cancel'||(event.ctrlKey&&(event.key==='Pause'||event.key==='F12'))){
         api.postMessage({command:'reset'});event.preventDefault();return;
+    }
+    // Shift+Insert pastes, as the screen's Paste menu item does: the extension types the clipboard's text. Ctrl+V is
+    // CONTROL-V, like any other Ctrl letter.
+    if(event.shiftKey&&event.key==='Insert'){
+        api.postMessage({command:'paste'});event.preventDefault();return;
     }
     // CONTROL with @, a letter or [ \\ ] ^ _ is that character less 64.
     if(event.ctrlKey&&!event.altKey&&event.key.length===1){
@@ -383,6 +404,13 @@ screen.addEventListener('keyup',event=>{
         const button=event.code==='AltLeft'?0:1;
         apple[button].held=false;setApple(button);event.preventDefault();
     }
+});
+// Text pasted by VS Code, as with Cmd+V on a Mac, is typed through the machine's keyboard,
+// a key at a time as the program reads them.
+screen.addEventListener('paste',event=>{
+    const text=event.clipboardData?.getData('text/plain');
+    event.preventDefault();
+    if(text)api.postMessage({command:'paste',text});
 });
 // A key released while the panel lacks focus never sends its keyup, so a held Apple key lets go here.
 window.addEventListener('blur',()=>{for(const button of [0,1])if(apple[button].held){apple[button].held=false;setApple(button);}});

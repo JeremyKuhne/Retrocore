@@ -331,6 +331,7 @@ internal static partial class AssemblyCompiler
         foreach (LayoutSection section in sections) { noOutputRegions |= section.NoOutput; }
         bool stable = false;
         bool needsBoundsCheck = false;
+        List<(int Line, string Message)>? clamped = null;
         for (int pass = 0; pass < MaximumLayoutPasses; pass++)
         {
             bool changed = EvaluateLinkerValues(project, symbols, firstPass: pass == 0);
@@ -408,6 +409,7 @@ internal static partial class AssemblyCompiler
 
             SaveSection(sections, current, context.Address, context.Offset);
             needsBoundsCheck = context.RelaxedBounds;
+            clamped = context.Clamped;
             changed |= UpdateSectionSymbols(sections, symbols);
             changed |= UpdateMemorySymbols(project, sections, symbols);
             if (context.DummyLine >= 0) { errors.Add(new(context.DummyLine, "Unterminated .dum region.")); }
@@ -426,6 +428,8 @@ internal static partial class AssemblyCompiler
             throw new AssemblyError(line: 0, $"Assembly layout did not stabilize within {MaximumLayoutPasses} passes.");
         }
 
+        // A .res or .org still behind the counter in the stable layout really is.
+        foreach ((int line, string message) in clamped ?? []) { errors.Add(new(line, message)); }
         CheckSections(sections, errors);
         if (needsBoundsCheck) { CheckStatementBounds(statements, statementCount, sections, errors); }
         if (errors.Count != 0) { return null; }
@@ -665,7 +669,14 @@ internal static partial class AssemblyCompiler
                 long target = LayoutValue(ref statement, statement.EncodingOperand, symbols, address);
                 if (target < address)
                 {
-                    throw new AssemblyError(statement.Line, ".org cannot overlap or move backwards.");
+                    // Before instructions shrink to their final widths the counter can be ahead of where it ends up.
+                    if (address - target > context.ShrinkBudget)
+                    {
+                        throw new AssemblyError(statement.Line, ".org cannot overlap or move backwards.");
+                    }
+
+                    (context.Clamped ??= []).Add((statement.Line, ".org cannot overlap or move backwards."));
+                    target = address;
                 }
 
                 if (target > InstructionEncoding.AddressSpaceSize)
@@ -701,9 +712,16 @@ internal static partial class AssemblyCompiler
                 long remaining = context.DummyLine >= 0
                     ? InstructionEncoding.AddressSpaceSize - (long)address : context.Capacity - (long)offset;
 
-                if (count < 0 || count > remaining + context.ShrinkBudget)
+                if (count < -(long)context.ShrinkBudget || count > remaining + context.ShrinkBudget)
                 {
                     throw new AssemblyError(statement.Line, ".res exceeds the current section.");
+                }
+
+                // A count that is negative only until instructions shrink, as for padding to an address.
+                if (count < 0)
+                {
+                    (context.Clamped ??= []).Add((statement.Line, ".res exceeds the current section."));
+                    count = 0;
                 }
 
                 length = (int)count;

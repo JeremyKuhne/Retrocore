@@ -12,11 +12,13 @@ straight into the ROM or DOS source.
 | --- | --- | --- | --- |
 | Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, SDL3 game controllers |
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
+| Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the emulated slot-7 ProDOS
-block device's firmware are documented SDK sources too. See the [Apple II family](docs/Apple2.md) and
-[TRS-80 Model I](docs/Trs80ModelI.md) guides for hardware details and launch options.
+block device's firmware are documented SDK sources too. See the [Apple II family](docs/Apple2.md),
+[Apple III](docs/Apple3.md) and [TRS-80 Model I](docs/Trs80ModelI.md) guides for hardware details and launch
+options.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
 > the VS Code extension, build and install the VSIX from this repository as shown below.
@@ -146,6 +148,7 @@ code never shows stale source lines. The [extension README](extension/README.md)
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | The IIe's video ROM (both models, including MouseText) and the II and II Plus's character generator. |
 | [`Dos33.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos33.asm), [`Dos32.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos32.asm) | Apple DOS 3.3 (1983 and 1980) and DOS 3.2: both the System Masters' tracks 0–2 and DOS relocated at `$9D00`; see [Dos.md](docs/Dos.md). |
 | [`Slot7.rom.asm`](src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's 256-byte boot and driver ROM, `$C700`–`$C7FF`. |
+| [`BootRom.asm`](src/Retrocore.Machines.Apple3/Roms/BootRom.asm), [`Apple3Equates.asm`](src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm) | The Apple III's boot ROM, `$F000`–`$FFFF`: disk routines, diagnostics and monitor, with its hardware names. |
 | [`Level2.asm`](src/Retrocore.Machines.Trs80/Roms/Level2.asm) | TRS-80 Model I Level II BASIC, revisions 1.2 and 1.3. |
 | [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Model I Level I BASIC. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGenerator.asm) | The Model I's stock MCM6670P character generator. |
@@ -166,6 +169,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, JV1 and JV3 floppies, and CAS tapes. |
 | [`Retrocore.Input`](src/Retrocore.Input) | SDL3 game controller discovery and polling, mapped to emulated joysticks and paddles. |
 | [`Retrocore.Machines.Apple2`](src/Retrocore.Machines.Apple2) | The Apple II, II Plus, and IIe (original and enhanced), peripheral cards, and SDK ROM sources. |
+| [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface, floppy/doubler hardware, cassette, and SDK ROM sources. |
 | [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--disassemble` CLI, in one host. |
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
@@ -190,7 +194,9 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_TRS80_ROMS` | Model I ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for debugging. |
-| `RETROCORE_MAME` | `mame.exe` path for the Model I oracle tests (default `<cache>\mame\mame.exe`). |
+| `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
+| `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
+| `RETROCORE_MAME` | `mame.exe` path for the Model I and Apple III oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB) and `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), both requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
@@ -280,7 +286,9 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [exporting HTML documentation from `;;` comments](docs/backlog/DocExport.md);
 - [the media library and explorers](docs/backlog/Media.md);
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
-- [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md).
+- [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md);
+- [the Apple III](docs/backlog/Apple3.md);
+- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md).
 
 ## License
 

@@ -239,11 +239,26 @@ internal interface IDebugTarget : IDebugMemory
     (ushort Target, int Length)? CallAt(ushort address);
 
     /// <summary>
-    ///  Tests whether running stops at an instruction because it would trap, such as the 6502's BRK.
+    ///  Describes the trap an instruction would take, such as the 6502's BRK, for the BRK filter to stop at.
     /// </summary>
     /// <param name="address">The instruction's address.</param>
-    /// <returns>Whether it traps.</returns>
-    bool Traps(ushort address);
+    /// <returns>The stop's description, or null when it does not trap.</returns>
+    string? Trap(ushort address);
+
+    /// <summary>
+    ///  Names the operating system call an instruction makes, such as an Apple III program's BRK into SOS.
+    /// </summary>
+    /// <param name="address">The instruction's address.</param>
+    /// <returns>The call's name and number, or null when it makes none.</returns>
+    (string Name, byte Number)? SystemCall(ushort address) => null;
+
+    /// <summary>
+    ///  Describes the operating system call an instruction makes with its main parameters, for a log message's
+    ///  <c>{sos}</c>.
+    /// </summary>
+    /// <param name="address">The instruction's address.</param>
+    /// <returns>The description, or null when it makes none.</returns>
+    string? DescribeSystemCall(ushort address) => null;
 
     /// <summary>
     ///  Gets whether the machine has a video beam that scanline breakpoints can stop on.
@@ -285,6 +300,15 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="debug">The session's modules.</param>
     /// <param name="directory">The SDK ROM source directory, or null for the copy beside the debug host.</param>
     void AddSdkModules(DebugInfo debug, string? directory);
+
+    /// <summary>
+    ///  Adds modules for code the machine has loaded since the last call, such as the drivers an operating system
+    ///  relocates as it boots. The session calls it while running and at each stop, so it must be cheap when
+    ///  nothing has changed.
+    /// </summary>
+    /// <param name="debug">The session's modules.</param>
+    /// <returns>Whether it added any, so that source breakpoints bind again.</returns>
+    bool AddLoadedModules(DebugInfo debug) => false;
 
     /// <summary>
     ///  Gets whether a launched source's single-statement macros debug as their call line.
@@ -339,7 +363,8 @@ internal interface IDebugTarget : IDebugMemory
     ///  Types a key.
     /// </summary>
     /// <param name="code">The ASCII code, 0-127.</param>
-    void Key(int code);
+    /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
+    bool Key(int code);
 
     /// <summary>
     ///  Presses the machine's reset: CONTROL-RESET on the IIe, the reset button on the Model I.

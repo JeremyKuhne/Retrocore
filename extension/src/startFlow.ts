@@ -100,7 +100,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             Object.assign(configuration, { basic: path, stopOnEntry: true });
             break;
         case "disk":
-            Object.assign(configuration, machine.configuration.machine === "trs80-model1" ? { disks: [path] } : { diskImage: path });
+            Object.assign(configuration, machine.configuration.machine === "apple2" ? { diskImage: path } : { disks: [path] });
             break;
         case "tape":
             Object.assign(configuration, { cassette: path });

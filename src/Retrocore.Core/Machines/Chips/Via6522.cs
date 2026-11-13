@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Apple2;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  CPU-cycle 6522 VIA with parallel ports, control pins, timers and serial shifting.
@@ -15,7 +15,7 @@ namespace Retrocore.Machines.Apple2;
 ///  original NMOS external-shift silicon race are not modeled.
 ///  <see href="https://www.westerndesigncenter.com/wdc/documentation/w65c22.pdf">VIA data sheet</see>.
 /// </remarks>
-internal sealed class Via6522
+public sealed class Via6522
 {
     private byte _orb;
     private byte _ora;
@@ -57,17 +57,17 @@ internal sealed class Via6522
     /// <summary>
     ///  Creates a reset VIA.
     /// </summary>
-    internal Via6522() => Reset();
+    public Via6522() => Reset();
 
     /// <summary>
     ///  Gets the combined enabled interrupt level.
     /// </summary>
-    internal bool InterruptRequested => (_ifr & _ier & 127) != 0;
+    public bool InterruptRequested => (_ifr & _ier & 127) != 0;
 
     /// <summary>
     ///  Gets or sets external PA input pins.
     /// </summary>
-    internal byte PortAInput
+    public byte PortAInput
     {
         get => _portAInput;
         set => _portAInput = value;
@@ -76,7 +76,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets or sets external PB input pins, including the T2 pulse-count input PB6.
     /// </summary>
-    internal byte PortBInput
+    public byte PortBInput
     {
         get => _portBInput;
         set
@@ -90,17 +90,33 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets physical PA levels with DDR-selected output latches.
     /// </summary>
-    internal byte PortA => (byte)((_ora & _ddra) | (_portAInput & ~_ddra));
+    public byte PortA => (byte)((_ora & _ddra) | (_portAInput & ~_ddra));
+
+    /// <summary>
+    ///  Gets what port A drives: the output register on output pins, and high on input pins, as pull-ups leave them.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A machine that wires a port to its own logic, as the Apple III does its environment and bank registers,
+    ///   reads this rather than <see cref="PortA"/>, so that inputs from elsewhere on the port cannot change it.
+    ///  </para>
+    /// </remarks>
+    public byte PortAOutput => (byte)((_ora & _ddra) | ~_ddra);
+
+    /// <summary>
+    ///  Gets what port B drives: the output register on output pins, and high on input pins, as pull-ups leave them.
+    /// </summary>
+    public byte PortBOutput => (byte)((_orb & _ddrb) | ~_ddrb);
 
     /// <summary>
     ///  Gets physical PB levels, including the optional timer-controlled PB7.
     /// </summary>
-    internal byte PortB => MixPortB(_portBInput);
+    public byte PortB => MixPortB(_portBInput);
 
     /// <summary>
     ///  Gets or sets CA1, capturing latched input and interrupts on the selected edge.
     /// </summary>
-    internal bool CA1
+    public bool CA1
     {
         get => _ca1;
         set
@@ -128,7 +144,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets or sets external CA2, generating interrupts in input modes.
     /// </summary>
-    internal bool CA2
+    public bool CA2
     {
         get => _ca2;
         set
@@ -146,7 +162,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets or sets external CB1, including externally clocked shift modes.
     /// </summary>
-    internal bool CB1
+    public bool CB1
     {
         get => _cb1;
         set
@@ -180,7 +196,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets or sets external CB2, used for serial input and input-mode interrupts.
     /// </summary>
-    internal bool CB2
+    public bool CB2
     {
         get => _cb2;
         set
@@ -198,17 +214,17 @@ internal sealed class Via6522
     /// <summary>
     ///  Gets the CA2 driven level in handshake, pulse or forced-output mode.
     /// </summary>
-    internal bool CA2Output => _ca2Output;
+    public bool CA2Output => _ca2Output;
 
     /// <summary>
     ///  Gets the CB2 driven level, including serial output's next most-significant bit.
     /// </summary>
-    internal bool CB2Output => ShiftMode >= 4 ? (_shift & 128) != 0 : _cb2Output;
+    public bool CB2Output => ShiftMode >= 4 ? (_shift & 128) != 0 : _cb2Output;
 
     /// <summary>
     ///  Gets CB1's generated serial clock, or the external pin in non-generated modes.
     /// </summary>
-    internal bool CB1Output => ShiftMode is 1 or 2 or 4 or 5 or 6 ? _serialClock : _cb1;
+    public bool CB1Output => ShiftMode is 1 or 2 or 4 or 5 or 6 ? _serialClock : _cb1;
 
     private int CA2Mode => (_pcr >> 1) & 7;
     private int CB2Mode => (_pcr >> 5) & 7;
@@ -219,7 +235,7 @@ internal sealed class Via6522
     /// </summary>
     /// <param name="register">The register number; low four bits are decoded.</param>
     /// <returns>The register data before acknowledgement.</returns>
-    internal byte Read(byte register)
+    public byte Read(byte register)
     {
         int address = register & 15;
         byte value = Peek(register);
@@ -250,7 +266,7 @@ internal sealed class Via6522
     /// </summary>
     /// <param name="register">The register number; low four bits are decoded.</param>
     /// <returns>The current register data.</returns>
-    internal byte Peek(byte register) => (register & 15) switch
+    public byte Peek(byte register) => (register & 15) switch
     {
         0 => MixPortB((_acr & 2) != 0 ? _latchedB : _portBInput),
         1 or 15 => (byte)((_ora & _ddra) | (((_acr & 1) != 0 ? _latchedA : _portAInput) & ~_ddra)),
@@ -275,7 +291,7 @@ internal sealed class Via6522
     /// </summary>
     /// <param name="register">The register number; low four bits are decoded.</param>
     /// <param name="value">The register value.</param>
-    internal void Write(byte register, byte value)
+    public void Write(byte register, byte value)
     {
         byte previousPortB = PortB;
         int previousShiftMode = ShiftMode;
@@ -356,7 +372,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Completes one CPU cycle, including timer and generated shift-clock edges.
     /// </summary>
-    internal void Tick()
+    public void Tick()
     {
         if (_ca2Pulse)
         {
@@ -423,7 +439,7 @@ internal sealed class Via6522
     /// <summary>
     ///  Resets registers, timers and output pins without altering external input levels.
     /// </summary>
-    internal void Reset()
+    public void Reset()
     {
         _orb = _ora = _ddrb = _ddra = _acr = _pcr = _ifr = _ier = 0;
         _t1Latch = _t2Latch = _t1Counter = _t2Counter = ushort.MaxValue;

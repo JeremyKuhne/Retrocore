@@ -4,7 +4,8 @@
 
 // Altair 8800 DAP integration: launches an 8080 source that greets and echoes on the 88-2SIO's terminal, stops at a
 // breakpoint in its Print routine with the 8080 call stack and registers, steps out to the caller, shows the terminal's
-// frames and hardware, echoes typed keys, stops on a write to the serial data port, and stops where the machine resets.
+// frames and hardware, clears the screen while stopped, echoes typed keys, stops on a write to the serial data port and
+// where the machine resets, and holds a breakpoint after HLT until a key's interrupt wakes the 8080.
 // The Altair has no ROM, so nothing is needed but the repository.
 
 import { resolve, join } from "node:path";
@@ -55,6 +56,26 @@ const program = [
     ""
 ];
 const lineOf = label => program.findIndex(line => line.startsWith(`${label}:`)) + 1;
+
+// Halts with the receive interrupt enabled; a key runs RST 7, whose handler reads it into B.
+const halting = [
+    ".cpu I8080",
+    "        .org $38",
+    "Handler: in $11",
+    "        mov b,a",
+    "        ret",
+    "        .org $100",
+    "Start:  lxi sp,$1000",
+    "        mvi a,3",
+    "        out $10",
+    "        mvi a,$95           ; receive interrupt enabled",
+    "        out $10",
+    "        ei",
+    "        hlt",
+    "After:  nop",
+    "        jmp After",
+    ""
+];
 
 // Forgets queued events of a kind, so a wait sees only what happens next.
 function drop(name) {
@@ -141,10 +162,14 @@ try {
     assert.equal(paused.screen, "white");
     assert.deepEqual(paused.screens, ["green", "white", "amber"]);
 
+    // CLEAR SCREEN while stopped sends a frame showing the blank screen.
+    await request("altair/clearScreen");
+    assert.ok((await stoppedFrame()).rows.every(row => row.trim() === ""), "the stopped frame shows the cleared screen");
+
     // Typed keys echo.
     await request("continue", { threadId: 1 });
     await type("Hello, 8080!");
-    await screen(screen => screen.includes("ALTAIR 8800\nHello, 8080!"), "the echoed keys");
+    await screen(screen => screen.includes("Hello, 8080!"), "the echoed keys after the clear");
 
     // A watch on writes to the serial data port stops after the OUT that sends the next key.
     const watch = await request("setDataBreakpoints", { breakpoints: [{ dataId: "port:11:1", accessType: "write" }] });
@@ -162,6 +187,28 @@ try {
     assert.equal(reset.reason, "breakpoint");
     assert.equal(reset.description, "The machine reset.");
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$0 (0)");
+
+    // HLT waits for an interrupt: a breakpoint after it holds until a key's receive interrupt runs RST 7, whose
+    // handler shows on the call stack above the halted instruction it interrupted.
+    writeFileSync(source, halting.join("\n"));
+    events.length = 0;
+    await request("launch", { machine: "altair", source, loadAddress: 0x38, entryAddress: 0x100, stopOnEntry: false, speed: "max" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    const after = halting.findIndex(line => line.startsWith("After:")) + 1;
+    const handler = halting.findIndex(line => line.startsWith("Handler:")) + 1;
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: after }, { line: handler }] });
+    await request("configurationDone");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    assert.ok(!events.some(message => message.event === "stopped"), "no stop while the 8080 is halted");
+    await type("K");
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    stack = await request("stackTrace", { threadId: 1 });
+    assert.equal(stack.stackFrames[0].line, handler);
+    assert.equal(stack.stackFrames[1].line, after, "the interrupt came before the instruction after HLT");
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].line, after);
+    assert.equal((await request("evaluate", { expression: "B" })).result, "$4B (75)", "the handler read the key");
 
     await request("disconnect", {});
     console.log("Altair DAP integration passed.");

@@ -11,9 +11,9 @@ namespace Retrocore.Debug;
 /// <remarks>
 ///  <para>
 ///   A call is <c>CALL</c>, a conditional call, <c>RST</c>, the 8080's undocumented <c>CALL</c> aliases or the 8085's
-///   <c>RSTV</c>, when the word pushed is the address after it. An interrupt pushes the address of the instruction it
-///   comes before. <c>PUSH</c> also lowers SP by two and is neither. <c>LXI SP</c> and <c>SPHL</c> move to another
-///   stack, which forgets the calls.
+///   <c>RSTV</c>, when the word pushed is the address after it. An interrupt, which the target reports, pushes the
+///   address of the instruction it comes before; the opcode there did not run, so it is not judged. <c>PUSH</c> also
+///   lowers SP by two and is neither. <c>LXI SP</c> and <c>SPHL</c> move to another stack, which forgets the calls.
 ///  </para>
 /// </remarks>
 internal sealed class I8080CallStack : IDebugCallStack
@@ -48,10 +48,21 @@ internal sealed class I8080CallStack : IDebugCallStack
     /// </summary>
     /// <param name="before">The registers as the instruction started.</param>
     /// <param name="after">The registers as it ended.</param>
-    internal void Complete(in DebugFrame before, in DebugFrame after)
+    /// <param name="interrupt">
+    ///  Whether it was an interrupt response, such as an acknowledged <c>RST</c>, rather than the instruction at PC.
+    /// </param>
+    internal void Complete(in DebugFrame before, in DebugFrame after, bool interrupt)
     {
         _stack = after.StackPointer;
         ushort pc = before.ProgramCounter;
+        bool pushed = ((before.StackPointer - after.StackPointer) & 0xFFFF) == 2;
+        if (interrupt)
+        {
+            if (pushed && Word(after.StackPointer) == pc) { Push(before, pc, after.StackPointer, interrupt: true); }
+            Prune();
+            return;
+        }
+
         byte opcode = _memory.Peek(pc);
 
         // LXI SP,nn and SPHL move to another stack.
@@ -62,17 +73,13 @@ internal sealed class I8080CallStack : IDebugCallStack
             return;
         }
 
-        if (((before.StackPointer - after.StackPointer) & 0xFFFF) == 2)
+        if (pushed)
         {
             ushort stored = Word(after.StackPointer);
             int length = CallLength(opcode, _is8085);
             if (length != 0 && stored == (ushort)(pc + length))
             {
                 Push(before, stored, after.StackPointer, interrupt: false);
-            }
-            else if (stored == pc && (opcode & 0xCF) != 0xC5)
-            {
-                Push(before, stored, after.StackPointer, interrupt: true);
             }
         }
 

@@ -84,4 +84,5 @@ Screen**.
 - The same programs, a greeting, an echo and a table of squares in decimal, print identically on SIMH's
   `altairz80` (open-simh `87eb7d5`, in 8080 mode), built outside the repository.
 - [`Test-AltairDap.mjs`](../tools/Test-AltairDap.mjs) drives the debug adapter: breakpoints, the call stack,
-  registers, step out, the terminal's frames, typed keys, a port watchpoint and RESET.
+  registers, step out, the terminal's frames, Clear Screen, typed keys, a port watchpoint, RESET, and a breakpoint
+  after `HLT` that holds until a key's interrupt wakes the 8080, with the interrupt on the call stack.

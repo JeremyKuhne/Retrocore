@@ -65,15 +65,29 @@ public class I8080CallStackTests
     }
 
     /// <summary>
-    ///  An interrupt pushes the address of the instruction it comes before, and LXI SP forgets the calls.
+    ///  An interrupt pushes the address of the instruction it comes before, whose opcode did not run and is not judged;
+    ///  LXI SP that runs forgets the calls.
     /// </summary>
     [TestMethod]
     public void InterruptsPushFramesAndLoadingStackPointerResets()
     {
         DebugTestMemory memory = new();
         I8080CallStack stack = new(memory, is8085: false);
+
+        // The interrupt comes before an LXI SP and a PUSH, neither of which ran.
+        memory.Set(0x1000, 0x31, 0x00, 0x60);
+        Step(stack, memory, Frame(0x1000, 0x8000), Frame(0x0038, 0x7FFE), push: 0x1000, interrupt: true);
+        stack.Depth().Should().Be(1, "the interrupt, not a stack switch");
+        memory.Set(0x0038, 0xC5);
+        Step(stack, memory, Frame(0x0038, 0x7FFE), Frame(0x0038, 0x7FFC), push: 0x0038, interrupt: true);
+        stack.Depth().Should().Be(2, "a nested interrupt before a PUSH");
+
+        // Without the interrupt flag, the same stack change at a PUSH is the PUSH.
+        Step(stack, memory, Frame(0x0038, 0x7FFC), Frame(0x0039, 0x7FFA), push: 0x0038);
+        stack.Depth().Should().Be(2);
+        stack.Reset();
         memory.Set(0x1000, 0x00);
-        Step(stack, memory, Frame(0x1000, 0x8000), Frame(0x0038, 0x7FFE), push: 0x1000);
+        Step(stack, memory, Frame(0x1000, 0x8000), Frame(0x0038, 0x7FFE), push: 0x1000, interrupt: true);
         stack.Depth().Should().Be(1);
 
         memory.Set(0x0038, 0x31, 0x00, 0x60);
@@ -113,9 +127,9 @@ public class I8080CallStackTests
     private static DebugFrame Frame(ushort pc, int sp) => new() { ProgramCounter = pc, StackPointer = sp };
 
     // One instruction: what it pushes lands at the new stack pointer.
-    private static void Step(I8080CallStack stack, DebugTestMemory memory, DebugFrame before, DebugFrame after, ushort? push)
+    private static void Step(I8080CallStack stack, DebugTestMemory memory, DebugFrame before, DebugFrame after, ushort? push, bool interrupt = false)
     {
         if (push is { } value) { memory.Set((ushort)after.StackPointer, (byte)value, (byte)(value >> 8)); }
-        stack.Complete(before, after);
+        stack.Complete(before, after, interrupt);
     }
 }

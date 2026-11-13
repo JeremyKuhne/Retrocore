@@ -32,6 +32,11 @@ internal sealed class AltairDebugTarget : IDebugTarget
     private string _screen = DebugScreens.White;
     private DebugFrame _beforeInstruction;
     private bool _instruction;
+
+    // Whether the instruction in progress began with an interrupt acknowledge, rather than an opcode fetch, and whether
+    // it fetched anything at all: a halted 8080's idle states fetch nothing and are not instructions.
+    private bool _interrupt;
+    private bool _fetched;
     private bool _resetPending;
 
     /// <summary>
@@ -105,7 +110,13 @@ internal sealed class AltairDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
+    /// <remarks>
+    ///  <para>
+    ///   A halted 8080 is between instructions in each idle state, with PC past its HLT; it is not at a boundary for the
+    ///   debugger until an interrupt or reset sends it on, so breakpoints and steps wait for that.
+    ///  </para>
+    /// </remarks>
+    public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary && !IsIdle;
 
     /// <inheritdoc/>
     public bool InInstruction => _instruction;
@@ -192,17 +203,21 @@ internal sealed class AltairDebugTarget : IDebugTarget
     /// <inheritdoc/>
     public bool StepCycle()
     {
-        if (_machine.Processor.IsInstructionBoundary)
+        if (_machine.Processor.IsInstructionBoundary && !_instruction)
         {
             _beforeInstruction = Frame;
             _instruction = true;
+            _interrupt = false;
+            _fetched = false;
         }
 
         _machine.StepCycle();
+        _fetched |= _machine.Processor.FetchedOpcode;
+        _interrupt |= _machine.LastCycle.Operation == BusOperation.InterruptAcknowledge;
         if (_machine.Processor.IsInstructionBoundary && _instruction)
         {
             _instruction = false;
-            _calls.Complete(_beforeInstruction, Frame);
+            if (_fetched) { _calls.Complete(_beforeInstruction, Frame, _interrupt); }
         }
 
         return _machine.Processor.FetchedOpcode;
@@ -268,6 +283,8 @@ internal sealed class AltairDebugTarget : IDebugTarget
     public void Reset()
     {
         _machine.Reset();
+        _calls.Reset();
+        _instruction = false;
         _resetPending = true;
     }
 

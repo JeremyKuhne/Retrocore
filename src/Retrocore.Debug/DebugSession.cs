@@ -38,7 +38,8 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
-        "apple1/clearScreen"
+        "apple1/clearScreen",
+        "altair/clearScreen"
     ];
 
     private readonly object _gate = new();
@@ -414,7 +415,9 @@ internal sealed partial class DebugSession
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", _ => Reply(() =>
         {
+            // A reset abandons every call in progress, even where it keeps the stack pointer and RAM, as the 8080's does.
             Target.Reset();
+            Target.CallStack.Reset();
             Pascal?.Reset();
             _pascalFrames = null;
             Invalidate();
@@ -441,7 +444,7 @@ internal sealed partial class DebugSession
         JsonObject result = handler(args);
 
         // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
-        if (name == "apple1/clearScreen" && _run is not { IsCancellationRequested: false })
+        if (name is "apple1/clearScreen" or "altair/clearScreen" && _run is not { IsCancellationRequested: false })
         {
             NotifyFrame(running: false);
         }

@@ -24,7 +24,9 @@ boots and APPLE2 in drive 2 has the Compiler.
 }
 ```
 
-Sector images load read-only, so to keep what the Editor and Compiler write, mount a `.woz` copy. CONTROL-C, which
+Disks load write-protected. For the Editor and Compiler to write, take the protection off in the **Retro Devices**
+view (**Unprotect** on the drive). What the machine writes stays in memory, and the image file does not change;
+`--pascal extract` can't read it from there yet. CONTROL-C, which
 ends an insertion in the Editor, is the panel's Ctrl+C.
 
 ## Debugging

@@ -400,6 +400,9 @@ internal sealed class Apple3DebugTarget : IDebugTarget
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }

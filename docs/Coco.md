@@ -78,10 +78,11 @@ listing, the command loop, errors, BREAK and the screen's output reach Super Ext
 RAM. The debugger follows: on a CoCo 3 the three sources apply wherever their bytes are, and the patched places show
 the patches' source.
 
-Without dumps, every model's ROMs are built from the sources, disk controller included, and debugging steps into
-them wherever the BASICs run. Dumps can still take their place, from a directory of dumps under MAME's names:
-`romDirectory`, or `RETROCORE_COCO_ROMS`, in the directory itself or its `coco`, `coco2b`, `coco3` and `coco_fdc`
-folders.
+Nothing external is needed: without dumps, every model's ROMs are built from the sources, disk controller included,
+and debugging steps into them wherever the BASICs run. Dumps can still take their place, from a directory of dumps
+under MAME's names: `romDirectory`, or `RETROCORE_COCO_ROMS`, in the directory itself or its `coco`, `coco2b`, `coco3`
+and `coco_fdc` folders. A blank `romDirectory`, as `${env:RETROCORE_COCO_ROMS}` gives when the variable is not set,
+names no dumps.
 
 | Model | Files |
 | --- | --- |
@@ -101,7 +102,6 @@ a tape or a disk. Launch configurations take `"machine": "coco"` and a `model`:
     "name": "Color Computer: 6809 sample",
     "machine": "coco",
     "model": "coco2",
-    "romDirectory": "${env:RETROCORE_COCO_ROMS}",
     "source": "${workspaceFolder}/sample/coco/hello.asm",
     "stopOnEntry": true
 }
@@ -162,9 +162,11 @@ through. The CoCo 3's BASIC has no BASIC thread yet.
 | `BasicConformanceTests`, `BasicTokenizerTests` | Color BASIC lines typed on a CoCo 2 from the SDK's sources are stored as the library tokenizes them, with and without Disk BASIC; the keyword tables match the three ROMs'. |
 | `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources and the CoCo 3's ROM, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk, and the CoCo 3 drawing on its hi-res screen. |
 | `CocoOracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua): screens and programs on the CoCo 2, 2B and 3, and a Disk BASIC SAVE's disk image byte for byte. |
-| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm`, which then switches to 80 columns, and a Color BASIC file on the BASIC thread (stepping, a GOSUB's frame, variables and loops, STOP and CONT, the program as text), with no dumps; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns. |
+| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm` and on into a patch in `Coco3.asm`, which then switches to 80 columns, and a Color BASIC file on the BASIC thread (stepping, a GOSUB's frame, variables and loops, STOP and CONT, the program as text); then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns, on the dumps when they are there and otherwise on the sources. |
 
-Tests that need the dumps or MAME are inconclusive without them, and the DAP script runs only its first part.
+The machine, disk, video and peripheral tests and the DAP script run on the dumps when they are there and otherwise
+on the ROMs built from the sources, so they need nothing external. Only the comparisons with the dumps and with MAME
+are inconclusive without them.
 
 The [MAME 0.264 ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/) hold the
 dumps under these names, in `coco.zip`, `coco2b.zip`, `coco3.zip` and `coco_fdc.zip`; MAME 0.289 is the oracle.

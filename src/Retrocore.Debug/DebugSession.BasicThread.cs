@@ -10,8 +10,9 @@ namespace Retrocore.Debug;
 
 // The BASIC thread: the program's statements, GOSUBs, breakpoints, steps and stops, beside the CPU's.
 //
-// Every statement starts at the ROM's GONE, with the current line set and the text pointer before the statement. The
-// run looks at BASIC only there and at the ROM's error and stop routines, so a program without BASIC breakpoints or
+// Every statement starts at the ROM's GONE, with the current line set and the text pointer before the statement, or
+// where the target says it starts one otherwise (AppleSoft under ProDOS's BASIC.SYSTEM, which skips GONE). The run
+// looks at BASIC only there and at the ROM's error and stop routines, so a program without BASIC breakpoints or
 // steps runs as before. Frames come from BASIC's own stack, as saved when the statement began.
 internal sealed partial class DebugSession
 {

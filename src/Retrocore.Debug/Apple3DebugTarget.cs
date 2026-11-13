@@ -385,6 +385,15 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
+    ///   About 30 ms a key and 300 ms after a line, at the III's 2 MHz: SOS takes each key into its type-ahead buffer
+    ///   at once, which overflows if a pasted program comes faster than Apple III Pascal's Editor reads it.
+    ///  </para>
+    /// </remarks>
+    public (ulong Key, ulong Line)? TypingPace => (60_000, 600_000);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
     ///   CONTROL-RESET: the processor and the devices a reset reaches restart, keeping RAM and the VIAs.
     ///  </para>
     /// </remarks>
@@ -450,6 +459,9 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
+            case (Apple2FloppyDrive drive, "save"):
+                Apple2Loader.Save(drive, args.String("path"));
                 break;
             case (ProFileDrive drive, "insert"):
                 ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));

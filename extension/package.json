@@ -189,7 +189,8 @@
         ],
         "extensions": [
           ".pas",
-          ".pascal"
+          ".pascal",
+          ".text"
         ],
         "configuration": "./pascal-language-configuration.json"
       }
@@ -419,6 +420,16 @@
           "command": "retrocore.device.unprotect",
           "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
           "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
+          "group": "1_save"
         }
       ],
       "webview/context": [
@@ -459,6 +470,14 @@
         },
         {
           "command": "retrocore.device.unprotect",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveAs",
           "when": "false"
         },
         {
@@ -588,6 +607,15 @@
         "command": "retrocore.device.unprotect",
         "title": "Allow Writes",
         "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.save",
+        "title": "Save to Its Image",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveAs",
+        "title": "Save Disk As..."
       },
       {
         "command": "retrocore.device.refresh",
@@ -1239,7 +1267,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
@@ -1249,7 +1276,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

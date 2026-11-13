@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
 
@@ -31,13 +32,13 @@ internal sealed partial class DebugSession
         "apple2/sound",
         "apple2/button",
         "apple2/mouse",
-        "apple2/screen",
         "apple2/fastDisk",
         "apple3/disk",
         "apple3/sound",
         "apple3/button",
         "apple3/fastDisk",
-        "retro/media"
+        "retro/media",
+        "apple1/clearScreen"
     ];
 
     private readonly object _gate = new();
@@ -178,10 +179,18 @@ internal sealed partial class DebugSession
             }
 
 
-            // A value in the CPU's 64K can open a memory view there; a bank-qualified one, in that bank.
+            // A value in the CPU's 64K can open a memory view there; a bank-qualified one, in that bank. While
+            // debugging, the editor shows this hover in place of the language server's, so a documented name
+            // brings its ;; summary along.
+            string result = bank is null ? $"${value:X} ({value})" : $"{bank.Name}:${value:X4}";
+            if (args.String("context") == "hover" && SymbolSummary(expression) is { } summary)
+            {
+                result = $"{result} · {summary}";
+            }
+
             return new JsonObject
             {
-                ["result"] = bank is null ? $"${value:X} ({value})" : $"{bank.Name}:${value:X4}",
+                ["result"] = result,
                 ["variablesReference"] = 0,
                 ["memoryReference"] = value is >= 0 and <= 0xFFFF ? Reference(bank, (int)value) : null
             };
@@ -353,6 +362,15 @@ internal sealed partial class DebugSession
             return new JsonObject { ["typed"] = typed, ["skipped"] = skipped };
         }));
 
+        // retro/screen: shows the video on another of the machine's monitors, such as a green-phosphor one. A new
+        // monitor changes the picture, so a stopped machine sends the panel a frame drawn on it.
+        transport.On("retro/screen", args => Reply(() =>
+        {
+            Target.Screen = args.String("screen") ?? throw new ArgumentException("screen is required.");
+            if (_run is not { IsCancellationRequested: false }) { NotifyFrame(running: false); }
+            return new JsonObject { ["screen"] = Target.Screen };
+        }));
+
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", _ => Reply(() =>
         {
@@ -382,8 +400,12 @@ internal sealed partial class DebugSession
 
         JsonObject result = handler(args);
 
-        // A new monitor changes the picture, so a stopped machine sends the panel a frame drawn on it.
-        if (name == "apple2/screen" && _run is not { IsCancellationRequested: false }) { NotifyFrame(running: false); }
+        // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
+        if (name == "apple1/clearScreen" && _run is not { IsCancellationRequested: false })
+        {
+            NotifyFrame(running: false);
+        }
+
         return result;
     }
 
@@ -501,8 +523,11 @@ internal sealed partial class DebugSession
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
+            DebugMachines.Apple1 => LaunchApple1(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
+
+        if (args.String("screen") is { } screen) { Target.Screen = screen; }
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -657,6 +682,14 @@ internal sealed partial class DebugSession
         }
 
         return [];
+    }
+
+    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO reaches the terminal.
+    private static Apple1DebugTarget LaunchApple1(JsonObject args, bool loads)
+    {
+        Apple1DebugTarget target = Apple1DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 0.05 : 0));
+        return target;
     }
 
     // A program on a Model I calls the ROM through the RAM vectors and device control blocks, so the ROM runs
@@ -816,6 +849,36 @@ internal sealed partial class DebugSession
 
     // Variables references at and above this are documentation scopes, by frame.
     private const int DocumentationScope = 100000;
+
+    /// <summary>
+    ///  Gets the <c>;;</c> summary of a name the program's or the ROMs' sources document, inheritance followed, as
+    ///  plain text: a link shows its name.
+    /// </summary>
+    /// <param name="name">The name, as the hover's expression gives it.</param>
+    /// <returns>The summary, or null when the name is not a documented one.</returns>
+    private string? SymbolSummary(string name)
+    {
+        if (name.Length == 0 || !name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '.'))
+        {
+            return null;
+        }
+
+        DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
+        // The module whose definition the value came from, as evaluation resolves it: the first that defines the
+        // name. Its documentation, or none, describes it; another module's same name is a different symbol.
+        IDebugModule? defining = _debug.Modules.FirstOrDefault(module => module.TryResolve(name, out _));
+        if (defining is null) { return null; }
+        DocumentationSet documentation = defining.Documentation;
+        if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { return null; }
+        string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
+
+        // A link shows its name without its module.
+        return summary.Length == 0 ? null : LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
+    }
+
+    // A documentation link, such as <XAMH> or <Monitor:A1L>.
+    [GeneratedRegex(@"<([A-Za-z_][\w.]*(?::[A-Za-z_][\w.]*)?)>")]
+    private static partial Regex LinkPattern();
 
     /// <summary>
     ///  Finds the documented routine a frame is in: the nearest documented routine at or before its PC.

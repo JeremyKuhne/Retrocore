@@ -49,7 +49,7 @@ test("each choice sets a launch option to values it allows, and its default is o
 test("the machines are the seven agreed, each with its own id and name, in order", () => {
     assert.deepEqual(machines.map(machine => machine.label), [
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
-        "TRS-80 Model I (Level I)"
+        "TRS-80 Model I (Level I)", "Apple-1"
     ]);
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.equal(new Set(machines.map(machine => machine.id)).size, machines.length);
@@ -67,7 +67,7 @@ test("a machine's launch configuration boots it with the packaged debug host", (
     for (const machine of machines) assert.equal("debugHost" in launchConfiguration(machine), false);
 });
 
-test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes, and each BASIC", () => {
+test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes, the Apple-1's tapes, and each BASIC", () => {
     for (const machine of machines) {
         if (machine.configuration.machine === "apple2") {
             assert.deepEqual(machine.diskFormats, ["dsk", "do", "po", "woz", "d13"]);
@@ -77,4 +77,6 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("apple2-ii")?.basicDialects, ["integer"]);
     assert.deepEqual(machineById("trs80-model1-level2")?.tapeFormats, ["cas"]);
     assert.deepEqual(machineById("trs80-model1-level1")?.diskFormats, [], "Level I has no disks");
+    assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
+    assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");
 });

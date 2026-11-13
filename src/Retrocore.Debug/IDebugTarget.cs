@@ -338,6 +338,17 @@ internal interface IDebugTarget : IDebugMemory
     JsonObject DisplayState(bool running);
 
     /// <summary>
+    ///  Gets the monitors the video can be shown on, from <see cref="DebugScreens"/>, the default first.
+    /// </summary>
+    IReadOnlyList<string> Screens { get; }
+
+    /// <summary>
+    ///  Gets or sets the monitor the video is shown on, one of <see cref="Screens"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The machine has no such monitor.</exception>
+    string Screen { get; set; }
+
+    /// <summary>
     ///  Renders the video as the beam drew it, into a buffer the target keeps.
     /// </summary>
     /// <returns>The RGBA pixels, valid until the next call.</returns>

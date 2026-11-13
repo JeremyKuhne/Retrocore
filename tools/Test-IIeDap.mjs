@@ -156,9 +156,9 @@ try {
 
     // A new monitor while stopped sends the panel a frame drawn on it.
     events.splice(0, events.length, ...events.filter(message => message.event !== "retro/frame"));
-    await request("apple2/screen", { screen: "green" });
+    await request("retro/screen", { screen: "green" });
     assert.equal((await event("retro/frame")).screen, "green");
-    await request("apple2/screen", { screen: "color" });
+    await request("retro/screen", { screen: "color" });
     assert.equal((await event("retro/frame")).screen, "color");
     await request("retro/cycles", { clear: true });
     assert.equal((await request("retro/cycles")).lines.length, 0);

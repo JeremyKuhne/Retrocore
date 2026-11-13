@@ -60,6 +60,7 @@ class Element {
     hidden = false;
     textContent = "";
     value = "";
+    children: unknown[] = [];
     readonly classes = new Set<string>();
     readonly classList = {
         toggle: (name: string, on: boolean): void => { if (on) this.classes.add(name); else this.classes.delete(name); },
@@ -75,6 +76,7 @@ class Element {
     setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
     getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
     focus(): void { /* nothing to focus */ }
+    replaceChildren(...children: unknown[]): void { this.children = children; }
     readonly context = new Context2d();
     getContext(): Context2d { return this.context; }
     dispatch(type: string, event: Record<string, unknown> = {}): void {
@@ -93,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "apple1-reset", "apple1-clear", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -134,7 +136,9 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
         events.dispatch("pointerlockchange");
     };
     const requestAnimationFrame = (callback: () => void): number => frames.push(callback);
-    const context = createContext({ window, document, Buffer, Promise, requestAnimationFrame, acquireVsCodeApi: () => ({ postMessage: post, getState, setState }) });
+    // A select's option, as the Screen menu builds them.
+    const Option = class { constructor(readonly text: string, readonly value: string) {} };
+    const context = createContext({ window, document, Buffer, Promise, requestAnimationFrame, Option, acquireVsCodeApi: () => ({ postMessage: post, getState, setState }) });
     // Node lacks Uint8Array.prototype.setFromBase64, which VS Code's Chromium has; this one behaves the same.
     new Script(`Uint8Array.prototype.setFromBase64 ??= function (text) {
         const bytes = Buffer.from(text, "base64");
@@ -220,7 +224,7 @@ test("taking the mouse card out, or the session ending, gives the pointer back",
 
 test("Screen follows the host's monitor, and the panel's choice is kept and sent to each new session", () => {
     const frame = (screen: string): Record<string, unknown> => ({
-        machine: "apple2", rows: [""], cycles: 1, running: true, screen,
+        machine: "apple2", rows: [""], cycles: 1, running: true, screen, screens: ["color", "white", "green", "amber"],
         video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
     });
     const first = loadPanel();
@@ -240,6 +244,35 @@ test("Screen follows the host's monitor, and the panel's choice is kept and sent
     assert.deepEqual(later.posted.filter(message => (message as { command?: string }).command === "screen"), [{ command: "screen", screen: "green" }]);
     later.window.dispatch("message", { data: frame("green") });
     assert.equal((later.byId.get("screenType") as Element).value, "green");
+});
+
+test("Screen offers each machine's own monitors, and keeps a choice another machine lacks", () => {
+    const frame = (machine: string, screen: string | undefined, screens: string[] | undefined): Record<string, unknown> => ({
+        machine, rows: [""], cycles: 1, running: true, screen, screens,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    });
+    const screenCommands = (posted: unknown[]): unknown[] => posted.filter(message => (message as { command?: string }).command === "screen");
+    const panel = loadPanel({ screen: "color" });
+    const choice = panel.byId.get("screenChoice") as Element;
+    const select = panel.byId.get("screenType") as Element;
+    // The Apple-1's media is a cassette alone, with no disks.
+    const apple1 = { ...frame("apple1", "green", ["green", "white", "amber"]), media: { cassette: { path: "basic.wav", recording: false, motor: true } } };
+    panel.window.dispatch("message", { data: apple1 });
+    assert.deepEqual(panel.posted.filter(message => "error" in (message as object)), [], "the frame draws without an error");
+    assert.match((panel.byId.get("status") as Element).textContent, /Tape playing/);
+    assert.equal(choice.hidden, false, "every machine has the menu");
+    assert.deepEqual(select.children.map(option => (option as { value: string }).value), ["green", "white", "amber"], "a monochrome machine offers no color");
+    assert.equal(select.value, "green", "a monochrome machine starts green");
+    assert.deepEqual(screenCommands(panel.posted), [], "color is not asked of a machine without it");
+    assert.equal((panel.saved() as { screen?: string }).screen, "color", "the choice is kept for the next machine that has it");
+
+    select.value = "amber";
+    select.dispatch("change");
+    assert.deepEqual(screenCommands(panel.posted.splice(0)), [{ command: "screen", screen: "amber" }]);
+
+    // A host too old to say leaves the menu out.
+    panel.window.dispatch("message", { data: frame("trs80-model1", undefined, undefined) });
+    assert.equal(choice.hidden, true);
 });
 
 test("the panel sends control characters, the Apple keys and CONTROL-RESET", () => {

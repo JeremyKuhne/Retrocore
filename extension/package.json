@@ -615,20 +615,32 @@
                   "apple2",
                   "apple3",
                   "trs80-model1",
+                  "apple1",
                   "apple2e"
                 ],
                 "enumDescriptions": [
                   "The Apple II family; model says which.",
                   "The Apple III.",
                   "The TRS-80 Model I.",
+                  "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, apple1 an Apple-1."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set) and RETROCORE_TRS80_ROMS for the Model I. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I and RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin). Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them."
+              },
+              "highRam": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: a 4 KB bank of RAM at $E000-$EFFF, where BASIC loads and runs."
+              },
+              "cassetteInterface": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
               },
               "rom": {
                 "enum": [
@@ -648,7 +660,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000."
               },
               "expansionInterface": {
                 "type": "boolean",
@@ -702,12 +714,12 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I: a .cas tape to play."
+                "description": "Model I: a .cas tape to play. Apple-1: a .wav tape, which plays from the start of the session."
               },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I: run as fast as possible while the cassette motor runs, so tapes load and save quickly; the machine's own timing is unchanged."
+                "description": "Model I: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -781,12 +793,12 @@
                   "amber"
                 ],
                 "enumDescriptions": [
-                  "A color monitor or television (the default).",
-                  "A black and white monochrome monitor: every dot sharp, as double hi-res desktops need.",
+                  "A color monitor or television (the default on the Apple II family and the Apple III).",
+                  "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
                 ],
-                "description": "Apple II: the monitor the video is shown on. The display panel's Screen menu changes it, and its choice is kept for later launches."
+                "description": "The monitor the video is shown on: color on the Apple II family and the Apple III, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1 and the Model I, which have no color). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
               },
               "mouse": {
                 "type": "integer",

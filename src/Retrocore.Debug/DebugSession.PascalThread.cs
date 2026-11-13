@@ -45,6 +45,7 @@ internal sealed partial class DebugSession
         if (pascal.Interpreter is null && Stopwatch.GetElapsedTime(_pascalScanned).TotalSeconds < 1) { return; }
         _pascalScanned = Stopwatch.GetTimestamp();
         bool known = pascal.Scan();
+        if (known) { RefreshPascalSources(); }
         if (known == _pascalAnnounced) { return; }
 
         _pascalAnnounced = known;
@@ -93,9 +94,11 @@ internal sealed partial class DebugSession
         if (!pascal.AtFetch(pc) || pascal.ObserveFetch() is not { } top) { return false; }
         if (_pascalGoal is { } goal)
         {
+            // MSCWs are made below their callers', so a higher MP is a caller.
             bool done = goal.Step switch
             {
-                PascalStep.Over => top.Mark.Address >= goal.Mark,
+                PascalStep.Over => top.Mark.Address > goal.Mark || (top.Mark.Address == goal.Mark && goal.LeftLine(top)),
+                PascalStep.Into => top.Mark.Address != goal.Mark || goal.LeftLine(top),
                 PascalStep.Out => top.Mark.Address > goal.Mark,
                 _ => true
             };
@@ -121,10 +124,15 @@ internal sealed partial class DebugSession
         return true;
     }
 
-    private void StepPascal(PascalStep step)
+    // A step by line where the procedure's listing is known, unless the Disassembly view steps by instruction; by
+    // p-code otherwise.
+    private void StepPascal(PascalStep step, bool instruction = false)
     {
         ushort mark = Pascal?.Registers?.Mark.Address ?? 0;
-        _pascalGoal = new PascalGoal(step, mark, Target.CycleCount + 2_000_000);
+        (PascalListing Listing, PascalListingLine Line, string? Path)? place =
+            instruction || step is PascalStep.Pause or PascalStep.Out || PascalFrames() is not [PascalFrame top, ..] ? null : PascalPlace(top);
+
+        _pascalGoal = new PascalGoal(step, mark, Target.CycleCount + 2_000_000, place?.Listing, place?.Line);
         if (step == PascalStep.Pause) { return; }
         Continue();
     }
@@ -175,15 +183,29 @@ internal sealed partial class DebugSession
             {
                 PascalFrame frame = stack[index];
                 string name = $"{pascal.Describe(frame)}+${frame.Offset:X4}";
+                (PascalListing Listing, PascalListingLine Line, string? Path)? place = PascalPlace(frame);
+                if (place?.Listing.ProcedureName(frame.SegmentNumber, frame.Procedure) is { } procedure)
+                {
+                    name = $"{procedure} ({name})";
+                }
+
                 if (index == 0 && pascal.Instruction(frame) is { } instruction) { name += $": {instruction}"; }
-                frames.Add(new JsonObject
+                if (place is { Path: null } unsourced) { name += $" (line {unsourced.Line.Line})"; }
+                JsonObject entry = new()
                 {
                     ["id"] = PascalFrameBase + index,
                     ["name"] = name,
-                    ["line"] = 0,
-                    ["column"] = 0,
+                    ["line"] = place is { Path: not null } sourced ? sourced.Line.Line : 0,
+                    ["column"] = place is { Path: not null } ? 1 : 0,
                     ["presentationHint"] = index == 0 ? "normal" : "subtle"
-                });
+                };
+
+                if (place is { Path: { } path })
+                {
+                    entry["source"] = new JsonObject { ["name"] = Path.GetFileName(path), ["path"] = path };
+                }
+
+                frames.Add(entry);
             }
         }
 

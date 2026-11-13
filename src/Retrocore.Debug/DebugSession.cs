@@ -236,7 +236,7 @@ internal sealed partial class DebugSession
 
         transport.On("next", args => Reply(() =>
         {
-            if (OnPascal(args)) { StepPascal(PascalStep.Over); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Over, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Over); }
             else { Step(over: true, outOf: false, Instruction(args)); }
             return [];
@@ -244,7 +244,7 @@ internal sealed partial class DebugSession
 
         transport.On("stepIn", args => Reply(() =>
         {
-            if (OnPascal(args)) { StepPascal(PascalStep.Into); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Into, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Into); }
             else { Step(over: false, outOf: false, Instruction(args)); }
             return [];

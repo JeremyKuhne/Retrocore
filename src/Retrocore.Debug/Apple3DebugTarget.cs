@@ -86,6 +86,7 @@ internal sealed class Apple3DebugTarget : IDebugTarget
         "Apple III Pascal",
         new Apple3PascalMemory(_machine.Bus),
         _machine.Bus.Peek,
+        [],
         (0x2000, 0xC000),
         extended: true,
         () => (ushort)(_machine.Bus.ZeroPage << 8),

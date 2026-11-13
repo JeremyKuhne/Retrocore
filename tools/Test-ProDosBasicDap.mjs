@@ -6,7 +6,8 @@
 // turns TRACE on and takes the "#" it prints to see every statement start, then jumps past GONE into the statement, so
 // the BASIC thread finds statements there too: RUN stops at its first statement, a breakpoint stops once each time its
 // statement runs, stepping goes statement by statement and into a GOSUB, an inline breakpoint stops at its own
-// statement, Set Next Statement moves BASIC, and an error stops at its statement. The ProDOS 2.4.3 image is
+// statement, Set Next Statement moves BASIC, and an error stops at its statement. An interrupt that comes as a statement
+// starts, which ProDOS hands to a handler ALLOC_INTERRUPT installed, returns there without starting it again. The ProDOS 2.4.3 image is
 // m1-dependencies\ProDOS_2_4_3.po under the external-files folder (RETROCORE_CACHE, or %USERPROFILE%\Retrocore), from
 // Fetch-M1Dependencies.ps1.
 
@@ -47,7 +48,7 @@ const hits = async () => (await request("retro/breakpoints")).breakpoints.map(br
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     await request("launch", {
-        machine: "apple2", model: "iie-enhanced", stopOnEntry: false, sound: "off", speed: "max", diskImage: image
+        machine: "apple2", model: "iie-enhanced", stopOnEntry: false, sound: "off", speed: "max", diskImage: image, mockingboard: true
     });
 
     const path = (await request("retro/basic/document", { base: "retrocore-basic://iie/" })).uri;
@@ -131,8 +132,49 @@ try {
     assert.match(error.description, /DIVISION BY ZERO/);
     assert.equal((await frames())[0].line, lineOf(50));
 
+    // The Mockingboard's timer interrupts every 1499 cycles, through ProDOS to the handler at $0330, while a breakpoint
+    // that never stops counts one hit per pass.
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("continue", { threadId: 2 });
+    await waitFor(text => text.includes("DIVISION BY ZERO"), "the error's message");
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    const bytes = list => Buffer.from(list).toString("base64");
+    const period = 1499;
+
+    // $0300: ALLOC_INTERRUPT with the parameters at $0320, the 6522's timer 1 free-running with its interrupt on, CLI.
+    const setup = [
+        0x20, 0x00, 0xBF, 0x40, 0x20, 0x03,
+        0xA9, 0x40, 0x8D, 0x0B, 0xC4, 0xA9, 0xC0, 0x8D, 0x0E, 0xC4,
+        0xA9, period & 0xFF, 0x8D, 0x04, 0xC4, 0xA9, period >> 8, 0x8D, 0x05, 0xC4,
+        0x58, 0x60
+    ];
+
+    // $0330: takes the timer's interrupt, counts it in $0350 and claims it; refuses any other.
+    const handler = [
+        0xD8, 0xAD, 0x0D, 0xC4, 0x10, 0x0D, 0xAD, 0x04, 0xC4, 0xEE, 0x50, 0x03, 0xD0, 0x03, 0xEE, 0x51, 0x03,
+        0x18, 0x60, 0x38, 0x60
+    ];
+
+    await request("writeMemory", { memoryReference: "0x300", data: bytes(setup) });
+    await request("writeMemory", { memoryReference: "0x320", data: bytes([2, 0, 0x30, 0x03]) });
+    await request("writeMemory", { memoryReference: "0x330", data: bytes(handler) });
+    await request("writeMemory", { memoryReference: "0x350", data: bytes([0, 0]) });
+    await request("continue", { threadId: 1 });
+    await request("retro/type", { text: "NEW\r10 CALL 768\r20 FOR I = 1 TO 2000\r30 A = A + 1\r40 NEXT I\r50 PRINT \"DONE\"\r" });
+    await waitFor(text => text.includes("50 PRINT"), "the second program");
+    const timed = (await request("retro/basic/program")).text.split(/\r?\n/);
+    const thirty = timed.findIndex(line => line.startsWith("30 ")) + 1;
+    await request("setBreakpoints", { source: { path }, breakpoints: [{ line: thirty, hitCondition: ">100000" }] });
+    await request("retro/type", { text: "RUN\r" });
+    await waitFor(text => /^DONE/m.test(text), "the second program's end");
+    const interrupts = Buffer.from((await request("readMemory", { memoryReference: "0x350", count: 2 })).data, "base64")
+        .readUInt16LE(0);
+    assert.ok(interrupts > 2000, `the timer interrupted ${interrupts} times`);
+    assert.deepEqual(await hits(), [2000], "each pass is one hit, interrupts or not");
+
     await request("disconnect");
-    console.log("ProDOS BASIC DAP passed: under BASIC.SYSTEM, RUN stops at its first statement, a breakpoint stops once per pass, stepping goes by statement and into a GOSUB, an inline breakpoint stops at its statement, Set Next Statement moves BASIC, and an error stops at its statement.");
+    console.log("ProDOS BASIC DAP passed: under BASIC.SYSTEM, RUN stops at its first statement, a breakpoint stops once per pass, stepping goes by statement and into a GOSUB, an inline breakpoint stops at its statement, Set Next Statement moves BASIC, an error stops at its statement, and interrupts start no statement twice.");
 } finally {
     clearTimeout(timeout);
     close();

@@ -210,7 +210,7 @@ Pascal thread, with `pascal` breakpoints on their procedures: see [Pascal.md](Pa
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |
 | `tools/Test-IIeDap.mjs`, `tools/Test-IIDap.mjs`, `tools/Test-IIPlusDap.mjs`, `tools/Test-IntegerBasicDap.mjs` | Each model and Integer BASIC through the debug adapter, from dumps and from the SDK's ROMs |
-| `tools/Test-ProDosBasicDap.mjs` | AppleSoft's BASIC thread under ProDOS's BASIC.SYSTEM, which runs statements past `GONE`: breakpoints, stepping, Set Next Statement and errors, on the ProDOS 2.4.3 image from `Fetch-M1Dependencies.ps1` |
+| `tools/Test-ProDosBasicDap.mjs` | AppleSoft's BASIC thread under ProDOS's BASIC.SYSTEM, which runs statements past `GONE`: breakpoints, stepping, Set Next Statement, errors and interrupts, on the ProDOS 2.4.3 image from `Fetch-M1Dependencies.ps1` |
 
 Dumps are looked for in `RETROCORE_IIE_ROMS`, `RETROCORE_IIPLUS_ROMS` and `RETROCORE_II_ROMS` (or `apple2-roms` under
 `RETROCORE_CACHE`, default `%USERPROFILE%\Retrocore`, for the II and II Plus); without them dump-dependent tests are

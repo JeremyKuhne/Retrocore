@@ -64,7 +64,7 @@ internal static partial class PascalCommand
                 ["catalog", string disk, .. string[] rest] => Catalog(disk, rest.Contains("--json")),
                 ["extract", string disk, string name, string output, .. string[] rest] => Extract(disk, name, output, rest.Contains("--raw")),
                 ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
-                ["disassemble", .. string[] rest] when rest.Length > 0 && IsSource(rest[^1]) => DisassembleToSource(rest),
+                ["disassemble", .. string[] rest] when rest.Any(IsSource) => DisassembleToSource(rest),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
                 ["assemble", string source, string output] => Assemble(source, output),
                 ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
@@ -180,11 +180,15 @@ internal static partial class PascalCommand
     // Writes a code file as p-code source, then assembles the source to check it gives the same bytes.
     private static int DisassembleToSource(string[] args)
     {
-        string output = args[^1];
-        List<string> input = [.. args[..^1]];
+        // The options come out first, so the output may come before or after them.
+        List<string> input = [.. args];
         byte[]? library = Option(input, "--library");
         byte[]? listing = Option(input, "--listing");
         byte[]? hints = Option(input, "--hints");
+        if (input.Count == 0 || !IsSource(input[^1])) { throw new ArgumentException(Usage); }
+
+        string output = input[^1];
+        input.RemoveAt(input.Count - 1);
         byte[] data = input switch
         {
             [string disk, string name] when IsDisk(disk) => Open(disk).Read(name),

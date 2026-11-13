@@ -1,10 +1,19 @@
 ;; COLOR BASIC ENTRY POINTS, FOR THE SOURCES THAT CALL COLOR BASIC
 ;;
-;; The Color BASIC routines and tables Extended and Disk Color BASIC use, as equates at their addresses, which
-;; are the same in Color BASIC 1.0 to 1.3. ColorBasic.asm defines and documents each of them as a label, so it
-;; does not include this file; the others do, and each definition here inherits Color BASIC's documentation. The
-;; places within a routine that the others enter have a line of their own instead.
+;; The Color BASIC routines and tables that Extended and Disk Color BASIC and the CoCo 3's ROM use, as equates at
+;; their addresses, which are the same in Color BASIC 1.0 to 1.3. ColorBasic.asm defines and documents each of them
+;; as a label, so it does not include this file; the others do, and each definition here inherits Color BASIC's
+;; documentation. The places within a routine that the others enter or patch have a line of their own instead, as
+;; do the routines only the CoCo 3's build has.
 
+;; Inherit: <ColorBasic:DEBDEL>
+DEBDEL = $045E
+
+;; Inherit: <ColorBasic:RESVEC>
+RESVEC = $A027
+
+EXECCART = $A05E                    ;; the CoCo 3's start of a ROM pack by hand, for EXEC &HE010: maps it in and jumps to it
+WAITKY3 = $A0CE                     ;; the CoCo 3's wait for a key, on the hi-res text screen when one is in use
 COLDST_RSTFLG = $A0E2               ;; the cold start's end: makes RESET a warm start, then enters BASIC
 
 ;; Inherit: <ColorBasic:BAWMST>
@@ -16,8 +25,17 @@ INCHR = $A171
 ;; Inherit: <ColorBasic:CONIN>
 CONIN = $A176
 
+;; Inherit: <ColorBasic:WAITKY>
+WAITKY = $A1B1
+
+;; Inherit: <ColorBasic:KEYIN>
+KEYIN = $A1CB
+
 ;; Inherit: <ColorBasic:PUTCHR>
 PUTCHR = $A282
+
+;; Inherit: <ColorBasic:SCRCHR>
+SCRCHR = $A30A
 
 SCRCHR_SAVED = $A30E                ;; SCRCHR with its registers saved: prints A on the 32-column screen
 
@@ -25,6 +43,16 @@ SCRCHR_SAVED = $A30E                ;; SCRCHR with its registers saved: prints A
 SETPRM = $A35F
 
 SETPRM_STORE = $A37C                ;; SETPRM's end: sets the comma fields, position and width from X, B and A
+
+;; Inherit: <ColorBasic:LINEIN_CLEAR>
+LINEIN_CLEAR = $A38D
+
+;; Inherit: <ColorBasic:LINEIN>
+LINEIN = $A390
+
+LINEIN_BREAK = $A3C2                ;; LINEIN's check for BREAK
+
+LINEIN_BRKDONE = $A3C6              ;; LINEIN's BREAK check once the carry is set: BREAK ends the line
 
 ;; Inherit: <ColorBasic:CHKIN>
 CHKIN = $A3ED
@@ -57,6 +85,9 @@ CLOADM_OFFSET = $A505               ;; CLOADM once its file is found: reads the 
 
 ;; Inherit: <ColorBasic:CHKBRK>
 CHKBRK = $A549
+
+;; Inherit: <ColorBasic:SETCUR>
+SETCUR = $A554
 
 ;; Inherit: <ColorBasic:GETNAM>
 GETNAM = $A578
@@ -104,6 +135,9 @@ WRHDR = $A65F
 ;; Inherit: <ColorBasic:DELAY>
 DELAY = $A7D1
 
+;; Inherit: <ColorBasic:WAITX>
+WAITX = $A7D3
+
 ;; Inherit: <ColorBasic:WRLDR>
 WRLDR = $A7D8
 
@@ -112,6 +146,9 @@ MOTOROFF = $A7E9
 
 ;; Inherit: <ColorBasic:SNDBLK>
 SNDBLK = $A7F4
+
+;; Inherit: <ColorBasic:CLS>
+CLS = $A910
 
 CLS_HOOKED = $A913                  ;; CLS past its hook: clears the screen, to the color given when there is one
 
@@ -146,15 +183,24 @@ OMERR = $AC44
 ;; Inherit: <ColorBasic:ERROR>
 ERROR = $AC46
 
+ERROR_HOOKED = $AC49                ;; ERROR past its first hook
 ERROR_SHOW = $AC60                  ;; the error handler's message: the two letters at X+B, then ERROR and the line
+
+ERROR_MESSAGE = $AC65               ;; ERROR after its code's two letters: shows ERROR and the line, then prompts
 
 ;; Inherit: <ColorBasic:OKPRMT>
 OKPRMT = $AC73
+
+OKPRMT_OK = $AC76                   ;; OKPRMT after its new line: shows OK and goes on to the main loop
 
 ;; Inherit: <ColorBasic:MAINLP>
 MAINLP = $AC7C
 
 MAINLP_RUN = $AC9D                  ;; where the main loop runs a crunched direct line
+
+;; Inherit: <ColorBasic:ERRCHR>
+ERRCHR = $ACA0
+
 EDITLN_NUMBER = $ACA8               ;; EDITLN with the line number read: crunches the line and puts it in the program
 
 ;; Inherit: <ColorBasic:LINKLN>
@@ -164,6 +210,8 @@ LINKLN_LINE = $ACF1                 ;; LINKLN from the line at X
 
 ;; Inherit: <ColorBasic:FINDLN>
 FINDLN = $AD01
+
+FINDLN_NEXT = $AD05                 ;; FINDLN's search from the line at X
 
 ;; Inherit: <ColorBasic:ERASEP>
 ERASEP = $AD19
@@ -177,8 +225,14 @@ CLRSTR = $AD26
 ;; Inherit: <ColorBasic:RSTSTK>
 RSTSTK = $AD33
 
+RSTSTK_OLDPTR = $AD3F               ;; RSTSTK with the stack reset: clears OLDPTR so CONT cannot continue
+
+RSTSTK_ARYDIS = $AD43               ;; RSTSTK's end: allows arrays again and returns
+
 ;; Inherit: <ColorBasic:NEWSTT>
 NEWSTT = $AD9E
+
+GONE_LOOP = $ADC4                   ;; GONE after the statement: back to NEWSTT, the interpreter's loop
 
 ;; Inherit: <ColorBasic:GONE2>
 GONE2 = $ADC6
@@ -188,14 +242,35 @@ GONE_DISPATCH = $ADD4               ;; runs the command whose place is in A from
 ;; Inherit: <ColorBasic:ISCNTC>
 ISCNTC = $ADEB
 
+ISCNTC_KEY = $ADF0                  ;; ISCNTC once a key is read: BREAK stops, SHIFT-@ pauses
+
+ISCNTC_NOTBRK = $ADF4               ;; ISCNTC's key that is not BREAK: pauses for SHIFT-@, or keeps the key
+
+;; Inherit: <ColorBasic:STOP>
+STOP = $AE09
+
+;; Inherit: <ColorBasic:STOPIT>
+STOPIT = $AE11
+
 ;; Inherit: <ColorBasic:ENDPRG>
 ENDPRG = $AE15
+
+;; Inherit: <ColorBasic:SETPTR>
+SETPTR = $AEBB
 
 ;; Inherit: <ColorBasic:ULERR>
 ULERR = $AED2
 
 ;; Inherit: <ColorBasic:DATA>
 DATA = $AEE0
+
+;; Inherit: <ColorBasic:SKPLIN>
+SKPLIN = $AEEB
+
+;; Inherit: <ColorBasic:ON>
+ON = $AF42
+
+ON_GO = $AF45                       ;; ON once n is read: reads GOTO or GOSUB and its lines
 
 ;; Inherit: <ColorBasic:LINGET>
 LINGET = $AF67
@@ -212,6 +287,7 @@ LETSTR_COPY = $AFB1                 ;; LETSTR once it knows the string must be c
 INPDEV_FILE = $B00C                 ;; where INPUT # returns to once CHKIN has opened the file for input
 INPDEV_LINE = $B01E                 ;; INPUT once its prompt is shown: reads the first line from the device
 INPLIN_READ = $B035                 ;; INPLIN without its prompt: reads a line into the line input buffer
+INPLIN_BREAK = $B03C                ;; INPUT's line read, ended by BREAK: stops as STOP does
 INPRD_ITEM = $B069                  ;; where INPUT reads its next item, from the text at X
 
 ;; Inherit: <ColorBasic:FRMNUM>
@@ -225,6 +301,8 @@ CKSTR = $B146
 
 ;; Inherit: <ColorBasic:CKTYPE>
 CKTYPE = $B148
+
+TMERR = $B151                       ;; CKTYPE's ?TM ERROR: raises a type mismatch
 
 ;; Inherit: <ColorBasic:FRMEVL>
 FRMEVL = $B156
@@ -267,6 +345,12 @@ ISLETC = $B3A2
 ;; Inherit: <ColorBasic:POSINT>
 POSINT = $B3E6
 
+;; Inherit: <ColorBasic:POSCHK>
+POSCHK = $B3E9
+
+;; Inherit: <ColorBasic:INTCNV>
+INTCNV = $B3ED
+
 ;; Inherit: <ColorBasic:FCERR>
 FCERR = $B44A
 
@@ -279,6 +363,9 @@ GIVABF = $B4F4
 ;; Inherit: <ColorBasic:STRSPA>
 STRSPA = $B50F
 
+;; Inherit: <ColorBasic:STRSET>
+STRSET = $B511
+
 ;; Inherit: <ColorBasic:STRLX>
 STRLX = $B516
 
@@ -286,6 +373,9 @@ STRLX = $B516
 STRLT2 = $B518
 
 STRLT2_ENDS = $B51A                 ;; STRLT2 with the terminator in A
+
+;; Inherit: <ColorBasic:PUTNEW>
+PUTNEW = $B54C
 
 ;; Inherit: <ColorBasic:GETSPA>
 GETSPA = $B56D
@@ -333,11 +423,25 @@ LIST = $B764
 ;; Inherit: <ColorBasic:DETOK>
 DETOK = $B7C2
 
+DETOK_TABLE = $B7F3                 ;; detokenizing a line: the next ROM's table
+DETOK_FIND = $B7F9                  ;; detokenizing a line, in a ROM's table: the token's place in it
+CRUNCH_TABLE = $B89D                ;; CRUNCH's search of a ROM's words, with U at the table before it
+
+CRUNCH_FUNCTIONS = $B8D4            ;; CRUNCH once the commands are searched: the functions' tables next
+
+CRUNCH_SEARCH = $B8D7               ;; CRUNCH's step to the next ROM's table, or to the functions after the last
+
+PRINT_AT_CURSOR = $B902             ;; PRINT @ once its position is read: moves the cursor there
+
+PRINT_AT_COMMA = $B905              ;; PRINT @ with the cursor moved: the comma, then the rest of PRINT
+
 ;; Inherit: <ColorBasic:PRNTCR>
 PRNTCR = $B958
 
 ;; Inherit: <ColorBasic:NEWLIN>
 NEWLIN = $B95C
+
+NEWLIN_CHECK = $B95F                ;; NEWLIN after SETPRM: a new line unless the device is at the start of one
 
 ;; Inherit: <ColorBasic:STROUT1>
 STROUT1 = $B99C

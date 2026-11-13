@@ -1910,26 +1910,26 @@ CARTROM:
     RTS
 
 ;; The screen's character output, which start-up patches into <SCRCHR>: on a hi-res text screen it prints there,
-;; through <HPUTCHR>, and otherwise goes on as <SCRCHR> does.
+;; through <PUTCHR20>, and otherwise goes on as <SCRCHR> does.
 ;;
 ;; In:   A = the character
 PUTCHR3:
     PSHS A,B,X
     LDX CURPOS
     LDB HRWIDTH
-    LBNE HPUTCHR                    ; a hi-res text screen
+    LBNE PUTCHR20                    ; a hi-res text screen
     LDB 1,S                         ; B as it came
     JMP SCRCHR_SAVED
 
 ;; CLS, which start-up patches in after <CLS>'s hook: on a hi-res text screen it clears that screen through
-;; <HCLS>, and otherwise goes on as <CLS> does.
+;; <CLS20>, and otherwise goes on as <CLS> does.
 ;;
 ;; In:   zero = set when CLS has no color
 CLS3:
     PSHS CC
     TST HRWIDTH
     BEQ CLS3_LORES
-    JMP HCLS                        ; a hi-res text screen
+    JMP CLS20                       ; a hi-res text screen
 CLS3_LORES:
     PULS CC
     JMP CLS_HOOKED

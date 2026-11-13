@@ -350,7 +350,7 @@ COLDST_HOOKS:
 WAITKY3:
     PSHS B,X
     TST HRWIDTH
-    LBNE HWAITKY                    ; a hi-res text screen
+    LBNE WAITKY20                    ; a hi-res text screen
 WAITKY3_LOOP:
     JSR BLINK
     JSR KEYIN

@@ -7,11 +7,11 @@
 ;; Inherit: <Coco3:COCO3RESET>
 COCO3RESET = $C000
 
-;; Inherit: <Coco3:HCLS>
-HCLS = $F6AD
+;; Inherit: <Coco3:CLS20>
+CLS20 = $F6AD
 
-;; Inherit: <Coco3:HWAITKY>
-HWAITKY = $F77E
+;; Inherit: <Coco3:WAITKY20>
+WAITKY20 = $F77E
 
-;; Inherit: <Coco3:HPUTCHR>
-HPUTCHR = $F7AE
+;; Inherit: <Coco3:PUTCHR20>
+PUTCHR20 = $F7AE

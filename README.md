@@ -10,7 +10,7 @@ straight into the ROM or DOS source.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
-| Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, SDL3 game controllers |
+| Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, Apple II 3.5 Disk Controller-compatible SmartPort with two SuperDrives (400K/800K, 720K/1.44 MB), SDL3 game controllers |
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
@@ -149,6 +149,8 @@ code never shows stale source lines. The [extension README](extension/README.md)
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | The IIe's video ROM (both models, including MouseText) and the II and II Plus's character generator. |
 | [`Dos33.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos33.asm), [`Dos32.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos32.asm) | Apple DOS 3.3 (1983 and 1980) and DOS 3.2: both the System Masters' tracks 0–2 and DOS relocated at `$9D00`; see [Dos.md](docs/Dos.md). |
 | [`Slot7.rom.asm`](src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's 256-byte boot and driver ROM, `$C700`–`$C7FF`. |
+| [`Disk35.rom.asm`](src/Retrocore.Machines.Apple2/Roms/Disk35.rom.asm) | The emulated 3.5 disk controller's 256-byte slot ROM: Apple's card's identification and entry points, handing each SmartPort and ProDOS call to the emulator. |
+| [`Disk35Controller.asm`](src/Retrocore.Machines.Apple2/Roms/Disk35/Disk35Controller.asm) | Apple's Apple II 3.5 Disk Controller Card EPROM (341-0438-A): the host's slot page and SmartPort code, the diagnostics, and the card's own 65C02 firmware that drives the SWIM. |
 | [`BootRom.asm`](src/Retrocore.Machines.Apple3/Roms/BootRom.asm), [`Apple3Equates.asm`](src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm) | The Apple III's boot ROM, `$F000`–`$FFFF`: disk routines, diagnostics and monitor, with its hardware names. |
 | [`Level2.asm`](src/Retrocore.Machines.Trs80/Roms/Level2.asm) | TRS-80 Model I Level II BASIC, revisions 1.2 and 1.3. |
 | [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Model I Level I BASIC. |
@@ -291,6 +293,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md);
 - [the Apple III](docs/backlog/Apple3.md);
+- [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md).
 
 ## License

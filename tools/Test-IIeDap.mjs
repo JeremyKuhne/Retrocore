@@ -3,8 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 import { startDap } from "./DapClient.mjs";
-import { resolve, join } from "node:path";
-import { writeFileSync, unlinkSync } from "node:fs";
+import { resolve, join, dirname } from "node:path";
+import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
@@ -171,6 +171,30 @@ try {
         const devices = await request("retro/devices");
         assert.equal(slotRow(devices, "slot2").value, "Mouse card", JSON.stringify(cards));
         assert.equal(slotRow(devices, "slot4").value, "empty", JSON.stringify(cards));
+    }
+
+    // The 3.5 controller: the launch puts it in slot 5 with an 800K disk in drive 1, and a saved machine moves it,
+    // disk and all.
+    const disk35 = join(root, "artifacts", "iie-sample", "blank800k.po");
+    mkdirSync(dirname(disk35), { recursive: true });
+    writeFileSync(disk35, Buffer.alloc(800 * 1024));
+    try {
+        for (const machineState of [undefined, { cards: { 2: "disk35", 5: "empty" } }]) {
+            await request("launch", {
+                machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, disk35: 5,
+                disk35Images: [disk35], machineState
+            });
+            const devices = await request("retro/devices");
+            const slot = machineState === undefined ? "slot5" : "slot2";
+            assert.equal(slotRow(devices, slot).value, "3.5 disk controller");
+            assert.deepEqual(slotRow(devices, slot).devices, ["disk35d1", "disk35d2"]);
+            const drive = devices.devices.find(device => device.id === "disk35d1");
+            assert.equal(drive.media.label, disk35);
+            assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect"]);
+            assert.equal(devices.configuration.cards[slot.slice(4)], "disk35");
+        }
+    } finally {
+        unlinkSync(disk35);
     }
     events.splice(0, events.length); // these launches' own events, such as their stops on entry
 

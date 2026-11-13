@@ -248,6 +248,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
         if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
+        target.InstallDisk35(args);
         if (args.String("screen") is { } screen) { machine.Bus.Video.Monitor = ParseScreen(screen); }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
         target.FastDisk = args.Bool("fastDisk") ?? true;
@@ -901,11 +902,53 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public IReadOnlyList<Machines.Devices.IDevice> Devices => _machine.Devices;
 
+    // The launch's 3.5 controller: disk35 names its slot, and disk35Images the disks in its drives, in order.
+    private void InstallDisk35(JsonObject args)
+    {
+        JsonArray? images = args["disk35Images"] as JsonArray;
+        int? slot = args.Int("disk35");
+        if (slot is null or 0)
+        {
+            if (images is { Count: > 0 })
+            {
+                throw new ArgumentException("disk35Images needs disk35, the controller's slot.");
+            }
+
+            return;
+        }
+
+        HardwareAction($"slot{slot}", "addDisk35", []);
+        if (images is null) { return; }
+        if (images.Count > 2)
+        {
+            throw new ArgumentException("disk35Images takes at most two disks, one for each drive.");
+        }
+
+        for (int drive = 0; drive < images.Count; drive++)
+        {
+            if (images[drive]?.GetValue<string>() is { Length: > 0 } image)
+            {
+                Apple2Loader.Insert(_machine.Bus.Disk35.Drives[drive], Path.GetFullPath(image));
+            }
+        }
+    }
+
     /// <inheritdoc/>
     public void DeviceAction(Machines.Devices.IDevice device, string action, JsonObject args)
     {
         switch (device, action)
         {
+            case (Apple2Disk35Drive drive, "insert"):
+                string image = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
+                drive.Eject();
+                Apple2Loader.Insert(drive, image);
+                break;
+            case (Apple2Disk35Drive drive, "eject"):
+                drive.Eject();
+                break;
+            case (Apple2Disk35Drive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
                 drive.Eject();
@@ -1140,8 +1183,21 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard, a Disk II controller or the mouse card here."
-            : "Add Card puts a Disk II controller or the mouse card here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller, the mouse card or the 3.5 controller here."
+            : "Add Card puts a Disk II controller, the mouse card or the 3.5 controller here.";
+
+        if (slot == _machine.Bus.Disk35Slot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "3.5 disk controller",
+                "A SmartPort with two SuperDrives, answering as Apple's Apple II 3.5 Disk Controller Card does: 400K and "
+                    + "800K Apple disks and 720K and 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. The launch "
+                    + "installs it with disk35 and a slot, and disk35Images; Remove Card takes it out and ejects its disks.",
+                [.. _machine.Bus.Disk35.Drives.Select(drive => drive.Id)],
+                ["removeCard"]);
+        }
 
         if (slot == _machine.Bus.MouseSlot)
         {
@@ -1248,6 +1304,14 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             case "removeCard" when slot > 0 && slot == _machine.Bus.MouseSlot:
                 _machine.Bus.RemoveMouse();
                 break;
+            case "addDisk35" when _machine.Bus.Disk35Slot != 0:
+                throw new ArgumentException($"The 3.5 controller is already in slot {_machine.Bus.Disk35Slot}.");
+            case "addDisk35" when slot > 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallDisk35(slot);
+                break;
+            case "removeCard" when slot > 0 && slot == _machine.Bus.Disk35Slot:
+                _machine.Bus.RemoveDisk35();
+                break;
             case "addMockingboard" when slot == 4 && _machine.Bus.IsSlotFree(4):
                 _machine.Bus.InstallMockingboard();
                 break;
@@ -1313,6 +1377,16 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
                         HardwareAction(id, "addMouse", []);
                         break;
+                    case "disk35":
+                        // One per machine, as the mouse card is; its drives keep their disks as it moves.
+                        if (_machine.Bus.Disk35Slot is not 0 and var from && from != slot && _machine.Bus.IsSlotFree(slot))
+                        {
+                            MoveDisk35(from, slot);
+                            break;
+                        }
+
+                        HardwareAction(id, "addDisk35", []);
+                        break;
                     case "languageCard":
                         HardwareAction(id, "addLanguageCard", []);
                         break;
@@ -1338,8 +1412,21 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
+    // Moves the 3.5 controller to another slot with its disks still in, as a saved machine puts it where it was.
+    private void MoveDisk35(int from, int to)
+    {
+        Apple2Disk35Drive[] drives = [.. _machine.Bus.Disk35.Drives];
+        (Disk35Disk? Disk, Machines.Devices.MediaState? State)[] disks = [.. drives.Select(drive => (drive.Disk, drive.Media))];
+        HardwareAction($"slot{from}", "removeCard", []);
+        HardwareAction($"slot{to}", "addDisk35", []);
+        for (int i = 0; i < drives.Length; i++)
+        {
+            if (disks[i] is ({ } disk, { } state)) { drives[i].Insert(disk, state.Label, state.Format); }
+        }
+    }
+
     // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, mouse,
-    // diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
+    // disk35, diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
     // blockStorage, or empty.
     private string CardIn(int slot)
     {
@@ -1352,6 +1439,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
         if (slot == _machine.Bus.MouseSlot) { return "mouse"; }
+        if (slot == _machine.Bus.Disk35Slot) { return "disk35"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {
             return _diskSectors.TryGetValue(slot, out int sectors) ? $"diskII{sectors}" : "diskII";

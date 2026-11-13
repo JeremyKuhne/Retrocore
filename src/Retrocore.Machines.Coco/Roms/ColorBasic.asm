@@ -6243,7 +6243,8 @@ UNUSED:
 ;; The 6809's interrupt vectors: each points to page 1's JMP, which later ROMs can change, except RESET's.
 ;;
 ;; On the CoCo 3 they point to the GIME's constant page, <INT_SWI3> to <INT_NMI>, whose jumps start-up copies from
-;; <INTIMAGE>, and RESET goes to <INTRESET>, which maps the whole ROM in and starts the CoCo 3 at <COCO3RESET>.
+;; <INTIMAGE>, and RESET goes to $8C1B, in the patched Extended BASIC, which maps the whole ROM in and starts the
+;; CoCo 3 at <COCO3RESET>.
 VECTRS:
     .dbyt SEARCH                    ; reserved
 .if COCO3

@@ -4,7 +4,8 @@
 
 // Color Computer DAP integration: runs Color and Extended BASIC built from the SDK's sources, stepping from the 6809
 // sample into ColorBasic.asm, through the console out hook into ExtendedBasic.asm, and out again; with a disk, into
-// DiskBasic.asm's hook instead; then, with the ROM dumps, boots a CoCo 2 with the disk controller to Disk Extended
+// DiskBasic.asm's hook instead; boots a CoCo 3 on its ROM built from the sources, stepping into its ColorBasic.asm and
+// out, and switches it to 80 columns; then, with the ROM dumps, boots a CoCo 2 with the disk controller to Disk Extended
 // Color BASIC, saves and lists a program on a disk, stops in the sample with its call stack, and boots a CoCo 3 to its
 // 80-column screen.
 // The dumps are those in RETROCORE_COCO_ROMS, or %USERPROFILE%\Retrocore\coco-roms\extract.
@@ -141,9 +142,48 @@ try {
     await request("continue", { threadId: 1 });
     await screen(text => text.includes("DISK EXTENDED COLOR BASIC 1.1") && text.includes("HELLO FROM THE 6809"), "the sample on the SDK's Disk BASIC");
 
+    // A CoCo 3 boots its ROM built from the SDK's sources, which it copies into RAM and patches: the sample's
+    // JSR [CHROUT] steps into PUTCHR in the CoCo 3's build of ColorBasic.asm, on through the patched screen output
+    // into Coco3.asm, and stepping out comes back.
+    events.length = 0;
+    await request("launch", {
+        machine: "coco", model: "coco3", sdkRoms, source: hello, stopOnEntry: true, speed: "max", sound: "off"
+    });
+    assert.equal((await request("setBreakpoints", { source: { path: hello }, breakpoints: [{ line: chrout }] })).breakpoints[0].verified, true);
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    const coco3Hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
+    assert.equal(coco3Hardware.rom.value, "Color, Extended and Super Extended Color BASIC 2.0, from the SDK's sources");
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    await request("stepIn", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "step");
+    sdkStack = await request("stackTrace", { threadId: 1 });
+    assert.equal(sdkStack.stackFrames[0].source.path.toLowerCase(), colorBasic.toLowerCase());
+    assert.equal(sdkStack.stackFrames[0].name, "PUTCHR");
+    await request("stepOut", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "step");
+    sdkStack = await request("stackTrace", { threadId: 1 });
+    assert.equal(sdkStack.stackFrames[0].source.path.toLowerCase(), hello.toLowerCase());
+    assert.equal(sdkStack.stackFrames[0].line, chrout + 1);
+    await request("setBreakpoints", { source: { path: hello }, breakpoints: [] });
+    await request("continue", { threadId: 1 });
+    await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && text.includes("HELLO FROM THE 6809"), "the sample on the CoCo 3's SDK ROM");
+
+    // The CoCo 3 on the SDK's ROM switches to 80 columns.
+    events.length = 0;
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("launch", { machine: "coco", model: "coco3", sdkRoms, stopOnEntry: false, speed: "max", sound: "off" });
+    await request("configurationDone");
+    await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK from the SDK's ROM");
+    await type("WIDTH 80\r");
+    const sdkWide = await screen(text => /^OK/m.test(text) && !text.includes("EXTENDED"), "the 80-column screen from the SDK's ROM");
+    assert.equal(sdkWide.columns, 80);
+
     if (!dumps) {
         await request("disconnect");
-        console.log(`Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm and DiskBasic.asm and out. No dumps in ${romDirectory}, so the rest was skipped.`);
+        console.log(`Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm and DiskBasic.asm and out, and a CoCo 3 on the SDK's ROM at 80 columns. No dumps in ${romDirectory}, so the rest was skipped.`);
         process.exit(0);
     }
 

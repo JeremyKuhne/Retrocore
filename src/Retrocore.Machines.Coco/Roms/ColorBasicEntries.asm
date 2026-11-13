@@ -12,7 +12,7 @@ DEBDEL = $045E
 ;; Inherit: <ColorBasic:RESVEC>
 RESVEC = $A027
 
-EXECCART = $A05E                    ;; the CoCo 3's start of a ROM pack by hand, for EXEC &HE010: maps it in and jumps to it
+EXECCART = $A05E                    ;; the CoCo 3's ROM pack start by hand, for EXEC &HE010
 WAITKY3 = $A0CE                     ;; the CoCo 3's wait for a key, on the hi-res text screen when one is in use
 COLDST_RSTFLG = $A0E2               ;; the cold start's end: makes RESET a warm start, then enters BASIC
 

@@ -264,34 +264,44 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     ///  <para>
     ///   A CoCo 1 or 2's Color BASIC debugs against <c>ColorBasic.asm</c>, its Extended Color BASIC against
     ///   <c>ExtendedBasic.asm</c>, and the disk controller's Disk Extended Color BASIC against <c>DiskBasic.asm</c>,
-    ///   each built for its version. The SDK has no source for the CoCo 3's BASIC yet, so its code shows as
-    ///   disassembly.
+    ///   each built for its version. A CoCo 3's ROM debugs against the CoCo 3's build of <c>ExtendedBasic.asm</c> and
+    ///   <c>ColorBasic.asm</c> and against <c>Coco3.asm</c>. The CoCo 3 copies its ROM, and Disk BASIC's, into RAM
+    ///   and runs it there, patched, so its modules apply wherever the memory map puts those bytes, and the patched
+    ///   places show the patches' source, in <c>Coco3.asm</c>.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
-        if (_machine.Model == CocoModel.Coco3) { return; }
         string sdk = CocoSdkModules.SdkDirectory(directory);
+        bool coco3 = _machine.Model == CocoModel.Coco3;
+        if (coco3 && CocoSdkModules.IsCoco3Rom(_machine.Bus.Coco3Rom) && File.Exists(Path.Join(sdk, "Coco3.asm")))
+        {
+            Coco3Assembly rom = CocoSdkModules.AssembleCoco3(sdk);
+            debug.Add(new SourceMapModule(rom.Coco3, area: null));
+            debug.Add(new SourceMapModule(rom.ExtendedBasic, area: null));
+            debug.Add(new SourceMapModule(rom.ColorBasic, area: null));
+        }
+
         string source = Path.Join(sdk, "ColorBasic.asm");
-        if (CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version && File.Exists(source))
+        if (!coco3 && CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version && File.Exists(source))
         {
             debug.Add(new SourceMapModule(CocoSdkModules.AssembleColorBasic(source, version), CocoMemoryArea.ColorBasic));
         }
 
         source = Path.Join(sdk, "ExtendedBasic.asm");
-        if (CocoSdkModules.ExtendedVersionOf(_machine.Bus.ExtendedBasicRom) is { } extended && File.Exists(source))
+        if (!coco3 && CocoSdkModules.ExtendedVersionOf(_machine.Bus.ExtendedBasicRom) is { } extended && File.Exists(source))
         {
             debug.Add(new SourceMapModule(CocoSdkModules.AssembleExtendedBasic(source, extended), CocoMemoryArea.ExtendedBasic));
         }
 
-        // The disk controller's ROM is in the cartridge slot when no cartridge is.
+        // The disk controller's ROM is in the cartridge slot when no cartridge is; a CoCo 3 runs a copy in RAM.
         source = Path.Join(sdk, "DiskBasic.asm");
         if (_machine.Bus.Cartridge is null
             && _machine.Bus.DiskController is { } controller
             && CocoSdkModules.DiskVersionOf(controller.Rom.Bytes) is { } disk
             && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleDiskBasic(source, disk), CocoMemoryArea.Cartridge));
+            debug.Add(new SourceMapModule(CocoSdkModules.AssembleDiskBasic(source, disk), coco3 ? null : CocoMemoryArea.Cartridge));
         }
     }
 
@@ -388,7 +398,7 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
                 "rom",
                 "ROM",
                 RomText(),
-                "The dumps in romDirectory or RETROCORE_COCO_ROMS; without them, Color and Extended BASIC from the SDK's sources."),
+                "The dumps in romDirectory or RETROCORE_COCO_ROMS; without them, built from the SDK's sources."),
             new(
                 "memory",
                 "Memory",
@@ -425,7 +435,11 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
 
     private string RomText()
     {
-        if (_machine.Model == CocoModel.Coco3) { return "Color, Extended and Super Extended Color BASIC 2.0"; }
+        if (_machine.Model == CocoModel.Coco3)
+        {
+            return "Color, Extended and Super Extended Color BASIC 2.0" + (SdkRoms ? ", from the SDK's sources" : "");
+        }
+
         string color = CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version
             ? $"Color BASIC 1.{version - 10}"
             : "Color BASIC";

@@ -12,7 +12,7 @@ namespace Retrocore.Tests;
 
 /// <summary>
 ///  Verifies the SDK's native sources for the Color Computer's Color BASIC, versions 1.0 to 1.3, Extended Color
-///  BASIC, versions 1.0 and 1.1, and Disk Extended Color BASIC, versions 1.0 and 1.1.
+///  BASIC, versions 1.0 and 1.1, Disk Extended Color BASIC, versions 1.0 and 1.1, and the CoCo 3's ROM.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -241,6 +241,64 @@ public sealed class CocoRomSourceTests
         CocoMachineTests.Type(machine, "print free(0)\r");
         CocoDiskTests.WaitForOk(machine, limit: 10);
         CocoMachineTests.Screen(machine).Should().Contain(" 67 ");
+    }
+
+    /// <summary>
+    ///  The CoCo 3's 32 KB ROM builds byte-identically from Extended and Color BASIC with <c>COCO3</c> set and
+    ///  <c>Coco3.asm</c>.
+    /// </summary>
+    [TestMethod]
+    public void Coco3MatchesTheRom()
+    {
+        Coco3Assembly rom = CocoSdkModules.AssembleCoco3(Path.Join(AppContext.BaseDirectory, "Inputs", "Coco"));
+        rom.ExtendedBasic.Diagnostics.Should().BeEmpty();
+        rom.ColorBasic.Diagnostics.Should().BeEmpty();
+        rom.Coco3.Diagnostics.Should().BeEmpty();
+        rom.Image.Should().HaveCount(CocoRoms.Coco3Size);
+        string hash = Convert.ToHexString(SHA256.HashData(rom.Image));
+        hash.Should().Be("AD358430568250EB8330A37F85361D9CE67E5AE6D5A28C17B31802CD3953A5D2");
+        CocoSdkModules.IsCoco3Rom(rom.Image).Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  With the dump, the CoCo 3's ROM compares byte for byte.
+    /// </summary>
+    [TestMethod]
+    public void Coco3MatchesTheDump()
+    {
+        string directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS")
+            ?? Path.Join(ExternalTestData.Root, "coco-roms", "extract");
+
+        string path = Path.Join(directory, "coco3", "coco3.rom");
+        if (!File.Exists(path))
+        {
+            Assert.Inconclusive($"The CoCo 3 dump ({path}) is missing.");
+        }
+
+        byte[] expected = File.ReadAllBytes(path);
+        byte[] actual = CocoSdkModules.AssembleCoco3(Path.Join(AppContext.BaseDirectory, "Inputs", "Coco")).Image;
+        int first = actual.AsSpan().CommonPrefixLength(expected);
+        first.Should().Be(actual.Length, $"the first difference is at ${CocoSdkModules.ExtendedBasicOrigin + first:X4}");
+    }
+
+    /// <summary>
+    ///  A CoCo 3 runs on its ROM built from the sources, with no dumps: it signs on as Extended Color BASIC 2.0, and
+    ///  Super Extended BASIC's text and graphics commands work.
+    /// </summary>
+    [TestMethod]
+    public void Coco3BootsFromTheSource()
+    {
+        Coco3Assembly rom = CocoSdkModules.AssembleCoco3(Path.Join(AppContext.BaseDirectory, "Inputs", "Coco"));
+        CocoMachine machine = new(new() { Model = CocoModel.Coco3, RamKilobytes = 128 }, CocoRoms.ForCoco3(rom.Image));
+
+        machine.Run(3 * (ulong)CocoTiming.ClockHertz);
+        CocoMachineTests.Screen(machine).Should().Contain("EXTENDED COLOR BASIC 2.0").And.Contain("OK");
+        CocoMachineTests.Type(machine, "HSCREEN 2:HSET(10,10,3):A=HPOINT(10,10):HSCREEN 0:PRINT A;LPEEK(&H7A000)\r");
+        machine.Run(2 * (ulong)CocoTiming.ClockHertz);
+        CocoMachineTests.Screen(machine).Should().Contain(" 3 ");
+        CocoMachineTests.Type(machine, "WIDTH 40\rPRINT 6*7\r");
+        machine.Bus.Gime?.CompatibleVideo.Should().BeFalse();
+        CocoMachineTests.Screen(machine).Should().Contain("42");
     }
 
     private static string Source(string name) => Path.Join(AppContext.BaseDirectory, "Inputs", "Coco", name);

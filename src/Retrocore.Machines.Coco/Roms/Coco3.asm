@@ -71,10 +71,10 @@ COCO3RESET_MMU:
     STA ,X+
     DECB
     BNE COCO3RESET_MMU
-    LDA #COCO+MMUEN+MC3+MC2+MC1     ; CoCo compatible, the MMU on, the constant page, the standard SCS, 32K of internal ROM
+    LDA #COCO+MMUEN+MC3+MC2+MC1     ; CoCo compatible, the MMU on, constant page, standard SCS, 32K ROM
     STA INIT0
     LEAX >BEGMOVE,PCR
-    LDY #$4000
+    LDY #STARTUP
 COCO3RESET_COPY:
     LDD ,X++                        ; four bytes at a time
     LDU ,X++
@@ -98,7 +98,7 @@ BEGMOVE:
 ;; has one, then $E000-$FDFF; then <PATCHTAB>'s patches go in, <DSKPATCH> patches Disk BASIC, <AUTHNAMES> decodes
 ;; the authors' names, and <INTIMAGE> sets up the interrupt jumps.
 STARTUP:
-    LEAS -$01,S                     ; a byte on the stack for the F1 key
+    LEAS -1,S                       ; a byte on the stack for the F1 key
     NOP                             ; nothing: room the code never used
     NOP
     NOP
@@ -116,25 +116,25 @@ STARTUP_VIDEO:
     BNE STARTUP_VIDEO
     LDX #PIA1
     LDD #$FF34                      ; the PIAs as <INITHW> sets them
-    CLR $01,X
-    CLR $03,X
+    CLR 1,X
+    CLR 3,X
     DECA
     STA ,X
     LDA #$F8
-    STA $02,X
-    STB $01,X
-    STB $03,X
-    CLR $02,X                       ; the VDG's text mode
+    STA 2,X
+    STB 1,X
+    STB 3,X
+    CLR 2,X                         ; the VDG's text mode
     LDA #$02
     STA ,X                          ; serial output marking
     LDA #$FF
     LDX #PIA0
-    CLR $01,X
-    CLR $03,X
+    CLR 1,X
+    CLR 3,X
     CLR ,X
-    STA $02,X
-    STB $01,X
-    STB $03,X
+    STA 2,X
+    STB 1,X
+    STB 3,X
     LDB #12                         ; the SAM's first twelve bits: the VDG's mode and the display's offset
     LDU #SAMREG
 STARTUP_SAM:
@@ -143,11 +143,11 @@ STARTUP_SAM:
     BNE STARTUP_SAM
     STA SAMREG+9                    ; the text screen at $0400
     TFR B,DP                        ; B = 0: the direct page at $0000
-    CLR $02,X
-    STA -$03,U                      ; the SAM's page bit, which the CoCo 3 ignores
+    CLR 2,X
+    STA -3,U                        ; the SAM's page bit, which the CoCo 3 ignores
     LDX #PIA0
     LDB #$DF                        ; column 2 strobed: F1 in row 6
-    STB $02,X
+    STB 2,X
     LDA ,X
     COMA
     ANDA #$40                       ; F1 down?
@@ -155,12 +155,12 @@ STARTUP_SAM:
     LDY #2                          ; two keys: CTRL, in the next column, then ALT
 STARTUP_KEYS:
     ASRB                            ; the next column
-    STB $02,X
+    STB 2,X
     LDA ,X
     COMA
     ANDA #$40
     BEQ STARTUP_CHECK
-    LEAY -$01,Y                     ; the next key
+    LEAY -1,Y                       ; the next key
     BNE STARTUP_KEYS
     LBRA AUTHSHOW                   ; both down: show the picture
 STARTUP_CHECK:
@@ -235,12 +235,12 @@ STARTUP_SUPER:
     BEQ STARTUP_CLEAR
     LDX #IM_TEXT                    ; the alternate color set in the video images Super Extended BASIC keeps
     LDB #$03                        ; three text modes
-    LEAX $01,X                      ; past the first image's INIT0
+    LEAX 1,X                        ; past the first image's INIT0
 STARTUP_ALTTEXT:
     LDA ,X
     ORA #$20                        ; the alternate color set
     STA ,X
-    LEAX $09,X                      ; the next image
+    LEAX 9,X                        ; the next image
     DECB
     BNE STARTUP_ALTTEXT
     LDB #$02                        ; two graphics modes
@@ -249,7 +249,7 @@ STARTUP_ALTGRAPH:
     LDA ,X
     ORA #$20
     STA ,X
-    LEAX $09,X
+    LEAX 9,X
     DECB
     BNE STARTUP_ALTGRAPH
 STARTUP_CLEAR:
@@ -271,7 +271,7 @@ STARTUP_PALETTE:
     LEAY >PALIMAGE,PCR
     LDB #16
     BSR MOVEXY
-    LEAS $01,S                      ; drop the F1 flag
+    LEAS 1,S                        ; drop the F1 flag
     JMP RESVEC                      ; Color BASIC's reset, which warm or cold starts BASIC
 
 ;; Copies ROM into the RAM under it, eight bytes at a time: each is read with the ROM switched in and written with
@@ -284,15 +284,15 @@ ROMTORAM:
 ROMTORAM_LOOP:
     CLR SAMREG+30                   ; the ROM in
     LDD ,Y
-    LDX $02,Y
-    LDU $04,Y
-    LDS $06,Y
+    LDX 2,Y
+    LDU 4,Y
+    LDS 6,Y
     CLR SAMREG+31                   ; the RAM in
     STD ,Y                          ; the same bytes into the RAM
-    STX $02,Y
-    STU $04,Y
-    STS $06,Y
-    LEAY $08,Y                      ; the next eight
+    STX 2,Y
+    STU 4,Y
+    STS 6,Y
+    LEAY 8,Y                        ; the next eight
     CMPY COPYEND
     BCS ROMTORAM_LOOP
     LDS COPYSTK
@@ -301,7 +301,7 @@ ROMTORAM_LOOP:
 ;; Copies bytes from Y to X.
 ;;
 ;; In:   B = the count, X = where to, Y = where from
-;; Out:  X and Y past the bytes
+;; Out:  X = past the bytes written, Y = past the bytes read
 MOVEXY:
     LDA ,Y+
     STA ,X+
@@ -346,14 +346,14 @@ AUTHSHOW_COPY:
     BCS AUTHSHOW_COPY
     LDA #$F9                        ; PMODE 4's graphics, the second color set
     STA PIA1+2
-    CLRA                            ; clear the SAM's offset bits but F3 and F2: the display at $0E00, and the VDG's graphics mode
+    CLRA                            ; clear the SAM's bits but F3 and F2: graphics, the display at $0E00
     LDX #SAMREG
     STA ,X
-    STA $03,X
-    STA $05,X
-    STA $07,X
-    STA $09,X
-    STA $0B,X
+    STA 3,X
+    STA 5,X
+    STA 7,X
+    STA 9,X
+    STA 11,X
 AUTHSHOW_WAIT:
     BRA AUTHSHOW_WAIT               ; until RESET
 
@@ -361,25 +361,25 @@ AUTHSHOW_WAIT:
 ;; block $38, BASIC's first, so the SAM's offset places the screen as on a CoCo 2, and the vertical scroll that
 ;; mode needs.
 VIDIMAGE:
-    .byte $00,$00,$00,$00,$0F,$E0
-    .byte $00,$00
+    .byte $00, $00, $00, $00, $0F, $E0
+    .byte $00, $00
 
 ;; What <STARTUP> puts in the palette registers, $FFB0-$FFBF: the composite colors the VDG showed, as the GIME
 ;; makes them.
 PALIMAGE:
-    .byte 18,36,11,7,63,31
-    .byte 9,38,0,18,0,63
-    .byte 0,18,0,38
+    .byte 18, 36, 11, 7, 63, 31
+    .byte 9, 38, 0, 18, 0, 63
+    .byte 0, 18, 0, 38
 
 ;; What <COCO3RESET> puts in the MMU's registers: task 0, BASIC's 64K with block $34 at $4000 for start-up, then
 ;; task 1, the hi-res graphics screen, blocks $30-$33, at $2000-$9FFF, with block $35 at $C000 for its stack.
 MMUIMAGE:
-    .byte BLOCK7_0,BLOCK7_1,BLOCK6_4
-    .byte BLOCK7_3,BLOCK7_4,BLOCK7_5
-    .byte BLOCK7_6,BLOCK7_7
-    .byte BLOCK7_0,BLOCK6_0,BLOCK6_1
-    .byte BLOCK6_2,BLOCK6_3,BLOCK7_5
-    .byte BLOCK6_5,BLOCK7_7
+    .byte BLOCK7_0, BLOCK7_1, BLOCK6_4
+    .byte BLOCK7_3, BLOCK7_4, BLOCK7_5
+    .byte BLOCK7_6, BLOCK7_7
+    .byte BLOCK7_0, BLOCK6_0, BLOCK6_1
+    .byte BLOCK6_2, BLOCK6_3, BLOCK7_5
+    .byte BLOCK6_5, BLOCK7_7
 
 ;; The patches <STARTUP> makes to the copies of Extended and Color BASIC in RAM, after a count: each is where it
 ;; goes, its length, and its code, which mostly jumps to Super Extended BASIC's code for what the CoCo 3 does
@@ -524,10 +524,10 @@ HEXPATCH_POINT:
 
 ;; The authors' names, complemented, which <AUTHNAMES> decodes into <AUTHORMS>.
 AUTHCODED:
-    .byte $AB,$D1,$B7,$9E,$8D,$8D
-    .byte $96,$8C,$DF,$D9,$DF,$AB
-    .byte $D1,$BA,$9E,$8D,$93,$9A
-    .byte $8C,$F2,$FF
+    .byte $AB, $D1, $B7, $9E, $8D, $8D
+    .byte $96, $8C, $DF, $D9, $DF, $AB
+    .byte $D1, $BA, $9E, $8D, $93, $9A
+    .byte $8C, $F2, $FF
 
 ;; Patches the copy of Disk BASIC in RAM: its sign-on goes to <DISK20MS> or <DISK21MS>, which show Disk BASIC 2.0 or
 ;; 2.1 with Microware's copyright, and 1.1's quick keyboard check before each statement goes, as Color BASIC's
@@ -1122,16 +1122,16 @@ SETTEXT:
 ;; CoCo compatible screen, then 40 and 80 columns with attributes, from block $36 (<BLOCK6_6>).
 IM_TEXT:
     .byte COCO+MMUEN+MC3+MC2
-    .byte $00,$00,$00,$00,$0F,$E0
-    .byte $00,$00
+    .byte $00, $00, $00, $00, $0F, $E0
+    .byte $00, $00
 IM_TEXT40:
     .byte MMUEN+MC3+MC2
-    .byte $03,$05,$12,$00,$00,$D8
-    .byte $00,$00
+    .byte $03, $05, $12, $00, $00, $D8
+    .byte $00, $00
 IM_TEXT80:
     .byte MMUEN+MC3+MC2
-    .byte $03,$15,$12,$00,$00,$D8
-    .byte $00,$00
+    .byte $03, $15, $12, $00, $00, $D8
+    .byte $00, $00
 
 ;; Sets the video for the hi-res graphics mode <HRMODE> chooses, putting its resolution from <RESTABLE> in the
 ;; image first: modes 1 and 2 are 320 pixels across, 3 and 4 are 640.
@@ -1149,7 +1149,7 @@ SETGRAPH:
 SETGRAPH_MODE:
     SUBA #$01                       ; modes from 0
     LDA A,Y
-    STA $02,X
+    STA 2,X
     JMP SETVIDEO
 
 ;; The resolution register's value, $FF99, for each HSCREEN mode: 320x192 in 4 and 16 colors, and 640x192 in 2 and
@@ -1164,12 +1164,12 @@ RESTABLE:
 ;; at block $30 (<BLOCK6_0>).
 IM_GRAPH:
     .byte MMUEN+MC3+MC2
-    .byte $80,$00,$00,$00,$00,$C0
-    .byte $00,$00
+    .byte $80, $00, $00, $00, $00, $C0
+    .byte $00, $00
 IM_GRAPH640:
     .byte MMUEN+MC3+MC2
-    .byte $80,$00,$00,$00,$00,$C0
-    .byte $00,$00
+    .byte $80, $00, $00, $00, $00, $C0
+    .byte $00, $00
 
 ;; Loads INIT0 and the video registers, $FF98-$FF9F, from an image, then returns to <SETTEXT>'s or
 ;; <SETGRAPH>'s caller.
@@ -1220,11 +1220,11 @@ SELTEXT:
     LEAX >IM_MMU,PCR
     PSHS X
     LDB #BLOCK6_6
-    STB $01,X
+    STB 1,X
     BSR LOADMMU
     PULS X
     LDB #BLOCK7_1
-    STB $01,X
+    STB 1,X
     PULS A,B,X,Y,PC
 
 ;; Maps the HGET and HPUT buffers' block, $34, at $C000-$DFFF in task 1, then puts task 1's stack block back in
@@ -1270,7 +1270,7 @@ SELTASK0:
     STD V40
     LDD ,S
     STD V42
-    LDD $02,S
+    LDD 2,S
     STD V44
     CLRB                            ; task 0, and the timer's slow clock
     STB INIT1
@@ -1340,7 +1340,7 @@ EBCOMTAB:
     .dbyt FUNDIC20
     .dbyt XFUNCTION20
 EBCOMTAB_END:
-    .byte $00,$00,$00,$00,$00,$00
+    .byte $00, $00, $00, $00, $00, $00
 
 ;; Listing a line: the patch at <DETOK_TABLE> comes here, so tokens past Disk BASIC's are found in Super Extended
 ;; BASIC's table, <EBCOMTAB>.
@@ -1350,7 +1350,7 @@ DETOK20:
     LEAU 10,U
     TST ,U
     LBNE DETOK_FIND                 ; another ROM's table: go on there
-    LEAX -$01,X                     ; the token again
+    LEAX -1,X                       ; the token again
     LDA ,X+
     ANDA #$7F
     CMPA #$62                       ; below Super Extended BASIC's?
@@ -1500,7 +1500,7 @@ DISK20MS:
 ;; Microware's copyright, which Extended and Disk BASIC's sign-ons end with.
 MWAREMS:
     .byte "AND MICROWARE SYSTEMS CORP."
-    .byte $0D,$0D,$00
+    .byte $0D, $0D, $00
 
 ;; Disk BASIC 2.1's sign-on.
 DISK21MS:
@@ -1511,7 +1511,7 @@ DISK21MS:
     .byte "UNDER LICENSE FROM MICROSOFT"
     .byte $0D
     .byte "AND MICROWARE SYSTEMS CORP."
-    .byte $0D,$0D,$00
+    .byte $0D, $0D, $00
 
 ;; The end of Extended BASIC's GRINIT: the patch at <GRINIT_END> comes here, so a cold start or NEW also resets
 ;; Super Extended BASIC: no hi-res screens, ON ERR and ON BRK off, HCOLOR's colors 1 on 0, and no HGET and HPUT
@@ -1555,7 +1555,7 @@ ONGOTO:
     BNE ONGOTO_SN
     RTS
 ONGOTO_SN:
-    LEAS $02,S                      ; return past ERR or BRK
+    LEAS 2,S                        ; return past ERR or BRK
     JMP SNERR
 
 ;; Runs ON ERR GOTO line: keeps the line to go to when an error happens, and the line the statement is in.
@@ -1586,15 +1586,15 @@ BRK:
 ;; In:   A = the digit's character, B = its bits, X = the value, three bytes
 ;; Errors: ?OV ERROR past 24 bits
 HEXSHIFT:
-    LSL $02,X
-    ROL $01,X
+    LSL 2,X
+    ROL 1,X
     ROL ,X
     LBCS OVERR
     DECB
     BNE HEXSHIFT
     SUBA #'0'
-    ADDA $02,X
-    STA $02,X
+    ADDA 2,X
+    STA 2,X
     RTS
 
 ;; The octal digits' loop, which the patch at <HEXOCT_OCTAL_CHECK> sends here: a digit goes on to
@@ -1658,7 +1658,7 @@ ONTRAP:
     PSHS B,A
 ONTRAP_FIND:
     JSR SKPLIN                      ; past this line's end
-    LEAX $01,X
+    LEAX 1,X
     LDD BINVAL
     CMPD CURLIN                     ; at or before this line: search from the start
     BHI ONTRAP_SEARCH
@@ -1883,7 +1883,7 @@ BUTTON:
     CLRB
     COMB
     LDX #PIA0
-    STB $02,X                       ; no column strobed: only the buttons pull rows down
+    STB 2,X                         ; no column strobed: only the buttons pull rows down
     LDB ,X
     CMPB #$0F                       ; none down?
     BEQ BUTTON_UP
@@ -1980,15 +1980,15 @@ PALETTE_COPYLOOP:
 
 ;; The palette for a composite monitor, which PALETTE CMP sets: the colors a CoCo 2 shows.
 IM_CMP:
-    .byte 18,36,11,7,63,31
-    .byte 9,38,0,18,0,63
-    .byte 0,18,0,38
+    .byte 18, 36, 11, 7, 63, 31
+    .byte 9, 38, 0, 18, 0, 63
+    .byte 0, 18, 0, 38
 
 ;; The palette for an RGB monitor, which PALETTE RGB sets.
 IM_RGB:
-    .byte 18,54,9,36,63,27
-    .byte 45,38,0,18,0,63
-    .byte 0,18,0,38
+    .byte 18, 54, 9, 36, 63, 27
+    .byte 45, 38, 0, 18, 0, 63
+    .byte 0, 18, 0, 38
 
 ;; Runs RGB: sets the palette for an RGB monitor, as PALETTE RGB does.
 RGB:
@@ -2000,9 +2000,9 @@ CMP:
 
 ;; The palette registers' image, which BASIC keeps since they cannot be read back.
 IM_PALET:
-    .byte 18,36,11,7,63,31
-    .byte 9,38,0,18,0,63
-    .byte 0,18,0,38
+    .byte 18, 36, 11, 7, 63, 31
+    .byte 9, 38, 0, 18, 0, 63
+    .byte 0, 18, 0, 38
 
 ;; Runs HSCREEN [mode]: 0, or none, shows the text screen again; 1 to 4 show the hi-res graphics screen, 320x192 in
 ;; 4 or 16 colors or 640x192 in 2 or 4, cleared to the background color, with the default point at its center.
@@ -2045,7 +2045,7 @@ HSCREEN_CENTER:
 
 ;; The bytes in a row of the hi-res graphics screen, for each HSCREEN mode.
 HORBYTTAB:
-    .byte 80,160,80,160
+    .byte 80, 160, 80, 160
 
 ;; Runs HCLS [color]: clears the hi-res graphics screen to a color, or to the background color.
 ;;
@@ -2161,11 +2161,11 @@ PIXELFIL:
 
 ;; The bits of a pixel's color in each HSCREEN mode.
 PIXMASKTAB:
-    .byte $03,$0F,$01,$03
+    .byte $03, $0F, $01, $03
 
 ;; What multiplies a pixel's color into every pixel of a byte, in each HSCREEN mode.
 PIXMULTAB:
-    .byte $55,$11,$FF,$55
+    .byte $55, $11, $FF, $55
 
 ;; Runs HSET(x,y[,color]): sets a pixel of the hi-res graphics screen, in the color given or the foreground color.
 ;;
@@ -2254,7 +2254,7 @@ HLIMXY:
     LDB #192-1
 HLIMXY_V:
     CLRA
-    STD $02,Y
+    STD 2,Y
     LDA HRMODE
     CMPA #$02
     BGT HLIMXY_640
@@ -2280,7 +2280,7 @@ HCALPOS:
 
 ;; <HCALPOS>'s routines for each HSCREEN mode, by the bits in a pixel.
 CALTABLE:
-    .dbyt G2BITPIX,G4BITPIX,G1BITPIX
+    .dbyt G2BITPIX, G4BITPIX, G1BITPIX
     .dbyt G2BITPIX
 
 ;; Finds <HCALPOS>'s routine for the mode.
@@ -2296,16 +2296,16 @@ HCALADR:
 
 ;; The masks of the eight pixels in a byte of two colors, the leftmost first.
 PIX1MASK:
-    .byte $80,$40,$20,$10,$08,$04
-    .byte $02,$01
+    .byte $80, $40, $20, $10, $08, $04
+    .byte $02, $01
 
 ;; The masks of the four pixels in a byte of four colors.
 PIX2MASK:
-    .byte $C0,$30,$0C,$03
+    .byte $C0, $30, $0C, $03
 
 ;; The masks of the two pixels in a byte of sixteen colors.
 PIX4MASK:
-    .byte $F0,$0F
+    .byte $F0, $0F
 
 ;; Finds the byte and mask of a pixel on a screen of one bit to a pixel.
 ;;
@@ -2457,7 +2457,7 @@ HLINE_FILL:
     JSR SYNCHR
     BRA HLINE_FILLROW
 HLINE_UP:
-    LEAX -$01,X
+    LEAX -1,X
 HLINE_ROW:
     STX VERBEG
 HLINE_FILLROW:
@@ -2466,7 +2466,7 @@ HLINE_FILLROW:
     CMPX VEREND
     BEQ HLINE_DONE
     BCC HLINE_UP                    ; filling upward?
-    LEAX $01,X
+    LEAX 1,X
     BRA HLINE_ROW
 HLINE_DONE:
     RTS
@@ -2481,7 +2481,7 @@ HORLINE:
     STX HORBEG
 HORLINE_COUNT:
     TFR D,Y
-    LEAY $01,Y                      ; the pixels, both ends counted
+    LEAY 1,Y                        ; the pixels, both ends counted
     JSR HCALPOS
     PULS U
     STU HORBEG
@@ -2495,7 +2495,7 @@ HLINEDRAW:
     JSR HPIXSET
     LDA VD7
     JSR ,U
-    LEAY -$01,Y
+    LEAY -1,Y
     BNE HLINEDRAW
     RTS
 VERLINE_POP:
@@ -2511,7 +2511,7 @@ VERLINE:
     STX VERBEG
 VERLINE_COUNT:
     TFR D,Y
-    LEAY $01,Y
+    LEAY 1,Y
     JSR HCALPOS
     PULS U
     STU VERBEG
@@ -2554,15 +2554,15 @@ HDLINE_FRAME:
 HDLINE_LOOP:
     JSR ,U
     JSR HPIXSET
-    LDX $06,S                       ; the steps left
+    LDX 6,S                         ; the steps left
     BEQ HDLINE_DONE
-    LEAX -$01,X
-    STX $06,S
-    JSR [$08,S]                     ; a step along the longer side
+    LEAX -1,X
+    STX 6,S
+    JSR [8,S]                       ; a step along the longer side
     LDD ,S                          ; the shorter side's error
-    ADDD $02,S
+    ADDD 2,S
     STD ,S
-    SUBD $04,S
+    SUBD 4,S
     BCS HDLINE_LOOP                 ; not a whole step yet?
     STD ,S
     JSR ,Y                          ; a step along the shorter side
@@ -2574,28 +2574,28 @@ HDLINE_DONE:
 ;; Steps <HORBEG> right. <HDLINE> keeps these four steps in this order: right, down, left, up.
 HINCX:
     LDX HORBEG
-    LEAX $01,X
+    LEAX 1,X
     STX HORBEG
     RTS
 
 ;; Steps <VERBEG> down.
 HINCY:
     LDX VERBEG
-    LEAX $01,X
+    LEAX 1,X
     STX VERBEG
     RTS
 
 ;; Steps <HORBEG> left.
 HDECX:
     LDX HORBEG
-    LEAX -$01,X
+    LEAX -1,X
     STX HORBEG
     RTS
 
 ;; Steps <VERBEG> up.
 HDECY:
     LDX VERBEG
-    LEAX -$01,X
+    LEAX -1,X
     STX VERBEG
 HDIFF_DONE:
     RTS
@@ -2686,7 +2686,7 @@ HRIGHT1:
     LSRA
     BCC HRIGHT_DONE
     RORA
-    LEAX $01,X
+    LEAX 1,X
 HRIGHT_DONE:
     RTS
 
@@ -2698,7 +2698,7 @@ HRIGHT2:
     LSRA
     BCC HRIGHT_DONE
     LDA #$C0                        ; the next byte's first pixel
-    LEAX $01,X
+    LEAX 1,X
     RTS
 
 ;; Steps a pixel's byte and mask one pixel right, at four bits to a pixel.
@@ -2708,7 +2708,7 @@ HRIGHT4:
     COMA                            ; the other half of the byte
     CMPA #$F0                       ; now the left half: the next byte
     BNE HRIGHT4_DONE
-    LEAX $01,X
+    LEAX 1,X
 HRIGHT4_DONE:
     RTS
 
@@ -2738,7 +2738,7 @@ HCIRCLE_ARGS:
     JSR HGETXY_DONE
     LDX ,U                          ; the center into VCB and VCD
     STX VCB
-    LDX $02,U
+    LDX 2,U
     STX VCD
     JSR SYNCOM
     JSR GETADR
@@ -2791,7 +2791,7 @@ HCIRCLE_ENTRY:
     PSHS U
     JSR HCIRCMUL                    ; the horizontal offset, from the sine
     PULS U
-    LEAU -$02,U                     ; the vertical, from the cosine
+    LEAU -2,U                       ; the vertical, from the cosine
     PSHS X
     JSR HCIRCMUL
     PULS Y
@@ -2887,7 +2887,7 @@ HCIRCLIM:
     STX ,U
 HCIRCLIM_V:
     LDX #192-1
-    STX $02,U
+    STX 2,U
     JMP HNOSCALE
 
 ;; Reads HCIRCLE's start or end, a fraction of a turn, as 64ths: 0 when there is none.
@@ -2915,15 +2915,15 @@ HCIRCARG_SPLIT:
 ;; The sines and cosines of the nine points from 0 to an eighth of a turn, in 65536ths: each entry's cosine, then
 ;; its sine, the first after 1 and 0.
 CIRCDATA:
-    .dbyt $0000,$0001
-    .dbyt $FEC5,$1919
-    .dbyt $FB16,$31F2
-    .dbyt $F4FB,$4A51
-    .dbyt $EC84,$61F9
-    .dbyt $E1C7,$78AE
-    .dbyt $D4DC,$8E3B
-    .dbyt $C5E5,$A269
-    .dbyt $B506,$B506
+    .dbyt $0000, $0001
+    .dbyt $FEC5, $1919
+    .dbyt $FB16, $31F2
+    .dbyt $F4FB, $4A51
+    .dbyt $EC84, $61F9
+    .dbyt $E1C7, $78AE
+    .dbyt $D4DC, $8E3B
+    .dbyt $C5E5, $A269
+    .dbyt $B506, $B506
 
 ;; Multiplies the radius, VCF, by a sine or cosine from <CIRCDATA>.
 ;;
@@ -2941,32 +2941,32 @@ HCIRCMUL_DONE:
 
 ;; Multiplies two 16-bit numbers, as Extended BASIC's <MUL16> does.
 ;;
-;; In:   D and X = the numbers
-;; Out:  Y and U = the 32-bit product, high word in Y
+;; In:   D = a number, X = the other
+;; Out:  Y = the product's high word, U = its low word
 HMUL16:
     PSHS U,Y,X,B,A
-    CLR $04,S
-    LDA $03,S                       ; the low bytes
+    CLR 4,S
+    LDA 3,S                         ; the low bytes
     MUL
-    STD $06,S
-    LDD $01,S                       ; the low by the high
+    STD 6,S
+    LDD 1,S                         ; the low by the high
     MUL
-    ADDB $06,S
+    ADDB 6,S
     ADCA #$00
-    STD $05,S
+    STD 5,S
     LDB ,S                          ; the high by the low
-    LDA $03,S
+    LDA 3,S
     MUL
-    ADDD $05,S
-    STD $05,S
+    ADDD 5,S
+    STD 5,S
     BCC HMUL16_HIGH
-    INC $04,S                       ; a carry into the high word
+    INC 4,S                         ; a carry into the high word
 HMUL16_HIGH:
     LDA ,S                          ; the high bytes
-    LDB $02,S
+    LDB 2,S
     MUL
-    ADDD $04,S
-    STD $04,S
+    ADDD 4,S
+    STD 4,S
     PULS A,B,X,Y,U,PC
 
 ;; Runs HPAINT[@](x,y)[,color[,border]]: fills the hi-res graphics screen from a point out to a border, as PAINT
@@ -3021,7 +3021,7 @@ HPAINT_LINE:
     PULS A,B,X,U                    ; a line still to fill
     CLR CHGFLG
     STS TMPSTK
-    LEAX $01,X                      ; one right of where it starts
+    LEAX 1,X                        ; one right of where it starts
     STX HORBEG
     STU VD1                         ; the length of the line it came from
     STA VD7
@@ -3041,7 +3041,7 @@ HPAINT_ROW:
     BEQ HPAINT_REST
     CMPD #3                         ; three or more filled?
     BCS HPAINT_RIGHT
-    LEAX -$02,X                     ; then the row back the other way, from its left end
+    LEAX -2,X                       ; then the row back the other way, from its left end
     JSR HPNTBACK
 HPAINT_RIGHT:
     JSR HPNTWIDE
@@ -3111,7 +3111,7 @@ HPNTSCAN_LOOP:
     BEQ HPNTSCAN_BORDER
     JSR HPIXSET1                    ; fill it
     PULS Y,U
-    LEAU $01,U
+    LEAU 1,U
     JSR ,Y
     BRA HPNTSCAN_LOOP
 HPNTSCAN_BORDER:
@@ -3131,7 +3131,7 @@ HPNTBORDER:
     ANDB VD8
     PSHS B,A
     ANDA ,X
-    CMPA $01,S
+    CMPA 1,S
     PULS A,B,PC
 
 ;; Fills rightward after a leftward fill, from where the leftward one began; <HOREND> becomes the row's left end.
@@ -3238,7 +3238,7 @@ HBUFF_FIND:
 HBUFF_LAST:
     LDB VD1+1
 HBUFF_LOOP:
-    CMPB $02,Y                      ; this number already?
+    CMPB 2,Y                        ; this number already?
     BEQ HBUFF_DD
     LDU ,Y
     BEQ HBUFF_ADD                   ; the last?
@@ -3246,8 +3246,8 @@ HBUFF_LOOP:
     BRA HBUFF_LOOP
 HBUFF_ADD:
     TFR Y,U
-    LDD $03,Y
-    LEAY $05,Y                      ; past its header and data
+    LDD 3,Y
+    LEAY 5,Y                        ; past its header and data
     LEAY D,Y
     BSR HBUFFROOM
     STY ,U                          ; the last one links to this
@@ -3255,9 +3255,9 @@ HBUFF_HEADER:
     LDD #0                          ; the new last
     STD ,Y
     LDB VD1+1
-    STB $02,Y
+    STB 2,Y
     LDD VD3
-    STD $03,Y
+    STD 3,Y
 HBUFF_DONE:
     JSR SELTASK0
     JSR SETMMU
@@ -3269,7 +3269,7 @@ HBUFF_DONE:
 ;; Errors: ?OM ERROR when it does not
 HBUFFROOM:
     TFR Y,X
-    LEAX $05,X
+    LEAX 5,X
     LDD VD3
     LEAX D,X
     CMPX #HRESBUFF+$1F00
@@ -3426,7 +3426,7 @@ HGETBYTE:
 ;; Errors: ?FC ERROR past the buffer's end
 HBUFNEXT:
     LDU VCF
-    LEAU $01,U
+    LEAU 1,U
     STU VCF
     CMPU VD1
     BHI HBUFFC
@@ -3516,12 +3516,12 @@ HBUFADR_NEXT:
     LDY ,Y
     LBEQ HBUFFC
 HBUFADR_CHECK:
-    CMPB $02,Y
+    CMPB 2,Y
     BNE HBUFADR_NEXT
-    LDD $03,Y
-    LEAY $04,Y                      ; one before the data
+    LDD 3,Y
+    LEAY 4,Y                        ; one before the data
     STY VCF
-    LEAY $01,Y
+    LEAY 1,Y
     LEAY D,Y
     STY VD1
     RTS
@@ -3621,7 +3621,7 @@ HPRINT_BYTE:
     DEC VD3
     BEQ HPRINT_DONE
     STA H_PCOUNT
-    LEAU $01,U
+    LEAU 1,U
     JSR HDOWN
     BRA HPRINT_LINE
 HPRINT_DONE:
@@ -3673,9 +3673,9 @@ HPRINT2:
 
 ;; Each four pixels of a character's row, as a mask of two bits to a pixel.
 HPRINT2TAB:
-    .byte $00,$03,$0C,$0F,$30,$33
-    .byte $3C,$3F,$C0,$C3,$CC,$CF
-    .byte $F0,$F3,$FC,$FF
+    .byte $00, $03, $0C, $0F, $30, $33
+    .byte $3C, $3F, $C0, $C3, $CC, $CF
+    .byte $F0, $F3, $FC, $FF
 
 ;; Draws a row of a character at four bits to a pixel: four bytes, each two pixels of the row.
 ;;
@@ -3704,11 +3704,11 @@ HPRINT4:
 
 ;; Each four pixels of a character's row, as a mask of four bits to a pixel, two bytes.
 HPRINT4TAB:
-    .dbyt $0000,$000F,$00F0
-    .dbyt $00FF,$0F00,$0F0F
-    .dbyt $0FF0,$0FFF,$F000
-    .dbyt $F00F,$F0F0,$F0FF
-    .dbyt $FF00,$FF0F,$FFF0
+    .dbyt $0000, $000F, $00F0
+    .dbyt $00FF, $0F00, $0F0F
+    .dbyt $0FF0, $0FFF, $F000
+    .dbyt $F00F, $F0F0, $F0FF
+    .dbyt $FF00, $FF0F, $FFF0
     .dbyt $FFFF
 
 ;; Turns HPRINT's column and row into pixels, eight to a character.
@@ -3849,7 +3849,7 @@ HDRAW_STRING:
 
 ;; Reads a command's number, or =variable;.
 ;;
-;; Out:  D and VD3 = the number
+;; Out:  D = the number, also in VD3
 HDRAW_NUMBER:
     JSR HDRAWCHR
     JMP HDRAWVAL
@@ -4154,7 +4154,7 @@ HDRAWCHR_LOOP:
 ;; Reads a command's number: =variable; or digits, up to the screen's width.
 ;;
 ;; In:   A = the number's first character
-;; Out:  D and VD3 = the number
+;; Out:  D = the number, also in VD3
 ;; Errors: ?FC ERROR when it is not a number, or past the screen's width
 HDRAWVAL:
     CMPA #'='
@@ -4200,7 +4200,7 @@ HDRAWVAL_CHECK:
 HDRAWBACK:
     INC VD8
     LDX VD9
-    LEAX -$01,X
+    LEAX -1,X
     STX VD9
 HDRAWVAL_DONE:
     LDD VD3
@@ -4232,7 +4232,7 @@ HDRAWDIGIT_DONE:
 
 ;; Reads the variable a command names, up to the ; that ends it, as BASIC would read it in an expression.
 ;;
-;; Out:  FPA0 or the string descriptor = its value
+;; Out:  FPA0 = its value, a number or a string's descriptor
 HDRAWVAR:
     LDX VD9
     PSHS X
@@ -4379,14 +4379,14 @@ CLS20_AUTHORS:
 ;; The message CLS past 8 shows on the hi-res text screen.
 MICROMS:
     .byte "Microware Systems Corp."
-    .byte $0D,$00
+    .byte $0D, $00
 
 ;; The authors' names, which <AUTHNAMES> decodes here at start-up, for CLS 100 to show once.
 AUTHORMS:
-    .byte $00,$00,$00,$00,$00,$00
-    .byte $00,$00,$00,$00,$00,$00
-    .byte $00,$00,$00,$00,$00,$00
-    .byte $00,$00,$00
+    .byte $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00, $00, $00, $00
+    .byte $00, $00, $00
 CLS20_SHOWNAMES:
     BSR HTEXTON
     LBSR HCLRTEXT
@@ -4424,8 +4424,8 @@ LINEIN20_HIRES:
 SETBORDER:
     PSHS Y
     LEAY >IM_TEXT40,PCR
-    STA $03,Y                       ; $FF9A in the 40-column image
-    STA $0C,Y                       ; and in the 80-column one
+    STA 3,Y                         ; $FF9A in the 40-column image
+    STA 12,Y                        ; and in the 80-column one
     PULS Y,PC
 
 ;; Maps the hi-res text screen in at $2000, with interrupts off.
@@ -4457,7 +4457,7 @@ HBLINK:
     STB BLKCNT
     BSR HTEXTON
     LDX H_CRSLOC
-    LDA $01,X
+    LDA 1,X
     BITA #$40                       ; underlined now?
     BEQ HBLINK_ON
     LDA H_CRSATT
@@ -4466,7 +4466,7 @@ HBLINK_ON:
     LDA H_CRSATT
     ORA #$40                        ; underlined
 HBLINK_SET:
-    STA $01,X
+    STA 1,X
     BSR HTEXTOFF
 HBLINK_WAIT:
     LDX #DEBDEL
@@ -4515,8 +4515,8 @@ HBACKSP:
     LDB H_CRSATT
     STD ,X
     ORB #$40                        ; the cursor: underlined
-    STD -$02,X
-    LEAX -$02,X
+    STD -2,X
+    LEAX -2,X
     STX H_CRSLOC
     LDD H_CURSX
     DECA
@@ -4538,7 +4538,7 @@ HCURFWD:
     LDA #$20                        ; the cursor: an underlined space
     LDB H_CRSATT
     ORB #$40
-    LEAX $02,X
+    LEAX 2,X
     STD ,X
     STX H_CRSLOC
     LDD H_CURSX
@@ -4683,7 +4683,7 @@ LOCATE_CHECK:
     STD H_CURSX                     ; the new column and row
     LDX H_CRSLOC
     LDA H_CRSATT                    ; the old cursor without its underline
-    STA $01,X
+    STA 1,X
     LDA H_COLUMN
     .byte $48                       ; two bytes to a character
     MUL
@@ -4695,7 +4695,7 @@ LOCATE_CHECK:
     ABX
     LDA H_CRSATT                    ; the new cursor underlined
     ORA #$40
-    STA $01,X
+    STA 1,X
     STX H_CRSLOC
     LBSR HTEXTOFF
     RTS
@@ -4725,7 +4725,7 @@ HSTAT:
     STA ,X
     JSR PUTNEW
     LDX VARDES
-    TST -$01,X                      ; a string variable?
+    TST -1,X                        ; a string variable?
     LBPL TMERR
     LDY FPA0+2
     LDB #$05                        ; its descriptor into the variable
@@ -4735,7 +4735,7 @@ HSTAT_COPY:
     DECB
     BNE HSTAT_COPY
     LDX TEMPPT                      ; off the string stack, though its last entry pointer stays
-    LEAX -$05,X
+    LEAX -5,X
     STX TEMPPT
     JSR PTRGET                      ; the second variable: the attributes
     STX VARDES
@@ -4744,7 +4744,7 @@ HSTAT_COPY:
     LDB VCB+1
     JSR GIVABF
     LDX VARDES
-    TST -$01,X                      ; a numeric variable?
+    TST -1,X                        ; a numeric variable?
     LBMI TMERR
     JSR MOVMF
     JSR PTRGET                      ; the third: the column
@@ -4754,7 +4754,7 @@ HSTAT_COPY:
     LDB VCD
     JSR GIVABF
     LDX VARDES
-    TST -$01,X
+    TST -1,X
     LBMI TMERR
     JSR MOVMF
     JSR PTRGET                      ; the fourth: the row
@@ -4763,7 +4763,7 @@ HSTAT_COPY:
     LDB VCD+1
     JSR GIVABF
     LDX VARDES
-    TST -$01,X
+    TST -1,X
     LBMI TMERR
     JSR MOVMF
     RTS
@@ -4787,7 +4787,7 @@ ATTR:
     CMPB #$08
     LBCC FCERR
     ORB ,S                          ; the background in bits 0-2
-    LEAS $01,S
+    LEAS 1,S
     ANDB #$3F                       ; nothing above them yet
     PSHS B
     JSR GETCCH

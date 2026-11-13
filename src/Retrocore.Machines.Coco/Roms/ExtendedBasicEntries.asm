@@ -75,7 +75,7 @@ DLOAD_KIND = $8C1B                  ;; DLOAD once files are closed: reads M for 
 
 INTRESET = $8C1B                    ;; the CoCo 3's RESET, in place of DLOAD: maps the ROM in and starts the CoCo 3
 
-CARTFIRQ = $8C28                    ;; the CoCo 3's ROM pack start from its FIRQ: the interrupt jumps invalid, then CARTROM
+CARTFIRQ = $8C28                    ;; the CoCo 3's ROM pack start from its FIRQ
 
 CARTROM = $8C2E                     ;; the CoCo 3's ROM pack mapping: the cartridge's ROM at $C000, the ROM switched in
 

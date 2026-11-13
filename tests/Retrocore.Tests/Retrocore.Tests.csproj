@@ -79,6 +79,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceIncludes.cs" Link="Language\SourceIncludes.cs" />

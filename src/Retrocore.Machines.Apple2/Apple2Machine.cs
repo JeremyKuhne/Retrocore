@@ -88,8 +88,8 @@ public sealed class Apple2Machine : IMachine
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The drives of each slot's Disk II card in slot order, then slot seven's block storage. The list is made again
-    ///   only when a card goes in or comes out.
+    ///   The drives of each slot's Disk II card and the ProFile on each slot's ProFile card, in slot order, then slot
+    ///   seven's block storage. The list is made again only when a card goes in or comes out.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<IDevice> Devices
@@ -100,7 +100,12 @@ public sealed class Apple2Machine : IMachine
             if (_devices is null || key != _devicesKey)
             {
                 List<IDevice> devices = [];
-                for (int slot = 1; slot <= 7; slot++) { devices.AddRange(DrivesIn(slot)); }
+                for (int slot = 1; slot <= 7; slot++)
+                {
+                    devices.AddRange(DrivesIn(slot));
+                    if (Bus.ProFileIn(slot) is { } proFile) { devices.Add(proFile.Drive); }
+                }
+
                 if (BlockStorage is not null) { devices.Add(BlockStorage); }
                 _devices = [.. devices];
                 _devicesKey = key;

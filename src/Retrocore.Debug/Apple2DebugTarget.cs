@@ -261,6 +261,15 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
         if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
+        foreach ((int slot, string? image) in ProFileMedia.LaunchCards(args, "a free slot, 1 to 7"))
+        {
+            target.HardwareAction($"slot{slot}", "addProFile", []);
+            if (image is not null && machine.Bus.ProFileIn(slot) is { } card)
+            {
+                ProFileMedia.Insert(card.Drive, image);
+            }
+        }
+
         if (args.String("screen") is { } screen) { machine.Bus.Video.Monitor = ParseScreen(screen); }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
         target.FastDisk = args.Bool("fastDisk") ?? true;
@@ -693,7 +702,23 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///   the ROMs of the slots that have one are read-only.
     ///  </para>
     /// </remarks>
-    public IReadOnlyList<DebugMemoryBank> Banks => field ??= CreateBanks();
+    public IReadOnlyList<DebugMemoryBank> Banks
+    {
+        get
+        {
+            // The slots' ROMs come and go with their cards.
+            if (_banks is null || _bankCards != _machine.Bus.CardChanges)
+            {
+                _banks = CreateBanks();
+                _bankCards = _machine.Bus.CardChanges;
+            }
+
+            return _banks;
+        }
+    }
+
+    private List<DebugMemoryBank>? _banks;
+    private int _bankCards;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -738,14 +763,20 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             banks.Add(Bank("rom", "System ROM", [(0xD000, 0x3000)], Apple2MemoryArea.SystemRom));
         }
 
-        if (_machine.Bus.PeekArea(Apple2MemoryArea.Slot6Rom, 0xC600, out _))
+        // Each slot whose card has a ROM page: a Disk II's boot ROM, the mouse or ProFile card's firmware, or slot
+        // seven's block device.
+        for (int slot = 1; slot <= 7; slot++)
         {
-            banks.Add(Bank("slot6", "Slot 6 ROM (Disk II boot)", [(0xC600, 0x100)], Apple2MemoryArea.Slot6Rom));
-        }
+            Apple2MemoryArea area = Apple2MemoryArea.Slot1Rom + (slot - 1);
+            ushort page = (ushort)(0xC000 | (slot << 8));
+            if (!_machine.Bus.PeekArea(area, page, out _)) { continue; }
+            string card = slot == _machine.Bus.MouseSlot
+                ? "mouse card"
+                : _machine.Bus.ProFileIn(slot) is not null
+                    ? "ProFile card"
+                    : _machine.Bus.DiskIIIn(slot) is not null ? "Disk II boot" : "block device";
 
-        if (_machine.Bus.PeekArea(Apple2MemoryArea.Slot7Rom, 0xC700, out _))
-        {
-            banks.Add(Bank("slot7", "Slot 7 ROM (block device)", [(0xC700, 0x100)], Apple2MemoryArea.Slot7Rom));
+            banks.Add(Bank($"slot{slot}", $"Slot {slot} ROM ({card})", [(page, 0x100)], area));
         }
 
         return banks;
@@ -766,7 +797,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
             return null;
         },
-        areas is [Apple2MemoryArea.SystemRom or Apple2MemoryArea.Slot6Rom or Apple2MemoryArea.Slot7Rom]
+        areas is [Apple2MemoryArea.SystemRom or (>= Apple2MemoryArea.Slot1Rom and <= Apple2MemoryArea.Slot7Rom)]
             ? null
             : (address, value) => areas.Any(area => _machine.Bus.PokeArea(area, address, value)));
 
@@ -937,6 +968,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
+            case (ProFileDrive drive, "insert"):
+                ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));
+                break;
+            case (ProFileDrive drive, "eject"):
+                drive.Eject();
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
@@ -1165,8 +1202,21 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard, a Disk II controller or the mouse card here."
-            : "Add Card puts a Disk II controller or the mouse card here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller, the mouse card or a ProFile card here."
+            : "Add Card puts a Disk II controller, the mouse card or a ProFile card here.";
+
+        if (_machine.Bus.ProFileIn(slot) is { } proFile)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "ProFile interface card",
+                "Apple's ProFile hard disk as a ProDOS block device, through Retrocore's firmware for the card. Insert a "
+                    + ".po or .hdv image of up to 65535 blocks; the startup scan boots it from the highest slot. The "
+                    + "launch's proFiles installs it; Remove Card takes it out.",
+                [proFile.Drive.Id],
+                ["removeCard"]);
+        }
 
         if (slot == _machine.Bus.MouseSlot)
         {
@@ -1273,6 +1323,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             case "removeCard" when slot > 0 && slot == _machine.Bus.MouseSlot:
                 _machine.Bus.RemoveMouse();
                 break;
+            case "addProFile" when slot > 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallProFile(slot);
+                break;
+            case "removeCard" when slot > 0 && _machine.Bus.ProFileIn(slot) is not null:
+                _machine.Bus.RemoveProFile(slot);
+                break;
             case "addMockingboard" when slot == 4 && _machine.Bus.IsSlotFree(4):
                 _machine.Bus.InstallMockingboard();
                 break;
@@ -1338,6 +1394,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
                         HardwareAction(id, "addMouse", []);
                         break;
+                    case "proFile":
+                        HardwareAction(id, "addProFile", []);
+                        break;
                     case "languageCard":
                         HardwareAction(id, "addLanguageCard", []);
                         break;
@@ -1364,8 +1423,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, mouse,
-    // diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
-    // blockStorage, or empty.
+    // proFile, diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM
+    // dumps, blockStorage, or empty.
     private string CardIn(int slot)
     {
         if (slot == 0)
@@ -1377,6 +1436,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
         if (slot == _machine.Bus.MouseSlot) { return "mouse"; }
+        if (_machine.Bus.ProFileIn(slot) is not null) { return "proFile"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {
             return _diskSectors.TryGetValue(slot, out int sectors) ? $"diskII{sectors}" : "diskII";

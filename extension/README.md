@@ -1024,7 +1024,7 @@ while the machine runs. Eclipse CDT Cloud's Memory Inspector works too.
 
 The IIe's soft switches map one address to several stores, so a memory reference
 can name a bank: `main`, `aux`, `bank1`, `auxbank1` (the language cards' bank 1),
-`rom`, and `slot6` or `slot7` when those slots have ROMs. `aux:$0400` is auxiliary
+`rom`, and `slot1` to `slot7` while those slots' cards have ROMs. `aux:$0400` is auxiliary
 RAM's text page whatever the switches map, and `[aux:$0400]` reads it in
 expressions, conditions and data breakpoints. A function breakpoint such as
 `bank1:$D000` stops only while the CPU runs that bank's code. The
@@ -1184,7 +1184,16 @@ and a reset's startup scan finds it. Its two drives take disks like any other, a
 **Remove Card** takes it out again, asking first if it has disks in. Slot 4 also
 takes the Mockingboard; slot 3 belongs to the 80-column firmware. Any free slot
 takes the mouse card (one per machine), as the `mouse` launch option does: click the
-display to move it with your mouse, and press Escape to let go.
+display to move it with your mouse, and press Escape to let go. Any free slot also takes
+a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
+insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
+`disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
+Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
+MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
+in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
+from it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you

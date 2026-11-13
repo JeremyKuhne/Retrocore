@@ -54,6 +54,15 @@ async function screen(test, what) {
     }
 }
 
+// Waits for a stopped frame. Running frames sent before the stop can still be queued ahead of it, and may leave
+// out their pixels.
+async function stoppedFrame() {
+    for (;;) {
+        const frame = await event("retro/frame");
+        if (!frame.running) return frame;
+    }
+}
+
 async function type(line) {
     for (const character of line) await request("retro/key", { code: character === "\r" ? 13 : character.charCodeAt(0) });
 }
@@ -97,7 +106,7 @@ try {
     // A stop shows the 40x24 picture.
     await request("pause", { threadId: 1 });
     await event("stopped");
-    const paused = await event("retro/frame");
+    const paused = await stoppedFrame();
     assert.equal(paused.running, false);
     assert.equal(paused.machine, "apple1");
     assert.equal(Buffer.from(paused.video.pixels, "base64").length, 280 * 192 * 4);
@@ -113,12 +122,16 @@ try {
     };
     assert.deepEqual(brightest(paused), [51, 255, 102]);
     await request("retro/screen", { screen: "white" });
-    const white = await event("retro/frame");
+    const white = await stoppedFrame();
     assert.equal(white.screen, "white");
     assert.deepEqual(brightest(white), [240, 240, 240]);
     await assert.rejects(request("retro/screen", { screen: "color" }), /screen must be green, white or amber/);
     await request("retro/screen", { screen: "green" });
-    await event("retro/frame");
+    await stoppedFrame();
+
+    // CLEAR SCREEN while stopped sends a frame showing the blank screen.
+    await request("apple1/clearScreen");
+    assert.ok((await stoppedFrame()).rows.every(row => row.trim() === ""), "the stopped frame shows the cleared screen");
     await request("continue", { threadId: 1 });
 
     // A breakpoint in the Monitor: each typed key is echoed through ECHO, called from NEXTCHAR.

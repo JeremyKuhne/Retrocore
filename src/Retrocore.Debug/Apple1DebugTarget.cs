@@ -454,8 +454,13 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     // A recording is saved to its path when it is ejected.
     private void EjectCassette()
     {
-        Apple1Tape? tape = _machine.CassetteDrive?.Eject();
-        if (_recordingPath is { } path && tape is not null) { File.WriteAllBytes(path, tape.ToWave()); }
+        // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
+        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
+        {
+            File.WriteAllBytes(path, tape.ToWave());
+        }
+
+        _machine.CassetteDrive?.Eject();
         _recordingPath = null;
     }
 

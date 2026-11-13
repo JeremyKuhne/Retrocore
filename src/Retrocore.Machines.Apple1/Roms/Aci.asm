@@ -12,7 +12,7 @@
 ;;
 ;; The card has no other registers. Any access to $C000-$C0FF flips the flip-flop that drives the tape output,
 ;; and a read there returns the PROM's byte with address bit 0 taken from the tape input, so reading $C081 gives
-;; $A9 (the first byte, LDA #) or $AA (the second, the "*" prompt) as the input is low or high. The routines
+;; the byte at $C180 ($D0) or $C181 ($FA) as the input is low or high; the routines only look for a change. They
 ;; time each half cycle of the tape's square wave in loops of known length:
 ;;
 ;; - The leader is long half cycles, and the end of the leader one short one.
@@ -59,7 +59,8 @@ IN = $0200
 ;; The flip-flop driving the tape output: any access to $C000-$C0FF flips it.
 TAPEOUT = $C000
 
-;; The tape input: a read gives $A9 or $AA as the input is low or high (and flips the output).
+;; The tape input: a read gives $D0 or $FA, the PROM's bytes at $C180 and $C181, as the input is low or high
+;; (and flips the output).
 TAPEIN = $C081
 
 ;; The PIA's port A: the key last typed, with bit 7 set.

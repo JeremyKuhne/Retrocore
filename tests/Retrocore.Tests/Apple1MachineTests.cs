@@ -159,6 +159,17 @@ public sealed class Apple1MachineTests
         bus.Read(0xFFFC).Should().Be(0x00);
         bus.Read(0xFFFD).Should().Be(0xFF);
         bus.Read(0xC100).Should().Be(0xA9);
+
+        // $C081 reads the PROM's $80 or $81 as the tape input is low or high: only address bit 0 is the input.
+        Apple1Cassette cassette = bus.Cassette ?? throw new InvalidOperationException("No cassette interface.");
+        cassette.Play(new Apple1Tape([10, 10]));
+        bus.Peek(0xC081).Should().Be(0xD0, "the input starts low");
+        bus.Read(0xC081).Should().Be(0xD0);
+        for (int cycle = 0; cycle < 10; cycle++) { bus.Tick(); }
+        cassette.Input.Should().BeTrue();
+        bus.Peek(0xC081).Should().Be(0xFA);
+        bus.Read(0xC080).Should().Be(0xFA, "an even address reads the same pair");
+        cassette.Stop();
         bus.Write(0xE123, 0x5A);
         bus.Read(0xE123).Should().Be(0x5A);
 
@@ -266,6 +277,16 @@ public sealed class Apple1MachineTests
         TypeLine(machine, "C100R");
         TypeLine(machine, "300.30FR", seconds: 20);
         Bytes(machine, 0x300, 16).Should().Equal(0x00, 0x01, 0x7F, 0x80, 0xFF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0xC3);
+    }
+
+    /// <summary>
+    ///  An empty recording saves as a WAV with no samples, which loads back as an empty tape.
+    /// </summary>
+    [TestMethod]
+    public void EmptyRecordingRoundTrips()
+    {
+        byte[] wave = new Apple1Tape().ToWave();
+        Apple1Tape.FromWave(wave).HalfCycles.Should().BeEmpty();
     }
 
     /// <summary>

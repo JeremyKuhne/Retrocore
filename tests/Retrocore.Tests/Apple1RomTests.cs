@@ -52,9 +52,9 @@ public sealed class Apple1RomTests
         prom.Should().HaveCount(256);
         Hash(prom).Should().Be("1B9FCF6F3E9E77B8956181F399DFB7905EB7CC947B658A6C202F6B123518A0B7");
 
-        // A read of $C081 gives these two as the tape input is low or high.
-        prom[0].Should().Be(0xA9);
-        prom[1].Should().Be(0xAA);
+        // A read of $C081 gives the bytes at $80 and $81 as the tape input is low or high, which READ tells apart.
+        prom[0x80].Should().Be(0xD0);
+        prom[0x81].Should().Be(0xFA);
         CompareWithDump("aci.bin", prom);
     }
 

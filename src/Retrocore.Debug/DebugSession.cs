@@ -398,7 +398,15 @@ internal sealed partial class DebugSession
             throw new InvalidOperationException($"{name} is not supported on this machine.");
         }
 
-        return handler(args);
+        JsonObject result = handler(args);
+
+        // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
+        if (name == "apple1/clearScreen" && _run is not { IsCancellationRequested: false })
+        {
+            NotifyFrame(running: false);
+        }
+
+        return result;
     }
 
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
@@ -856,18 +864,16 @@ internal sealed partial class DebugSession
         }
 
         DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
-        foreach (IDebugModule module in _debug.Modules)
-        {
-            DocumentationSet documentation = module.Documentation;
-            if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { continue; }
-            string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
-            if (summary.Length == 0) { continue; }
+        // The module whose definition the value came from, as evaluation resolves it: the first that defines the
+        // name. Its documentation, or none, describes it; another module's same name is a different symbol.
+        IDebugModule? defining = _debug.Modules.FirstOrDefault(module => module.TryResolve(name, out _));
+        if (defining is null) { return null; }
+        DocumentationSet documentation = defining.Documentation;
+        if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { return null; }
+        string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
 
-            // A link shows its name without its module.
-            return LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
-        }
-
-        return null;
+        // A link shows its name without its module.
+        return summary.Length == 0 ? null : LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
     }
 
     // A documentation link, such as <XAMH> or <Monitor:A1L>.

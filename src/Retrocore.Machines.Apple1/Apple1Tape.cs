@@ -152,6 +152,9 @@ public sealed class Apple1Tape
         int frame = channels * bits / 8;
         int count = samples.Length / frame;
 
+        // A recording with no samples is an empty tape.
+        if (count == 0) { return new(); }
+
         // The level changes where the signal crosses its middle, with some hysteresis against noise.
         const int Hysteresis = 1024;
         List<int> halves = [];

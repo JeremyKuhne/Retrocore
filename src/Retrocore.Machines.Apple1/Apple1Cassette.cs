@@ -13,7 +13,8 @@ namespace Retrocore.Machines.Apple1;
 /// <remarks>
 ///  <para>
 ///   Any access to <c>$C000</c>-<c>$C0FF</c> flips the output. A read there returns the PROM's byte with address
-///   bit 0 taken from the tape input, so <c>$C081</c> reads <c>$A9</c> or <c>$AA</c> as the input is low or high.
+///   bit 0 taken from the tape input, so <c>$C081</c> reads the PROM's bytes at <c>$80</c> or <c>$81</c> as the
+///   input is low or high.
 ///   <c>$C100</c>-<c>$C1FF</c> reads the PROM itself.
 ///  </para>
 ///  <para>

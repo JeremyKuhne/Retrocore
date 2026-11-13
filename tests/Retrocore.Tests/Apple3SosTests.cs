@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
 
 namespace Retrocore.Tests;
 
 /// <summary>
-///  SOS 1.3 on the Apple III, from Apple's disks: the System Utilities boot, format and copy, and Business BASIC runs
-///  and saves a program.
+///  SOS 1.3 on the Apple III, from Apple's disks: the System Utilities boot, format and copy, on floppies and on a
+///  ProFile, and Business BASIC runs and saves a program.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -66,6 +67,63 @@ public class Apple3SosTests
     }
 
     /// <summary>
+    ///  With a ProFile card in slot 4, where the System Utilities disk's SOS.DRIVER has .PROFILE, the Utilities format
+    ///  the ProFile, copy SOS.KERNEL onto it and list it; the file's bytes are the floppy's, and a second boot lists the
+    ///  volume SOS wrote.
+    /// </summary>
+    [TestMethod]
+    public void UtilitiesFormatAProFileAndCopyAFileToIt()
+    {
+        Apple3Machine machine = Boot(Utilities);
+        byte[] blocks = new byte[512 * 9728];
+        machine.Bus.InstallProFile(4).Drive.Insert(new MemoryBlockDevice(blocks, isReadOnly: false), "profile", "PO");
+        RunUntil(machine, "Please select a command", seconds: 90);
+
+        Type(machine, "D");
+        RunUntil(machine, "Device Handling Commands Menu", seconds: 10);
+        Type(machine, "F");
+        RunUntil(machine, "with the new volume name", seconds: 10);
+        Type(machine, ".PROFILE\r");
+        machine.Run(TimeSpan.FromSeconds(1));
+        Type(machine, "HARD\r");
+        RunUntil(machine, "Formatting successful", seconds: 60);
+
+        Type(machine, "\u001B");
+        RunUntil(machine, "Device Handling Commands Menu", seconds: 10);
+        Type(machine, "\u001B");
+        RunUntil(machine, "F - File handling commands", seconds: 10);
+        Type(machine, "F");
+        RunUntil(machine, "File Handling Commands Menu", seconds: 10);
+        Type(machine, "C");
+        RunUntil(machine, "Copy the files:", seconds: 10);
+        Type(machine, "SOS.KERNEL\r");
+        machine.Run(TimeSpan.FromSeconds(1));
+        Type(machine, "/HARD/SOS.KERNEL\r");
+        RunUntil(machine, "---> /HARD/SOS.KERNEL", seconds: 60);
+
+        Type(machine, "\u001B");
+        RunUntil(machine, "File Handling Commands Menu", seconds: 10);
+        ListHard(machine);
+        Screen(machine).Should().Contain("SOS.KERNEL");
+
+        // What SOS wrote through .PROFILE is a SOS volume holding the floppy's file.
+        byte[] image = Image(machine.Bus.ProFileIn(4)?.Drive);
+        SosVolume hard = SosVolume.ReadBlocks(image);
+        hard.Name.Should().Be("HARD");
+        byte[] floppy = SosVolume.Read(File.ReadAllBytes(Path.Join(Disks, Utilities)), proDosOrder: false).ReadFile("SOS.KERNEL");
+        hard.ReadFile("SOS.KERNEL").Should().Equal(floppy);
+
+        // A fresh machine reads the volume from the ProFile.
+        Apple3Machine second = Boot(Utilities);
+        second.Bus.InstallProFile(4).Drive.Insert(new MemoryBlockDevice(image, isReadOnly: false), "profile", "PO");
+        RunUntil(second, "Please select a command", seconds: 90);
+        Type(second, "F");
+        RunUntil(second, "File Handling Commands Menu", seconds: 10);
+        ListHard(second);
+        Screen(second).Should().Contain("SOS.KERNEL");
+    }
+
+    /// <summary>
     ///  Business BASIC runs a typed program, with shifted symbols, and saves it where an unlocked and deleted file
     ///  was.
     /// </summary>
@@ -79,9 +137,70 @@ public class Apple3SosTests
         Type(machine, "HOME\r10 PRINT 6*7;\"!\"\rRUN\r");
         RunUntil(machine, "42!", seconds: 10);
 
+        // HELLO ends with NEW, so the program in memory, read through BASIC's banked pointers, is the typed line.
+        BasicProgram typed = BasicProgram.Read(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        typed.ToText().Should().Be("10 PRINT 6*7;\"!\"\n");
+
         Type(machine, "UNLOCK RENUMBER.DOC\rDELETE RENUMBER.DOC\rSAVE SIX\rCATALOG\r");
         RunUntil(machine, "BLOCKS FREE", seconds: 30);
         Screen(machine).Should().Contain(" SIX ");
+    }
+
+    /// <summary>
+    ///  The variables a program sets read back from banked memory: each kind, an array element, and a string set
+    ///  from outside, which BASIC then prints.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicVariablesReadAndWrite()
+    {
+        Apple3Machine machine = Boot(BusinessBasic);
+        RunUntil(machine, "TOTAL BLOCKS", seconds: 90);
+        machine.Run(TimeSpan.FromSeconds(2));
+        Type(machine, "HOME\r10 A=1.5:B%=-7:C&=1234567890123:N$=\"HELLO\":DIM X(2,3):X(1,2)=9\rRUN\r");
+        RunUntil(machine, ")RUN", seconds: 10);
+        machine.Run(TimeSpan.FromSeconds(1));
+
+        BasicVariables variables = new(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        variables.Simple().Select(variable => variable.Name).Should().Equal("A", "B%", "C&", "N$");
+        BasicValue Read(string name)
+        {
+            BasicVariable variable = variables.Find(name) ?? throw new AssertFailedException($"{name} is missing");
+            return variables.Read(variable.Kind, variable.ValueAddress);
+        }
+
+        Read("A").Number.Should().Be(1.5);
+        Read("B%").Number.Should().Be(-7);
+        Read("C&").Long.Should().Be(1234567890123);
+        Read("N$").Text.Should().Equal("HELLO"u8.ToArray());
+
+        BasicArray array = variables.FindArray("X").Should().NotBeNull().And.Subject.As<BasicArray>();
+        array.Dimensions.Should().Equal(3, 4);
+        variables.Read(array.Kind, array.ElementAddress([1, 2])).Number.Should().Be(9);
+
+        // Expressions read the variables, with long integers exact, and numbers format as BASIC prints them.
+        BasicEvaluator evaluator = new(BasicDialect.BusinessBasic, new Apple3BasicMemory(machine.Bus));
+        string Evaluate(string expression) => evaluator.Format(evaluator.Evaluate(expression));
+        Evaluate("A*2+B%").Should().Be("-4");
+        Evaluate("C&+1").Should().Be("1234567890124");
+        Evaluate("C& DIV 1000").Should().Be("1234567890");
+        Evaluate("X(1,2)*2").Should().Be("18");
+        Evaluate("N$+\"!\"").Should().Be("\"HELLO!\"");
+        Evaluate("LEN(N$)=5 AND NOT A=0").Should().Be("1", "NOT takes one value: (NOT A)=0");
+        Evaluate("MID$(N$,2,3)").Should().Be("\"ELL\"");
+        Evaluate("UNSET").Should().Be("0");
+        Action mixed = () => evaluator.Evaluate("C&+0.5");
+        mixed.Should().Throw<FormatException>().WithMessage("?TYPE MISMATCH*");
+        Type(machine, "PRINT 1/3;\"/\";2^31;\"/\"\r");
+        RunUntil(machine, "/", seconds: 10);
+        machine.Run(TimeSpan.FromSeconds(1));
+        string printed = Screen(machine).Split('\n').Last(row => row.Contains('/', StringComparison.Ordinal)).Trim();
+        printed.Should().Be($"{Evaluate("1/3")}/{Evaluate("2^31")}/");
+
+        // A string set from outside goes into string space, where BASIC finds it.
+        BasicVariable n = variables.Find("N$") ?? throw new AssertFailedException("N$ is missing");
+        variables.Write(n.Kind, n.ValueAddress, BasicValue.Of("CHANGED"u8.ToArray()));
+        Type(machine, "PRINT N$;LEN(N$)\r");
+        RunUntil(machine, "CHANGED7", seconds: 10);
     }
 
     private static Apple3Machine Boot(string disk)
@@ -94,6 +213,32 @@ public class Apple3SosTests
         WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
         machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), disk, "DSK");
         return machine;
+    }
+
+    // From the File Handling menu, lists /HARD's files on the screen.
+    private static void ListHard(Apple3Machine machine)
+    {
+        Type(machine, "L");
+        RunUntil(machine, "List the directory information", seconds: 10);
+        Type(machine, "/HARD\r");
+        machine.Run(TimeSpan.FromSeconds(1));
+        Type(machine, "\r");
+        machine.Run(TimeSpan.FromSeconds(1));
+        Type(machine, "\r");
+        RunUntil(machine, "1 files listed", seconds: 30);
+    }
+
+    // The blocks in a ProFile's image.
+    private static byte[] Image(Machines.Apple2.ProFileDrive? drive)
+    {
+        IBlockDevice device = drive?.Image ?? throw new InvalidOperationException("The ProFile has no image.");
+        byte[] image = new byte[device.BlockCount * 512];
+        for (uint block = 0; block < device.BlockCount; block++)
+        {
+            device.ReadBlock(block, image.AsSpan((int)block * 512, 512));
+        }
+
+        return image;
     }
 
     private static void Type(Apple3Machine machine, string keys)

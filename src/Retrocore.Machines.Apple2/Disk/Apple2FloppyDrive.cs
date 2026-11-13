@@ -58,7 +58,7 @@ public sealed class Apple2FloppyDrive : IDiskDrive
             Description = description,
             Controller = controllerName,
             Formats = ["woz", "dsk", "do", "po"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject,
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
             Tracks = 35,
             Sides = 1
         };
@@ -134,6 +134,15 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     ///  Gets the disk in the drive, which stays in it; null when the drive is empty.
     /// </summary>
     public WozDisk? Disk => _controller.MediaIn(Drive);
+
+    /// <summary>
+    ///  Covers or uncovers the disk's write-protect notch. The disk keeps what is written to it in memory; its image
+    ///  file does not change.
+    /// </summary>
+    /// <param name="writeProtected">Whether the disk is protected.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    public void SetWriteProtected(bool writeProtected) =>
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsReadOnly = writeProtected;
 
     /// <summary>
     ///  Ejects the disk, leaving any unsaved changes to the caller.

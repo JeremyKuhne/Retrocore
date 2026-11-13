@@ -21,7 +21,7 @@ namespace Retrocore.Debug;
 ///   <c>bank2:$2000</c> stops only while bank 2 is switched in.
 ///  </para>
 /// </remarks>
-internal sealed class Apple3DebugTarget : IDebugTarget
+internal sealed partial class Apple3DebugTarget : IDebugTarget
 {
     private const byte BrkOpcode = 0x00;
     private const byte JsrOpcode = 0x20;
@@ -89,6 +89,7 @@ internal sealed class Apple3DebugTarget : IDebugTarget
         "Apple III Pascal",
         new Apple3PascalMemory(_machine.Bus),
         _machine.Bus.Peek,
+        [],
         (0x2000, 0xC000),
         extended: true,
         () => (ushort)(_machine.Bus.ZeroPage << 8),
@@ -254,12 +255,45 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     public string? DescribeSystemCall(ushort address) =>
         SystemCall(address) is { } call ? SosCalls.Describe(call.Number, address, ReadFar) : null;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Extended addressing applies above the zero page; with X-byte 0, or below $0100, the address is as mapped now.
+    ///  </para>
+    /// </remarks>
+    public byte PeekFar(byte xByte, ushort address) => ReadFar(xByte, address);
+
+    /// <inheritdoc/>
+    public void PokeFar(byte xByte, ushort address, byte value)
+    {
+        if ((xByte & 0x80) != 0 && address >= 0x100)
+        {
+            _machine.Bus.Ram[_machine.Bus.ExtendedOffset(xByte, address)] = value;
+        }
+        else
+        {
+            Poke(address, value);
+        }
+    }
+
     // Reads through an X-byte, as extended addressing does above the zero page, or with X-byte 0 as mapped now.
     private byte ReadFar(byte xByte, ushort address) =>
         (xByte & 0x80) != 0 && address >= 0x100 ? _machine.Bus.Ram[_machine.Bus.ExtendedOffset(xByte, address)] : Peek(address);
 
     /// <inheritdoc/>
-    public bool InRom(ushort address) => ReadArea(address) is Apple3MemoryArea.Rom;
+    /// <remarks>
+    ///  <para>
+    ///   What plays the ROM's part: the boot ROM, SOS's kernel from $B800 up, and Business BASIC's interpreter, from
+    ///   $5200, while it is in memory. Invokable modules and drivers, in the switchable banks, are machine code: below
+    ///   <c>$A000</c> the interpreter counts only while its own bank is in the window, not a module's that PERFORM or
+    ///   EXFN switched in.
+    ///  </para>
+    /// </remarks>
+    public bool InRom(ushort address) => ReadArea(address) is Apple3MemoryArea.Rom
+        || address >= SosKernelStart
+        || (address is >= Apple3SdkModules.BusinessBasicOrigin and < BusinessBasicEnd
+            && BusinessBasicActive
+            && (address >= SwitchableEnd || BusinessBasicInWindow));
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address reads ROM, I/O or nothing.</exception>
@@ -290,7 +324,9 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     ///  <para>
     ///   The boot ROM's source, <c>BootRom.asm</c>, applies where the ROM is mapped. SOS 1.3's kernel,
     ///   <c>Sos/SosKernel.asm</c>, applies wherever memory holds its bytes: the loader and INIT while they run, and
-    ///   the rest of the kernel in the system bank once the loader has moved it there.
+    ///   the rest of the kernel in the system bank once the loader has moved it there. Business BASIC 1.23's
+    ///   interpreter, <c>BusinessBasic/BusinessBasic.asm</c>, applies where SOS loaded it, at <c>$5200</c> in the bank
+    ///   the window shows while it runs.
     ///  </para>
     /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
@@ -319,6 +355,15 @@ internal sealed class Apple3DebugTarget : IDebugTarget
             AssemblyResult sos = Apple3SdkModules.AssembleSosKernel(kernel);
             debug.Add(new SourceMapModule(sos, area: null));
             _sosDrivers = new SosDriverModules(_machine.Bus, sos, Path.Join(roms, "Sos", "Drivers"));
+        }
+
+        // Business BASIC runs where SOS loaded it, at $5200 in the bank the window shows while it runs.
+        string basic = Path.Join(roms, "BusinessBasic", "BusinessBasic.asm");
+        if (File.Exists(basic))
+        {
+            AssemblyResult business = Apple3SdkModules.AssembleBusinessBasic(basic);
+            debug.Add(new SourceMapModule(business, area: null));
+            AddBusinessBasic(business);
         }
     }
 
@@ -403,6 +448,15 @@ internal sealed class Apple3DebugTarget : IDebugTarget
             case (Apple2FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
+            case (Apple2FloppyDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
+            case (ProFileDrive drive, "insert"):
+                ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));
+                break;
+            case (ProFileDrive drive, "eject"):
+                drive.Eject();
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }
@@ -478,8 +532,85 @@ internal sealed class Apple3DebugTarget : IDebugTarget
                 "Environment register",
                 bus.AppleIIMode ? $"${bus.Environment:X2}, Apple II mode" : $"${bus.Environment:X2}",
                 "VIA 0 port A: 1 MHz, I/O, video, reset, write protection, the primary stack and the ROM. Apple II mode, "
-                    + "set by the Apple II Emulation disk, hides the VIAs, so only turning the machine off leaves it.")
+                    + "set by the Apple II Emulation disk, hides the VIAs, so only turning the machine off leaves it."),
+            Slot(1),
+            Slot(2),
+            Slot(3),
+            Slot(4)
         ];
+    }
+
+    // A slot: its ProFile card and the ProFile cabled to it, or empty.
+    private HardwareRow Slot(int slot)
+    {
+        if (_machine.Bus.ProFileIn(slot) is not { } card)
+        {
+            return HardwareRow.Empty(
+                slot,
+                "Add Card puts a ProFile interface card here; so does the launch's proFiles.",
+                free: true);
+        }
+
+        return new(
+            $"slot{slot}",
+            $"Slot {slot}",
+            "ProFile interface card",
+            "Apple's ProFile hard disk, which SOS reaches through the .PROFILE driver in SOS.DRIVER (the System "
+                + "Utilities disk's is set for slot 4). Insert a .po or .hdv image of a SOS volume, up to 65535 blocks; "
+                + ".PROFILE as Apple shipped it uses the first 9728. The launch's proFiles installs it; Remove Card takes "
+                + "it out.",
+            [card.Drive.Id],
+            ["removeCard"]);
+    }
+
+    /// <inheritdoc/>
+    public void HardwareAction(string id, string action, JsonObject args)
+    {
+        int slot = id is ['s', 'l', 'o', 't', >= '1' and <= '4' and var digit] ? digit - '0' : 0;
+        switch (action)
+        {
+            case "addProFile" when slot != 0 && _machine.Bus.ProFileIn(slot) is null:
+                _machine.Bus.InstallProFile(slot);
+                break;
+            case "removeCard" when slot != 0 && _machine.Bus.ProFileIn(slot) is not null:
+                _machine.Bus.RemoveProFile(slot);
+                break;
+            default:
+                throw new ArgumentException($"The {id} hardware does not support {action}.");
+        }
+    }
+
+    /// <inheritdoc/>
+    public JsonObject? Cards()
+    {
+        JsonObject cards = [];
+        for (int slot = 1; slot <= 4; slot++)
+        {
+            cards[$"{slot}"] = _machine.Bus.ProFileIn(slot) is null ? "empty" : "proFile";
+        }
+
+        return cards;
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<string> RestoreCards(JsonObject cards)
+    {
+        List<string> problems = [];
+        foreach ((string key, JsonNode? node) in cards)
+        {
+            string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
+            if (!int.TryParse(key, out int slot) || slot is < 1 or > 4 || card is not ("proFile" or "empty"))
+            {
+                problems.Add($"Slot {key} cannot take the saved card '{node}'.");
+                continue;
+            }
+
+            bool installed = _machine.Bus.ProFileIn(slot) is not null;
+            if (card == "proFile" && !installed) { _machine.Bus.InstallProFile(slot); }
+            if (card == "empty" && installed) { _machine.Bus.RemoveProFile(slot); }
+        }
+
+        return problems;
     }
 
     private JsonObject VideoState() => new JsonObject
@@ -648,6 +779,15 @@ internal sealed class Apple3DebugTarget : IDebugTarget
         };
 
         target.SetSound(args.String("sound") ?? "speaker");
+        foreach ((int slot, string? image) in ProFileMedia.LaunchCards(args, "1 to 4"))
+        {
+            target.HardwareAction($"slot{slot}", "addProFile", []);
+            if (image is not null && machine.Bus.ProFileIn(slot) is { } card)
+            {
+                ProFileMedia.Insert(card.Drive, image);
+            }
+        }
+
         if (args["disks"] is JsonArray disks)
         {
             if (disks.Count > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }

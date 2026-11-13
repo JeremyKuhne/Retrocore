@@ -164,8 +164,23 @@ internal sealed partial class DebugSession
             int frameId = args.Int("frameId") ?? 1;
             if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
 
-            // A Pascal frame's expressions are the CPU's, as the machine is now.
-            if (frameId is >= PascalFrameBase and < BasicFrameBase) { frameId = 1; }
+            // In a Pascal frame, a variable its listing names; other expressions are the CPU's, as the machine is now.
+            if (frameId is >= PascalFrameBase and < BasicFrameBase)
+            {
+                if (PascalVariableNamed(frameId, expression.Trim()) is { } named && Pascal is { } pascal)
+                {
+                    return new JsonObject
+                    {
+                        ["result"] = PascalValue(pascal.Memory, named.At, named.Variable),
+                        ["type"] = named.Variable.Type,
+                        ["variablesReference"] = 0,
+                        ["memoryReference"] = named.At.Bank == 0 ? Reference(bank: null, named.At.Address) : null
+                    };
+                }
+
+                frameId = 1;
+            }
+
             long value;
             DebugMemoryBank? bank;
             try
@@ -245,7 +260,7 @@ internal sealed partial class DebugSession
 
         transport.On("next", args => Reply(() =>
         {
-            if (OnPascal(args)) { StepPascal(PascalStep.Over); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Over, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Over); }
             else { Step(over: true, outOf: false, Instruction(args)); }
             return [];
@@ -253,7 +268,7 @@ internal sealed partial class DebugSession
 
         transport.On("stepIn", args => Reply(() =>
         {
-            if (OnPascal(args)) { StepPascal(PascalStep.Into); }
+            if (OnPascal(args)) { StepPascal(PascalStep.Into, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Into); }
             else { Step(over: false, outOf: false, Instruction(args)); }
             return [];
@@ -524,6 +539,7 @@ internal sealed partial class DebugSession
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads),
+            DebugMachines.Coco => LaunchCoco(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -698,6 +714,15 @@ internal sealed partial class DebugSession
     {
         Trs80DebugTarget target = Trs80DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Color Computer calls Color BASIC's routines through RAM hooks it sets up as it starts, so the
+    // ROM runs first; Disk BASIC takes longer, as it resets the drives.
+    private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
+    {
+        CocoDebugTarget target = CocoDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }
 
@@ -1042,6 +1067,9 @@ internal sealed partial class DebugSession
         for (int count = 0; count < 1_000_000; count++)
         {
             if (!Execute()) { return; }
+
+            // While the CPU is idle no instruction has finished, so the step neither ends nor meets a breakpoint.
+            if (!Target.IsInstructionBoundary) { continue; }
             DebugFrame r = Target.Frame;
             DebugPosition? now = _debug.Position(Target, r.ProgramCounter);
 
@@ -1126,6 +1154,11 @@ internal sealed partial class DebugSession
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
             if (instruction && Target.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+
+            // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
+            // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
+            // made its writes, so the watchpoints they hit stop now.
+            if (Target.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");

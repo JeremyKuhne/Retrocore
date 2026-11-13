@@ -61,6 +61,33 @@ public sealed class BasicLabelTests
     }
 
     /// <summary>
+    ///  THEN GOTO and THEN GOSUB take a label: the word after THEN that is no label is read as the jump it is.
+    /// </summary>
+    /// <param name="dialect">The dialect.</param>
+    /// <param name="listed">How the line lists.</param>
+    [TestMethod]
+    [DataRow("applesoft", "20 IF T<3 THEN GOTO 10")]
+    [DataRow("business", "20 IF T<3 THEN GOTO 10")]
+    public void ThenGotoTakesALabel(string dialect, string listed)
+    {
+        BasicParseResult parsed = BasicProgram.Parse($"REM retrocore {dialect}\nloop:\nT=T+1\nIF T<3 THEN GOTO loop\n");
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Split('\n')[1].Should().Be(listed);
+    }
+
+    /// <summary>
+    ///  Business BASIC takes GOTO only with a separator after it, so after THEN, GOTOCOUNT=1 is an assignment, and
+    ///  no label is wanted.
+    /// </summary>
+    [TestMethod]
+    public void BusinessBasicGotoNeedsASeparator()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("REM retrocore business\n10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Should().Be("10 IF A THEN GOTOCOUNT=1\n20 X.GOTO=2\n");
+    }
+
+    /// <summary>
     ///  Lines without numbers are numbered after the line before them, labels become their lines' numbers, and the
     ///  program maps back to its text lines.
     /// </summary>

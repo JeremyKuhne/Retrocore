@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.insertDisk", async () => {
         const drive = await pickDrive();
         if (drive === undefined) return;
-        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3"] });
+        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3", "jvc"] });
         if (path !== undefined) await media({ device: "disk", action: "insert", drive, path });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.ejectDisk", async () => {
@@ -223,9 +223,10 @@ export function activate(context: vscode.ExtensionContext): void {
                     const machine = typeof message.body === "object" && message.body !== null && "machine" in message.body ? message.body.machine : undefined;
                     const model = typeof message.body === "object" && message.body !== null && "model" in message.body && typeof message.body.model === "string" ? message.body.model : undefined;
                     const title = machine === "trs80-model1" ? "TRS-80 Model I" : machine === "apple1" ? "Apple-1" : model ?? "Apple IIe";
+                    const phosphor = machine === "trs80-model1" || machine === "apple1" || machine === "coco" ? machine : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
-                    const screen = running ? (machine === "trs80-model1" || machine === "apple1" ? machine : "apple2") : "off";
+                    const screen = running ? phosphor : "off";
                     const icon = machineIcon(context.extensionUri, screen);
                     if (panel !== undefined && panel.title !== title) panel.title = title;
                     if (panel !== undefined && panelScreen !== screen) {
@@ -333,10 +334,10 @@ function applePrefix(session: vscode.DebugSession): string {
 
 /**
  * The display panel's tab icon: a CRT monitor framed in the theme's tab text color, whose screen glows in the
- * machine's phosphor while it runs (green for the IIe, white for the Model I and the Apple-1) and is dark (off) when
- * it stops.
+ * machine's phosphor while it runs (green for the IIe, white for the Model I and the Apple-1, the Color Computer's
+ * green text screen) and is dark (off) when it stops.
  */
-function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "apple1" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
+function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "apple1" | "coco" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
     const name = screen === "off" ? "crt-off" : screen;
     return {
         light: vscode.Uri.joinPath(extension, "media", `${name}-light.svg`),

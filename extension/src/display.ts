@@ -63,13 +63,18 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button id="apple1-reset" title="RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen">Reset</button>
 <button id="apple1-clear" title="CLEAR SCREEN: blanks the screen and puts the cursor at the top left">Clear Screen</button>
 </span>
+<span class="keys" data-machine="coco">
+<button data-code="1" title="BREAK (or Esc)">Break</button>
+<button data-code="31" title="CLEAR (or Home)">Clear</button>
+<button id="coco-reset" title="The RESET button (or Ctrl+F12 or Ctrl+Break): BASIC starts again with the program kept">Reset</button>
+</span>
 <span class="keys end">
 <button id="basic" hidden title="Opens the BASIC program in the machine's memory in an editor; saving puts it back">BASIC program</button>
 <label class="speed" title="How fast the machine runs, as a multiple of its clock. Sound plays only at 1x.">Speed <select id="speed" aria-label="Speed">
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2 apple3">
+<span class="keys" data-machine="apple2 apple3 coco">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -90,8 +95,9 @@ const api=acquireVsCodeApi();
 window.addEventListener('error',event=>api.postMessage({error:event.message}));
 const screen=document.getElementById('screen');
 let lastFrame;
-// The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 fills a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','apple1':'280/192'};
+// The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
+// border, fill a 4:3 screen.
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','apple1':'280/192','coco':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -105,9 +111,9 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's or Apple-1's fast cassette or the IIe's fast disk, running flat out while the
-    // media moves.
-    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='apple1'?'Fast tape':'Fast disk']:[];
+    // Accelerated is the Model I's, Apple-1's or Color Computer's fast cassette or the IIe's fast disk, running flat
+    // out while the media moves.
+    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='apple1'||frame.machine==='coco'?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
 const fastDisk=document.getElementById('fastDisk');
@@ -204,7 +210,7 @@ window.addEventListener('message',event=>{
     off.hidden=true;
     const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model;
     lastFrame=event.data;draw(lastFrame);
-    // A frame without it, as the Apple III's, is a machine with no Mockingboard.
+    // A frame without it, as the Apple III's or the Color Computer's, is a machine with no Mockingboard.
     mockingboard=lastFrame?.mockingboard===true;
     if(typeof lastFrame?.sound==='string')showSound(lastFrame.sound);
     syncScreen(lastFrame);
@@ -321,19 +327,22 @@ overlay.addEventListener('change',()=>{
     api.setState?.({...(api.getState?.()??{}),overlay:overlay.checked});
     if(lastFrame)draw(lastFrame);
 });
-// Each machine's codes for its special keys: the Model I has arrows, CLEAR (Home) and BREAK (Escape).
+// Each machine's codes for its special keys: the Model I and Color Computer have arrows, CLEAR (Home) and BREAK
+// (Escape).
 const keys={
     'apple2':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
     'apple3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:21,ArrowUp:11,ArrowDown:10,Escape:27,Tab:9,Delete:127},
     'trs80-model1':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
     // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
-    'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27}
+    'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
+    'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
     'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
-    'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals'
+    'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
+    'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -343,10 +352,13 @@ const board=()=>machine()==='apple2'&&typeof lastFrame?.model==='string'&&!lastF
 const ctrl=document.getElementById('ctrl');
 // Sharp scaling: each dot a whole number of physical pixels across and down, keeping the screen's shape. The IIe's
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
-// screen (768x576). Sizes are in CSS pixels for the display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'apple1':[560,384]};
+// screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
+// show its lines twice over, about 4:3. Sizes are in CSS pixels for the display's scaling, ratio physical pixels to
+// each.
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498]};
 function sharpSize(machine,width,height,ratio){
-    const [w,h]=sharpBase[machine]??sharpBase['apple2'];
+    const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
+    const [w,h]=sharpBase[key]??sharpBase['apple2'];
     const scale=Math.floor(Math.min(width*ratio/w,height*ratio/h));
     return scale>=1?{width:w*scale/ratio,height:h*scale/ratio,scale}:null;
 }
@@ -472,7 +484,7 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','apple1-reset']){
+for(const id of ['reset','trs80-reset','apple1-reset','coco-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
 }
 document.getElementById('apple1-clear').addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});

@@ -129,6 +129,61 @@ if (!z80Image.Success
 
 Console.WriteLine("Z80: Native AOT T-state execution, mid-instruction restore, assembly and disassembly passed.");
 
+// The MC6809: native assembly, cycle-stepped execution with mid-instruction restore, and 5-byte round-trip disassembly.
+AssemblyResult m6809Image = new NativeAssembler().Assemble(
+    new AssemblySource(
+        """
+        .cpu M6809
+                .org $0200
+                LDS #$2000
+                LDB #$10
+                LDX #$3000
+        Loop:   INC 2,X
+                CMPD [$1234,X]
+                PSHS A,B,X
+                PULS A,B,X
+                DECB
+                BNE Loop
+                SYNC
+        """),
+    new(M6809Isa.Name, origin: 0x0200, imageSize: 32));
+
+if (!m6809Image.Success)
+{
+    throw new InvalidOperationException("Native AOT M6809 assembly failed.");
+}
+
+byte[] m6809Memory = new byte[0x10000];
+m6809Image.Sections[0].Bytes.Span.CopyTo(m6809Memory.AsSpan(0x0200));
+M6809Processor<RamBus> m6809 = new(new RamBus(m6809Memory));
+m6809.Registers = m6809.Registers with { PC = 0x0200 };
+for (int index = 0; index < 45; index++) { m6809.StepCycle(); }
+M6809Snapshot m6809Snapshot = m6809.CaptureState();
+byte savedCell = m6809Memory[0x3002];
+while (!m6809.IsWaiting) { m6809.StepCycle(); }
+ulong m6809Cycles = m6809.CycleCount;
+m6809Memory[0x3002] = savedCell;
+m6809.RestoreState(m6809Snapshot);
+while (!m6809.IsWaiting) { m6809.StepCycle(); }
+if (m6809Memory[0x3002] != 0x10 || m6809.CycleCount != m6809Cycles || m6809.Registers.B != 0 || !m6809.Registers.NmiArmed)
+{
+    throw new InvalidOperationException("Native AOT M6809 execution or restore failed.");
+}
+
+DisassemblyResult m6809Disassembly = Disassembler.Disassemble(m6809Image.Sections[0].Bytes.Span, 0x0200, M6809Isa.InstructionSet);
+AssemblyResult m6809RoundTrip = new NativeAssembler().Assemble(
+    new AssemblySource(m6809Disassembly.ExportSource()),
+    m6809Disassembly.Options);
+
+if (!m6809Disassembly.Success
+    || !m6809RoundTrip.Success
+    || !m6809RoundTrip.Sections[0].Bytes.Span.SequenceEqual(m6809Image.Sections[0].Bytes.Span))
+{
+    throw new InvalidOperationException("Native AOT M6809 disassembly round trip failed.");
+}
+
+Console.WriteLine("M6809: Native AOT execution, mid-instruction restore, assembly and disassembly passed.");
+
 // The TRS-80 Model I: a tiny ROM from the native assembler writes to video RAM and halts.
 AssemblyResult modelOneRom = new NativeAssembler().Assemble(
     new AssemblySource(".cpu Z80\nLD HL,$3C00\nLD [HL],'O'\nINC HL\nLD [HL],'K'\nHALT"),
@@ -147,3 +202,28 @@ if (!modelOne.Processor.IsHalted || modelOne.Bus.Video.Read(0) != 'O' || modelOn
 }
 
 Console.WriteLine("Model I: Native AOT machine, video RAM and rendering passed.");
+
+// The Color Computer: a tiny Color BASIC ROM from the native assembler writes OK to the text screen and loops.
+AssemblyResult cocoCode = new NativeAssembler().Assemble(
+    new AssemblySource(".cpu M6809\nLDA #$0F\nSTA $0400\nLDA #$0B\nSTA $0401\nLOOP: BRA LOOP"),
+    new(M6809Isa.Name, origin: 0xA000, imageSize: 0x20));
+
+byte[] colorBasic = new byte[Retrocore.Machines.Coco.CocoRoms.BasicSize];
+cocoCode.Sections[0].Bytes.Span.CopyTo(colorBasic);
+colorBasic[^2] = 0xA0;
+colorBasic[^1] = 0x00;
+Retrocore.Machines.Coco.CocoMachine coco = new(
+    new() { Model = Retrocore.Machines.Coco.CocoModel.Coco2, RamKilobytes = 16 },
+    Retrocore.Machines.Coco.CocoRoms.ForCoco12(colorBasic, []));
+
+coco.Run(1000);
+coco.StepInstruction();
+Retrocore.Machines.IVideoSource cocoVideo = coco.Bus.VideoOutput;
+byte[] cocoScreen = new byte[cocoVideo.Width * cocoVideo.Height * 4];
+cocoVideo.Render(cocoScreen, scanned: false);
+if (coco.Bus.Peek(0x0400) != 0x0F || coco.Bus.Peek(0x0401) != 0x0B || coco.Processor.Registers.PC != 0xA00A)
+{
+    throw new InvalidOperationException("Native AOT Color Computer execution failed.");
+}
+
+Console.WriteLine("Color Computer: Native AOT machine, SAM, VDG and rendering passed.");

@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1 and the TRS-80 Model I in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -74,7 +74,7 @@ a separate VS Code window running the in-repo extension, on
 `sample\trs80\hello.asm` or the files given with `-File`. That window has its own
 profile under `artifacts\self-host`, so your VS Code profile is unchanged.
 Highlighting and IntelliSense need no ROMs, and neither does a launch: without dumps
-the IIe and the Model I run ROMs assembled from the SDK's sources. `-RomDirectory` (or
+the IIe, the Model I and the CoCo 1 and 2 run ROMs assembled from the SDK's sources. `-RomDirectory` (or
 `RETROCORE_IIE_ROMS`) lets the IIe launch configurations use your IIe dumps instead, and
 `tools\Start-IIeDevelopment.ps1 <rom directory>` opens the IIe sample with them.
 `-SkipBuild` relaunches without building. After a change, rebuild and run
@@ -93,12 +93,15 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 
 ## Starting a machine
 
-No launch.json is needed to start a machine. Without dumps, every machine runs ROMs
-assembled from the SDK's sources, so there is nothing else to set up.
+No launch.json is needed to start a machine. Without dumps, the Apple II family and the
+Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
+Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
+their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II), TRS-80 Model I (Level I) and Apple-1. Pick one and press F5, and it boots as it
+Model I (Level II), TRS-80 Model I (Level I), Apple-1, and the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -112,7 +115,7 @@ session runs. It asks three things:
    - a binary program, loaded at the machine's usual address;
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive;
-   - a tape, on the Model I and the Apple-1;
+   - a tape, on the Model I, the Apple-1 and the Color Computer;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -948,6 +951,36 @@ Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's ro
 [Retro Devices](#retro-devices); a recording is saved as a WAV file when it is
 ejected.
 
+## Debugging on the TRS-80 Color Computer
+
+`"machine": "coco"` debugs a Color Computer 1, 2 or 3, chosen by `model` (`coco1`,
+`coco2`, the default, or `coco3`), with the same source debugging, call stack, cycle
+counts and `Keeps:` checks; the call stack follows `JSR`, `BSR`, `LBSR`, `SWI` and
+interrupts on the 6809's S stack. The machine is configured by:
+
+- `ramKilobytes`: 4, 16, 32 or 64 on a CoCo 1 or 2, 128 or 512 on a CoCo 3;
+- `colorBasic` and `extendedBasic`, the CoCo 1 and 2's ROM versions;
+- `lowercase` (the MC6847T1 VDG), `artifacts` (`blue-red`, `red-blue` or `none`)
+  and, on a CoCo 3, `monitor` (`composite` or `rgb`);
+- `cartridge` and `autostart`, a ROM pack;
+- `diskController`, `diskBasic` and `disks` (JVC `.dsk` images for drives 0-3);
+- `cassette`, `fastCassette` and `sound` (`speaker` or `off`).
+
+Color, Extended and Disk BASIC are the SDK sources `ColorBasic.asm`, `ExtendedBasic.asm`
+and `DiskBasic.asm`, and the CoCo 3's ROM is those with its patches and `Coco3.asm`, so
+every model needs nothing else, disk controller included, and debugging steps into the
+sources, on a CoCo 3 in the copy of its ROM it runs from RAM. Dumps from `romDirectory`
+or `RETROCORE_COCO_ROMS`, under MAME's names (such as `coco3.rom`), replace the sources'
+ROMs when given. A program
+(`source` or `program`, loaded at `$3000` by default) runs after BASIC has started for
+`bootSeconds` (2 by default); [the sample](../sample/coco/hello.asm) prints through
+Color BASIC's `CHROUT` vector.
+
+The panel shows the screen and takes keys: arrows, **Home** for CLEAR, **Escape** for
+BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key bar. The
+TRS-80 cassette and disk commands work as on the Model I. See the
+[Color Computer guide](../docs/Coco.md) for what is emulated.
+
 ## Breakpoints
 
 Breakpoints work in `retrocore-asm` and `asm` files, and every kind in VS Code's
@@ -991,7 +1024,7 @@ while the machine runs. Eclipse CDT Cloud's Memory Inspector works too.
 
 The IIe's soft switches map one address to several stores, so a memory reference
 can name a bank: `main`, `aux`, `bank1`, `auxbank1` (the language cards' bank 1),
-`rom`, and `slot6` or `slot7` when those slots have ROMs. `aux:$0400` is auxiliary
+`rom`, and `slot1` to `slot7` while those slots' cards have ROMs. `aux:$0400` is auxiliary
 RAM's text page whatever the switches map, and `[aux:$0400]` reads it in
 expressions, conditions and data breakpoints. A function breakpoint such as
 `bank1:$D000` stops only while the CPU runs that bank's code. The
@@ -1073,10 +1106,12 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas` and `.level2.bas` files are AppleSoft, Integer BASIC
-and Level II BASIC. A plain `.bas` file takes its dialect from a first line such as
-`REM retrocore applesoft` or `' retrocore level2`, else the `retrocore.basic.dialect`
-setting, else the BASIC of the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.business.bas` and `.level2.bas` files are
+AppleSoft, Integer BASIC, Business BASIC and Level II BASIC. Business BASIC takes a
+reserved word only between separators, so its highlighting leaves `PRINTER` a name,
+and its names count in full, dots included. A plain `.bas` file takes its dialect
+from a first line such as `REM retrocore applesoft` or `' retrocore level2`, else the
+`retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and
@@ -1103,7 +1138,10 @@ A launch configuration's `basic` names a file to debug: the machine boots to BAS
 prompt, the file is compiled into memory and RUN (`"run": false` leaves it at the
 prompt), and `stopOnEntry` stops on its first statement. While the program in memory
 is what the file compiles to, its frames, breakpoints, inline breakpoints and Jump to
-Cursor are in the file itself, labels and all. BASIC files, the machine's program and opened listings
+Cursor are in the file itself, labels and all. On the Apple III, a `.business.bas` file
+(or one with `REM retrocore business`) needs the Business BASIC disk in `disks`, which
+**Retrocore: Start Machine** asks for: SOS boots it, BASIC runs the disk's HELLO, and the
+program goes in once BASIC is at its prompt. BASIC files, the machine's program and opened listings
 get:
 
 - highlighting that finds reserved words where the ROM does, inside names too;
@@ -1151,7 +1189,16 @@ and a reset's startup scan finds it. Its two drives take disks like any other, a
 **Remove Card** takes it out again, asking first if it has disks in. Slot 4 also
 takes the Mockingboard; slot 3 belongs to the 80-column firmware. Any free slot
 takes the mouse card (one per machine), as the `mouse` launch option does: click the
-display to move it with your mouse, and press Escape to let go.
+display to move it with your mouse, and press Escape to let go. Any free slot also takes
+a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
+insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
+`disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
+Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
+MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
+in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
+from it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you

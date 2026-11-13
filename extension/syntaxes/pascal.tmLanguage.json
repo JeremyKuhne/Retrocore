@@ -1,0 +1,74 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Apple Pascal",
+  "scopeName": "source.retrocore-pascal",
+  "comment": "UCSD Pascal II.1, as Apple Pascal and Apple III Pascal compile it. Case does not matter.",
+  "patterns": [
+    { "include": "#directive" },
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#heading" },
+    { "include": "#keyword" },
+    { "include": "#type" },
+    { "include": "#constant" },
+    { "include": "#builtin" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "directive": {
+      "patterns": [
+        { "name": "meta.preprocessor.pascal.retrocore", "begin": "\\(\\*\\$", "end": "\\*\\)" },
+        { "name": "meta.preprocessor.pascal.retrocore", "begin": "\\{\\$", "end": "\\}" }
+      ]
+    },
+    "comment": {
+      "patterns": [
+        { "name": "comment.block.pascal.retrocore", "begin": "\\(\\*", "end": "\\*\\)" },
+        { "name": "comment.block.braces.pascal.retrocore", "begin": "\\{", "end": "\\}" }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.single.pascal.retrocore",
+      "begin": "'",
+      "end": "'(?!')",
+      "patterns": [{ "name": "constant.character.escape.pascal.retrocore", "match": "''" }]
+    },
+    "number": {
+      "patterns": [
+        { "name": "constant.numeric.real.pascal.retrocore", "match": "\\b[0-9]+(\\.[0-9]+)?[eE][+-]?[0-9]+\\b|\\b[0-9]+\\.[0-9]+\\b" },
+        { "name": "constant.numeric.integer.pascal.retrocore", "match": "\\b[0-9]+\\b" }
+      ]
+    },
+    "heading": {
+      "match": "(?i)\\b(program|unit|procedure|function)\\s+([A-Za-z][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.function.pascal.retrocore" },
+        "2": { "name": "entity.name.function.pascal.retrocore" }
+      }
+    },
+    "keyword": {
+      "patterns": [
+        { "name": "keyword.control.pascal.retrocore", "match": "(?i)\\b(begin|end|if|then|else|case|of|for|to|downto|do|while|repeat|until|with|goto|exit)\\b" },
+        { "name": "keyword.operator.word.pascal.retrocore", "match": "(?i)\\b(and|or|not|div|mod|in)\\b" },
+        { "name": "storage.modifier.pascal.retrocore", "match": "(?i)\\b(var|const|type|label|array|record|set|file|packed|segment|forward|external|uses|interface|implementation)\\b" }
+      ]
+    },
+    "type": {
+      "name": "support.type.pascal.retrocore",
+      "match": "(?i)\\b(integer|real|boolean|char|string|text|interactive)\\b"
+    },
+    "constant": {
+      "name": "constant.language.pascal.retrocore",
+      "match": "(?i)\\b(true|false|nil|maxint)\\b"
+    },
+    "builtin": {
+      "name": "support.function.pascal.retrocore",
+      "match": "(?i)\\b(write|writeln|read|readln|reset|rewrite|close|eof|eoln|get|put|page|new|mark|release|ord|chr|succ|pred|odd|abs|sqr|sqrt|sin|cos|exp|ln|log|atan|round|trunc|length|copy|concat|pos|insert|delete|str|fillchar|moveleft|moveright|scan|sizeof|unitread|unitwrite|unitbusy|unitwait|unitclear|unitstatus|blockread|blockwrite|ioresult|seek|halt|memavail|time|pwroften|gotoxy)\\b"
+    },
+    "operator": {
+      "name": "keyword.operator.pascal.retrocore",
+      "match": ":=|<>|<=|>=|[-+*/=<>^@]"
+    }
+  }
+}

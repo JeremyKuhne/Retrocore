@@ -249,7 +249,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.addCard", async (node?: Node) => {
         if (node === undefined || !("hardware" in node)) return;
-        const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id), { title: `Add a card to ${node.hardware.name}` });
+        const machine = vscode.debug.activeDebugSession?.configuration.machine as string | undefined;
+        const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id, machine),
+            { title: `Add a card to ${node.hardware.name}` });
         if (card) await change(node, card.args);
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.removeCard", async (node?: Node) => {

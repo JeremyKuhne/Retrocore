@@ -1,7 +1,7 @@
 # Backlog: Apple Pascal
 
 Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Steps
-1-4 are built for both machines; see Built. [Pascal.md](../Pascal.md) is the user guide.
+1-4 and most of Later are built for both machines; see Built. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -63,9 +63,32 @@ Built 2026-11-13:
     Apple III the caller's code X-byte. Locals follow it, local n at MSCW + 10 + 2n.
   - The interpreter is found by its fetch's bytes, so other versions should be found too, but only 1.1 is checked.
   - `WozDisk.Version` counts changes, so code files the Compiler writes while the machine runs are found.
-- **Not done:** line breakpoints in `.TEXT` sources from listings (a listing's offsets work as `pascal` breakpoints
-  today), named variables, Apple III Pascal 1.2 and Apple Pascal 1.2 booted, the IIe, and a language for `.TEXT`
-  files in the extension.
+- **Not done** in that round: line breakpoints, named variables, the 1.2 versions, the IIe and a language for
+  sources; all but Apple III Pascal 1.2 are built in the next.
+
+Built 2026-11-13, the second round:
+
+- **Writable disks:** an Apple disk's write protection can come off (the Retro Devices view, a saved machine, or
+  `retro/device` with `writeProtect`), so the Editor and Compiler can save in a debug session. Writes stay in memory.
+- **Listings:** `PascalListing` reads a compiler listing: each line's segment, procedure, depth or declaration and
+  offset, the segments' and procedures' names, and the words of declared variables where their types' sizes are
+  known; `PascalListingTests`.
+- **Source lines:** breakpoints in `.pas`, `.pascal` and `.text` sources bind through `NAME.LST.TEXT`, on a disk in a
+  drive (read again when it changes) or beside the source, to the first p-code of the line's statement. Frames show
+  source lines and procedure names; Step Over and Step Into go by line. `Test-PascalDap.mjs` compiles HELLO in the
+  debugger, stops at its line 9 in a host copy, steps, and stops there again on the loop's next pass.
+- **Variables:** named, with values as their types read, in Locals and Globals and on hover.
+- **The extension:** `retrocore-pascal` for `.pas` and `.pascal`, with a grammar and gutter breakpoints;
+  `pascalGrammar.test.ts`.
+- **Versions:** Apple Pascal 1.2 boots, compiles and runs on the II Plus and the IIe, and 1.1 on the IIe
+  (`Apple2PascalTests`); 1.2's interpreter fetches at `$D266`, with the same registers and mark stack.
+- **Found:**
+  - Apple Pascal's interpreter uses both of the language card's `$D000` banks, so the debugger looks for it in each.
+  - On both machines, keys pasted faster than a typist types can be lost while the Editor scrolls: SOS's and
+    Apple Pascal's type-ahead overflows. The tests type a line at a time, and the guide says to paste in pieces.
+- **Not done:** Apple III Pascal 1.2, whose disks are updates to copy onto 1.1's (that needs SOS volumes the media
+  library can write); `.TEXT` files open as plain text unless associated with `retrocore-pascal`; pacing pasted
+  text to what the program takes.
 
 ## The pieces
 
@@ -134,9 +157,10 @@ registers, found by its bytes, as `SosDriverModules` finds a driver.
 
 ### 5. Later
 
-- A Pascal language and grammar for `.TEXT` sources in the extension.
-- Named variables, from the compiler's listing, which gives each declaration's offset.
-- Writing Pascal volumes and SOS volumes, with the media library ([Media.md](Media.md)).
+- ~~A Pascal language and grammar in the extension~~ and ~~named variables~~: built in the second round.
+- Writing Pascal volumes and SOS volumes, with the media library ([Media.md](Media.md)), which Apple III Pascal 1.2
+  needs, and saving a disk the machine wrote back to its image.
+- Pasted text paced to what the program takes.
 - Apple Pascal 1.3, and Apple III Pascal 1.0.
 
 ## Order

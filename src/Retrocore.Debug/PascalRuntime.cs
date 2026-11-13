@@ -20,12 +20,14 @@ namespace Retrocore.Debug;
 internal sealed class PascalRuntime
 {
     private readonly Func<ushort, byte> _peek;
+    private readonly IReadOnlyList<Func<ushort, byte>> _views;
     private readonly (int Start, int End) _range;
     private readonly bool _extended;
     private readonly Func<ushort> _zeroPage;
     private readonly Func<IEnumerable<WozDisk>> _disks;
     private readonly Func<ulong> _cycles;
     private readonly PascalCodeLibrary _library = new();
+    private readonly List<(string File, PascalListing Listing)> _listings = [];
 
     // When the interpreter's fetch was last seen, and when its bytes were first found missing since.
     private ulong _lastFetch;
@@ -40,6 +42,10 @@ internal sealed class PascalRuntime
     /// <param name="name">The interpreter's name, such as <c>Apple III Pascal</c>.</param>
     /// <param name="memory">The memory the interpreter sees.</param>
     /// <param name="peek">Reads the memory the CPU sees.</param>
+    /// <param name="views">
+    ///  Other ways to read where the interpreter may be, which the CPU sees only while they are switched in, such as
+    ///  the language card's two banks at <c>$D000</c>.
+    /// </param>
     /// <param name="range">Where to look for the interpreter.</param>
     /// <param name="extended">Whether its pointers have X-bytes.</param>
     /// <param name="zeroPage">Gets where zero page is now.</param>
@@ -49,6 +55,7 @@ internal sealed class PascalRuntime
         string name,
         IPascalMemory memory,
         Func<ushort, byte> peek,
+        IReadOnlyList<Func<ushort, byte>> views,
         (int Start, int End) range,
         bool extended,
         Func<ushort> zeroPage,
@@ -58,6 +65,7 @@ internal sealed class PascalRuntime
         Name = name;
         Memory = memory;
         _peek = peek;
+        _views = [peek, .. views];
         _range = range;
         _extended = extended;
         _zeroPage = zeroPage;
@@ -98,13 +106,13 @@ internal sealed class PascalRuntime
     /// <returns>Whether the interpreter is known.</returns>
     internal bool Scan()
     {
-        if (Interpreter is { } known && PascalInterpreter.IsFetch(_peek, known.Fetch))
+        if (Interpreter is { } known && _views.Any(view => PascalInterpreter.IsFetch(view, known.Fetch)))
         {
             _missingSince = null;
             return true;
         }
 
-        if (PascalInterpreter.FindFetch(_peek, _range.Start, _range.End) is { } fetch)
+        if (_views.Select(view => PascalInterpreter.FindFetch(view, _range.Start, _range.End)).FirstOrDefault(found => found is not null) is { } fetch)
         {
             if (Interpreter?.Fetch != fetch) { Registers = null; }
             Interpreter = new PascalInterpreter(Name, fetch, Interpreter?.ZeroPage ?? 0, _extended);
@@ -174,6 +182,46 @@ internal sealed class PascalRuntime
     }
 
     /// <summary>
+    ///  Finds a segment of the code files on the disks in the drives by its name and number.
+    /// </summary>
+    /// <param name="name">The segment's name.</param>
+    /// <param name="number">Its number.</param>
+    /// <returns>The segment, or null.</returns>
+    internal PascalSegment? CodeSegment(string name, int number)
+    {
+        Refresh();
+        return _library.Segment(name, number);
+    }
+
+    /// <summary>
+    ///  Gets a count of the times the disks have been read, which changes when their code files and listings may have.
+    /// </summary>
+    internal int Generation { get; private set; }
+
+    /// <summary>
+    ///  Reads the disks in the drives again if one has changed since they were read.
+    /// </summary>
+    /// <returns>Whether they were read again.</returns>
+    internal bool Refresh()
+    {
+        if (!DisksChanged()) { return false; }
+        ReadLibrary();
+        return true;
+    }
+
+    /// <summary>
+    ///  Gets the compiler listings on the disks in the drives, by file name, such as <c>/PASCAL2/HELLO.LST.TEXT</c>.
+    /// </summary>
+    internal IReadOnlyList<(string File, PascalListing Listing)> Listings
+    {
+        get
+        {
+            Refresh();
+            return _listings;
+        }
+    }
+
+    /// <summary>
     ///  Names a frame's procedure, such as <c>HELLO.2</c>, or by number, <c>1.2</c>, when no code file has its segment.
     /// </summary>
     /// <param name="frame">The frame.</param>
@@ -230,23 +278,40 @@ internal sealed class PascalRuntime
 
     private void ReadLibrary()
     {
+        Generation++;
         _library.Clear();
+        _listings.Clear();
         _libraryDisks = [.. _disks().Select(disk => (disk, disk.Version))];
         foreach ((WozDisk disk, _) in _libraryDisks)
         {
-            // A disk that does not read as a volume has no code to name, and a code file that does not read is left out.
-            List<(string Name, byte[] Data)> files;
+            // A disk that does not read as a volume has nothing to name code by, and a file that does not read is left
+            // out.
+            List<(string Name, bool Text, byte[] Data)> files;
             try
             {
-                files = CodeFiles(SectorDiskReader.Read(disk, proDosOrder: false));
+                files = Files(SectorDiskReader.Read(disk, proDosOrder: false));
             }
             catch (InvalidDataException)
             {
                 continue;
             }
 
-            foreach ((string name, byte[] data) in files)
+            foreach ((string name, bool text, byte[] data) in files)
             {
+                if (text)
+                {
+                    // A text file is a listing when most of its lines are a listing's.
+                    string plain = PascalTextFile.Read(data);
+                    PascalListing listing = PascalListing.Parse(plain);
+                    int lines = plain.Split('\n').Count(line => line.Trim().Length != 0);
+                    if (listing.Lines.Count != 0 && listing.Lines.Count * 2 >= lines)
+                    {
+                        _listings.Add((name, listing));
+                    }
+
+                    continue;
+                }
+
                 try
                 {
                     _library.Add(name, PascalCodeFile.Read(data));
@@ -259,34 +324,34 @@ internal sealed class PascalRuntime
         }
     }
 
-    // The code files on a Pascal or SOS volume, leaving out any file whose blocks cannot be read.
-    private static List<(string Name, byte[] Data)> CodeFiles(byte[] image)
+    // The code and text files on a Pascal or SOS volume, leaving out any file whose blocks cannot be read.
+    private static List<(string Name, bool Text, byte[] Data)> Files(byte[] image)
     {
-        List<(string Name, Func<byte[]> Read)> files = [];
+        List<(string Name, bool Text, Func<byte[]> Read)> files = [];
         if (PascalVolume.IsPascalVolume(image, proDosOrder: false))
         {
             PascalVolume volume = PascalVolume.Read(image, proDosOrder: false);
-            foreach (PascalFileEntry file in volume.Files.Where(file => file.Kind is PascalFileKind.Code or PascalFileKind.Data))
+            foreach (PascalFileEntry file in volume.Files.Where(file => file.Kind is PascalFileKind.Code or PascalFileKind.Data or PascalFileKind.Text))
             {
-                files.Add(($"{volume.Name}:{file.Name}", () => volume.ReadFile(file)));
+                files.Add(($"{volume.Name}:{file.Name}", file.Kind == PascalFileKind.Text, () => volume.ReadFile(file)));
             }
         }
         else
         {
             SosVolume sos = SosVolume.Read(image, proDosOrder: false);
-            foreach (SosFileEntry file in sos.Files.Where(file => file.FileType is 0x02 or 0x05 && file.StorageType is >= 1 and <= 3))
+            foreach (SosFileEntry file in sos.Files.Where(file => file.FileType is 0x02 or 0x03 or 0x05 && file.StorageType is >= 1 and <= 3))
             {
-                files.Add(($"/{sos.Name}/{file.Name}", () => sos.ReadFile(file.Name)));
+                files.Add(($"/{sos.Name}/{file.Name}", file.FileType == 0x03, () => sos.ReadFile(file.Name)));
             }
         }
 
-        List<(string Name, byte[] Data)> code = [];
-        foreach ((string name, Func<byte[]> read) in files)
+        List<(string Name, bool Text, byte[] Data)> read = [];
+        foreach ((string name, bool text, Func<byte[]> reader) in files)
         {
             try
             {
-                byte[] data = read();
-                if (PascalCodeFile.IsCodeFile(data)) { code.Add((name, data)); }
+                byte[] data = reader();
+                if (text || PascalCodeFile.IsCodeFile(data)) { read.Add((name, text, data)); }
             }
             catch (InvalidDataException)
             {
@@ -294,6 +359,6 @@ internal sealed class PascalRuntime
             }
         }
 
-        return code;
+        return read;
     }
 }

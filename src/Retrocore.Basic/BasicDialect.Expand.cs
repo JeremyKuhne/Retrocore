@@ -45,7 +45,7 @@ public abstract partial class BasicDialect
                 continue;
             }
 
-            if (spaceAfter && value is not (byte)':' and not (byte)',' and not (byte)';' and not (byte)')')
+            if (spaceAfter && SpacesAfterWord(value))
             {
                 builder.Append(' ');
             }
@@ -88,4 +88,13 @@ public abstract partial class BasicDialect
     ///  Gets whether a listing adds spaces for readability, which only a dialect whose tokenizer drops spaces may.
     /// </summary>
     internal abstract bool ListingSpaces { get; }
+
+    /// <summary>
+    ///  Tests whether a listing puts a space between a reserved word ending in a letter and the byte after it.
+    /// </summary>
+    /// <param name="next">The byte after the word.</param>
+    /// <returns>
+    ///  Whether a space goes between them: by default, unless a colon, comma, semicolon or parenthesis follows.
+    /// </returns>
+    internal virtual bool SpacesAfterWord(byte next) => next is not (byte)':' and not (byte)',' and not (byte)';' and not (byte)')';
 }

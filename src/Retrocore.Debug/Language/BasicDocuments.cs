@@ -33,6 +33,7 @@ internal sealed class BasicDocuments
         LanguageHost.AppleSoftId => BasicDialect.AppleSoft,
         LanguageHost.Level2Id => BasicDialect.Level2,
         LanguageHost.IntegerId => BasicDialect.Integer,
+        LanguageHost.BusinessId => BasicDialect.BusinessBasic,
         _ => null
     };
 

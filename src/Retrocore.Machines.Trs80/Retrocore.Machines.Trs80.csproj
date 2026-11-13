@@ -9,6 +9,7 @@
     <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
     <InternalsVisibleTo Include="Retrocore.Tests" />
     <InternalsVisibleTo Include="Retrocore.Perf" />
+    <InternalsVisibleTo Include="Retrocore.Machines.Coco" />
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />
     <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />

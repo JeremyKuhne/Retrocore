@@ -50,4 +50,14 @@ internal sealed class IsaRules
     ///  Gets the instruction sets whose indirect pointers do not carry into the high byte's page.
     /// </summary>
     internal HashSet<string> IndirectPageWrap { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///  Gets whether leading <c>&lt;</c> and <c>&gt;</c> prefixes force narrow and wide addressing, as on Motorola CPUs.
+    /// </summary>
+    internal bool AngleWidths { get; set; }
+
+    /// <summary>
+    ///  Gets alternate mnemonic names mapped to their canonical mnemonic, such as <c>LSL</c> for <c>ASL</c>.
+    /// </summary>
+    internal Dictionary<string, string> Aliases { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

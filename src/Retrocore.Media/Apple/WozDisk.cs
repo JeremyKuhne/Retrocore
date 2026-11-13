@@ -28,9 +28,10 @@ public sealed class WozDisk
     }
 
     /// <summary>
-    ///  Gets whether writes are prohibited by the caller or the image's write-protection flag.
+    ///  Gets or sets whether writes are prohibited, as the disk's write-protect notch does: at first by the caller or
+    ///  the image's write-protection flag.
     /// </summary>
-    public bool IsReadOnly { get; }
+    public bool IsReadOnly { get; set; }
 
     /// <summary>
     ///  Gets the bit-cell duration in 125-nanosecond units.

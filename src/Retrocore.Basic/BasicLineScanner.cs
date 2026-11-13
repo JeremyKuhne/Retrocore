@@ -60,6 +60,7 @@ internal sealed class BasicLineScanner
         BasicJump jump = BasicJump.None;
         bool afterNumber = false;
         bool afterFunction = false;
+        bool afterExternal = false;
         bool inString = false;
         bool inData = false;
         string? previous = null;
@@ -90,15 +91,18 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            if (_dialect.Keyword(value) is { } word)
+            if (Word(index) is { } word)
             {
                 // Level II stores ELSE as :ELSE and ' as :REM': the site is the last byte from the same text.
                 int last = Last(index);
                 byte token = _bytes[last];
-                BasicSite site = Site(BasicSiteKind.Keyword, index, End(last)) with { Token = token };
+                word = Business ? word : _dialect.Keyword(token) ?? word;
+                BasicSite site = Site(BasicSiteKind.Keyword, index, End(last)) with { Token = token, Word = word };
                 sites.Add(site);
-                word = _dialect.Keyword(token) ?? word;
-                if (name is { Text.Length: >= 2 } before
+
+                // Business BASIC takes a word only with a separator before it, so a name never runs into one.
+                if (!Business
+                    && name is { Text.Length: >= 2 } before
                     && before.End == site.Start
                     && char.IsAsciiLetter(word[0]))
                 {
@@ -112,6 +116,7 @@ internal sealed class BasicLineScanner
                 via = range ? via : word;
                 afterNumber = false;
                 afterFunction = word == "FN";
+                afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
                 if (word == "GOTO") { beforeGoto = previous; }
                 previous = word;
@@ -131,7 +136,7 @@ internal sealed class BasicLineScanner
             {
                 if (jump != BasicJump.None && value != '.' && !afterNumber)
                 {
-                    index = Reference(index, sites, via, zero: previous == "RESUME" || beforeGoto is "ERROR" or "ONERR");
+                    index = Reference(index, sites, via, zero: previous == "RESUME" || beforeGoto is "ERROR" or "ONERR" or "ERR");
                     afterNumber = true;
                     if (jump == BasicJump.Single) { jump = BasicJump.None; }
                 }
@@ -145,6 +150,20 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
+            // EXFN. names a function in a module INVOKE loaded, not one of the program's variables or DEF FNs.
+            if (afterExternal && char.IsAsciiLetter((char)value))
+            {
+                while (index + 1 < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[index + 1]) || _bytes[index + 1] == '.'))
+                {
+                    index++;
+                }
+
+                afterExternal = false;
+                jump = BasicJump.None;
+                continue;
+            }
+
+            afterExternal = false;
             if (char.IsAsciiLetter((char)value))
             {
                 index = Name(index, afterFunction, sites, diagnostics, split, out name);
@@ -254,7 +273,8 @@ internal sealed class BasicLineScanner
         while (at + 1 < _bytes.Length && (char.IsAsciiDigit((char)_bytes[at + 1]) || _bytes[at + 1] == '.')) { at++; }
         if (at + 2 < _bytes.Length && _bytes[at + 1] is (byte)'E' or (byte)'D')
         {
-            int sign = _dialect.Keyword(_bytes[at + 2]) is "+" or "-" ? at + 3 : at + 2;
+            bool signed = _bytes[at + 2] is (byte)'+' or (byte)'-' || _dialect.Keyword(_bytes[at + 2]) is "+" or "-";
+            int sign = signed ? at + 3 : at + 2;
             if (sign < _bytes.Length && char.IsAsciiDigit((char)_bytes[sign]))
             {
                 at = sign;
@@ -275,7 +295,11 @@ internal sealed class BasicLineScanner
         out BasicSite? site)
     {
         int last = index;
-        while (last + 1 < _bytes.Length && char.IsAsciiLetterOrDigit((char)_bytes[last + 1])) { last++; }
+        while (last + 1 < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1]) || (Business && _bytes[last + 1] == '.')))
+        {
+            last++;
+        }
+
         string letters = new([.. _bytes[index..(last + 1)].Select(value => char.ToUpperInvariant((char)value))]);
         string suffix = "";
         if (last + 1 < _bytes.Length && IsSuffix(_bytes[last + 1]))
@@ -287,8 +311,8 @@ internal sealed class BasicLineScanner
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
-        // The Microsoft BASICs keep a name's first two characters; Integer BASIC keeps all of it.
-        string significant = letters.Length > 2 && _dialect != BasicDialect.Integer ? letters[..2] : letters;
+        // The Microsoft BASICs keep a name's first two characters; Integer BASIC and Business BASIC keep all of it.
+        string significant = letters.Length > 2 && _dialect != BasicDialect.Integer && !Business ? letters[..2] : letters;
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
             Key = $"{significant}{suffix}{(array && _dialect != BasicDialect.Integer ? "(" : "")}",
@@ -322,9 +346,25 @@ internal sealed class BasicLineScanner
         return last;
     }
 
-    // A type suffix: $ and %, and on Level II ! and # for single and double precision.
-    private bool IsSuffix(byte value) =>
-        value is (byte)'$' or (byte)'%' || (_dialect == BasicDialect.Level2 && value is (byte)'!' or (byte)'#');
+    // A type suffix: $ and %, on Level II ! and # for single and double precision, and in Business BASIC & for a
+    // long integer.
+    private bool IsSuffix(byte value) => value is (byte)'$' or (byte)'%'
+        || (_dialect == BasicDialect.Level2 && value is (byte)'!' or (byte)'#')
+        || (Business && value == '&');
+
+    private bool Business => _dialect == BasicDialect.BusinessBasic;
+
+    // The reserved word a byte starts: a token, or in Business BASIC $FF and a second-list token; null for a
+    // character or a placeholder token.
+    private string? Word(int index)
+    {
+        byte value = _bytes[index];
+        string? word = Business && value == 0xFF && index + 1 < _bytes.Length
+            ? BusinessBasicDialect.Function(_bytes[index + 1])
+            : _dialect.Keyword(value);
+
+        return string.IsNullOrEmpty(word) ? null : word;
+    }
 
     // The last byte that came from the same text as this one.
     private int Last(int index)

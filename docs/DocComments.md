@@ -167,17 +167,19 @@ checked line by line:
   the register and its carry is `carry`. An entry says what the flag means when set, or says set and clear:
   `Out: zero = found`, `Out: carry = clear on success`.
 
-| Word | 6502 | Z80 | Meaning |
-| --- | --- | --- | --- |
-| `carry` | C | C | Carry out of the top bit, or no borrow (6502) or a borrow (Z80) from a subtract or compare |
-| `zero` | Z | Z | A zero result, or an equal compare |
-| `negative` | N | S | Bit 7 of the result, a negative number in two's complement; Zilog calls it the sign |
-| `overflow` | V | P/V | A signed result out of range |
-| `parity` | | P/V | An even number of 1 bits, after logical operations, rotates and IN |
-| `half-carry` | | H | A carry out of or borrow into bit 3, for DAA |
-| `subtract` | | N | The last arithmetic was a subtract, for DAA |
-| `decimal` | D | | Binary-coded decimal arithmetic |
-| `interrupt` | I | | IRQ masked |
+| Word | 6502 | Z80 | 6809 | Meaning |
+| --- | --- | --- | --- | --- |
+| `carry` | C | C | C | Carry out of the top bit, or no borrow (6502) or a borrow (Z80, 6809) from a subtract or compare |
+| `zero` | Z | Z | Z | A zero result, or an equal compare |
+| `negative` | N | S | N | Most significant bit of the result, a negative number in two's complement; Zilog calls it the sign |
+| `overflow` | V | P/V | V | A signed result out of range |
+| `parity` | | P/V | | An even number of 1 bits, after logical operations, rotates and IN |
+| `half-carry` | | H | H | A carry out of or borrow into bit 3, for DAA |
+| `subtract` | | N | | The last arithmetic was a subtract, for DAA |
+| `decimal` | D | | | Binary-coded decimal arithmetic |
+| `interrupt` | I | | I | IRQ masked |
+| `fast-interrupt` | | | F | FIRQ masked |
+| `entire` | | | E | Complete register state stacked for RTI |
 
 A flag's letter is reported with its word (`name the C flag by its word, 'carry'`), as are branch conditions
 such as `NZ`, which say the same as `zero` with its meaning turned around. The words come from the CPU's

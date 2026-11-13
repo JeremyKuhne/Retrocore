@@ -1,0 +1,462 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Business BASIC",
+  "scopeName": "source.retrocore-business",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-business"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-business"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-business"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-business"
+        },
+        {
+          "match": "(?i:((?<![A-Za-z0-9.])END(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FOR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NEXT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INPUT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OUTPUT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DIM(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])READ(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WRITE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OPEN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CLOSE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TEXT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])BYE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WINDOW(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INVOKE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PERFORM(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FRE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])HPOS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])VPOS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERRLIN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])KBD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EOF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TIME\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DATE\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PREFIX\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EXFN\\.)|((?<![A-Za-z0-9.])EXFN%\\.)|((?<![A-Za-z0-9.])OUTREC(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INDENT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])POP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])HOME(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SUB\\$\\()|((?<![A-Za-z0-9.])OFF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TRACE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NOTRACE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NORMAL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INVERSE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SCALE\\()|((?<![A-Za-z0-9.])RESUME(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])G\\s*O\\s*T\\s*O(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])IF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RESTORE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SWAP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])GOSUB(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RETURN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])STOP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ON(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOAD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SAVE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DELETE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RUN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RENAME(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOCK(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])UNLOCK(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CREATE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EXEC(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CHAIN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CATALOG(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])IMAGE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CAT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PRINT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ELSE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CONT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LIST(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CLEAR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])GET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NEW(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TAB\\()|((?<![A-Za-z0-9.])TO(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SPC\\()|((?<![A-Za-z0-9.])USING(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])THEN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MOD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])STEP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])AND(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EXTENSION(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DIV(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FN)|((?<![A-Za-z0-9.])NOT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])AS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SGN\\()|((?<![A-Za-z0-9.])INT\\()|((?<![A-Za-z0-9.])ABS\\()|((?<![A-Za-z0-9.])TYP\\()|((?<![A-Za-z0-9.])REC\\()|((?<![A-Za-z0-9.])PDL\\()|((?<![A-Za-z0-9.])BUTTON\\()|((?<![A-Za-z0-9.])SQR\\()|((?<![A-Za-z0-9.])RND\\()|((?<![A-Za-z0-9.])LOG\\()|((?<![A-Za-z0-9.])EXP\\()|((?<![A-Za-z0-9.])COS\\()|((?<![A-Za-z0-9.])SIN\\()|((?<![A-Za-z0-9.])TAN\\()|((?<![A-Za-z0-9.])ATN\\()|((?<![A-Za-z0-9.])STR\\$\\()|((?<![A-Za-z0-9.])HEX\\$\\()|((?<![A-Za-z0-9.])CHR\\$\\()|((?<![A-Za-z0-9.])LEN\\()|((?<![A-Za-z0-9.])VAL\\()|((?<![A-Za-z0-9.])ASC\\()|((?<![A-Za-z0-9.])TEN\\()|((?<![A-Za-z0-9.])CONV\\()|((?<![A-Za-z0-9.])CONV&\\()|((?<![A-Za-z0-9.])CONV\\$\\()|((?<![A-Za-z0-9.])CONV%\\()|((?<![A-Za-z0-9.])LEFT\\$\\()|((?<![A-Za-z0-9.])RIGHT\\$\\()|((?<![A-Za-z0-9.])MID\\$\\()|((?<![A-Za-z0-9.])INSTR\\())",
+          "captures": {
+            "1": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "2": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "3": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "4": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "5": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "6": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "7": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "8": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "9": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "12": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "13": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "14": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "15": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "16": {
+              "name": "support.function.retrocore-business"
+            },
+            "17": {
+              "name": "support.function.retrocore-business"
+            },
+            "18": {
+              "name": "support.function.retrocore-business"
+            },
+            "19": {
+              "name": "support.function.retrocore-business"
+            },
+            "20": {
+              "name": "support.function.retrocore-business"
+            },
+            "21": {
+              "name": "support.function.retrocore-business"
+            },
+            "22": {
+              "name": "support.function.retrocore-business"
+            },
+            "23": {
+              "name": "support.function.retrocore-business"
+            },
+            "24": {
+              "name": "support.function.retrocore-business"
+            },
+            "25": {
+              "name": "support.function.retrocore-business"
+            },
+            "26": {
+              "name": "support.function.retrocore-business"
+            },
+            "27": {
+              "name": "support.function.retrocore-business"
+            },
+            "28": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "29": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "30": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "31": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "32": {
+              "name": "support.function.retrocore-business"
+            },
+            "33": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "34": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "35": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "36": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "37": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "38": {
+              "name": "support.function.retrocore-business"
+            },
+            "39": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "41": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "42": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "43": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "44": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "45": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "46": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "47": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "48": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "49": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "50": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "52": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "53": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "59": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "60": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "62": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "63": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "64": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "65": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "66": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "68": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "69": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "70": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "71": {
+              "name": "support.function.retrocore-business"
+            },
+            "72": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "73": {
+              "name": "support.function.retrocore-business"
+            },
+            "74": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "75": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "76": {
+              "name": "keyword.operator.retrocore-business"
+            },
+            "77": {
+              "name": "keyword.control.retrocore-business"
+            },
+            "78": {
+              "name": "keyword.operator.retrocore-business"
+            },
+            "79": {
+              "name": "keyword.operator.retrocore-business"
+            },
+            "80": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "81": {
+              "name": "keyword.operator.retrocore-business"
+            },
+            "82": {
+              "name": "support.function.retrocore-business"
+            },
+            "83": {
+              "name": "keyword.operator.retrocore-business"
+            },
+            "84": {
+              "name": "keyword.other.retrocore-business"
+            },
+            "85": {
+              "name": "support.function.retrocore-business"
+            },
+            "86": {
+              "name": "support.function.retrocore-business"
+            },
+            "87": {
+              "name": "support.function.retrocore-business"
+            },
+            "88": {
+              "name": "support.function.retrocore-business"
+            },
+            "89": {
+              "name": "support.function.retrocore-business"
+            },
+            "90": {
+              "name": "support.function.retrocore-business"
+            },
+            "91": {
+              "name": "support.function.retrocore-business"
+            },
+            "92": {
+              "name": "support.function.retrocore-business"
+            },
+            "93": {
+              "name": "support.function.retrocore-business"
+            },
+            "94": {
+              "name": "support.function.retrocore-business"
+            },
+            "95": {
+              "name": "support.function.retrocore-business"
+            },
+            "96": {
+              "name": "support.function.retrocore-business"
+            },
+            "97": {
+              "name": "support.function.retrocore-business"
+            },
+            "98": {
+              "name": "support.function.retrocore-business"
+            },
+            "99": {
+              "name": "support.function.retrocore-business"
+            },
+            "100": {
+              "name": "support.function.retrocore-business"
+            },
+            "101": {
+              "name": "support.function.retrocore-business"
+            },
+            "102": {
+              "name": "support.function.retrocore-business"
+            },
+            "103": {
+              "name": "support.function.retrocore-business"
+            },
+            "104": {
+              "name": "support.function.retrocore-business"
+            },
+            "105": {
+              "name": "support.function.retrocore-business"
+            },
+            "106": {
+              "name": "support.function.retrocore-business"
+            },
+            "107": {
+              "name": "support.function.retrocore-business"
+            },
+            "108": {
+              "name": "support.function.retrocore-business"
+            },
+            "109": {
+              "name": "support.function.retrocore-business"
+            },
+            "110": {
+              "name": "support.function.retrocore-business"
+            },
+            "111": {
+              "name": "support.function.retrocore-business"
+            },
+            "112": {
+              "name": "support.function.retrocore-business"
+            },
+            "113": {
+              "name": "support.function.retrocore-business"
+            },
+            "114": {
+              "name": "support.function.retrocore-business"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-business"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-business"
+        },
+        {
+          "match": "[A-Za-z][A-Za-z0-9.]*[$%&]?",
+          "name": "variable.other.retrocore-business"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-business"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-business"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?i:(?<![A-Za-z0-9.])(REM)(?![A-Za-z0-9.])|(!)).*$",
+      "name": "comment.line.retrocore-business",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-business"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-business"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?i:(?<![A-Za-z0-9.])(DATA)(?![A-Za-z0-9.]))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-business"
+        }
+      },
+      "end": "(?=:|$)",
+      "contentName": "string.unquoted.data.retrocore-business",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-business",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-business"
+    }
+  }
+}

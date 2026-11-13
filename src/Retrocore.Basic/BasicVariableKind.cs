@@ -10,7 +10,7 @@ namespace Retrocore.Basic;
 public enum BasicVariableKind
 {
     /// <summary>
-    ///  An AppleSoft number, a five-byte float.
+    ///  A number in the dialect's float: AppleSoft's five bytes, or Business BASIC's four.
     /// </summary>
     Real,
 
@@ -35,7 +35,12 @@ public enum BasicVariableKind
     Double,
 
     /// <summary>
-    ///  An AppleSoft DEF FN function.
+    ///  An AppleSoft or Business BASIC DEF FN function.
     /// </summary>
-    Function
+    Function,
+
+    /// <summary>
+    ///  A Business BASIC long integer, eight bytes, named with &amp;.
+    /// </summary>
+    Long
 }

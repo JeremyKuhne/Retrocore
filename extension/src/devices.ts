@@ -11,6 +11,8 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { cardsFor, group, type HardwareRow } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
+import { OffMachine, type OffTarget } from "./offMachine";
+import type { SavedMachines } from "./savedMachine";
 
 /** A device as the debug host's retro/devices describes it. */
 export interface Device {
@@ -108,7 +110,10 @@ export function details(device: Device): [string, string][] {
     return rows;
 }
 
-/** What the Machine and Drives views show: the active Retrocore session's machine, hardware, devices and BASIC program. */
+/**
+ * What the Machine and Drives views show: the active Retrocore session's machine, hardware, devices and BASIC program,
+ * or with no session the off machine's.
+ */
 class MachineState {
     private readonly changed = new vscode.EventEmitter<void>();
     readonly onDidChange = this.changed.event;
@@ -117,6 +122,8 @@ class MachineState {
     basic: BasicSummary | undefined;
     /** The active session, when it is a Retrocore one. */
     session: vscode.DebugSession | undefined;
+    /** With no session, the off machine's launch configuration, while it has a description to show. */
+    off: Record<string, unknown> | undefined;
     /** The ids of the sessions stopped in the debugger. */
     readonly paused = new Set<string>();
 
@@ -150,7 +157,7 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
 
     getChildren(node?: Node): Node[] {
         if (node === undefined) {
-            if (this.state.session === undefined) return [];
+            if (this.state.session === undefined && this.state.off === undefined) return [];
             return [
                 { machine: this.state.hardware.find(row => row.id === "model") },
                 ...this.state.basic === undefined ? [] : [{ basic: this.state.basic }]
@@ -187,22 +194,28 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         return item;
     }
 
-    // The machine heads the view, its screen lit while it runs and dark while it is stopped in the debugger.
+    // The machine heads the view, its screen lit while it runs and dark while it is stopped in the debugger or off.
     private machineItem(model: HardwareRow | undefined): vscode.TreeItem {
         const session = this.state.session;
+        const off = session === undefined ? this.state.off : undefined;
+        const configuration = session?.configuration ?? off ?? {};
+        const name = String(configuration.name ?? "Machine");
         const paused = session !== undefined && this.state.paused.has(session.id);
-        const item = new vscode.TreeItem(model?.name ?? session?.name ?? "Machine", vscode.TreeItemCollapsibleState.Expanded);
+        const status = off !== undefined ? "off" : paused ? "paused" : "running";
+        const item = new vscode.TreeItem(model?.name ?? name, vscode.TreeItemCollapsibleState.Expanded);
         item.id = "machine";
-        item.description = [model?.value, paused ? "paused" : "running"].filter(part => part !== undefined).join(" · ");
-        const screen = paused ? "crt-off" : screens[String(session?.configuration.machine ?? "apple2")] ?? "apple2";
+        item.description = [model?.value, status].filter(part => part !== undefined).join(" · ");
+        const screen = status !== "running" ? "crt-off" : screens[String(configuration.machine ?? "apple2")] ?? "apple2";
         item.iconPath = {
             light: vscode.Uri.joinPath(this.extension, "media", `${screen}-light.svg`),
             dark: vscode.Uri.joinPath(this.extension, "media", `${screen}-dark.svg`)
         };
         const tooltip = new vscode.MarkdownString(model === undefined ? "" : `**${escape(model.name)}**: ${escape(model.value)}\n\n${escape(model.description)}\n\n`);
-        if (session !== undefined) tooltip.appendMarkdown(`Launched by *${escape(session.name)}*, ${paused ? "stopped in the debugger" : "running"}.`);
+        tooltip.appendMarkdown(off !== undefined
+            ? `*${escape(name)}*, off. Cards and media changed now are there when it starts.`
+            : `Launched by *${escape(name)}*, ${paused ? "stopped in the debugger" : "running"}.`);
         item.tooltip = tooltip;
-        item.contextValue = "machine";
+        item.contextValue = off !== undefined ? "machine off" : "machine";
         return item;
     }
 }
@@ -231,7 +244,7 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
 
     getChildren(node?: Node): Node[] {
         if (node === undefined) {
-            if (this.state.session === undefined) return [];
+            if (this.state.session === undefined && this.state.off === undefined) return [];
             const grouped = group(this.state.hardware, this.state.devices);
             return [
                 ...grouped.rows.filter(({ devices }) => devices.length > 0).map(({ row, devices }) => ({ controller: row, devices })),
@@ -278,14 +291,16 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
         for (const [detail, value] of details(device)) tooltip.appendMarkdown(`- ${detail}: ${escape(value)}\n`);
         item.tooltip = tooltip;
 
-        // Menus pick their actions by these words.
+        // Menus pick their actions by these words. While the machine is off, a tape cannot record and nothing has
+        // changed a disk to save.
+        const running = this.state.session !== undefined;
         const words = ["device", device.media ? "loaded" : "empty"];
         if (device.operations.includes("insert")) words.push("insert");
-        if (device.operations.includes("record")) words.push("record");
+        if (running && device.operations.includes("record")) words.push("record");
         if (device.media && device.operations.includes("eject")) words.push("eject");
         if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "unprotect" : "protect");
-        if (device.media && device.operations.includes("save")) words.push("save");
-        if (device.media?.changed && device.operations.includes("save")) words.push("changed");
+        if (running && device.media && device.operations.includes("save")) words.push("save");
+        if (running && device.media?.changed && device.operations.includes("save")) words.push("changed");
         item.contextValue = words.join(" ");
         return item;
     }
@@ -295,8 +310,9 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
 const resumes = new Set(["continue", "next", "stepIn", "stepOut", "stepBack", "reverseContinue", "goto"]);
 
 /** Registers the Retrocore activity bar's Machine and Drives views and their actions. */
-export function registerDevices(context: vscode.ExtensionContext, basic: BasicPrograms): void {
+export function registerDevices(context: vscode.ExtensionContext, basic: BasicPrograms, saved: SavedMachines): void {
     const tree = new MachineState();
+    const off = new OffMachine(context.workspaceState, saved);
     const showBasic = (): void => {
         tree.basic = basic.summary(vscode.debug.activeDebugSession);
         tree.show({ devices: tree.devices, hardware: tree.hardware });
@@ -315,12 +331,36 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             if (pending) tree.show(pending);
         }, 100);
     };
+    // With no Retrocore session the views show the off machine, which the language server describes when they come
+    // into sight, so a closed sidebar builds nothing.
+    let stale = true;
     const refresh = async (session: vscode.DebugSession | undefined): Promise<void> => {
         tree.basic = basic.summary(session);
-        if (session?.type !== "retrocore") { tree.session = undefined; show({ devices: [] }); return; }
-        tree.session = session;
-        try { show(await session.customRequest("retro/devices")); } catch { /* Not launched yet. */ }
+        if (session?.type === "retrocore") {
+            tree.session = session;
+            tree.off = undefined;
+            void vscode.commands.executeCommand("setContext", "retrocore.machineOff", false);
+            machineView.message = undefined;
+            try { show(await session.customRequest("retro/devices")); } catch { /* Not launched yet. */ }
+            return;
+        }
+        tree.session = undefined;
+        stale = true;
+        showOff();
+        if (showing()) await describeOff();
     };
+    const showOff = (): void => {
+        if (tree.session !== undefined) return;
+        tree.off = off.body === undefined ? undefined : off.target?.configuration;
+        void vscode.commands.executeCommand("setContext", "retrocore.machineOff", tree.off !== undefined);
+        machineView.message = off.error === undefined ? undefined : `${off.name ?? "The machine"} could not be set up: ${off.error}`;
+        show((off.body as Devices | undefined) ?? { devices: [] });
+    };
+    const describeOff = async (): Promise<void> => {
+        stale = false;
+        await off.describe();
+    };
+    context.subscriptions.push(off.onDidChange(showOff));
 
     const machineView = vscode.window.createTreeView("retrocore.machine", { treeDataProvider: new MachineTree(tree, context.extensionUri) });
     const drivesView = vscode.window.createTreeView("retrocore.drives", { treeDataProvider: new DriveTree(tree) });
@@ -350,8 +390,20 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         if (hiddenAt - debugAt < moment) bringBack();
     };
     context.subscriptions.push(machineView.onDidChangeVisibility(hidden), drivesView.onDidChangeVisibility(hidden));
+    const seen = (): void => {
+        if (showing() && stale && tree.session === undefined) void describeOff();
+    };
+    context.subscriptions.push(machineView.onDidChangeVisibility(seen), drivesView.onDidChangeVisibility(seen));
     context.subscriptions.push(vscode.debug.onDidStartDebugSession(session => {
-        if (session.type === "retrocore") debugMoved();
+        if (session.type !== "retrocore") return;
+        debugMoved();
+        // Once this session ends, the views show its machine, off.
+        void off.started(session);
+    }));
+    context.subscriptions.push(saved.onDidReset(() => {
+        if (tree.session !== undefined) return;
+        stale = true;
+        seen();
     }));
     // The Drives view's badge counts the disks changed in the machine and not yet saved to their images.
     context.subscriptions.push(tree.onDidChange(() => {
@@ -384,14 +436,19 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(vscode.debug.onDidChangeActiveDebugSession(session => void refresh(session)));
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => void refresh(vscode.debug.activeDebugSession)));
 
-    const act = async (node: Node | undefined, action: string, args: Record<string, unknown> = {}): Promise<void> => {
+    // A change goes to the running machine as retro/hardware or retro/device, or to the off machine, whose saved
+    // machine its next launch restores.
+    const send = async (request: "hardware" | "device", args: Record<string, unknown>): Promise<void> => {
         const session = vscode.debug.activeDebugSession;
-        if (session?.type !== "retrocore" || node === undefined || !("device" in node)) return;
         try {
-            show(await session.customRequest("retro/device", { id: node.device.id, action, ...args }));
+            if (session?.type === "retrocore") show(await session.customRequest(`retro/${request}`, args));
+            else if (tree.off !== undefined) await off.change(request, args);
         } catch (error) {
-            await vscode.window.showErrorMessage(`Retrocore: ${String(error)}`);
+            await vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
         }
+    };
+    const act = async (node: Node | undefined, action: string, args: Record<string, unknown> = {}): Promise<void> => {
+        if (node !== undefined && "device" in node) await send("device", { id: node.device.id, action, ...args });
     };
     const filters = (device: Device): Record<string, string[]> => ({ [`${device.name} images`]: device.formats });
 
@@ -427,19 +484,13 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         });
         if (file) await act(node, "save", { path: file.fsPath });
     }));
-    // Cards go in and come out while the machine runs, as nothing on the bus minds here.
+    // Cards go in and come out while the machine runs, as nothing on the bus minds here, and while it is off.
     const change = async (node: Node | undefined, args: Record<string, unknown>): Promise<void> => {
-        const session = vscode.debug.activeDebugSession;
-        if (session?.type !== "retrocore" || node === undefined || !("hardware" in node)) return;
-        try {
-            show(await session.customRequest("retro/hardware", { id: node.hardware.id, ...args }));
-        } catch (error) {
-            await vscode.window.showErrorMessage(`Retrocore: ${String(error)}`);
-        }
+        if (node !== undefined && "hardware" in node) await send("hardware", { id: node.hardware.id, ...args });
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.addCard", async (node?: Node) => {
         if (node === undefined || !("hardware" in node)) return;
-        const machine = vscode.debug.activeDebugSession?.configuration.machine as string | undefined;
+        const machine = (tree.session?.configuration ?? tree.off)?.machine as string | undefined;
         const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id, machine),
             { title: `Add a card to ${node.hardware.name}` });
         if (card) await change(node, card.args);
@@ -456,8 +507,22 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         await change(node, { action: "removeCard" });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.refresh", () => refresh(vscode.debug.activeDebugSession)));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.boot", () => off.boot()));
+    // Switch Machine… picks the off machine, or takes it given, as the tests and favorites do.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.switch", async (given?: OffTarget) => {
+        const target = given ?? await off.pick();
+        if (target === undefined) return;
+        stale = false;
+        await off.select(target);
+    }));
+    // A change without a view's row, for the tests: as retro/hardware or retro/device takes it.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.change",
+        (request: "hardware" | "device", args: Record<string, unknown>) => send(request, args)));
+    // The off machine's configuration name, for the tests; undefined while a session runs or before it is described.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.off", () => tree.off?.name));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.list", () => tree.devices));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.hardware", () => tree.hardware));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.basic", () =>
         tree.basic === undefined ? undefined : basicDescription(tree.basic)));
+    void refresh(vscode.debug.activeDebugSession);
 }

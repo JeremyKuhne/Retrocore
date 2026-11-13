@@ -377,11 +377,11 @@
     "viewsWelcome": [
       {
         "view": "retrocore.machine",
-        "contents": "No machine is running.\n[Start Machine](command:retrocore.startMachine)\n[Start Last Machine](command:retrocore.startLastMachine)\nOr pick a machine under Retrocore in the Run and Debug dropdown and press F5."
+        "contents": "No machine is set up yet.\n[Start Machine](command:retrocore.startMachine)\n[Set Up a Machine](command:retrocore.machine.switch)\nSet one up to add cards and insert disks before it starts, or pick a machine under Retrocore in the Run and Debug dropdown and press F5."
       },
       {
         "view": "retrocore.drives",
-        "contents": "The running machine's disk, tape and hard disk drives show here, with their media."
+        "contents": "The machine's disk, tape and hard disk drives show here, with their media."
       },
       {
         "view": "debug",
@@ -391,7 +391,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "retrocore.startMachine",
+          "command": "retrocore.machine.switch",
           "when": "view == retrocore.machine && debugType != retrocore",
           "group": "navigation@1"
         },
@@ -402,8 +402,13 @@
         },
         {
           "command": "retrocore.device.refresh",
-          "when": "view =~ /^retrocore\\.(machine|drives)$/ && debugType == retrocore",
+          "when": "view =~ /^retrocore\\.(machine|drives)$/ && (debugType == retrocore || retrocore.machineOff)",
           "group": "navigation@9"
+        },
+        {
+          "command": "retrocore.startMachine",
+          "when": "view == retrocore.machine",
+          "group": "1_start@0"
         },
         {
           "command": "retrocore.startLastMachine",
@@ -432,6 +437,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "retrocore.machine.boot",
+          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/",
+          "group": "inline@1"
+        },
         {
           "command": "retrocore.basic.open",
           "when": "view == retrocore.machine && viewItem == basicProgram",
@@ -533,6 +543,18 @@
         },
         {
           "command": "retrocore.device.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.boot",
+          "when": "retrocore.machineOff && debugType != retrocore"
+        },
+        {
+          "command": "retrocore.machine.off",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.change",
           "when": "false"
         },
         {
@@ -676,6 +698,24 @@
       {
         "command": "retrocore.device.list",
         "title": "Retrocore: List Devices"
+      },
+      {
+        "command": "retrocore.machine.boot",
+        "title": "Retrocore: Start This Machine",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.machine.switch",
+        "title": "Retrocore: Switch Machine...",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "retrocore.machine.off",
+        "title": "Retrocore: Off Machine"
+      },
+      {
+        "command": "retrocore.machine.change",
+        "title": "Retrocore: Change Machine"
       },
       {
         "command": "retrocore.resetSavedMachine",

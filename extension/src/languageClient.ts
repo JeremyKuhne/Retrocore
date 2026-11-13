@@ -9,6 +9,8 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } f
 import { defaultHost, isBundled } from "./host";
 
 let client: LanguageClient | undefined;
+// The current client's start, which requests wait for.
+let starting: Promise<void> | undefined;
 
 /** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
 export function hostPath(context: vscode.ExtensionContext): string | undefined {
@@ -105,7 +107,8 @@ async function startFrom(context: vscode.ExtensionContext, host: string): Promis
     const started = new LanguageClient("retrocore", "Retrocore Assembly", serverOptions, clientOptions);
     client = started;
     context.subscriptions.push({ dispose: () => { void started.stop().catch(() => undefined); } });
-    await started.start();
+    starting = started.start();
+    await starting;
 }
 
 /** The BASIC languages: one per dialect, and one whose pragma, file name or session decides. */
@@ -118,10 +121,12 @@ export const documentSelector = [
     ...basicLanguages.map(language => ({ language }))
 ];
 
-/** Sends a request to the language server, or fails when it is not running. */
+/** Sends a request to the language server once it has started, or fails when it is not running. */
 export async function languageRequest<T>(method: string, params: unknown): Promise<T> {
-    if (client === undefined) throw new Error("The Retrocore language server is not running.");
-    return await client.sendRequest<T>(method, params);
+    const running = client;
+    if (running === undefined) throw new Error("The Retrocore language server is not running.");
+    await starting;
+    return await running.sendRequest<T>(method, params);
 }
 
 /** Stops the language server. */

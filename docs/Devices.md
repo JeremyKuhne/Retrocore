@@ -150,9 +150,20 @@ launched.
 
 ## The Machine and Drives views
 
-Retrocore has its own icon in the activity bar, a small computer, which opens two views. Before a session starts,
-the **Machine** view's welcome text and title-bar **Start Machine** (`▶`) button start a machine without a
-`launch.json`, and **Start Last Machine** repeats the last one.
+Retrocore has its own icon in the activity bar, a small computer, which opens two views.
+
+With no Retrocore session, the views show a machine that is off ([offMachine.ts](../extension/src/offMachine.ts)):
+the one last started, or the one **Switch Machine…** (`⇄` in the Machine view's title bar) picks from Start
+Machine's last setup, the workspace's launch configurations and the catalog's machines. The language server
+describes it ([A machine that is off](#a-machine-that-is-off)) when either view comes into sight, so a closed
+sidebar builds nothing. Its header says `off` with a dark screen, and its cards and media change as a running
+machine's do, except that a tape cannot record and there is no changed disk to save. Each change is saved as its
+launch configuration's saved machine, which its next launch restores; its `▶` starts it as it came (Start Machine's
+setup, the launch.json configuration, or the configuration itself). When a session ends, the views show its machine
+off, with what changed while it ran. A saved disk that can no longer be restored is reported once, and a machine
+that cannot be built says why at the top of the Machine view. Before any machine has started, the Machine view's
+welcome text offers **Start Machine** and **Set Up a Machine**; its **...** menu always has **Start Machine…** and
+**Start Last Machine**.
 
 While a Retrocore session runs, the **Machine** view is headed by the machine itself, such as `Apple IIe` with
 `Enhanced, 65C02 · running`: its screen icon is lit while it runs and dark while it is stopped in the debugger.

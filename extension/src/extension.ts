@@ -23,8 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
     void startLanguageClient(context);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
-    registerDevices(context, basic);
-    registerSavedMachines(context);
+    registerDevices(context, basic, registerSavedMachines(context));
     registerMachineMenu(context);
     registerStartMachine(context);
     registerBreakpoints(context);

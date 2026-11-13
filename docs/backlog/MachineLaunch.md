@@ -91,7 +91,9 @@ Each step is usable on its own:
    described in [Devices.md](../Devices.md#a-machine-that-is-off)), tested against the debug host's own rows by
    `tools/Test-OffMachine.mjs`. Building the machine for each request takes about 40 to 200 ms (the first, cold,
    about 500), so the fallback is not needed.
-2. The powered-off views and **Switch Machine…**: cards and media while off, and what a session changed kept
-   when it ends.
+2. **Done.** The powered-off views and **Switch Machine…** ([offMachine.ts](../../extension/src/offMachine.ts)):
+   cards and media while off, and what a session changed kept when it ends. The editor tests' `offMachine.ts`
+   adds a card off, boots it, and switches machines. Start Machine moved to the Machine view's **...** menu, so
+   the header's `▶` is the only one beside it.
 3. Settings as rows of the off machine, from the catalog, keeping the cards and media that still fit.
 4. The `retrocore.favorites` setting and the Favorites view.

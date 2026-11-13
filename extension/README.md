@@ -105,8 +105,7 @@ Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
-the Command Palette, and it is the ▶ button on the **Machine** view while no
-session runs. It asks three things:
+the Command Palette and on the **Machine** view's **...** menu. It asks three things:
 
 1. **Which machine.** The last setup you started comes first, so one pick repeats it.
 2. **What it runs.** The choices depend on the machine:
@@ -1195,8 +1194,16 @@ BASIC debugging.
 ## Machine and Drives
 
 Retrocore has its own icon in the activity bar, a small computer, with two views:
-**Machine** and **Drives**. With no session running, the Machine view offers **Start
-Machine** ([Starting a machine](#starting-a-machine)) and **Start Last Machine**.
+**Machine** and **Drives**.
+
+With no session running, they show a machine that is off: the last one started, or the
+one **Switch Machine** (the ⇄ button) picks from your launch configurations and the
+machines Retrocore knows. Its row says `off`, and you can set it up before it starts:
+add and remove cards, insert and eject disks and tapes, and write-protect them. Its ▶
+starts it with those changes, and when the session ends the views show it off again,
+with what changed while it ran. The **...** menu has **Start Machine**
+([Starting a machine](#starting-a-machine)) and **Start Last Machine**. Before any
+machine has been started, the view offers **Start Machine** and **Set Up a Machine**.
 
 While a Retrocore session runs, the Machine view is headed by the machine, such as
 **Apple IIe** `Enhanced, 65C02 · running`, its screen lit while it runs and dark while

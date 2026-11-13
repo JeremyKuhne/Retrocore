@@ -163,8 +163,23 @@ internal sealed partial class DebugSession
             int frameId = args.Int("frameId") ?? 1;
             if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
 
-            // A Pascal frame's expressions are the CPU's, as the machine is now.
-            if (frameId is >= PascalFrameBase and < BasicFrameBase) { frameId = 1; }
+            // In a Pascal frame, a variable its listing names; other expressions are the CPU's, as the machine is now.
+            if (frameId is >= PascalFrameBase and < BasicFrameBase)
+            {
+                if (PascalVariableNamed(frameId, expression.Trim()) is { } named && Pascal is { } pascal)
+                {
+                    return new JsonObject
+                    {
+                        ["result"] = PascalValue(pascal.Memory, named.At, named.Variable),
+                        ["type"] = named.Variable.Type,
+                        ["variablesReference"] = 0,
+                        ["memoryReference"] = named.At.Bank == 0 ? Reference(bank: null, named.At.Address) : null
+                    };
+                }
+
+                frameId = 1;
+            }
+
             long value;
             DebugMemoryBank? bank;
             try

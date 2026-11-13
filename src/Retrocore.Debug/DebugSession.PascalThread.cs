@@ -261,8 +261,31 @@ internal sealed partial class DebugSession
             }
             else if ((scope == PascalLocalsScope ? stack[index] : Globals()) is { } frame)
             {
+                // The listing names what it declares; the words it does not cover keep their numbers.
+                IReadOnlyList<PascalVariable> named = PascalPlace(frame) is { } place
+                    ? place.Listing.Variables(frame.SegmentNumber, frame.Procedure)
+                    : [];
+
+                foreach (PascalVariable variable in named.Where(variable => variable.Word <= frame.Words))
+                {
+                    PascalPointer at = frame.Local(variable.Word);
+                    variables.Add(new JsonObject
+                    {
+                        ["name"] = variable.Name,
+                        ["value"] = PascalValue(pascal.Memory, at, variable),
+                        ["type"] = variable.Type,
+                        ["variablesReference"] = 0,
+                        ["memoryReference"] = at.Bank == 0 ? Reference(bank: null, at.Address) : null
+                    });
+                }
+
                 for (int number = 1; number <= Math.Min(frame.Words, 512); number++)
                 {
+                    if (named.Any(variable => number >= variable.Word && number < variable.Word + Math.Max(variable.Words, 1)))
+                    {
+                        continue;
+                    }
+
                     PascalPointer at = frame.Local(number);
                     ushort value = PascalMachine.Word(pascal.Memory, at);
                     variables.Add(new JsonObject
@@ -285,6 +308,60 @@ internal sealed partial class DebugSession
             ["variablesReference"] = 0,
             ["memoryReference"] = pointer.Bank == 0 ? Reference(bank: null, pointer.Address) : null
         };
+    }
+
+    // A variable's value as its declared type shows it: an integer, a character, a boolean, a string, or words.
+    private static string PascalValue(IPascalMemory memory, PascalPointer at, PascalVariable variable)
+    {
+        string type = variable.Type.ToUpperInvariant().Replace(" ", "", StringComparison.Ordinal);
+        ushort word = PascalMachine.Word(memory, at);
+        if (type == "INTEGER" || type.Contains("..", StringComparison.Ordinal))
+        {
+            return ((short)word).ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (type == "BOOLEAN") { return (word & 1) != 0 ? "TRUE" : "FALSE"; }
+        if (type == "CHAR")
+        {
+            char character = (char)(word & 0x7F);
+            return character is >= ' ' and < (char)0x7F ? $"'{character}' ({word & 0xFF})" : $"CHR({word & 0xFF})";
+        }
+
+        if (type.StartsWith("STRING", StringComparison.Ordinal) && variable.Words > 0)
+        {
+            int length = Math.Min(memory.Read(at.Address, at.Bank), (variable.Words * 2) - 1);
+            char[] text = new char[length];
+            for (int index = 0; index < length; index++)
+            {
+                char character = (char)(memory.Read((ushort)(at.Address + 1 + index), at.Bank) & 0x7F);
+                text[index] = character is >= ' ' and < (char)0x7F ? character : '?';
+            }
+
+            return $"'{new string(text).Replace("'", "''", StringComparison.Ordinal)}'";
+        }
+
+        int words = Math.Clamp(variable.Words, 1, 4);
+        return string.Join(' ', Enumerable.Range(0, words).Select(index => $"${PascalMachine.Word(memory, at.Plus(index * 2)):X4}"));
+    }
+
+    // A variable a Pascal frame's listing names, and where it is: in the frame, or in the program's globals.
+    private (PascalVariable Variable, PascalPointer At)? PascalVariableNamed(int frameId, string name)
+    {
+        IReadOnlyList<PascalFrame> stack = PascalFrames();
+        int index = frameId - PascalFrameBase;
+        if ((uint)index >= (uint)stack.Count) { return null; }
+
+        foreach (PascalFrame? frame in (PascalFrame?[])[stack[index], Globals()])
+        {
+            if (frame is not null
+                && PascalPlace(frame)?.Listing.Variables(frame.SegmentNumber, frame.Procedure)
+                    .FirstOrDefault(variable => string.Equals(variable.Name, name, StringComparison.OrdinalIgnoreCase)) is { } variable)
+            {
+                return (variable, frame.Local(variable.Word));
+            }
+        }
+
+        return null;
     }
 
     // The outer block's frame, whose locals are the program's globals: the one BASE names.

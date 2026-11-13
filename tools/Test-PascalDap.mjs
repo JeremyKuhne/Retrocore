@@ -6,7 +6,8 @@
 // boots Pascal, stops on the Pascal thread at a pascal function breakpoint on the Filer's main procedure, reads its
 // frames, scopes and the p-machine's registers, steps over a p-code, and steps out to the system once Q quits the
 // Filer. On the Apple III it then compiles a program with a listing, and stops at a source breakpoint in a copy of
-// its source on the host, steps by line, and stops there again on the loop's next pass.
+// its source on the host, reads the program's variable by name, steps by line, and stops there again on the loop's
+// next pass.
 // The disks are Apple3Pascal1.1Disk1.dsk and Disk2.dsk in RETROCORE_APPLE3_DISKS (by default <cache>\apple3-disks)
 // and UCSD Pascal 1.1_1.dsk in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
 // whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
@@ -137,6 +138,12 @@ async function sourceBreakpoints(machine) {
         assert.equal(frames[0].line, 9);
         assert.match(frames[0].name, /^HELLO \(HELLO\.1\+\$000D\): SLDO3$/);
 
+        // The listing names the program's variable, I, in its locals and for evaluating.
+        const locals = (await request("scopes", { frameId: frames[0].id })).scopes.find(scope => scope.name === "Locals");
+        const named = (await request("variables", { variablesReference: locals.variablesReference })).variables;
+        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0, memoryReference: named.find(variable => variable.name === "I").memoryReference });
+        assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "hover" })).result, "1");
+
         // Step Over goes by line: the call, which the listing counts in line 10, where the compiler read END.
         await request("next", { threadId: 3 });
         assert.equal((await stop()).reason, "step");
@@ -148,7 +155,9 @@ async function sourceBreakpoints(machine) {
         await request("continue", { threadId: 1 });
         const again = await stop();
         assert.equal(again.reason, "breakpoint");
-        assert.equal((await request("stackTrace", { threadId: 3 })).stackFrames[0].line, 9);
+        const second = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+        assert.equal(second.line, 9);
+        assert.equal((await request("evaluate", { expression: "I", frameId: second.id })).result, "2");
         await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
         await request("continue", { threadId: 1 });
         await screen(text => /\n21 /.test(text), "the program's output");

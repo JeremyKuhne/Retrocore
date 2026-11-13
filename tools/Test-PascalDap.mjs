@@ -176,9 +176,14 @@ async function sourceBreakpoints(machine) {
         const saved = await disk2();
         assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
         assert.equal(statSync(sectors).size, 143360);
+        // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
+        const native = process.env.RETROCORE_DAP_HOST;
         const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
         for (const image of [woz, sectors]) {
-            const catalog = execFileSync("dotnet", [host, "--pascal", "catalog", image], { encoding: "utf8" });
+            const args = ["--pascal", "catalog", image];
+            const catalog = native
+                ? execFileSync(native, args, { encoding: "utf8" })
+                : execFileSync("dotnet", [host, ...args], { encoding: "utf8" });
             assert.match(catalog, /HELLO\.CODE/i, image);
             assert.match(catalog, /HELLO\.LST\.TEXT/i, image);
         }

@@ -362,6 +362,19 @@ internal sealed partial class DebugSession
         {
             int code = (args.Int("code") ?? 0);
             if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+
+            // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
+            // goes now and drops the rest of the paste.
+            if (code == 3)
+            {
+                _typing.Clear();
+            }
+            else if (_typing.Count != 0)
+            {
+                _typing.Enqueue(code);
+                return [];
+            }
+
             Target.Key(code);
             return [];
         }));
@@ -1152,6 +1165,9 @@ internal sealed partial class DebugSession
     private bool Execute()
     {
         Invalidate();
+
+        // Pasted keys go in as the machine runs, whether continuing or stepping.
+        if (_typing.Count != 0) { TypeNext(); }
         bool instruction = Target.InInstruction;
         for (int count = 0; count < InstructionCycleBudget; count++)
         {
@@ -1286,7 +1302,6 @@ internal sealed partial class DebugSession
                                 break;
                             }
 
-                            if (_typing.Count != 0) { TypeNext(); }
                             ushort pc = Target.ProgramCounter;
                             if (Target.IsInstructionBoundary
                                 && !first

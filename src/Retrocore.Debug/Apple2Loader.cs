@@ -88,10 +88,22 @@ internal static class Apple2Loader
             _ => throw new ArgumentException($"{Path.GetFileName(path)} is not a .woz, .dsk, .do or .po image; save it as .woz.")
         };
 
-        // Written beside it and moved over it, so a failed write leaves the image as it was.
-        string temporary = path + ".saving";
-        File.WriteAllBytes(temporary, image);
-        File.Move(temporary, path, overwrite: true);
+        // Written to a new file beside it and moved over it, so a failed write leaves the image as it was.
+        string temporary = Path.Join(Path.GetDirectoryName(path), $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.saving");
+        try
+        {
+            using (FileStream stream = new(temporary, FileMode.CreateNew, FileAccess.Write))
+            {
+                stream.Write(image);
+            }
+
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+
         drive.Saved(path, extension);
     }
 

@@ -191,6 +191,51 @@ public sealed class LanguageAnalysisTests
         SourceText.CommentFor(["; Not the stale definition's comment."], line).Should().BeEmpty();
 
     /// <summary>
+    ///  In a file of p-code and 6502 code, a line's help is that of what wrote its bytes: under the <c>.cpu Pcode</c> an
+    ///  include sets, <c>LDA</c> expands its macro, so its help is the macro's; under <c>.cpu Mos6502</c> it is the
+    ///  6502's instruction. A macro-only CPU has no instruction help or mnemonics of its own.
+    /// </summary>
+    [TestMethod]
+    public void MixedPcodeAndM6502LinesKnowWhatWroteThem()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(Path.Join(directory, "pcode.asm"), """
+                .cpu Pcode
+                ;; Loads an intermediate variable's address.
+                .macro LDA level, offset
+                .byte 178, level, offset
+                .endmacro
+                """);
+
+            File.WriteAllText(main, """
+                .include "pcode.asm"
+                .org $6000
+                        LDA 1, 4
+                        .cpu Mos6502
+                        LDA #1
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.ExpandsMacro(main, line: 2).Should().BeTrue("the p-code LDA expands Pcode's macro");
+            analysis.ExpandsMacro(main, line: 4).Should().BeFalse("under .cpu Mos6502, LDA is the 6502's");
+            analysis.Find("LDA").Should().ContainSingle().Which.Kind.Should().Be(SymbolSiteKind.Macro);
+
+            Retrocore.Isa.InstructionSet pcode = Retrocore.Assembler.CpuCatalog.Get("Pcode");
+            InstructionDocs.Describe("LDA", pcode).Should().BeNull();
+            InstructionDocs.MnemonicsFor(pcode).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  Instruction help lists the CPU's encodings, and says when an instruction is not the CPU's.
     /// </summary>
     [TestMethod]

@@ -70,6 +70,11 @@ public sealed partial class InstructionSet
     public string Name { get; }
 
     /// <summary>
+    ///  Gets whether it has no instructions of its own, so a source writes it with macros (see <see cref="MacroOnly"/>).
+    /// </summary>
+    public bool IsMacroOnly => _mnemonics.Count == 0;
+
+    /// <summary>
     ///  Gets the description shared by the instruction sets of one file: byte order, registers, flags and forms.
     /// </summary>
     public IsaDescription Description { get; }

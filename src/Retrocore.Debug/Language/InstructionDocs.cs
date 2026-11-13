@@ -122,13 +122,16 @@ internal static partial class InstructionDocs
     /// </summary>
     /// <param name="mnemonic">The mnemonic, such as LDA, BBR3 or LDIR.</param>
     /// <param name="set">The CPU's instruction set, whose encodings to list.</param>
-    /// <returns>Markdown text.</returns>
-    internal static string? Describe(string mnemonic, InstructionSet set) =>
-        ReferenceEquals(set.Description, Z80Isa.Description)
-            ? DescribeZ80(mnemonic, set)
-            : ReferenceEquals(set.Description, M6809Isa.Description)
-                ? DescribeM6809(mnemonic, set)
-                : DescribeM6502(mnemonic, M6502Isa.VariantOf(set));
+    /// <returns>
+    ///  Markdown text; null for a macro-only CPU, such as <c>Pcode</c>, whose macros say what they are.
+    /// </returns>
+    internal static string? Describe(string mnemonic, InstructionSet set) => set switch
+    {
+        { IsMacroOnly: true } => null,
+        _ when ReferenceEquals(set.Description, Z80Isa.Description) => DescribeZ80(mnemonic, set),
+        _ when ReferenceEquals(set.Description, M6809Isa.Description) => DescribeM6809(mnemonic, set),
+        _ => DescribeM6502(mnemonic, M6502Isa.VariantOf(set))
+    };
 
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
@@ -151,14 +154,16 @@ internal static partial class InstructionDocs
     ///  Gets the mnemonics any CPU can assemble.
     /// </summary>
     /// <param name="set">The CPU's instruction set.</param>
-    /// <returns>The mnemonics.</returns>
-    internal static IEnumerable<string> MnemonicsFor(InstructionSet set) =>
-        ReferenceEquals(set.Description, Z80Isa.Description)
-            ? Enumerable.Range(0, set.MnemonicCount).Select(set.MnemonicName)
-            : ReferenceEquals(set.Description, M6809Isa.Description)
-                ? Enumerable.Range(0, set.MnemonicCount).Select(set.MnemonicName)
-                    .Concat(["LSL", "LSLA", "LSLB", "BHS", "BLO", "LBHS", "LBLO"])
-                : MnemonicsFor(M6502Isa.VariantOf(set));
+    /// <returns>The mnemonics; none for a macro-only CPU, whose macros complete as macros.</returns>
+    internal static IEnumerable<string> MnemonicsFor(InstructionSet set) => set switch
+    {
+        { IsMacroOnly: true } => [],
+        _ when ReferenceEquals(set.Description, Z80Isa.Description) => Enumerable.Range(0, set.MnemonicCount).Select(set.MnemonicName),
+        _ when ReferenceEquals(set.Description, M6809Isa.Description) => Enumerable.Range(0, set.MnemonicCount)
+            .Select(set.MnemonicName)
+            .Concat(["LSL", "LSLA", "LSLB", "BHS", "BLO", "LBHS", "LBLO"]),
+        _ => MnemonicsFor(M6502Isa.VariantOf(set))
+    };
 
     private static List<(AddressMode Mode, byte Code)> Encodings(ProcessorVariant variant, string mnemonic) =>
         Table(variant).TryGetValue(mnemonic, out List<(AddressMode Mode, byte Code)>? list) ? list : [];

@@ -24,6 +24,10 @@ internal sealed partial class SourceMapModule : IDebugModule
 
     private readonly Statement[] _statements;
     private readonly Dictionary<ushort, int> _byAddress = [];
+
+    // The earlier statements at an address that a later one also covers, as code assembled for where it is copied
+    // overlaps code assembled where it is stored; the one whose bytes memory holds applies.
+    private readonly Dictionary<ushort, List<int>> _overlapped = [];
     private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, long> _symbols = new(StringComparer.OrdinalIgnoreCase);
     private readonly (string Name, long Value)[] _labels;
@@ -116,7 +120,17 @@ internal sealed partial class SourceMapModule : IDebugModule
             previous.Clear();
             previous.UnionWith(kept);
             _statements[index] = new(address, bytes, chain, entryDepth);
-            for (int offset = 0; offset < bytes.Length; offset++) { _byAddress[(ushort)(address + offset)] = index; }
+            for (int offset = 0; offset < bytes.Length; offset++)
+            {
+                ushort at = (ushort)(address + offset);
+                if (_byAddress.TryGetValue(at, out int earlier))
+                {
+                    if (!_overlapped.TryGetValue(at, out List<int>? list)) { _overlapped[at] = list = []; }
+                    list.Add(earlier);
+                }
+
+                _byAddress[at] = index;
+            }
         }
 
         Dictionary<string, string> sourceNames = new(StringComparer.Ordinal);
@@ -155,16 +169,35 @@ internal sealed partial class SourceMapModule : IDebugModule
     public DebugPosition? Position(IDebugMemory memory, ushort address)
     {
         if (!_byAddress.TryGetValue(address, out int index)) { return null; }
-        Statement statement = _statements[index];
-        if (!Holds(memory, statement)) { return null; }
+        if (Applies(memory, index)) { return At(index, address); }
+        if (!_overlapped.TryGetValue(address, out List<int>? earlier)) { return null; }
+        for (int candidate = earlier.Count - 1; candidate >= 0; candidate--)
+        {
+            if (Applies(memory, earlier[candidate])) { return At(earlier[candidate], address); }
+        }
+
+        return null;
+    }
+
+    // Whether a statement applies: memory holds its bytes, and for a whole image, every statement's.
+    private bool Applies(IDebugMemory memory, int index)
+    {
+        if (!Holds(memory, _statements[index])) { return false; }
         if (_wholeImage)
         {
             foreach (Statement other in _statements)
             {
-                if (!Holds(memory, other)) { return null; }
+                if (!Holds(memory, other)) { return false; }
             }
         }
 
+        return true;
+    }
+
+    // A statement's position, entering its macro levels only at its first byte.
+    private DebugPosition At(int index, ushort address)
+    {
+        Statement statement = _statements[index];
         return new(statement.Chain, address == statement.Address ? statement.EntryDepth : 0);
     }
 

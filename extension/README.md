@@ -95,8 +95,8 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
-Color Computer 1 and 2 run Color, Extended and Disk BASIC from their sources, and need ROM
-dumps in `RETROCORE_COCO_ROMS` only for the CoCo 3.
+Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
+their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
@@ -967,10 +967,11 @@ interrupts on the 6809's S stack. The machine is configured by:
 - `cassette`, `fastCassette` and `sound` (`speaker` or `off`).
 
 Color, Extended and Disk BASIC are the SDK sources `ColorBasic.asm`, `ExtendedBasic.asm`
-and `DiskBasic.asm`, so a CoCo 1 or 2 needs nothing else, disk controller included, and
-debugging steps into the sources. The CoCo 3's ROM is a dump from `romDirectory` or
-`RETROCORE_COCO_ROMS`, under MAME's name (`coco3.rom`), and debugs as disassembly; dumps,
-when given, replace the sources' ROMs too. A program
+and `DiskBasic.asm`, and the CoCo 3's ROM is those with its patches and `Coco3.asm`, so
+every model needs nothing else, disk controller included, and debugging steps into the
+sources, on a CoCo 3 in the copy of its ROM it runs from RAM. Dumps from `romDirectory`
+or `RETROCORE_COCO_ROMS`, under MAME's names (such as `coco3.rom`), replace the sources'
+ROMs when given. A program
 (`source` or `program`, loaded at `$3000` by default) runs after BASIC has started for
 `bootSeconds` (2 by default); [the sample](../sample/coco/hello.asm) prints through
 Color BASIC's `CHROUT` vector.

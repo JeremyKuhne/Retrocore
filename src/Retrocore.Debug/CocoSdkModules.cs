@@ -8,8 +8,8 @@ using Retrocore.Cpu.M6809;
 namespace Retrocore.Debug;
 
 /// <summary>
-///  Assembles the SDK's Color Computer ROM sources: Color BASIC 1.0 to 1.3, Extended Color BASIC 1.0 and 1.1, and
-///  Disk Extended Color BASIC 1.0 and 1.1.
+///  Assembles the SDK's Color Computer ROM sources: Color BASIC 1.0 to 1.3, Extended Color BASIC 1.0 and 1.1, Disk
+///  Extended Color BASIC 1.0 and 1.1, and the CoCo 3's ROM.
 /// </summary>
 internal static class CocoSdkModules
 {
@@ -32,6 +32,11 @@ internal static class CocoSdkModules
     ///  Gets the size of each BASIC ROM: 8 KB.
     /// </summary>
     internal const int RomSize = 0x2000;
+
+    /// <summary>
+    ///  Gets the address the CoCo 3's own part of its ROM, <c>Coco3.asm</c>, starts at.
+    /// </summary>
+    internal const int Coco3Origin = 0xC000;
 
     // The sign-on messages, "COLOR BASIC 1." and "EXTENDED COLOR BASIC 1." and then the version's digit, in every
     // version; Disk BASIC's, "DISK EXTENDED COLOR BASIC 1.", moves in 1.1.
@@ -113,6 +118,33 @@ internal static class CocoSdkModules
     internal static AssemblyResult AssembleDiskBasic(string path, int version) =>
         Assemble(path, DiskBasicOrigin, version);
 
+    /// <summary>
+    ///  Identifies the CoCo 3's ROM from Extended Color BASIC 2.0's sign-on message, in its lower half.
+    /// </summary>
+    /// <param name="rom">The 32K CoCo 3 image.</param>
+    /// <returns>Whether the image is the CoCo 3's ROM.</returns>
+    internal static bool IsCoco3Rom(ReadOnlySpan<byte> rom) =>
+        rom.Length == 4 * RomSize && rom.Slice(ExtendedSignOn, 24).SequenceEqual("EXTENDED COLOR BASIC 2.0"u8);
+
+    /// <summary>
+    ///  Assembles the CoCo 3's 32 KB ROM: Extended Color BASIC 1.1 and Color BASIC 1.2 with <c>COCO3</c> set, which
+    ///  applies the CoCo 3's patches, and <c>Coco3.asm</c> on top.
+    /// </summary>
+    /// <param name="directory">
+    ///  The directory that holds <c>ExtendedBasic.asm</c>, <c>ColorBasic.asm</c> and <c>Coco3.asm</c>.
+    /// </param>
+    /// <returns>The three assemblies and the image, byte-identical to the CoCo 3's ROM.</returns>
+    /// <exception cref="InvalidDataException">A source has errors.</exception>
+    internal static Coco3Assembly AssembleCoco3(string directory)
+    {
+        Dictionary<string, long> coco3 = new() { ["COCO3"] = 1 };
+        AssemblyResult extended = Assemble(Path.Join(directory, "ExtendedBasic.asm"), ExtendedBasicOrigin, RomSize, 11, coco3);
+        AssemblyResult color = Assemble(Path.Join(directory, "ColorBasic.asm"), ColorBasicOrigin, RomSize, 12, coco3);
+        AssemblyResult top = Assemble(Path.Join(directory, "Coco3.asm"), Coco3Origin, 2 * RomSize, version: null, []);
+        byte[] image = [.. extended.Sections[0].Bytes.Span, .. color.Sections[0].Bytes.Span, .. top.Sections[0].Bytes.Span];
+        return new(extended, color, top, image);
+    }
+
     // The version digit after a sign-on's text, as 10 plus it.
     private static int? Version(ReadOnlySpan<byte> rom, int offset, ReadOnlySpan<byte> text, int highest)
     {
@@ -126,13 +158,18 @@ internal static class CocoSdkModules
     }
 
     // Assembles an 8 KB ROM source at its origin, with VERSION set.
-    private static AssemblyResult Assemble(string path, int origin, int version)
+    private static AssemblyResult Assemble(string path, int origin, int version) =>
+        Assemble(path, origin, RomSize, version, []);
+
+    // Assembles a ROM source at its origin, with VERSION, when given, and other symbols set.
+    private static AssemblyResult Assemble(string path, int origin, int size, int? version, Dictionary<string, long> symbols)
     {
         string full = Path.GetFullPath(path);
-        AssemblyOptions options = new(M6809Isa.Name, origin, RomSize)
+        if (version is { } value) { symbols["VERSION"] = value; }
+        AssemblyOptions options = new(M6809Isa.Name, origin, size)
         {
             SourceResolver = new FileAssemblySourceResolver(),
-            PredefinedSymbols = new Dictionary<string, long> { ["VERSION"] = version }
+            PredefinedSymbols = symbols
         };
 
         AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(full), full), options);

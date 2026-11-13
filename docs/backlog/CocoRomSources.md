@@ -5,8 +5,8 @@ that assemble byte-identically to every ROM the machine runs, maintained by hand
 Color Computer runs and debugs with nothing external, as the Apple II family and the Model I do, and stepping from a
 program into a ROM call goes into the ROM's source.
 
-**Status:** the decisions were approved (2026-11-12). Stage 1, Color BASIC, was reviewed; stages 2 and 3, Extended
-and Disk Extended Color BASIC, are built and await review; stages 4 and 5 are next.
+**Status:** the decisions were approved (2026-11-12). Stage 1, Color BASIC, was reviewed; stages 2 to 4, Extended and
+Disk Extended Color BASIC and the CoCo 3, are built and await review; stage 5 is what remains.
 
 ## What there is to write
 
@@ -60,7 +60,13 @@ lines, the SDK's largest source after the IIe's.
    `ColorBasicEntries.asm` now lists Color BASIC's for both. A launch without dumps builds it for the disk
    controller; it is pinned by digest, mapped by the debugger in the cartridge area, and stepped into by
    `tools/Test-CocoDap.mjs` through the console out hook.
-4. **The CoCo 3:** the `COCO3` patches and `Coco3.asm`, assembled into the 32 KB image and pinned.
+4. **The CoCo 3:** the `COCO3` patches and `Coco3.asm`, assembled into the 32 KB image and pinned. Built:
+   `ExtendedBasic.asm` and `ColorBasic.asm` apply the CoCo 3's patches in place when `COCO3` is set, and `Coco3.asm`
+   holds `$C000-$FFFF`: the start-up, which copies the ROM into RAM and patches the copy further from its table, and
+   Super Extended Color BASIC, with its hardware and RAM in `Coco3Equates.asm` and the routines the patches call in it
+   in `Coco3Entries.asm`. `CocoSdkModules.AssembleCoco3` builds the image; it is pinned by digest and compared with
+   the dump when present, a launch without dumps runs it, the debugger maps the three sources over the CoCo 3's RAM
+   copy, and `tools/Test-CocoDap.mjs` steps into it with no dumps.
 5. **Nothing external.** Launches without dumps, `tools/Test-CocoDap.mjs` running with no ROMs and stepping into
    `ColorBasic.asm`, and [Coco.md](../Coco.md), the READMEs and the extension's options updated to match.
 

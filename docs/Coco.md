@@ -58,16 +58,28 @@ controller, shared with the TRS-80's code.
 
 ## ROMs
 
-Color BASIC 1.0 to 1.3, Extended Color BASIC 1.0 and 1.1 and Disk Extended Color BASIC 1.0 and 1.1 are SDK sources,
+Every ROM the machines run is an SDK source, maintained by hand and byte-identical to the ROM: Color BASIC 1.0 to 1.3,
+Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's 32 KB ROM,
 [`ColorBasic.asm`](../src/Retrocore.Machines.Coco/Roms/ColorBasic.asm),
-[`ExtendedBasic.asm`](../src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm) and
-[`DiskBasic.asm`](../src/Retrocore.Machines.Coco/Roms/DiskBasic.asm), maintained by hand and byte-identical to each
-version's ROM. They share the RAM, hardware, token and error names in `ColorBasicEquates.asm`,
-`ExtendedBasicEquates.asm` and `DiskBasicEquates.asm`, and each names the routines it calls in the BASICs below it
-through `ColorBasicEntries.asm` and `ExtendedBasicEntries.asm`. A CoCo 1 or 2 runs without dumps, the ROMs built from
-the sources, disk controller included, and debugging steps into the sources wherever the three BASICs run.
+[`ExtendedBasic.asm`](../src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm),
+[`DiskBasic.asm`](../src/Retrocore.Machines.Coco/Roms/DiskBasic.asm) and
+[`Coco3.asm`](../src/Retrocore.Machines.Coco/Roms/Coco3.asm). They share the RAM, hardware, token and error names in
+`ColorBasicEquates.asm`, `ExtendedBasicEquates.asm`, `DiskBasicEquates.asm` and `Coco3Equates.asm`, and each names
+the routines it calls in the others through `ColorBasicEntries.asm`, `ExtendedBasicEntries.asm` and
+`Coco3Entries.asm`.
 
-The CoCo 3's ROM, and any dumps used in place of the sources, come from a directory of dumps under MAME's names:
+The CoCo 3's ROM is Extended Color BASIC 1.1 and Color BASIC 1.2 with the CoCo 3's patches, which the two sources
+apply when `COCO3` is set, with `Coco3.asm` on top: the start-up and Super Extended Color BASIC at `$C000-$FDFF`. The
+patches in place give Extended BASIC 2.0's sign-on, send RESET to the start-up, replace the CoCo 2's RAM test and
+memory size setting, which the GIME's MMU makes unneeded, drop the quick keyboard check, and point the interrupt
+vectors at the GIME's constant page. The
+start-up copies the ROM into RAM and patches the copy further, from the table in `Coco3.asm`, so that crunching,
+listing, the command loop, errors, BREAK and the screen's output reach Super Extended BASIC; BASIC then runs in
+RAM. The debugger follows: on a CoCo 3 the three sources apply wherever their bytes are, and the patched places show
+the patches' source.
+
+Without dumps, every model's ROMs are built from the sources, disk controller included, and debugging steps into
+them wherever the BASICs run. Dumps can still take their place, from a directory of dumps under MAME's names:
 `romDirectory`, or `RETROCORE_COCO_ROMS`, in the directory itself or its `coco`, `coco2b`, `coco3` and `coco_fdc`
 folders.
 
@@ -76,8 +88,6 @@ folders.
 | CoCo 1 and 2 | `bas10.rom` to `bas13.rom`, `extbas10.rom` and `extbas11.rom` |
 | CoCo 3 | `coco3.rom` |
 | Disk controller | `disk10.rom` and `disk11.rom` |
-
-The CoCo 3's BASIC has no source yet, so the debugger shows it as disassembly.
 
 ## Debugging
 
@@ -144,9 +154,9 @@ yet there for Color BASIC.
 | `CocoVideoTests`, `Coco3VideoTests` | The VDG's and GIME's modes, pixel by pixel. |
 | `CocoPeripheralTests` | A cassette round trip, joysticks, sound and a ROM pack. |
 | `CocoDiskTests` | DSKINI, SAVE, DIR and LOAD on a CoCo 2 and 3, and JVC images. |
-| `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk. |
+| `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources and the CoCo 3's ROM, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk, and the CoCo 3 drawing on its hi-res screen. |
 | `CocoOracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua): screens and programs on the CoCo 2, 2B and 3, and a Disk BASIC SAVE's disk image byte for byte. |
-| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, with no dumps; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns. |
+| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm`, which then switches to 80 columns, with no dumps; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns. |
 
 Tests that need the dumps or MAME are inconclusive without them, and the DAP script runs only its first part.
 

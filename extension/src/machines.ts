@@ -273,8 +273,8 @@ export const machines: readonly Machine[] = [
             }
         ]
     },
-    // The Color Computer 1 and 2 build Color, Extended and Disk BASIC from the SDK's sources without dumps; the CoCo 3
-    // needs the ROM dumps: romDirectory, or RETROCORE_COCO_ROMS.
+    // Without dumps, every Color Computer builds its ROMs from the SDK's sources: Color, Extended and Disk BASIC, and
+    // the CoCo 3's ROM.
     {
         id: "coco1",
         label: "TRS-80 Color Computer",

@@ -15,14 +15,14 @@ straight into the ROM or DOS source.
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
-| TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, and Disk Extended Color BASIC 1.0 and 1.1; plus the CoCo 3's 2.0 from dumps you supply | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
+| TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
 [TRS-80 Model I](docs/Trs80ModelI.md) and [Color Computer](docs/Coco.md) guides for hardware details and launch
-options. On the Color Computer, Color, Extended and Disk BASIC have SDK sources so far; the CoCo 3's ROM comes
-from the dumps you supply.
+options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
+model runs with nothing external.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
 > the VS Code extension, build and install the VSIX from this repository as shown below.
@@ -216,7 +216,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_TRS80_ROMS` | Model I ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for debugging. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
-| `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for a CoCo 1 or 2 (which otherwise builds Color, Extended and Disk BASIC from the SDK), required for the CoCo 3. |
+| `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources). |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III and Color Computer oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), and `tools\Fetch-M6809Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
@@ -242,7 +242,7 @@ dotnet test Retrocore.slnx -c Release --no-build
 
 node tools/Test-Trs80Dap.mjs          # needs nothing external
 node tools/Test-Apple1Dap.mjs         # needs nothing external
-node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add disks and the CoCo 3
+node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add a disk session and dumps
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set

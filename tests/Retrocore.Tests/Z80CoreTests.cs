@@ -125,6 +125,30 @@ public class Z80CoreTests
     }
 
     /// <summary>
+    ///  An NMI edge while halted wakes the CPU through <see cref="Z80Processor{TBus}.StepInstruction"/> alone, and a
+    ///  RESET edge resets it.
+    /// </summary>
+    [TestMethod]
+    public void HaltedStepInstructionSamplesEdges()
+    {
+        // HALT / NOP, with interrupts disabled so only NMI can wake it.
+        Z80Processor<Z80TestBus> cpu = Create(0x76, 0x00);
+        cpu.StepInstruction();
+        cpu.StepInstruction().Status.Should().Be(ProcessorExecutionStatus.Waiting);
+        cpu.Signals = Z80Signals.NonMaskableInterrupt;
+        cpu.StepInstruction().Status.Should().Be(ProcessorExecutionStatus.InstructionComplete);
+        cpu.Registers.PC.Should().Be(0x0066);
+
+        cpu.Registers = cpu.Registers with { PC = 0x0000, A = 0x12 };
+        cpu.StepInstruction();
+        cpu.IsHalted.Should().BeTrue();
+        cpu.Signals = Z80Signals.Reset;
+        cpu.StepInstruction();
+        cpu.Registers.A.Should().Be(0xFF, "reset sets AF to $FFFF");
+        cpu.Registers.PC.Should().Be(1, "reset cleared PC, and the HALT at 0 ran again");
+    }
+
+    /// <summary>
     ///  An interrupt right after LD A,I clears the parity flag it copied from IFF2.
     /// </summary>
     [TestMethod]

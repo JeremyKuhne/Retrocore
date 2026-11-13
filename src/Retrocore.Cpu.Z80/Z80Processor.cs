@@ -191,6 +191,8 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
         ulong start = _state.CycleCount;
         for (int index = 0; index < maximumCycles; index++)
         {
+            // An NMI or RESET edge while halted must latch before deciding whether the CPU still waits.
+            if (_state.Halted && _state.Signals != _state.PreviousSignals) { SampleSignals(); }
             if (_state.Halted && IsInstructionBoundary && !InterruptReady())
             {
                 return new() { Status = ProcessorExecutionStatus.Waiting, Cycles = _state.CycleCount - start };

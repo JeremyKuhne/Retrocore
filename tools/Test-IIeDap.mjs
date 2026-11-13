@@ -266,6 +266,20 @@ try {
             assert.equal(stopped.reason, "exception");
             assert.equal(stopped.description, `BRK at ${address}.`);
         }
+
+        // A breakpoint's stop at a BRK has not reported it: continuing stops there for the BRK, then runs it.
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: false, program: brks, loadAddress: 0x6000 });
+        await request("setExceptionBreakpoints", { filters: ["brk"] });
+        await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: "0x600A" }] });
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "instruction breakpoint");
+        await request("setInstructionBreakpoints", { breakpoints: [] });
+        for (const address of ["$600A", "$6010"]) {
+            await request("continue", { threadId: 1 });
+            const stopped = await event("stopped");
+            assert.equal(stopped.reason, "exception");
+            assert.equal(stopped.description, `BRK at ${address}.`);
+        }
     } finally {
         unlinkSync(brks);
     }

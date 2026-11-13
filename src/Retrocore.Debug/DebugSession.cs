@@ -1087,6 +1087,9 @@ internal sealed partial class DebugSession
         _ = Task.Run(async () =>
         {
             bool first = !check;
+
+            // Only a stop at the BRK itself has reported it; resuming from any other stop there checks it.
+            bool trapReported = _exception is ("brk", _);
             long frameTime = Stopwatch.GetTimestamp();
 
             // Sound made while stopped would play as a burst; the panel hears only what runs from here.
@@ -1126,7 +1129,10 @@ internal sealed partial class DebugSession
                             if (Target.IsInstructionBoundary && !first && BasicStops(pc)) { return; }
 
                             // Continuing from a BRK stop runs the BRK.
-                            if (Target.IsInstructionBoundary && !first && BreaksOn(BrkFilter) && Target.Trap(pc) is { } trap)
+                            if (Target.IsInstructionBoundary
+                                && !(first && trapReported)
+                                && BreaksOn(BrkFilter)
+                                && Target.Trap(pc) is { } trap)
                             {
                                 Stopped("exception", description: trap, exception: "brk");
                                 return;

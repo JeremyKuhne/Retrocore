@@ -620,6 +620,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
         _machine.StepCycle();
         ProcessorCycle cycle = _machine.LastCycle;
+        if (cycle.IsOpcodeFetch && !cycle.IsStalled) { ObserveFetch(cycle.Address, cycle.Value); }
         _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
@@ -858,6 +859,44 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public bool InRom(ushort address) =>
         _machine.Bus.ReadArea(address) == Apple2MemoryArea.SystemRom || (IntegerActive && address is >= 0xE000 and < 0xF800);
 
+    // AppleSoft's GONE is JSR CHRGET, then JSR GONE3 to run the statement CHRGET fetched. ProDOS's BASIC.SYSTEM turns
+    // TRACE on and takes the "#" TRACE prints before GONE, so it sees every statement start: it fetches the statement's
+    // first character itself and jumps to the JSR GONE3, past GONE.
+    private const int GoneFetchLength = 3;
+    private const byte RtiOpcode = 0x40;
+
+    // Whether GONE's JSR CHRGET has run since NEWSTT and its JSR GONE3 has not yet: GONE started this statement. Kept
+    // as instructions are fetched, so an interrupt between the two leaves it as it was.
+    private bool _goneFetching;
+
+    // Whether the last instruction was an RTI: an interrupt that came at an instruction boundary returns to it, which
+    // starts nothing that the boundary did not start before the interrupt.
+    private bool _returnedFromInterrupt;
+
+    // Where a statement starts in AppleSoft: at GONE, with the text pointer before it, or at GONE's JSR GONE3 with the
+    // text pointer on it when GONE did not run first. Neither starts one again when an interrupt returns there.
+    private (int Line, int Address)? AppleSoftStatementStart(BasicRom rom, ushort pc)
+    {
+        if (_returnedFromInterrupt) { return null; }
+        if (pc == rom.Gone) { return (BasicCurrentLine, BasicTextPointer + 1); }
+        return pc == rom.Gone + GoneFetchLength && !_goneFetching ? (BasicCurrentLine, BasicTextPointer) : null;
+    }
+
+    // Follows AppleSoft's statement dispatch at each instruction fetched; an interrupt's response fetches none.
+    private void ObserveFetch(ushort pc, byte opcode)
+    {
+        _returnedFromInterrupt = opcode == RtiOpcode;
+        if (_basicRom is not { } rom) { return; }
+        if (pc == rom.Gone)
+        {
+            _goneFetching = true;
+        }
+        else if (pc == rom.Gone + GoneFetchLength || pc == rom.StatementStart)
+        {
+            _goneFetching = false;
+        }
+    }
+
     /// <inheritdoc/>
     public int BasicTextPointer => IntegerActive ? IntegerWord(IntegerBasicDialect.Px) - 1 : IntegerWord(TextPointer);
 
@@ -900,6 +939,15 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         Poke(CurrentLine + 1, (byte)(line >> 8));
         Poke(TextPointer, (byte)textPointer);
         Poke(TextPointer + 1, (byte)(textPointer >> 8));
+
+        // Past GONE's JSR CHRGET, as under BASIC.SYSTEM, the old statement's first character is already fetched: back
+        // up to GONE to fetch the new one's. The stack is the same at both.
+        ProcessorRegisters registers = _machine.Processor.Registers;
+        if (_basicRom is { } rom && registers.ProgramCounter == rom.Gone + GoneFetchLength)
+        {
+            registers.ProgramCounter = rom.Gone;
+            _machine.Processor.Registers = registers;
+        }
     }
 
     /// <inheritdoc/>

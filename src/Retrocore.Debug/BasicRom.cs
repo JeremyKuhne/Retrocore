@@ -54,6 +54,11 @@ internal sealed record BasicRom(
     internal const string IntegerRanOff = "INTRANOFF";
 
     /// <summary>
+    ///  The stop the Color Computer's STOP statement and BREAK key share, which runs on into the program's end.
+    /// </summary>
+    internal const string StopOrBreak = "STOPBREAK";
+
+    /// <summary>
     ///  Gets the addresses from a ROM's assembled symbols.
     /// </summary>
     /// <param name="symbols">The symbols; null when the ROM's source was not assembled.</param>

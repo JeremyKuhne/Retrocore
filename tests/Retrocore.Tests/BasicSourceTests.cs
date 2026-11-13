@@ -106,6 +106,21 @@ public sealed class BasicSourceTests
     }
 
     /// <summary>
+    ///  Color BASIC's functions are $FF and a token, so ABS's $82 is not REM, and its apostrophe remark runs to the
+    ///  line's end: the remark's words are no variables and its colons start no statements.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicStatementsSkipFunctionsAndRemarks()
+    {
+        BasicSource source = BasicSource.Analyze("10 A=ABS(1):STOP\n20 B=1 ' C:D\n", BasicDialect.ColorBasic);
+        source.Diagnostics.Should().BeEmpty();
+        source.NumberedLines[0].Statements.Should().HaveCount(2);
+        source.NumberedLines[1].Statements.Should().HaveCount(2);
+        string[] keys = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Distinct()];
+        keys.Should().Equal("A", "B");
+    }
+
+    /// <summary>
     ///  Business BASIC keeps whole names, with dots in them and &amp; for a long integer; its words need separators,
     ///  so PRINTER is a name; and the words after $FF, such as THEN, ELSE's line and FN, are read as BASIC reads them.
     /// </summary>
@@ -176,14 +191,13 @@ public sealed class BasicSourceTests
     [DataRow("level2")]
     [DataRow("integer")]
     [DataRow("business")]
+    [DataRow("colorbasic")]
     public void EveryKeywordHasHelp(string name)
     {
+        // Business BASIC keeps its lists' placeholders empty.
         BasicDialect dialect = BasicDialect.FromName(name) ?? throw new AssertFailedException(name);
-
-        // Business BASIC's second list, after $FF, has the rest of its words; both keep placeholders empty.
-        IEnumerable<string> words = dialect.Keywords;
-        if (dialect == BasicDialect.BusinessBasic) { words = words.Concat(BusinessBasicDialect.Functions); }
-        words.Where(keyword => keyword.Length > 0 && BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
+        IEnumerable<string> words = dialect.AllKeywords.Where(keyword => keyword.Length > 0);
+        words.Where(keyword => BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
         BasicKeywordHelp.Markdown(dialect, "PRINT").Should().Contain("PRINT");
     }
 

@@ -25,6 +25,7 @@ public static class BasicKeywordHelp
             "level2" => '2',
             "integer" or "apple1" => 'i',
             "business" => 'b',
+            "colorbasic" => 'c',
             _ => 'a'
         };
 

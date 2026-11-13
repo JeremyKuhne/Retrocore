@@ -28,6 +28,37 @@ public sealed class BasicLabelTests
         """;
 
     /// <summary>
+    ///  Color BASIC files take labels too, after GOTO and GOSUB, which it stores as GO and then TO or SUB.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicLabels()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("""
+            ' retrocore colorbasic
+                A=0
+            loop:
+                A=A+1
+                IF A<3 THEN loop ELSE GOSUB @show
+                GO TO @done
+            @show
+                PRINT A: RETURN
+            @done
+                ON A GOSUB @show,@show: GO SUB @show: END ' GOTO @missing
+            """);
+
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Should().Be("""
+            10 A=0
+            20 A=A+1
+            30 IF A<3 THEN 20 ELSE GOSUB 50
+            40 GO TO 60
+            50 PRINT A: RETURN
+            60 ON A GOSUB 50,50: GO SUB 50: END ' GOTO @missing
+
+            """.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>
     ///  Integer BASIC files take labels too; as its GOTO and GOSUB take expressions, a name there that is no label
     ///  stays a variable.
     /// </summary>

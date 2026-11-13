@@ -29,7 +29,7 @@ public sealed class BusinessBasicDialectTests
         int Offset(string name) => (int)result.Symbols[name] - 0x51F2;
 
         Words(image, Offset("RESLST"), Offset("RESL2")).Should().Equal(Dialect.Keywords);
-        Words(image, Offset("RESL2"), Offset("OPTAB")).Should().Equal(BusinessBasicDialect.Functions);
+        Words(image, Offset("RESL2"), Offset("OPTAB")).Should().Equal(BusinessBasicDialect.Instance.Functions);
 
         // The tokens the tokenizer and listing depend on.
         Dialect.Keywords[(int)result.Symbols["REMTK"] - 0x80].Should().Be("REM");
@@ -37,7 +37,7 @@ public sealed class BusinessBasicDialectTests
         Dialect.Keywords[(int)result.Symbols["PRINTK"] - 0x80].Should().Be("PRINT");
         Dialect.Keywords[(int)result.Symbols["IMAGETK"] - 0x80].Should().Be("IMAGE");
         Dialect.Keywords[(int)result.Symbols["EXFNSTK"] - 0x80].Should().Be("EXFN%.");
-        BusinessBasicDialect.Functions[(int)result.Symbols["FNTK"] - 0x80].Should().Be("FN");
+        BusinessBasicDialect.Instance.Functions[(int)result.Symbols["FNTK"] - 0x80].Should().Be("FN");
         result.Symbols["SCRATK"].Should().Be(0x80 + Dialect.Keywords.Count - 1);
     }
 

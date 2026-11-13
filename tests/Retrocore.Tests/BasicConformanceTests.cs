@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Basic;
+using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Coco;
 using Retrocore.Machines.Trs80;
 
 namespace Retrocore.Tests;
@@ -90,6 +93,81 @@ public sealed class BasicConformanceTests
         DelegateBasicMemory memory = new(address => machine.Bus.Peek((ushort)address), (_, _) => { });
         Verify(BasicDialect.Level2, BasicProgram.Read(BasicDialect.Level2, memory), s_level2);
     }
+
+    /// <summary>
+    ///  Color, Extended and Disk Extended Color BASIC, built from the SDK's sources, store typed lines as the library
+    ///  tokenizes them: GO TO and GO SUB, functions after $FF, ELSE and the apostrophe after a colon, and the names
+    ///  that swallow the words typed against them.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicStoresWhatTheLibraryTokenizes()
+    {
+        CocoMachine machine = BootCoco(disk: 11);
+        foreach (string line in s_colorBasic) { CocoMachineTests.Type(machine, line + "\r"); }
+
+        BasicDialect dialect = BasicDialect.ColorBasicWith(extended: true, disk: 11);
+        Verify(dialect, BasicProgram.Read(dialect, CocoMemory(machine)), s_colorBasic);
+    }
+
+    /// <summary>
+    ///  Without the disk controller, Disk BASIC's words stay as their letters, as Extended BASIC leaves them.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicCrunchesOnlyTheFittedRomsWords()
+    {
+        string[] typed = ["10 DIR 0:A=FREE(0):PRINT HEX$(10)"];
+        CocoMachine machine = BootCoco(disk: 0);
+        CocoMachineTests.Type(machine, typed[0] + "\r");
+
+        BasicDialect dialect = BasicDialect.ColorBasicWith(extended: true, disk: 0);
+        BasicProgram stored = BasicProgram.Read(dialect, CocoMemory(machine));
+        Verify(dialect, stored, typed);
+        stored.Lines[0].Tokens.Span.IndexOf("DIR"u8).Should().Be(0, "DIR is not Extended BASIC's");
+    }
+
+    private static readonly string[] s_colorBasic =
+    [
+        "10 CLS",
+        "20 PRINT \"HELLO, WORLD!\" : REM GREET",
+        "30 IF SCORE > 5 THEN 100 ELSE 20",
+        "40 FOR I = A TO B STEP 2 : NEXT I",
+        "50 A=1 'NOTE: HERE",
+        "60 GOTO 10 : GOSUB 70",
+        "70 DATA 1, 2 ,\"A:B\", HELLO : PRINT",
+        "80 ? \"Q\";TAB(5)",
+        "90 PRINT A$; LEFT$(B$,2); MID$(B$,1,1)",
+        "100 IF X AND Y OR NOT Z THEN PRINT ELSE PRINT",
+        "110 X=PEEK(1024)+USR(0)+JOYSTK(0)",
+        "120 IFA=BTHEN10",
+        "130 PRINT HEX$(255);STRING$(3,\"*\")",
+        "140 PMODE 4,1:PCLS:LINE(0,0)-(10,10),PSET",
+        "150 DIR 0:A=FREE(0):DOS",
+        "160 PRINT USING \"##.##\";3.14",
+        "170   PRINT \"SPACES\"",
+        "180 X=10:Y=X*2/4-1>=A<B"
+    ];
+
+    // A CoCo 2 on Color BASIC 1.2 and Extended BASIC 1.1 from the SDK's sources, with Disk BASIC when asked.
+    private static CocoMachine BootCoco(int disk)
+    {
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Coco");
+        AssemblyResult color = CocoSdkModules.AssembleColorBasic(Path.Join(roms, "ColorBasic.asm"), 12);
+        AssemblyResult extended = CocoSdkModules.AssembleExtendedBasic(Path.Join(roms, "ExtendedBasic.asm"), 11);
+        CocoDiskController? controller = disk == 0
+            ? null
+            : new(CocoSdkModules.AssembleDiskBasic(Path.Join(roms, "DiskBasic.asm"), disk).Sections[0].Bytes.Span);
+
+        CocoMachine machine = new(
+            new() { Model = CocoModel.Coco2, RamKilobytes = 64 },
+            CocoRoms.ForCoco12(color.Sections[0].Bytes.Span, extended.Sections[0].Bytes.Span),
+            controller);
+
+        machine.Run(3 * (ulong)CocoTiming.ClockHertz);
+        return machine;
+    }
+
+    private static DelegateBasicMemory CocoMemory(CocoMachine machine) =>
+        new(address => machine.Bus.Peek((ushort)address), (_, _) => { }, bigEndian: true);
 
     private static void Verify(BasicDialect dialect, BasicProgram stored, string[] typed)
     {

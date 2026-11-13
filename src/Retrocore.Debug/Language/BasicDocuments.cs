@@ -35,6 +35,7 @@ internal sealed class BasicDocuments
         LanguageHost.IntegerId => BasicDialect.Integer,
         LanguageHost.BusinessId => BasicDialect.BusinessBasic,
         LanguageHost.Apple1Id => BasicDialect.Apple1,
+        LanguageHost.ColorBasicId => BasicDialect.ColorBasic,
         _ => null
     };
 

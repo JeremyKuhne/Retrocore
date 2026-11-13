@@ -38,6 +38,20 @@ public abstract partial class BasicDialect
     internal virtual byte[] MemoryImage(BasicProgram program, int start) => program.ToImage(start);
 
     /// <summary>
+    ///  Gets the address the variables and arrays must end by, below the strings or the stack.
+    /// </summary>
+    /// <param name="memory">The memory.</param>
+    /// <returns>The first address past their room.</returns>
+    internal virtual int VariableLimit(IBasicMemory memory) => BasicProgram.Word(memory, Pointers.StringBottom);
+
+    /// <summary>
+    ///  Gets the lowest address a new string may take.
+    /// </summary>
+    /// <param name="memory">The memory.</param>
+    /// <returns>The address.</returns>
+    internal virtual int StringFloorOf(IBasicMemory memory) => BasicProgram.Word(memory, Pointers.FreeStart);
+
+    /// <summary>
     ///  Tests whether BASIC is at its prompt or running a typed command, rather than running a program.
     /// </summary>
     /// <param name="memory">The memory.</param>

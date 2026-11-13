@@ -473,7 +473,7 @@ internal sealed class BusinessBasicExpression
 
     // A reserved word that is a function with its parenthesis, from either of Business BASIC's lists.
     private static bool IsFunction(string word) =>
-        BusinessBasicDialect.Functions.Contains(word) || BasicDialect.BusinessBasic.Keywords.Contains(word);
+        BusinessBasicDialect.Instance.Functions.Contains(word) || BasicDialect.BusinessBasic.Keywords.Contains(word);
 
     private string? Peek() => _at < _tokens.Count ? _tokens[_at] : null;
 

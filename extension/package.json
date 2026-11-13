@@ -24,6 +24,7 @@
     "onLanguage:retrocore-business",
     "onLanguage:retrocore-apple1",
     "onLanguage:retrocore-level1",
+    "onLanguage:retrocore-colorbasic",
     "onLanguage:retrocore-basic"
   ],
   "scripts": {
@@ -168,6 +169,21 @@
         }
       },
       {
+        "id": "retrocore-colorbasic",
+        "aliases": [
+          "Color BASIC",
+          "colorbasic"
+        ],
+        "extensions": [
+          ".colorbasic.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-basic",
         "aliases": [
           "Retrocore BASIC"
@@ -232,6 +248,11 @@
         "path": "./syntaxes/integer.tmLanguage.json"
       },
       {
+        "language": "retrocore-colorbasic",
+        "scopeName": "source.retrocore-colorbasic",
+        "path": "./syntaxes/colorbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -276,7 +297,8 @@
             "integer",
             "business",
             "apple1",
-            "level2"
+            "level2",
+            "colorbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -320,6 +342,9 @@
       },
       {
         "language": "retrocore-apple1"
+      },
+      {
+        "language": "retrocore-colorbasic"
       },
       {
         "language": "retrocore-basic"
@@ -518,7 +543,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -1141,7 +1166,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",

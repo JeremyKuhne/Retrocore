@@ -62,7 +62,7 @@ public sealed partial class BasicProgram
                 diagnostics.Add(new(
                     Math.Max(first, 0),
                     BasicSeverity.Error,
-                    $"'{named}' is not a BASIC dialect; use applesoft, integer, apple1 or level2."));
+                    $"'{named}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business or colorbasic."));
 
                 return Failed(diagnostics);
             }
@@ -127,7 +127,7 @@ public sealed partial class BasicProgram
             string trimmed = line.Trim();
             int indent = line.Length - line.TrimStart().Length;
             if (LabelLine().Match(trimmed) is { Success: true } label
-                && !(trimmed.EndsWith(':') && dialect.Keywords.Contains(label.Groups["name"].Value.ToUpperInvariant())))
+                && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(label.Groups["name"].Value.ToUpperInvariant())))
             {
                 string name = label.Groups["name"].Value;
                 labels.Add(new(name.ToUpperInvariant(), index, indent, indent + trimmed.Length, -1));

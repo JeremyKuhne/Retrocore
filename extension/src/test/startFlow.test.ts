@@ -33,7 +33,9 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.deepEqual(kinds("trs80-model1-level2"), ["machine", "source", "program", "basic", "disk", "tape"]);
     assert.deepEqual(kinds("trs80-model1-level1"), ["machine", "source", "program", "tape"], "Level I has no BASIC file launch or disks");
     assert.deepEqual(kinds("apple1"), ["machine", "source", "program", "tape"], "the Apple-1 has no BASIC in ROM or disks");
-    assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "disk", "tape"], "Color BASIC files do not launch yet");
+    assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "basic", "disk", "tape"]);
+    assert.deepEqual(kinds("coco3"), ["machine", "source", "program", "disk", "tape"], "the CoCo 3's BASIC files do not launch yet");
+    assert.match(runChoices(machine("coco1")).find(choice => choice.kind === "basic")?.detail ?? "", /Color BASIC/);
     assert.match(runChoices(machine("apple2-ii")).find(choice => choice.kind === "basic")?.detail ?? "", /Integer BASIC/);
 });
 

@@ -11,7 +11,8 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <param name="read">Reads a byte.</param>
 /// <param name="write">Writes a byte.</param>
-internal sealed class DelegateBasicMemory(Func<int, byte> read, Action<int, byte> write) : IBasicMemory
+/// <param name="bigEndian">Whether words are kept high byte first.</param>
+internal sealed class DelegateBasicMemory(Func<int, byte> read, Action<int, byte> write, bool bigEndian = false) : IBasicMemory
 {
     /// <summary>
     ///  Wraps a 64K array.
@@ -25,4 +26,7 @@ internal sealed class DelegateBasicMemory(Func<int, byte> read, Action<int, byte
 
     /// <inheritdoc/>
     public void Write(int address, byte value) => write(address, value);
+
+    /// <inheritdoc/>
+    public bool BigEndian => bigEndian;
 }

@@ -1038,8 +1038,9 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I. Level I is not supported yet. It is in three places besides the Command
-Palette:
+Model I, and Color BASIC on the Color Computer 1 and 2, with Extended and Disk
+Extended Color BASIC's words when their ROMs are fitted. Level I and the CoCo 3's
+BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
 - the **BASIC program** row at the top of the Retro Devices view, which shows the
@@ -1068,8 +1069,8 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC or Level II has a **BASIC** thread beside
-the CPU's.
+A session running AppleSoft, Integer BASIC, Level II or Color BASIC has a **BASIC**
+thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
 
@@ -1091,8 +1092,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   default) stops at the first statement RUN runs and where CONT resumes; **BASIC
   errors** (on by default) at errors no ONERR GOTO or ON ERROR GOTO will take;
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
-  END, the end of the program and Ctrl-C or BREAK. Integer BASIC has no error
-  handler, so its errors, such as `*** BAD BRANCH ERR`, always stop.
+  END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
+  have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
+  always stop.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1105,13 +1107,19 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   gave room for. Expressions follow Integer BASIC: `/` drops the remainder, `MOD`
   and `#` (not equal) work, a comparison is 1 or 0, and `A$(2,4)` is characters 2 to
   4. Its Program scope shows its variables from LOMEM, and its program up to HIMEM.
+- **Color BASIC** finds reserved words only in capitals, and never inside a name: a
+  name runs from a capital through the letters and digits after it, so `IFA=BTHEN10`
+  compares A with the variable BTHEN10. GOTO and GOSUB are stored as GO and then TO or
+  SUB, and its numbers and pointers are high byte first, as the 6809 keeps them.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.business.bas` and `.level2.bas` files are
-AppleSoft, Integer BASIC, Business BASIC and Level II BASIC. Business BASIC takes a
-reserved word only between separators, so its highlighting leaves `PRINTER` a name,
-and its names count in full, dots included. A plain `.bas` file takes its dialect
+`.applesoft.bas`, `.integer.bas`, `.business.bas`, `.level2.bas` and
+`.colorbasic.bas` files are AppleSoft, Integer BASIC, Business BASIC, Level II BASIC
+and Color BASIC. Business BASIC takes a reserved word only between separators, so its
+highlighting leaves `PRINTER` a name, and its names count in full, dots included. A
+Color BASIC file may use every word of Disk Extended Color BASIC; a machine without
+those ROMs stores the words they add as letters. A plain `.bas` file takes its dialect
 from a first line such as `REM retrocore applesoft` or `' retrocore level2`, else the
 `retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 

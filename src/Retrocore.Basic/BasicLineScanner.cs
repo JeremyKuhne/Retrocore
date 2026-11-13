@@ -91,14 +91,19 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            if (Word(index) is { } word)
+            // A placeholder token, which Business BASIC's lists keep empty, is no word.
+            if (_dialect.KeywordAt(_bytes, index, out int length) is { Length: > 0 } word)
             {
-                // Level II stores ELSE as :ELSE and ' as :REM': the site is the last byte from the same text.
+                // Level II stores ELSE as :ELSE and ' as :REM': the site is the last byte from the same text. A
+                // function stored as a prefix and a token is both.
                 int last = Last(index);
-                byte token = _bytes[last];
-                word = Business ? word : _dialect.Keyword(token) ?? word;
+                int token = length == 2 ? (_bytes[index] << 8) | _bytes[index + 1] : _bytes[last];
+                word = _dialect.Word(token) ?? word;
                 BasicSite site = Site(BasicSiteKind.Keyword, index, End(last)) with { Token = token, Word = word };
                 sites.Add(site);
+
+                // Color BASIC's GOTO and GOSUB are GO, then TO or SUB.
+                if (previous == "GO" && word is "TO" or "SUB") { word = "GO" + word; }
 
                 // Business BASIC takes a word only with a separator before it, so a name never runs into one.
                 if (!Business
@@ -110,7 +115,7 @@ internal sealed class BasicLineScanner
                 }
 
                 name = null;
-                if (value == _dialect.RemToken) { break; }
+                if (length == 1 && _dialect.IsRemark(value)) { break; }
                 bool range = jump == BasicJump.Range && afterNumber && word == "-";
                 jump = range ? BasicJump.Range : JumpAfter(word);
                 via = range ? via : word;
@@ -206,7 +211,14 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            if (value == _dialect.RemToken) { break; }
+            // A function's token after its prefix is read with it: ABS is $FF $82, and $82 alone is REM.
+            if (value == _dialect.FunctionPrefix && index + 1 < _bytes.Length)
+            {
+                index++;
+                continue;
+            }
+
+            if (_dialect.IsRemark(value)) { break; }
             if (value != ':') { continue; }
             statements.Add(new(index + 1, index + 1 < _bytes.Length ? FirstColumn(index + 1) : _text.Length));
         }
@@ -353,18 +365,6 @@ internal sealed class BasicLineScanner
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;
-
-    // The reserved word a byte starts: a token, or in Business BASIC $FF and a second-list token; null for a
-    // character or a placeholder token.
-    private string? Word(int index)
-    {
-        byte value = _bytes[index];
-        string? word = Business && value == 0xFF && index + 1 < _bytes.Length
-            ? BusinessBasicDialect.Function(_bytes[index + 1])
-            : _dialect.Keyword(value);
-
-        return string.IsNullOrEmpty(word) ? null : word;
-    }
 
     // The last byte that came from the same text as this one.
     private int Last(int index)

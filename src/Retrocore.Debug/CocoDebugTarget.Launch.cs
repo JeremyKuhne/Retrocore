@@ -22,8 +22,8 @@ internal sealed partial class CocoDebugTarget
     ///  <para>
     ///   The ROMs are the dumps in <c>romDirectory</c> (or <c>RETROCORE_COCO_ROMS</c>) under MAME's names, such as
     ///   <c>bas12.rom</c>, <c>extbas11.rom</c>, <c>coco3.rom</c> and <c>disk11.rom</c>, in the directory or its
-    ///   <c>coco</c>, <c>coco2b</c>, <c>coco3</c> and <c>coco_fdc</c> folders. Without either, every model's ROMs
-    ///   are built from the SDK's sources.
+    ///   <c>coco</c>, <c>coco2b</c>, <c>coco3</c> and <c>coco_fdc</c> folders. Without either, or with either blank,
+    ///   every model's ROMs are built from the SDK's sources.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
@@ -65,7 +65,14 @@ internal sealed partial class CocoDebugTarget
             RgbMonitor = rgb
         };
 
-        string? directory = args.String("romDirectory") ?? Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS");
+        // A blank romDirectory, as ${env:RETROCORE_COCO_ROMS} gives when it is not set, names no dumps.
+        string? directory = args.String("romDirectory");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS");
+        }
+
+        if (string.IsNullOrWhiteSpace(directory)) { directory = null; }
         CocoRoms roms;
         CocoDiskController? disk = null;
         JsonNode?[] disks = args["disks"] is JsonArray given ? [.. given] : [];

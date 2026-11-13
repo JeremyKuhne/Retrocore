@@ -59,17 +59,9 @@ public class Coco3VideoTests
 
     private static CocoMachine Boot()
     {
-        string directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS")
-            ?? Path.Join(ExternalTestData.Root, "coco-roms", "extract");
-
-        if (!Directory.Exists(directory))
-        {
-            Assert.Inconclusive("Set RETROCORE_COCO_ROMS to the Color Computer ROM dumps.");
-        }
-
         CocoMachine machine = new(
             new() { Model = CocoModel.Coco3, RgbMonitor = true },
-            CocoRoms.Load(CocoModel.Coco3, directory));
+            CocoTestRoms.Load(CocoModel.Coco3));
 
         machine.Run(3 * (ulong)CocoTiming.ClockHertz);
         return machine;

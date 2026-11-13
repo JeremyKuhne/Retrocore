@@ -120,19 +120,11 @@ public class CocoDiskTests
 
     private static CocoMachine Create(CocoModel model)
     {
-        string directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS")
-            ?? Path.Join(ExternalTestData.Root, "coco-roms", "extract");
-
-        if (!Directory.Exists(directory))
-        {
-            Assert.Inconclusive("Set RETROCORE_COCO_ROMS to the Color Computer ROM dumps.");
-        }
-
         int kilobytes = model == CocoModel.Coco3 ? 128 : 64;
         CocoMachine machine = new(
             new() { Model = model, RamKilobytes = kilobytes },
-            CocoRoms.Load(model, directory),
-            new CocoDiskController(CocoRoms.LoadDiskBasic(directory)));
+            CocoTestRoms.Load(model),
+            new CocoDiskController(CocoTestRoms.DiskBasic()));
 
         machine.Run(3 * (ulong)CocoTiming.ClockHertz);
         return machine;

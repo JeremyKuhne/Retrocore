@@ -1242,7 +1242,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
@@ -1252,7 +1251,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

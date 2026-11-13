@@ -242,7 +242,7 @@ dotnet test Retrocore.slnx -c Release --no-build
 
 node tools/Test-Trs80Dap.mjs          # needs nothing external
 node tools/Test-Apple1Dap.mjs         # needs nothing external
-node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add a disk session and dumps
+node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps in RETROCORE_COCO_ROMS when set
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set

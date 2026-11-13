@@ -74,7 +74,7 @@ a separate VS Code window running the in-repo extension, on
 `sample\trs80\hello.asm` or the files given with `-File`. That window has its own
 profile under `artifacts\self-host`, so your VS Code profile is unchanged.
 Highlighting and IntelliSense need no ROMs, and neither does a launch: without dumps
-the IIe, the Model I and the CoCo 1 and 2 run ROMs assembled from the SDK's sources. `-RomDirectory` (or
+the IIe, the Model I and every Color Computer run ROMs assembled from the SDK's sources. `-RomDirectory` (or
 `RETROCORE_IIE_ROMS`) lets the IIe launch configurations use your IIe dumps instead, and
 `tools\Start-IIeDevelopment.ps1 <rom directory>` opens the IIe sample with them.
 `-SkipBuild` relaunches without building. After a change, rebuild and run

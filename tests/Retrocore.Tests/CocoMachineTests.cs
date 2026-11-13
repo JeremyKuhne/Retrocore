@@ -87,7 +87,7 @@ public class CocoMachineTests
     }
 
     /// <summary>
-    ///  Builds a machine on the ROM dumps, or skips the test without them.
+    ///  Builds a machine on the ROM dumps, or without them on the ROMs built from the SDK's sources.
     /// </summary>
     /// <param name="model">The model.</param>
     /// <param name="color">Color BASIC's version.</param>
@@ -96,15 +96,7 @@ public class CocoMachineTests
     /// <returns>The machine, reset.</returns>
     internal static CocoMachine Create(CocoModel model, int color, int extended, int kilobytes)
     {
-        string directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS")
-            ?? Path.Join(ExternalTestData.Root, "coco-roms", "extract");
-
-        if (!Directory.Exists(directory))
-        {
-            Assert.Inconclusive("Set RETROCORE_COCO_ROMS to the Color Computer ROM dumps.");
-        }
-
-        CocoRoms roms = CocoRoms.Load(model, directory, color, extended);
+        CocoRoms roms = CocoTestRoms.Load(model, color, extended);
         return new(new() { Model = model, RamKilobytes = kilobytes, LowercaseVdg = color == 13 }, roms);
     }
 

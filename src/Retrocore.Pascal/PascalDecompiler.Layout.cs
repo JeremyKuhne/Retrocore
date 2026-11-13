@@ -13,6 +13,13 @@ public sealed partial class PascalDecompiler
     // uses no word, so that each variable keeps its offset.
     private void Layout()
     {
+        // A pointer to more words than the scalar the code reads through it points to a record that starts with it.
+        HashSet<TypeNode> seen = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            foreach (Variable variable in procedure.Frame.Variables.Values) { Blocks(variable.Type, seen); }
+        }
+
         _system.At(2).Name = "INPUT";
         _system.At(3).Name = "OUTPUT";
         _system.At(4).Name = "KEYBOARD";
@@ -32,6 +39,25 @@ public sealed partial class PascalDecompiler
                         ? $"{(procedure.IsFunction ? "FUNC" : "PROC")}{procedure.Number}"
                         : $"S{procedure.Segment.Number}{(procedure.IsFunction ? "F" : "P")}{procedure.Number}";
         }
+    }
+
+    private static void Blocks(TypeNode type, HashSet<TypeNode> seen)
+    {
+        TypeNode root = type.Find();
+        if (!seen.Add(root)) { return; }
+        if (root.Kind == TypeKind.Pointer && root.Element?.Find() is { Kind: TypeKind.Unknown, Words: > 1 } block)
+        {
+            Fit(block, block.Words);
+        }
+        else if (root.Kind == TypeKind.Pointer && root.Element?.Find() is { Kind: TypeKind.Scalar or TypeKind.Real, Words: > 1 } target && target.Words > (SizeOf(target) ?? 1))
+        {
+            int words = target.Words;
+            target.Field(0);
+            target.Find().Words = words;
+        }
+
+        if (root.Element is { } element) { Blocks(element, seen); }
+        foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>()) { Blocks(field, seen); }
     }
 
     // A procedure's parameters in the order they are declared: the first has the highest words.
@@ -179,7 +205,7 @@ public sealed partial class PascalDecompiler
             case TypeKind.Text:
                 return 301;
             case TypeKind.File:
-                return root.RecordWords > 0 ? 300 + root.RecordWords : 300;
+                return root.RecordWords > 0 ? 300 + root.RecordWords : 40;
             case TypeKind.Record:
                 {
                     int words = root.Words;

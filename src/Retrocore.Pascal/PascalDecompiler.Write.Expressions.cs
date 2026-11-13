@@ -18,10 +18,17 @@ public sealed partial class PascalDecompiler
     private string Expression(Expr expression, TypeNode? expected, int precedence)
     {
         // A record's address where a word is used is its first field's.
+        expression = Narrow(expression);
         if (expression is Load { Designator: var whole } load && whole.Type.Find().Kind == TypeKind.Record)
         {
             Designator field = Descend(whole, expected);
             if (field != whole) { expression = new Load(field, load.Words); }
+        }
+
+        // A word also read by bytes is a variant record's.
+        if (expression is Load { Designator: VariableDesignator { Variable: var viewed } } && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
+        {
+            return Convert($"{viewed.Name}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
         }
 
         // A word used both as a pointer and as an integer is a variant record's.
@@ -60,6 +67,22 @@ public sealed partial class PascalDecompiler
         return field;
     }
 
+    // A load of fewer words than a record has is of its first field.
+    private static Expr Narrow(Expr expression)
+    {
+        if (expression is not Load { Designator: var designator } load || load.Words == 0) { return expression; }
+
+        Designator field = designator;
+        for (int depth = 0; depth < 8; depth++)
+        {
+            TypeNode root = field.Type.Find();
+            if (root.Kind != TypeKind.Record || SizeOf(root) is not { } size || size <= load.Words) { break; }
+            field = new FieldDesignator(field, 0);
+        }
+
+        return field == designator ? expression : new Load(field, load.Words);
+    }
+
     private static bool IsPunned(TypeNode type) => type.Find() is { Kind: TypeKind.Pointer, Punned: true };
 
     // The scalar kind a type is, or null when it is not a scalar.
@@ -81,6 +104,7 @@ public sealed partial class PascalDecompiler
         Unary { Op: Operator.Negate or Operator.Absolute or Operator.Square } => ScalarKind.Integer,
         Unary { Op: Operator.Not } => ScalarKind.Boolean,
         Comparison => ScalarKind.Boolean,
+        Load { Designator: IndexDesignator { Array: VariableDesignator { Variable: var bytes } } } when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true } => ScalarKind.Char,
         Load { Designator: IndexDesignator { Index: Constant { Value: 0 }, High: null } length } when length.Array.Type.Find().Kind == TypeKind.String => ScalarKind.Integer,
         _ => Kind(expression.Type)
     };
@@ -248,14 +272,14 @@ public sealed partial class PascalDecompiler
             Comparand.Boolean => TypeNode.Scalar(ScalarKind.Boolean),
             Comparand.Real => TypeNode.Of(TypeKind.Real),
             Comparand.Set when comparison.Op == Operator.In => comparison.Right.Type.Find().Element,
-            Comparand.Word => comparison.Right.Type,
+            Comparand.Word => comparison.Right is Constant ? comparison.Left.Type : comparison.Right.Type,
             _ => null
         };
 
         TypeNode? right = comparison.Comparand switch
         {
             Comparand.Set when comparison.Op == Operator.In => null,
-            Comparand.Word => comparison.Left.Type,
+            Comparand.Word => comparison.Left is Constant ? comparison.Right.Type : comparison.Left.Type,
             _ => left
         };
         return ($"{Expression(comparison.Left, left, Adding)} {symbol} {Expression(comparison.Right, right, Adding)}", Relational);

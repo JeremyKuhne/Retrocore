@@ -319,6 +319,10 @@ public sealed partial class PascalDecompiler
 
         public int? High { get; }
 
+        // Whether the code says nothing of range checking, as for MOVELEFT's byte offset; otherwise a range check
+        // (CHK) gives the high bound, and its absence means range checking was off.
+        public bool Neutral { get; init; }
+
         public override TypeNode Type { get; }
     }
 

@@ -105,6 +105,9 @@ public sealed partial class PascalDecompiler
         // A word used both as a pointer and as an integer, as through a variant record.
         public bool Punned { get; set; }
 
+        // A scalar word also read by bytes, as through a variant record.
+        public bool ByteView { get; set; }
+
         // The name the writer gives it, once declared.
         public string? Name { get; set; }
 
@@ -149,8 +152,9 @@ public sealed partial class PascalDecompiler
         {
             TypeNode root = Find();
 
-            // A pointer used as an integer is a word used both ways.
+            // A pointer used as an integer is a word used both ways; so is an integer read by bytes.
             if (root.Kind == TypeKind.Pointer && kind == ScalarKind.Integer) { root.Punned = true; }
+            if (root.Kind == TypeKind.Array && root.Bytes && kind == ScalarKind.Integer) { root.View(); }
             if (root.Kind == TypeKind.Record)
             {
                 root.Field(0).Vote(kind, weight);
@@ -291,6 +295,13 @@ public sealed partial class PascalDecompiler
         {
             TypeNode root = Find();
             if (root.Kind == TypeKind.Record) { return root.Field(0).ByteElement(low, high); }
+
+            // An integer read by bytes is a variant record's two views of a word.
+            if (root.Kind == TypeKind.Scalar)
+            {
+                root.ByteView = true;
+                return root.Element ??= Scalar(ScalarKind.Char);
+            }
             if (root.Kind == TypeKind.Unknown) { root.Kind = TypeKind.Array; }
             root.Element ??= new TypeNode();
             if (root.Kind == TypeKind.Array) { root.Bytes = true; }
@@ -355,6 +366,11 @@ public sealed partial class PascalDecompiler
                 {
                     a.Kind = TypeKind.String;
                 }
+                else if ((a.Kind == TypeKind.Array && a.Bytes && b.Kind == TypeKind.Scalar) || (b.Kind == TypeKind.Array && b.Bytes && a.Kind == TypeKind.Scalar))
+                {
+                    a.Element ??= b.Element;
+                    a.View();
+                }
             }
 
             a.IntegerVotes += b.IntegerVotes;
@@ -363,6 +379,7 @@ public sealed partial class PascalDecompiler
             a.Forced ??= b.Forced;
             a.Enumeration ??= b.Enumeration;
             a.Punned |= b.Punned;
+            a.ByteView |= b.ByteView;
             if (b.Low is { } low) { a.Low = a.Low is { } oldLow ? Math.Min(oldLow, low) : low; }
             if (b.High is { } high) { a.High = a.High is { } oldHigh ? Math.Max(oldHigh, high) : high; }
             Bounds(a, b.IndexLow, b.IndexHigh);
@@ -460,6 +477,16 @@ public sealed partial class PascalDecompiler
             Bytes = Punned = false;
             Words = 0;
             Fields = new SortedDictionary<int, TypeNode> { [0] = first };
+        }
+
+        // Makes a byte array also used as an integer the integer read by bytes.
+        private void View()
+        {
+            Kind = TypeKind.Scalar;
+            ByteView = true;
+            Bytes = false;
+            IndexLow = IndexHigh = null;
+            Element ??= Scalar(ScalarKind.Char);
         }
 
         private static void Bounds(TypeNode root, int? low, int? high)

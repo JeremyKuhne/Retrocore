@@ -171,7 +171,18 @@ public sealed partial class PascalDecompiler
 
                 case 168: // MOV
                     {
-                        Designator source = Designate(Pop(stack));
+                        Expr from = Pop(stack);
+                        if (from is PackedConstant or StringConstant)
+                        {
+                            // A packed array of characters takes a string constant's characters.
+                            Designator array = Designate(Pop(stack));
+                            array.Type.ByteElement(null, null);
+                            Blocks(array, operands[0]);
+                            statements.Add(new Assignment(array, from, block: true));
+                            break;
+                        }
+
+                        Designator source = Designate(from);
                         Designator target = Designate(Pop(stack));
                         source.Type.Size(operands[0]);
                         Blocks(source, operands[0]);

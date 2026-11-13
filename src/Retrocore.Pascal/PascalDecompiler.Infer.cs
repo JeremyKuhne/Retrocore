@@ -306,6 +306,20 @@ public sealed partial class PascalDecompiler
     {
         switch (statement)
         {
+            case Assignment { Value: PackedConstant or StringConstant } packed when packed.Target.Type.Find() is { Kind: TypeKind.Array, Bytes: true } array:
+                {
+                    int length = packed.Value is PackedConstant p ? p.Bytes.Length : ((StringConstant)packed.Value).Characters.Length;
+                    if (array.IndexLow is { } low) { array.IndexHigh ??= low + length - 1; }
+                    break;
+                }
+
+            case Assignment { Block: true, Value: Load whole } assignment when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
+                // A record or array moved whole is the same type at both ends.
+                TypeNode.Unify(assignment.Target.Type, whole.Type);
+                break;
+            case Assignment { Value: WordsConstant { Values.Length: 2 } } real when real.Target.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar:
+                real.Target.Type.Find().Kind = TypeKind.Real;
+                break;
             case Assignment assignment:
                 Assign(assignment.Target.Type, assignment.Value);
                 break;

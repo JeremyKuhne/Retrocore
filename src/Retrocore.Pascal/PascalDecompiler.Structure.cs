@@ -21,7 +21,7 @@ public sealed partial class PascalDecompiler
                 if (statement is Assignment { Target: VariableDesignator { Variable: var target } } assignment
                     && target.Frame == frame
                     && target.Offset > frame.ParameterWords
-                    && target.Kind == VariableKind.Variable)
+                    && target.Kind is VariableKind.Variable or VariableKind.Temporary)
                 {
                     bool address = assignment.Value is Address || (assignment.Value is Load or Call && assignment.Value.Words == 1);
                     candidates[target] = (!candidates.TryGetValue(target, out bool before) || before) && address && !assignment.Block;
@@ -72,10 +72,15 @@ public sealed partial class PascalDecompiler
             HashSet<Variable> accepted = [];
             foreach (Variable candidate in temporaries)
             {
-                if (frame.Variables.Values.All(other => other.Offset <= candidate.Offset || other.Kind == VariableKind.Temporary || accepted.Contains(other)))
+                if (frame.Variables.Values.All(other => other.Offset <= candidate.Offset || other.Kind == VariableKind.Temporary || other.Container is not null || accepted.Contains(other)))
                 {
                     accepted.Add(candidate);
                 }
+            }
+
+            if (Environment.GetEnvironmentVariable("DECOMPILE_DEBUG") is not null)
+            {
+                Console.Error.WriteLine($"{procedure}: candidates {string.Join(",", candidates.Select(pair => $"{pair.Key.Offset}={pair.Value}"))} accepted {string.Join(",", accepted.Select(v => v.Offset))} vars {string.Join(",", frame.Variables.Values.Select(v => $"{v.Offset}:{v.Kind}"))}");
             }
 
             foreach (Variable temporary in accepted) { temporary.Kind = VariableKind.Temporary; }

@@ -10,6 +10,7 @@ public sealed partial class PascalDecompiler
     private sealed partial class Decoder
     {
         private int _opened;
+        private int _concatLength;
 
         // A call of a procedure in the code file: its arguments fill its parameters' words.
         private void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
@@ -126,12 +127,20 @@ public sealed partial class PascalDecompiler
 
                         if (file is VariableDesignator { Variable: var opened }) { opened.Opened = ++_opened; }
 
-                        // The window is the file variable's last words.
+                        // The window is the file variable's last words; an untyped file's 40 words have none, and its
+                        // window's address is past them.
                         if (file is VariableDesignator { Variable: var variable } && window is Address { Designator: VariableDesignator { Variable: var buffer } })
                         {
                             buffer.Container = variable;
                             buffer.FieldOffset = buffer.Offset - variable.Offset;
-                            variable.BlockWords = Math.Max(variable.BlockWords, buffer.Offset - variable.Offset + 1);
+                            if (variable.Type.Find().Kind == TypeKind.File && variable.Type.Find().RecordWords <= 0)
+                            {
+                                if (buffer.Used is false || !buffer.LoadedAsWord) { buffer.Frame.Variables.Remove(buffer.Offset); }
+                            }
+                            else
+                            {
+                                variable.BlockWords = Math.Max(variable.BlockWords, buffer.Offset - variable.Offset + 1);
+                            }
                         }
                         break;
                     }
@@ -226,7 +235,7 @@ public sealed partial class PascalDecompiler
                 case 22: Statement(statements, "WRITELN", File(Pop(stack))); break;
                 case 23: // SCONCAT(temporary, string, length so far)
                     {
-                        Pop(stack);
+                        Expr length = Pop(stack);
                         Expr source = StringValue(Pop(stack));
                         Variable temporary = Temporary(Pop(stack));
                         if (!_strings.TryGetValue(temporary, out StringFunction? concat))
@@ -240,8 +249,16 @@ public sealed partial class PascalDecompiler
                             }
 
                             statements.RemoveAt(statements.Count - 1);
+                            _concatLength = 0;
                             concat = new StringFunction("CONCAT", []);
                             _strings[temporary] = concat;
+                        }
+
+                        // The lengths so far grow by each string's greatest length.
+                        if (length is Constant total)
+                        {
+                            if (source is Load { Designator: var designator }) { designator.Type.String(total.Value - _concatLength); }
+                            _concatLength = total.Value;
                         }
 
                         concat.Arguments.Add(source);
@@ -442,11 +459,12 @@ public sealed partial class PascalDecompiler
         {
             Expr offset = Pop(stack);
             Expr address = Pop(stack);
+            if (address is ByteAddress or Address && offset is Constant { Value: 0 }) { return address; }
             if (address is ByteAddress) { return address; }
-            if (offset is Constant { Value: 0 }) { return address; }
+            if (offset is Constant { Value: 0 }) { return address is StringConstant or PackedConstant ? address : new Address(Designate(address)); }
 
             Designator array = Designate(address);
-            return new Address(new IndexDesignator(array, offset, 0, null, array.Type.ByteElement(0, null)));
+            return new Address(new IndexDesignator(array, offset, 0, null, array.Type.ByteElement(0, null)) { Neutral = true });
         }
 
         // A WRITE's width: none when 0.

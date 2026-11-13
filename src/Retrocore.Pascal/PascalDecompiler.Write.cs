@@ -13,6 +13,7 @@ public sealed partial class PascalDecompiler
     private readonly List<TypeNode> _types = [];
     private int _indent;
     private bool _ioChecked = true;
+    private bool _rangeChecked = true;
 
     // The WITH statements the writer is inside, innermost last: their records' fields go by name alone.
     private readonly List<Variable> _with = [];
@@ -176,7 +177,7 @@ public sealed partial class PascalDecompiler
     private void Visit(TypeNode type, bool parameter)
     {
         TypeNode root = type.Find();
-        bool named = root.Kind is TypeKind.Record or TypeKind.Pointer or TypeKind.Array or TypeKind.Set or TypeKind.File
+        bool named = root.Kind is TypeKind.Record or TypeKind.Pointer or TypeKind.Array or TypeKind.Set || (root.Kind == TypeKind.File && root.RecordWords > 0) || root.ByteView
             || (parameter && Simple(root) is null);
 
         if (named && root.Name is null)
@@ -243,6 +244,7 @@ public sealed partial class PascalDecompiler
         TypeKind.Unknown => "INTEGER",
         TypeKind.Real => "REAL",
         TypeKind.Text => "TEXT",
+        TypeKind.File when root.RecordWords <= 0 => "FILE",
         TypeKind.String when root.MaxLength is 80 or 0 => "STRING",
         _ => null
     };
@@ -250,6 +252,11 @@ public sealed partial class PascalDecompiler
     private string Declare(TypeNode type, bool inline)
     {
         TypeNode root = type.Find();
+        if (root.ByteView && root.Kind == TypeKind.Scalar)
+        {
+            return "RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (B: PACKED ARRAY[0..1] OF CHAR) END";
+        }
+
         switch (root.Kind)
         {
             case TypeKind.Scalar when root.Low is { } low && root.High is { } high:
@@ -272,7 +279,11 @@ public sealed partial class PascalDecompiler
             case TypeKind.Array:
                 {
                     int low = root.IndexLow ?? 0;
-                    int high = root.IndexHigh ?? low;
+                    int count = root.Words <= 0 ? 1
+                        : root.Bytes ? root.Words * 2
+                        : root.PerWord > 0 ? root.Words * root.PerWord
+                        : root.Words / Math.Max(1, root.ElementWords);
+                    int high = root.IndexHigh ?? low + Math.Max(1, count) - 1;
                     TypeNode element = root.Element ?? TypeNode.Scalar(ScalarKind.Integer);
                     if (root.Bytes)
                     {
@@ -371,6 +382,7 @@ public sealed partial class PascalDecompiler
 
                 Separate(lines, first);
                 Check(io.Checked, lines);
+                if (RangeChecked(statement) is { } ioRange) { CheckRange(ioRange, lines); }
                 lines.Add(Io(name, io.Arguments[0], arguments));
                 index = end;
                 continue;
@@ -378,6 +390,7 @@ public sealed partial class PascalDecompiler
 
             Separate(lines, first);
             if (statement is CallStatement { Callee.Builtin: { } builtin } call && IsIo(builtin)) { Check(call.Checked, lines); }
+            if (RangeChecked(statement) is { } range) { CheckRange(range, lines); }
             WriteStatement(procedure, statement, lines);
         }
 
@@ -393,6 +406,72 @@ public sealed partial class PascalDecompiler
         if (on == _ioChecked) { return; }
         _ioChecked = on;
         lines.Add(Indented(on ? "(*$I+*)" : "(*$I-*)"));
+    }
+
+    // Turns range checking on or off ahead of a statement whose indexes are checked (CHK) or not.
+    private void CheckRange(bool on, List<string> lines)
+    {
+        if (on == _rangeChecked) { return; }
+        _rangeChecked = on;
+        lines.Add(Indented(on ? "(*$R+*)" : "(*$R-*)"));
+    }
+
+    // Whether a statement's own expressions, not those of the statements inside it, check ranges: true where one
+    // does, false where an index goes unchecked, and null where nothing says.
+    private static bool? RangeChecked(Statement statement)
+    {
+        bool? result = null;
+        void Visit(Expr expression) => Walk(expression, inner =>
+        {
+            if (inner is Checked) { result ??= true; }
+        });
+
+        List<Expr> parts = statement switch
+        {
+            Assignment assignment => [new Address(assignment.Target), assignment.Value],
+            CallStatement call => [.. call.Arguments.Select(argument => argument.Value)],
+            IfStatement branch => [branch.Condition],
+            WhileStatement loop => [loop.Condition],
+            ForStatement loop => [new Address(loop.Control), loop.From, loop.To],
+            CaseStatement choice => [choice.Selector],
+            WithStatement with => [new Address(with.Record)],
+            _ => []
+        };
+
+        foreach (Expr part in parts)
+        {
+            Visit(part);
+            Walk(part, inner =>
+            {
+                Designator? designator = inner switch
+                {
+                    Load load => load.Designator,
+                    Address address => address.Designator,
+                    ByteAddress address => address.Designator,
+                    PackedAddress address => address.Designator,
+                    _ => null
+                };
+
+                for (Designator? at = designator; at is not null;)
+                {
+                    if (at is IndexDesignator { Neutral: false } index && !(index.Index is Constant { Value: 0 } && index.High is null && index.Array.Type.Find().Kind == TypeKind.String))
+                    {
+                        if (index.High is null) { result = false; } else { result ??= true; }
+                    }
+
+                    at = at switch
+                    {
+                        FieldDesignator field => field.Record,
+                        PackedFieldDesignator field => field.Record,
+                        IndexDesignator index2 => index2.Array,
+                        StringIndexDesignator text => text.Text,
+                        _ => null
+                    };
+                }
+            });
+        }
+
+        return result;
     }
 
     // Statements in a list are separated by semicolons, after the last line of the one before; not after a label.
@@ -446,8 +525,15 @@ public sealed partial class PascalDecompiler
         {
             case Assignment assignment:
                 {
-                    Designator target = Descend(assignment.Target, assignment.Value is Constant ? null : assignment.Value.Type);
+                    Expr value = Narrow(assignment.Value);
+                    Designator target = Descend(assignment.Target, value is Constant ? null : value.Type);
                     string text = DesignatorText(target);
+                    if (target is VariableDesignator { Variable: var viewed } && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
+                    {
+                        lines.Add(Indented($"{text}.I := {Expression(value, TypeNode.Scalar(ScalarKind.Integer), 0)}"));
+                        break;
+                    }
+
                     if (target is VariableDesignator { Variable: var punned } && IsPunned(punned.Type))
                     {
                         bool pointer = assignment.Value is Nil || Natural(assignment.Value) is null && assignment.Value is not Constant;
@@ -585,6 +671,13 @@ public sealed partial class PascalDecompiler
         List<string> parts = [];
         foreach (Argument argument in call.Arguments)
         {
+            // FILLCHAR fills with a character.
+            if (name == "FILLCHAR" && argument == call.Arguments[^1])
+            {
+                parts.Add(Expression(argument.Value, TypeNode.Scalar(ScalarKind.Char), 0));
+                continue;
+            }
+
             parts.Add(argument.Value switch
             {
                 Keyword keyword => keyword.Text,
@@ -669,10 +762,19 @@ public sealed partial class PascalDecompiler
                 return $"{file.Name}^";
             case IndexDesignator { Index: Constant { Value: 0 }, High: null } length when length.Array.Type.Find().Kind == TypeKind.String:
                 return $"LENGTH({DesignatorText(length.Array)})";
+            case IndexDesignator { Array: VariableDesignator { Variable: var bytes } } byteIndex when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
+                return $"{bytes.Name}.B[{Expression(byteIndex.Index, null, 0)}]";
             case IndexDesignator index:
                 {
                     string array = DesignatorText(index.Array);
                     string value = Expression(index.Index, null, 0);
+
+                    // Without range checks, the bound an index lost may not be the one the array has.
+                    if (index.Low is { } lost && index.Array.Type.Find().IndexLow is { } declared && lost != declared && !index.Neutral)
+                    {
+                        int difference = lost - declared;
+                        value = $"{Expression(index.Index, null, Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
+                    }
                     return array.EndsWith(']') && index.Array is IndexDesignator ? $"{array[..^1]}, {value}]" : $"{array}[{value}]";
                 }
 

@@ -28,8 +28,6 @@ options.
 Prerequisites:
 
 - the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0);
-- a sibling checkout of [`touki`](https://github.com/JeremyKuhne/touki) at `..\touki` (`Directory.Build.props`
-  references its analyzer projects during the .NET build);
 - [Node.js](https://nodejs.org) with npm, to compile and package the extension;
 - [VS Code](https://code.visualstudio.com) 1.140 or later, with its `code` command on `PATH`;
 - PowerShell 7 (the install script is tested on Windows only).
@@ -57,7 +55,7 @@ To build only the VSIX (for example, to install on another machine):
 Copy the `.vsix` file over and install it with **Extensions: Install from VSIX...** in the Command Palette, or
 run `code --install-extension retrocore-<version>.vsix`. The packaged host is framework-dependent, so that
 machine needs the [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0), but it does not need the
-.NET SDK, Node.js, `touki`, or any ROM dumps. To run the in-repo extension directly in a separate development
+.NET SDK, Node.js, or any ROM dumps. To run the in-repo extension directly in a separate development
 window while working on it, see [Installing and self-hosting](extension/README.md#installing-and-self-hosting).
 
 ## Assembly language
@@ -215,9 +213,9 @@ Apple2TS sources. `tools\Fetch-Trs80Font.ps1` fetches xtrs's font source to veri
 
 ## Building and testing
 
-With the `.NET 10 SDK`, Node.js, and the sibling `..\touki` checkout in place, these build and test the repository.
+With the `.NET 10 SDK` and Node.js in place, these build and test the repository.
 [CI](.github/workflows/ci.yml) runs the ones that need nothing external on every push to `main` and every pull
-request, with touki pinned to a known commit:
+request:
 
 ```powershell
 dotnet build Retrocore.slnx -c Release

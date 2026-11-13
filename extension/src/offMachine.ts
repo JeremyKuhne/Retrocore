@@ -8,10 +8,11 @@
 
 import * as os from "node:os";
 import * as vscode from "vscode";
+import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
-import { launchConfiguration, machines } from "./machines";
+import { catalogMachine, launchConfiguration, machineById, machines, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { describeSetup, isUsable, setupConfiguration, type Setup } from "./startFlow";
+import { describeSetup, isUsable, setupConfiguration, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -68,6 +69,29 @@ function launchConfigurations(): Record<string, unknown>[] {
         .filter(entry => entry.type === "retrocore" && entry.request === "launch" && typeof entry.name === "string");
 }
 
+/** A catalog machine as a setup that runs nothing, with the choices a configuration sets. */
+function catalogSetup(machine: Machine, configuration: Record<string, unknown> = {}): Setup {
+    const options: Setup["options"] = {};
+    for (const choice of machine.choices) {
+        const value = configuration[choice.option];
+        if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && value !== choice.default) {
+            options[choice.option] = value;
+        }
+    }
+    return { machineId: machine.id, kind: "machine", options };
+}
+
+/** Sets one choice in a launch.json configuration, keeping its variables as written. */
+async function updateLaunch(name: string, choice: MachineChoice, value: string | number | boolean): Promise<void> {
+    const workspace = folder();
+    if (workspace === undefined) return;
+    const launch = vscode.workspace.getConfiguration("launch", workspace.uri);
+    const entries = launch.get<Record<string, unknown>[]>("configurations") ?? [];
+    await launch.update("configurations",
+        entries.map(entry => entry.type === "retrocore" && entry.name === name ? withSetting(entry, choice, value) : entry),
+        vscode.ConfigurationTarget.WorkspaceFolder);
+}
+
 /** The off machine, its description, and the actions on it. */
 export class OffMachine {
     private readonly changed = new vscode.EventEmitter<void>();
@@ -110,9 +134,11 @@ export class OffMachine {
         const configuration = session.configuration as Record<string, unknown>;
         const name = configuration.name;
         const setup = this.state.get<Setup>(lastSetupKey);
+        const machine = catalogMachine(configuration);
         let source: OffSource = { kind: "configuration" };
         if (isUsable(setup) && setupConfiguration(setup).name === name) source = { kind: "setup", setup };
         else if (typeof name === "string" && launchConfigurations().some(entry => entry.name === name)) source = { kind: "launch", name };
+        else if (machine !== undefined && launchConfiguration(machine).name === name) source = { kind: "setup", setup: catalogSetup(machine, configuration) };
         const { machineState: _saved, ...rest } = configuration;
         this.target = { configuration: rest, source };
         this.body = undefined;
@@ -133,6 +159,45 @@ export class OffMachine {
         await this.ask("retrocore/machine/change", {
             configuration: target.configuration, machineState: this.saved.get(target.configuration), request, arguments: args
         }, true);
+    }
+
+    /** The catalog machine the off machine is, whose choices are its settings. */
+    get machine(): Machine | undefined {
+        const target = this.target;
+        if (target === undefined) return undefined;
+        return target.source.kind === "setup" ? machineById(target.source.setup.machineId) : catalogMachine(target.configuration);
+    }
+
+    /**
+     * Changes one of the settings while the machine is off: in Start Machine's setup (which Start Last Machine then
+     * starts), in the launch.json configuration, or in the configuration itself. The cards and media someone changed
+     * stay on top of the new setting, where the whole saved machine would put back what the setting replaced.
+     */
+    async setSetting(option: string, value: string | number | boolean): Promise<void> {
+        const target = this.target;
+        const machine = this.machine;
+        const choice = machine?.choices.find(candidate => candidate.option === option);
+        if (target === undefined || machine === undefined || choice === undefined) {
+            throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
+        }
+
+        let next: OffTarget;
+        if (target.source.kind === "setup") {
+            const setup = withOption(machine, target.source.setup, option, value);
+            next = { configuration: setupConfiguration(setup), source: { kind: "setup", setup } };
+            await this.state.update(lastSetupKey, setup);
+        } else {
+            if (target.source.kind === "launch") await updateLaunch(target.source.name, choice, value);
+            next = { configuration: withSetting(target.configuration, choice, value), source: target.source };
+        }
+
+        const saved = this.saved.get(target.configuration);
+        if (saved !== undefined) {
+            const base = await languageRequest<OffBody>("retrocore/machine/describe", { configuration: target.configuration });
+            await this.saved.set(next.configuration, changesFrom(saved, base.configuration));
+        }
+
+        await this.select(next);
     }
 
     /** Boots the machine as it came: Start Machine's setup, the launch.json configuration, or the configuration. */
@@ -168,8 +233,9 @@ export class OffMachine {
         }
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });
         for (const machine of machines) {
+            const setup = catalogSetup(machine);
             items.push({ label: machine.label, detail: machine.detail,
-                target: { configuration: launchConfiguration(machine), source: { kind: "configuration" } } });
+                target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
         }
         const current = this.name;
         for (const item of items) if (item.target?.configuration.name === current) item.description = "$(check) " + (item.description ?? "");

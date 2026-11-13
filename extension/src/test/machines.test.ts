@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { launchConfiguration, machineById, machines } from "../machines";
+import { catalogMachine, launchConfiguration, machineById, machines, settingValue, withSetting } from "../machines";
 
 interface OptionSchema { type?: string; enum?: unknown[]; default?: unknown; anyOf?: OptionSchema[] }
 
@@ -91,4 +91,29 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.deepEqual(coco?.diskFormats, ["dsk"]);
         assert.deepEqual(coco?.tapeFormats, ["cas"]);
     }
+});
+
+test("a launch configuration finds its catalog machine as the host reads its model", () => {
+    for (const machine of machines) {
+        assert.equal(catalogMachine(launchConfiguration(machine))?.id, machine.id, `${machine.label} finds itself`);
+    }
+    assert.equal(catalogMachine({ machine: "apple2" })?.id, "apple2-iie-enhanced", "the IIe enhanced is the Apple II default");
+    assert.equal(catalogMachine({ machine: "apple2", model: "enhanced" })?.id, "apple2-iie-enhanced");
+    assert.equal(catalogMachine({ machine: "apple2", model: "original" })?.id, "apple2-iie");
+    assert.equal(catalogMachine({ machine: "coco" })?.id, "coco2", "the CoCo 2 is the Color Computer default");
+    assert.equal(catalogMachine({ machine: "trs80-model1" })?.id, "trs80-model1-level2");
+    assert.equal(catalogMachine({ machine: "trs80-model1", rom: "level1" })?.id, "trs80-model1-level1");
+    assert.equal(catalogMachine({ machine: "pdp10" }), undefined);
+});
+
+test("a setting reads its default when the configuration leaves it out, and is left out when set back to it", () => {
+    const plus = machineById("apple2-iiplus");
+    const memory = plus?.choices.find(choice => choice.option === "ramKilobytes");
+    assert.ok(plus && memory);
+    const configuration = launchConfiguration(plus);
+    assert.equal(settingValue(memory, configuration), 48);
+    const smaller = withSetting(configuration, memory, 32);
+    assert.equal(settingValue(memory, smaller), 32);
+    assert.equal(configuration.ramKilobytes, undefined, "the original is unchanged");
+    assert.equal("ramKilobytes" in withSetting(smaller, memory, 48), false, "the default is left out");
 });

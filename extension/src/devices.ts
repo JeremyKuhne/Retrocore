@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { cardsFor, group, type HardwareRow } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
+import { catalogMachine, settingValue, type MachineChoice } from "./machines";
 import { OffMachine, type OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
 
@@ -36,10 +37,12 @@ export interface Device {
 interface Devices { devices: Device[]; hardware?: HardwareRow[] }
 
 /**
- * A row of the Machine or Drives view: the machine itself, a piece of its installed hardware, a controller its drives
- * are listed under, a device, one line of a device's details, or the BASIC program in memory.
+ * A row of the Machine or Drives view: the machine itself, its settings and each setting, a piece of its installed
+ * hardware, a controller its drives are listed under, a device, one line of a device's details, or the BASIC program
+ * in memory.
  */
-type Node = { machine: HardwareRow | undefined } | { hardware: HardwareRow; devices: Device[] }
+type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settings: MachineChoice[] } | { setting: MachineChoice }
+    | { hardware: HardwareRow; devices: Device[] }
     | { controller: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
     | { basic: BasicSummary };
 
@@ -160,25 +163,48 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
             if (this.state.session === undefined && this.state.off === undefined) return [];
             return [
                 { machine: this.state.hardware.find(row => row.id === "model") },
-                ...this.state.basic === undefined ? [] : [{ basic: this.state.basic }]
+                ...this.state.basic === undefined ? [] : [{ basic: this.state.basic }],
+                // While off, another machine is a click away rather than a title-bar icon shown only on hover.
+                ...this.state.session === undefined ? [{ switcher: true as const }] : []
             ];
         }
         if ("machine" in node) {
-            return group(this.state.hardware, this.state.devices).rows
-                .filter(({ row }) => row.id !== "model")
-                .map(({ row, devices }) => ({ hardware: row, devices }));
+            const choices = catalogMachine(this.configuration())?.choices ?? [];
+            return [
+                ...choices.length === 0 ? [] : [{ settings: choices }],
+                ...group(this.state.hardware, this.state.devices).rows
+                    .filter(({ row }) => row.id !== "model")
+                    .map(({ row, devices }) => ({ hardware: row, devices }))
+            ];
         }
+        if ("settings" in node) return node.settings.map(setting => ({ setting }));
         return [];
+    }
+
+    // The configuration the machine shown was launched with, or will be.
+    private configuration(): Record<string, unknown> {
+        return (this.state.session?.configuration as Record<string, unknown> | undefined) ?? this.state.off ?? {};
     }
 
     // Revealing a row, as bringing the views back does, needs its parent: the machine for a piece of hardware.
     getParent(node: Node): Node | undefined {
-        return "hardware" in node ? { machine: this.state.hardware.find(row => row.id === "model") } : undefined;
+        if ("setting" in node) return { settings: catalogMachine(this.configuration())?.choices ?? [] };
+        return "hardware" in node || "settings" in node ? { machine: this.state.hardware.find(row => row.id === "model") } : undefined;
     }
 
     getTreeItem(node: Node): vscode.TreeItem {
         if ("machine" in node) return this.machineItem(node.machine);
         if ("basic" in node) return basicItem(node.basic);
+        if ("settings" in node) return this.settingsItem();
+        if ("setting" in node) return this.settingItem(node.setting);
+        if ("switcher" in node) {
+            const item = new vscode.TreeItem("Switch to Another Machine…", vscode.TreeItemCollapsibleState.None);
+            item.id = "switch";
+            item.iconPath = new vscode.ThemeIcon("arrow-swap");
+            item.tooltip = "Pick a launch configuration or a machine to set up, off, and start from here.";
+            item.command = { command: "retrocore.machine.switch", title: "Switch Machine" };
+            return item;
+        }
         if (!("hardware" in node)) return new vscode.TreeItem("");
 
         const row = node.hardware;
@@ -191,6 +217,42 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         item.iconPath = new vscode.ThemeIcon(isEmpty(row) ? "circle-outline" : hardwareIcons[row.id] ?? "circuit-board",
             isEmpty(row) ? new vscode.ThemeColor("disabledForeground") : undefined);
         item.contextValue = ["hardware", ...row.actions ?? []].join(" ");
+        return item;
+    }
+
+    // The settings: the launch options the catalog offers for the machine, changed while it is off.
+    private settingsItem(): vscode.TreeItem {
+        const off = this.state.session === undefined;
+        const item = new vscode.TreeItem("Settings",
+            off ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
+        item.id = "settings";
+        item.iconPath = new vscode.ThemeIcon("settings-gear");
+        item.description = off ? "" : "fixed while it runs";
+        item.tooltip = off
+            ? "What the machine is built with. A change keeps the cards and media you added, where they still fit."
+            : "What the machine was built with. Stop it to change them.";
+        return item;
+    }
+
+    // One setting: its value, and while off a click to pick another.
+    private settingItem(choice: MachineChoice): vscode.TreeItem {
+        const value = settingValue(choice, this.configuration());
+        const chosen = choice.values.find(candidate => candidate.value === value);
+        const item = new vscode.TreeItem(choice.label, vscode.TreeItemCollapsibleState.None);
+        item.id = `setting/${choice.option}`;
+        item.description = chosen?.label ?? String(value);
+        const standard = choice.values.find(candidate => candidate.value === choice.default)?.label ?? String(choice.default);
+        const tooltip = new vscode.MarkdownString(`**${escape(choice.label)}**: ${escape(chosen?.label ?? String(value))}`);
+        if (chosen?.detail !== undefined) tooltip.appendMarkdown(`\n\n${escape(chosen.detail)}`);
+        tooltip.appendMarkdown(`\n\nThe launch option \`${choice.option}\`; ${escape(standard)} by default.`);
+        if (this.state.session !== undefined) tooltip.appendMarkdown(" Stop the machine to change it.");
+        item.tooltip = tooltip;
+        if (this.state.session === undefined) {
+            item.contextValue = "setting off";
+            item.command = { command: "retrocore.machine.setting", title: "Change Setting", arguments: [choice.option] };
+        } else {
+            item.contextValue = "setting";
+        }
         return item;
     }
 
@@ -434,7 +496,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         if (event.event === "retro/devices" && event.session.id === vscode.debug.activeDebugSession?.id) show(event.body);
     }));
     context.subscriptions.push(vscode.debug.onDidChangeActiveDebugSession(session => void refresh(session)));
-    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(() => void refresh(vscode.debug.activeDebugSession)));
+    // As a session ends VS Code can still give it as the active one; it is not, so the views show its machine off.
+    context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(ended => {
+        const active = vscode.debug.activeDebugSession;
+        void refresh(active?.id === ended.id ? undefined : active);
+    }));
 
     // A change goes to the running machine as retro/hardware or retro/device, or to the off machine, whose saved
     // machine its next launch restores.
@@ -444,7 +510,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             if (session?.type === "retrocore") show(await session.customRequest(`retro/${request}`, args));
             else if (tree.off !== undefined) await off.change(request, args);
         } catch (error) {
-            await vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
+            void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
     const act = async (node: Node | undefined, action: string, args: Record<string, unknown> = {}): Promise<void> => {
@@ -515,6 +581,33 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         stale = false;
         await off.select(target);
     }));
+    // A setting's row: pick its value while the machine is off, or take it given, as the tests do.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.setting",
+        async (option: string, given?: string | number | boolean) => {
+            // The note is not awaited: it settles only when dismissed.
+            if (tree.session !== undefined || tree.off === undefined) {
+                void vscode.window.showInformationMessage("Retrocore: stop the machine to change its settings.");
+                return;
+            }
+            const choice = off.machine?.choices.find(candidate => candidate.option === option);
+            if (choice === undefined) return;
+            const current = settingValue(choice, tree.off);
+            const value = given ?? (await vscode.window.showQuickPick(
+                choice.values.map(candidate => ({
+                    label: candidate.label,
+                    detail: candidate.detail,
+                    description: candidate.value === choice.default ? "default" : undefined,
+                    picked: candidate.value === current,
+                    value: candidate.value
+                })),
+                { title: `${off.name ?? "Machine"}: ${choice.label}`, placeHolder: "Applies when it starts; cards and disks you added stay" }))?.value;
+            if (value === undefined || value === current) return;
+            try {
+                await off.setSetting(option, value);
+            } catch (error) {
+                void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }));
     // A change without a view's row, for the tests: as retro/hardware or retro/device takes it.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.change",
         (request: "hardware" | "device", args: Record<string, unknown>) => send(request, args)));

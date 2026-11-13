@@ -369,3 +369,37 @@ export function machineById(id: string): Machine | undefined {
 export function launchConfiguration(machine: Machine, name = `${machine.label} (Retrocore)`): Record<string, unknown> {
     return { type: "retrocore", request: "launch", name, ...machine.configuration, stopOnEntry: false };
 }
+
+// The models a launch option names, as the debug host reads them, by machine: an alias, or none for its default.
+const models: Record<string, Record<string, string>> = {
+    apple2: { "": "iie-enhanced", enhanced: "iie-enhanced", original: "iie" },
+    coco: { "": "coco2" }
+};
+
+/**
+ * The catalog machine a launch configuration starts, as the debug host reads its machine, model and rom, so a
+ * launch.json entry that leaves the model to its default is still its machine; none for a machine the catalog lacks.
+ */
+export function catalogMachine(configuration: Record<string, unknown>): Machine | undefined {
+    const kind = configuration.machine === "apple2e" ? "apple2" : String(configuration.machine ?? "");
+    const named = typeof configuration.model === "string" ? configuration.model : "";
+    const model = models[kind]?.[named] ?? named;
+    const rom = kind === "trs80-model1" ? String(configuration.rom ?? "level2") : "";
+    return machines.find(machine => machine.configuration.machine === kind
+        && (machine.configuration.model ?? "") === model
+        && (kind !== "trs80-model1" || (machine.configuration.rom ?? "level2") === rom));
+}
+
+/** The value a launch configuration gives one of its machine's choices: its own, or the choice's default. */
+export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    const value = configuration[choice.option];
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : choice.default;
+}
+
+/** A launch configuration with one choice set, leaving the option out when it is the choice's default. */
+export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {
+    const changed = { ...configuration };
+    if (value === choice.default) delete changed[choice.option];
+    else changed[choice.option] = value;
+    return changed;
+}

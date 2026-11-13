@@ -60,7 +60,30 @@ export async function testOffMachine(workspace: vscode.WorkspaceFolder): Promise
     }
     await offRow(plus, "slot5", row => /Disk II/.test(row.value), "the Disk II in slot 5, off again");
 
-    // Taking it out again leaves the II Plus as the menu's test found it.
+    // A setting changed while off: slot 0's firmware card in place of the language card the launch gives. The Disk II
+    // added in slot 5 stays, while the saved slot 0 does not put the language card back.
+    await vscode.commands.executeCommand("retrocore.machine.setting", "slot0", "firmwareCard");
+    await offRow(plus, "slot0", row => /Firmware/i.test(row.value), "the firmware card in slot 0, off");
+    assert.match((await rows()).find(row => row.id === "slot5")?.value ?? "", /Disk II/, "the card added off stays");
+    assert.equal((await rows()).find(row => row.id === "memory")?.value, "32 KB", "and the other settings");
+    assert.ok(await vscode.commands.executeCommand<boolean>("retrocore.machine.boot"), "the changed machine starts");
+    const changed = vscode.debug.activeDebugSession;
+    if (changed?.type !== "retrocore") throw new Error("Start This Machine did not start a Retrocore session.");
+    try {
+        assert.equal(changed.configuration.slot0, "firmwareCard", "the setup has the setting");
+        const hardware = (await changed.customRequest("retro/devices") as { hardware: Row[] }).hardware;
+        assert.match(hardware.find(row => row.id === "slot0")?.value ?? "", /Firmware/i, "the launch has the setting");
+        assert.match(hardware.find(row => row.id === "slot5")?.value ?? "", /Disk II/, "and the card added off");
+        await vscode.commands.executeCommand("retrocore.machine.setting", "slot0", "languageCard");
+        assert.equal(changed.configuration.slot0, "firmwareCard", "a running machine's settings do not change");
+    } finally {
+        await vscode.debug.stopDebugging(changed);
+    }
+
+    // Setting slot 0 back and taking the card out leaves the II Plus as the menu's test found it.
+    await offRow(plus, "slot0", row => /Firmware/i.test(row.value), "the II Plus off again");
+    await vscode.commands.executeCommand("retrocore.machine.setting", "slot0", "languageCard");
+    await offRow(plus, "slot0", row => /Language/i.test(row.value), "the language card back in slot 0");
     await vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot5", action: "removeCard" });
     await offRow(plus, "slot5", row => row.value === "empty", "slot 5 empty again");
 
@@ -79,5 +102,5 @@ export async function testOffMachine(workspace: vscode.WorkspaceFolder): Promise
     await offRow(plus, "memory", row => row.value === "32 KB", "the II Plus again");
     void workspace;
 
-    console.log("Off machine passed: the last machine shows off, a card added off is in its next launch, and Switch Machine shows another.");
+    console.log("Off machine passed: the last machine shows off, a card added off is in its next launch, a setting changed off takes effect under that card, and Switch Machine shows another.");
 }

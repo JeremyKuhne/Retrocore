@@ -439,7 +439,12 @@
       "view/item/context": [
         {
           "command": "retrocore.machine.boot",
-          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/",
+          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/ && viewItem =~ /\\bmachine\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "retrocore.machine.switch",
+          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/ && viewItem =~ /\\bmachine\\b/",
           "group": "inline@1"
         },
         {
@@ -555,6 +560,10 @@
         },
         {
           "command": "retrocore.machine.change",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.setting",
           "when": "false"
         },
         {
@@ -716,6 +725,10 @@
       {
         "command": "retrocore.machine.change",
         "title": "Retrocore: Change Machine"
+      },
+      {
+        "command": "retrocore.machine.setting",
+        "title": "Change Setting..."
       },
       {
         "command": "retrocore.resetSavedMachine",

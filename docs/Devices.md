@@ -157,7 +157,16 @@ the one last started, or the one **Switch Machine…** (`⇄` in the Machine vie
 Machine's last setup, the workspace's launch configurations and the catalog's machines. The language server
 describes it ([A machine that is off](#a-machine-that-is-off)) when either view comes into sight, so a closed
 sidebar builds nothing. Its header says `off` with a dark screen, and its cards and media change as a running
-machine's do, except that a tape cannot record and there is no changed disk to save. Each change is saved as its
+machine's do, except that a tape cannot record and there is no changed disk to save.
+
+Its **Settings**, the first rows under it, are the catalog's choices for the machine
+([machines.ts](../extension/src/machines.ts)), the ones **Start Machine → Options…** offers; a launch.json entry
+that leaves out its model is matched as the host reads it. While off, clicking one picks its value. The change goes
+where the machine came from: Start Machine's setup (which **Start Last Machine** then starts), the launch.json
+configuration (written there, its variables kept), or the configuration itself. Before it, the saved machine is cut
+down to what differs from the machine its old settings give by themselves, so the new setting takes effect while
+the cards and media someone added stay on top of it; what no longer fits is reported. While running, the settings
+show the session's own values and do not change. Each change is saved as its
 launch configuration's saved machine, which its next launch restores; its `▶` starts it as it came (Start Machine's
 setup, the launch.json configuration, or the configuration itself). When a session ends, the views show its machine
 off, with what changed while it ran. A saved disk that can no longer be restored is reported once, and a machine

@@ -95,5 +95,8 @@ Each step is usable on its own:
    cards and media while off, and what a session changed kept when it ends. The editor tests' `offMachine.ts`
    adds a card off, boots it, and switches machines. Start Machine moved to the Machine view's **...** menu, so
    the header's `▶` is the only one beside it.
-3. Settings as rows of the off machine, from the catalog, keeping the cards and media that still fit.
+3. **Done.** Settings as rows of the off machine, from the catalog, keeping the cards and media that still fit:
+   the saved machine is cut down to what differs from what the old settings give (`changesFrom` in
+   [hardware.ts](../../extension/src/hardware.ts)), so the new setting takes effect under the cards and media added.
+   A launch.json machine's setting is written to its entry, so its next F5 matches.
 4. The `retrocore.favorites` setting and the Favorites view.

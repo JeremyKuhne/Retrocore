@@ -1199,7 +1199,12 @@ Retrocore has its own icon in the activity bar, a small computer, with two views
 With no session running, they show a machine that is off: the last one started, or the
 one **Switch Machine** (the ⇄ button) picks from your launch configurations and the
 machines Retrocore knows. Its row says `off`, and you can set it up before it starts:
-add and remove cards, insert and eject disks and tapes, and write-protect them. Its ▶
+add and remove cards, insert and eject disks and tapes, and write-protect them. Its
+**Settings** are the choices **Start Machine → Options…** offers, such as memory, slot
+0, the II's Monitor or the Model I's Expansion Interface: click one to change it. The
+cards and disks you added stay, where they still fit. A machine from launch.json gets
+the setting written into its configuration. While it runs, the settings show what it
+was built with. Its ▶
 starts it with those changes, and when the session ends the views show it off again,
 with what changed while it ran. The **...** menu has **Start Machine**
 ([Starting a machine](#starting-a-machine)) and **Start Last Machine**. Before any

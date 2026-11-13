@@ -29,12 +29,23 @@
 ;; The comments are our own, written with trs-80.com's disassembly and the Level II ROM Reference Manual
 ;; (Micro Products, 1980) as references.
 ;;
-;; Maintained by hand. Trs80RomSourceTests check that both revisions assemble byte-identically to the ROMs.
+;; The Model III's ROM is Level II 1.3 with its device drivers, cassette routines and start-up rewritten, and new
+;; code in ROM C at $3000. MODEL selects the machine: 1 (the default) assembles the Model I's Level II, and 3 or 4
+;; the Model III's $0000-$2FFF, which the Model 4 shares and Model3.asm assembles with ROM C. The Model III's blocks below keep Level II's
+;; names where the Model III keeps its entry points, and otherwise use the names in Radio Shack's Model III source.
+;;
+;; Maintained by hand. Trs80RomSourceTests check that both revisions, and the Model III's, assemble
+;; byte-identically to the ROMs.
 
 .ifndef REVISION
 REVISION = 13
 .endif
 .assert (REVISION = 12) | (REVISION = 13), "REVISION is 12 or 13."
+.ifndef MODEL
+MODEL = 1
+.endif
+.assert (MODEL = 1) | (MODEL = 3) | (MODEL = 4), "MODEL is 1, 3 or 4."
+.assert (MODEL = 1) | (REVISION = 13), "The Model III's ROM is built on Level II 1.3."
 
 .cpu Z80
 
@@ -55,8 +66,8 @@ REVISION = 13
     .byte name
 .endmacro
 
-;; Error codes: the code in E when a routine jumps to ERROR, twice the index of its two letters in
-;; ERROR_CODES.
+; Error codes: the code in E when a routine jumps to ERROR, twice the index of its two letters in
+; ERROR_CODES.
 ERR_NF = $00                        ;; NF: NEXT without FOR
 ERR_SN = $02                        ;; SN: syntax error
 ERR_RG = $04                        ;; RG: RETURN without GOSUB
@@ -81,7 +92,7 @@ ERR_MO = $28                        ;; MO: missing operand
 ERR_FD = $2A                        ;; FD: bad file data
 ERR_L3 = $2C                        ;; L3: Disk BASIC only
 
-;; Tokens: a keyword in a program line is stored as one byte, $80 plus its place in KEYWORDS.
+; Tokens: a keyword in a program line is stored as one byte, $80 plus its place in KEYWORDS.
 TK_END = $80                        ;; END
 TK_FOR = $81                        ;; FOR
 TK_RESET = $82                      ;; RESET
@@ -359,6 +370,23 @@ HOOK_SYSTEM = $41E2                 ;; dOS exit at SYSTEM
 BOOT_SECTOR = $4200                 ;; where the disk boot sector is read to and run
 USING_SKIP_OPERAND = $D1EB          ;; not an address: operand of a never-taken JP Z in PRINT USING's exponent check
 
+; Where BASIC's work areas start. The Model III keeps its RS-232 and cassette state at $41E5-$4224, so its input
+; buffer, program text and free memory start $100 higher than the Model I's.
+.if MODEL = 1
+INPUT_PREFIX = $41E5                ;; a colon, a zero and a comma just before the input buffer
+INIT_STACK = $41F8                  ;; the stack while BASIC starts
+TEXT_START = $42E9                  ;; the program's first line, after a zero byte
+INITIAL_STKTOP = $434C              ;; the bottom of string space before the memory size is known
+MINIMUM_MEMORY = $4414              ;; the lowest top of memory BASIC can work with
+.else
+INPUT_PREFIX = $42E5
+INIT_STACK = $42F8
+TEXT_START = $43E9
+INITIAL_STKTOP = $444C
+MINIMUM_MEMORY = $4514
+.include "Model3Equates.asm"
+.endif
+
 .org $0000
 
 ;; Power-up and reset: interrupts off, then the cold start at INIT.
@@ -453,6 +481,7 @@ KBWAIT:
     RET NZ
     JR KBWAIT
 
+.if MODEL = 1
 KEYTAB:
     .byte $0D, $0D                  ; ENTER, then with SHIFT
     .byte $1F, $1F                  ; CLEAR, then with SHIFT
@@ -484,13 +513,53 @@ NMI:
     CP $02
     JP NC,RESET                     ; a controller answered: cold start, which boots the disk
     JP RESETR                       ; no disk: warm restart of BASIC
+.else
+
+;; Reads a byte from the RS-232 port into A, through its device control block.
+RSI:
+    LD DE,RS232_INPUT_DCB
+    JR GET
+
+;; Sends the byte in A to the RS-232 port.
+RSO:
+    LD DE,RS232_OUTPUT_DCB
+    JR PUT
+
+;; Sets the RS-232 port up from its set-up block's baud rate, UART control and wait settings.
+RSN:
+    LD DE,RS232_INIT_DCB
+    JR PUT
+    NOP
+
+;; Waits for BC passes of a loop of about 14.7 us. The loop is PAUSE1 now; the end of Level II's loop stays here,
+;; never reached.
+DELAY:
+    JP PAUSE1
+    JR NZ,DELAY
+    RET
+
+;; The nonmaskable interrupt: the reset button or the disk controller, which DOSIT tells apart.
+NMI:
+    JP DOSIT
+
+;; Puts every device control block back as it was at power-up.
+SET1:
+    JP SETDCB
+
+;; Routes one device's input or output to another's, as the route block's letters name them.
+RO:
+    LD DE,ROUTE_DCB
+    JR PUT
+    NOP
+    JP RESETR                       ; Level II's entry at $0072 that restarts BASIC
+.endif
 
 INIT2:
     LD DE,FDIVC                     ; RAM home of the division routine and its work area
     LD HL,$18F7                     ; ROM image of the initial RAM contents
     LD BC,$0027                     ; 39 bytes
     LDIR
-    LD HL,$41E5                     ; the three bytes just before the input buffer
+    LD HL,INPUT_PREFIX              ; the three bytes just before the input buffer
     LD [HL],$3A                     ; a colon ahead of the buffer
     INC HL
     LD [HL],B                       ; B is zero after the LDIR
@@ -516,11 +585,17 @@ LOPRTS:
     INC HL                          ; skip the rest of the three-byte slot
     INC HL
     DJNZ LOPRTS
-    LD HL,$42E8                     ; the zero byte just before the program text
+    LD HL,TEXT_START - 1            ; the zero byte just before the program text
     LD [HL],B                       ; B is zero after the loop
-    LD SP,$41F8                     ; a temporary stack in the communications area
+    LD SP,INIT_STACK                ; a temporary stack in the communications area
     CALL STKINI
+.if MODEL = 1
     CALL CLS
+.else
+    NOP                             ; the screen keeps the power-up messages
+    NOP
+    NOP
+.endif
 
 MEMGET:
     LD HL,MEMMSG
@@ -530,7 +605,7 @@ MEMGET:
     RST $10                         ; first character of the reply
     OR A
     JR NZ,TYPMEM                    ; a size was typed
-    LD HL,$434C                     ; scan for RAM from just below free memory
+    LD HL,INITIAL_STKTOP            ; scan for RAM from just below free memory
 LOOPMM:
     INC HL
     LD A,H                          ; wrapping past $FFFF means all 64K is RAM
@@ -558,7 +633,7 @@ TYPMEM:
     JR NZ,MEMGET                    ; not RAM: ask again
 USEDEF:
     DEC HL                          ; HL = the top byte BASIC may use
-    LD DE,$4414                     ; the least memory BASIC can work in
+    LD DE,MINIMUM_MEMORY            ; the least memory BASIC can work in
     RST $18
     JP C,OMERR                      ; too little memory for BASIC
     LD DE,$FFCE                     ; minus 50: the default string space
@@ -566,17 +641,29 @@ USEDEF:
     ADD HL,DE
     LD [STKTOP],HL                  ; string space starts 50 bytes below it
     CALL ERASE_PROGRAM
+.if MODEL = 1
     LD HL,BANNER_MSG
     CALL STROUT
+.else
+    LD HL,HDGMSG
+    JP PRTNAM                       ; prints the banner and the copyright, and sets up TIME$
+.endif
     JP READY
 
 ;; Holds the zero-terminated MEMORY SIZE prompt shown at power-up (shortened to MEM SIZE in 1.3).
 MEMMSG:
-.if REVISION = 12
+.if MODEL != 1
+    .byte "Memory Size", $00
+
+;; The Model III's banner, ended by a carriage return for VDLINE.
+HDGMSG:
+    .byte "Radio Shack Model III Basic", $0D
+.elseif REVISION = 12
     .byte "MEMORY SIZE", $00
 .else
     .byte "MEM SIZE", $00
 .endif
+.if MODEL = 1
 
 BANNER_MSG:
 .if REVISION = 12
@@ -600,6 +687,7 @@ KEY_DEBOUNCE:
     RLCA
     RLCA
     JP KEYBOARD_DRIVER_12
+.endif
 .endif
 ;; Raises the ?L3 ERROR that a Disk BASIC keyword gives when no DOS is loaded.
 NAVERR:
@@ -751,6 +839,7 @@ ST_RANDOM:
     LD [RND_SEED_MID],A
     RET
 
+.if MODEL = 1
 ;; Writes one pulse to the tape: drives the cassette output one way, then the other, then
 ;; back to rest, with the delays that set the bit timing.
 CASSETTE_WRITE_BIT:
@@ -938,6 +1027,210 @@ CLOD1:
     LD [CASSETTE_BLINK_CHAR],A      ; and blink it as blocks arrive
     POP HL
     RET
+.else
+
+;; Prints the screen on the printer, a row to a line, with each graphics character as a period. Control-*
+;; calls it from the keyboard driver.
+SCRPRT:
+    LD HL,VIDEO
+SCRLP1:
+    LD A,[HL]
+    CP $80
+    JR C,OKAY1                      ; a character prints as itself
+    LD A,'.'                        ; graphics print as a period
+OKAY1:
+    CALL PRINTER_CHAR
+    INC HL
+    BIT 6,H                         ; past $3FFF: the whole screen is done
+    JR NZ,SCREND
+    LD A,L
+    AND $3F                         ; at the start of a row: end the printed line
+    JR NZ,SCRLP1
+    CALL SCREND
+    JR SCRLP1
+
+;; Waits B passes of a 13 T-state loop, where Level II's pulse writer ended.
+CT3:
+    DJNZ CT3
+    RET
+
+;; Stops the cassette motor.
+CASSETTE_OFF:
+    JP CASOFF
+
+;; Waits for BC passes of a 30 T-state loop, about 14.8 us each: DELAY's loop.
+;; In:    BC = the passes
+;; Out:   A = 0, BC = 0
+PAUSE1:
+    LD A,A                          ; four T-states more than Level II's loop, keeping its time at 2.03 MHz
+    DEC BC
+    LD A,B
+    OR C
+    JR NZ,PAUSE1
+    RET
+
+;; The copyright message PRTNAM prints after the banner.
+COPRIG:
+    .byte "(c) '80 Tandy", $0D
+    LD E,$3D                        ; never reached
+
+;; Returns with A zero and zero set. BCASIN comes here, as the Model III's tape readers blink the asterisk
+;; themselves.
+RETURN:
+    XOR A
+    RET
+
+;; Ends a printed line of SCRPRT's.
+;; Out:   A = 0, zero = set
+SCREND:
+    LD A,$0D
+    CALL PRINTER_CHAR
+    XOR A
+    RET
+
+;; Shows a message on the screen up to its $03, or through its carriage return.
+;; In:    HL = the message
+;; Out:   HL = past the message
+VDLINE:
+    LD A,[HL]
+    INC HL
+    CP $03                          ; $03 ends a message without a new line
+    RET Z
+    CALL DISPLAY_CHAR
+    CP $0D
+    JR NZ,VDLINE
+    RET
+
+;; Jumps to the 500 baud routine whose ROM C vector is on the stack, or to the 1500 baud one after it, as CASDCB
+;; sets the speed. After a # (PRINT #-1 and INPUT #-1) it takes the number and comma and goes to the 500 baud
+;; routine.
+;; In:    HL = the vector, the caller's HL on the stack
+SWITCH:
+    EX [SP],HL
+    JP LKSEE
+
+;; Level II's tape blinker, which does nothing here.
+;; Out:   A = 0, zero = set
+BCASIN:
+    JR RETURN
+
+;; Restarts BASIC at READY with interrupts on, as BREAK during a tape or RS-232 transfer does through
+;; BREAK_VECTOR.
+BASIC:
+    EI
+    JP READY
+    CCF                             ; never reached
+    INC A
+    RET
+
+;; Reads a byte from the tape into A, at the speed chosen, through REDLOC's reader, keeping BC, DE and HL.
+;; Out:   A = the byte
+CASSETTE_READ:
+    PUSH DE
+    PUSH BC
+    PUSH HL
+    LD HL,[REDLOC]
+    EX [SP],HL                      ; HL back, and the reader as the return address
+    RET
+
+;; Writes the leader and sync byte, at the speed chosen.
+CASS1:
+    PUSH HL
+    LD HL,WSYNCZ
+    JR SWITCH
+
+;; Starts the motor and waits for the leader and sync byte, at the speed chosen.
+CASS2:
+    DI
+    CALL CTONZ
+    PUSH HL
+    LD HL,RSYNCZ
+    JR SWITCH
+
+;; Writes the byte in A to the tape, at the speed chosen.
+;; In:    A = the byte
+CASS3:
+    PUSH HL
+    LD HL,[WRILOC]
+    EX [SP],HL
+    RET
+
+;; Continues SWITCH: the vector in HL for 500 baud, or the next one for 1500 baud.
+SWTC1:
+    EX [SP],HL
+    LD A,[CASDCB]
+    OR A
+    JR Z,SW500
+    INC HL                          ; the 1500 baud routine's vector follows the 500 baud one's
+    INC HL
+    INC HL
+SW500:
+    EX [SP],HL                      ; the routine as the return address, and HL back
+    RET
+    POP BC                          ; never reached
+    RET
+
+;; Writes the byte in A to the tape twice.
+TWOCSO:
+    CALL CASSETTE_WRITE
+
+;; Writes the byte in A to the tape.
+;; In:    A = the byte
+CASSETTE_WRITE:
+    JR CASS3
+
+;; The clock's limits: 60 seconds, 60 minutes and 24 hours, then each month's days from January, then a zero word.
+MAXTIM:
+    .byte 60, 60, 24
+    .byte 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+    .word $0000
+
+;; The message the boot shows while it waits for a disk: home, clear the screen, Diskette?
+DSKMSG:
+    .byte $1D, $1E, "Diskette?", $03
+    .byte $F2                       ; a byte left over from an earlier ROM
+
+;; Writes the leader and sync byte: Level II's entry, which took a #-n first. The Model III has one cassette.
+CWRTON:
+    JP CASSETTE_WRITE_LEADER
+
+;; Starts the motor and writes the leader and sync byte, at the speed chosen.
+CASSETTE_WRITE_LEADER:
+    DI
+    CALL CTONZ
+    JR CASS1
+
+;; Tests BREAK.
+;; Out:   A = 4 and zero = clear when it is down, else A = 0 and zero = set
+BRKCHK:
+    LD A,[KEYBOARD_ROW6]
+    AND $04
+    RET
+
+;; Starts the motor and waits for the leader and sync byte: Level II's entry, which took a #-n first.
+CSRDON:
+    JP CASS2
+
+;; Starts the motor and waits for the leader and sync byte.
+CASSETTE_READ_LEADER:
+    JR CASS2
+
+;; Shows the clock at the top right of the screen, as it ticks.
+CLOCKN:
+    LD A,[IOSTAT]
+    SET 0,A
+CLOCKE:
+    LD [IOSTAT],A
+    RET
+
+;; Stops showing the clock.
+CLOCKF:
+    LD A,[IOSTAT]
+    RES 0,A
+    JR CLOCKE
+    RET                             ; never reached
+
+.endif
 ;; Ends a SYSTEM tape load: reads the entry address into TEMP, stops the motor and returns to
 ;; the *? prompt.
 ENBLK:
@@ -973,8 +1266,13 @@ CHKBYT:
     JR Z,GETDT
     CALL CASSETTE_READ
     CP [HL]
+.if MODEL = 1
     JR NZ,LOPHD                     ; wrong file: wait for the next header
     INC HL
+.else
+    INC HL                          ; the Model III steps HL first
+    JR NZ,LOPHD                     ; wrong file: wait for the next header
+.endif
     DJNZ CHKBYT
 GETDT:
     CALL BCASIN
@@ -1146,6 +1444,7 @@ LZRPOS:
     POP AF
     RET
 
+.if MODEL = 1
 ;; Calls the driver of the control block DE addresses for the request in B (1 get, 2 put, 4 control).
 CIO:
     PUSH HL
@@ -1563,7 +1862,418 @@ PRTOP:
 ;; Tests the printer status: Z when the printer is ready for a character.
 PRTSTA:
     LD A,[PRINTER_STATUS]
+.else
+
+;; The printer driver: prints the character in C through PRINTER_PORT, keeping its control block's count of lines
+;; on the page and characters on the line. A form feed ($0C) feeds to the next page, a carriage return at the
+;; start of a line prints as a line feed, a line longer than the block's width is broken, and codes $20-$7F go
+;; through the translation table VDTAB.
+;; In:    C = the character, IX = the printer's control block: +3 lines a page, +4 the line, +5 the column,
+;;        +6 the width or $FF for none
+;; Out:   A = the character, zero = set
+PRINTZ:
+    LD A,C
+    CP $20
+    JR NC,PRTCHG                    ; a printable character
+    CP $0D
+    JR Z,PRTCR1
+    CP $0C
+    JR NZ,PRTIT                     ; other control codes print as they are
+
+;; Feeds to the top of the next page.
+PRTVT:
+    LD A,[IX+$03]                   ; the lines left on the page
+    SUB [IX+$04]
+    LD B,A
+PRTVT1:
+    CALL PRTAVL
+    LD A,$0A
+    OUT [PRINTER_PORT],A
+    DJNZ PRTVT1
+    LD [IX+$05],$00
+    JR PRTIT1
+
+;; Prints graphics as they are, and translates other printable characters through VDTAB.
+PRTCHG:
+    CP $80
+    JR NC,PRTIT0
+    LD B,$00
+    SUB $20
+    LD C,A
+    LD HL,VDTAB
+    ADD HL,BC
+    LD C,[HL]
+    JR PRTIT7
+
+;; Prints a carriage return, or a line feed when the line is empty.
+PRTCR1:
+    LD A,[IX+$05]
+    OR A
+    LD A,C
+    JR NZ,PRTIT
+    LD A,$0A
+    LD C,A
+PRTIT:
+    CP $20
+    JR C,PRTIT0                     ; control codes are not counted against the width
+PRTIT7:
+    LD A,[IX+$06]
+    INC A                           ; a width of $FF never breaks a line
+    JR Z,PRTIT0
+    CP [IX+$05]
+    JR NC,PRTIT0
+    CALL PRTAVL                     ; the line is full: end it first
+    LD A,$0D
+    OUT [PRINTER_PORT],A
+    LD [IX+$05],$00
+PRTIT0:
+    CALL PRTAVL
+    LD A,C
+    OUT [PRINTER_PORT],A
+    INC [IX+$05]
+    CP $0D
+    JR Z,CRLF
+    CP $0A
+    JR NZ,PRTEXT
+
+;; Starts a new line, and a new page when the page is full.
+CRLF:
+    LD [IX+$05],$00
+    INC [IX+$04]
+    LD A,[IX+$04]
+    CP [IX+$03]
+    JR NZ,PRTEXT
+PRTIT1:
+    LD [IX+$04],$01
+PRTEXT:
+    XOR A
+    LD A,C
+    RET
+
+;; Waits until the printer is ready. BREAK gives up, returning from the printer driver.
+PRTAVL:
+    CALL PRTSTA
+    RET Z
+    CALL BRKCHK
+    JR Z,PRTAVL
+    POP AF                          ; drop the return to the driver
+    RET
+
+;; Tests the printer status: zero when the printer is ready for a character.
+PRTSTA:
+    IN A,[PRINTER_PORT]
     AND $F0                         ; busy, paper, select and fault bits
+    CP $30                          ; ready: not busy, paper in, selected, no fault
+    RET
+
+;; Puts the keyboard, video and printer control blocks, and the RS-232 ones, back as they were at power-up.
+SETDCB:
+    LD HL,RAM_DCBS
+    LD DE,KEYBOARD_DCB
+    LD BC,RAM_DOS_VECTORS - RAM_DCBS
+    LDIR
+    LD HL,RAM_RS232
+    LD DE,RS232_INPUT_DCB
+    LD BC,RAM_RS232_DCBS_END - RAM_RS232
+    LDIR
+    RET
+    .byte $20, $DA                  ; left over from Level II
+
+;; Turns scroll protection off as a program runs.
+;; Out:   HL = TXTTAB
+NEWX:
+    XOR A
+    LD [SCRLCT],A
+    LD HL,[TXTTAB]
+    RET
+
+;; The video driver: shows the character in C at the cursor, acting on control codes, and moves the cursor. The
+;; cursor blinks under the clock interrupt, so interrupts are off while the driver works.
+;; In:    C = the character, IX = the video's control block: +3 the cursor's address, +5 the character under
+;;        the cursor or zero when it is off, +6 the cursor's character, +7 bit 0 set when codes $C0-$FF show as
+;;        characters rather than spaces
+;; Out:   A = the character, zero = set
+VIDEOZ:
+    DI
+    LD L,[IX+$03]
+    LD H,[IX+$04]
+    LD A,[IX+$05]
+    OR A
+    JR Z,DSPGRP
+    LD [HL],A                       ; put back the character under the cursor
+DSPGRP:
+    LD A,C
+    CP $20
+    JP C,DSPCTL
+    CP $C0
+    JR NC,DSPGSC
+DSPCHR:
+    CALL DSPOUT
+
+;; Puts the cursor at HL, wrapped onto the screen.
+DSPSKP:
+    LD A,H
+    AND $03
+    OR $3C
+    LD H,A
+    LD D,[HL]
+    LD A,[IX+$05]
+    OR A
+    JR Z,DSPRTN                     ; the cursor is off
+    LD [IX+$05],D                   ; keep the character it covers
+    LD A,[IX+$06]
+    CP $20
+    JR NC,DSPSK1
+    LD A,$B0                        ; a control code shows as a block
+DSPSK1:
+    LD [HL],A
+DSPRTN:
+    LD [IX+$03],L
+    LD [IX+$04],H
+    XOR A
+    LD A,C
+    EI
+    RET
+
+;; Moves HL to the start of its line.
+DSPBOL:
+    LD A,L
+    AND $C0
+    LD L,A
+    RET
+
+;; Shows codes $C0-$FF as that many spaces less $C0, or as characters when CURSWT's bit is set.
+DSPGSC:
+    LD A,[IX+$07]
+    OR A
+    LD A,C
+    JR NZ,DSPCHR
+    SUB $C0
+    JR Z,DSPSKP
+    LD B,A
+DSPSPC:
+    LD A,' '
+    CALL DSPOUT
+    DJNZ DSPSPC
+    JR DSPSKP
+
+;; Turns the cursor on ($0E).
+DSPCON:
+    LD A,[HL]
+DSPCN2:
+    LD [IX+$05],A
+    RET
+
+;; Turns the cursor off ($0F).
+DSPCOF:
+    XOR A
+    JR DSPCN2
+
+;; Homes the cursor ($1C), below any protected lines, and returns to 64 characters a line.
+DSPHOM:
+    LD HL,VIDEO
+    LD A,[IOSTAT]
+    AND $FB
+    CALL SETIT1
+    LD A,[SCRLCT]
+    AND $07
+DSPHO1:
+    RET Z
+    CALL DSPDWN
+    DEC A
+    JR DSPHO1
+
+;; Backspaces and erases ($08).
+DSPBSP:
+    DEC HL
+    LD A,[IOSTAT]
+    AND $04
+    JR Z,DSPBS2
+    DEC HL                          ; wide characters take two cells
+DSPBS2:
+    LD [HL],' '
+    RET
+
+;; Moves the cursor left ($18), wrapping within the line.
+DSPLFT:
+    LD A,[IOSTAT]
+    AND $04
+    CALL NZ,DSPLF2                  ; twice for wide characters
+DSPLF2:
+    LD A,L
+    AND $3F
+    DEC HL
+    RET NZ
+
+;; Moves the cursor down a line ($1A).
+DSPDWN:
+    LD DE,64
+    ADD HL,DE
+    RET
+
+;; Moves the cursor right ($19), wrapping within the line.
+DSPRHT:
+    INC HL
+    LD A,L
+    AND $3F
+    RET NZ
+
+;; Moves the cursor up a line ($1B).
+DSPUP:
+    LD DE,$FFC0                     ; minus 64
+    ADD HL,DE
+    RET
+
+;; Turns wide characters on ($17), on an even column.
+DSPETB:
+    LD A,[IOSTAT]
+    OR $04
+    CALL SETIT1
+    INC HL
+    LD A,L
+    AND $FE
+    LD L,A
+    RET
+
+;; Acts on a control code, returning through DSPSKP.
+DSPCTL:
+    LD DE,DSPSKP
+    PUSH DE
+    CP $08
+    JR Z,DSPBSP
+    CP $0A
+    JP Z,DSPCR
+    CP $0D
+    JP Z,DSPCR
+    CP $0E
+    JR Z,DSPCON
+    CP $0F
+    JR Z,DSPCOF
+    SUB $15
+    JR Z,SETBIT                     ; $15: codes $C0-$FF as characters or spaces
+    DEC A
+    JR Z,JAPAN                      ; $16: the alternate characters
+    DEC A
+    JR Z,DSPETB                     ; $17
+    DEC A
+    JR Z,DSPLFT                     ; $18
+    DEC A
+    JR Z,DSPRHT                     ; $19
+    DEC A
+    JR Z,DSPDWN                     ; $1A
+    DEC A
+    JR Z,DSPUP                      ; $1B
+    DEC A
+    JP Z,DSPHOM                     ; $1C
+    DEC A
+    JP Z,DSPBOL                     ; $1D
+    DEC A
+    JR Z,DSPEOL                     ; $1E: erase to the end of the line
+    DEC A
+    JR Z,DSPEOF                     ; $1F: erase to the end of the screen
+    RET
+
+;; Switches codes $C0-$FF between spaces and characters ($15).
+SETBIT:
+    LD A,[IX+$07]
+    AND $01
+    XOR $01
+    LD [IX+$07],A
+    RET
+
+;; Switches codes $C0-$FF between the special and the alternate characters ($16): Japanese Katakana on some
+;; machines.
+JAPAN:
+    LD A,[IOSTAT]
+    XOR $08
+
+;; Writes OPTIONS_PORT and its copy in IOSTAT.
+;; In:    A = the value
+SETIT1:
+    LD [IOSTAT],A
+    OUT [OPTIONS_PORT],A
+    RET
+
+;; Stores a character at HL and steps past it, scrolling when the cursor leaves the screen.
+DSPOUT:
+    LD [HL],A
+    INC HL
+    LD A,[IOSTAT]
+    AND $04
+    JR Z,DSPOT2
+    INC HL                          ; wide characters take two cells
+DSPOT2:
+    LD A,H
+    CP $40
+    RET NZ
+    CALL DSPUP
+    PUSH HL
+
+;; Scrolls the screen up a line, below the protected lines, and erases the last line.
+DSPROL:
+    LD A,[SCRLCT]
+    AND $07
+    LD HL,VIDEO
+    LD DE,$0400
+    PUSH BC
+    LD BC,64
+    INC A
+DSPLO1:
+    ADD HL,BC                       ; HL: the first line that moves
+    EX DE,HL
+    OR A
+    SBC HL,BC                       ; DE: the bytes that move
+    EX DE,HL
+    DEC A
+    JR NZ,DSPLO1
+    PUSH DE
+    PUSH HL
+    OR A
+    SBC HL,BC
+    EX DE,HL
+    POP HL
+    POP BC
+    LDIR
+    POP BC
+    EX DE,HL
+    JR DSPERF
+
+;; Starts a new line ($0A and $0D), scrolling at the bottom.
+DSPCR:
+    CALL DSPBOL
+DSPALF:
+    PUSH HL
+    CALL DSPDWN
+    LD A,H
+    CP $40
+    JR Z,DSPROL
+    POP DE
+
+;; Erases to the end of the line.
+DSPEOL:
+    PUSH HL
+    LD D,H
+    LD A,L
+    OR $3F
+    LD E,A
+    INC DE
+    JR DSPERA
+
+;; Erases to the end of the screen.
+DSPEOF:
+    PUSH HL
+DSPERF:
+    LD DE,VIDEO + $0400
+DSPERA:
+    LD [HL],' '
+    INC HL
+    RST $18
+    JR NZ,DSPERA
+    POP HL
+    RET
+    .byte "RON"                     ; left over
+.endif
+    AND $F0                         ; busy, paper, select and fault bits; never reached on the Model III
     CP $30                          ; ready: not busy, paper in, selected, no fault
     RET
 
@@ -1696,6 +2406,7 @@ KLNCR:
     POP HL                          ; HL = the buffer start
     RET
 
+.if MODEL = 1
 ;; Copies RAM_VECTORS to $4000 and clears the rest, then boots from drive 0 when a disk controller
 ;; answers and BREAK is not held, or starts BASIC.
 INIT:
@@ -1780,6 +2491,135 @@ RAM_VECTORS:
     NOP
     LD A,$00
     RET
+
+.else
+
+;; Calls the driver of the control block DE addresses for the request in B (1 get, 2 put, 4 control), keeping
+;; DE, HL and IX. A disk device's block (type bit 7) whose type lacks the request goes to DCB_REQUEST_HOOK.
+;; In:    A = the byte to put, B = the request, DE = the control block, BC on the stack
+;; Out:   A = the byte got, or as the driver returns it
+CIO:
+    PUSH HL
+    PUSH IX
+    PUSH DE
+    POP IX                          ; IX: the control block, for the driver
+    PUSH DE
+    LD HL,CIORTN
+    PUSH HL
+    LD C,A
+    LD A,[DE]                       ; the device's type
+    BIT 7,A
+    JR Z,CIO2
+    AND B
+    CP B
+    JP NZ,DCB_REQUEST_HOOK
+CIO2:
+    AND B                           ; zero when the device does not take the request
+    CP $02                          ; zero for a put
+    LD L,[IX+$01]
+    LD H,[IX+$02]
+    JP [HL]
+CIORTN:
+    POP DE
+    POP IX
+    POP HL
+    POP BC
+    RET
+
+;; Starts PLOOP's copy of a line with quotes, DATA and REM unseen.
+CPATC1:
+    XOR A
+    LD [RUBSW],A
+    LD D,$FF                        ; room left in the buffer
+    JP PLOOP2 + 1
+
+;; Leaves DATA when CPATCH meets a colon outside quotes.
+CPATC2:
+    AND $FD
+    LD [RUBSW],A
+QTCOLN:
+    LD A,':'
+
+;; Copies a character PLOOP read, watching for DATA and REM so that a word inside them is not taken for an apostrophe
+;; remark, and so that :REM before an apostrophe is dropped as Level II drops it.
+;; In:    A = the character, HL = where it came from, BC = where it was stored, D = room left
+NTEMBL:
+    OR A
+    JP P,PLOOP3                     ; not a token
+    LD A,[RUBSW]
+    RRA
+    JR C,PLOOP3                     ; inside quotes
+    RRA
+    RRA
+    JR NC,CHKDRS                    ; not inside a remark
+    LD A,[HL]
+    CP TK_APOSTROPHE
+    PUSH HL
+    PUSH BC
+    LD HL,NOSNGQ
+    PUSH HL
+    RET NZ                          ; to NOSNGQ
+    DEC BC                          ; an apostrophe: look back for :REM
+    LD A,[BC]
+    CP 'M'
+    RET NZ
+    DEC BC
+    LD A,[BC]
+    CP 'E'
+    RET NZ
+RESETR:
+    DEC BC
+    LD A,[BC]
+    CP 'R'
+    RET NZ
+    DEC BC
+    LD A,[BC]
+    CP ':'
+    RET NZ
+    POP AF                          ; :REM is there: drop NOSNGQ and the pointers
+    POP AF
+    POP HL
+    INC D                           ; the four characters are room again
+    INC D
+    INC D
+    INC D
+    JR RESEXP
+NOSNGQ:
+    POP BC
+    POP HL
+    LD A,[HL]
+PLOOP3:
+    JP PLOOP
+
+;; Notes that a DATA statement started.
+;; Out:   A = 0
+DATSET:
+    LD A,[RUBSW]
+    OR $02
+SETDRS:
+    LD [RUBSW],A
+    XOR A
+    RET
+
+;; Notes that a remark started.
+REMSET:
+    LD A,[RUBSW]
+    OR $04
+    JR SETDRS
+
+;; Copies a token outside a remark, noting DATA and REM.
+CHKDRS:
+    RLA
+    JR C,PLOOP3                     ; inside DATA
+    LD A,[HL]
+    CP TK_DATA
+    CALL Z,DATSET
+    CP TK_REM
+    CALL Z,REMSET
+RESEXP:
+    LD A,[HL]
+    JP NTQTTK
+.endif
 
 ;; Adds one half, the constant at $1380, to FAC.
 FADDH:
@@ -5250,7 +6090,8 @@ ERRL3:
     RET
     OUT [$00],A                     ; port number is patched in the RAM copy for OUT
     RET
-    .byte $00, $00, $00, $00, $40, $30, $00, $4C, $43, $FE, $FF, $E9, $42
+    .byte $00, $00, $00, $00, $40, $30, $00
+    .word INITIAL_STKTOP, $FFFE, TEXT_START
 
 ;; Holds the error and status message texts: " Error", " in ", READY and Break.
 ERR:
@@ -5447,7 +6288,11 @@ ERRFIN:
     POP HL                          ; HL = the line with the error
     LD DE,$FFFE                     ; line $FFFE marks an error during startup
     RST $18
+.if MODEL = 1
     JP Z,INIT                       ; restart the initialization
+.else
+    JP Z,CIO                        ; $0674, Level II's INIT: the Model III ROM kept the address, not the routine
+.endif
     LD A,H
     AND L
     INC A                           ; Z when the line number is $FFFF
@@ -5715,7 +6560,11 @@ ERASE_PROGRAM:
 
 ;; Clears variables, strings and the DATA pointer to run from the program's start.
 RUNC:
+.if MODEL = 1
     LD HL,[TXTTAB]
+.else
+    CALL NEWX                       ; scroll protection off, and HL = TXTTAB
+.endif
     DEC HL                          ; the text pointer sits just before the first line
 
 ;; Clears the variables, arrays, strings and ON ERROR state, makes every letter single precision,
@@ -9102,8 +9951,13 @@ BUFLIN:
     LD B,H
     LD C,L
     POP HL
+.if MODEL = 1
     LD D,$FF                        ; D = room left in the buffer
     JR PLOOP2
+.else
+    JP CPATC1                       ; the Model III also starts watching for DATA and REM
+    NOP
+.endif
 
 PLOOP:
     INC BC
@@ -9111,12 +9965,21 @@ PLOOP:
     RET Z                           ; Stop when the buffer is full
 
 PLOOP2:
+.if MODEL = 1
     LD A,[HL]                       ; A = next byte of the line
     OR A
     INC HL
     LD [BC],A
     RET Z                           ; A zero byte ends the line
     JP P,PLOOP                      ; Ordinary characters are copied unchanged
+.else
+    INC HL
+    LD A,[HL]
+    OR A
+    LD [BC],A
+    RET Z                           ; A zero byte ends the line
+    JP KANA                         ; through CPATCH and NTEMBL, back to PLOOP
+.endif
     CP $FB                          ; $FB is the apostrophe remark token
     JR NZ,NTQTTK
     DEC BC                          ; Remove the :REM text stored before the apostrophe
@@ -9309,15 +10172,25 @@ DOCSMR:
     LD [VARTAB],HL                  ; The program ends here
 
 OKCASS:
+.if MODEL = 1
     LD HL,READY_MSG
     CALL STROUT
     CALL CASSETTE_OFF
+.else
+    CALL CASSETTE_OFF               ; the Model III stops the tape first
+    LD HL,READY_MSG
+    CALL STROUT
+.endif
     LD HL,[TXTTAB]
     PUSH HL
     JP FINI                         ; Relink the loaded lines and return to Ready
 ;; Prints BAD when CLOAD? finds a difference, and returns to the command level.
 NOGOOD:
+.if MODEL = 1
     LD HL,$2CA5                     ; $2CA5 is the BAD message at NOOKCS
+.else
+    CALL CTOFFX                     ; stops the tape, with HL at the BAD message
+.endif
     CALL STROUT
     JP STPRDY
 SKPFIL:

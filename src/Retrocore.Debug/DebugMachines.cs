@@ -25,6 +25,21 @@ internal static class DebugMachines
     internal const string Trs80Model1 = "trs80-model1";
 
     /// <summary>
+    ///  The TRS-80 Model III, 4 or 4P; the launch's <c>model</c> says which.
+    /// </summary>
+    internal const string Trs80Model3 = "trs80-model3";
+
+    /// <summary>
+    ///  The Model 4's own name, which launches may use for <see cref="Trs80Model3"/> with the Model 4 as its default.
+    /// </summary>
+    internal const string Trs80Model4 = "trs80-model4";
+
+    /// <summary>
+    ///  The TRS-80 Model II, 12 or 16; the launch's <c>model</c> says which.
+    /// </summary>
+    internal const string Trs80Model2 = "trs80-model2";
+
+    /// <summary>
     ///  The Apple III.
     /// </summary>
     internal const string Apple3 = "apple3";
@@ -49,11 +64,14 @@ internal static class DebugMachines
     {
         Apple2 or Apple2e => Apple2,
         Trs80Model1 => Trs80Model1,
+        Trs80Model3 or Trs80Model4 => Trs80Model3,
+        Trs80Model2 => Trs80Model2,
         Apple3 => Apple3,
         Apple1 => Apple1,
         Coco => Coco,
         null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
-            $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\" and \"{Coco}\".")
+            $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\", "
+                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\" and \"{Coco}\".")
     };
 }

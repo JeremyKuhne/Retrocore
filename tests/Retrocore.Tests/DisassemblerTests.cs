@@ -74,7 +74,14 @@ public class DisassemblerTests
     /// <summary>
     ///  Checks warmed full-image analysis allocates output plus compact flags, not another decoded list or owner map.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The JIT can allocate on this thread as it recompiles the analysis at a higher tier during the measured run;
+    ///   that happens once, so a retry measures the analysis alone.
+    ///  </para>
+    /// </remarks>
     [TestMethod]
+    [Retry(1)]
     public void FullImageAnalysisAllocatesOnlyOutputAndCompactFlags()
     {
         const int FixedMetadataBudget = 4096;

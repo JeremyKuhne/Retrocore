@@ -2,8 +2,11 @@
 
 Retrocore runs Apple's Pascal on both of its Apple machines and debugs the programs it runs:
 
-- **Apple III Pascal** 1.1 on the Apple III, from Apple's three disks;
-- **Apple Pascal** 1.1 and 1.2 on a 64K Apple II Plus, with the language card, and on the IIe.
+- **Apple III Pascal** 1.0, 1.1 and 1.2 on the Apple III;
+- **Apple Pascal** 1.0, 1.1 and 1.2 on a 64K Apple II Plus, with the language card, and 1.1 and 1.2 on the IIe.
+
+Apple Pascal 1.3 is not checked, as no image of it was at hand. On 1.0, a listing (`$L`) leaves the Compiler's code
+file open, so compile without one there; and R(un) runs no code C(ompile) wrote, so X(ecute) the code file by name.
 
 Both are UCSD Pascal II.1. The compiler turns a program into p-code, the instruction set of a stack machine, and a
 6502 interpreter runs it: `SOS.INTERP` on the Apple III, and `SYSTEM.APPLE` in the language card on the Apple II.
@@ -23,6 +26,28 @@ boots and APPLE2 in drive 2 has the Compiler.
     "disks": ["${workspaceFolder}/disks/Apple3Pascal1.1Disk1.dsk", "${workspaceFolder}/disks/Apple3Pascal1.1Disk2.dsk"]
 }
 ```
+
+### Apple III Pascal 1.2
+
+Apple shipped 1.2 as two update disks, whose files go onto 1.1's disks. Its system is larger than 1.1's, so the boot
+disk keeps SOS, the interpreter and the system, and 1.1's Filer and Library, which 1.2 keeps, move to the second
+disk with the Editor and Compiler. `--pascal sos` builds both disks:
+
+```text
+Retrocore.Debug --pascal sos Pascal1.2Disk1.dsk PASCAL1 --boot Apple3Pascal1.1Disk1.dsk
+    --from Apple3Pascal1.1Disk1.dsk SOS.KERNEL SOS.DRIVER
+    --from Apple3Pascal1.2UpdateDisk1.dsk SOS.INTERP SYSTEM.PASCAL
+    --from Apple3Pascal1.1Disk1.dsk SYSTEM.MISCINFO
+Retrocore.Debug --pascal sos Pascal1.2Disk2.dsk PASCAL2
+    --from Apple3Pascal1.1Disk1.dsk SYSTEM.FILER SYSTEM.LIBRARY
+    --from Apple3Pascal1.2UpdateDisk1.dsk SYSTEM.EDITOR SYSTEM.SYNTAX
+    --from Apple3Pascal1.2UpdateDisk2.dsk SYSTEM.COMPILER
+```
+
+(each command on one line). 1.2's Editor asks `Edit what file?` where 1.1's says there is no workfile: RETURN starts
+an empty one.
+
+### Editing and saving
 
 Disks load write-protected. For the Editor and Compiler to write, take the protection off in the **Retro Devices**
 view (**Allow Writes** on the drive). What the machine writes stays in memory until you save the disk: **Save to
@@ -101,19 +126,23 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal extract disk NAME output` copies one out, a text file as plain text (`--raw` keeps Pascal's format);
 - `--pascal segments code` lists a code file's segments and procedures;
 - `--pascal disassemble code [SEGMENT[.PROCEDURE]]` disassembles its p-code, and its assembled procedures as 6502
-  code.
+  code;
+- `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
+  above.
 
 A code file is a file's path, or a disk and the file's name: `--pascal disassemble APPLE3.dsk HILBERT.CODE HILBERT.2`.
 
-The libraries behind them are `PascalVolume`, `PascalCodeFile` and `PascalTextFile` in `Retrocore.Media`, and the
+The libraries behind them are `PascalVolume`, `PascalCodeFile`, `PascalTextFile` and `SosVolumeBuilder` in
+`Retrocore.Media`, and the
 p-code and its disassembler in `Retrocore.Pascal`.
 
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.
 - With the disks, `PascalMediaTests` and `PcodeTests` read and disassemble every code file on them;
-  `Apple3PascalTests` and `Apple2PascalTests` boot Pascal, compile and run a program, and read its frames, the latter
-  for 1.1 and 1.2 on the II Plus and the IIe. Apple III Pascal's disks are with the other Apple III disks
+  `Apple3PascalTests` and `Apple2PascalTests` boot Pascal, compile and run a program, and read its frames: Apple III
+  Pascal 1.0, 1.1 and 1.2 (on disks built as above), and Apple Pascal 1.0, 1.1 and 1.2 on the II Plus and 1.1 and
+  1.2 on the IIe. Apple III Pascal's disks are with the other Apple III disks
   (`RETROCORE_APPLE3_DISKS`), and Apple Pascal's in `RETROCORE_APPLE2_PASCAL_DISKS` (by default
   `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk` and `1.2_0.DSK` to `1.2_3.DSK`).
 - `node tools/Test-PascalDap.mjs` drives the debug host on both machines, and on the Apple III compiles a program

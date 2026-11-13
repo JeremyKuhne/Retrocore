@@ -1,7 +1,8 @@
 # Backlog: Apple Pascal
 
-Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Steps
-1-4 and most of Later are built for both machines; see Built. [Pascal.md](../Pascal.md) is the user guide.
+Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Built
+for both machines, every version at hand: see Built. Apple Pascal 1.3, which no allowed host had, and writing Pascal
+(Apple II) volumes are what remain. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -90,6 +91,26 @@ Built 2026-11-13, the second round:
   library can write); `.TEXT` files open as plain text unless associated with `retrocore-pascal`; pacing pasted
   text to what the program takes.
 
+Built 2026-11-13, the third round:
+
+- **Every version at hand:** Apple Pascal 1.0 on the II Plus and Apple III Pascal 1.0 boot, compile and run, and
+  their frames read (`Apple2PascalTests`, `Apple3PascalTests`). 1.0's R(un) runs no code its C(ompile) wrote, so
+  the tests X(ecute) it; its Compiler leaves the code file open when it also writes a listing, so 1.0 compiles
+  without one; and Apple III Pascal 1.0's first disk has its known damaged Filer.
+- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings and
+  saplings), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
+- **Apple III Pascal 1.2** boots from disks built from 1.1's and the update's, compiles and runs HELLO (code
+  version 6), and its frames read. Its larger `SYSTEM.PASCAL` leaves no room on the boot disk for 1.1's Filer and
+  Library, so they go on the second. Its Editor asks `Edit what file?` and its Quit asks `Write to what file?`.
+- **Saving disks:** an Apple drive's `save` writes its disk to its image or another, as WOZ or as sectors in either
+  order; the Retro Devices view's **Save to Its Image** and **Save Disk As...**. `Test-PascalDap.mjs` saves the
+  disk the Compiler wrote both ways and lists HELLO.CODE on each.
+- **Paced pasting:** on the Apple II and III, `retro/type` keys go in a typist's pace apart (30,000 cycles a key and
+  300,000 a line on the II, twice that on the III), so the Editor takes a pasted program whole.
+- **`.text` sources** open as Apple Pascal.
+- **Not done:** Apple Pascal 1.3 (no image on an allowed host), writing Pascal volumes for the Apple II, and SOS
+  trees (files over 128K, which a 140K disk barely needs).
+
 ## The pieces
 
 ### 1. Media: volumes, sectors and code files
@@ -158,10 +179,9 @@ registers, found by its bytes, as `SosDriverModules` finds a driver.
 ### 5. Later
 
 - ~~A Pascal language and grammar in the extension~~ and ~~named variables~~: built in the second round.
-- Writing Pascal volumes and SOS volumes, with the media library ([Media.md](Media.md)), which Apple III Pascal 1.2
-  needs, and saving a disk the machine wrote back to its image.
-- Pasted text paced to what the program takes.
-- Apple Pascal 1.3, and Apple III Pascal 1.0.
+- ~~SOS volumes~~, ~~saving a disk~~, ~~paced pasting~~ and ~~Apple III Pascal 1.0~~: built in the third round.
+- Writing Pascal volumes, with the media library ([Media.md](Media.md)).
+- Apple Pascal 1.3.
 
 ## Order
 

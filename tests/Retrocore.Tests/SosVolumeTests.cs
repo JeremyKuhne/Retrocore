@@ -147,4 +147,80 @@ public class SosVolumeTests
         entry[0x15] = 10;
         return image;
     }
+
+    /// <summary>
+    ///  A built volume reads back: its name, each file's type, auxiliary type and contents as a seedling, an empty file
+    ///  or a sapling, in either sector order, with the bitmap marking the blocks after the files free.
+    /// </summary>
+    /// <param name="proDosOrder">Whether the image is in ProDOS's sector order.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void BuiltVolumeReadsBack(bool proDosOrder)
+    {
+        byte[] large = [.. Enumerable.Range(0, 70_000).Select(index => (byte)(index * 7))];
+        SosVolumeBuilder builder = new("work");
+        builder.Add("SMALL.TEXT", 0x03, 0x1234, "HELLO"u8);
+        builder.Add("EMPTY", 0x06, 0, []);
+        builder.Add("Large.Code", 0x02, 0, large);
+        builder.BlocksUsed.Should().Be(7 + 1 + 1 + 138);
+
+        SosVolume volume = SosVolume.Read(builder.Build(proDosOrder), proDosOrder);
+        volume.Name.Should().Be("WORK");
+        volume.Files.Select(file => (file.Name, file.StorageType, file.FileType, file.AuxType, file.EndOfFile)).Should().Equal(
+            ("SMALL.TEXT", 1, 0x03, 0x1234, 5), ("EMPTY", 1, 0x06, 0, 0), ("LARGE.CODE", 2, 0x02, 0, 70_000));
+
+        volume.ReadFile("small.text").Should().Equal("HELLO"u8.ToArray());
+        volume.ReadFile("EMPTY").Should().BeEmpty();
+        volume.ReadFile("LARGE.CODE").Should().Equal(large);
+
+        byte[] bitmap = volume.Block(6);
+        int free = Enumerable.Range(0, 280).Count(block => (bitmap[block / 8] & (0x80 >> (block % 8))) != 0);
+        free.Should().Be(280 - builder.BlocksUsed);
+        (bitmap[builder.BlocksUsed / 8] & (0x80 >> (builder.BlocksUsed % 8))).Should().NotBe(0, "the first block after the files is free");
+    }
+
+    /// <summary>
+    ///  A builder takes only SOS names, a name once, and files that fit.
+    /// </summary>
+    [TestMethod]
+    public void BuilderRefusesWhatSosCannotHold()
+    {
+        Action badVolume = () => _ = new SosVolumeBuilder("1DISK");
+        badVolume.Should().Throw<ArgumentException>();
+        SosVolumeBuilder builder = new("DISK");
+        Action badName = () => builder.Add("A FILE", 0x06, 0, []);
+        badName.Should().Throw<ArgumentException>();
+        builder.Add("FILE", 0x06, 0, []);
+        Action again = () => builder.Add("file", 0x06, 0, []);
+        again.Should().Throw<ArgumentException>();
+        Action tree = () => builder.Add("TREE", 0x06, 0, new byte[(256 * 512) + 1]);
+        tree.Should().Throw<ArgumentException>();
+        builder.Add("BIG", 0x06, 0, new byte[256 * 512]);
+        Action full = () => builder.Add("MORE", 0x06, 0, new byte[20 * 512]);
+        full.Should().Throw<InvalidOperationException>();
+    }
+
+    /// <summary>
+    ///  A volume built from Apple III Pascal's first disk, with its boot blocks, holds the same files.
+    /// </summary>
+    [TestMethod]
+    public void BuiltVolumeCopiesAnotherVolumesFiles()
+    {
+        SosVolume source = Volume("Apple3Pascal1.1Disk1.dsk");
+        SosVolumeBuilder builder = new(source.Name);
+        builder.BootFrom(source);
+        foreach (SosFileEntry file in source.Files) { builder.Add(source, file.Name); }
+
+        SosVolume copy = SosVolume.Read(builder.Build(proDosOrder: false), proDosOrder: false);
+        copy.Block(0).Should().Equal(source.Block(0));
+        copy.Block(1).Should().Equal(source.Block(1));
+        copy.Files.Select(file => (file.Name, file.FileType, file.AuxType, file.EndOfFile)).Should().Equal(
+            source.Files.Select(file => (file.Name, file.FileType, file.AuxType, file.EndOfFile)));
+
+        foreach (SosFileEntry file in source.Files)
+        {
+            copy.ReadFile(file.Name).Should().Equal(source.ReadFile(file.Name), file.Name);
+        }
+    }
 }

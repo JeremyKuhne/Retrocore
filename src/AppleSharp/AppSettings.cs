@@ -73,6 +73,11 @@ internal sealed record AppSettings
     public bool Muted { get; init; }
 
     /// <summary>
+    ///  Gets or initializes the monitor the video is shown on.
+    /// </summary>
+    public Apple2Monitor Screen { get; init; }
+
+    /// <summary>
     ///  Reads saved configuration; only a nonexistent file produces first-launch defaults.
     /// </summary>
     /// <param name="path">The configuration file.</param>
@@ -93,6 +98,7 @@ internal sealed record AppSettings
             throw new InvalidDataException("UI scale must be between 1 and 4.");
         }
 
+        if (!Enum.IsDefined(settings.Screen)) { throw new InvalidDataException("Unknown screen."); }
         return !Enum.IsDefined(settings.SequencerLayout)
             ? throw new InvalidDataException("Unknown P6 PROM layout.")
             : settings.RomDirectory is { Length: 0 } || settings.DiskPath is { Length: 0 }

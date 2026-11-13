@@ -153,8 +153,27 @@ try {
     changed = await request("retro/hardware", { id: "slot4", action: "removeCard" });
     assert.equal(slotRow(changed, "slot4").value, "empty");
     assert.equal((await request("apple2/text")).sound, "speaker", "taking the card out leaves the speaker");
+
+    // A new monitor while stopped sends the panel a frame drawn on it.
+    events.splice(0, events.length, ...events.filter(message => message.event !== "retro/frame"));
+    await request("apple2/screen", { screen: "green" });
+    assert.equal((await event("retro/frame")).screen, "green");
+    await request("apple2/screen", { screen: "color" });
+    assert.equal((await event("retro/frame")).screen, "color");
     await request("retro/cycles", { clear: true });
     assert.equal((await request("retro/cycles")).lines.length, 0);
+    // A saved machine's mouse slot wins over the launch's, whichever slot the saved cards name first.
+    for (const cards of [{ 2: "mouse", 4: "empty" }, { 4: "empty", 2: "mouse" }]) {
+        await request("launch", {
+            machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true, mouse: 4,
+            machineState: { cards }
+        });
+        const devices = await request("retro/devices");
+        assert.equal(slotRow(devices, "slot2").value, "Mouse card", JSON.stringify(cards));
+        assert.equal(slotRow(devices, "slot4").value, "empty", JSON.stringify(cards));
+    }
+    events.splice(0, events.length); // these launches' own events, such as their stops on entry
+
     // The same sample assembled in place by retrocore's ca65 front end debugs by line without ca65, ld65 or a .dbg file.
     await request("launch", {
         machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: true,

@@ -265,7 +265,8 @@ Built 2026-11-12, pinned by `Apple3EmulationTests` and `Apple3BusTests.ClearingT
 - The ProFile hard disk and its card.
 - Source-level SOS debugging from the SOS 1.3 listing.
 - Business BASIC debugging, like AppleSoft's.
-- Apple III Pascal.
+- Apple III Pascal: booting, code files and the Pascal thread are built ([Apple Pascal](ApplePascal.md)); line
+  breakpoints from listings are next.
 - SOS volumes in the media library, through CiderPress2's ProDOS support ([media](Media.md)).
 
 ## Decisions

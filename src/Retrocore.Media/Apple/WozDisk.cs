@@ -43,6 +43,12 @@ public sealed class WozDisk
     public bool IsDirty { get; private set; }
 
     /// <summary>
+    ///  Gets a count that changes whenever the media changes, so a reader of its files can tell when to read them
+    ///  again.
+    /// </summary>
+    public long Version { get; private set; }
+
+    /// <summary>
     ///  Loads validated 5.25-inch WOZ bitstream media; no file I/O or ROM lookup is performed.
     /// </summary>
     /// <param name="image">The complete WOZ file.</param>
@@ -221,6 +227,7 @@ public sealed class WozDisk
         _tracks[index] = new(bits, bitCount);
         _map[quarterTrack] = (byte)index;
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>
@@ -243,6 +250,7 @@ public sealed class WozDisk
 
         _map[quarterTrack] = _map[sourceQuarterTrack];
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>
@@ -264,6 +272,7 @@ public sealed class WozDisk
 
         track.WriteBit(position, transition);
         IsDirty = true;
+        Version++;
     }
 
     /// <summary>

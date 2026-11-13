@@ -24,6 +24,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
 
     private readonly Apple2Machine _machine;
+    private PascalRuntime? _pascal;
     private readonly Apple2Model _model;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels = new byte[Apple2Video.Width * Apple2Video.Height * 4];
@@ -103,6 +104,22 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["apple2/fastDisk"] = FastDiskRequest
         };
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   <c>SYSTEM.APPLE</c> runs from the language card's RAM at <c>$D000-$FFFF</c>, so Pascal needs 64K.
+    ///  </para>
+    /// </remarks>
+    public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
+        "Apple Pascal",
+        new Apple2PascalMemory(_machine.Bus),
+        _machine.Bus.Peek,
+        (0xD000, 0x10000),
+        extended: false,
+        () => 0,
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount);
 
     /// <summary>
     ///  Launches a IIe from a launch request's arguments.

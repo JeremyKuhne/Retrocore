@@ -1,0 +1,242 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using System.Globalization;
+using System.Text.Json.Nodes;
+using Retrocore.Assembler;
+using Retrocore.Media;
+using Retrocore.Pascal;
+
+namespace Retrocore.Debug;
+
+/// <summary>
+///  Lists and copies out the files on an Apple Pascal disk, and lists and disassembles code files.
+/// </summary>
+/// <remarks>
+///  <para>
+///   A disk is an Apple II Pascal volume or an Apple III SOS volume, as a <c>.dsk</c>, <c>.po</c> or <c>.woz</c> image.
+///  </para>
+///  <para>
+///   <c>--pascal catalog disk [--json]</c> lists the files. <c>--pascal extract disk NAME output [--raw]</c> writes
+///   one, a text file as plain text unless <c>--raw</c>. <c>--pascal segments code</c> lists a code file's segments
+///   and procedures, and <c>--pascal disassemble code [SEGMENT[.PROCEDURE]]</c> disassembles them: p-code as p-code,
+///   and assembled procedures as 6502 code from offset 0. A code file is a file's path, or a disk and the file's
+///   name.
+///  </para>
+/// </remarks>
+internal static class PascalCommand
+{
+    private const string Usage = """
+        Usage: --pascal catalog disk [--json]
+               --pascal extract disk NAME output [--raw]
+               --pascal segments (file.code | disk NAME)
+               --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
+        """;
+
+    /// <summary>
+    ///  Runs the command.
+    /// </summary>
+    /// <param name="args">The arguments after <c>--pascal</c>.</param>
+    /// <returns>The process exit code.</returns>
+    internal static int Run(string[] args)
+    {
+        try
+        {
+            return args switch
+            {
+                ["catalog", string disk, .. string[] rest] => Catalog(disk, rest.Contains("--json")),
+                ["extract", string disk, string name, string output, .. string[] rest] => Extract(disk, name, output, rest.Contains("--raw")),
+                ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
+                ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
+                _ => Fail(Usage, code: 2)
+            };
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException)
+        {
+            return Fail(exception.Message);
+        }
+    }
+
+    /// <summary>
+    ///  Opens a disk image's volume.
+    /// </summary>
+    /// <param name="path">The image's path.</param>
+    /// <returns>The volume.</returns>
+    /// <exception cref="InvalidDataException">The image holds neither a Pascal nor a SOS volume.</exception>
+    internal static PascalDisk Open(string path)
+    {
+        bool proDos = path.EndsWith(".po", StringComparison.OrdinalIgnoreCase);
+        byte[] image = File.ReadAllBytes(path);
+        if (path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase))
+        {
+            image = SectorDiskReader.Read(WozDisk.Load(image), proDosOrder: false);
+            proDos = false;
+        }
+
+        return PascalVolume.IsPascalVolume(image, proDos)
+            ? new PascalDisk(PascalVolume.Read(image, proDos))
+            : new PascalDisk(SosVolume.Read(image, proDos));
+    }
+
+    private static bool IsDisk(string path) =>
+        Path.GetExtension(path).ToUpperInvariant() is ".DSK" or ".DO" or ".PO" or ".WOZ";
+
+    // A code file from a path, or from a disk and a name; the argument after it names a segment and procedure.
+    private static PascalCodeFile? CodeFile(string[] args, out string? which)
+    {
+        which = null;
+        if (args.Length == 0) { return null; }
+
+        byte[] data;
+        if (IsDisk(args[0]))
+        {
+            if (args.Length < 2) { return null; }
+            data = Open(args[0]).Read(args[1]);
+            which = args.Length > 2 ? args[2] : null;
+        }
+        else
+        {
+            data = File.ReadAllBytes(args[0]);
+            which = args.Length > 1 ? args[1] : null;
+        }
+
+        return PascalCodeFile.Read(data);
+    }
+
+    private static int Catalog(string path, bool json)
+    {
+        PascalDisk disk = Open(path);
+        JsonArray entries = [];
+        if (!json) { Console.WriteLine(disk.Name); }
+        foreach (PascalDiskFile file in disk.Files)
+        {
+            if (json)
+            {
+                JsonObject entry = new()
+                {
+                    ["name"] = file.Name,
+                    ["kind"] = file.Kind,
+                    ["length"] = file.Length
+                };
+
+                if (file.Modified is { } modified)
+                {
+                    entry["modified"] = modified.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                }
+
+                entries.Add((JsonNode)entry);
+                continue;
+            }
+
+            string date = file.Modified?.ToString("dd-MMM-yy", CultureInfo.InvariantCulture) ?? "";
+            Console.WriteLine($"  {file.Name,-15} {file.Kind,-8} {file.Length,7} {date}");
+        }
+
+        if (json) { Console.WriteLine(entries.ToJsonString()); }
+        return 0;
+    }
+
+    private static int Extract(string path, string name, string output, bool raw)
+    {
+        PascalDisk disk = Open(path);
+        PascalDiskFile file = disk.Find(name);
+        byte[] data = disk.Read(file.Name);
+        if (!raw && file.Kind == "Text")
+        {
+            File.WriteAllText(output, PascalTextFile.Read(data));
+            Console.WriteLine($"Wrote the text file {file.Name} to {output}.");
+            return 0;
+        }
+
+        File.WriteAllBytes(output, data);
+        Console.WriteLine($"Wrote {file.Name}, {data.Length} bytes, to {output}.");
+        return 0;
+    }
+
+    private static int Segments(PascalCodeFile file)
+    {
+        foreach (PascalSegment segment in file.Segments)
+        {
+            Console.WriteLine(
+                $"{segment.Slot,2} {segment.Name,-8} segment {segment.Number,3}  {segment.Kind,-17} {segment.MachineType,-15} version {segment.Version}  {segment.Length} bytes");
+
+            foreach (PascalProcedure procedure in segment.Procedures)
+            {
+                string what = procedure.IsNative
+                    ? $"assembled, entry ${procedure.Entry:X4}"
+                    : $"entry ${procedure.Entry:X4}, exit ${procedure.Exit:X4}, lex {procedure.LexicalLevel}, parameters {procedure.ParameterSize}, data {procedure.DataSize}";
+
+                Console.WriteLine($"     {segment.Name}.{procedure.Index,-3} {what}");
+            }
+        }
+
+        return 0;
+    }
+
+    private static int Disassemble(PascalCodeFile file, string? which)
+    {
+        string? segmentName = which?.Split('.')[0];
+        int? only = which?.Split('.') is [_, string number] ? int.Parse(number, CultureInfo.InvariantCulture) : null;
+        bool any = false;
+        foreach (PascalSegment segment in file.Segments)
+        {
+            if (segmentName is not null && !string.Equals(segment.Name, segmentName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (PascalProcedure procedure in segment.Procedures)
+            {
+                if (only is not null && procedure.Index != only) { continue; }
+
+                any = true;
+                Console.WriteLine($"; {segment.Name}.{procedure.Index}{(procedure.IsNative ? ", assembled" : "")}");
+                if (procedure.IsNative)
+                {
+                    Native(segment, procedure);
+                }
+                else
+                {
+                    foreach (PcodeInstruction instruction in PcodeDisassembler.Disassemble(segment, procedure))
+                    {
+                        string mark = instruction.Offset == procedure.Exit ? "; exit" : "";
+                        Console.WriteLine($"  ${instruction.Offset:X4}  {instruction,-40}{mark}".TrimEnd());
+                    }
+                }
+
+                Console.WriteLine();
+            }
+        }
+
+        return any ? 0 : Fail($"No procedure {which} in the code file.");
+    }
+
+    // An assembled procedure from its entry to the first of its relocation lists, which sit below its attributes.
+    private static void Native(PascalSegment segment, PascalProcedure procedure)
+    {
+        int end = procedure.Attributes - 2 - (2 * (procedure.Relocations.Count + procedure.Relocations.Sum(list => list.Count)));
+        HashSet<int> relocated = [.. procedure.Relocations.SelectMany(list => list)];
+        ReadOnlySpan<byte> code = segment.Code;
+        int offset = procedure.Entry;
+        while (offset < end)
+        {
+            if (!Disassembler.TryDecode(code[offset..end], (ushort)(offset - procedure.Entry), ProcessorVariant.Mos6502, out DisassembledInstruction instruction))
+            {
+                Console.WriteLine($"  ${offset:X4}  .byte ${code[offset]:X2}");
+                offset++;
+                continue;
+            }
+
+            bool moves = Enumerable.Range(offset + 1, instruction.Size - 1).Any(relocated.Contains);
+            Console.WriteLine($"  ${offset:X4}  {instruction,-40}{(moves ? "; relocated" : "")}".TrimEnd());
+            offset += instruction.Size;
+        }
+    }
+
+    private static int Fail(string message, int code = 1)
+    {
+        Console.Error.WriteLine(message);
+        return code;
+    }
+}

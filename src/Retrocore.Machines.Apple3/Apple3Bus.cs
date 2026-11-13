@@ -91,7 +91,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private readonly int _switchableBanks;
     private readonly int _bankMask;
     private readonly int _system;
-    private readonly Queue<(byte Code, bool Shifted)> _keys = new();
+    private readonly Queue<(byte Code, bool Shifted, bool Control)> _keys = new();
 
     private int _zeroPageBase;
     private int _stackBase;
@@ -109,6 +109,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
 
     private byte _key;
     private bool _keyShifted;
+    private bool _keyControl;
     private int _keyDelay;
     private byte _strobe;
     private int _analogSelect;
@@ -307,10 +308,15 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     ///   letter or a shifted symbol goes with SHIFT held while it is the current key, and a small letter as its
     ///   capital without.
     ///  </para>
+    ///  <para>
+    ///   SOS makes control characters the same way, from the key and CONTROL, so any other code below <c>$20</c>
+    ///   goes with CONTROL held: <c>$03</c> is CONTROL-C, not C.
+    ///  </para>
     /// </remarks>
     public void QueueKey(byte code)
     {
         bool shifted = code is >= (byte)'A' and <= (byte)'Z' || ShiftedSymbols.Contains((char)code);
+        bool control = code < 0x20 && code is not (0x08 or 0x09 or 0x0A or 0x0B or 0x0D or 0x15 or 0x1B);
         _keys.Enqueue((code switch
         {
             0x1B => 0x9B,
@@ -322,7 +328,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             0x0B => 0x8B,
             >= (byte)'a' and <= (byte)'z' => (byte)(code - 0x20),
             _ => code
-        }, shifted));
+        }, shifted, control));
 
         if (_strobe == 0 && _keyDelay == 0) { DeliverKey(); }
     }
@@ -657,9 +663,10 @@ public sealed class Apple3Bus : IOpcodeFetchBus
 
     private void DeliverKey()
     {
-        if (!_keys.TryDequeue(out (byte Code, bool Shifted) key)) { return; }
+        if (!_keys.TryDequeue(out (byte Code, bool Shifted, bool Control) key)) { return; }
         _key = key.Code;
         _keyShifted = key.Shifted;
+        _keyControl = key.Control;
         _strobe = 0x80;
 
         // The encoder's data-ready line, on VIA 1's CA2.
@@ -671,7 +678,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     {
         int value = 0x7C | (_key & 0x80) | (_strobe != 0 ? 1 : 0);
         if ((Modifiers & Apple3Modifiers.Shift) != 0 || (_keyShifted && _strobe != 0)) { value |= 0x02; }
-        if ((Modifiers & Apple3Modifiers.Control) != 0) { value &= ~0x04; }
+        if ((Modifiers & Apple3Modifiers.Control) != 0 || (_keyControl && _strobe != 0)) { value &= ~0x04; }
         if ((Modifiers & Apple3Modifiers.AlphaLock) != 0) { value &= ~0x08; }
         if ((Modifiers & Apple3Modifiers.OpenApple) != 0) { value &= ~0x10; }
         if ((Modifiers & Apple3Modifiers.SolidApple) != 0) { value &= ~0x20; }

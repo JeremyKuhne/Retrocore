@@ -7,6 +7,7 @@ using Retrocore.Assembler;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Apple3;
+using Retrocore.Media;
 
 namespace Retrocore.Debug;
 
@@ -28,6 +29,7 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     private static readonly DebugRegisters s_registers = new(M6502Isa.Description);
 
     private readonly Apple3Machine _machine;
+    private PascalRuntime? _pascal;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels;
     private DebugAudioSink? _sound;
@@ -73,6 +75,22 @@ internal sealed class Apple3DebugTarget : IDebugTarget
     ///  Gets the machine.
     /// </summary>
     internal Apple3Machine Machine => _machine;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   <c>SOS.INTERP</c> loads below the SOS kernel, in the bank switched in at <c>$2000-$9FFF</c> and above.
+    ///  </para>
+    /// </remarks>
+    public PascalRuntime? Pascal => _pascal ??= new PascalRuntime(
+        "Apple III Pascal",
+        new Apple3PascalMemory(_machine.Bus),
+        _machine.Bus.Peek,
+        (0x2000, 0xC000),
+        extended: true,
+        () => (ushort)(_machine.Bus.ZeroPage << 8),
+        () => _machine.Drives.Select(drive => drive.Disk).OfType<WozDisk>(),
+        () => CycleCount);
 
     /// <summary>
     ///  Gets or sets whether running outpaces the clock while a drive's motor turns.

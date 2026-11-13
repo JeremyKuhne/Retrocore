@@ -191,7 +191,9 @@ internal sealed partial class DebugSession
     // lines in that code stop; each binding the editor shows is updated.
     private void AddLoadedModules()
     {
-        if (_target is null || !Target.AddLoadedModules(_debug)) { return; }
+        if (_target is null) { return; }
+        ScanPascal();
+        if (!Target.AddLoadedModules(_debug)) { return; }
         foreach (JsonObject request in _requested.Values.ToArray())
         {
             JsonObject response = Breakpoints(request);
@@ -211,6 +213,7 @@ internal sealed partial class DebugSession
     {
         _beamBreakpoints.Clear();
         _systemCallBreakpoints.Clear();
+        _pascalBreakpoints.Clear();
         _states.Clear();
         _breakpoints.Clear();
         _basicSites.Clear();
@@ -289,6 +292,7 @@ internal sealed partial class DebugSession
         RemoveSites(FunctionGroup);
         _beamBreakpoints.Clear();
         _systemCallBreakpoints.Clear();
+        _pascalBreakpoints.Clear();
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -300,6 +304,13 @@ internal sealed partial class DebugSession
             if (BeamPosition(name) is { } beam)
             {
                 BindBeam(state, beam.Position, beam.Problem);
+                responses.Add(Describe(state, changed: false));
+                continue;
+            }
+
+            if (PascalBreakpointName().Match(name.Trim()) is { Success: true } pascal)
+            {
+                BindPascal(state, pascal);
                 responses.Add(Describe(state, changed: false));
                 continue;
             }
@@ -603,7 +614,7 @@ internal sealed partial class DebugSession
     {
         string name = Required(args, "name").Trim();
         int reference = args.Int("variablesReference") ?? 0;
-        bool basic = reference >= BasicReferences || (reference == 0 && args.Int("frameId") >= BasicFrameBase);
+        bool basic = (reference >= BasicReferences && reference < PascalReferences) || (reference == 0 && args.Int("frameId") >= BasicFrameBase);
         if (basic && HasBasicThread)
         {
             string description = $"'{name}' is not a BASIC variable or array element.";

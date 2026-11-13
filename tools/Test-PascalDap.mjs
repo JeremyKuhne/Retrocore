@@ -255,6 +255,30 @@ try {
         assert.deepEqual(registers.map(register => register.name), ["IPC", "MP", "BASE", "JTAB", "SEG"]);
         assert.match(registers[0].value, /^(x8[0-9A-F]:)?\$[0-9A-F]{4}$/);
 
+        // On the Apple II a local's memory reference reads and writes the word the Locals show, wherever the interpreter
+        // has RAM switched: on the IIe, 1.3 runs with auxiliary reads on. The Apple III's locals are through X-bytes,
+        // which have no reference.
+        if (machine.name !== "Apple III") {
+            const locals = scopes.find(scope => scope.name === "Locals");
+            const word = (await request("variables", { variablesReference: locals.variablesReference })).variables
+                .find(variable => variable.memoryReference);
+            assert.ok(word, "a local has a memory reference");
+            assert.match(word.memoryReference, /^main:0x/);
+            const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
+            const original = await bytes();
+            const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");
+            assert.ok(word.value.endsWith(`($${hex})`), `${word.name} at ${word.memoryReference} shows ${word.value}, reads $${hex}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: Buffer.from([0x34, 0x12]).toString("base64") });
+
+            // Writing memory refreshes the views, so the scopes are read again.
+            const top = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+            const again = (await request("scopes", { frameId: top.id })).scopes.find(scope => scope.name === "Locals");
+            const written = (await request("variables", { variablesReference: again.variablesReference })).variables
+                .find(variable => variable.name === word.name);
+            assert.ok(written.value.endsWith("($1234)"), `${word.name} after writing its memory shows ${written.value}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: original.toString("base64") });
+        }
+
         // Step Over runs one p-code of the procedure.
         await request("next", { threadId: 3 });
         const step = await stop();

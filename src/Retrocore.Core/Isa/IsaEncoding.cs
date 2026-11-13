@@ -43,6 +43,12 @@ public readonly record struct IsaEncoding(
     public bool IsConditional => CyclesTaken != Cycles;
 
     /// <summary>
+    ///  Gets the address a jump or call goes to that its opcode implies without an operand, such as the 8085's
+    ///  <c>RSTV</c> to <c>$40</c>, or <see langword="null"/>.
+    /// </summary>
+    public ushort? FixedTarget { get; init; }
+
+    /// <summary>
     ///  Gets the number of opcode bytes before the operand bytes.
     /// </summary>
     public int OpcodeBytesBeforeOperands => SplitAt == 0 ? OpcodeLength : SplitAt;

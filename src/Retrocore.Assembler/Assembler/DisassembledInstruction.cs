@@ -162,11 +162,12 @@ public readonly struct DisassembledInstruction
     }
 
     /// <summary>
-    ///  Gets a direct branch, jump or call target; indirect pointers are never resolved.
+    ///  Gets a direct branch, jump or call target, including one the opcode implies, such as the 8085's
+    ///  <c>RSTV</c> to <c>$40</c>; indirect pointers are never resolved.
     /// </summary>
     public ushort? DirectTarget =>
         Flow is DisassemblyFlow.Jump or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch
-            ? RelativeTarget ?? AbsoluteTarget()
+            ? RelativeTarget ?? AbsoluteTarget() ?? Encoding.FixedTarget
             : null;
 
     /// <summary>

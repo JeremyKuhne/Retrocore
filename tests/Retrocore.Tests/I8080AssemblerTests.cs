@@ -274,6 +274,32 @@ public class I8080AssemblerTests
     }
 
     /// <summary>
+    ///  The 8085's TRAP and RST 5.5, 6.5 and 7.5 entries are traced as code on the 8085 only, and <c>RSTV</c> calls
+    ///  <c>$40</c>, which is traced as its handler.
+    /// </summary>
+    [TestMethod]
+    public void The8085sInterruptEntriesAndRstvAreFollowed()
+    {
+        // $0000: RSTV / HLT ... $0024: NOP ... $0040: RET; the restarts' slots hold NOPs (zero bytes).
+        byte[] image = new byte[0x48];
+        image[0x0000] = 0xCB;
+        image[0x0001] = 0x76;
+        image[0x0040] = 0xC9;
+
+        DisassemblyResult i8085 = Disassembler.Analyze(new AnalysisProject(image, 0, I8080Isa.InstructionSet8085));
+        i8085.References.Should().Contain(reference => reference.Target == 0x0040 && reference.Kind == DisassemblyReferenceKind.Call);
+        ushort[] traced = [.. i8085.Instructions.Select(instruction => instruction.Address)];
+        traced.Should().Contain([0x0001, 0x0024, 0x002C, 0x0034, 0x003C, 0x0040]);
+
+        I8080Isa.InstructionSet.EntryPoints.Should().NotContain((ushort)0x0024);
+        I8080Isa.InstructionSet8085.EntryPoints.Should().Contain([0x0000, 0x0038, 0x0024, 0x002C, 0x0034, 0x003C]);
+
+        // On the 8080 $CB is an undocumented JMP; with a $0000 operand it jumps to 0 and nothing reaches $40.
+        DisassemblyResult i8080 = Disassembler.Analyze(new AnalysisProject(image, 0, I8080Isa.InstructionSet));
+        i8080.References.Should().NotContain(reference => reference.Target == 0x0040);
+    }
+
+    /// <summary>
     ///  An exported disassembly, with undocumented aliases as bytes, assembles back to the same image.
     /// </summary>
     /// <param name="cpu">The CPU.</param>

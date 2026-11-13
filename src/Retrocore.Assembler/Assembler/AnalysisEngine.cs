@@ -116,7 +116,7 @@ internal sealed class AnalysisEngine
                             FollowVector(vector, low, high);
                         }
 
-                        foreach (ushort entry in _set.Description.EntryPoints) { Enqueue(entry, entryPoint: false); }
+                        foreach (ushort entry in _set.EntryPoints) { Enqueue(entry, entryPoint: false); }
                     }
 
                     foreach (ushort entry in _project.EntryPoints) { Enqueue(entry, entryPoint: true); }

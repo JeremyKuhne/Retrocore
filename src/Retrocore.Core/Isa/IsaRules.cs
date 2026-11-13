@@ -47,6 +47,17 @@ internal sealed class IsaRules
     internal List<ushort> EntryPoints { get; } = [];
 
     /// <summary>
+    ///  Gets the entry points of one instruction set, by its name, beyond the description's.
+    /// </summary>
+    internal Dictionary<string, List<ushort>> SetEntryPoints { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///  Gets the fixed target of an instruction whose opcode implies it, by <c>Mnemonic</c> or
+    ///  <c>Mnemonic:Form</c>.
+    /// </summary>
+    internal Dictionary<string, ushort> Targets { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     ///  Gets the instruction sets whose indirect pointers do not carry into the high byte's page.
     /// </summary>
     internal HashSet<string> IndirectPageWrap { get; } = new(StringComparer.OrdinalIgnoreCase);

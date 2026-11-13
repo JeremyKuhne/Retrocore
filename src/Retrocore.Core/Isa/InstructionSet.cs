@@ -102,6 +102,12 @@ public sealed partial class InstructionSet
     public PostbyteCodec? Postbytes { get; private init; }
 
     /// <summary>
+    ///  Gets the addresses where code starts on this CPU without a vector pointing there, such as the Z80's and
+    ///  8080's restarts and the 8085's interrupt entries: the description's, and the set's own.
+    /// </summary>
+    public IReadOnlyList<ushort> EntryPoints { get; private init; } = [];
+
+    /// <summary>
     ///  Gets a small number that identifies this set for the life of the process, so unmanaged values such as
     ///  decoded instructions can refer to it; <see cref="FromHandle"/> returns the set.
     /// </summary>
@@ -462,7 +468,8 @@ public sealed partial class InstructionSet
         InstructionFlow flow,
         MemoryAccess access,
         MemoryAccess encodingAccess,
-        bool prefer)
+        bool prefer,
+        ushort? target)
     {
         if (!_ids.TryGetValue(mnemonic, out int id))
         {
@@ -491,7 +498,8 @@ public sealed partial class InstructionSet
         _encodings.Add(new((ushort)id, form.Id, entry.Opcode, entry.Length, entry.Undocumented, entry.SplitAt)
         {
             Cycles = entry.Cycles,
-            CyclesTaken = entry.CyclesTaken
+            CyclesTaken = entry.CyclesTaken,
+            FixedTarget = target
         });
 
         _flows.Add(flow);

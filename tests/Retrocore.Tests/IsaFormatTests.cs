@@ -47,6 +47,49 @@ public class IsaFormatTests
     }
 
     /// <summary>
+    ///  <c>entry-points in Name</c> adds entry points to one set and the sets built on it, and <c>target</c> gives an
+    ///  instruction the address its opcode implies.
+    /// </summary>
+    [TestMethod]
+    public void SetsHaveTheirOwnEntryPointsAndFixedTargets()
+    {
+        const string Text = """
+            [isa]
+            literal-forms
+            entry-points 0000
+            entry-points in Plus 0024
+            entry-points in Plus 003C
+            flow call RSTV
+            target RSTV 0040
+            [forms]
+            Implied ""
+            [Base]
+            00 NOP Implied
+            [Plus : Base]
+            CB RSTV Implied
+            [Derived : Plus]
+            01 NOP Implied
+            """;
+
+        IsaDescription description = IsaParser.Parse(Text);
+        description.InstructionSets["Base"].EntryPoints.Should().Equal(0x0000);
+        description.InstructionSets["Plus"].EntryPoints.Should().Equal(0x0000, 0x0024, 0x003C);
+        description.InstructionSets["Derived"].EntryPoints.Should().Equal(0x0000, 0x0024, 0x003C);
+        description.EntryPoints.Should().Equal(0x0000);
+
+        InstructionSet plus = description.InstructionSets["Plus"];
+        plus.TryDecode([0xCB], out int rstv).Should().BeTrue();
+        plus.GetEncoding(rstv).FixedTarget.Should().Be(0x0040);
+        plus.TryDecode([0x00], out int nop).Should().BeTrue();
+        plus.GetEncoding(nop).FixedTarget.Should().BeNull();
+
+        Action unknown = () => IsaParser.Parse(Text.Replace("in Plus 003C", "in Missing 003C", StringComparison.Ordinal));
+        unknown.Should().Throw<FormatException>().WithMessage("*unknown instruction set 'Missing'*");
+        Action malformed = () => IsaParser.Parse(Text.Replace("target RSTV 0040", "target RSTV", StringComparison.Ordinal));
+        malformed.Should().Throw<FormatException>().WithMessage("*target Mnemonic hex-address*");
+    }
+
+    /// <summary>
     ///  A mnemonic made of hex digits, such as the 8080's <c>CC</c>, follows the opcode bytes rather than joining
     ///  them.
     /// </summary>

@@ -28,17 +28,19 @@ flag AC half-carry "Auxiliary carry: set when a result carries out of bit 3. DAA
 flag P parity "Set when a result has an even number of 1 bits."
 flag CY carry "Set when an add carries out of the top bit, or a subtract or compare borrows (A is less than the value). Rotates move bits through it."
 literal-forms
-# The restarts; the 8085's TRAP and RST 5.5, 6.5 and 7.5 vectors ($24, $2C, $34, $3C) are left out, since on the
-# 8080 they fall inside the restarts' own code.
+# The restarts, and on the 8085 alone the entries of TRAP and RST 5.5, 6.5 and 7.5, which on the 8080 fall inside
+# the restarts' own code.
 entry-points 0000 0008 0010 0018 0020 0028 0030 0038
+entry-points in I8085 0024 002C 0034 003C
 
 # Control flow, for disassembly and analysis. A conditional return continues when it is not taken, so it keeps
 # the default class.
 flow branch JNZ JZ JNC JC JPO JPE JP JM JNK JK
 flow jump JMP
 flow indirect-jump PCHL
-# RSTV (8085) calls $40 when V is set; its target is fixed by the opcode, so analysis records no call to it.
+# RSTV (8085) calls $40 when V is set; the opcode implies its target.
 flow call CALL CNZ CZ CNC CC CPO CPE CP CM RST RSTV
+target RSTV 0040
 flow return RET
 flow wait HLT
 

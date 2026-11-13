@@ -176,7 +176,7 @@
           "include": "#directives"
         },
         {
-          "begin": "\\G[ \\t]*((?i:CALL|CC|CM|CNC|CNZ|CP|CPE|CPO|CZ|HLT|JC|JK|JM|JMP|JNC|JNK|JNZ|JP|JPE|JPO|JZ|PCHL|RET|RST))(?=[\\s;]|$)",
+          "begin": "\\G[ \\t]*((?i:CALL|CC|CM|CNC|CNZ|CP|CPE|CPO|CZ|HLT|JC|JK|JM|JMP|JNC|JNK|JNZ|JP|JPE|JPO|JZ|PCHL|RET|RST|RSTV))(?=[\\s;]|$)",
           "beginCaptures": {
             "1": {
               "name": "keyword.control.flow.retrocore"
@@ -205,7 +205,7 @@
           ]
         },
         {
-          "begin": "\\G[ \\t]*((?i:ACI|ADC|ADD|ADI|ANA|ANI|ARHL|CMA|CMC|CMP|CPI|DAA|DAD|DCR|DCX|DI|DSUB|EI|IN|INR|INX|LDA|LDAX|LDHI|LDSI|LHLD|LHLX|LXI|MOV|MVI|NOP|ORA|ORI|OUT|POP|PUSH|RAL|RAR|RC|RDEL|RIM|RLC|RM|RNC|RNZ|RP|RPE|RPO|RRC|RSTV|RZ|SBB|SBI|SHLD|SHLX|SIM|SPHL|STA|STAX|STC|SUB|SUI|XCHG|XRA|XRI|XTHL))(?=[\\s;]|$)",
+          "begin": "\\G[ \\t]*((?i:ACI|ADC|ADD|ADI|ANA|ANI|ARHL|CMA|CMC|CMP|CPI|DAA|DAD|DCR|DCX|DI|DSUB|EI|IN|INR|INX|LDA|LDAX|LDHI|LDSI|LHLD|LHLX|LXI|MOV|MVI|NOP|ORA|ORI|OUT|POP|PUSH|RAL|RAR|RC|RDEL|RIM|RLC|RM|RNC|RNZ|RP|RPE|RPO|RRC|RZ|SBB|SBI|SHLD|SHLX|SIM|SPHL|STA|STAX|STC|SUB|SUI|XCHG|XRA|XRI|XTHL))(?=[\\s;]|$)",
           "beginCaptures": {
             "1": {
               "name": "keyword.other.opcode.retrocore"

@@ -149,7 +149,9 @@ slot. `ProFileDrive` plays the ProFile's Z8 controller, shared with the [Apple I
 The first four are the Apple III card's. Its lines are an addressable latch in its $Cn00 page, which this card keeps for
 its firmware, so they are ports here. Apple's ProFile gives its size only in its identification block ($FFFFFF, which
 the drive answers), and reading that through the handshakes does not fit in 256 bytes beside the driver, so the card
-reports it. FORMAT succeeds and does nothing. The emulated ProFile answers at once, with no seek or rotation time, and
+reports it. FORMAT succeeds and does nothing. A boot that fails, as from a ProFile with no image, goes on with the
+Autostart Monitor's startup scan from the next lower slot, as an empty Disk II drive does; with the II's original
+Monitor, which has no scan, it stops. The emulated ProFile answers at once, with no seek or rotation time, and
 keeps no block tags.
 
 **Apple's mouse firmware** (341-0270-C) is an SDK source too, `Roms/Mouse/MouseInterface.asm`, which assembles

@@ -163,7 +163,8 @@ internal static class SdkModules
         if (File.Exists(slot7)) { debug.Add(new SourceMapModule(AssembleRom(slot7), Apple2MemoryArea.Slot7Rom)); }
 
         // The mouse and ProFile cards' firmware reaches nothing inside itself by an absolute address, so it works in
-        // any slot: one assembly maps each slot's page, wherever the card's bytes are the ones installed.
+        // any slot: one assembly maps each slot's page, wherever the card's whole ROM is the one installed (a Disk II's
+        // boot ROM starts with the same LDX #$20 as the ProFile's).
         foreach (string card in (ReadOnlySpan<string>)["Mouse.rom.asm", "ProFile.rom.asm"])
         {
             string path = Path.Join(roms, card);
@@ -175,7 +176,8 @@ internal static class SdkModules
                 debug.Add(new SourceMapModule(
                     cardRom,
                     Apple2MemoryArea.Slot1Rom + (slot - 1),
-                    relocation: page - cardRom.Sections[0].Origin));
+                    relocation: page - cardRom.Sections[0].Origin,
+                    wholeImage: true));
             }
         }
 

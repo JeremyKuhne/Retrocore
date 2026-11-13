@@ -53,6 +53,48 @@ public sealed class CardFirmwareSourceTests
     }
 
     /// <summary>
+    ///  A Disk II's boot ROM starts with the ProFile firmware's LDX #$20, but debugs at its own source: a card's
+    ///  firmware maps only where its whole ROM is installed.
+    /// </summary>
+    [TestMethod]
+    public void OtherCardsRomsAreNotTheFirmware()
+    {
+        Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
+        machine.Bus.InstallDiskII(6, SdkModules.BuildDiskII(sectors: 16, s_inputs));
+        DebugInfo debug = new();
+        SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
+        Apple2TestMemory memory = new(machine.Bus);
+
+        machine.Bus.Peek(0xC600).Should().Be(ProFileRom.Bytes[0], "both start with LDX #$20");
+        machine.Bus.Peek(0xC601).Should().Be(ProFileRom.Bytes[1]);
+        string path = debug.Position(memory, 0xC600)?.Chain[^1].Path ?? throw new AssertFailedException("No source.");
+        Path.GetFileName(path).Should().NotBe("ProFile.rom.asm");
+        List<string> files = [];
+        foreach (SourceMapModule module in debug.Modules.OfType<SourceMapModule>())
+        {
+            if (module.Area is Apple2MemoryArea.Slot6Rom && module.Position(memory, 0xC600) is { } position)
+            {
+                files.Add(Path.GetFileName(position.Chain[^1].Path));
+            }
+        }
+
+        files.Should().NotBeEmpty().And.NotContain(["ProFile.rom.asm", "Mouse.rom.asm"]);
+    }
+
+    /// <summary>
+    ///  A slot's module documents its routines at that slot's addresses, so their contracts are checked there.
+    /// </summary>
+    [TestMethod]
+    public void DocumentationMovesWithTheSlot()
+    {
+        DebugInfo debug = new();
+        SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, s_inputs);
+        SourceMapModule slot2 = debug.Modules.OfType<SourceMapModule>().First(MouseInSlotTwo);
+        slot2.Documentation.Symbols["SETMOUSE"].Should().Be(0xC200 | (MouseRom.SETMOUSE & 0xFF));
+        slot2.Documentation.Symbols["CommandPort"].Should().Be(0xC080, "constants stay");
+    }
+
+    /// <summary>
     ///  A line in the firmware has an entry in every slot, so a breakpoint there stops wherever the card is.
     /// </summary>
     [TestMethod]
@@ -65,6 +107,9 @@ public sealed class CardFirmwareSourceTests
         List<ushort> entries = [.. debug.Modules.SelectMany(module => module.Entries(source, line))];
         entries.Order().Should().Equal(Enumerable.Range(1, 7).Select(slot => (ushort)((0xC0 | slot) << 8 | (ProFileRom.Driver & 0xFF))));
     }
+
+    private static bool MouseInSlotTwo(SourceMapModule module) =>
+        module.Area is Apple2MemoryArea.Slot2Rom && module.TryResolve("SETMOUSE", out long _);
 
     // The outermost line, the invocation where a routine is a macro call, follows the routine's label.
     private static void AtLabel(DebugInfo debug, Apple2TestMemory memory, ushort address, string file, string label)

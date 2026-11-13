@@ -48,7 +48,8 @@
 ;
 ; ProDOS mailbox ABI:
 ;   $42 command: 0=status, 1=read, 2=write, 3=format (which does nothing).
-;   $43 unit: drive bit 7 and slot bits 6..4; drive two answers $28, no device.
+;   $43 unit: drive bit 7 and slot bits 6..4. The card is one volume ($CnFE), so
+;   ProDOS asks only for drive one, and the driver does not look at the drive bit.
 ;   $44/$45 buffer address, $46/$47 block number, both little endian.
 ;   A=0 and carry clear on success; A=error and carry set on failure ($27 an I/O
 ;   error, a failed block or a refused handshake, $28 no ProFile). Status returns the block count in X (low) and Y (high); the card takes
@@ -72,6 +73,14 @@ BlockHigh = $47
 IORTS = $FF58                       ; an RTS in every Apple II Monitor
 StackPage = $0100
 BootPage = $08                      ; ProDOS's boot block goes to $0800 and starts at $0801
+BootEntry = $0801
+
+; The Autostart Monitor's startup scan: LOC0/LOC1 point at the slot it is trying, and SLOOP tries the next lower one,
+; going on to BASIC after slot 1. The II's original Monitor has no scan; it has a JSR at $FABA, not SLOOP's LDY #.
+LOC0 = $00
+LOC1 = $01
+SLOOP = $FABA
+LdyImmediate = $A0
 
 DataOut = $C080
 DataIn = $C081
@@ -103,11 +112,11 @@ WriteCapabilityMask = %00000100
 ReadCapabilityMask = %00000010
 StatusCapabilityMask = %00000001
 
-;; Boots the ProFile: reads block 0 to $0800 through <Driver>, which returns to the block's code at $0801.
+;; Boots the ProFile: reads block 0 to $0800 through <Driver>, which returns to <BootRead>.
 ;;
-;; It finds its slot from the return address an RTS in the Monitor leaves on the stack, and pushes $0800 as the
-;; driver's return address, so that the driver's RTS goes on to $0801 with X = the slot times 16, as ProDOS's
-;; boot block expects.
+;; It finds its slot from the return address an RTS in the Monitor leaves on the stack, and pushes <BootRead> in this
+;; slot's page as the driver's return address. It points LOC0/LOC1 at this slot, as the startup scan does, so that a
+;; failed boot can go on with the scan, however the card was started.
 Boot:
     ldx #$20                        ; $Cn01 = $20, $Cn03 = $00, $Cn05 = $03: a ProDOS block device
     ldy #$00
@@ -116,19 +125,22 @@ Boot:
     jsr IORTS
     tsx
     lda StackPage,x                 ; $Cn, the high byte of the return address
+    sta LOC1
+    pha                             ; the driver returns to BootRead in this page
     asl a
     asl a
     asl a
     asl a
     sta Unit                        ; drive 1 in this slot
+    lda #<(BootRead - 1)
+    pha
     lda #BootPage
     sta BufferHigh
-    pha
     lda #0
+    sta LOC0
     sta BufferLow
     sta BlockLow
     sta BlockHigh
-    pha
     lda #1
     sta Command
     bne Driver
@@ -146,14 +158,13 @@ Done:
     rts
 
 ;; The ProDOS block-device entry: performs the command in the zero-page mailbox.
-;; In:    Command = 0 for status, 1 to read, 2 to write, 3 (or above) to format; Unit = drive and slot,
+;; In:    Command = 0 for status, 1 to read, 2 to write, 3 (or above) to format; Unit = the slot,
 ;;          BufferLow/BufferHigh = the buffer, BlockLow/BlockHigh = the block number
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error; X/Y = the block count, for status;
 ;;          otherwise X = the slot times 16
 ;; Uses:  A, X, Y
 Driver:
     lda Unit
-    bmi NoDrive                     ; drive 2
     and #$70
     tax
     lda Status,x
@@ -277,6 +288,20 @@ Failed:
     lda #IoError
     sec
     rts
+
+;; Where <Driver> returns at boot: runs block 0 at $0801 when it was read, with X = the slot times 16. Otherwise, as
+;; when the scan finds no disk in a slot, it goes on with the Monitor's startup scan from the next lower slot, or
+;; stops here with the II's original Monitor, which has no scan to go back to.
+;; In:    carry = set when the read failed, X = the slot times 16
+BootRead:
+    bcs BootRead_Failed
+    jmp BootEntry
+BootRead_Failed:
+    lda SLOOP
+    cmp #LdyImmediate
+BootRead_Stop:
+    bne BootRead_Stop               ; the original Monitor
+    jmp SLOOP
 
 .assert * <= $C5FC
 .org $C5FC

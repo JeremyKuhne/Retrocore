@@ -81,7 +81,7 @@ public sealed class Apple2ProFileTests
     }
 
     /// <summary>
-    ///  FORMAT succeeds and does nothing; drive 2, a block past the end, a read-only image's write and a slot with no
+    ///  FORMAT succeeds and does nothing; a block past the end, a read-only image's write and a slot with no
     ///  ProFile cabled each answer with ProDOS's error.
     /// </summary>
     [TestMethod]
@@ -89,7 +89,6 @@ public sealed class Apple2ProFileTests
     {
         (Apple2Machine machine, _) = Machine(Apple2Model.IIeEnhanced, slot: 5);
         Error(Call(machine, command: 3, unit: 0x50, block: 0)).Should().Be(0);
-        Error(Call(machine, command: 1, unit: 0xD0, block: 0)).Should().Be(0x28, "there is no drive 2");
         Error(Call(machine, command: 1, unit: 0x50, block: (ushort)Blocks)).Should().Be(0x27, "the block is past the end");
         Error(Call(machine, command: 1, unit: 0x50, block: 0)).Should().Be(0, "the ProFile is ready again");
 
@@ -130,6 +129,39 @@ public sealed class Apple2ProFileTests
 
         machine.Bus.Peek(0x07).Should().Be(0xA5, "block 0 ran");
         machine.Bus.Peek(0x06).Should().Be(0x50, "the firmware passes slot * 16 in X");
+    }
+
+    /// <summary>
+    ///  A ProFile with no image fails its boot and the startup scan goes on to the next lower slot, as for an empty
+    ///  Disk II drive: here it boots the Disk II in slot 6.
+    /// </summary>
+    [TestMethod]
+    public void FailedBootGoesOnWithTheScan()
+    {
+        Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
+        machine.Bus.InstallProFile(7);
+        machine.Bus.InstallDiskII(6, SdkModules.BuildDiskII(sectors: 16, s_inputs));
+        byte[] image = new byte[35 * 16 * 256];
+        byte[] boot =
+        [
+            0x01,                   // one sector to read
+            0x86, 0x06,             // STX $06
+            0xA9, 0xA5,             // LDA #$A5
+            0x85, 0x07,             // STA $07
+            0x4C, 0x07, 0x08        // JMP *
+        ];
+
+        boot.CopyTo(image, 0);
+        machine.Drives[0].Insert(SectorDiskConverter.Convert(image, proDosOrder: false), "boot", "DSK");
+        machine.Reset();
+
+        for (int second = 0; second < 5 && machine.Bus.Peek(0x07) != 0xA5; second++)
+        {
+            machine.Run(BasicMachines.IIeClock);
+        }
+
+        machine.Bus.Peek(0x07).Should().Be(0xA5, "the Disk II's boot sector ran");
+        machine.Bus.Peek(0x06).Should().Be(0x60, "slot 6 booted");
     }
 
     /// <summary>

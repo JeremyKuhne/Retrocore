@@ -9,7 +9,7 @@
         .cpu Pcode
 
 ;; A standard procedure's number, for CSP.
-.scope Csp
+.scope CSP
 IOC = 0
 NEW = 1
 MVL = 2
@@ -251,7 +251,7 @@ FWRITEREAL = 4
 
 ;; Call a standard procedure.
 .macro CSP name
-        .byte 158, Csp::name
+        .byte 158, CSP::name
 .endmacro
 
 ;; Calls a standard procedure by number.

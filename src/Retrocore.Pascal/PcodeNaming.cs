@@ -15,7 +15,7 @@ internal sealed class PcodeNaming
 {
     private static readonly HashSet<string> s_reserved = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Csp",
+        "CSP",
         "PASCALSY",
         "PASCALIO"
     };

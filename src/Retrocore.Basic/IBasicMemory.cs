@@ -39,4 +39,9 @@ public interface IBasicMemory
     /// <param name="address">The address, $0000-$FFFF.</param>
     /// <param name="value">The byte.</param>
     void WriteFar(byte xByte, int address, byte value) => Write(address, value);
+
+    /// <summary>
+    ///  Gets whether the memory keeps words high byte first, as the 6809's does, rather than low byte first.
+    /// </summary>
+    bool BigEndian => false;
 }

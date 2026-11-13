@@ -122,7 +122,7 @@ internal sealed partial class DebugSession
         {
             int reference = BasicChildren + _basicChildren.Count;
             _basicChildren[reference] = () => Elements(array, 0, array.Count, reference);
-            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1));
+            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1 + array.LowerBound));
             list.Add(new JsonObject
             {
                 ["name"] = array.Name,
@@ -149,7 +149,7 @@ internal sealed partial class DebugSession
                 _basicChildren[chunk] = () => Elements(array, from, stop, chunk);
                 list.Add(new JsonObject
                 {
-                    ["name"] = $"[{start}..{stop - 1}]",
+                    ["name"] = $"[{start + array.LowerBound}..{stop - 1 + array.LowerBound}]",
                     ["value"] = "",
                     ["variablesReference"] = chunk
                 });
@@ -214,7 +214,7 @@ internal sealed partial class DebugSession
     {
         string line = BasicDirect ? "direct mode" : CurrentLine.ToString(CultureInfo.InvariantCulture);
         string Span(int from, int to) => $"${from:X4}-${Math.Max(from, to - 1):X4} ({Math.Max(0, to - from)} bytes)";
-        if (Basic == BasicDialect.Integer)
+        if (Basic is IntegerBasicDialect)
         {
             // Integer BASIC's variables grow up from LOMEM to PV, and its program down from HIMEM to PP.
             int lomem = Word(IntegerBasicDialect.LoMem);

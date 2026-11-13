@@ -204,6 +204,27 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  The Apple-1's sources pass the lint as the editor runs it: the Woz Monitor, the cassette interface, the
+    ///  character generator and Apple-1 BASIC.
+    /// </summary>
+    [TestMethod]
+    public void Apple1DocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Apple1");
+        List<SourceAnalysis> sdk =
+        [
+            .. SourceIncludes.Roots(folder)
+                .Concat(SourceIncludes.Roots(Path.Join(folder, "Basic")))
+                .Select(file => SourceAnalysis.Assemble(file, _ => null))
+        ];
+
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain(["WozMonitor.asm", "Aci.asm", "Basic.asm"]);
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
     ///  The Color Computer's ROM sources pass the lint as the editor runs it, 6809 registers and flags included.
     /// </summary>
     [TestMethod]

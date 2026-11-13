@@ -341,7 +341,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "apple1" },
         diskFormats: [],
         tapeFormats: ["wav"],
-        basicDialects: [],
+        basicDialects: ["apple1"],
         dos: false,
         choices: [
             {
@@ -379,7 +379,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "coco", model: "coco1" },
         diskFormats: ["dsk"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["colorbasic"],
         dos: false,
         choices: [
             {
@@ -404,7 +404,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "coco", model: "coco2" },
         diskFormats: ["dsk"],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["colorbasic"],
         dos: false,
         choices: [
             {

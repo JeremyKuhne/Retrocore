@@ -170,7 +170,8 @@ internal interface IDebugTarget : IDebugMemory
     /// <remarks>
     ///  <para>
     ///   The Microsoft BASICs start every statement at <see cref="Debug.BasicRom.Gone"/>. A BASIC that starts them in
-    ///   more than one place, or only sometimes at one, says so here.
+    ///   more than one place, or only sometimes at one, says so here, as AppleSoft does under ProDOS's BASIC.SYSTEM,
+    ///   which enters each statement past <c>GONE</c>.
     ///  </para>
     /// </remarks>
     /// <param name="pc">The instruction's address.</param>
@@ -219,7 +220,7 @@ internal interface IDebugTarget : IDebugMemory
 
     /// <summary>
     ///  Moves BASIC to another statement, at <see cref="Debug.BasicRom.Gone"/>: sets the current line and the text
-    ///  pointer the statement fetch continues from.
+    ///  pointer the statement fetch continues from. A statement start past <c>GONE</c> moves back to it.
     /// </summary>
     /// <param name="line">The line number.</param>
     /// <param name="textPointer">The address before the statement's first byte.</param>
@@ -423,6 +424,18 @@ internal interface IDebugTarget : IDebugMemory
     bool Key(int code);
 
     /// <summary>
+    ///  Gets how far apart pasted keys go, in the machine's cycles: between keys, and after a RETURN; null to queue
+    ///  them all at once, as the machine's keyboard holds them until a program takes each.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A program that keeps its own type-ahead, as Apple Pascal's Editor does, can lose keys that come faster than
+    ///   it empties it, such as while it scrolls after a line.
+    ///  </para>
+    /// </remarks>
+    (ulong Key, ulong Line)? TypingPace => null;
+
+    /// <summary>
     ///  Presses the machine's reset: CONTROL-RESET on the IIe, the reset button on the Model I.
     /// </summary>
     void Reset();
@@ -454,9 +467,10 @@ internal interface IDebugTarget : IDebugMemory
     ///  Carries out a <c>retro/device</c> action on one of <see cref="Devices"/>.
     /// </summary>
     /// <param name="device">The device.</param>
-    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c> or <c>writeProtect</c>.</param>
+    /// <param name="action"><c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c> or <c>save</c>.</param>
     /// <param name="args">
-    ///  The request: <c>path</c> for insert and record, <c>writeProtected</c> for writeProtect.
+    ///  The request: <c>path</c> for insert and record, and for save when not the media's own image;
+    ///  <c>writeProtected</c> for writeProtect.
     /// </param>
     /// <exception cref="ArgumentException">
     ///  The device does not support the action, or an argument is missing.

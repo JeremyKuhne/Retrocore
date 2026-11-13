@@ -69,10 +69,10 @@ internal sealed partial class Apple2DebugTarget
             if (_integerChecked == ulong.MaxValue || now - _integerChecked > BasicCheckCycles || now < _integerChecked)
             {
                 _integerChecked = now;
-                _integerActive = Peek(0xEC00) == IntegerBasicSyntax.s_table[0]
-                    && Peek(0xEC01) == IntegerBasicSyntax.s_table[1]
-                    && Peek(0xEC02) == IntegerBasicSyntax.s_table[2]
-                    && Peek(0xEC03) == IntegerBasicSyntax.s_table[3];
+                _integerActive = Peek(0xEC00) == IntegerBasicSyntax.Integer.Table[0]
+                    && Peek(0xEC01) == IntegerBasicSyntax.Integer.Table[1]
+                    && Peek(0xEC02) == IntegerBasicSyntax.Integer.Table[2]
+                    && Peek(0xEC03) == IntegerBasicSyntax.Integer.Table[3];
             }
 
             return _integerActive;
@@ -98,7 +98,7 @@ internal sealed partial class Apple2DebugTarget
     public (int Line, int Address)? BasicStatementStart(ushort pc)
     {
         if (BasicRom is not { } rom) { return null; }
-        if (!IntegerActive) { return pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null; }
+        if (!IntegerActive) { return AppleSoftStatementStart(rom, pc); }
 
         int token = IntegerWord(IntegerBasicDialect.Px);
         if (pc == rom.Gone)
@@ -142,7 +142,7 @@ internal sealed partial class Apple2DebugTarget
     private BasicRom? IntegerBasicRom(IReadOnlyDictionary<string, long>? symbols)
     {
         if (symbols is null) { return null; }
-        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "CON", "STOPPED_AT", "END"];
+        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "CON", "STOPPED_AT", "END", "TRYLINE_END"];
         if (names.Any(name => !symbols.ContainsKey(name))) { return null; }
         _integerColon = (ushort)symbols["WAITTOKEN"];
         ushort line = (ushort)symbols["RUNLOOP"];
@@ -156,7 +156,8 @@ internal sealed partial class Apple2DebugTarget
             new Dictionary<ushort, string>
             {
                 [(ushort)symbols["STOPPED_AT"]] = BasicRom.IntegerStop,
-                [(ushort)symbols["END"]] = BasicRom.IntegerEnd
+                [(ushort)symbols["END"]] = BasicRom.IntegerEnd,
+                [(ushort)symbols["TRYLINE_END"]] = BasicRom.IntegerRanOff
             });
     }
 

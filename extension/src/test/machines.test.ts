@@ -80,6 +80,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         }
     }
     assert.deepEqual(machineById("apple2-ii")?.basicDialects, ["integer"]);
+    assert.deepEqual(machineById("coco2")?.basicDialects, ["colorbasic"]);
     assert.deepEqual(machineById("trs80-model1-level2")?.tapeFormats, ["cas"]);
     assert.deepEqual(machineById("trs80-model1-level1")?.diskFormats, [], "Level I has no disks");
     assert.deepEqual(machineById("trs80-model4p")?.tapeFormats, [], "the 4P has no cassette port");
@@ -89,6 +90,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
     assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");
+    assert.deepEqual(machineById("apple1")?.basicDialects, ["apple1"], "Apple-1 BASIC loads into its $E000 bank");
     for (const id of ["coco1", "coco2", "coco3"]) {
         const coco = machineById(id);
         assert.equal(coco?.configuration.machine, "coco");

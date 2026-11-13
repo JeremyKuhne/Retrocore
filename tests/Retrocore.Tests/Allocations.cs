@@ -9,27 +9,82 @@ namespace Retrocore.Tests;
 /// </summary>
 internal static class Allocations
 {
+    // Room for the work's own allocations and for what the tests running beside it allocate meanwhile, which in a
+    // full run with the machines' fixtures used up 64 MB during a measurement that rendered 32 frames.
+    private const long RegionSize = 256 * 1024 * 1024;
+
+    // A measurement whose region a GC broke into is taken again, up to this many times in all.
+    private const int Attempts = 5;
+
+    // The no-GC region covers the whole process, and only one can be open at a time.
+    private static readonly Lock s_region = new();
+
     /// <summary>
-    ///  Gets the fewest bytes the work allocates in any of a few runs.
+    ///  Gets the bytes the work allocates on this thread, measured while no GC can run.
     /// </summary>
-    /// <param name="work">The work, already run once so its code and types are loaded.</param>
-    /// <param name="attempts">The runs to measure.</param>
-    /// <returns>The lowest count, which is 0 for allocation-free work.</returns>
+    /// <param name="work">
+    ///  The work, already run once so its code, types and pooled buffers are ready. Keep it short: the tests running
+    ///  beside it allocate meanwhile, and once the region is used up a GC ends it.
+    /// </param>
+    /// <returns>The bytes allocated, which is 0 for allocation-free work.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///  No attempt held: each either could not start a no-GC region or had a GC run during it.
+    /// </exception>
     /// <remarks>
-    ///  Under a loaded parallel test run the runtime can allocate on the thread once, while the work's code is
-    ///  being promoted to optimized code. Work that allocates does so on every run, so the lowest count still
-    ///  shows it.
+    ///  <para>
+    ///   <see cref="GC.GetAllocatedBytesForCurrentThread"/> counts the unused part of the thread's allocation
+    ///   context, up to about 8 KB, as allocated when a GC retires it. Another thread can start that GC, including a
+    ///   background GC's suspension, which leaves <see cref="GC.CollectionCount(int)"/> unchanged. So the work runs in
+    ///   a no-GC region, and when <see cref="GC.EndNoGCRegion"/> reports that a GC ran anyway, it is measured again.
+    ///  </para>
     /// </remarks>
-    internal static long Fewest(Action work, int attempts = 3)
+    internal static long During(Action work)
     {
-        long fewest = long.MaxValue;
-        for (int attempt = 0; attempt < attempts && fewest != 0; attempt++)
+        ArgumentNullException.ThrowIfNull(work);
+        int unstarted = 0;
+        lock (s_region)
         {
-            long start = GC.GetAllocatedBytesForCurrentThread();
-            work();
-            fewest = Math.Min(fewest, GC.GetAllocatedBytesForCurrentThread() - start);
+            for (int attempt = 0; attempt < Attempts; attempt++)
+            {
+                if (!GC.TryStartNoGCRegion(RegionSize))
+                {
+                    unstarted++;
+                    continue;
+                }
+
+                long allocated;
+                bool held;
+                try
+                {
+                    long start = GC.GetAllocatedBytesForCurrentThread();
+                    work();
+                    allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+                }
+                finally
+                {
+                    held = EndRegion();
+                }
+
+                if (held) { return allocated; }
+            }
         }
 
-        return fewest;
+        string unstartedText = $"{unstarted} could not start a no-GC region of {RegionSize / (1024 * 1024)} MB";
+        string interruptedText = $"a GC ran during the other {Attempts - unstarted}";
+        throw new InvalidOperationException($"No measurement held in {Attempts} attempts: {unstartedText}, and {interruptedText}.");
+    }
+
+    // Ends the no-GC region; false when a GC ran in it, which may have retired the thread's allocation context.
+    private static bool EndRegion()
+    {
+        try
+        {
+            GC.EndNoGCRegion();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 }

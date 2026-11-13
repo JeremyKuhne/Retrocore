@@ -655,6 +655,59 @@ try {
         assert.deepEqual(await moved(), [{ line: last, column: null }], "erasing the program removes it");
     }
 
+    // An interrupt that comes between a statement's start and its run returns there without starting it again: with the
+    // Mockingboard's timer interrupting every 1499 cycles, a breakpoint that never stops counts one hit per pass.
+    {
+        const screen = async () => (await request("apple2/text")).rows.join("\n");
+        const waitFor = async (test, what) => {
+            for (const end = performance.now() + 30000; performance.now() < end;) {
+                if (test(await screen())) return;
+                await new Promise(done => setTimeout(done, 100));
+            }
+            assert.fail(`${what}:\n${await screen()}`);
+        };
+
+        const bytes = list => Buffer.from(list).toString("base64");
+        const period = 1499;
+        // $0300: IRQLOC to the handler at $0330, the 6522's timer 1 free-running with its interrupt on, then CLI.
+        const setup = [
+            0xA9, 0x30, 0x8D, 0xFE, 0x03, 0xA9, 0x03, 0x8D, 0xFF, 0x03,
+            0xA9, 0x40, 0x8D, 0x0B, 0xC4, 0xA9, 0xC0, 0x8D, 0x0E, 0xC4,
+            0xA9, period & 0xFF, 0x8D, 0x04, 0xC4, 0xA9, period >> 8, 0x8D, 0x05, 0xC4,
+            0x58, 0x60
+        ];
+
+        // $0330: clears the timer's interrupt, counts it in $0350, and returns with the program's A.
+        const handler = [0xAD, 0x04, 0xC4, 0xEE, 0x50, 0x03, 0xD0, 0x03, 0xEE, 0x51, 0x03, 0xA5, 0x45, 0x40];
+        events.length = 0;
+        await request("launch", { machine: "apple2", romDirectory: roms, model: "iie-enhanced", stopOnEntry: false,
+            speed: "max", sound: "off", mockingboard: true });
+        const path = (await request("retro/basic/document", { base: "retrocore-basic://iie/" })).uri;
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await waitFor(text => text.includes("]"), "AppleSoft's prompt");
+        await request("pause", { threadId: 1 });
+        await event("stopped");
+        await request("writeMemory", { memoryReference: "0x300", data: bytes(setup) });
+        await request("writeMemory", { memoryReference: "0x330", data: bytes(handler) });
+        await request("writeMemory", { memoryReference: "0x350", data: bytes([0, 0]) });
+        const written = await request("retro/basic/write",
+            { text: "10 CALL 768\n20 FOR I = 1 TO 2000\n30 A = A + 1\n40 NEXT I\n50 PRINT \"DONE\"\n" });
+        assert.equal(written.success, true);
+        const lines = (await request("retro/basic/program")).text.split(/\r?\n/);
+        const thirty = lines.findIndex(line => line.startsWith("30 ")) + 1;
+        await request("setBreakpoints", { source: { path }, breakpoints: [{ line: thirty, hitCondition: ">100000" }] });
+        await request("continue", { threadId: 1 });
+        await request("retro/type", { text: "RUN\r" });
+        await waitFor(text => text.includes("DONE"), "the program's end");
+        const interrupts = Buffer.from((await request("readMemory", { memoryReference: "0x350", count: 2 })).data, "base64")
+            .readUInt16LE(0);
+        assert.ok(interrupts > 2000, `the timer interrupted ${interrupts} times`);
+        assert.deepEqual((await request("retro/breakpoints")).breakpoints.map(breakpoint => breakpoint.hits), [2000]);
+        await request("pause", { threadId: 1 });
+        await event("stopped");
+    }
+
     // The mouse and ProFile cards' firmware debugs at its source in whatever slot the card is in: the startup scan
     // boots the ProFile in slot 7, and a breakpoint in ProFile.rom.asm stops in its driver at $C7xx.
     const sdkRoms = join(root, "src", "Retrocore.Machines.Apple2", "Roms");

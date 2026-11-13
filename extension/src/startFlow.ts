@@ -76,8 +76,10 @@ function dialectName(dialect: string): string {
     switch (dialect) {
         case "applesoft": return "AppleSoft";
         case "integer": return "Integer BASIC";
+        case "apple1": return "Apple-1 BASIC";
         case "level2": return "Level II BASIC";
         case "business": return "Business BASIC";
+        case "colorbasic": return "Color BASIC";
         default: return dialect;
     }
 }

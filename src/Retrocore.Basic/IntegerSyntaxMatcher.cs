@@ -25,12 +25,12 @@ internal sealed class IntegerSyntaxMatcher
 
     private const int TableStart = 0xEC00;
     private const int TableEnd = 0xEE00;
-    private const int IndexStart = 0xF197;
 
     private const byte EndMark = 0xDF;
     private const byte Quote = 0xA2;
     private const byte Blank = 0xA0;
 
+    private readonly IntegerSyntaxTables _tables;
     private readonly byte[] _zeroPage = new byte[0x100];
     private readonly byte[] _input = new byte[0x100];
     private readonly bool[] _literal = new bool[0x100];
@@ -43,8 +43,10 @@ internal sealed class IntegerSyntaxMatcher
     ///  Puts a line in the input buffer as GETCMD does.
     /// </summary>
     /// <param name="text">The line's units.</param>
-    internal IntegerSyntaxMatcher(ReadOnlySpan<int> text)
+    /// <param name="tables">The BASIC's syntax tables.</param>
+    internal IntegerSyntaxMatcher(ReadOnlySpan<int> text, IntegerSyntaxTables tables)
     {
+        _tables = tables;
         // GETCMD: the line from index 0, its end marked by an underline where the return was.
         _length = text.Length;
         for (int index = 0; index < text.Length; index++)
@@ -276,7 +278,7 @@ internal sealed class IntegerSyntaxMatcher
         _zeroPage[TxtNdxStk + x] = _zeroPage[TxtNdx];
         _zeroPage[(TokNdxStk + x) & 0xFF] = _zeroPage[TokNdx];
         y = a & 0x1F;
-        a = IntegerBasicSyntax.s_index[y];
+        a = _tables.Index[y];
         goto STARTRULE;
 
     LE4B1Letter:
@@ -316,8 +318,8 @@ internal sealed class IntegerSyntaxMatcher
         y = _stack.Pop();
         a = x;
 
-        // KEYMATCHED: a reserved word ($85 and up) ends a name instead.
-        if (a >= 0x85)
+        // KEYMATCHED: a reserved word ($85 and up) ends a name instead, in Integer BASIC.
+        if (_tables.ReservedWords && a >= 0x85)
         {
             y = 0x02;
             goto ITEMFAILED;
@@ -344,8 +346,9 @@ internal sealed class IntegerSyntaxMatcher
     {
         int address = (_zeroPage[SynPag + 1] << 8) | _zeroPage[SynPag];
         address = page ? address : address + y;
-        if (address is >= TableStart and < TableEnd) { return IntegerBasicSyntax.s_table[address - TableStart]; }
-        return address is >= IndexStart and < IndexStart + 32 ? IntegerBasicSyntax.s_index[address - IndexStart] : (byte)0;
+        if (address is >= TableStart and < TableEnd) { return _tables.Table[address - TableStart]; }
+        int index = _tables.IndexStart;
+        return address >= index && address < index + 32 ? _tables.Index[address - index] : (byte)0;
     }
 
     // A character of the line as the matcher compares it: letters outside strings and remarks as capitals.

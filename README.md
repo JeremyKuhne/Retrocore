@@ -10,7 +10,7 @@ straight into the ROM or DOS source.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
-| Apple-1 | MOS 6502 | Woz Monitor, Apple Cassette Interface PROM, Signetics 2513 character generator | 4 or 8 KB RAM plus the `$E000` bank, 6821 PIA keyboard and 60-characters-a-second video terminal, Apple Cassette Interface (WAV tapes, play and record) |
+| Apple-1 | MOS 6502 | Woz Monitor, Apple Cassette Interface PROM, Signetics 2513 character generator; Apple-1 BASIC, which loads into RAM | 4 or 8 KB RAM plus the `$E000` bank, 6821 PIA keyboard and 60-characters-a-second video terminal, Apple Cassette Interface (WAV tapes, play and record) |
 | Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, Apple II 3.5 Disk Controller-compatible SmartPort with two SuperDrives (400K/800K, 720K/1.44 MB), ProFile hard disk cards (PO, HDV), SDL3 game controllers |
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
@@ -163,6 +163,7 @@ machine.
 | [`WozMonitor.asm`](src/Retrocore.Machines.Apple1/Roms/WozMonitor.asm) | The Apple-1 Monitor, `$FF00`–`$FFFF`. |
 | [`Aci.asm`](src/Retrocore.Machines.Apple1/Roms/Aci.asm) | The Apple Cassette Interface's PROM, `$C100`–`$C1FF`. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple1/Roms/CharacterGenerator.asm) | The Apple-1 terminal's Signetics 2513 (no chip dump is published; its glyphs match the original Apple II's). |
+| [`Basic/Basic.asm`](src/Retrocore.Machines.Apple1/Roms/Basic/Basic.asm) | Apple-1 BASIC, `$E000`–`$EFFF`, which loads from tape into the `$E000` bank. |
 | [`Level2.asm`](src/Retrocore.Machines.Trs80/Roms/Level2.asm) | TRS-80 Model I Level II BASIC, revisions 1.2 and 1.3. |
 | [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Model I Level I BASIC. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGenerator.asm) | The Model I's stock MCM6670P character generator. |
@@ -218,7 +219,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp`, the IIe chip/oracle tests, and `extension`'s full `npm test`. |
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
-| `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor and ACI dumps, `wozmon.bin` and `aci.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
+| `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
 | `RETROCORE_TRS80_ROMS` | TRS-80 ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for every TRS-80, whose ROMs the SDK's sources build. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
@@ -249,13 +250,15 @@ dotnet test Retrocore.slnx -c Release --no-build
 node tools/Test-Trs80Dap.mjs          # needs nothing external
 node tools/Test-Trs80Model3Dap.mjs    # needs nothing external; it writes stand-in ROMs
 node tools/Test-Apple1Dap.mjs         # needs nothing external
-node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add a disk session and dumps
+node tools/Test-Apple1BasicDap.mjs    # needs nothing external
+node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps in RETROCORE_COCO_ROMS when set
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
 node tools/Test-IIeDap.mjs            # SDK-built ROMs, or the dumps in RETROCORE_IIE_ROMS
+node tools/Test-ProDosBasicDap.mjs    # needs the ProDOS 2.4.3 image from Fetch-M1Dependencies.ps1
 
 npm --prefix extension ci
 npm --prefix extension run compile

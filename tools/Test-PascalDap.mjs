@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1) and a 64K Apple II Plus (Apple Pascal 1.1):
+// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1), a 64K Apple II Plus (Apple Pascal 1.1) and a
+// 128K IIe (Apple Pascal 1.3):
 // boots Pascal, stops on the Pascal thread at a pascal function breakpoint on the Filer's main procedure, reads its
 // frames, scopes and the p-machine's registers, steps over a p-code, and steps out to the system once Q quits the
 // Filer. On the Apple III it then compiles a program with a listing, and stops at a source breakpoint in a copy of
 // its source on the host, reads the program's variable by name, steps by line, and stops there again on the loop's
 // next pass.
 // The disks are Apple3Pascal1.1Disk1.dsk and Disk2.dsk in RETROCORE_APPLE3_DISKS (by default <cache>\apple3-disks)
-// and UCSD Pascal 1.1_1.dsk in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
+// and UCSD Pascal 1.1_1.dsk and 1.3_1.DSK in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
 // whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
 
 import { resolve, join } from "node:path";
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -45,6 +47,18 @@ const machines = [
         command: "COMMAND: E(DIT, R(UN, F(ILE",
         filer: "FILEHAND",
         prompt: "FILER: G, S, N"
+    },
+    {
+        // 1.3 needs 128K, and keeps its code in the IIe's auxiliary 64K.
+        name: "Apple IIe (Apple Pascal 1.3)",
+        thread: "IIe CPU",
+        disks: [join(apple2Disks, "UCSD Pascal 1.3_1.DSK")],
+        launch: disks => ({ machine: "apple2", model: "enhanced", diskImage: disks[0] }),
+        title: "Welcome APPLE1, to Apple II Pascal 1.3",
+        start: "",
+        command: "Command: F(ile, E(dit, R(un",
+        filer: "FILEHAND",
+        prompt: "Filer: L(dir"
     }
 ];
 
@@ -109,7 +123,9 @@ async function sourceBreakpoints(machine) {
         await type("E", "No workfile is present");
         await type("\r", ">Edit: A(djst");
         await type("I", ">Insert:");
-        for (const line of hello) await type(`${line}\r`, line);
+        // Pasted whole: the machine's typing pace keeps the Editor from losing keys as it scrolls.
+        await request("retro/type", { text: hello.join("\n") + "\n" });
+        await screen(text => hello.every(line => text.includes(line)), "the pasted program");
         await request("retro/key", { code: 3 });
         await screen(text => text.includes(">Edit: A(djst"), "the Editor's prompt");
         await type("Q", "W(rite to a new file name");
@@ -161,6 +177,29 @@ async function sourceBreakpoints(machine) {
         await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
         await request("continue", { threadId: 1 });
         await screen(text => /\n21 /.test(text), "the program's output");
+
+        // The disk the Editor and Compiler wrote saves to an image, as WOZ or as sectors, and lists the new files.
+        const disk2 = () => request("retro/devices").then(body => body.devices.find(device => device.id === "disk2"));
+        assert.equal((await disk2()).media.changed, true);
+        assert.ok((await disk2()).operations.includes("save"));
+        const woz = join(folder, "PASCAL2.woz");
+        const sectors = join(folder, "PASCAL2.dsk");
+        await request("retro/device", { id: "disk2", action: "save", path: woz });
+        await request("retro/device", { id: "disk2", action: "save", path: sectors });
+        const saved = await disk2();
+        assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
+        assert.equal(statSync(sectors).size, 143360);
+        // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
+        const native = process.env.RETROCORE_DAP_HOST;
+        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+        for (const image of [woz, sectors]) {
+            const args = ["--pascal", "catalog", image];
+            const catalog = native
+                ? execFileSync(native, args, { encoding: "utf8" })
+                : execFileSync("dotnet", [host, ...args], { encoding: "utf8" });
+            assert.match(catalog, /HELLO\.CODE/i, image);
+            assert.match(catalog, /HELLO\.LST\.TEXT/i, image);
+        }
     } finally {
         rmSync(folder, { recursive: true, force: true });
     }
@@ -216,6 +255,30 @@ try {
         assert.deepEqual(registers.map(register => register.name), ["IPC", "MP", "BASE", "JTAB", "SEG"]);
         assert.match(registers[0].value, /^(x8[0-9A-F]:)?\$[0-9A-F]{4}$/);
 
+        // On the Apple II a local's memory reference reads and writes the word the Locals show, wherever the interpreter
+        // has RAM switched: on the IIe, 1.3 runs with auxiliary reads on. The Apple III's locals are through X-bytes,
+        // which have no reference.
+        if (machine.name !== "Apple III") {
+            const locals = scopes.find(scope => scope.name === "Locals");
+            const word = (await request("variables", { variablesReference: locals.variablesReference })).variables
+                .find(variable => variable.memoryReference);
+            assert.ok(word, "a local has a memory reference");
+            assert.match(word.memoryReference, /^main:0x/);
+            const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
+            const original = await bytes();
+            const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");
+            assert.ok(word.value.endsWith(`($${hex})`), `${word.name} at ${word.memoryReference} shows ${word.value}, reads $${hex}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: Buffer.from([0x34, 0x12]).toString("base64") });
+
+            // Writing memory refreshes the views, so the scopes are read again.
+            const top = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+            const again = (await request("scopes", { frameId: top.id })).scopes.find(scope => scope.name === "Locals");
+            const written = (await request("variables", { variablesReference: again.variablesReference })).variables
+                .find(variable => variable.name === word.name);
+            assert.ok(written.value.endsWith("($1234)"), `${word.name} after writing its memory shows ${written.value}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: original.toString("base64") });
+        }
+
         // Step Over runs one p-code of the procedure.
         await request("next", { threadId: 3 });
         const step = await stop();
@@ -240,7 +303,7 @@ try {
     if (sources) { await sourceBreakpoints(machines[0]); }
 
     await request("disconnect");
-    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.join(" and ")}: the Pascal thread, `
+    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.length < 3 ? passed.join(" and ") : `${passed.slice(0, -1).join(", ")} and ${passed[passed.length - 1]}`}: the Pascal thread, `
         + "a pascal function breakpoint in the Filer, its frames, scopes and registers, Step Over and Step Out"
         + (sources ? "; and on the Apple III a source breakpoint through a listing the Compiler wrote, with line steps." : "."));
 } finally {

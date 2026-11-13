@@ -210,23 +210,24 @@ public class Apple2AudioTests
             audio.Tick((cycle & 16) != 0, board.Left, board.Right);
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int cycle = 0; cycle < 250000; cycle++)
+        Allocations.During(() =>
         {
-            board.Tick();
-            audio.Tick((cycle & 16) != 0, board.Left, board.Right);
-            if ((cycle & 255) == 0)
+            for (int cycle = 0; cycle < 250000; cycle++)
             {
-                board.Write(4, (byte)cycle);
-                board.Write(5, 0);
-                _ = board.Peek(13);
-                _ = board.Read(4);
+                board.Tick();
+                audio.Tick((cycle & 16) != 0, board.Left, board.Right);
+                if ((cycle & 255) == 0)
+                {
+                    board.Write(4, (byte)cycle);
+                    board.Write(5, 0);
+                    _ = board.Peek(13);
+                    _ = board.Read(4);
+                }
             }
-        }
 
-        audio.Flush();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
+            audio.Flush();
+        }).Should().Be(0);
+
         sink.ValidBlocks.Should().BeTrue();
     }
 }

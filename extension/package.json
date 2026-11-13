@@ -22,7 +22,9 @@
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
     "onLanguage:retrocore-business",
+    "onLanguage:retrocore-apple1",
     "onLanguage:retrocore-level1",
+    "onLanguage:retrocore-colorbasic",
     "onLanguage:retrocore-basic"
   ],
   "scripts": {
@@ -137,6 +139,21 @@
         }
       },
       {
+        "id": "retrocore-apple1",
+        "aliases": [
+          "Apple-1 BASIC",
+          "apple1"
+        ],
+        "extensions": [
+          ".apple1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -144,6 +161,21 @@
         ],
         "extensions": [
           ".level1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-colorbasic",
+        "aliases": [
+          "Color BASIC",
+          "colorbasic"
+        ],
+        "extensions": [
+          ".colorbasic.bas"
         ],
         "configuration": "./basic-language-configuration.json",
         "icon": {
@@ -173,7 +205,8 @@
         ],
         "extensions": [
           ".pas",
-          ".pascal"
+          ".pascal",
+          ".text"
         ],
         "configuration": "./pascal-language-configuration.json"
       }
@@ -208,6 +241,16 @@
         "language": "retrocore-business",
         "scopeName": "source.retrocore-business",
         "path": "./syntaxes/business.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-apple1",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-colorbasic",
+        "scopeName": "source.retrocore-colorbasic",
+        "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
         "language": "retrocore-level1",
@@ -253,7 +296,9 @@
             "applesoft",
             "integer",
             "business",
-            "level2"
+            "apple1",
+            "level2",
+            "colorbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -294,6 +339,12 @@
       },
       {
         "language": "retrocore-business"
+      },
+      {
+        "language": "retrocore-apple1"
+      },
+      {
+        "language": "retrocore-colorbasic"
       },
       {
         "language": "retrocore-basic"
@@ -394,6 +445,16 @@
           "command": "retrocore.device.unprotect",
           "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
           "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
+          "group": "1_save"
         }
       ],
       "webview/context": [
@@ -437,6 +498,14 @@
           "when": "false"
         },
         {
+          "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "false"
+        },
+        {
           "command": "retrocore.device.list",
           "when": "false"
         },
@@ -474,7 +543,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -563,6 +632,15 @@
         "command": "retrocore.device.unprotect",
         "title": "Allow Writes",
         "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.save",
+        "title": "Save to Its Image",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveAs",
+        "title": "Save Disk As..."
       },
       {
         "command": "retrocore.device.refresh",
@@ -695,6 +773,11 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
+              },
+              "loadBasic": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
               },
               "rom": {
                 "enum": [
@@ -1105,7 +1188,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -1236,7 +1319,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
@@ -1246,7 +1328,6 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "romDirectory": "${env:RETROCORE_COCO_ROMS}",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

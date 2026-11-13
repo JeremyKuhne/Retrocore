@@ -84,13 +84,10 @@ public class CocoOracleTests
         byte[] formatted = JvcFormat.Write(JvcFormat.Formatted());
         (byte[] oracle, byte[]? oracleDisk) = RunMame(mame, zips, "coco", "b12e11", "64K", script, Finish, formatted);
 
-        string directory = Environment.GetEnvironmentVariable("RETROCORE_COCO_ROMS")
-            ?? Path.Join(ExternalTestData.Root, "coco-roms", "extract");
-
         CocoMachine machine = new(
             new() { Model = CocoModel.Coco2, RamKilobytes = 64 },
-            CocoRoms.Load(CocoModel.Coco2, directory),
-            new CocoDiskController(CocoRoms.LoadDiskBasic(directory)));
+            CocoTestRoms.Load(CocoModel.Coco2),
+            new CocoDiskController(CocoTestRoms.DiskBasic()));
 
         FloppyDisk disk = JvcFormat.Read(formatted);
         machine.Bus.DiskController?.Drives[0].Insert(disk, "formatted", "dsk");

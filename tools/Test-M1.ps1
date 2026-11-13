@@ -19,6 +19,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Original/enhanced ProDOS differential boot failed.' }
     node .\tools\Test-IIeDap.mjs
     if ($LASTEXITCODE -ne 0) { throw 'DAP source-debugging acceptance failed.' }
+    node .\tools\Test-ProDosBasicDap.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'ProDOS BASIC debugging failed.' }
     npm --prefix .\extension run compile
     if ($LASTEXITCODE -ne 0) { throw 'VS Code extension compilation failed.' }
     npm --prefix .\extension test

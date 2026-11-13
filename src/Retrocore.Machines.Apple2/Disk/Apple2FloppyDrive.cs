@@ -58,7 +58,7 @@ public sealed class Apple2FloppyDrive : IDiskDrive
             Description = description,
             Controller = controllerName,
             Formats = ["woz", "dsk", "do", "po"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 35,
             Sides = 1
         };
@@ -143,6 +143,19 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
     public void SetWriteProtected(bool writeProtected) =>
         (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsReadOnly = writeProtected;
+
+    /// <summary>
+    ///  Records that the disk was saved to an image, which it now comes from.
+    /// </summary>
+    /// <param name="label">What the host calls the image, such as its path.</param>
+    /// <param name="format">Its image format, such as <c>WOZ</c>.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    public void Saved(string label, string format)
+    {
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).MarkSaved();
+        _label = label;
+        _format = format;
+    }
 
     /// <summary>
     ///  Ejects the disk, leaving any unsaved changes to the caller.

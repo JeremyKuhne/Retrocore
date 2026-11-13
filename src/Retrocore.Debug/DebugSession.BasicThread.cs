@@ -10,8 +10,9 @@ namespace Retrocore.Debug;
 
 // The BASIC thread: the program's statements, GOSUBs, breakpoints, steps and stops, beside the CPU's.
 //
-// Every statement starts at the ROM's GONE, with the current line set and the text pointer before the statement. The
-// run looks at BASIC only there and at the ROM's error and stop routines, so a program without BASIC breakpoints or
+// Every statement starts at the ROM's GONE, with the current line set and the text pointer before the statement, or
+// where the target says it starts one otherwise (AppleSoft under ProDOS's BASIC.SYSTEM, which skips GONE). The run
+// looks at BASIC only there and at the ROM's error and stop routines, so a program without BASIC breakpoints or
 // steps runs as before. Frames come from BASIC's own stack, as saved when the statement began.
 internal sealed partial class DebugSession
 {
@@ -168,7 +169,15 @@ internal sealed partial class DebugSession
             return ErrorStops();
         }
 
-        return rom.Stops.TryGetValue(pc, out string? kind) && EndStops(kind);
+        if (!rom.Stops.TryGetValue(pc, out string? kind)) { return false; }
+        if (kind == BasicRom.IntegerRanOff)
+        {
+            // Running off the last line is an error, reported once BASIC has left the program: stop for it here.
+            _basicEnded = true;
+            return ErrorStops();
+        }
+
+        return EndStops(kind);
     }
 
     private bool StatementStops(int line, int address)
@@ -243,13 +252,20 @@ internal sealed partial class DebugSession
     private bool EndStops(string kind)
     {
         if (ActiveBasic is null || BasicDirect) { return false; }
-        if (kind is BasicRom.IntegerStop or BasicRom.IntegerEnd)
+        if (kind is BasicRom.IntegerStop or BasicRom.Apple1Stop or BasicRom.IntegerEnd)
         {
-            // Integer BASIC's errors and Control-C stop at STOPPED AT, which runs into END: only the first says why.
+            // Integer BASIC's errors and Control-C, and Apple-1 BASIC's errors and keys, stop at STOPPED AT, which
+            // runs into END: only the first says why.
             bool reported = _basicEnded;
             _basicEnded = true;
             if (reported || !BreaksOn(BasicStopFilter)) { return false; }
-            string why = kind == BasicRom.IntegerStop ? "Ctrl-C" : "END";
+            string why = kind switch
+            {
+                BasicRom.IntegerStop => "Ctrl-C",
+                BasicRom.Apple1Stop => "A key",
+                _ => "END"
+            };
+
             Stopped("exception", description: $"{why} in {CurrentLine}.", exception: "basic-stop", threadId: BasicThread);
             return true;
         }
@@ -257,12 +273,13 @@ internal sealed partial class DebugSession
         string? what = kind switch
         {
             "STOP" => StatementWord() is "STOP" or "END" ? StatementWord() : "Ctrl-C",
+            BasicRom.StopOrBreak => StatementWord() == "STOP" ? "STOP" : "BREAK",
             "END" => "END",
             "ENDCON" or "PRGEND" => _basicEnded ? null : "the end of the program",
             _ => StatementWord() is "STOP" or "END" ? StatementWord() : "BREAK"
         };
 
-        _basicEnded = kind is "STOP" or "END";
+        _basicEnded = kind is "STOP" or "END" or BasicRom.StopOrBreak;
         if (what is null)
         {
             _basicEnded = false;
@@ -306,8 +323,8 @@ internal sealed partial class DebugSession
         List<(int, int)> entries = [];
         if (Target.Basic is not { } dialect) { return entries; }
         if (Target.BasicGosubs is { } gosubs) { return [.. gosubs]; }
-        int gosub = BasicDialect.FirstToken + IndexOf(dialect, "GOSUB");
-        int forToken = BasicDialect.FirstToken + IndexOf(dialect, "FOR");
+        int gosub = dialect.StackGosubToken;
+        int forToken = dialect.StackForToken;
         int at = BasicStackTop;
         for (int count = 0; count < MaximumStackEntries && at < 0xFFFB; count++)
         {
@@ -332,8 +349,6 @@ internal sealed partial class DebugSession
 
     // BASIC's most recent stack entry: as the current statement began, else as BASIC saved it.
     private int BasicStackTop => _basicStatement is { } last && last.Line == CurrentLine ? last.Stack : Target.BasicStack;
-
-    private static int IndexOf(BasicDialect dialect, string keyword) => dialect.Keywords.ToList().IndexOf(keyword);
 
     // The program as the machine-program document shows it, made again when the program changes.
     private BasicView? View()
@@ -374,21 +389,18 @@ internal sealed partial class DebugSession
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
         IBasicMemory text = TextMemory;
-        byte first = text.Read(statement.Address);
-        for (int at = statement.Address; first == ' ' && at < statement.Address + 8; at++)
-        {
-            first = text.Read(at + 1);
-        }
-
-        return dialect.Keyword(first);
+        int at = statement.Address;
+        while (text.Read(at) == ' ' && at < statement.Address + 8) { at++; }
+        ReadOnlySpan<byte> token = [text.Read(at), text.Read(at + 1)];
+        return dialect.KeywordAt(token, 0, out _);
     }
 
-    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, or Business BASIC's PERFORM
-    // and EXFN.
+    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, Business BASIC's PERFORM
+    // and EXFN., or Color BASIC's EXEC.
     private bool CallsMachine()
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return false; }
-        if (dialect == BasicDialect.Integer)
+        if (dialect is IntegerBasicDialect)
         {
             byte[] tokens = new byte[256];
             for (int index = 0; index < tokens.Length; index++)
@@ -407,15 +419,15 @@ internal sealed partial class DebugSession
             if (value == 0 || (value == ':' && !inString)) { break; }
             if (value == '"') { inString = !inString; }
 
-            // Business BASIC's $FF and the token after it are a word of its second list, none of which calls machine
-            // code; the token is no word of the first list, as REC('s $A2 would be EXFN.
-            if (!inString && value == BusinessBasicDialect.SecondList && dialect == BasicDialect.BusinessBasic)
+            // A function after a prefix, such as Business BASIC's $FF, is read with it: REC('s token alone would be
+            // EXFN.
+            ReadOnlySpan<byte> token = [value, text.Read(at + 1)];
+            if (!inString && dialect.KeywordAt(token, 0, out int length) is { } word)
             {
-                at++;
-                continue;
+                // Color BASIC's EXEC runs machine code; Business BASIC's reads a file as typed input.
+                if (s_machineCalls.Contains(word) || (word == "EXEC" && dialect.Name == "colorbasic")) { return true; }
+                at += length - 1;
             }
-
-            if (!inString && dialect.Keyword(value) is { } word && s_machineCalls.Contains(word)) { return true; }
         }
 
         return false;

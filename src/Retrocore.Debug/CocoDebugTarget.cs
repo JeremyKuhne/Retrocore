@@ -285,13 +285,19 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         string source = Path.Join(sdk, "ColorBasic.asm");
         if (!coco3 && CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleColorBasic(source, version), CocoMemoryArea.ColorBasic));
+            Assembler.AssemblyResult colorBasic = CocoSdkModules.AssembleColorBasic(source, version);
+            debug.Add(new SourceMapModule(colorBasic, CocoMemoryArea.ColorBasic));
+            _basicRom = ColorBasicRom(colorBasic.Symbols);
         }
 
         source = Path.Join(sdk, "ExtendedBasic.asm");
         if (!coco3 && CocoSdkModules.ExtendedVersionOf(_machine.Bus.ExtendedBasicRom) is { } extended && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleExtendedBasic(source, extended), CocoMemoryArea.ExtendedBasic));
+            Assembler.AssemblyResult extendedBasic = CocoSdkModules.AssembleExtendedBasic(source, extended);
+            debug.Add(new SourceMapModule(extendedBasic, CocoMemoryArea.ExtendedBasic));
+            string[] cassette = ["XVEC20_CLOAD", "XVEC20_CSAVE"];
+            _cassetteStarts = [.. cassette.Where(extendedBasic.Symbols.ContainsKey).Select(label => (ushort)extendedBasic.Symbols[label])];
+            _cassetteRun = extendedBasic.Symbols.TryGetValue("XVEC20_RUN", out long run) ? (ushort)run : (ushort)0;
         }
 
         // The disk controller's ROM is in the cartridge slot when no cartridge is; a CoCo 3 runs a copy in RAM.

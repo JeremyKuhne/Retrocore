@@ -68,7 +68,7 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && dialect == BasicDialect.Level2) { break; }
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
             if (StartsWord(text, index, "REM")) { break; }
             if (StartsWord(text, index, "DATA"))
             {
@@ -82,7 +82,7 @@ public sealed partial class BasicProgram
 
         // Integer BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only when one of
         // that name is defined.
-        if (dialect == BasicDialect.Integer)
+        if (dialect is IntegerBasicDialect)
         {
             references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
             for (int index = 0; index < references.Count; index++)
@@ -141,8 +141,9 @@ public sealed partial class BasicProgram
         (string Word, bool List, bool Required)? found = null;
         if (GoTo().Match(text, index) is { Success: true } go && go.Index == index)
         {
+            // GO TO, and Color BASIC's GO SUB, with spaces between.
             end = index + go.Length;
-            found = s_jumps[1];
+            found = go.Groups["word"].Value.Equals("SUB", StringComparison.OrdinalIgnoreCase) ? s_jumps[0] : s_jumps[1];
         }
         else
         {
@@ -227,7 +228,7 @@ public sealed partial class BasicProgram
         (index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
             && string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
 
-    [GeneratedRegex(@"GO\s+TO", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"GO\s+(?<word>TO|SUB)", RegexOptions.IgnoreCase)]
     private static partial Regex GoTo();
 
     [GeneratedRegex(@"@?(?<name>[A-Za-z_][A-Za-z0-9_]*)")]

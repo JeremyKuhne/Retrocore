@@ -43,6 +43,7 @@ test("each kind of setup becomes the launch options that run it, which package.j
         [{ machineId: "apple2-iie", kind: "source", path: "C:\\src\\main.s", options: {} }, { name: "Apple IIe: main.s", source: "C:\\src\\main.s", stopOnEntry: true }],
         [{ machineId: "apple2-iie", kind: "program", path: "/p/game.bin", options: {} }, { program: "/p/game.bin", stopOnEntry: true }],
         [{ machineId: "apple2-ii", kind: "basic", path: "a.integer.bas", options: {} }, { basic: "a.integer.bas", model: "ii" }],
+        [{ machineId: "apple3", kind: "basic", path: "a.business.bas", basicDisk: "bb.dsk", options: {} }, { basic: "a.business.bas", disks: ["bb.dsk"] }],
         [{ machineId: "apple2-iiplus", kind: "disk", path: "dos.dsk", options: {} }, { diskImage: "dos.dsk" }],
         [{ machineId: "trs80-model1-level2", kind: "disk", path: "newdos.jv3", options: {} }, { disks: ["newdos.jv3"] }],
         [{ machineId: "trs80-model1-level2", kind: "tape", path: "game.cas", options: {} }, { cassette: "game.cas" }],

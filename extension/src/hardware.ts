@@ -38,6 +38,10 @@ export const cards: Card[] = [
         args: { action: "addProFile" }, machines: ["apple2", "apple3"]
     },
     {
+        label: "3.5 disk controller", detail: "Two SuperDrives: 400K and 800K Apple disks, 720K and 1.44 MB MFM disks",
+        args: { action: "addDisk35" }
+    },
+    {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
         args: { action: "addLanguageCard" }, slots: ["slot0"]
     },
@@ -74,8 +78,8 @@ export function group<T extends { id: string }>(hardware: HardwareRow[] | undefi
 export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
-    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "sound", "slot0", "monitor", "boardRevision",
-    "firmwareCardRoms", "programmersAid"
+    "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */

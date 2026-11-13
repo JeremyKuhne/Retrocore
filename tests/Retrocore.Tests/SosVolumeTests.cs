@@ -100,6 +100,23 @@ public class SosVolumeTests
     }
 
     /// <summary>
+    ///  A hard disk's image of whole blocks reads past a floppy's 280, and an image of partial blocks is refused.
+    /// </summary>
+    [TestMethod]
+    public void HardDiskImageReadsPastAFloppy()
+    {
+        byte[] image = new byte[9728 * 512];
+        Volume(next: 0, keyBlock: 9000).AsSpan(0, 3 * 512).CopyTo(image);
+        image[(9000 * 512) + 3] = 0x42;
+        SosVolume volume = SosVolume.ReadBlocks(image);
+        volume.Name.Should().Be("V");
+        volume.ReadFile("F")[3].Should().Be(0x42);
+
+        Action partial = () => SosVolume.ReadBlocks(new byte[(3 * 512) + 1]);
+        partial.Should().Throw<InvalidDataException>();
+    }
+
+    /// <summary>
     ///  A driver file without its signature is refused.
     /// </summary>
     [TestMethod]

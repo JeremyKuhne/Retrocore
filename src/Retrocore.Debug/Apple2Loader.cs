@@ -107,6 +107,19 @@ internal static class Apple2Loader
         drive.Saved(path, extension);
     }
 
+    /// <summary>
+    ///  Inserts a 3.5-inch disk image (<c>.po</c>, <c>.2mg</c>, <c>.hdv</c>, <c>.img</c> or <c>.dsk</c>) in a 3.5
+    ///  drive.
+    /// </summary>
+    /// <param name="drive">The drive.</param>
+    /// <param name="path">The image's full path.</param>
+    internal static void Insert(Apple2Disk35Drive drive, string path)
+    {
+        Disk35Disk disk = Disk35Disk.Load(File.ReadAllBytes(path));
+        string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        drive.Insert(disk, path, extension.Length == 0 ? "PO" : extension);
+    }
+
     // The most blocks a ProDOS volume, and the slot 7 device's 16-bit block count, can hold: 32 MiB.
     private const int MaximumBlocks = 65535;
 

@@ -79,6 +79,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceIncludes.cs" Link="Language\SourceIncludes.cs" />
@@ -97,6 +98,7 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Inputs\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Mouse\*.asm" Link="Inputs\Mouse\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Disk35\*.asm" Link="Inputs\Disk35\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Inputs\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Inputs\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Inputs\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
@@ -110,6 +112,7 @@
     <None Include="..\..\src\Retrocore.Machines.Trs80\Roms\*.asm" Link="Inputs\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\*.asm" Link="Inputs\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Inputs\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\BusinessBasic\*.asm" Link="Inputs\Apple3\BusinessBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\Kernel\*.asm" Link="Inputs\Apple3\Sos\Kernel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\Drivers\**\*.asm" Link="Inputs\Apple3\Sos\Drivers\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple1\Roms\*.asm" Link="Inputs\Apple1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

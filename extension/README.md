@@ -95,8 +95,8 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 Model I run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
-Color Computer 1 and 2 run Color, Extended and Disk BASIC from their sources, and need ROM
-dumps in `RETROCORE_COCO_ROMS` only for the CoCo 3.
+Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
+their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
@@ -969,10 +969,11 @@ interrupts on the 6809's S stack. The machine is configured by:
 - `cassette`, `fastCassette` and `sound` (`speaker` or `off`).
 
 Color, Extended and Disk BASIC are the SDK sources `ColorBasic.asm`, `ExtendedBasic.asm`
-and `DiskBasic.asm`, so a CoCo 1 or 2 needs nothing else, disk controller included, and
-debugging steps into the sources. The CoCo 3's ROM is a dump from `romDirectory` or
-`RETROCORE_COCO_ROMS`, under MAME's name (`coco3.rom`), and debugs as disassembly; dumps,
-when given, replace the sources' ROMs too. A program
+and `DiskBasic.asm`, and the CoCo 3's ROM is those with its patches and `Coco3.asm`, so
+every model needs nothing else, disk controller included, and debugging steps into the
+sources, on a CoCo 3 in the copy of its ROM it runs from RAM. Dumps from `romDirectory`
+or `RETROCORE_COCO_ROMS`, under MAME's names (such as `coco3.rom`), replace the sources'
+ROMs when given. A program
 (`source` or `program`, loaded at `$3000` by default) runs after BASIC has started for
 `bootSeconds` (2 by default); [the sample](../sample/coco/hello.asm) prints through
 Color BASIC's `CHROUT` vector.
@@ -1107,10 +1108,12 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas` and `.level2.bas` files are AppleSoft, Integer BASIC
-and Level II BASIC. A plain `.bas` file takes its dialect from a first line such as
-`REM retrocore applesoft` or `' retrocore level2`, else the `retrocore.basic.dialect`
-setting, else the BASIC of the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.business.bas` and `.level2.bas` files are
+AppleSoft, Integer BASIC, Business BASIC and Level II BASIC. Business BASIC takes a
+reserved word only between separators, so its highlighting leaves `PRINTER` a name,
+and its names count in full, dots included. A plain `.bas` file takes its dialect
+from a first line such as `REM retrocore applesoft` or `' retrocore level2`, else the
+`retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and
@@ -1137,7 +1140,10 @@ A launch configuration's `basic` names a file to debug: the machine boots to BAS
 prompt, the file is compiled into memory and RUN (`"run": false` leaves it at the
 prompt), and `stopOnEntry` stops on its first statement. While the program in memory
 is what the file compiles to, its frames, breakpoints, inline breakpoints and Jump to
-Cursor are in the file itself, labels and all. BASIC files, the machine's program and opened listings
+Cursor are in the file itself, labels and all. On the Apple III, a `.business.bas` file
+(or one with `REM retrocore business`) needs the Business BASIC disk in `disks`, which
+**Retrocore: Start Machine** asks for: SOS boots it, BASIC runs the disk's HELLO, and the
+program goes in once BASIC is at its prompt. BASIC files, the machine's program and opened listings
 get:
 
 - highlighting that finds reserved words where the ROM does, inside names too;
@@ -1189,6 +1195,12 @@ display to move it with your mouse, and press Escape to let go. Any free slot al
 a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
 insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
 Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
+`disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
+Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
+MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
+in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
+from it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you

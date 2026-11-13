@@ -261,6 +261,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
         if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
+        target.InstallDisk35(args);
         foreach ((int slot, string? image) in ProFileMedia.LaunchCards(args, "a free slot, 1 to 7"))
         {
             target.HardwareAction($"slot{slot}", "addProFile", []);
@@ -962,11 +963,53 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public IReadOnlyList<Machines.Devices.IDevice> Devices => _machine.Devices;
 
+    // The launch's 3.5 controller: disk35 names its slot, and disk35Images the disks in its drives, in order.
+    private void InstallDisk35(JsonObject args)
+    {
+        JsonArray? images = args["disk35Images"] as JsonArray;
+        int? slot = args.Int("disk35");
+        if (slot is null or 0)
+        {
+            if (images is { Count: > 0 })
+            {
+                throw new ArgumentException("disk35Images needs disk35, the controller's slot.");
+            }
+
+            return;
+        }
+
+        HardwareAction($"slot{slot}", "addDisk35", []);
+        if (images is null) { return; }
+        if (images.Count > 2)
+        {
+            throw new ArgumentException("disk35Images takes at most two disks, one for each drive.");
+        }
+
+        for (int drive = 0; drive < images.Count; drive++)
+        {
+            if (images[drive]?.GetValue<string>() is { Length: > 0 } image)
+            {
+                Apple2Loader.Insert(_machine.Bus.Disk35.Drives[drive], Path.GetFullPath(image));
+            }
+        }
+    }
+
     /// <inheritdoc/>
     public void DeviceAction(Machines.Devices.IDevice device, string action, JsonObject args)
     {
         switch (device, action)
         {
+            case (Apple2Disk35Drive drive, "insert"):
+                string image = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
+                drive.Eject();
+                Apple2Loader.Insert(drive, image);
+                break;
+            case (Apple2Disk35Drive drive, "eject"):
+                drive.Eject();
+                break;
+            case (Apple2Disk35Drive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
                 drive.Eject();
@@ -1214,8 +1257,22 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard, a Disk II controller, the mouse card or a ProFile card here."
-            : "Add Card puts a Disk II controller, the mouse card or a ProFile card here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller, the mouse card, a ProFile card or the 3.5 controller "
+                + "here."
+            : "Add Card puts a Disk II controller, the mouse card, a ProFile card or the 3.5 controller here.";
+
+        if (slot == _machine.Bus.Disk35Slot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "3.5 disk controller",
+                "A SmartPort with two SuperDrives, answering as Apple's Apple II 3.5 Disk Controller Card does: 400K and "
+                    + "800K Apple disks and 720K and 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. The launch "
+                    + "installs it with disk35 and a slot, and disk35Images; Remove Card takes it out and ejects its disks.",
+                [.. _machine.Bus.Disk35.Drives.Select(drive => drive.Id)],
+                ["removeCard"]);
+        }
 
         if (_machine.Bus.ProFileIn(slot) is { } proFile)
         {
@@ -1335,6 +1392,14 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             case "removeCard" when slot > 0 && slot == _machine.Bus.MouseSlot:
                 _machine.Bus.RemoveMouse();
                 break;
+            case "addDisk35" when _machine.Bus.Disk35Slot != 0:
+                throw new ArgumentException($"The 3.5 controller is already in slot {_machine.Bus.Disk35Slot}.");
+            case "addDisk35" when slot > 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallDisk35(slot);
+                break;
+            case "removeCard" when slot > 0 && slot == _machine.Bus.Disk35Slot:
+                _machine.Bus.RemoveDisk35();
+                break;
             case "addProFile" when slot > 0 && _machine.Bus.IsSlotFree(slot):
                 _machine.Bus.InstallProFile(slot);
                 break;
@@ -1372,6 +1437,10 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public IEnumerable<string> RestoreCards(JsonObject cards)
     {
         List<string> problems = [];
+
+        // The 3.5 controller moves to its saved slot with its disks before any slot is emptied, which would otherwise
+        // take it out, and its disks with it, before its new slot comes up.
+        MoveDisk35To(cards, problems);
         foreach ((string key, JsonNode? node) in cards)
         {
             string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
@@ -1406,6 +1475,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
                         HardwareAction(id, "addMouse", []);
                         break;
+                    case "disk35":
+                        HardwareAction(id, "addDisk35", []);
+                        break;
                     case "proFile":
                         HardwareAction(id, "addProFile", []);
                         break;
@@ -1434,9 +1506,34 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
+    // Whether a saved slot holds the 3.5 controller.
+    private static bool IsDisk35(KeyValuePair<string, JsonNode?> entry) =>
+        entry.Value?.GetValueKind() == System.Text.Json.JsonValueKind.String && entry.Value.GetValue<string>() == "disk35";
+
+    // Moves the 3.5 controller, one per machine, to the slot the saved cards give it, taking out what is there unless
+    // the launch gave it.
+    private void MoveDisk35To(JsonObject cards, List<string> problems)
+    {
+        int from = _machine.Bus.Disk35Slot;
+        string? saved = cards.FirstOrDefault(IsDisk35).Key;
+        if (from == 0 || saved is null || !int.TryParse(saved, out int to) || to == from) { return; }
+
+        string current = CardIn(to);
+        if (current is "blockStorage" or "diskII" || to is < 1 or > 7) { return; }
+        try
+        {
+            if (current != "empty") { HardwareAction($"slot{to}", "removeCard", []); }
+            if (_machine.Bus.IsSlotFree(to)) { _machine.Bus.MoveDisk35(to); }
+        }
+        catch (ArgumentException error)
+        {
+            problems.Add(error.Message);
+        }
+    }
+
     // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, mouse,
-    // proFile, diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM
-    // dumps, blockStorage, or empty.
+    // disk35, proFile, diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's
+    // ROM dumps, blockStorage, or empty.
     private string CardIn(int slot)
     {
         if (slot == 0)
@@ -1448,6 +1545,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
         if (slot == _machine.Bus.MouseSlot) { return "mouse"; }
+        if (slot == _machine.Bus.Disk35Slot) { return "disk35"; }
         if (_machine.Bus.ProFileIn(slot) is not null) { return "proFile"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {

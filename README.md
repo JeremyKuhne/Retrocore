@@ -11,18 +11,18 @@ straight into the ROM or DOS source.
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
 | Apple-1 | MOS 6502 | Woz Monitor, Apple Cassette Interface PROM, Signetics 2513 character generator | 4 or 8 KB RAM plus the `$E000` bank, 6821 PIA keyboard and 60-characters-a-second video terminal, Apple Cassette Interface (WAV tapes, play and record) |
-| Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, ProFile hard disk cards (PO, HDV), SDL3 game controllers |
+| Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, Apple II 3.5 Disk Controller-compatible SmartPort with two SuperDrives (400K/800K, 720K/1.44 MB), ProFile hard disk cards (PO, HDV), SDL3 game controllers |
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
-| TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, and Disk Extended Color BASIC 1.0 and 1.1; plus the CoCo 3's 2.0 from dumps you supply | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
+| TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
 [TRS-80 Model I](docs/Trs80ModelI.md) and [Color Computer](docs/Coco.md) guides for hardware details and launch
-options. On the Color Computer, Color, Extended and Disk BASIC have SDK sources so far; the CoCo 3's ROM comes
-from the dumps you supply.
+options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
+model runs with nothing external.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
 > the VS Code extension, build and install the VSIX from this repository as shown below.
@@ -154,6 +154,8 @@ machine.
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple2/Roms/System/CharacterGenerator.asm) | The IIe's video ROM (both models, including MouseText) and the II and II Plus's character generator. |
 | [`Dos33.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos33.asm), [`Dos32.asm`](src/Retrocore.Machines.Apple2/Roms/Dos/Dos32.asm) | Apple DOS 3.3 (1983 and 1980) and DOS 3.2: both the System Masters' tracks 0–2 and DOS relocated at `$9D00`; see [Dos.md](docs/Dos.md). |
 | [`Slot7.rom.asm`](src/Retrocore.Machines.Apple2/Roms/Slot7.rom.asm) | The emulated slot-7 ProDOS block device's 256-byte boot and driver ROM, `$C700`–`$C7FF`. |
+| [`Disk35.rom.asm`](src/Retrocore.Machines.Apple2/Roms/Disk35.rom.asm) | The emulated 3.5 disk controller's 256-byte slot ROM: Apple's card's identification and entry points, handing each SmartPort and ProDOS call to the emulator. |
+| [`Disk35Controller.asm`](src/Retrocore.Machines.Apple2/Roms/Disk35/Disk35Controller.asm) | Apple's Apple II 3.5 Disk Controller Card EPROM (341-0438-A): the host's slot page and SmartPort code, the diagnostics, and the card's own 65C02 firmware that drives the SWIM. |
 | [`ProFile.rom.asm`](src/Retrocore.Machines.Apple2/Roms/ProFile.rom.asm) | The emulated Apple II ProFile card's 256-byte ProDOS boot and driver ROM, which drives the ProFile's handshakes; works in any slot. |
 | [`BootRom.asm`](src/Retrocore.Machines.Apple3/Roms/BootRom.asm), [`Apple3Equates.asm`](src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm) | The Apple III's boot ROM, `$F000`–`$FFFF`: disk routines, diagnostics and monitor, with its hardware names. |
 | [`WozMonitor.asm`](src/Retrocore.Machines.Apple1/Roms/WozMonitor.asm) | The Apple-1 Monitor, `$FF00`–`$FFFF`. |
@@ -214,7 +216,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_TRS80_ROMS` | Model I ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for debugging. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
-| `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for a CoCo 1 or 2 (which otherwise builds Color, Extended and Disk BASIC from the SDK), required for the CoCo 3. |
+| `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources). |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III and Color Computer oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), and `tools\Fetch-M6809Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
@@ -240,7 +242,7 @@ dotnet test Retrocore.slnx -c Release --no-build
 
 node tools/Test-Trs80Dap.mjs          # needs nothing external
 node tools/Test-Apple1Dap.mjs         # needs nothing external
-node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add disks and the CoCo 3
+node tools/Test-CocoDap.mjs           # needs nothing external; the dumps in RETROCORE_COCO_ROMS add a disk session and dumps
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
@@ -311,7 +313,9 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III](docs/backlog/Apple3.md);
-- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md).
+- [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
+- [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
+- [debugging Business BASIC](docs/backlog/BusinessBasic.md).
 
 ## License
 

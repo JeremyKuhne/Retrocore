@@ -179,8 +179,8 @@ Built 2026-11-12: all three, pinned by `Apple3SosTests`.
 - **Keyboard:**
   - A typed capital or shifted symbol holds SHIFT while it is the key, since SOS makes lowercase itself.
   - Queued keys come 20 ms apart, since SOS takes keys by interrupt.
-- **Other devices:** the MM58167 clock (host time plus offsets, no interrupts), the ACIA's registers, the speaker
-  and the DAC through `Apple2Audio`, and joysticks through `Apple3Bus.Joysticks`/`Buttons`.
+- **Other devices:** the MM58167 clock (counters of their own, set one at a time, advancing with the host's time;
+  no interrupts), the ACIA's registers, the speaker and the DAC through `Apple2Audio`, and joysticks through `Apple3Bus.Joysticks`/`Buttons`.
 - **Not done:**
   - Host game controllers are not wired to the joysticks.
   - Sector images load read-only, as on the Apple II, so saving needs a WOZ.
@@ -262,10 +262,8 @@ Built 2026-11-12, pinned by `Apple3EmulationTests` and `Apple3BusTests.ClearingT
 ## Later
 
 - The Apple III Plus (interlaced video, its keyboard, 256K standard), once the III is solid.
-- The ProFile hard disk and its card are built ([The ProFile](../Apple3.md#the-profile)) and run Apple's
-  `.PROFILE` driver; trying them under SOS itself, with the System Utilities listing a volume on the ProFile, is next.
 - Source-level SOS debugging from the SOS 1.3 listing.
-- Business BASIC debugging, like AppleSoft's.
+- Business BASIC debugging, like AppleSoft's: built, awaiting review ([BusinessBasic.md](BusinessBasic.md)).
 - Apple III Pascal: booting, code files and the Pascal thread are built ([Apple Pascal](ApplePascal.md)); line
   breakpoints from listings are next.
 - SOS volumes in the media library, through CiderPress2's ProDOS support ([media](Media.md)).

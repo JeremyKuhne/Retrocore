@@ -21,6 +21,7 @@
     "onLanguage:retrocore-applesoft",
     "onLanguage:retrocore-level2",
     "onLanguage:retrocore-integer",
+    "onLanguage:retrocore-business",
     "onLanguage:retrocore-level1",
     "onLanguage:retrocore-basic"
   ],
@@ -121,6 +122,21 @@
         }
       },
       {
+        "id": "retrocore-business",
+        "aliases": [
+          "Business BASIC",
+          "business"
+        ],
+        "extensions": [
+          ".business.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -190,6 +206,11 @@
         "path": "./syntaxes/integer.tmLanguage.json"
       },
       {
+        "language": "retrocore-business",
+        "scopeName": "source.retrocore-business",
+        "path": "./syntaxes/business.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -232,6 +253,7 @@
             "",
             "applesoft",
             "integer",
+            "business",
             "level2"
           ],
           "default": "",
@@ -270,6 +292,9 @@
       },
       {
         "language": "retrocore-integer"
+      },
+      {
+        "language": "retrocore-business"
       },
       {
         "language": "retrocore-basic"
@@ -681,7 +706,7 @@
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them, but for the CoCo 3's, which needs its dump: the Color Computer's are under MAME's names (coco3.rom, and extbas11.rom or disk11.rom to replace the sources'), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -856,6 +881,20 @@
                 "minimum": 1,
                 "maximum": 7,
                 "description": "Apple II: the slot of an AppleMouse II-compatible mouse card, which a click on the display drives until Escape. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: the slot of a 3.5 disk controller that answers as Apple's Apple II 3.5 Disk Controller Card: a SmartPort with two SuperDrives. Slot 5 is the usual one. None by default; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "disk35Images": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Apple II: the disks in the 3.5 controller's drives 1 and 2: 400K or 800K Apple disks or 720K or 1440K MFM disks, as .po, .2mg, .hdv, .img or .dsk images. Drive 1 boots. Needs disk35."
               },
               "proFiles": {
                 "type": "array",
@@ -1116,7 +1155,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm), or the Color Computer's (ColorBasic.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
               },
               "breakpoints": {
                 "type": "array",

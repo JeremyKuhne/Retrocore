@@ -22,7 +22,8 @@ internal sealed partial class CocoDebugTarget
     ///  <para>
     ///   The ROMs are the dumps in <c>romDirectory</c> (or <c>RETROCORE_COCO_ROMS</c>) under MAME's names, such as
     ///   <c>bas12.rom</c>, <c>extbas11.rom</c>, <c>coco3.rom</c> and <c>disk11.rom</c>, in the directory or its
-    ///   <c>coco</c>, <c>coco2b</c>, <c>coco3</c> and <c>coco_fdc</c> folders.
+    ///   <c>coco</c>, <c>coco2b</c>, <c>coco3</c> and <c>coco_fdc</c> folders. Without either, every model's ROMs
+    ///   are built from the SDK's sources.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
@@ -70,23 +71,24 @@ internal sealed partial class CocoDebugTarget
         JsonNode?[] disks = args["disks"] is JsonArray given ? [.. given] : [];
         if (directory is null)
         {
-            // Without dumps, Color, Extended and Disk BASIC are built from the SDK's sources; the CoCo 3's has none
-            // yet.
-            if (model == CocoModel.Coco3)
-            {
-                throw new ArgumentException(
-                    "Without ROM dumps a CoCo 1 or 2 runs Color, Extended and Disk BASIC, built from the SDK's sources; "
-                        + "the CoCo 3's BASIC needs romDirectory (or RETROCORE_COCO_ROMS).");
-            }
-
+            // Without dumps, the ROMs are built from the SDK's sources: Color, Extended and Disk BASIC, or the
+            // CoCo 3's ROM.
             string? sdkRoms = args.String("sdkRoms");
             string sdk = CocoSdkModules.SdkDirectory(sdkRoms is null ? null : Path.GetFullPath(sdkRoms));
-            AssemblyResult colorBasic = CocoSdkModules.AssembleColorBasic(Path.Join(sdk, "ColorBasic.asm"), color);
-            ReadOnlySpan<byte> extendedBasic = extended == 0
-                ? []
-                : CocoSdkModules.AssembleExtendedBasic(Path.Join(sdk, "ExtendedBasic.asm"), extended).Sections[0].Bytes.Span;
+            if (model == CocoModel.Coco3)
+            {
+                roms = CocoRoms.ForCoco3(CocoSdkModules.AssembleCoco3(sdk).Image);
+            }
+            else
+            {
+                AssemblyResult colorBasic = CocoSdkModules.AssembleColorBasic(Path.Join(sdk, "ColorBasic.asm"), color);
+                ReadOnlySpan<byte> extendedBasic = extended == 0
+                    ? []
+                    : CocoSdkModules.AssembleExtendedBasic(Path.Join(sdk, "ExtendedBasic.asm"), extended).Sections[0].Bytes.Span;
 
-            roms = CocoRoms.ForCoco12(colorBasic.Sections[0].Bytes.Span, extendedBasic);
+                roms = CocoRoms.ForCoco12(colorBasic.Sections[0].Bytes.Span, extendedBasic);
+            }
+
             if (args.Bool("diskController") ?? disks.Length != 0)
             {
                 int version = Version(args.String("diskBasic") ?? "1.1", "diskBasic", "1.0", "1.1");

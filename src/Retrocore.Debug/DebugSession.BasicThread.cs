@@ -31,7 +31,7 @@ internal sealed partial class DebugSession
     private const string NotAtStatement =
         "Set Next Statement works when BASIC is at the start of a statement: step on the BASIC thread first.";
 
-    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYSTEM"];
+    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
 
 
     // Where the machine-program documents live, which the extension gives at the session's start.
@@ -256,7 +256,7 @@ internal sealed partial class DebugSession
 
         string? what = kind switch
         {
-            "STOP" => StatementWord() == "STOP" ? "STOP" : "Ctrl-C",
+            "STOP" => StatementWord() is "STOP" or "END" ? StatementWord() : "Ctrl-C",
             "END" => "END",
             "ENDCON" or "PRGEND" => _basicEnded ? null : "the end of the program",
             _ => StatementWord() is "STOP" or "END" ? StatementWord() : "BREAK"
@@ -345,7 +345,7 @@ internal sealed partial class DebugSession
         {
             BasicProgram program = BasicProgram.Read(dialect, new TargetBasicMemory(Target));
             Dictionary<int, int> addresses = [];
-            int address = Word(dialect.Pointers.ProgramStart);
+            int address = dialect.ProgramBounds(new TargetBasicMemory(Target)).Start;
             foreach (BasicLine line in program.Lines)
             {
                 addresses.TryAdd(line.Number, address);
@@ -373,16 +373,18 @@ internal sealed partial class DebugSession
     private string? StatementWord()
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
-        byte first = Target.Peek((ushort)statement.Address);
+        IBasicMemory text = TextMemory;
+        byte first = text.Read(statement.Address);
         for (int at = statement.Address; first == ' ' && at < statement.Address + 8; at++)
         {
-            first = Target.Peek((ushort)(at + 1));
+            first = text.Read(at + 1);
         }
 
         return dialect.Keyword(first);
     }
 
-    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM.
+    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, or Business BASIC's PERFORM
+    // and EXFN.
     private bool CallsMachine()
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return false; }
@@ -391,18 +393,28 @@ internal sealed partial class DebugSession
             byte[] tokens = new byte[256];
             for (int index = 0; index < tokens.Length; index++)
             {
-                tokens[index] = Target.Peek((ushort)(statement.Address + index));
+                tokens[index] = TextMemory.Read(statement.Address + index);
             }
 
             return IntegerBasic.CallsMachine(tokens);
         }
 
         bool inString = false;
+        IBasicMemory text = TextMemory;
         for (int at = statement.Address; at < statement.Address + 256; at++)
         {
-            byte value = Target.Peek((ushort)at);
+            byte value = text.Read(at);
             if (value == 0 || (value == ':' && !inString)) { break; }
             if (value == '"') { inString = !inString; }
+
+            // Business BASIC's $FF and the token after it are a word of its second list, none of which calls machine
+            // code; the token is no word of the first list, as REC('s $A2 would be EXFN.
+            if (!inString && value == BusinessBasicDialect.SecondList && dialect == BasicDialect.BusinessBasic)
+            {
+                at++;
+                continue;
+            }
+
             if (!inString && dialect.Keyword(value) is { } word && s_machineCalls.Contains(word)) { return true; }
         }
 

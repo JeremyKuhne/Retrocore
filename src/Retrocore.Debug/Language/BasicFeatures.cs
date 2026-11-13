@@ -28,7 +28,7 @@ internal static partial class BasicFeatures
 
         string? text = site.Kind switch
         {
-            BasicSiteKind.Keyword => BasicKeywordHelp.Markdown(dialect, dialect.Keyword(site.Token) ?? site.Text),
+            BasicSiteKind.Keyword => BasicKeywordHelp.Markdown(dialect, KeywordOf(dialect, site)),
             BasicSiteKind.LineNumber => LineUses(source, site),
             BasicSiteKind.Label => $"Label for line {site.Number}. {LineUses(source, site)}",
             BasicSiteKind.LineReference => source.LineNumbered(site.Number) is { } target
@@ -43,6 +43,15 @@ internal static partial class BasicFeatures
             Range = Range(site)
         };
     }
+
+    // The reserved word a keyword site is, as the dialect spells it.
+    // A dialect's reserved words; Business BASIC's second list, after $FF, has THEN, TO and its functions.
+    private static IEnumerable<string> Words(BasicDialect dialect) => dialect == BasicDialect.BusinessBasic
+        ? dialect.Keywords.Concat(BusinessBasicDialect.Functions)
+        : dialect.Keywords;
+
+    private static string KeywordOf(BasicDialect dialect, BasicSite site) =>
+        site.Word.Length > 0 ? site.Word : dialect.Keyword(site.Token) ?? site.Text;
 
     /// <summary>
     ///  Finds where a line reference or a function is defined: its line, or its DEF FN.
@@ -125,7 +134,7 @@ internal static partial class BasicFeatures
 
         List<CompletionItem> items =
         [
-            .. dialect.Keywords.Where(keyword => char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
+            .. Words(dialect).Where(keyword => keyword.Length > 0 && char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
             {
                 Label = keyword,
                 Kind = CompletionItemKind.Keyword,

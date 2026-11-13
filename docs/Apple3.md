@@ -95,7 +95,9 @@ The card follows Apple's driver ([Sos.md](Sos.md)):
   block at `$FFFFFF`. The card's interrupt is not raised; the driver turns it off.
 
 `Apple3ProFileTests` runs Apple's `.PROFILE` 1.30, assembled from the SDK's source, against the card, reading and
-writing buffers at every alignment.
+writing buffers at every alignment. Under SOS itself, `Apple3SosTests` boots the System Utilities with a card in slot 4:
+they format the ProFile as `/HARD`, copy `SOS.KERNEL` onto it, whose bytes match the floppy's, and list it, and a second
+boot lists the volume again from the ProFile.
 
 Phase by phase, how this was built and checked against MAME and the manual is in the
 [backlog plan](backlog/Apple3.md).
@@ -128,6 +130,10 @@ Apple III Pascal's programs debug on a Pascal thread, by source line through the
 
 SOS itself debugs at its source: the SDK has SOS 1.3's kernel, its bootstrap loader and Apple's drivers, each
 byte-identical to Apple's disks, and the debugger maps the drivers as SOS loads them. [Sos.md](Sos.md) covers them.
+
+The SDK also has the source of Business BASIC 1.23's interpreter, byte-identical to its disk's `SOS.INTERP`, and it
+debugs at that source where SOS loads it. Programs in Business BASIC debug on a BASIC thread, statement by statement.
+[BusinessBasic.md](BusinessBasic.md) covers both.
 
 The display panel shows the screen, with **Fast disk**, **Sound** and its volume, and buttons for Ctrl, CONTROL-C,
 CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid Apple, and Ctrl+F12 CONTROL-RESET.

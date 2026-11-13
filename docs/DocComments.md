@@ -354,4 +354,6 @@ broken link.
 | C# summaries for exports | `src/Retrocore.Generators/ExportDocumentation.cs` |
 | Highlighting | `extension/scripts/generate-grammar.mjs` (`comment.line.documentation.retrocore`) |
 
-The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems.
+The SDK's ROM sources use the format, and `SdkDocumentationTests` keeps them free of lint problems. Its
+`EveryRepositorySourceIsCleanInTheEditor` lints every assembly source under `src` and `sample` as the editor reads
+it, without a list of folders, so a new source is covered from its first commit, and CI runs it on every pull request.

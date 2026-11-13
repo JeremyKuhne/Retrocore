@@ -100,6 +100,96 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
+    // Sources another source includes that are also whole programs of their own, checked as roots too.
+    private static readonly string[] s_includedRoots = ["Level2.asm"];
+
+    // Each sample folder's machine project, whose sources its links reach.
+    private static readonly Dictionary<string, string> s_sampleMachines = new()
+    {
+        ["coco"] = "Retrocore.Machines.Coco",
+        ["iie"] = "Retrocore.Machines.Apple2",
+        ["trs80"] = "Retrocore.Machines.Trs80"
+    };
+
+    /// <summary>
+    ///  Every assembly source in the repository passes the lint as the editor runs it: each project's sources,
+    ///  its ROMs and software together, and each sample with its machine's. It names no source folder, so a new
+    ///  source is checked as soon as it is added. A file another source includes is checked as the editor sees it,
+    ///  through the source the editor reads it in.
+    /// </summary>
+    [TestMethod]
+    public void EveryRepositorySourceIsCleanInTheEditor()
+    {
+        string repository = RepositoryRoot();
+        Dictionary<string, List<SourceAnalysis>> projects = [];
+        foreach (string project in Directory.EnumerateDirectories(Path.Join(repository, "src")))
+        {
+            projects[Path.GetFileName(project)] = [.. Sources(project).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        }
+
+        List<string> problems = [];
+        foreach ((string name, List<SourceAnalysis> sources) in projects)
+        {
+            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, sources, name)));
+        }
+
+        foreach (string sample in Directory.EnumerateDirectories(Path.Join(repository, "sample")))
+        {
+            List<string> roots = Sources(sample);
+            if (roots.Count == 0) { continue; }
+            string folder = Path.GetFileName(sample);
+            s_sampleMachines.Should().ContainKey(folder, $"sample/{folder}'s links need its machine's project in s_sampleMachines");
+            List<SourceAnalysis> sources = [.. roots.Select(file => SourceAnalysis.Assemble(file, _ => null))];
+            List<SourceAnalysis> reach = [.. sources, .. projects[s_sampleMachines[folder]]];
+            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, reach, $"sample/{folder}")));
+        }
+
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems.Order())}");
+    }
+
+    // A folder's roots, with the included sources that are whole programs too, leaving out build output.
+    private static List<string> Sources(string folder)
+    {
+        string bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+        string obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
+        List<string> roots = [.. SourceIncludes.Roots(folder)
+            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))];
+
+        foreach (string name in s_includedRoots)
+        {
+            roots.AddRange(Directory.EnumerateFiles(folder, name, SearchOption.AllDirectories).Select(Path.GetFullPath));
+        }
+
+        return roots;
+    }
+
+    // The problems in a root and in the files the editor reads through it.
+    private static IEnumerable<string> OwnProblems(SourceAnalysis analysis, List<SourceAnalysis> others, string label)
+    {
+        DocumentationResolver resolver = new(
+            analysis.Documentation,
+            analysis.OtherModules(others).Select(other => other.Documentation),
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        string root = Path.GetFullPath(analysis.Root);
+        string folder = Path.GetDirectoryName(root) ?? "";
+        return resolver.Check()
+            .Where(problem => Path.GetFullPath(problem.Path) == root || SourceIncludes.RootOf(Path.GetFullPath(problem.Path)) == root)
+            .Select(problem => $"{label} {Path.GetRelativePath(folder, problem.Path)}:{problem.Line + 1}: {problem.Message}");
+    }
+
+    private static string RepositoryRoot()
+    {
+        string? root = AppContext.BaseDirectory;
+        while (root is not null && !File.Exists(Path.Join(root, "Retrocore.slnx")))
+        {
+            root = Path.GetDirectoryName(root);
+        }
+
+        return root ?? throw new InvalidOperationException("The repository root was not found.");
+    }
+
     /// <summary>
     ///  The Apple III's ROM source passes the lint as the editor runs it, with its equates file.
     /// </summary>

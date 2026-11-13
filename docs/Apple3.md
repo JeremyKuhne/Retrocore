@@ -23,7 +23,7 @@ names it with `"machine": "apple3"`:
 | Option | Meaning |
 | --- | --- |
 | `ramKilobytes` | 128, 256 (the default) or 512 (third-party upgrades). |
-| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Unprotect** in the Retro Devices view lets the machine write one, in memory. |
+| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Allow Writes** in the Retro Devices view lets the machine write one, in memory, and **Save to Its Image** saves it. |
 | `romDirectory` | MAME's `apple3` set (`apple3.rom`, `341-0028-a.rom`), or `RETROCORE_APPLE3_ROMS`. Without it the ROM comes from the SDK. |
 | `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
 | `sound` | `speaker` (the default) or `off`. |

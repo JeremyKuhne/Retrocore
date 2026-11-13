@@ -833,7 +833,9 @@ aren't letters:
 To paste, right-click the screen and choose **Paste**, or press **Shift+Insert**.
 This works on every machine. The clipboard's text is typed into the machine as if
 you typed it, waiting for the program to read each key, so a pasted BASIC listing
-enters line by line. Each line ending is RETURN. Typographic quotes, dashes and
+enters line by line. On the Apple II and the Apple III keys go in at a typist's pace,
+with a pause after each line, so a program with its own type-ahead, such as Apple
+Pascal's Editor, doesn't lose them as it scrolls. Each line ending is RETURN. Typographic quotes, dashes and
 ellipses become their ASCII forms. Control characters and anything else without a
 key are left out. The II Plus types capitals, as its keyboard does. **Ctrl+V** is
 CONTROL-V, like any other Ctrl letter, and doesn't paste.
@@ -1211,7 +1213,10 @@ the launch makes them again. Each device shows its media, its
 track, side and sector or its tape position, whether it is write-protected or
 changed, and whether it is seeking, reading or writing. Expanding a device lists
 its state and what it is (its controller, formats and geometry). Its inline
-buttons insert, record, eject and write-protect, as the device allows.
+buttons insert, record, eject and write-protect, as the device allows. What the
+machine writes to an Apple disk stays in memory until you save it: **Save to Its
+Image** (the disk icon on a changed drive) replaces the image it came from, after
+asking, and **Save Disk As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po`.
 
 [Devices.md](../docs/Devices.md) describes the device model and the
 `retro/devices` and `retro/device` requests behind the view.

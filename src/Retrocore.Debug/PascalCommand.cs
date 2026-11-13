@@ -24,6 +24,11 @@ namespace Retrocore.Debug;
 ///   and assembled procedures as 6502 code from offset 0. A code file is a file's path, or a disk and the file's
 ///   name.
 ///  </para>
+///  <para>
+///   <c>--pascal sos output NAME [--boot disk] --from disk FILE... [--from disk FILE...]</c> builds a SOS volume
+///   named NAME from files on other SOS disks, each keeping its type, and with <c>--boot</c> that disk's boot loader,
+///   as Apple III Pascal 1.2's update disks are copied onto 1.1's.
+///  </para>
 /// </remarks>
 internal static class PascalCommand
 {
@@ -32,6 +37,7 @@ internal static class PascalCommand
                --pascal extract disk NAME output [--raw]
                --pascal segments (file.code | disk NAME)
                --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
+               --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
         """;
 
     /// <summary>
@@ -49,10 +55,11 @@ internal static class PascalCommand
                 ["extract", string disk, string name, string output, .. string[] rest] => Extract(disk, name, output, rest.Contains("--raw")),
                 ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
+                ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
                 _ => Fail(Usage, code: 2)
             };
         }
-        catch (Exception exception) when (exception is InvalidDataException or IOException)
+        catch (Exception exception) when (exception is InvalidDataException or IOException or ArgumentException or InvalidOperationException)
         {
             return Fail(exception.Message);
         }
@@ -77,6 +84,53 @@ internal static class PascalCommand
         return PascalVolume.IsPascalVolume(image, proDos)
             ? new PascalDisk(PascalVolume.Read(image, proDos))
             : new PascalDisk(SosVolume.Read(image, proDos));
+    }
+
+    // A disk image's SOS volume.
+    private static SosVolume OpenSos(string path)
+    {
+        bool proDos = path.EndsWith(".po", StringComparison.OrdinalIgnoreCase);
+        byte[] image = File.ReadAllBytes(path);
+        if (path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase))
+        {
+            image = SectorDiskReader.Read(WozDisk.Load(image), proDosOrder: false);
+            proDos = false;
+        }
+
+        return SosVolume.Read(image, proDos);
+    }
+
+    // Builds a SOS volume from other disks' files.
+    private static int Sos(string output, string name, string[] args)
+    {
+        if (!IsDisk(output) || output.EndsWith(".woz", StringComparison.OrdinalIgnoreCase))
+        {
+            return Fail($"{output} is not a .dsk, .do or .po image.", code: 2);
+        }
+
+        SosVolumeBuilder builder = new(name);
+        SosVolume? from = null;
+        for (int index = 0; index < args.Length; index++)
+        {
+            switch (args[index])
+            {
+                case "--boot" when index + 1 < args.Length:
+                    builder.BootFrom(OpenSos(args[++index]));
+                    break;
+                case "--from" when index + 1 < args.Length:
+                    from = OpenSos(args[++index]);
+                    break;
+                case string file when from is not null:
+                    builder.Add(from, file);
+                    break;
+                default:
+                    return Fail(Usage, code: 2);
+            }
+        }
+
+        File.WriteAllBytes(output, builder.Build(output.EndsWith(".po", StringComparison.OrdinalIgnoreCase)));
+        Console.WriteLine($"Wrote /{name.ToUpperInvariant()}, {builder.Count} files in {builder.BlocksUsed} of 280 blocks, to {output}.");
+        return 0;
     }
 
     private static bool IsDisk(string path) =>

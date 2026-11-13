@@ -109,6 +109,14 @@ try {
     assert.equal(error.reason, "exception");
     assert.equal(error.description, "*** BAD BRANCH ERR in 10 (code 55).");
     assert.equal((await frames())[0].name, "10: GOTO 999");
+
+    // Running off the last line is an error too, which stops while the program still runs.
+    assert.equal((await request("retro/basic/write", { text: "10 A=1\n" })).success, true);
+    await request("continue", { threadId: 1 });
+    for (const key of "RUN\r") await request("retro/key", { code: key.charCodeAt(0) });
+    const ranOff = await event("stopped");
+    assert.equal(ranOff.reason, "exception");
+    assert.match(ranOff.description, /^\*\*\* END ERR in 10 \(code \d+\)\.$/);
     assert.equal((await request("retro/basic/write", { text: "10 PRINT \"NEW\"\n20 GOTO 10\n" })).success, true);
 
     // RUN it, then any key stops the program.
@@ -121,7 +129,7 @@ try {
     assert.equal(stop.reason, "exception");
     assert.match(stop.description, /A key in (10|20)\./);
 
-    console.log("Apple-1 BASIC DAP passed: the BASIC thread stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, steps out and over GOSUBs, reads and writes the program, and stops on an error and on a key.");
+    console.log("Apple-1 BASIC DAP passed: the BASIC thread stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, steps out and over GOSUBs, reads and writes the program, and stops on an error, on running off the last line and on a key.");
 } catch (error) {
     fail(error);
 } finally {

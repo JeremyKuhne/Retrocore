@@ -32,6 +32,12 @@ public sealed partial class BasicVariables
 
     private bool Apple1Basic => _dialect is IntegerBasicDialect { IsApple1: true };
 
+    /// <summary>
+    ///  Gets the subscript of an Integer BASIC array's first element: 0, or 1 in Apple-1 BASIC, whose DIM A(3) makes
+    ///  A(1) to A(3). A simple variable is its own first element.
+    /// </summary>
+    internal int ArrayBase => Apple1Basic ? 1 : 0;
+
     // Each variable in the list: its name, where it starts, where its value starts and how many bytes the value has.
     private List<(string Name, bool Text, int Address, int Value, int Size)> IntegerEntries()
     {
@@ -99,7 +105,7 @@ public sealed partial class BasicVariables
                 entry.Address,
                 entry.Value))];
 
-    // The arrays: numbers DIM made more than one element, A(0) to A(n).
+    // The arrays: numbers DIM made more than one element, A(0) to A(n), or A(1) to A(n) in Apple-1 BASIC.
     private List<BasicArray> IntegerArrays() =>
         [.. IntegerEntries()
             .Where(entry => !entry.Text && entry.Size > 2)
@@ -109,7 +115,8 @@ public sealed partial class BasicVariables
                 entry.Address,
                 [entry.Size / 2],
                 entry.Value,
-                ElementSize: 2))];
+                ElementSize: 2,
+                LowerBound: ArrayBase))];
 
     // A number, low byte first, or a string's characters up to the byte with bit 7 clear.
     private BasicValue IntegerRead(BasicVariableKind kind, int address)

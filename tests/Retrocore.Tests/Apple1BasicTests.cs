@@ -125,6 +125,45 @@ public sealed class Apple1BasicTests
     }
 
     /// <summary>
+    ///  The debugger's arithmetic and arrays agree with the machine's: MOD is negative when the signs differ, and an
+    ///  array counts from 1, as DIM A(3) makes A(1) to A(3).
+    /// </summary>
+    [TestMethod]
+    public void DebuggerAgreesWithTheInterpreter()
+    {
+        Apple1Machine machine = Start();
+        Type(machine, "PRINT 5 MOD -3;\" \";-5 MOD -3;\" \";-5 MOD 3;\" \";5 MOD 3");
+        Output(machine).Should().Contain("-2 2 -2 2");
+        Type(machine, "B=5");
+        Type(machine, "DIM A(3)");
+        Type(machine, "A(1)=11");
+        Type(machine, "A(3)=33");
+        Type(machine, "A(0)=1");
+        Output(machine).Should().Contain("*** RANGE ERR", "Apple-1 BASIC has no A(0)");
+
+        Apple1BasicMemory memory = new(machine);
+        BasicEvaluator evaluator = new(BasicDialect.Apple1, memory);
+        string Evaluate(string expression) => evaluator.Format(evaluator.Evaluate(expression));
+        Evaluate("5 MOD -3").Should().Be("-2");
+        Evaluate("-5 MOD -3").Should().Be("2");
+        Evaluate("-5 MOD 3").Should().Be("-2");
+        Evaluate("A(1)").Should().Be("11");
+        Evaluate("A(3)").Should().Be("33");
+        Evaluate("B(1)").Should().Be("5", "a simple variable is its own first element");
+        FluentActions.Invoking(() => evaluator.Evaluate("A(0)")).Should().Throw<FormatException>().WithMessage("*** RANGE ERR*");
+
+        BasicVariables variables = new(BasicDialect.Apple1, memory);
+        BasicArray array = variables.FindArray("A") ?? throw new AssertFailedException("DIM A(3) makes an array.");
+
+        array.LowerBound.Should().Be(1);
+        array.Count.Should().Be(3);
+        array.Subscripts(0).Should().Equal(1);
+        variables.Write(array.Kind, array.ElementAddress([2]), new BasicValue(22));
+        Type(machine, "PRINT A(2)");
+        Output(machine).Should().Contain("22");
+    }
+
+    /// <summary>
     ///  BASIC loads from tape as it was sold: E000.EFFFR at the cassette interface's prompt, then E000R.
     /// </summary>
     [TestMethod]

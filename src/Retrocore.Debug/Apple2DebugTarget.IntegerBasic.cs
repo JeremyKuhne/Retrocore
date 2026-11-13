@@ -142,7 +142,7 @@ internal sealed partial class Apple2DebugTarget
     private BasicRom? IntegerBasicRom(IReadOnlyDictionary<string, long>? symbols)
     {
         if (symbols is null) { return null; }
-        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "CON", "STOPPED_AT", "END"];
+        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "CON", "STOPPED_AT", "END", "TRYLINE_END"];
         if (names.Any(name => !symbols.ContainsKey(name))) { return null; }
         _integerColon = (ushort)symbols["WAITTOKEN"];
         ushort line = (ushort)symbols["RUNLOOP"];
@@ -156,7 +156,8 @@ internal sealed partial class Apple2DebugTarget
             new Dictionary<ushort, string>
             {
                 [(ushort)symbols["STOPPED_AT"]] = BasicRom.IntegerStop,
-                [(ushort)symbols["END"]] = BasicRom.IntegerEnd
+                [(ushort)symbols["END"]] = BasicRom.IntegerEnd,
+                [(ushort)symbols["TRYLINE_END"]] = BasicRom.IntegerRanOff
             });
     }
 

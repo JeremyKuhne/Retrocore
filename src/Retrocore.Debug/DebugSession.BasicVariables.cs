@@ -122,7 +122,7 @@ internal sealed partial class DebugSession
         {
             int reference = BasicChildren + _basicChildren.Count;
             _basicChildren[reference] = () => Elements(array, 0, array.Count, reference);
-            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1));
+            string bounds = string.Join(",", array.Dimensions.Select(size => size - 1 + array.LowerBound));
             list.Add(new JsonObject
             {
                 ["name"] = array.Name,
@@ -149,7 +149,7 @@ internal sealed partial class DebugSession
                 _basicChildren[chunk] = () => Elements(array, from, stop, chunk);
                 list.Add(new JsonObject
                 {
-                    ["name"] = $"[{start}..{stop - 1}]",
+                    ["name"] = $"[{start + array.LowerBound}..{stop - 1 + array.LowerBound}]",
                     ["value"] = "",
                     ["variablesReference"] = chunk
                 });

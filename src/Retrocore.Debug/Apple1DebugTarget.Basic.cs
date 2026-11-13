@@ -220,7 +220,7 @@ internal sealed partial class Apple1DebugTarget
     private void SetBasicSymbols(IReadOnlyDictionary<string, long>? symbols)
     {
         if (symbols is null) { return; }
-        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "STOPPED_AT", "END"];
+        string[] names = ["RUNLOOP", "WAITTOKEN", "CMDPROMPT", "ERRMESS", "RUN", "STOPPED_AT", "END", "TRYLINE_END"];
         if (names.Any(name => !symbols.ContainsKey(name))) { return; }
         _basicColon = (ushort)symbols["WAITTOKEN"];
         ushort line = (ushort)symbols["RUNLOOP"];
@@ -236,7 +236,8 @@ internal sealed partial class Apple1DebugTarget
             new Dictionary<ushort, string>
             {
                 [(ushort)symbols["STOPPED_AT"]] = BasicRom.Apple1Stop,
-                [(ushort)symbols["END"]] = BasicRom.IntegerEnd
+                [(ushort)symbols["END"]] = BasicRom.IntegerEnd,
+                [(ushort)symbols["TRYLINE_END"]] = BasicRom.IntegerRanOff
             });
     }
 

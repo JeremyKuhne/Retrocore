@@ -48,6 +48,12 @@ internal sealed record BasicRom(
     internal const string IntegerEnd = "INTEND";
 
     /// <summary>
+    ///  Where Integer BASIC and Apple-1 BASIC run off the program's last line, an error, while the program still runs:
+    ///  ERRMESS, which reports it, comes after BASIC has left the program.
+    /// </summary>
+    internal const string IntegerRanOff = "INTRANOFF";
+
+    /// <summary>
     ///  Gets the addresses from a ROM's assembled symbols.
     /// </summary>
     /// <param name="symbols">The symbols; null when the ROM's source was not assembled.</param>

@@ -169,7 +169,15 @@ internal sealed partial class DebugSession
             return ErrorStops();
         }
 
-        return rom.Stops.TryGetValue(pc, out string? kind) && EndStops(kind);
+        if (!rom.Stops.TryGetValue(pc, out string? kind)) { return false; }
+        if (kind == BasicRom.IntegerRanOff)
+        {
+            // Running off the last line is an error, reported once BASIC has left the program: stop for it here.
+            _basicEnded = true;
+            return ErrorStops();
+        }
+
+        return EndStops(kind);
     }
 
     private bool StatementStops(int line, int address)

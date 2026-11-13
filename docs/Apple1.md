@@ -67,6 +67,8 @@ cassette interface's prompt loads it, `E000R` starts it with an empty program, a
 the program. It is the first form of the Apple II's Integer BASIC, which kept its layout and code:
 
 - 16-bit integers, -32767 to 32767, and strings with `DIM`, `LEN(` and substrings such as `A$(2,3)`;
+- arrays of numbers that count from 1: `DIM A(10)` makes `A(1)` to `A(10)`, where Integer BASIC also has `A(0)`;
+- `MOD` negative when its two numbers' signs differ: `5 MOD -3` is -2;
 - a name is a letter and an optional digit (`A`, `B7`), or a letter and `$` for a string;
 - the statements `LET` (or none), `PRINT`, `INPUT`, `IF ... THEN`, `GOTO`, `GOSUB`/`RETURN`, `FOR`/`NEXT`, `DIM`,
   `REM`, `END`, `POKE`, `CALL` and `TAB`, and the functions `PEEK`, `RND`, `SGN` and `ABS`; GOSUBs and FOR loops

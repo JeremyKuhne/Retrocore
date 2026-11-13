@@ -30,6 +30,8 @@ internal sealed partial class DebugSession
         "apple2/disk",
         "apple2/sound",
         "apple2/button",
+        "apple2/mouse",
+        "apple2/screen",
         "apple2/fastDisk",
         "apple3/disk",
         "apple3/sound",
@@ -371,10 +373,19 @@ internal sealed partial class DebugSession
     // The display as the panel draws it, while running or stopped.
     private JsonObject DisplayNow() => Target.DisplayFrame(running: _run is { IsCancellationRequested: false });
 
-    private JsonObject MachineRequest(string name, JsonObject args) =>
-        Target.Requests.TryGetValue(name, out Func<JsonObject, JsonObject>? handler)
-            ? handler(args)
-            : throw new InvalidOperationException($"{name} is not supported on this machine.");
+    private JsonObject MachineRequest(string name, JsonObject args)
+    {
+        if (!Target.Requests.TryGetValue(name, out Func<JsonObject, JsonObject>? handler))
+        {
+            throw new InvalidOperationException($"{name} is not supported on this machine.");
+        }
+
+        JsonObject result = handler(args);
+
+        // A new monitor changes the picture, so a stopped machine sends the panel a frame drawn on it.
+        if (name == "apple2/screen" && _run is not { IsCancellationRequested: false }) { NotifyFrame(running: false); }
+        return result;
+    }
 
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
 

@@ -784,6 +784,16 @@ multiples on the Model I, allowing for Windows display scaling. **Scale: fit** f
 the panel's width instead; sharp falls back to it when the panel is too small for 1x.
 The panel remembers the choice.
 
+**Screen** picks the IIe's monitor: **Color**, or a monochrome monitor of the time,
+**Black and white**, **Green** or **Amber**. A monochrome monitor shows every one of the
+560 dots on its own, so double hi-res text and the mouse desktops are sharp instead of
+smeared into color. The `screen` launch option sets where a session starts; once you
+pick one in the panel, the panel keeps it for later sessions.
+
+With a mouse card in, a strip under the screen says so. Click the screen to capture
+your mouse for it: the strip and the screen's border light up and say **press Esc to
+release it**.
+
 **Speed** on the key bar runs the machine at 1x (its real speed), 2x, 4x or 8x its
 clock, or Max, as fast as the host can, from the moment you pick it; the `speed`
 launch option sets where a session starts. While it runs, the status line shows the
@@ -1105,7 +1115,9 @@ On the IIe, a free slot's **Add Card** button puts a Disk II controller there
 (16-sector, or 13-sector for DOS 3.2), even while the machine runs: `PR#5` boots it,
 and a reset's startup scan finds it. Its two drives take disks like any other, and
 **Remove Card** takes it out again, asking first if it has disks in. Slot 4 also
-takes the Mockingboard; slot 3 belongs to the 80-column firmware.
+takes the Mockingboard; slot 3 belongs to the 80-column firmware. Any free slot
+takes the mouse card (one per machine), as the `mouse` launch option does: click the
+display to move it with your mouse, and press Escape to let go.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you

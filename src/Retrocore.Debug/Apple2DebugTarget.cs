@@ -98,6 +98,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["apple2/beam"] = _ => Beam(),
             ["apple2/disk"] = _ => DiskState(),
             ["apple2/button"] = Button,
+            ["apple2/mouse"] = Mouse,
+            ["apple2/screen"] = Screen,
             ["apple2/sound"] = Sound,
             ["apple2/fastDisk"] = FastDiskRequest
         };
@@ -245,6 +247,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         // then the speaker is all there is to hear.
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
+        if (args.Int("mouse") is { } mouse and not 0) { target.HardwareAction($"slot{mouse}", "addMouse", []); }
+        if (args.String("screen") is { } screen) { machine.Bus.Video.Monitor = ParseScreen(screen); }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
         target.FastDisk = args.Bool("fastDisk") ?? true;
         target.StartControllers(args);
@@ -359,6 +363,34 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         _machine.Bus.SetButton(button, args.Bool("pressed") ?? throw new ArgumentException("pressed is required."));
         return [];
     }
+
+    // apple2/mouse: moves the mouse card's mouse by dx and dy and sets its button when pressed is given. Without the
+    // card, nothing happens.
+    private JsonObject Mouse(JsonObject args)
+    {
+        if (_machine.Bus.MouseSlot == 0) { return []; }
+        Apple2MouseCard mouse = _machine.Bus.Mouse;
+        mouse.Move(args.Int("dx") ?? 0, args.Int("dy") ?? 0);
+        if (args.Bool("pressed") is { } pressed) { mouse.Button = pressed; }
+        return [];
+    }
+
+    // apple2/screen: shows the video on a color monitor or a green, amber or white monochrome one.
+    private JsonObject Screen(JsonObject args)
+    {
+        _machine.Bus.Video.Monitor = ParseScreen(args.String("screen") ?? throw new ArgumentException("screen is required."));
+        return [];
+    }
+
+    // The launch's and the panel's names for the monitors.
+    private static Apple2Monitor ParseScreen(string screen) => screen switch
+    {
+        "color" => Apple2Monitor.Color,
+        "green" => Apple2Monitor.Green,
+        "amber" => Apple2Monitor.Amber,
+        "white" => Apple2Monitor.White,
+        _ => throw new ArgumentException("screen must be color, green, amber or white.")
+    };
 
     // apple2/sound: changes what the panel hears while running, as the launch's sound option does.
     // apple2/fastDisk: turns fast disk on or off.
@@ -923,6 +955,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             ["disk"] = DiskState(),
             ["sound"] = _soundMode,
             ["mockingboard"] = _machine.Bus.MockingboardInstalled,
+            ["mouse"] = _machine.Bus.MouseSlot,
+            ["screen"] = _machine.Bus.Video.Monitor.ToString().ToLowerInvariant(),
             ["fastDisk"] = FastDisk,
             ["running"] = running
         };
@@ -1106,8 +1140,21 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard or a Disk II controller here."
-            : "Add Card puts a Disk II controller here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller or the mouse card here."
+            : "Add Card puts a Disk II controller or the mouse card here.";
+
+        if (slot == _machine.Bus.MouseSlot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "Mouse card",
+                "A mouse with the AppleMouse II's firmware calls, interrupts and BASIC IN#/PR# interface. Click the "
+                    + "display to move it with your mouse; Escape lets go. The launch installs it with mouse and a slot; "
+                    + "Remove Card takes it out.",
+                [],
+                ["removeCard"]);
+        }
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled)
         {
@@ -1193,6 +1240,14 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 _machine.Bus.InstallDiskII(slot, SdkModules.BuildDiskII(sectors, SdkRoms));
                 _diskSectors[slot] = sectors;
                 break;
+            case "addMouse" when _machine.Bus.MouseSlot != 0:
+                throw new ArgumentException($"The mouse card is already in slot {_machine.Bus.MouseSlot}.");
+            case "addMouse" when slot > 0 && _machine.Bus.MouseSlot == 0 && _machine.Bus.IsSlotFree(slot):
+                _machine.Bus.InstallMouse(slot);
+                break;
+            case "removeCard" when slot > 0 && slot == _machine.Bus.MouseSlot:
+                _machine.Bus.RemoveMouse();
+                break;
             case "addMockingboard" when slot == 4 && _machine.Bus.IsSlotFree(4):
                 _machine.Bus.InstallMockingboard();
                 break;
@@ -1248,6 +1303,16 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                     case "mockingboard":
                         HardwareAction(id, "addMockingboard", []);
                         break;
+                    case "mouse":
+                        // The machine has one mouse card: the saved slot wins over the launch's, whatever the order
+                        // the slots come in.
+                        if (_machine.Bus.MouseSlot is not 0 and var other && other != slot && _machine.Bus.IsSlotFree(slot))
+                        {
+                            HardwareAction($"slot{other}", "removeCard", []);
+                        }
+
+                        HardwareAction(id, "addMouse", []);
+                        break;
                     case "languageCard":
                         HardwareAction(id, "addLanguageCard", []);
                         break;
@@ -1273,7 +1338,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
-    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard,
+    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, mouse,
     // diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
     // blockStorage, or empty.
     private string CardIn(int slot)
@@ -1286,6 +1351,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         }
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
+        if (slot == _machine.Bus.MouseSlot) { return "mouse"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {
             return _diskSectors.TryGetValue(slot, out int sectors) ? $"diskII{sectors}" : "diskII";

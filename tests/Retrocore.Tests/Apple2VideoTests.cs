@@ -228,6 +228,63 @@ public class Apple2VideoTests
         }
     }
 
+    /// <summary>
+    ///  A monochrome monitor shows double hi-res one dot per bit, the auxiliary byte's seven then the main byte's, lit in
+    ///  its phosphor's color, where a color monitor groups four dots into one color.
+    /// </summary>
+    /// <param name="monitor">The monitor.</param>
+    /// <param name="red">The phosphor's red.</param>
+    /// <param name="green">Its green.</param>
+    /// <param name="blue">Its blue.</param>
+    [TestMethod]
+    [DataRow(Apple2Monitor.White, 240, 240, 240)]
+    [DataRow(Apple2Monitor.Green, 51, 255, 102)]
+    [DataRow(Apple2Monitor.Amber, 255, 176, 0)]
+    public void MonochromeShowsEveryDoubleHiresDot(Apple2Monitor monitor, int red, int green, int blue)
+    {
+        Apple2Bus bus = Bus();
+        foreach (ushort address in (ReadOnlySpan<ushort>)[0xC050, 0xC057, 0xC05E]) { bus.Read(address); }
+        bus.Write(0xC00D, value: 0);                                  // 80 columns, for double hi-res
+        bus.SetRam(auxiliary: true, address: 0x2000, value: 0b0000101);   // dots 0 and 2
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0b1000000);  // dot 13
+        bus.Video.Monitor = monitor;
+        byte[] pixels = bus.Video.RenderBitmap();
+        byte[] lit = [(byte)red, (byte)green, (byte)blue, 255];
+        byte[] dark = [0, 0, 0, 255];
+        for (int dot = 0; dot < 14; dot++)
+        {
+            Pixel(pixels, dot, y: 0).Should().Equal(dot is 0 or 2 or 13 ? lit : dark, $"dot {dot}");
+        }
+    }
+
+    /// <summary>
+    ///  On a monochrome monitor a hi-res bit is two dots, a half bit later with the byte's high bit set.
+    /// </summary>
+    [TestMethod]
+    public void MonochromeShowsHiresBitsAsDotPairs()
+    {
+        Apple2Bus bus = Bus();
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0b0000001);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0b1000_0001);
+        bus.Video.Monitor = Apple2Monitor.White;
+        byte[] pixels = bus.Video.RenderBitmap();
+        bool Lit(int x) => Pixel(pixels, x, y: 0)[0] != 0;
+        Enumerable.Range(0, 4).Select(Lit).Should().Equal(true, true, false, false);
+        Enumerable.Range(14, 4).Select(Lit).Should().Equal(false, true, true, false);
+    }
+
+    /// <summary>
+    ///  The monitor is one of the four.
+    /// </summary>
+    [TestMethod]
+    public void MonitorRejectsAnUnknownValue()
+    {
+        Action set = () => Bus().Video.Monitor = (Apple2Monitor)9;
+        set.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     private static byte[] Pixel(byte[] pixels, int x, int y)
     {
         int start = (y * 560 + x) * 4;

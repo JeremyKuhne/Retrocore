@@ -36,6 +36,12 @@ namespace Retrocore.Machines.Apple3;
 ///   and the 128K board's layout (2.19). MAME's <c>apple3</c> driver maps bank 7 to bank 2 instead. On 128K, what
 ///   values 3-6 select depends on which of the manual's two RAS PROMs is fitted; here they wrap to banks 0-2.
 ///  </para>
+///  <para>
+///   Slots 1-4 take cards (<see cref="IApple3Card"/>): their I/O at <c>$C090-$C0CF</c>, their ROM pages at
+///   <c>$C100-$C4FF</c> and the expansion ROM at <c>$C800-$CFFF</c> answer while the environment enables I/O, as in
+///   MAME. A card can inhibit reads at <c>$F000-$FFFF</c>, and a card's DMA (<see cref="DmaRead"/>) sees memory as the
+///   6502 does. Slot interrupts are not wired yet.
+///  </para>
 /// </remarks>
 public sealed class Apple3Bus : IOpcodeFetchBus
 {
@@ -114,6 +120,12 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private int _analogSelect;
     private bool _rampActive;
     private int _paddleCharge;
+
+    // The slots' cards, by slot (index 0 unused); the installed ones, asked about inhibited reads; and the slot whose
+    // expansion ROM answers at $C800, or 0.
+    private readonly IApple3Card?[] _slots = new IApple3Card?[5];
+    private IApple3Card[] _inhibitors = [];
+    private int _expansionSlot;
 
     /// <summary>
     ///  Constructs a bus.
@@ -290,7 +302,118 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         _rampActive = false;
         _driveSelect = 0;
         _externalDrive = false;
+        _expansionSlot = 0;
         Disk.Reset();
+        foreach (IApple3Card? card in _slots) { card?.Reset(); }
+    }
+
+    /// <summary>
+    ///  Gets the card in a slot, or null.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <returns>The card.</returns>
+    public IApple3Card? Card(int slot) => slot is >= 1 and <= 4 ? _slots[slot] : null;
+
+    /// <summary>
+    ///  Gets the SoftCard ///, or null when none is installed.
+    /// </summary>
+    public SoftCard3? SoftCard { get; private set; }
+
+    /// <summary>
+    ///  Gets a count that changes whenever a card goes in or comes out.
+    /// </summary>
+    public int CardChanges { get; private set; }
+
+    /// <summary>
+    ///  Puts a card in its slot.
+    /// </summary>
+    /// <param name="card">The card.</param>
+    /// <exception cref="InvalidOperationException">
+    ///  The slot is not 1 to 4 or has a card, or the card is a second SoftCard ///.
+    /// </exception>
+    public void InstallCard(IApple3Card card)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        if (card.Slot is < 1 or > 4 || _slots[card.Slot] is not null)
+        {
+            throw new InvalidOperationException($"Slot {card.Slot} is not free.");
+        }
+
+        if (card is SoftCard3 softCard)
+        {
+            if (SoftCard is not null) { throw new InvalidOperationException("A SoftCard /// is already installed."); }
+            SoftCard = softCard;
+        }
+
+        _slots[card.Slot] = card;
+        CardsChanged();
+    }
+
+    /// <summary>
+    ///  Puts a SoftCard /// in a free slot, off.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <param name="prom">The card's 256-byte address mapping PROM.</param>
+    /// <returns>The card.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///  The slot is not free, or a SoftCard /// is already installed.
+    /// </exception>
+    public SoftCard3 InstallSoftCard(int slot, ReadOnlySpan<byte> prom)
+    {
+        SoftCard3 card = new(this, slot, prom);
+        InstallCard(card);
+        return card;
+    }
+
+    /// <summary>
+    ///  Takes the card out of a slot. If it is the SoftCard ///, the 6502 gets the bus back.
+    /// </summary>
+    /// <param name="slot">The slot, 1 to 4.</param>
+    /// <exception cref="InvalidOperationException">The slot has no card.</exception>
+    public void RemoveCard(int slot)
+    {
+        if (Card(slot) is not { } card) { throw new InvalidOperationException($"Slot {slot} has no card."); }
+        if (ReferenceEquals(card, SoftCard)) { SoftCard = null; }
+        _slots[slot] = null;
+        if (_expansionSlot == slot) { _expansionSlot = 0; }
+        CardsChanged();
+    }
+
+    /// <summary>
+    ///  Reads for a card's DMA: what the 6502 would read at the address, through the bank and zero-page registers
+    ///  but without extended addressing, which only the 6502's own instructions start.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>The value.</returns>
+    public byte DmaRead(ushort address)
+    {
+        byte extended = _extendedBank;
+        bool sync = _sync;
+        _extendedBank = 0;
+        _sync = true;
+        byte value = Read(address);
+        _extendedBank = extended;
+        _sync = sync;
+        return value;
+    }
+
+    /// <summary>
+    ///  Writes for a card's DMA, as the 6502 would write at the address, without extended addressing.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <param name="value">The value.</param>
+    public void DmaWrite(ushort address, byte value)
+    {
+        byte extended = _extendedBank;
+        _extendedBank = 0;
+        Write(address, value);
+        _extendedBank = extended;
+    }
+
+    private void CardsChanged()
+    {
+        _inhibitors = [.. _slots.OfType<IApple3Card>()];
+        CardChanges++;
     }
 
     /// <summary>
@@ -447,13 +570,15 @@ public sealed class Apple3Bus : IOpcodeFetchBus
             case < 0xC100:
                 return (Environment & IoEnable) != 0 ? ReadIo((byte)address) : _ram[_system + address - 0x8000];
             case < 0xC500:
-                return (Environment & IoEnable) != 0 ? (byte)0xFF : _ram[_system + address - 0x8000];
+                return (Environment & IoEnable) != 0 ? ReadSlotRom(address) : _ram[_system + address - 0x8000];
             case < 0xC800:
                 return _ram[_system + address - 0x8000];
             case < 0xD000:
-                return (Environment & IoEnable) != 0 ? (byte)0xFF : _ram[_system + address - 0x8000];
+                return (Environment & IoEnable) != 0 ? ReadExpansionRom(address) : _ram[_system + address - 0x8000];
             case < 0xF000:
                 return _ram[_system + address - 0x8000];
+            case >= 0xF000 when _inhibitors.Length != 0 && Inhibitor(address) is { } inhibitor:
+                return inhibitor.ReadInhibited(address);
             case >= 0xFFC0 and < 0xFFD0:
                 return _ram[_system + address - 0x8000];
             case >= 0xFFD0 and < 0xFFF0 when (BankRegister & ViasVisible) != 0:
@@ -493,7 +618,10 @@ public sealed class Apple3Bus : IOpcodeFetchBus
                 WriteIo((byte)address, value);
                 return;
             case < 0xC500 when (Environment & IoEnable) != 0:
+                SelectExpansion(address);
+                return;
             case >= 0xC800 and < 0xD000 when (Environment & IoEnable) != 0:
+                if (address == 0xCFFF) { _expansionSlot = 0; }
                 return;
             case >= 0xFFD0 and < 0xFFF0 when (BankRegister & ViasVisible) != 0:
                 (address < 0xFFE0 ? Via0 : Via1).Write((byte)address, value);
@@ -678,10 +806,44 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         return (byte)value;
     }
 
+    // The card that inhibits a read at an address, if any.
+    private IApple3Card? Inhibitor(ushort address)
+    {
+        foreach (IApple3Card card in _inhibitors)
+        {
+            if (card.InhibitsRead(address)) { return card; }
+        }
+
+        return null;
+    }
+
+    // A read of a slot's ROM page selects its expansion ROM.
+    private byte ReadSlotRom(ushort address)
+    {
+        SelectExpansion(address);
+        return _slots[(address >> 8) & 7] is { } card ? card.ReadRom(address & 0xFF) : (byte)0xFF;
+    }
+
+    private void SelectExpansion(ushort address)
+    {
+        int slot = (address >> 8) & 7;
+        if (_slots[slot] is { HasExpansionRom: true }) { _expansionSlot = slot; }
+    }
+
+    // $CFFF deselects every card's expansion ROM.
+    private byte ReadExpansionRom(ushort address)
+    {
+        byte value = _slots[_expansionSlot] is { } card ? card.ReadExpansionRom(address - 0xC800) : (byte)0xFF;
+        if (address == 0xCFFF) { _expansionSlot = 0; }
+        return value;
+    }
+
     private byte ReadIo(byte offset)
     {
         switch (offset)
         {
+            case >= 0x90 and < 0xD0:
+                return _slots[(offset >> 4) - 8] is { } card ? card.ReadIo(offset & 0x0F) : (byte)0xFF;
             case < 0x08:
                 return (byte)((_key & 0x7F) | _strobe);
             case < 0x10:
@@ -708,6 +870,9 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     {
         switch (offset)
         {
+            case >= 0x90 and < 0xD0:
+                _slots[(offset >> 4) - 8]?.WriteIo(offset & 0x0F, value);
+                break;
             case >= 0x10 and < 0x20:
                 ClearStrobe();
                 break;
@@ -788,6 +953,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
         0x64 or 0x65 or 0x6C or 0x6D => 0x80,                                   // no slot interrupt
         0x66 or 0x6E => _rampActive ? (byte)0x80 : (byte)0x00,
         >= 0x70 and < 0x80 => Clock.Read(ZeroPage),
+        >= 0x90 and < 0xD0 => _slots[(offset >> 4) - 8] is { } card ? card.PeekIo(offset & 0x0F) : (byte)0xFF,
         >= 0xD0 and < 0xD8 => 0x00,
         >= 0xE0 and < 0xF0 => Disk.Peek((byte)(offset & 0x0F), floatingBus: 0),
         >= 0xF0 and < 0xF4 => Acia.Read(offset),

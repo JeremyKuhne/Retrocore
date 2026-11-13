@@ -64,7 +64,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     internal DebugMemoryBank Bank { get; }
 
     // Each Z80 instruction boundary, whichever CPU's view is running: the instruction that ended, for the calls.
-    private void Boundary(SoftCard card)
+    private void Boundary(Z80Card card)
     {
         DebugFrame after = Frame;
         if (_before is { } before) { _calls.Complete(before, after); }

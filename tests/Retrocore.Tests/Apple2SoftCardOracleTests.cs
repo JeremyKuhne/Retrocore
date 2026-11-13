@@ -50,8 +50,25 @@ public class Apple2SoftCardOracleTests
             Assert.Inconclusive("MAME, its II Plus ROM path or the SoftCard CP/M disk is missing.");
         }
 
-        List<ushort> expected = Collapse(RunMame(mame, roms, disk));
-        List<ushort> actual = Collapse(RunMachine(disk));
+        List<ushort> expected = RunMame(
+            mame,
+            ["apple2p", "-sl4", "softcard", "-sl6", "diskiing", "-rompath", roms],
+            ":sl4:softcard:z80",
+            disk,
+            Seconds);
+
+        Compare(expected, RunMachine(disk));
+    }
+
+    /// <summary>
+    ///  Compares two traces after collapsing their loops: every instruction address must match.
+    /// </summary>
+    /// <param name="mame">MAME's instruction addresses.</param>
+    /// <param name="ours">The machine's.</param>
+    internal static void Compare(List<ushort> mame, List<ushort> ours)
+    {
+        List<ushort> expected = Collapse(mame);
+        List<ushort> actual = Collapse(ours);
         expected.Count.Should().BeGreaterThan(1_000, "MAME booted CP/M");
 
         int count = Math.Min(expected.Count, actual.Count);
@@ -64,6 +81,48 @@ public class Apple2SoftCardOracleTests
         }
 
         actual.Count.Should().Be(expected.Count);
+    }
+
+    /// <summary>
+    ///  Ends a recording: if WAIT holds the Z80 at its next instruction, that instruction has not run, so its address
+    ///  goes.
+    /// </summary>
+    /// <param name="card">The card.</param>
+    /// <param name="rows">The recording.</param>
+    /// <returns>The recording.</returns>
+    internal static List<ushort> Finish(Z80Card card, List<ushort> rows)
+    {
+        if (card.WaitingAtInstruction && rows.Count != 0) { rows.RemoveAt(rows.Count - 1); }
+        return rows;
+    }
+
+    /// <summary>
+    ///  Records the address of each instruction a card's Z80 runs, from its next boundary.
+    /// </summary>
+    /// <param name="card">The card.</param>
+    /// <returns>The addresses, which grow as the machine runs.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The boundary hook gives each instruction's address as the one before it ends. A reset while WAIT held the
+    ///   Z80 at its next instruction is a boundary too; it replaces that instruction's address, as it never ran.
+    ///  </para>
+    /// </remarks>
+    internal static List<ushort> Record(Z80Card card)
+    {
+        List<ushort> rows = [];
+        card.InstructionBoundary = z80 =>
+        {
+            if (z80.Processor.IsWaiting && rows.Count != 0)
+            {
+                rows[^1] = z80.Processor.Registers.PC;
+            }
+            else
+            {
+                rows.Add(z80.Processor.Registers.PC);
+            }
+        };
+
+        return rows;
     }
 
     // Removes loops repeated back to back, of up to 16 instructions, keeping one pass.
@@ -102,15 +161,21 @@ public class Apple2SoftCardOracleTests
         card.RefreshesHost = false;
         machine.Drives[0].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(disk), proDosOrder: false), Disk, "DSK");
         machine.Reset();
-
-        // The Z80 starts at zero; the hook reports each instruction after that as the one before it ends.
-        List<ushort> rows = [0x0000];
-        card.InstructionBoundary = softCard => rows.Add(softCard.Processor.Registers.PC);
+        List<ushort> rows = Record(card);
         machine.Run((ulong)(Seconds * BasicMachines.IIeClock));
-        return rows;
+        return Finish(card, rows);
     }
 
-    private static List<ushort> RunMame(string mame, string roms, string disk)
+    /// <summary>
+    ///  Runs MAME on a SoftCard CP/M disk and reads the addresses of the instructions its card's Z80 runs.
+    /// </summary>
+    /// <param name="mame">MAME.</param>
+    /// <param name="system">The system, its slots and its ROM path, as MAME's arguments.</param>
+    /// <param name="cpu">The Z80's tag.</param>
+    /// <param name="disk">The disk, for the first drive.</param>
+    /// <param name="seconds">The emulated seconds to trace.</param>
+    /// <returns>The addresses.</returns>
+    internal static List<ushort> RunMame(string mame, string[] system, string cpu, string disk, int seconds)
     {
         string work = Directory.CreateTempSubdirectory("retrocore-mame").FullName;
         try
@@ -118,7 +183,7 @@ public class Apple2SoftCardOracleTests
             string output = Path.Join(work, "trace.log");
 
             // MAME opens its disk for writing, which would lock the shared image away from other tests.
-            string copy = Path.Join(work, Disk);
+            string copy = Path.Join(work, Path.GetFileName(disk));
             File.Copy(disk, copy);
             ProcessStartInfo start = new(mame)
             {
@@ -130,16 +195,16 @@ public class Apple2SoftCardOracleTests
 
             string[] arguments =
             [
-                "apple2p", "-sl4", "softcard", "-sl6", "diskiing", "-flop1", copy,
-                "-rompath", roms, "-cfg_directory", work, "-nvram_directory", work,
+                .. system, "-flop1", copy, "-cfg_directory", work, "-nvram_directory", work,
                 "-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo",
-                "-debug", "-debugger", "none", "-seconds_to_run", (Seconds + 5).ToString(CultureInfo.InvariantCulture),
+                "-debug", "-debugger", "none", "-seconds_to_run", (seconds + 5).ToString(CultureInfo.InvariantCulture),
                 "-autoboot_script", FindTool("SoftCardOracle.lua"), "-autoboot_delay", "0"
             ];
 
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
-            start.Environment["RETRO_END"] = Seconds.ToString(CultureInfo.InvariantCulture);
+            start.Environment["RETRO_END"] = seconds.ToString(CultureInfo.InvariantCulture);
             start.Environment["RETRO_OUT"] = output;
+            start.Environment["RETRO_CPU"] = cpu;
             using (Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start."))
             {
                 process.StandardOutput.ReadToEnd();

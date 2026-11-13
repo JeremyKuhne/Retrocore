@@ -27,7 +27,9 @@ internal static class Allocations
     ///  beside it allocate meanwhile, and once the region is used up a GC ends it.
     /// </param>
     /// <returns>The bytes allocated, which is 0 for allocation-free work.</returns>
-    /// <exception cref="InvalidOperationException">A GC ran during every attempt.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  No attempt held: each either could not start a no-GC region or had a GC run during it.
+    /// </exception>
     /// <remarks>
     ///  <para>
     ///   <see cref="GC.GetAllocatedBytesForCurrentThread"/> counts the unused part of the thread's allocation
@@ -39,11 +41,17 @@ internal static class Allocations
     internal static long During(Action work)
     {
         ArgumentNullException.ThrowIfNull(work);
+        int unstarted = 0;
         lock (s_region)
         {
             for (int attempt = 0; attempt < Attempts; attempt++)
             {
-                if (!GC.TryStartNoGCRegion(RegionSize)) { continue; }
+                if (!GC.TryStartNoGCRegion(RegionSize))
+                {
+                    unstarted++;
+                    continue;
+                }
+
                 long allocated;
                 bool held;
                 try
@@ -61,7 +69,9 @@ internal static class Allocations
             }
         }
 
-        throw new InvalidOperationException($"A GC ran during each of {Attempts} measurements.");
+        string unstartedText = $"{unstarted} could not start a no-GC region of {RegionSize / (1024 * 1024)} MB";
+        string interruptedText = $"a GC ran during the other {Attempts - unstarted}";
+        throw new InvalidOperationException($"No measurement held in {Attempts} attempts: {unstartedText}, and {interruptedText}.");
     }
 
     // Ends the no-GC region; false when a GC ran in it, which may have retired the thread's allocation context.

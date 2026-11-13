@@ -87,7 +87,10 @@ it runs (a source, a program, a disk, a tape or nothing), and its cards and medi
 
 Each step is usable on its own:
 
-1. The language server's `describe` and `change` requests, tested against the debug host's own rows.
+1. **Done.** The language server's `describe` and `change` requests ([OffMachine.cs](../../src/Retrocore.Debug/OffMachine.cs),
+   described in [Devices.md](../Devices.md#a-machine-that-is-off)), tested against the debug host's own rows by
+   `tools/Test-OffMachine.mjs`. Building the machine for each request takes about 40 to 200 ms (the first, cold,
+   about 500), so the fallback is not needed.
 2. The powered-off views and **Switch Machine…**: cards and media while off, and what a session changed kept
    when it ends.
 3. Settings as rows of the off machine, from the catalog, keeping the cards and media that still fit.

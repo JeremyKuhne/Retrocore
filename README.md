@@ -248,6 +248,7 @@ node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps i
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
+node tools/Test-OffMachine.mjs        # needs nothing external
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
 node tools/Test-IIeDap.mjs            # SDK-built ROMs, or the dumps in RETROCORE_IIE_ROMS

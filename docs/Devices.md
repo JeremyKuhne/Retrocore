@@ -130,6 +130,24 @@ Disks the machine changes stay in memory, and `changed` shows that they differ f
 `.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
 drives don't save yet.
 
+## A machine that is off
+
+The language server, which is the same `Retrocore.Debug.dll`, answers two requests about a machine with no debug
+session, built as a launch builds it and never run:
+
+- `retrocore/machine/describe` takes `{ "configuration": { launch arguments }, "machineState": { saved } }`, the
+  saved machine being the `configuration` above.
+- `retrocore/machine/change` takes the same, plus `"request": "hardware"` or `"device"` and `"arguments"`, which are
+  what `retro/hardware` or `retro/device` would take, such as `{ "id": "slot5", "action": "addDiskII", "sectors": 16 }`
+  or `{ "id": "slot5disk1", "action": "insert", "path": "games.dsk" }`.
+
+Both answer as `retro/devices` does, with the new saved machine as `configuration`, and add `problems`: what of the
+saved machine could not be restored, such as a disk image that no longer exists. Nothing is kept between requests, so
+the saved machine the editor holds is all of an off machine's state, and launching with it as `machineState` boots
+the machine as it was described. Game controllers are not opened while off; the game port's row says they are read
+while it runs. `tools/Test-OffMachine.mjs` checks that each machine lists the same hardware and devices off as
+launched.
+
 ## The Machine and Drives views
 
 Retrocore has its own icon in the activity bar, a small computer, which opens two views. Before a session starts,

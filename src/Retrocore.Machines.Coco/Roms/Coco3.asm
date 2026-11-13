@@ -333,7 +333,7 @@ AUTHSHOW:
     STA SAMREG+30                   ; the ROM in, to read the picture
     LDB #$09                        ; the colors the picture shows in
     STB PALETREG+10
-    LDB #63
+    LDB #63                         ; white
     STB PALETREG+11
     LDX #AUTHPIC
     LDY #$0E00                      ; the picture's place in RAM
@@ -346,13 +346,13 @@ AUTHSHOW_COPY:
     BCS AUTHSHOW_COPY
     LDA #$F9                        ; PMODE 4's graphics, the second color set
     STA PIA1+2
-    CLRA                            ; clear the SAM's bits but F3 and F2: graphics, the display at $0E00
+    CLRA                            ; the SAM: V0 clear, V1 and V2 set for 256x192 graphics
     LDX #SAMREG
     STA ,X
     STA 3,X
     STA 5,X
     STA 7,X
-    STA 9,X
+    STA 9,X                         ; F0 to F2 set: the display at 7 x 512, $0E00
     STA 11,X
 AUTHSHOW_WAIT:
     BRA AUTHSHOW_WAIT               ; until RESET
@@ -374,12 +374,8 @@ PALIMAGE:
 ;; What <COCO3RESET> puts in the MMU's registers: task 0, BASIC's 64K with block $34 at $4000 for start-up, then
 ;; task 1, the hi-res graphics screen, blocks $30-$33, at $2000-$9FFF, with block $35 at $C000 for its stack.
 MMUIMAGE:
-    .byte BLOCK7_0, BLOCK7_1, BLOCK6_4
-    .byte BLOCK7_3, BLOCK7_4, BLOCK7_5
-    .byte BLOCK7_6, BLOCK7_7
-    .byte BLOCK7_0, BLOCK6_0, BLOCK6_1
-    .byte BLOCK6_2, BLOCK6_3, BLOCK7_5
-    .byte BLOCK6_5, BLOCK7_7
+    .byte BLOCK7_0, BLOCK7_1, BLOCK6_4, BLOCK7_3, BLOCK7_4, BLOCK7_5, BLOCK7_6, BLOCK7_7
+    .byte BLOCK7_0, BLOCK6_0, BLOCK6_1, BLOCK6_2, BLOCK6_3, BLOCK7_5, BLOCK6_5, BLOCK7_7
 
 ;; The patches <STARTUP> makes to the copies of Extended and Color BASIC in RAM, after a count: each is where it
 ;; goes, its length, and its code, which mostly jumps to Super Extended BASIC's code for what the CoCo 3 does
@@ -1108,7 +1104,7 @@ SPARE0:
 ;; Keeps: A, X, Y
 SETTEXT:
     PSHS Y,X,A
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     LDX #IM_TEXT
     LDA HRWIDTH
     BEQ SETVIDEO
@@ -1139,7 +1135,7 @@ IM_TEXT80:
 ;; Keeps: A, X, Y
 SETGRAPH:
     PSHS Y,X,A
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     LDX #IM_GRAPH
     LDY #RESTABLE
     LDA HRMODE
@@ -1519,7 +1515,7 @@ DISK21MS:
 GRINIT20:
     CLRA
     CLRB
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     STB H_CRSATT                    ; no attributes
     STD HRMODE                      ; no hi-res graphics or text
     STD H_ONBRK                     ; no ON BRK
@@ -1807,7 +1803,7 @@ INPUTBRK20:
 ;; Errors: ?FC ERROR past 512K
 LPOKE:
     JSR FRMNUM
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BSR LONGADR                     ; into a block and an offset
     CMPB #BLOCK7_7                  ; past the last block?
     LBHI FCERR
@@ -1830,7 +1826,7 @@ LPOKE:
 ;; Errors: ?FC ERROR past 512K
 LPEEK:
     BSR LONGADR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPB #BLOCK7_7
     LBHI FCERR
     ORCC #$50
@@ -1876,7 +1872,7 @@ LONGADR_DONE:
 ;; Errors: ?FC ERROR past 3
 BUTTON:
     JSR INTCNV
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPB #$03
     LBHI FCERR
     TFR B,A
@@ -1888,8 +1884,8 @@ BUTTON:
     CMPB #$0F                       ; none down?
     BEQ BUTTON_UP
     LEAX >BUTTON_TESTS,PCR
-    .byte $48                       ; four bytes to each test
-    .byte $48
+    ASLA                            ; four bytes to each test
+    ASLA
     JMP A,X
 BUTTON_TESTS:
     ANDB #$01
@@ -1917,7 +1913,7 @@ BUTTON_GIVE:
 ;; Errors: ?FC ERROR for a register past 15
 PALETTE:
     CMPA #TK_RGB
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BNE PALETTE_CMP
     JSR GETNCH
 PALETTE_RGB:
@@ -2010,7 +2006,7 @@ IM_PALET:
 ;; Errors: ?FC ERROR past 4
 HSCREEN:
     CMPA #$00                       ; the statement's end?
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BNE HSCREEN_MODE
     CLRB
     BRA HSCREEN_SET
@@ -2084,7 +2080,7 @@ HRERR:
 ;; Errors: ?FC ERROR past 15
 HCOLOR:
     CMPA #','
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BEQ HCOLOR_BACK                 ; no foreground?
     BSR HCOLORARG
     STB H_FCOLOR
@@ -2179,7 +2175,7 @@ HSET:
 ;; Errors: ?HR ERROR with no hi-res graphics screen
 HRESET:
     CLRA
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
 HSETRESET:
     TST HRMODE
     BEQ HRERR
@@ -2290,7 +2286,7 @@ HCALADR:
     LDU #CALTABLE
     LDA HRMODE
     SUBA #$01                       ; modes from 0
-    .byte $48
+    ASLA
     LDU A,U
     RTS
 
@@ -2406,7 +2402,7 @@ HPOINT_GIVE:
 HLINE:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPA #'('
     BEQ HLINE_ENDS
     CMPA #TK_MINUS                  ; no start?
@@ -2661,7 +2657,7 @@ HRIGHTRTN:
     LDU #HRIGHTTAB
     LDB HRMODE
     SUBB #$01                       ; modes from 0
-    .byte $58
+    ASLB
     LDU B,U
     RTS
 
@@ -2728,7 +2724,7 @@ HDOWN:
 HCIRCLE:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPA #'@'                       ; HCIRCLE@ is allowed
     BNE HCIRCLE_ARGS
     JSR GETNCH
@@ -2785,8 +2781,8 @@ HCIRCLE_ARC:
     NEGB
     ADDB #$08
 HCIRCLE_ENTRY:
-    .byte $58                       ; four bytes to each of the table's entries
-    .byte $58
+    ASLB                            ; four bytes to each of the table's entries
+    ASLB
     LEAU B,U
     PSHS U
     JSR HCIRCMUL                    ; the horizontal offset, from the sine
@@ -2977,7 +2973,7 @@ HMUL16_HIGH:
 HPAINT:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPA #'@'                       ; HPAINT@ is allowed
     BNE HPAINT_POINT
     JSR GETNCH
@@ -3211,7 +3207,7 @@ HPNTROOM_OM:
 ;; Errors: ?FC ERROR past 255; ?DD ERROR when n exists; ?OM ERROR past the block's 7.75K
 HBUFF:
     JSR GETADR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPX #255
     LBHI FCERR
     STX VD1
@@ -3309,7 +3305,7 @@ HPUT:
 HGETPUT:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     STB VD8
     CMPA #'@'                       ; HGET@ and HPUT@ are allowed
     BNE HGETPUT_RECT
@@ -3534,7 +3530,7 @@ HBUFADR_CHECK:
 HPRINT:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     JSR SYNLPR
     JSR HGETXYS                     ; the column and row
     JSR SYNRPR
@@ -3590,7 +3586,7 @@ HPRINT_NEXTCHAR:
     BGT HPRINT_CHARS
     LDA HRMODE                      ; the byte drawer for the mode
     DECA
-    .byte $48
+    ASLA
     LDY #HPRINTTAB
     LDY A,Y
     STY VD1
@@ -3608,10 +3604,10 @@ HPRINT_LINE:
 HPRINT_BYTE:
     LDB ,Y+
     CLRA
-    .byte $58                       ; eight bytes to a character
-    .byte $58
+    ASLB                            ; eight bytes to a character
+    ASLB
     ROLA
-    .byte $58
+    ASLB
     ROLA
     LDA D,U                         ; this row of it
     JSR [VD1]
@@ -3687,14 +3683,14 @@ HPRINT4:
     LSRA
     LSRA
     LSRA
-    .byte $48                       ; two bytes to each entry
+    ASLA                            ; two bytes to each entry
     LDD A,Y
     JSR HPRINT1
     TFR B,A
     JSR HPRINT1
     PULS A
     ANDA #$0F
-    .byte $48
+    ASLA
     LDD A,Y
     JSR HPRINT1
     TFR B,A
@@ -3714,16 +3710,16 @@ HPRINT4TAB:
 ;; Turns HPRINT's column and row into pixels, eight to a character.
 HPRINTPOS:
     LDD HORBEG
-    .byte $58                       ; the column times eight
-    .byte $58
+    ASLB                            ; the column times eight
+    ASLB
     ROLA
-    .byte $58
+    ASLB
     ROLA
     STD HORBEG
     LDA VERBEG+1
-    .byte $48                       ; the row times eight
-    .byte $48
-    .byte $48
+    ASLA                            ; the row times eight
+    ASLA
+    ASLA
     STA VERBEG+1
     RTS
 
@@ -3835,7 +3831,7 @@ HIRESCHR:
 HDRAW:
     TST HRMODE
     LBEQ HRERR
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     LDX #0                          ; a string of no length at address 0 ends the drawing
     LDB #$01
     PSHS X,B
@@ -4208,12 +4204,12 @@ HDRAWVAL_DONE:
 
 ;; Multiplies D by ten.
 HMUL10:
-    .byte $58
+    ASLB
     ROLA
     PSHS B,A
-    .byte $58
+    ASLB
     ROLA
-    .byte $58
+    ASLB
     ROLA
     ADDD ,S++
     RTS
@@ -4258,7 +4254,7 @@ HDRAWVAR_END:
 ;; Errors: ?FC ERROR for any other width
 WIDTH:
     CLR HRMODE
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPA #$00                       ; no width?
     BEQ WIDTH_FC
     JSR GETBYT
@@ -4312,7 +4308,7 @@ COL80:
 ;; Out:  X = the screen's start
 HCLRTEXT:
     LDX #HRESSCRN
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     STX H_CRSLOC
     LDA #' '
     LDB H_CRSATT
@@ -4337,7 +4333,7 @@ HCLRTEXT_LOOP:
 ;; In:   CC = <CLS>'s, zero = set when CLS has no color
 CLS20:
     PULS CC
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BEQ CLS20_PLAIN
     JSR GETBYT
     TSTB
@@ -4479,7 +4475,7 @@ HBLINK_WAIT:
 ;; In:   A = the character, and A, B and X on the stack, which it pulls and returns past
 PUTCHR20:
     BSR HTEXTON
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     LDX H_CRSLOC
     CMPA #$08
     BNE PUTCHR20_CR
@@ -4661,7 +4657,7 @@ HPERR:
 ;; Errors: ?HP ERROR on the 32-column screen; ?FC ERROR past the screen's columns or 24 rows
 LOCATE:
     LDB HRWIDTH
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BEQ HPERR
     PSHS B
     JSR HGETXYS
@@ -4685,12 +4681,12 @@ LOCATE_CHECK:
     LDA H_CRSATT                    ; the old cursor without its underline
     STA 1,X
     LDA H_COLUMN
-    .byte $48                       ; two bytes to a character
+    ASLA                            ; two bytes to a character
     MUL
     LDX #HRESSCRN                   ; the row's start
     LEAX D,X
     PULS A,B
-    .byte $48
+    ASLA
     TFR A,B
     ABX
     LDA H_CRSATT                    ; the new cursor underlined
@@ -4706,7 +4702,7 @@ LOCATE_CHECK:
 ;; Errors: ?HP ERROR on the 32-column screen; ?TM ERROR for a variable of the wrong type
 HSTAT:
     TST HRWIDTH
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     BEQ HPERR
     LBSR HTEXTON
     LDX H_CRSLOC
@@ -4774,12 +4770,12 @@ HSTAT_COPY:
 ;; Errors: ?FC ERROR for a color past 7, or anything but B or U
 ATTR:
     JSR GETBYT
-    LBRN 0                          ; never taken: a place for a hook
+    LBRN RAMLINK                    ; the hook, never taken
     CMPB #$08
     LBCC FCERR
-    .byte $58                       ; the foreground in bits 3-5
-    .byte $58
-    .byte $58
+    ASLB                            ; the foreground in bits 3-5
+    ASLB
+    ASLB
     PSHS B
     JSR GETCCH
     JSR SYNCOM

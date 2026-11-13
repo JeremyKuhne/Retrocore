@@ -1917,7 +1917,7 @@ PUTCHR3:
     PSHS A,B,X
     LDX CURPOS
     LDB HRWIDTH
-    LBNE PUTCHR20                    ; a hi-res text screen
+    LBNE PUTCHR20                   ; a hi-res text screen
     LDB 1,S                         ; B as it came
     JMP SCRCHR_SAVED
 

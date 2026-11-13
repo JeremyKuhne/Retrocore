@@ -141,6 +141,10 @@ HRESBUFF = $C000
 ;; The top of the stack task 1 uses while hi-res graphics commands run: the top of <BLOCK6_5>.
 TMPSTACK = $DFFF
 
+;; Where each command's hook goes: a long branch that is never taken, LBRN RAMLINK, at the start of Super Extended
+;; BASIC's commands, which a later ROM could have turned into a jump; Tandy left them all at $0000.
+RAMLINK = 0
+
 ;; The rows on the 40 and 80-column screens.
 ROWMAX = 24
 

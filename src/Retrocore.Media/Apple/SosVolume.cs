@@ -25,10 +25,7 @@ public sealed class SosVolume
     public const int BlockSize = 512;
 
     private const int VolumeDirectory = 2;
-    private const int DiskSize = 35 * 16 * 256;
-
-    // Where a block's two halves are on a DOS-order image: ProDOS sector n of a track is this DOS sector.
-    private static readonly byte[] s_dosSectors = [0x0, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0xF];
+    private const int DiskSize = DiskBlocks.DiskSize;
 
     private readonly byte[] _image;
     private readonly bool _proDosOrder;
@@ -102,23 +99,7 @@ public sealed class SosVolume
     /// </summary>
     /// <param name="block">The block number, 0-279.</param>
     /// <returns>Its 512 bytes.</returns>
-    public byte[] Block(int block)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(block);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(block, DiskSize / BlockSize);
-        if (_proDosOrder) { return _image.AsSpan(block * BlockSize, BlockSize).ToArray(); }
-
-        byte[] data = new byte[BlockSize];
-        int track = block / 8;
-        int half = block % 8;
-        for (int part = 0; part < 2; part++)
-        {
-            int sector = s_dosSectors[(half * 2) + part];
-            _image.AsSpan(((track * 16) + sector) * 256, 256).CopyTo(data.AsSpan(part * 256));
-        }
-
-        return data;
-    }
+    public byte[] Block(int block) => DiskBlocks.Read(_image, _proDosOrder, block);
 
     private IEnumerable<SosFileEntry> Entries()
     {

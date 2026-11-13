@@ -393,11 +393,13 @@ public sealed class Apple2Video : IVideoSource
                 }
                 else
                 {
-                    // Hi-res: each bit two dots wide, half a bit later when the byte's high bit is set.
+                    // Hi-res: each bit two dots wide, half a bit later when the byte's high bit is set. A delayed
+                    // byte's first half dot is the previous column's last dot, carried over only when that column
+                    // is shown as hi-res (see ShownHiresDot).
                     bool delayed = !Revision0 && (main[column] & 128) != 0;
                     int within = dot - (delayed ? 1 : 0);
                     lit = within < 0
-                        ? column != 0 && (main[column - 1] & 0x40) != 0
+                        ? ShownHiresDot(main, switches, row, column * 7 - 1)
                         : ((main[column] >> (within / 2)) & 1) != 0;
                 }
 

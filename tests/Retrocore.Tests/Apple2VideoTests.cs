@@ -278,11 +278,42 @@ public class Apple2VideoTests
         Pixel(pixels, x: 13, y: 0).Should().Equal(violet);
     }
 
-    // Scans line 0's first column in one mode and its second in the other, text and hi-res, on the composite
-    // monitor, after writing the given main memory bytes.
-    private static byte[] ScanModeChange(bool textFirst, params (ushort Address, byte Value)[] memory)
+    /// <summary>
+    ///  Checks that where a scanned line changes from text to hi-res partway, a monochrome monitor's delayed hi-res byte
+    ///  carries over no dot from the text column before it, while one after a hi-res column does.
+    /// </summary>
+    [TestMethod]
+    public void MonochromeHiresCarriesNoDotFromMidLineText()
+    {
+        byte[] white = [240, 240, 240, 255];
+        byte[] black = [0, 0, 0, 255];
+
+        // Text, a character code with bit 6 set, then a delayed hi-res byte with no dots: its first half dot is dark.
+        byte[] pixels = ScanModeChange(textFirst: true, Apple2Monitor.White, (0x400, 0x40), (0x2001, 0x80));
+        Pixel(pixels, x: 14, y: 0).Should().Equal(black);
+
+        // Both columns hi-res: the previous column's dot 6 carries over into the delayed byte's first half dot.
+        Apple2Bus bus = Bus();
+        bus.Video.Monitor = Apple2Monitor.White;
+        bus.Read(0xC050);
+        bus.Read(0xC057);
+        bus.SetRam(auxiliary: false, address: 0x2000, value: 0x40);
+        bus.SetRam(auxiliary: false, address: 0x2001, value: 0x80);
+        Pixel(bus.Video.RenderBitmap(), x: 14, y: 0).Should().Equal(white);
+    }
+
+    // Scans line 0's first column in one mode and its second in the other, text and hi-res, after writing the given
+    // main memory bytes.
+    private static byte[] ScanModeChange(bool textFirst, params (ushort Address, byte Value)[] memory) =>
+        ScanModeChange(textFirst, Apple2Monitor.Color, memory);
+
+    private static byte[] ScanModeChange(
+        bool textFirst,
+        Apple2Monitor monitor,
+        params (ushort Address, byte Value)[] memory)
     {
         Apple2Bus bus = Bus();
+        bus.Video.Monitor = monitor;
         foreach ((ushort address, byte value) in memory)
         {
             bus.SetRam(auxiliary: false, address, value);

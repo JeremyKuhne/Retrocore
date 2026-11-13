@@ -9,7 +9,7 @@ using Retrocore.Pascal;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Apple III Pascal 1.1 on the Apple III, from Apple's disks: it boots, its Filer lists the boot disk, and a program
+///  Apple III Pascal 1.0 and 1.1 on the Apple III, from Apple's disks: it boots, its Filer lists the boot disk, and a program
 ///  is edited, compiled with a listing, and run.
 /// </summary>
 /// <remarks>
@@ -21,19 +21,25 @@ namespace Retrocore.Tests;
 [TestClass]
 public class Apple3PascalTests
 {
-    private const string System = "Apple3Pascal1.1Disk1.dsk";
-    private const string Tools = "Apple3Pascal1.1Disk2.dsk";
+    // Each version's first disk, with SOS and the system, and second, with the Editor and Compiler. 1.0's first disk is
+    // known for a damaged Filer, which lists its directory all the same.
+    private static string System(string version) => version == "1.0" ? "Apple3Pascal1.0Disk1BadFiler.dsk" : $"Apple3Pascal{version}Disk1.dsk";
+
+    private static string Tools(string version) => $"Apple3Pascal{version}Disk2.dsk";
 
     /// <summary>
     ///  Pascal boots to its command line, and the Filer lists /PASCAL1.
     /// </summary>
+    /// <param name="version">Apple III Pascal's version: 1.1, as 1.0's first disk has a damaged Filer.</param>
     [TestMethod]
-    public void PascalBootsAndTheFilerListsItsDisk()
+    [DataRow("1.1")]
+    public void PascalBootsAndTheFilerListsItsDisk(string version)
     {
-        Apple3Machine machine = Boot(System);
+        Apple3Machine machine = Boot(System(version));
         RunUntil(machine, "Based on  U.C.S.D. Pascal II.1", seconds: 60);
         Type(machine, "\r");
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        machine.Run(TimeSpan.FromSeconds(1));
         Type(machine, "F");
         RunUntil(machine, "Filer: L(dir", seconds: 30);
         Type(machine, "L");
@@ -47,13 +53,17 @@ public class Apple3PascalTests
     ///  A program typed into the Editor (ending its insertion with CONTROL-C), saved to /PASCAL2, compiled with a
     ///  listing and run prints what it should, and its code file and listing read back from the disk.
     /// </summary>
+    /// <param name="version">Apple III Pascal's version, 1.0 or 1.1.</param>
     [TestMethod]
-    public void PascalCompilesAndRunsAProgram()
+    [DataRow("1.0")]
+    [DataRow("1.1")]
+    public void PascalCompilesAndRunsAProgram(string version)
     {
-        Apple3Machine machine = Boot(System, Tools);
+        Apple3Machine machine = Boot(System(version), Tools(version));
         RunUntil(machine, "Based on  U.C.S.D. Pascal II.1", seconds: 60);
         Type(machine, "\r");
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        machine.Run(TimeSpan.FromSeconds(1));
 
         CompileHello(machine);
 
@@ -67,10 +77,11 @@ public class Apple3PascalTests
         SosVolume volume = SosVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
         PascalSegment segment = PascalCodeFile.Read(volume.ReadFile("HELLO.CODE")).Segments.Should().ContainSingle().Subject;
         segment.Name.Should().Be("HELLO");
-        segment.Version.Should().Be(4);
+        segment.Version.Should().Be(version == "1.0" ? 3 : 4);
         string[] show = [.. PcodeDisassembler.Disassemble(segment, segment.Procedures.Single(procedure => procedure.Index == 2)).Select(instruction => instruction.ToString())];
         show.Should().StartWith(["LOD 2, 3", "SLDL1", "SLDC 7", "MPI"]);
 
+        if (version == "1.0") { return; }
         string listing = PascalTextFile.Read(volume.ReadFile("HELLO.LST.TEXT"));
         listing.Should().Contain("    9   1    1:2    13 SHOW(I)");
     }
@@ -79,13 +90,17 @@ public class Apple3PascalTests
     ///  At the interpreter's fetch in a procedure of a running program, the p-machine's frames read as the procedure,
     ///  its caller in the program, and the system below them.
     /// </summary>
+    /// <param name="version">Apple III Pascal's version, 1.0 or 1.1.</param>
     [TestMethod]
-    public void FramesReadFromTheMarkStack()
+    [DataRow("1.0")]
+    [DataRow("1.1")]
+    public void FramesReadFromTheMarkStack(string version)
     {
-        Apple3Machine machine = Boot(System, Tools);
+        Apple3Machine machine = Boot(System(version), Tools(version));
         RunUntil(machine, "Based on  U.C.S.D. Pascal II.1", seconds: 60);
         Type(machine, "\r");
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        machine.Run(TimeSpan.FromSeconds(1));
         CompileHello(machine);
 
         Type(machine, "X");
@@ -136,16 +151,23 @@ public class Apple3PascalTests
         RunUntil(machine, "bytes long", seconds: 60);
         Type(machine, "E");
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        machine.Run(TimeSpan.FromSeconds(1));
 
         Type(machine, "C");
         RunUntil(machine, "Compile what text?", seconds: 60);
         Type(machine, "/PASCAL2/HELLO\r");
         RunUntil(machine, "To what codefile?", seconds: 10);
         Type(machine, "/PASCAL2/HELLO\r");
-        RunUntil(machine, "Listing file", seconds: 10);
-        Type(machine, "/PASCAL2/HELLO.LST.TEXT\r");
+        // 1.0's Compiler asks for no listing.
+        RunUntil(machine, "Listing file", seconds: 60, orElse: "Smallest available space");
+        if (!Screen(machine).Contains("Smallest available space", StringComparison.Ordinal))
+        {
+            Type(machine, "/PASCAL2/HELLO.LST.TEXT\r");
+        }
+
         RunUntil(machine, "Smallest available space", seconds: 120);
         RunUntil(machine, "Command: E(dit, R(un, F(ile", seconds: 30);
+        machine.Run(TimeSpan.FromSeconds(1));
         machine.Run(TimeSpan.FromSeconds(1));
     }
 
@@ -175,11 +197,16 @@ public class Apple3PascalTests
 
     private static string Screen(Apple3Machine machine) => string.Join('\n', machine.ReadTextScreen());
 
-    private static void RunUntil(Apple3Machine machine, string text, int seconds)
+    private static void RunUntil(Apple3Machine machine, string text, int seconds, string? orElse = null)
     {
         for (int tenth = 0; tenth < seconds * 10; tenth++)
         {
-            if (Screen(machine).Contains(text, StringComparison.Ordinal)) { return; }
+            string screen = Screen(machine);
+            if (screen.Contains(text, StringComparison.Ordinal) || (orElse is not null && screen.Contains(orElse, StringComparison.Ordinal)))
+            {
+                return;
+            }
+
             machine.Run(TimeSpan.FromSeconds(0.1));
         }
 

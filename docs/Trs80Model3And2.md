@@ -70,7 +70,9 @@ The Model 4P has no cassette port.
 
 The peripherals interrupt in mode 2 through the Z80 daisy chain, from the CTC through the SIO and DMA to the PIO: the
 requesting device puts its vector on the bus, and holds off the devices after it until its routine returns with
-`RETI`, which the machine sees in the opcodes the Z80 fetches.
+`RETI`, which the machine sees in the opcodes the Z80 fetches. As on the chips, which watch the data bus during opcode
+fetches, that includes the opcode an NMI's response fetches and ignores: an NMI taken before an `ED`-prefixed
+instruction, whose handler starts with `LD C,L` (`$4D`), reads as `RETI`.
 
 The keyboard sends ASCII, with CTRL giving `$01`-`$1A`, BREAK `$03`, ESC `$1B`, the arrows `$1C`-`$1F` (left, right,
 up, down), HOLD `$00`, and F1 and F2 `$01` and `$02`. These follow the Model II's documentation as remembered rather
@@ -160,7 +162,7 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 | `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
 | `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; the Model II asks for a diskette. |
-| `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
+| `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## What is not done yet

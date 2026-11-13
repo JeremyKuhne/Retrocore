@@ -115,7 +115,9 @@ public sealed class Trs80Model2Machine : IMachine
         }
         else if (cycle.IsOpcodeFetch && cycle.Operation == BusOperation.Read)
         {
-            // RETI is ED 4D; the devices watch for it to end the service of the highest-priority interrupt.
+            // RETI is ED 4D; the devices watch for it to end the service of the highest-priority interrupt. Like the
+            // Z80's peripherals, which watch the data bus during opcode fetches, this sees an NMI's ignored opcode
+            // fetch too: an NMI taken before an ED-prefixed instruction, whose handler starts with 4D, reads as RETI.
             if (_afterEd && cycle.Value == 0x4D) { ReturnFromInterrupt(); }
             _afterEd = cycle.Value == 0xED;
         }

@@ -82,7 +82,7 @@ public class Trs80Model2Tests
         machine.Bus.Video.Displayed(0, 4).Should().Be((byte)'Y');
 
         machine.Run(Trs80Model2Timing.ClockHertz);
-        int ticks = machine.Bus.Peek(0x4001);
+        byte ticks = machine.Bus.Peek(0x4001);
         ticks.Should().BeInRange(28, 34, "the clock interrupts on every other frame");
 
         machine.Bus.Keyboard.Type((byte)'A');
@@ -215,6 +215,92 @@ public class Trs80Model2Tests
         (FloppyDisk read, string format) = Trs80DiskImage.Read(jv3, ".dsk");
         format.Should().Be("JV3");
         read.Track(0, 0).Should().HaveCount(10);
+    }
+
+    // The key's CTC interrupt runs a long loop of NEGs (ED 44) with interrupts off; the clock's NMI handler starts
+    // with LD C,L (4D). $4003 is set when the key's handler starts, $4001 counts NMIs and $4004 is set as the key's
+    // handler ends with its own RETI.
+    private const string NmiRom = """
+        .cpu Z80
+                .org 0
+                DI
+                JP   Start
+                .org $66
+        Nmi:    LD   C,L
+                PUSH AF
+                IN   A,[$FE]            ; acknowledge the clock
+                LD   A,[$4001]
+                INC  A
+                LD   [$4001],A
+                POP  AF
+                RETN
+                .org $100
+        Start:  LD   SP,$8000
+                LD   A,$07
+                LD   I,A
+                IM   2
+                XOR  A
+                LD   [$4001],A
+                LD   [$4003],A
+                LD   [$4004],A
+                LD   A,$10
+                OUT  [$F0],A
+                LD   A,$C7
+                OUT  [$F3],A
+                LD   A,1
+                OUT  [$F3],A
+                LD   A,$A1              ; video RAM in, the clock on
+                OUT  [$FF],A
+                EI
+        Loop:   JR   Loop
+        Key:    LD   A,1
+                LD   [$4003],A
+                IN   A,[$FC]
+                LD   DE,2000
+        Negs:   .repeat 16
+                NEG
+                .endrepeat
+                DEC  DE
+                LD   A,D
+                OR   E
+                JR   NZ,Negs
+                LD   A,1
+                LD   [$4004],A
+                EI
+                RETI
+                .org $716
+                .word Key
+        """;
+
+    /// <summary>
+    ///  The daisy chain sees RETI in the opcodes the Z80 fetches, as the Z80's peripherals watch the data bus during
+    ///  opcode fetches. An NMI's response fetches an opcode it ignores, so an NMI taken before an ED-prefixed
+    ///  instruction, whose handler starts with $4D, reads as RETI and ends the service of the interrupt it
+    ///  interrupted, as it would on the chips.
+    /// </summary>
+    [TestMethod]
+    public void NmiDummyFetchCanReadAsReti()
+    {
+        AssemblyResult result = new NativeAssembler().Assemble(
+            new AssemblySource(NmiRom, "boot.asm"),
+            new AssemblyOptions(Z80Isa.Name, 0, Trs80Model2Roms.BootSize));
+
+        result.Diagnostics.Should().BeEmpty();
+        Trs80Model2Machine machine = new(
+            new Trs80Model2Configuration(),
+            new Trs80Model2Roms(result.Sections[0].Bytes.Span, new byte[Trs80Model2Roms.CharacterGeneratorSize]));
+
+        machine.Run(Trs80Model2Timing.ClockHertz / 20);
+        machine.Bus.Keyboard.Type((byte)'A');
+        for (int step = 0; step < 100_000 && machine.Bus.Peek(0x4003) == 0; step++) { machine.Run(10); }
+        machine.Bus.Peek(0x4003).Should().Be(1, "the key's handler started");
+        machine.Bus.Ctc.InService.Should().BeTrue("the CTC is in service while its handler runs");
+
+        byte ticks = machine.Bus.Peek(0x4001);
+        for (int step = 0; step < 1_000_000 && machine.Bus.Peek(0x4001) == ticks; step++) { machine.Run(1); }
+        machine.Bus.Peek(0x4001).Should().NotBe(ticks, "the clock's NMI came");
+        machine.Bus.Peek(0x4004).Should().Be(0, "the key's handler has not reached its RETI");
+        machine.Bus.Ctc.InService.Should().BeFalse("the NMI's ignored fetch of ED and its handler's 4D read as RETI");
     }
 
     /// <summary>

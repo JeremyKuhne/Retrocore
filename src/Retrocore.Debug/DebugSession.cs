@@ -537,6 +537,8 @@ internal sealed partial class DebugSession
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
+            DebugMachines.Trs80Model3 => LaunchModelIII(args, loads),
+            DebugMachines.Trs80Model2 => LaunchModelII(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads),
             DebugMachines.Coco => LaunchCoco(args, loads),
@@ -714,6 +716,22 @@ internal sealed partial class DebugSession
     {
         Trs80DebugTarget target = Trs80DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Model III, 4 or 4P loads once the ROM has set up its RAM, as on a Model I.
+    private static Trs80Model3DebugTarget LaunchModelIII(JsonObject args, bool loads)
+    {
+        Trs80Model3DebugTarget target = Trs80Model3DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 1 : 0));
+        return target;
+    }
+
+    // A program on a Model II, 12 or 16 loads at once unless the launch asks the boot ROM to run first.
+    private static Trs80Model2DebugTarget LaunchModelII(JsonObject args, bool loads)
+    {
+        Trs80Model2DebugTarget target = Trs80Model2DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? 0);
         return target;
     }
 

@@ -110,8 +110,8 @@ public sealed partial class Trs80DiskController
 
     private int StepCycles()
     {
-        int[] rates = _doubleDensity ? s_stepRates1791 : s_stepRates1771;
-        return rates[_command & 3] * _cyclesPerMillisecond;
+        int[] rates = Is179x ? s_stepRates1791 : s_stepRates1771;
+        return rates[_command & 3] * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
     }
 
     private void Run()
@@ -192,7 +192,7 @@ public sealed partial class Trs80DiskController
             return;
         }
 
-        if (_indexPulses >= (_doubleDensity ? 5 : 2))
+        if (_indexPulses >= (Is179x ? 5 : 2))
         {
             _status |= SeekError;
             Finish();
@@ -249,7 +249,7 @@ public sealed partial class Trs80DiskController
         bool address = (_command & 0xF0) == 0xC0;
         if (!address && _sector is { } sector)
         {
-            _status |= _doubleDensity
+            _status |= Is179x
                 ? (sector.DataAddressMark == 0xFB ? (byte)0 : HeadLoaded)
                 : (byte)((0xFB - sector.DataAddressMark) << 5);
 
@@ -296,7 +296,7 @@ public sealed partial class Trs80DiskController
             _changed[_selected] = true;
 
             // The FD1771 writes the mark its a1 a0 bits select; the WD1791's a0 selects $F8.
-            sector.DataAddressMark = _doubleDensity
+            sector.DataAddressMark = Is179x
                 ? ((_command & 1) != 0 ? (byte)0xF8 : (byte)0xFB)
                 : (byte)(0xFB - (_command & 3));
 

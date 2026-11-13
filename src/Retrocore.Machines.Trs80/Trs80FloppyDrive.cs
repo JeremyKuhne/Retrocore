@@ -53,7 +53,7 @@ public sealed class Trs80FloppyDrive : IDiskDrive
             Trs80Doubler.Both => "FD1771 with a WD1791 doubler (Percom or Radio Shack), in the Expansion Interface",
             _ => "FD1771 in the Expansion Interface"
         },
-        Formats = ["dsk", "jv1", "jv3"],
+        Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
         Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
         Tracks = 40,
 

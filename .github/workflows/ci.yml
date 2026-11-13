@@ -64,6 +64,7 @@ jobs:
       - name: Debug adapter tests
         run: |
           node tools/Test-Trs80Dap.mjs
+          node tools/Test-Trs80Model3Dap.mjs
           node tools/Test-Apple1Dap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs

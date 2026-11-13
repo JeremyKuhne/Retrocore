@@ -108,6 +108,9 @@ internal sealed partial class DebugSession
         {
             DebugMachines.Trs80Model1 => [reset, .. checks, .. BasicFilters],
 
+            // The Model III family's and Model II's ROMs have no SDK sources yet, so BASIC cannot be followed.
+            DebugMachines.Trs80Model3 or DebugMachines.Trs80Model2 => [reset, .. checks],
+
             // The Apple III has no BASIC in ROM to stop in, nor a beam position to stop at yet.
             DebugMachines.Apple3 => [reset, sosBrk, .. checks],
             DebugMachines.Apple1 => [reset, brk, .. checks],

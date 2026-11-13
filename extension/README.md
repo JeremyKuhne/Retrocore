@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -100,8 +100,10 @@ their sources.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
-Model I (Level II), TRS-80 Model I (Level I), Apple-1, and the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it
+Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model 4, Model 4P,
+Model II, Model 12 and Model 16 (Z80 side), Apple-1, and the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3. The Model III family and the Model II family need
+ROM dumps in `RETROCORE_TRS80_ROMS` (see below). Pick one and press F5, and it boots as it
 is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -980,6 +982,19 @@ The panel shows the screen and takes keys: arrows, **Home** for CLEAR, **Escape*
 BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key bar. The
 TRS-80 cassette and disk commands work as on the Model I. See the
 [Color Computer guide](../docs/Coco.md) for what is emulated.
+
+## Debugging on the TRS-80 Model III, 4 and II
+
+`"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
+`"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
+Z80 side of a Model 16 (`model` `2`, `12` or `16`). The SDK has no sources for their ROMs
+yet, so `romDirectory` or `RETROCORE_TRS80_ROMS` must hold MAME's dumps, and debugging
+is at the Z80 level. The options are `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
+`diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
+`bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
+panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
+BREAK and buttons for HOLD, F1 and F2. See the
+[Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
 
 ## Breakpoints
 

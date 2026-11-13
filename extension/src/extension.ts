@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.insertDisk", async () => {
         const drive = await pickDrive();
         if (drive === undefined) return;
-        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3", "jvc"] });
+        const path = await openFile(`Insert disk in drive ${drive}`, { "Disk images": ["dsk", "jv1", "jv3", "jvc", "dmk", "imd"] });
         if (path !== undefined) await media({ device: "disk", action: "insert", drive, path });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.ejectDisk", async () => {
@@ -222,8 +222,12 @@ export function activate(context: vscode.ExtensionContext): void {
                     endedSession = undefined;
                     const machine = typeof message.body === "object" && message.body !== null && "machine" in message.body ? message.body.machine : undefined;
                     const model = typeof message.body === "object" && message.body !== null && "model" in message.body && typeof message.body.model === "string" ? message.body.model : undefined;
-                    const title = machine === "trs80-model1" ? "TRS-80 Model I" : machine === "apple1" ? "Apple-1" : model ?? "Apple IIe";
-                    const phosphor = machine === "trs80-model1" || machine === "apple1" || machine === "coco" ? machine : "apple2";
+                    const title = machine === "trs80-model1" ? "TRS-80 Model I"
+                        : (machine === "trs80-model3" || machine === "trs80-model2") && model !== undefined ? `TRS-80 ${model}`
+                            : machine === "apple1" ? "Apple-1" : model ?? "Apple IIe";
+                    // The Model III and 4 have white phosphor like the Model I; the Model II's is green, like the IIe's.
+                    const phosphor = machine === "trs80-model1" || machine === "trs80-model3" ? "trs80-model1"
+                        : machine === "apple1" || machine === "coco" ? machine : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
                     const screen = running ? phosphor : "off";

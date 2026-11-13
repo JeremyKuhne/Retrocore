@@ -8,7 +8,7 @@ namespace Retrocore.Media;
 
 /// <summary>
 ///  A SOS volume, read-only: the Apple III's file system, which ProDOS later shared. It reads the volume
-///  directory's files from a 140K disk image in either sector order.
+///  directory's files from a 140K disk image in either sector order, or from a hard disk's image of whole blocks.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -28,12 +28,14 @@ public sealed class SosVolume
     private const int DiskSize = DiskBlocks.DiskSize;
 
     private readonly byte[] _image;
+    private readonly int _blocks;
     private readonly bool _proDosOrder;
 
     private SosVolume(byte[] image, bool proDosOrder)
     {
         _image = image;
         _proDosOrder = proDosOrder;
+        _blocks = image.Length / BlockSize;
         byte[] header = Block(VolumeDirectory);
         if ((header[4] >> 4) != 0xF)
         {
@@ -74,6 +76,23 @@ public sealed class SosVolume
     }
 
     /// <summary>
+    ///  Reads a volume from an image that is its blocks in order, of any size, such as a ProFile's (<c>.po</c> or
+    ///  <c>.hdv</c>).
+    /// </summary>
+    /// <param name="image">The image: 3 to 65535 whole blocks.</param>
+    /// <returns>The volume.</returns>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not whole blocks, holds no SOS volume, or its directory's blocks loop or leave the volume.
+    /// </exception>
+    public static SosVolume ReadBlocks(byte[] image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return image.Length % BlockSize != 0 || image.Length / BlockSize is < VolumeDirectory + 1 or > 65535
+            ? throw new InvalidDataException($"A block image is 3 to 65535 whole blocks; this one is {image.Length} bytes.")
+            : new SosVolume(image, proDosOrder: true);
+    }
+
+    /// <summary>
     ///  Reads a file in the volume directory.
     /// </summary>
     /// <param name="name">Its name, in any case.</param>
@@ -101,9 +120,15 @@ public sealed class SosVolume
     /// <summary>
     ///  Reads a block.
     /// </summary>
-    /// <param name="block">The block number, 0-279.</param>
+    /// <param name="block">The block number, from 0 to the volume's last (279 on a 140K disk).</param>
     /// <returns>Its 512 bytes.</returns>
-    public byte[] Block(int block) => DiskBlocks.Read(_image, _proDosOrder, block);
+    public byte[] Block(int block)
+    {
+        if (_image.Length == DiskSize) { return DiskBlocks.Read(_image, _proDosOrder, block); }
+        ArgumentOutOfRangeException.ThrowIfNegative(block);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(block, _blocks);
+        return _image.AsSpan(block * BlockSize, BlockSize).ToArray();
+    }
 
     private IEnumerable<SosFileEntry> Entries()
     {
@@ -141,7 +166,7 @@ public sealed class SosVolume
 
     // A block a directory or index names, which must be on the volume.
     private byte[] Data(int number) =>
-        (uint)number < DiskSize / BlockSize
+        (uint)number < _blocks
             ? Block(number)
             : throw new InvalidDataException($"Block {number} is past the end of the volume.");
 

@@ -95,7 +95,9 @@ The card follows Apple's driver ([Sos.md](Sos.md)):
   block at `$FFFFFF`. The card's interrupt is not raised; the driver turns it off.
 
 `Apple3ProFileTests` runs Apple's `.PROFILE` 1.30, assembled from the SDK's source, against the card, reading and
-writing buffers at every alignment.
+writing buffers at every alignment. Under SOS itself, `Apple3SosTests` boots the System Utilities with a card in slot 4:
+they format the ProFile as `/HARD`, copy `SOS.KERNEL` onto it, whose bytes match the floppy's, and list it, and a second
+boot lists the volume again from the ProFile.
 
 Phase by phase, how this was built and checked against MAME and the manual is in the
 [backlog plan](backlog/Apple3.md).

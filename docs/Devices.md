@@ -1,7 +1,7 @@
 # Devices
 
 Each machine lists the devices installed in it, such as its floppy and tape drives, with what they are and
-what they are doing. The debugger sends that list to VS Code, whose **Retro Devices** view shows it while a
+what they are doing. The debugger sends that list to VS Code, whose **Machine** and **Drives** views show it while a
 Retrocore session runs, and takes media actions from it.
 
 ## The object model
@@ -130,22 +130,34 @@ Disks the machine changes stay in memory, and `changed` shows that they differ f
 `.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
 drives don't save yet.
 
-## The Retro Devices view
+## The Machine and Drives views
 
-The view is in the **Run and Debug** sidebar whenever no other debugger runs. Before a session starts, its
-welcome text and title-bar **Start Machine** (`▶`) button start a machine without a `launch.json`.
+Retrocore has its own icon in the activity bar, a small computer, which opens two views. Before a session starts,
+the **Machine** view's welcome text and title-bar **Start Machine** (`▶`) button start a machine without a
+`launch.json`, and **Start Last Machine** repeats the last one.
 
-While a Retrocore session runs, the view lists **BASIC program** first when the machine has a supported BASIC
-(showing the active dialect and line count, and opening **Retrocore: Open BASIC Program** when clicked), then
-the machine's installed hardware slot by slot, with each device under the card or option it sits on: Slot 6's
-Disk II drives under Slot 6, the Model I's drives under its disk controller. Hovering a row says what it does
-and which launch option installs it. Each device shows its media, its
-head or tape position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is
-green while it reads, red while it writes and yellow while it seeks. Expanding a device lists its state and
-metadata, and hovering it shows them all.
+While a Retrocore session runs, the **Machine** view is headed by the machine itself, such as `Apple IIe` with
+`Enhanced, 65C02 · running`: its screen icon is lit while it runs and dark while it is stopped in the debugger.
+Under it is the installed hardware, slot by slot, empty slots dimmed and a slot with drives saying how many. Below
+the machine is **BASIC program** when the machine has a supported BASIC (showing the active dialect and line
+count, and opening **Retrocore: Open BASIC Program** when clicked). Hovering a row says what it does and which
+launch option installs it.
 
-A device's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
+The **Drives** view lists each card or option that has drives, with its drives under it: Slot 6's Disk II drives
+under Slot 6, the Model I's drives under its disk controller. Each drive shows its media, its head or tape
+position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is green while it
+reads, red while it writes, yellow while it seeks and dimmed while it is empty. Expanding a drive lists its state
+and metadata, and hovering it shows them all. The view's badge counts the disks changed and not yet saved to
+their images.
+
+A drive's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
 protect or unprotect a disk, and save a changed disk to its image (**Save to Its Image**, which asks first; **Save Disk
-As...** in its menu saves to another), each as the device allows. A hardware row's inline buttons add or remove cards,
-and the view's title bar refreshes the list or resets a launch configuration's saved cards and media
-(**Retrocore: Reset Saved Machine...**). The view redraws at most ten times a second.
+As...** in its menu saves to another), each as the drive allows. A slot's inline buttons in the Machine view add or
+remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
+and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
+Machine...**). The views redraw at most ten times a second.
+
+VS Code opens Run and Debug as a session starts and when it breaks (its `debug.openDebug` setting). When that
+takes the sidebar from the Retrocore views within a moment of a Retrocore session starting or stopping, the
+extension reveals the Machine view again without focusing it, so the keyboard stays with the display panel or the
+editor.

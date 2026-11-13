@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The Retro Devices view: the launched machine's installed hardware, slot by slot, with its floppy drives, tape
-// drives and block storage under the hardware they sit on, their media and state, from the debug host's
-// retro/devices request and event, and actions through retro/device.
+// The Retrocore activity bar's views. Machine: the launched machine, whether it runs, its installed hardware slot by
+// slot, and its BASIC program. Drives: its floppy drives, tape drives and block storage under the controllers they sit
+// on, with their media and state. Both from the debug host's retro/devices request and event, with actions through
+// retro/device and retro/hardware.
 
 import * as vscode from "vscode";
 import * as path from "node:path";
@@ -32,9 +33,25 @@ export interface Device {
 /** The retro/devices body. */
 interface Devices { devices: Device[]; hardware?: HardwareRow[] }
 
-/** A row of the view: a piece of installed hardware, a device, or one line of a device's details. */
-type Node = { hardware: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
+/**
+ * A row of the Machine or Drives view: the machine itself, a piece of its installed hardware, a controller its drives
+ * are listed under, a device, one line of a device's details, or the BASIC program in memory.
+ */
+type Node = { machine: HardwareRow | undefined } | { hardware: HardwareRow; devices: Device[] }
+    | { controller: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
     | { basic: BasicSummary };
+
+/** The machines whose screens the media folder draws, by the launch's machine option. */
+const screens: Record<string, string> = { apple2: "apple2", apple3: "apple2", apple1: "apple1", "trs80-model1": "trs80-model1", coco: "coco" };
+
+/** The icons of the Machine view's rows, by hardware id, when the row is not a slot. */
+const hardwareIcons: Record<string, string> = {
+    cpu: "chip", rom: "file-binary", memory: "server", video: "device-desktop", builtIn: "plug", gamePort: "game",
+    cassette: "record-keys", auxiliary: "extensions"
+};
+
+/** Escapes Markdown in a value shown in a tooltip. */
+const escape = (text: string): string => text.replace(/[\\`*_]/g, "\\$&");
 
 /** The BASIC program row's summary, such as AppleSoft · 12 lines. */
 export function basicDescription(summary: BasicSummary): string {
@@ -91,46 +108,142 @@ export function details(device: Device): [string, string][] {
     return rows;
 }
 
-class DeviceTree implements vscode.TreeDataProvider<Node> {
-    private readonly changed = new vscode.EventEmitter<Node | undefined>();
-    readonly onDidChangeTreeData = this.changed.event;
+/** What the Machine and Drives views show: the active Retrocore session's machine, hardware, devices and BASIC program. */
+class MachineState {
+    private readonly changed = new vscode.EventEmitter<void>();
+    readonly onDidChange = this.changed.event;
     devices: Device[] = [];
     hardware: HardwareRow[] = [];
     basic: BasicSummary | undefined;
+    /** The active session, when it is a Retrocore one. */
+    session: vscode.DebugSession | undefined;
+    /** The ids of the sessions stopped in the debugger. */
+    readonly paused = new Set<string>();
 
     show(body: Devices): void {
         this.devices = body.devices;
         this.hardware = body.hardware ?? [];
-        this.changed.fire(undefined);
+        this.changed.fire();
+    }
+
+    redraw(): void {
+        this.changed.fire();
+    }
+}
+
+/** The tooltip of a hardware row: what is there, and what it does. */
+function hardwareTooltip(row: HardwareRow): vscode.MarkdownString {
+    return new vscode.MarkdownString(`**${escape(row.name)}**: ${escape(row.value)}\n\n${escape(row.description)}`);
+}
+
+/** Whether a hardware row has nothing in it, such as an empty slot. */
+const isEmpty = (row: HardwareRow): boolean => row.value === "empty" || row.value === "none";
+
+/** The Machine view: the machine, with its installed hardware under it, then the BASIC program in its memory. */
+class MachineTree implements vscode.TreeDataProvider<Node> {
+    private readonly changed = new vscode.EventEmitter<Node | undefined>();
+    readonly onDidChangeTreeData = this.changed.event;
+
+    constructor(private readonly state: MachineState, private readonly extension: vscode.Uri) {
+        state.onDidChange(() => this.changed.fire(undefined));
     }
 
     getChildren(node?: Node): Node[] {
         if (node === undefined) {
-            const grouped = group(this.hardware, this.devices);
+            if (this.state.session === undefined) return [];
             return [
-                ...this.basic === undefined ? [] : [{ basic: this.basic }],
-                ...grouped.rows.map(({ row, devices }) => ({ hardware: row, devices })),
+                { machine: this.state.hardware.find(row => row.id === "model") },
+                ...this.state.basic === undefined ? [] : [{ basic: this.state.basic }]
+            ];
+        }
+        if ("machine" in node) {
+            return group(this.state.hardware, this.state.devices).rows
+                .filter(({ row }) => row.id !== "model")
+                .map(({ row, devices }) => ({ hardware: row, devices }));
+        }
+        return [];
+    }
+
+    // Revealing a row, as bringing the views back does, needs its parent: the machine for a piece of hardware.
+    getParent(node: Node): Node | undefined {
+        return "hardware" in node ? { machine: this.state.hardware.find(row => row.id === "model") } : undefined;
+    }
+
+    getTreeItem(node: Node): vscode.TreeItem {
+        if ("machine" in node) return this.machineItem(node.machine);
+        if ("basic" in node) return basicItem(node.basic);
+        if (!("hardware" in node)) return new vscode.TreeItem("");
+
+        const row = node.hardware;
+        const item = new vscode.TreeItem(row.name, vscode.TreeItemCollapsibleState.None);
+        item.id = `hardware/${row.id}`;
+        // A row with drives says how many; the Drives view lists them.
+        const drives = node.devices.length;
+        item.description = drives === 0 || isEmpty(row) ? row.value : `${row.value} · ${drives} drive${drives === 1 ? "" : "s"}`;
+        item.tooltip = hardwareTooltip(row);
+        item.iconPath = new vscode.ThemeIcon(isEmpty(row) ? "circle-outline" : hardwareIcons[row.id] ?? "circuit-board",
+            isEmpty(row) ? new vscode.ThemeColor("disabledForeground") : undefined);
+        item.contextValue = ["hardware", ...row.actions ?? []].join(" ");
+        return item;
+    }
+
+    // The machine heads the view, its screen lit while it runs and dark while it is stopped in the debugger.
+    private machineItem(model: HardwareRow | undefined): vscode.TreeItem {
+        const session = this.state.session;
+        const paused = session !== undefined && this.state.paused.has(session.id);
+        const item = new vscode.TreeItem(model?.name ?? session?.name ?? "Machine", vscode.TreeItemCollapsibleState.Expanded);
+        item.id = "machine";
+        item.description = [model?.value, paused ? "paused" : "running"].filter(part => part !== undefined).join(" · ");
+        const screen = paused ? "crt-off" : screens[String(session?.configuration.machine ?? "apple2")] ?? "apple2";
+        item.iconPath = {
+            light: vscode.Uri.joinPath(this.extension, "media", `${screen}-light.svg`),
+            dark: vscode.Uri.joinPath(this.extension, "media", `${screen}-dark.svg`)
+        };
+        const tooltip = new vscode.MarkdownString(model === undefined ? "" : `**${escape(model.name)}**: ${escape(model.value)}\n\n${escape(model.description)}\n\n`);
+        if (session !== undefined) tooltip.appendMarkdown(`Launched by *${escape(session.name)}*, ${paused ? "stopped in the debugger" : "running"}.`);
+        item.tooltip = tooltip;
+        item.contextValue = "machine";
+        return item;
+    }
+}
+
+/** The BASIC program row: the program in memory, opened in an editor where saving puts it back. */
+function basicItem(summary: BasicSummary): vscode.TreeItem {
+    const item = new vscode.TreeItem("BASIC program", vscode.TreeItemCollapsibleState.None);
+    item.id = "basic";
+    item.description = basicDescription(summary);
+    item.tooltip = new vscode.MarkdownString(`**BASIC program**: the ${summary.displayName} program in the machine's memory. `
+        + "Open it to read or edit it; saving puts it back in memory.");
+    item.iconPath = new vscode.ThemeIcon("file-code");
+    item.contextValue = "basicProgram";
+    item.command = { command: "retrocore.basic.open", title: "Open BASIC Program" };
+    return item;
+}
+
+/** The Drives view: each controller with drives on it, its drives under it, and each drive's details under that. */
+class DriveTree implements vscode.TreeDataProvider<Node> {
+    private readonly changed = new vscode.EventEmitter<Node | undefined>();
+    readonly onDidChangeTreeData = this.changed.event;
+
+    constructor(private readonly state: MachineState) {
+        state.onDidChange(() => this.changed.fire(undefined));
+    }
+
+    getChildren(node?: Node): Node[] {
+        if (node === undefined) {
+            if (this.state.session === undefined) return [];
+            const grouped = group(this.state.hardware, this.state.devices);
+            return [
+                ...grouped.rows.filter(({ devices }) => devices.length > 0).map(({ row, devices }) => ({ controller: row, devices })),
                 ...grouped.loose.map(device => ({ device }))
             ];
         }
-        if ("hardware" in node) return node.devices.map(device => ({ device }));
+        if ("controller" in node) return node.devices.map(device => ({ device }));
         if ("device" in node) return details(node.device).map(([detail, value]) => ({ detail, value, parent: node.device.id }));
         return [];
     }
 
     getTreeItem(node: Node): vscode.TreeItem {
-        if ("basic" in node) {
-            // The program in memory, opened in an editor where saving puts it back.
-            const item = new vscode.TreeItem("BASIC program", vscode.TreeItemCollapsibleState.None);
-            item.id = "basic";
-            item.description = basicDescription(node.basic);
-            item.tooltip = new vscode.MarkdownString(`**BASIC program**: the ${node.basic.displayName} program in the machine's memory. `
-                + "Open it to read or edit it; saving puts it back in memory.");
-            item.iconPath = new vscode.ThemeIcon("file-code");
-            item.contextValue = "basicProgram";
-            item.command = { command: "retrocore.basic.open", title: "Open BASIC Program" };
-            return item;
-        }
         if ("detail" in node) {
             const item = new vscode.TreeItem(node.detail, vscode.TreeItemCollapsibleState.None);
             item.description = node.value;
@@ -138,19 +251,17 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
             item.id = `${node.parent}/${node.detail}`;
             return item;
         }
-        if ("hardware" in node) {
-            // A slot or option is open when there is a drive on it, as the drives are what is used most.
-            const row = node.hardware;
-            const item = new vscode.TreeItem(row.name,
-                node.devices.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
-            item.id = `hardware/${row.id}`;
+        if ("controller" in node) {
+            const row = node.controller;
+            const item = new vscode.TreeItem(row.name, vscode.TreeItemCollapsibleState.Expanded);
+            item.id = `controller/${row.id}`;
             item.description = row.value;
-            item.tooltip = new vscode.MarkdownString(`**${row.name}**: ${row.value.replace(/[\\`*_]/g, "\\$&")}\n\n`
-                + row.description.replace(/[\\`*_]/g, "\\$&"));
-            item.iconPath = new vscode.ThemeIcon(row.value === "empty" || row.value === "none" ? "circle-outline" : "circuit-board");
-            item.contextValue = ["hardware", ...row.actions ?? []].join(" ");
+            item.tooltip = hardwareTooltip(row);
+            item.iconPath = new vscode.ThemeIcon(hardwareIcons[row.id] ?? "circuit-board");
+            item.contextValue = "controller";
             return item;
         }
+        if (!("device" in node)) return new vscode.TreeItem("");
 
         const device = node.device;
         const item = new vscode.TreeItem(device.name, vscode.TreeItemCollapsibleState.Collapsed);
@@ -161,9 +272,10 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
             device.activity === "writing" ? new vscode.ThemeColor("charts.red")
                 : device.activity === "reading" ? new vscode.ThemeColor("charts.green")
                 : device.activity === "seeking" ? new vscode.ThemeColor("charts.yellow")
+                : device.media === null ? new vscode.ThemeColor("disabledForeground")
                 : undefined);
-        const tooltip = new vscode.MarkdownString(`**${device.name}**: ${device.description}\n\n`);
-        for (const [detail, value] of details(device)) tooltip.appendMarkdown(`- ${detail}: ${value.replace(/[\\`*_]/g, "\\$&")}\n`);
+        const tooltip = new vscode.MarkdownString(`**${escape(device.name)}**: ${escape(device.description)}\n\n`);
+        for (const [detail, value] of details(device)) tooltip.appendMarkdown(`- ${detail}: ${escape(value)}\n`);
         item.tooltip = tooltip;
 
         // Menus pick their actions by these words.
@@ -179,9 +291,12 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
     }
 }
 
-/** Registers the Retro Devices view and its actions. */
+/** The requests that set a stopped machine running again. */
+const resumes = new Set(["continue", "next", "stepIn", "stepOut", "stepBack", "reverseContinue", "goto"]);
+
+/** Registers the Retrocore activity bar's Machine and Drives views and their actions. */
 export function registerDevices(context: vscode.ExtensionContext, basic: BasicPrograms): void {
-    const tree = new DeviceTree();
+    const tree = new MachineState();
     const showBasic = (): void => {
         tree.basic = basic.summary(vscode.debug.activeDebugSession);
         tree.show({ devices: tree.devices, hardware: tree.hardware });
@@ -192,7 +307,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     let pending: Devices | undefined;
     let timer: NodeJS.Timeout | undefined;
 
-    // Running sends retro/devices as often as a head moves; the view redraws at most ten times a second.
+    // Running sends retro/devices as often as a head moves; the views redraw at most ten times a second.
     const show = (body: Devices): void => {
         pending = body;
         timer ??= setTimeout(() => {
@@ -202,11 +317,67 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     };
     const refresh = async (session: vscode.DebugSession | undefined): Promise<void> => {
         tree.basic = basic.summary(session);
-        if (session?.type !== "retrocore") { show({ devices: [] }); return; }
+        if (session?.type !== "retrocore") { tree.session = undefined; show({ devices: [] }); return; }
+        tree.session = session;
         try { show(await session.customRequest("retro/devices")); } catch { /* Not launched yet. */ }
     };
 
-    context.subscriptions.push(vscode.window.registerTreeDataProvider("retrocore.devices", tree));
+    const machineView = vscode.window.createTreeView("retrocore.machine", { treeDataProvider: new MachineTree(tree, context.extensionUri) });
+    const drivesView = vscode.window.createTreeView("retrocore.drives", { treeDataProvider: new DriveTree(tree) });
+    context.subscriptions.push(machineView, drivesView);
+
+    // VS Code opens Run and Debug as a session starts and when it breaks (its debug.openDebug setting). When that
+    // takes the sidebar from the Retrocore views, they come back, without taking the keyboard from the display panel
+    // or the editor. A session start or break and the views going out of sight within a moment of each other, in
+    // either order, is VS Code's doing rather than a click on another view.
+    const moment = 1500;
+    let hiddenAt = Number.NEGATIVE_INFINITY;
+    let debugAt = Number.NEGATIVE_INFINITY;
+    const showing = (): boolean => machineView.visible || drivesView.visible;
+    const bringBack = (): void => {
+        hiddenAt = debugAt = Number.NEGATIVE_INFINITY;
+        const model = tree.hardware.find(row => row.id === "model");
+        machineView.reveal({ machine: model }, { select: false, focus: false }).then(undefined,
+            () => vscode.commands.executeCommand("workbench.view.extension.retrocore"));
+    };
+    const debugMoved = (): void => {
+        debugAt = Date.now();
+        if (!showing() && debugAt - hiddenAt < moment) bringBack();
+    };
+    const hidden = (): void => {
+        if (showing()) return;
+        hiddenAt = Date.now();
+        if (hiddenAt - debugAt < moment) bringBack();
+    };
+    context.subscriptions.push(machineView.onDidChangeVisibility(hidden), drivesView.onDidChangeVisibility(hidden));
+    context.subscriptions.push(vscode.debug.onDidStartDebugSession(session => {
+        if (session.type === "retrocore") debugMoved();
+    }));
+    // The Drives view's badge counts the disks changed in the machine and not yet saved to their images.
+    context.subscriptions.push(tree.onDidChange(() => {
+        const changed = tree.devices.filter(device => device.media?.changed && device.operations.includes("save")).length;
+        drivesView.badge = changed === 0 ? undefined
+            : { value: changed, tooltip: `${changed} disk${changed === 1 ? "" : "s"} changed and not saved to ${changed === 1 ? "its image" : "their images"}` };
+    }));
+    // The machine row shows whether the machine runs or is stopped in the debugger.
+    context.subscriptions.push(vscode.debug.registerDebugAdapterTrackerFactory("retrocore", {
+        createDebugAdapterTracker(session) {
+            const set = (paused: boolean): void => {
+                if (paused) debugMoved();
+                if (paused === tree.paused.has(session.id)) return;
+                if (paused) tree.paused.add(session.id); else tree.paused.delete(session.id);
+                if (session.id === tree.session?.id) tree.redraw();
+            };
+            return {
+                onWillReceiveMessage(message: { command?: string }) { if (message.command !== undefined && resumes.has(message.command)) set(false); },
+                onDidSendMessage(message: { event?: string }) {
+                    if (message.event === "stopped") set(true);
+                    else if (message.event === "continued") set(false);
+                },
+                onExit() { tree.paused.delete(session.id); }
+            };
+        }
+    }));
     context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
         if (event.event === "retro/devices" && event.session.id === vscode.debug.activeDebugSession?.id) show(event.body);
     }));

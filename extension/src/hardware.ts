@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The installed hardware the Retro Devices view lists: each built-in part, slot or option, from retro/devices.
+// The installed hardware the Machine view lists: each built-in part, slot or option, from retro/devices.
 
 /** A row of a machine's installed hardware, as the debug host's retro/devices describes it. */
 export interface HardwareRow {

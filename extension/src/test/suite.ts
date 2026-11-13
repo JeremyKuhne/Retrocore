@@ -203,7 +203,7 @@ export async function run(): Promise<void> {
         assert.ok(display.rows.join("\n").includes("MEM SIZE?"));
         assert.equal(Buffer.from(display.video.pixels, "base64").length, 384 * 192 * 4);
 
-        // The Retro Devices view has the machine's devices from retro/devices: this configuration has no disk
+        // The Machine and Drives views have the machine's devices from retro/devices: this configuration has no disk
         // controller, so the cassette alone, empty and stopped.
         let listed: { id: string; media: unknown; transport?: { mode: string } }[] = [];
         for (let attempt = 0; attempt < 20 && listed.length === 0; attempt++) {

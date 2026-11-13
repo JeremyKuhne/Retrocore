@@ -9,13 +9,9 @@ byte-identical to MAME's dumps, and boot to their prompts. This is what remains 
 
 1. **Run the real ROMs.** Done for the first prompts: `Trs80Model3RomTests` boots the SDK's builds, the Model III and
    Model 4 through `Cass?` and `Memory Size?` to BASIC, the 4P to its drive-not-ready message, and the Model II to
-   `INSERT DISKETTE`. Writing the sources turned up what the emulation still gets wrong for them:
-   - The Model III's RS-232 set-up takes port `$EA` reading `$FF` as no RS-232 board; the emulation answers as if one
-     were there. With no board it should read `$FF`.
-   - The Model II boot ROM's versions 2 and 3 take port `$C2` reading nonzero in its low bits as a hard disk board, and
-     unmapped ports read `$FF`. By the code, they would find a drive ready, time out restoring it, and show
-     `BOOT ERROR H0` until ESC or BREAK sends them to the floppy; this has not been run. Version 5, which launches use,
-     checks the controller's registers instead and asks for a diskette, as `Trs80Model3RomTests` shows.
+   `INSERT DISKETTE`, every boot ROM version among them. Writing the sources turned up two ports the emulation got
+   wrong, now fixed: the Model III's RS-232 ports read `$FF`, as with no board, and the Model II's hard disk board's
+   ports read zero, so versions 2 and 3 of its boot ROM boot from the floppy. Still open:
    - The Model 4's real-time clock and the function keys' codes (`$60`, `$1B` and `$08` with shift) are untested.
 2. **Boot their DOSes.** TRSDOS 1.3 and LDOS 5.3 on the Model III, TRSDOS 6 (LS-DOS) on the Model 4 and 4P, and
    TRSDOS-II on the Model II, from DMK, JV3 or IMD images; check the FD1793's wait states, the Model II's DMA and the

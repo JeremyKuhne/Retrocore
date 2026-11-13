@@ -20,8 +20,8 @@ namespace Retrocore.Machines.Trs80;
 ///  </para>
 ///  <para>
 ///   The ports are the interrupt mask and status (<c>$E0</c>: bit 2 the 30 Hz clock), the disk NMI mask and
-///   status (<c>$E4</c>: bit 7 the controller's INTRQ, bit 6 the motor timeout, bit 5 reset), the RS-232 UART
-///   (<c>$E8</c>-<c>$EB</c>, with nothing connected), the options latch (<c>$EC</c>: bit 1 cassette motor, bit 2
+///   status (<c>$E4</c>: bit 7 the controller's INTRQ, bit 6 the motor timeout, bit 5 reset), the RS-232 board's
+///   UART (<c>$E8</c>-<c>$EB</c>, reading <c>$FF</c> as with no board fitted), the options latch (<c>$EC</c>: bit 1 cassette motor, bit 2
 ///   wide characters, bit 3 alternate characters, bit 6 the Model 4's 4 MHz; a read acknowledges the clock), the
 ///   FD1793 (<c>$F0</c>-<c>$F3</c>), drive select (<c>$F4</c>: bits 0-3 drive, bit 4 side, bit 6 wait, bit 7
 ///   double density), the printer (<c>$F8</c>) and the cassette (<c>$FF</c>); and on a Model 4 the memory map
@@ -227,13 +227,9 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
                 return (byte)~status;
             }
 
-            case 0xE8:
-                return 0;
-            case 0xEA:
-                // The UART's transmitter is empty and nothing is received.
-                return 0x47;
-            case 0xE9 or 0xEB:
-                return 0;
+            // No RS-232 board: the UART's ports read $FF, which the ROM's set-up takes as none fitted.
+            case >= 0xE8 and <= 0xEB:
+                return 0xFF;
             case >= 0xEC and <= 0xEF:
                 _interrupts &= unchecked((byte)~ClockInterrupt);
                 return 0xFF;

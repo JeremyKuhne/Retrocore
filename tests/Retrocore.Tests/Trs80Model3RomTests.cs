@@ -34,6 +34,9 @@ public class Trs80Model3RomTests
         Screen(machine).Should().Contain("Radio Shack Model III Basic");
         Type(machine, "PRINT 6*7\r");
         Screen(machine).Should().Contain(" 42 ");
+
+        // No RS-232 board is fitted: its UART's status reads $FF, which the ROM's RS-232 set-up takes as none.
+        machine.Bus.In(0xEA).Should().Be(0xFF);
     }
 
     /// <summary>
@@ -48,20 +51,26 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model II's newest boot ROM passes its tests, finds no hard disk and asks for a diskette.
+    ///  Each Model II boot ROM passes its tests, finds no hard disk and asks for a diskette. Versions 2 and 3 take
+    ///  the hard disk board's port <c>$C2</c> reading zero as no board, as it does with none fitted.
     /// </summary>
+    /// <param name="version">The boot ROM's version.</param>
     [TestMethod]
-    public void Model2AsksForADiskette()
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(3)]
+    [DataRow(5)]
+    public void Model2AsksForADiskette(int version)
     {
         string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
-        byte[] boot = Trs80SdkModules.AssembleModel2Boot(Path.Join(roms, "Model2Boot.asm"), 5).Sections[0].Bytes.ToArray();
+        byte[] boot = Trs80SdkModules.AssembleModel2Boot(Path.Join(roms, "Model2Boot.asm"), version).Sections[0].Bytes.ToArray();
         byte[] characters = Trs80SdkModules.AssembleModel2CharacterGenerator(Path.Join(roms, "Model2CharacterGenerator.asm"))
             .Sections[0].Bytes.ToArray();
 
         Trs80Model2Machine machine = new(new Trs80Model2Configuration(), new Trs80Model2Roms(boot, characters));
         machine.Run(Trs80Model2Timing.ClockHertz * 3UL);
         string screen = new([.. Enumerable.Range(0, 80 * 24).Select(index => (char)(machine.Bus.Video.Read(index) & 0x7F))]);
-        screen.Should().Contain("INSERT DISKETTE");
+        screen.Should().Contain("INSERT DISKETTE", $"version {version} boots from the floppy");
     }
 
     private static Trs80Model3Machine Model3(Trs80Model3Variant variant)

@@ -30,7 +30,7 @@ The ports are:
 | --- | --- | --- |
 | `$E0`-`$E3` | Interrupt status, active low: bit 2 the 30 Hz clock | Interrupt mask |
 | `$E4`-`$E7` | NMI status, active low: bit 7 the controller's INTRQ, 6 the motor timeout, 5 the reset button | NMI mask: bit 7 INTRQ, bit 6 the motor timeout |
-| `$E8`-`$EB` | The RS-232 UART, with nothing connected | |
+| `$E8`-`$EB` | `$FF`: no RS-232 board, which the ROM's set-up takes as none fitted | |
 | `$EC`-`$EF` | Acknowledges the clock | Bit 1 cassette motor, 2 wide characters, 3 alternate characters, 6 the Model 4's 4 MHz |
 | `$F0`-`$F3` | The FD1793 | The FD1793 |
 | `$F4`-`$F7` | | Drive select: bits 0-3 the drive, 4 the side, 6 wait, 7 double density |
@@ -66,6 +66,7 @@ The Model 4P has no cassette port.
 | FD1791 | `$E4`-`$E7`, drive select `$EF` | 8-inch drives at 360 rpm, both densities. Drive select: bits 0-3 the drive (active low), bit 6 clear side 1, bit 7 double density. |
 | CTC | `$F0`-`$F3` | Four counter/timer channels in timer and counter modes. |
 | SIO | `$F4`-`$F7` | Two serial channels with nothing connected. |
+| Hard disk board | `$C0`-`$CF` | Not fitted: the ports read zero, which the boot ROMs that boot from a hard disk take as no board. |
 | DMA | `$F8` | A Z80 DMA, ready on the disk controller's DRQ: memory and I/O ports, byte, continuous and burst modes, end-of-block interrupts and auto restart. |
 
 The peripherals interrupt in mode 2 through the Z80 daisy chain, from the CTC through the SIO and DMA to the PIO: the

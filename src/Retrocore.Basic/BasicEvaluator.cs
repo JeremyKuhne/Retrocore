@@ -263,9 +263,9 @@ public sealed partial class BasicEvaluator
 
         if (value == '"') { return StringLiteral(); }
         if (char.IsAsciiDigit((char)value) || value == '.') { return NumberLiteral(); }
-        if (_dialect.Keyword(value) is { } word)
+        if (_dialect.KeywordAt(_bytes, _at, out int length) is { } word)
         {
-            _at++;
+            _at += length;
             return word == "FN" ? Function() : Call(word);
         }
 
@@ -521,8 +521,8 @@ public sealed partial class BasicEvaluator
     private bool Take(string keyword)
     {
         Skip();
-        if (_at >= _bytes.Length || _dialect.Keyword(_bytes[_at]) != keyword) { return false; }
-        _at++;
+        if (_at >= _bytes.Length || _dialect.KeywordAt(_bytes, _at, out int length) != keyword) { return false; }
+        _at += length;
         return true;
     }
 

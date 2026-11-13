@@ -176,14 +176,13 @@ public sealed class BasicSourceTests
     [DataRow("level2")]
     [DataRow("integer")]
     [DataRow("business")]
+    [DataRow("colorbasic")]
     public void EveryKeywordHasHelp(string name)
     {
+        // Business BASIC keeps its lists' placeholders empty.
         BasicDialect dialect = BasicDialect.FromName(name) ?? throw new AssertFailedException(name);
-
-        // Business BASIC's second list, after $FF, has the rest of its words; both keep placeholders empty.
-        IEnumerable<string> words = dialect.Keywords;
-        if (dialect == BasicDialect.BusinessBasic) { words = words.Concat(BusinessBasicDialect.Functions); }
-        words.Where(keyword => keyword.Length > 0 && BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
+        IEnumerable<string> words = dialect.AllKeywords.Where(keyword => keyword.Length > 0);
+        words.Where(keyword => BasicKeywordHelp.Describe(dialect, keyword) is null).Should().BeEmpty();
         BasicKeywordHelp.Markdown(dialect, "PRINT").Should().Contain("PRINT");
     }
 

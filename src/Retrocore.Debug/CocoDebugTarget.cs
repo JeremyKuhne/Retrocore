@@ -285,7 +285,9 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         string source = Path.Join(sdk, "ColorBasic.asm");
         if (!coco3 && CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleColorBasic(source, version), CocoMemoryArea.ColorBasic));
+            Assembler.AssemblyResult colorBasic = CocoSdkModules.AssembleColorBasic(source, version);
+            debug.Add(new SourceMapModule(colorBasic, CocoMemoryArea.ColorBasic));
+            _basicRom = ColorBasicRom(colorBasic.Symbols);
         }
 
         source = Path.Join(sdk, "ExtendedBasic.asm");

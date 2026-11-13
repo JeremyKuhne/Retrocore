@@ -238,7 +238,9 @@ internal sealed partial class DebugSession
         return hash.ToString("X16", CultureInfo.InvariantCulture);
     }
 
-    private int Word(int address) => Target.Peek((ushort)address) | (Target.Peek((ushort)(address + 1)) << 8);
+    private int Word(int address) => Target.Basic?.BigEndian == true
+        ? (Target.Peek((ushort)address) << 8) | Target.Peek((ushort)(address + 1))
+        : Target.Peek((ushort)address) | (Target.Peek((ushort)(address + 1)) << 8);
 
     // The machine's memory by the addresses BASIC's program and text pointers hold, which may reach banked memory.
     private IBasicMemory TextMemory => Basic.Text(new TargetBasicMemory(Target));

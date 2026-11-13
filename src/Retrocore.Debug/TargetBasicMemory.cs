@@ -23,4 +23,7 @@ internal sealed class TargetBasicMemory(IDebugTarget target) : IBasicMemory
 
     /// <inheritdoc/>
     public void WriteFar(byte xByte, int address, byte value) => target.PokeFar(xByte, (ushort)address, value);
+
+    /// <inheritdoc/>
+    public bool BigEndian => target.Basic?.BigEndian == true;
 }

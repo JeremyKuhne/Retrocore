@@ -143,8 +143,13 @@ ejects media, as on the Model I; `retro/media` takes the same requests.
 - While the disk controller holds HALT, or the 6809 waits in `SYNC` or `CWAI`, it is between instructions;
   breakpoints are checked when it goes on.
 
-Color BASIC programs debug at the 6809 level; the BASIC thread, the Level II and AppleSoft dialects have, is not
-yet there for Color BASIC.
+On the CoCo 1 and 2, Color BASIC programs have the BASIC thread, the program document and `basic` launches, as
+AppleSoft and Level II do; the [extension's README](../extension/README.md#basic-programs) describes them. Every
+statement starts at `GONE2`, which Color BASIC's loop calls, and so do the loops Extended BASIC and Disk BASIC 1.1
+put in its place, so a statement breakpoint there holds whichever BASICs are fitted. The program is tokenized as the
+fitted ROMs crunch it: a word only Extended or Disk BASIC knows stays as letters without that ROM. A GOSUB takes seven
+bytes of BASIC's stack: its token, line and text pointer over the statement loop's return, which RETURN returns
+through. The CoCo 3's BASIC has no BASIC thread yet.
 
 ## Testing
 
@@ -154,9 +159,10 @@ yet there for Color BASIC.
 | `CocoVideoTests`, `Coco3VideoTests` | The VDG's and GIME's modes, pixel by pixel. |
 | `CocoPeripheralTests` | A cassette round trip, joysticks, sound and a ROM pack. |
 | `CocoDiskTests` | DSKINI, SAVE, DIR and LOAD on a CoCo 2 and 3, and JVC images. |
+| `BasicConformanceTests`, `BasicTokenizerTests` | Color BASIC lines typed on a CoCo 2 from the SDK's sources are stored as the library tokenizes them, with and without Disk BASIC; the keyword tables match the three ROMs'. |
 | `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources and the CoCo 3's ROM, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk, and the CoCo 3 drawing on its hi-res screen. |
 | `CocoOracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua): screens and programs on the CoCo 2, 2B and 3, and a Disk BASIC SAVE's disk image byte for byte. |
-| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm`, which then switches to 80 columns, with no dumps; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns. |
+| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm`, which then switches to 80 columns, and a Color BASIC file on the BASIC thread (stepping, a GOSUB's frame, variables and loops, STOP and CONT, the program as text), with no dumps; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns. |
 
 Tests that need the dumps or MAME are inconclusive without them, and the DAP script runs only its first part.
 

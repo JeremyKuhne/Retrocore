@@ -78,6 +78,7 @@ function dialectName(dialect: string): string {
         case "integer": return "Integer BASIC";
         case "level2": return "Level II BASIC";
         case "business": return "Business BASIC";
+        case "colorbasic": return "Color BASIC";
         default: return dialect;
     }
 }

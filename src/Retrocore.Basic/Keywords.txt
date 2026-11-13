@@ -1,4 +1,4 @@
-# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC) | syntax | what it does.
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC) | syntax | what it does.
 # Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
 END|a2b|END|Stops the program and returns to the prompt; CONT continues after it.
 FOR|a2b|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
@@ -335,3 +335,142 @@ LEFT$(|b|LEFT$(s$, n)|A string's first n characters, or all of it when it is sho
 RIGHT$(|b|RIGHT$(s$, n)|A string's last n characters, or all of it when it is shorter.
 MID$(|b|MID$(s$, start [, n])|n characters from position start on (1 is the first), or the rest of the string; empty when start is past the end.
 INSTR(|b|INSTR(s$, t$ [, start])|Where t$ first appears in s$, looking from position start (1 by default) on, or 0.
+# Color BASIC, with Extended and Disk Extended Color BASIC's words: single-precision numbers, names read by their first two characters, and true as -1.
+FOR|c|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
+GO|c|GOTO line / GOSUB line|GO TO continues at a line; GO SUB calls the subroutine there, and RETURN comes back after it. The space between is optional.
+REM|c|REM text|A remark: the rest of the line is ignored.
+'|c|' text|A remark, like :REM: the rest of the line is ignored.
+ELSE|c|IF condition THEN statements ELSE statements|Gives what IF runs when its condition does not hold; a line number alone jumps there.
+IF|c|IF condition THEN statements [ELSE statements]|Runs the statements after THEN when the condition is not zero, else those after ELSE or the next line.
+DATA|c|DATA item [, item ...]|Holds constants for READ. Items are numbers or strings; quotes are needed only around commas, colons or leading spaces.
+PRINT|c|PRINT [@position,] [items] / PRINT #device, items|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next 16-column zone. @ starts at a screen position, 0-511; #-2 is the printer, #-1 the cassette. ? is short for PRINT.
+ON|c|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...]|Jumps to, or calls, the nth line of the list; goes on with the next statement when n is 0 or past the list.
+INPUT|c|INPUT ["prompt";] v [, v ...] / INPUT #device, v [, ...]|Reads values typed at the keyboard, or from the cassette or a file, into variables.
+END|c|END|Stops the program and returns to OK; CONT continues after it.
+NEXT|c|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
+DIM|c|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from 0 to its size. An array used without DIM has 11 elements per dimension (0-10).
+READ|c|READ v [, v ...]|Takes the next items from DATA statements into variables.
+RUN|c|RUN [line] / RUN "file" [, R]|Clears the variables and runs the program, from its first line or the line given. Disk BASIC: loads a program and runs it, with R leaving files open.
+RESTORE|c|RESTORE|Makes READ start again at the program's first DATA item.
+RETURN|c|RETURN|Returns from a GOSUB to the statement after it.
+STOP|c|STOP|Stops the program with BREAK IN and its line; CONT continues after it.
+POKE|c|POKE address, value|Stores a byte in memory.
+CONT|c|CONT|Continues a program after STOP, END or BREAK, if it has not been changed.
+LIST|c|LIST [first] [- last]|Lists the program, or the lines given.
+CLEAR|c|CLEAR [bytes [, top]]|Clears every variable, array and string; sets aside that much string space (200 at power-up), and with a second number, the highest address BASIC uses.
+NEW|c|NEW|Erases the program and its variables.
+CLOAD|c|CLOAD ["name"] / CLOADM ["name" [, offset]]|Loads a program from cassette, the next one when no name is given; CLOADM loads machine code.
+CSAVE|c|CSAVE "name" [, A] / CSAVEM "name", start, end, entry|Writes the program to cassette, with A as text; CSAVEM writes machine code.
+OPEN|c|OPEN "mode", #device, "name" [, length]|Opens a file: on cassette (#-1), for input (I) or output (O); under Disk BASIC in a buffer, for input, output, random access (R or D) with its record length.
+CLOSE|c|CLOSE [#device, ...]|Closes files, all when none are named.
+LLIST|c|LLIST [first] [- last]|Lists the program, or the lines given, on the printer.
+SET|c|SET(x, y, color)|Turns on a semigraphics block in a color, 0-63 across and 0-31 down.
+RESET|c|RESET(x, y)|Turns off a semigraphics block, 0-63 across and 0-31 down.
+CLS|c|CLS [color]|Clears the screen, in a color 0-8 when one is given, and puts the cursor at the top left.
+MOTOR|c|MOTOR ON / MOTOR OFF|Turns the cassette motor on or off.
+SOUND|c|SOUND tone, duration|Plays a tone, 1-255 from low to high, for a duration, 1-255.
+AUDIO|c|AUDIO ON / AUDIO OFF|Sends the cassette's sound to the television, or stops it.
+EXEC|c|EXEC [address]|Runs machine code at an address, or where the last CLOADM or LOADM said to start.
+SKIPF|c|SKIPF ["name"]|Skips past a program on cassette, the next one when no name is given.
+TAB(|c|TAB(column)|In PRINT: moves to a column.
+TO|c|FOR v = start TO end / GOTO line|Gives the end value of a FOR loop; after GO, makes GOTO.
+SUB|c|GOSUB line|After GO, makes GOSUB.
+THEN|c|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
+NOT|c|NOT x|The bitwise complement of an integer, -32768 to 32767; NOT of true (-1) is false (0).
+STEP|c|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
+OFF|c|MOTOR OFF / AUDIO OFF / VERIFY OFF|Turns something off.
++|c|a + b|Adds numbers, or joins strings.
+-|c|a - b, -a|Subtracts, or negates.
+*|c|a * b|Multiplies.
+/|c|a / b|Divides.
+^|c|a ^ b|Raises a to the power b; the key shows as an up arrow.
+AND|c|a AND b|The bitwise and of integers, -32768 to 32767; true is -1.
+OR|c|a OR b|The bitwise or of integers, -32768 to 32767; true is -1.
+>|c|a > b|Greater than: -1 when a is greater than b, else 0. Also part of >= and <>.
+=|c|a = b|Assigns in LET; compares elsewhere.
+<|c|a < b|Less than. Also part of <= and <>.
+DEL|c|DEL first [- last]|Extended BASIC: deletes a line, or the lines from first to last.
+EDIT|c|EDIT line|Extended BASIC: edits a line with the line editor's single-key commands.
+TRON|c|TRON|Extended BASIC: prints each line number, in brackets, as it runs.
+TROFF|c|TROFF|Extended BASIC: turns TRON off.
+DEF|c|DEF FN f(x) = expression / DEF USRn = address|Extended BASIC: defines a one-line function of one parameter, called as FN f(value), or where USRn's machine code is, n 0-9.
+LET|c|[LET] v = expression|Assigns a value; LET itself can be left out.
+LINE|c|LINE (x1, y1) - (x2, y2), PSET [, B [F]] / LINE INPUT ["prompt";] s$|Extended BASIC: draws a line, or with B a box, filled with BF; PRESET draws in the background color. LINE INPUT reads a whole typed line into a string.
+PCLS|c|PCLS [color]|Extended BASIC: clears the graphics screen, in a color when one is given.
+PSET|c|PSET(x, y [, color])|Extended BASIC: plots a graphics point, in the foreground color unless one is given.
+PRESET|c|PRESET(x, y)|Extended BASIC: plots a graphics point in the background color.
+SCREEN|c|SCREEN type, color set|Extended BASIC: shows text (0) or graphics (1), in color set 0 or 1.
+PCLEAR|c|PCLEAR pages|Extended BASIC: reserves 1-8 graphics pages of 1.5 KB; the program moves to above them.
+COLOR|c|COLOR foreground [, background]|Extended BASIC: sets the graphics colors.
+CIRCLE|c|CIRCLE (x, y), radius [, color, ratio, start, end]|Extended BASIC: draws a circle, or with a ratio an ellipse, or with start and end (0-1) an arc.
+PAINT|c|PAINT (x, y), color, border|Extended BASIC: fills an area with a color, out to a border of another color.
+GET|c|GET (x1, y1) - (x2, y2), array [, G] / GET #buffer [, record]|Extended BASIC: copies a part of the graphics screen into an array. Disk BASIC: reads a record of a random file into its buffer.
+PUT|c|PUT (x1, y1) - (x2, y2), array [, action] / PUT #buffer [, record]|Extended BASIC: puts what GET saved back on the graphics screen, with PSET, PRESET, AND, OR or NOT. Disk BASIC: writes a random file's buffer as a record.
+DRAW|c|DRAW "commands"|Extended BASIC: draws lines from a string of commands: U, D, L, R, E, F, G, H and M to move, B and N for blank and no-update moves, C for color, A for angle, S for scale, X to run a string variable.
+PCOPY|c|PCOPY page TO page|Extended BASIC: copies one graphics page to another.
+PMODE|c|PMODE mode [, start page]|Extended BASIC: picks the graphics mode, 0-4 from fewest pixels to most, and the page the screen starts at.
+PLAY|c|PLAY "music"|Extended BASIC: plays notes from a string: A-G with # or + and -, O octave, L length, T tempo, V volume, P pause, and X to run a string variable.
+DLOAD|c|DLOAD|Extended BASIC: loads a program through the RS-232 port.
+RENUM|c|RENUM [new [, start [, increment]]]|Extended BASIC: renumbers the lines from start, beginning with new and counting by increment (10, 0 and 10 by default), and the references to them.
+FN|c|FN f(value)|Extended BASIC: calls a function DEF FN defined.
+USING|c|PRINT USING "format"; items|Extended BASIC: prints numbers and strings in a format: # digits, . and , in numbers, $$ and ** for money, ^^^^ for an exponent, ! and % % for strings.
+DIR|c|DIR [drive]|Disk BASIC: lists a disk's files.
+DRIVE|c|DRIVE n|Disk BASIC: makes drive 0-3 the one used when a file names none.
+FIELD|c|FIELD #buffer, width AS s$ [, ...]|Disk BASIC: divides a random file's buffer into string fields.
+FILES|c|FILES buffers [, bytes]|Disk BASIC: reserves 0-15 file buffers, and with a number, that much room for them.
+KILL|c|KILL "file"|Disk BASIC: deletes a file.
+LOAD|c|LOAD "file" [, R] / LOADM "file" [, offset]|Disk BASIC: loads a program, and with R runs it with files left open; LOADM loads machine code.
+LSET|c|LSET field$ = s$|Disk BASIC: puts a string in a field, on the left, padded with spaces.
+MERGE|c|MERGE "file" [, R]|Disk BASIC: adds the lines of a program saved as text to the one in memory, and with R runs it.
+RENAME|c|RENAME "file" TO "file"|Disk BASIC: renames a file.
+RSET|c|RSET field$ = s$|Disk BASIC: puts a string in a field, on the right, padded with spaces.
+SAVE|c|SAVE "file" [, A] / SAVEM "file", start, end, entry|Disk BASIC: saves the program, with A as text; SAVEM saves machine code.
+WRITE|c|WRITE [#buffer,] items|Disk BASIC: writes items separated by commas, with strings in quotes, for INPUT to read back.
+VERIFY|c|VERIFY ON / VERIFY OFF|Disk BASIC: reads back each sector after writing it, or stops.
+UNLOAD|c|UNLOAD [drive]|Disk BASIC: closes the files open on a drive.
+DSKINI|c|DSKINI drive [, skip]|Disk BASIC: formats a disk, erasing it, with its sectors that many apart (4 by default).
+BACKUP|c|BACKUP drive [TO drive]|Disk BASIC: copies a whole disk, on one drive by swapping disks when only one is given.
+COPY|c|COPY "file" TO "file"|Disk BASIC: copies a file.
+DSKI$|c|DSKI$ drive, track, sector, a$, b$|Disk BASIC: reads a sector, its first 128 bytes into a$ and the rest into b$.
+DSKO$|c|DSKO$ drive, track, sector, a$, b$|Disk BASIC: writes a sector from two strings of up to 128 bytes.
+DOS|c|DOS|Disk BASIC 1.1: boots the operating system on track 34 of drive 0, such as OS-9.
+SGN|c|SGN(x)|-1, 0 or 1 as x is negative, zero or positive.
+INT|c|INT(x)|The greatest whole number not greater than x.
+ABS|c|ABS(x)|The absolute value of x.
+USR|c|USR(x) / USRn(x)|Calls machine code with x and returns its result: the code DEF USRn names in Extended BASIC, else the address in the USR vector.
+RND|c|RND(n)|A random whole number from 1 to n; RND(0) is between 0 and 1.
+SIN|c|SIN(x)|The sine of an angle in radians.
+PEEK|c|PEEK(address)|The byte in memory at an address.
+LEN|c|LEN(s$)|The number of characters in a string.
+STR$|c|STR$(x)|A number as a string, as PRINT would write it.
+VAL|c|VAL(s$)|The number at the start of a string, or 0.
+ASC|c|ASC(s$)|The code of a string's first character.
+CHR$|c|CHR$(code)|A one-character string with that code.
+EOF|c|EOF(device)|-1 at the end of a file being read, from cassette (-1) or a disk buffer, else 0.
+JOYSTK|c|JOYSTK(n)|Reads a joystick axis, 0-63: 0 and 1 are the right joystick's across and down, 2 and 3 the left's. JOYSTK(0) reads all four.
+LEFT$|c|LEFT$(s$, n)|A string's first n characters.
+RIGHT$|c|RIGHT$(s$, n)|A string's last n characters.
+MID$|c|MID$(s$, start [, n])|Characters from a string, starting at position start (1 is the first). In Extended BASIC, assigning to MID$ replaces them.
+POINT|c|POINT(x, y)|The color of a semigraphics block, 0 when it is off, or -1 where a character is.
+INKEY$|c|INKEY$|The key being pressed, or an empty string; it does not wait.
+MEM|c|MEM|The free memory in bytes.
+ATN|c|ATN(x)|Extended BASIC: the arctangent of x, in radians.
+COS|c|COS(x)|Extended BASIC: the cosine of an angle in radians.
+TAN|c|TAN(x)|Extended BASIC: the tangent of an angle in radians.
+EXP|c|EXP(x)|Extended BASIC: e raised to the power x.
+FIX|c|FIX(x)|Extended BASIC: x with its fraction dropped, toward zero.
+LOG|c|LOG(x)|Extended BASIC: the natural logarithm of x.
+POS|c|POS(device)|Extended BASIC: the cursor's column on the screen (0) or the printer (-2).
+SQR|c|SQR(x)|Extended BASIC: the square root of x.
+HEX$|c|HEX$(n)|Extended BASIC: a number, 0-65535, in hexadecimal.
+VARPTR|c|VARPTR(v)|Extended BASIC: the address of a variable's value, or of a string's descriptor.
+INSTR|c|INSTR([start,] s$, t$)|Extended BASIC: where t$ first appears in s$, or 0.
+TIMER|c|TIMER / TIMER = n|Extended BASIC: a count of the screen's frames, 60 a second, which can be set.
+PPOINT|c|PPOINT(x, y)|Extended BASIC: the color of a graphics point.
+STRING$|c|STRING$(n, c)|Extended BASIC: a string of n copies of a character, given by its code or a string.
+CVN|c|CVN(s$)|Disk BASIC: the number a five-character field holds.
+FREE|c|FREE(drive)|Disk BASIC: the free granules, of 2304 bytes, on a disk.
+LOC|c|LOC(buffer)|Disk BASIC: the current record of a file.
+LOF|c|LOF(buffer)|Disk BASIC: the number of records in a file.
+MKN$|c|MKN$(x)|Disk BASIC: a number as a five-character field.
+AS|c|FIELD #buffer, width AS s$|Disk BASIC: names the string a FIELD's width goes to.

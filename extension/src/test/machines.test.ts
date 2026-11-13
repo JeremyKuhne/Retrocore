@@ -78,6 +78,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         }
     }
     assert.deepEqual(machineById("apple2-ii")?.basicDialects, ["integer"]);
+    assert.deepEqual(machineById("coco2")?.basicDialects, ["colorbasic"]);
     assert.deepEqual(machineById("trs80-model1-level2")?.tapeFormats, ["cas"]);
     assert.deepEqual(machineById("trs80-model1-level1")?.diskFormats, [], "Level I has no disks");
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);

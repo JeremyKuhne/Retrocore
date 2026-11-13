@@ -469,6 +469,31 @@ export const machines: readonly Machine[] = [
             cocoDisk,
             cocoSound
         ]
+    },
+    // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
+    {
+        id: "altair",
+        label: "MITS Altair 8800",
+        detail: "8080, the 88-2SIO's terminal and 64 KB",
+        configuration: { machine: "altair" },
+        diskFormats: [],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [
+            {
+                option: "ramKilobytes",
+                label: "Memory",
+                values: [
+                    { label: "64 KB", value: 64 },
+                    { label: "48 KB", value: 48 },
+                    { label: "32 KB", value: 32 },
+                    { label: "16 KB", value: 16 },
+                    { label: "4 KB", detail: "As the first Altairs shipped", value: 4 }
+                ],
+                default: 64
+            }
+        ]
     }
 ];
 

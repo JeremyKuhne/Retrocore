@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, and the TRS-80 Color Computer in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -101,8 +101,8 @@ their sources.
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
-Model II, Model 12 and Model 16 (Z80 side), Apple-1, and the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette, and it is the ▶ button on the **Retro Devices** view while no
@@ -794,8 +794,9 @@ the panel's width instead; sharp falls back to it when the panel is too small fo
 The panel remembers the choice.
 
 **Screen** picks the machine's monitor: **Color** on the Apple II family and the Apple
-III, or a monochrome monitor of the time, **Black and white**, **Green** or **Amber**, on
-any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
+III, **Color RGB** on a IIe (an RGB card's monitor: hi-res in solid colors with no
+fringing, and white text), or a monochrome monitor of the time, **Black and white**,
+**Green** or **Amber**, on any machine. On an Apple II, a monochrome monitor shows every one of the 560 dots on its
 own, so double hi-res text and the mouse desktops are sharp instead of smeared into
 color; on the others it lights the picture in the phosphor's color. The `screen` launch
 option sets where a session starts; once you pick one in the panel, the panel keeps it
@@ -965,6 +966,25 @@ real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
 Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
 [Retro Devices](#retro-devices); a recording is saved as a WAV file when it is
 ejected.
+
+## Debugging on the Altair 8800
+
+`"machine": "altair"` debugs a MITS Altair 8800 with the same source debugging, cycle
+counts, `Keeps:` checks and I/O port watchpoints; the call stack follows `CALL`, the
+conditional calls, `RST` and interrupts. The machine is configured by:
+
+- `ramKilobytes`: 1 to 64 from `$0000` (64 by default);
+- `switches`: the front panel's 16 switches, whose high 8 are the sense switches
+  `IN $FF` reads;
+- `baudRate`: the 88-2SIO's, 9600 by default.
+
+The Altair has no ROM. A program (`source` or `program`, loaded at `$0100` by default)
+starts there; it sets up the 88-2SIO's first ACIA (`$03`, then `$15`, to port `$10`)
+and talks to the terminal through ports `$10` and `$11`. The panel shows the 80x24
+terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
+control character, the arrow keys send ^H, ^J, ^K and ^L, and **Ctrl+F12** or
+**Ctrl+Break** is RESET; the key bar has **Esc**, **Reset** and **Clear Screen**.
+[The Altair guide](../docs/Altair8800.md) covers the hardware.
 
 ## Debugging on the TRS-80 Color Computer
 

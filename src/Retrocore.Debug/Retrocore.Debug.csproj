@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Altair\Retrocore.Machines.Altair.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <ProjectReference Include="..\Retrocore.Input\Retrocore.Input.csproj" />
     <!-- SDL3's native library, for game controllers, on each platform the extension runs on. -->

@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "apple1-reset", "apple1-clear", "coco-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "apple1-reset", "apple1-clear", "coco-reset", "altair-reset", "altair-clear", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -273,6 +273,19 @@ test("Screen offers each machine's own monitors, and keeps a choice another mach
     // A host too old to say leaves the menu out.
     panel.window.dispatch("message", { data: frame("trs80-model1", undefined, undefined) });
     assert.equal(choice.hidden, true);
+});
+
+test("Screen names a IIe's RGB monitor Color RGB, after Color", () => {
+    const panel = loadPanel();
+    const select = panel.byId.get("screenType") as Element;
+    panel.window.dispatch("message", { data: {
+        machine: "apple2", model: "Enhanced Apple IIe", rows: [""], cycles: 1, running: true, screen: "rgb",
+        screens: ["color", "rgb", "white", "green", "amber"],
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    } });
+    const options = select.children as unknown as { text: string; value: string }[];
+    assert.deepEqual(options.map(option => option.text), ["Color", "Color RGB", "Black and white", "Green", "Amber"]);
+    assert.equal(select.value, "rgb");
 });
 
 test("the panel sends control characters, the Apple keys and CONTROL-RESET", () => {

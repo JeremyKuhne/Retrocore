@@ -274,3 +274,45 @@ if (coco.Bus.Peek(0x0400) != 0x0F || coco.Bus.Peek(0x0401) != 0x0B || coco.Proce
 }
 
 Console.WriteLine("Color Computer: Native AOT machine, SAM, VDG and rendering passed.");
+
+// The Altair 8800: an 8080 program prints through the 88-2SIO's ACIA to the terminal, which renders.
+AssemblyResult altairImage = new NativeAssembler().Assemble(
+    new AssemblySource(
+        """
+        .cpu I8080
+                lxi sp,$1000
+                mvi a,3
+                out $10
+                mvi a,$15
+                out $10
+                lxi h,Text
+        Print:  in $10
+                ani 2
+                jz Print
+                mov a,m
+                ora a
+                jz Done
+                out $11
+                inx h
+                jmp Print
+        Done:   hlt
+        Text:   .byte "ALTAIR", 0
+        """),
+    new(I8080Isa.Name, origin: 0, imageSize: 64));
+
+Retrocore.Machines.Altair.AltairMachine altair = new(new Retrocore.Machines.Altair.AltairConfiguration());
+for (int index = 0; index < altairImage.Sections[0].Bytes.Length; index++)
+{
+    altair.Bus.Write((ushort)index, altairImage.Sections[0].Bytes.Span[index]);
+}
+
+while (!altair.Processor.IsHalted && altair.Processor.CycleCount < 1_000_000) { altair.StepCycle(); }
+altair.Run(5000);
+byte[] altairPixels = new byte[altair.Terminal.Width * altair.Terminal.Height * 4];
+altair.Terminal.Render(altairPixels, scanned: false);
+if (!altairImage.Success || altair.Terminal.Line(0).TrimEnd() != "ALTAIR" || !altairPixels.Any(value => value == 0xFF))
+{
+    throw new InvalidOperationException("Native AOT Altair execution failed.");
+}
+
+Console.WriteLine("Altair 8800: Native AOT machine, ACIA and terminal passed.");

@@ -295,6 +295,96 @@ public class I8080CoreTests
     }
 
     /// <summary>
+    ///  The 8085's V is set exactly when 8-bit arithmetic overflows the signed range, and K is V exclusive-or S, for
+    ///  every A, operand and carry. This is Shirriff's silicon analysis, and what V85 computes once its sign
+    ///  extension of negative operands is fixed (see the backlog).
+    /// </summary>
+    [TestMethod]
+    public void EightBitArithmeticSetsVAndKBySignedOverflow()
+    {
+        // ADD B, ADC B, SUB B, SBB B and CMP B, with B as the operand.
+        (I8080Processor<Z80TestBus> cpu, Z80TestBus bus) = Create(I8080Variant.I8085, 0x00);
+        foreach (byte opcode in (byte[])[0x80, 0x88, 0x90, 0x98, 0xB8])
+        {
+            bool subtract = opcode >= 0x90;
+            bool withCarry = opcode is 0x88 or 0x98;
+            bus.Memory[Origin] = opcode;
+            for (int a = 0; a < 256; a++)
+            {
+                for (int b = 0; b < 256; b++)
+                {
+                    for (int carry = 0; carry < 2; carry++)
+                    {
+                        cpu.Registers = cpu.Registers with { PC = Origin, A = (byte)a, B = (byte)b, F = (byte)carry };
+                        cpu.StepInstruction();
+                        int c = withCarry ? carry : 0;
+                        int signed = subtract ? (sbyte)a - (sbyte)b - c : (sbyte)a + (sbyte)b + c;
+                        int result = subtract ? a - b - c : a + b + c;
+                        bool overflow = signed is < sbyte.MinValue or > sbyte.MaxValue;
+                        bool negative = (result & 0x80) != 0;
+                        byte f = cpu.Registers.F;
+                        if (((f & V) != 0) != overflow || ((f & K) != 0) != (overflow != negative))
+                        {
+                            Assert.Fail($"${opcode:X2} A=${a:X2} B=${b:X2} CY={carry}: F=${f:X2}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///  The 8085's undocumented flags where the references differ, as this core decides them (see the backlog): DSUB's
+    ///  Z covers the whole word, RDEL's V is set when bit 15 changes, and INX, DCX, DAD and the rotates leave V and K
+    ///  alone but for INX and DCX's K.
+    /// </summary>
+    /// <param name="opcode">The instruction.</param>
+    /// <param name="hl">HL before.</param>
+    /// <param name="pair">BC before, or DE for RDEL.</param>
+    /// <param name="flags">F before.</param>
+    /// <param name="result">HL after, or the pair for INX, DCX and RDEL, or A for a rotate (A starts at $81).</param>
+    /// <param name="expected">F after.</param>
+    [TestMethod]
+    [DataRow(0x08, 0x0100, 0x00FF, 0x00, 0x0001, P | AC)]
+    [DataRow(0x08, 0x1234, 0x1234, 0x00, 0x0000, Z | P | AC)]
+    [DataRow(0x18, 0x0000, 0x7FFF, CY, 0xFFFF, V)]
+    [DataRow(0x18, 0x0000, 0xFFFF, CY, 0xFFFF, CY)]
+    [DataRow(0x03, 0x0000, 0x7FFF, V, 0x8000, V)]
+    [DataRow(0x0B, 0x0000, 0x8000, K, 0x7FFF, 0)]
+    [DataRow(0x0B, 0x0000, 0x0000, V, 0xFFFF, V | K)]
+    [DataRow(0x09, 0x7FFF, 0x0001, V | K, 0x8000, V | K)]
+    [DataRow(0x07, 0x0000, 0x0000, V | K, 0x0003, V | K | CY)]
+    [DataRow(0x17, 0x0000, 0x0000, V | K, 0x0002, V | K | CY)]
+    [DataRow(0x0F, 0x0000, 0x0000, V | K, 0x00C0, V | K | CY)]
+    [DataRow(0x1F, 0x0000, 0x0000, V | K, 0x0040, V | K | CY)]
+    public void UndocumentedFlagsWhereReferencesDiffer(int opcode, int hl, int pair, int flags, int result, int expected)
+    {
+        (I8080Processor<Z80TestBus> cpu, _) = Create(I8080Variant.I8085, (byte)opcode);
+        bool rdel = opcode == 0x18;
+        cpu.Registers = cpu.Registers with
+        {
+            A = 0x81,
+            HL = (ushort)hl,
+            BC = rdel ? (ushort)0 : (ushort)pair,
+            DE = rdel ? (ushort)pair : (ushort)0,
+            F = (byte)flags
+        };
+
+        cpu.StepInstruction();
+        I8080Registers r = cpu.Registers;
+        int actual = opcode switch
+        {
+            0x03 or 0x0B => r.BC,
+            0x18 => r.DE,
+            0x07 or 0x17 or 0x0F or 0x1F => r.A,
+            _ => r.HL
+        };
+
+        actual.Should().Be(result, $"${opcode:X2}");
+        r.F.Should().Be((byte)expected, $"${opcode:X2} flags ${r.F:X2}");
+    }
+
+    /// <summary>
     ///  POP PSW keeps only the flag bits the CPU has.
     /// </summary>
     /// <param name="variant">The CPU.</param>

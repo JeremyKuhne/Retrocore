@@ -2,7 +2,7 @@
 # CharacterGeneratorKit.asm with its reconstruction of the Radio Shack lowercase kit's font (CG 2). The file is
 # xtrs's own and is never copied into the workspace.
 param(
-    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path $env:USERPROFILE 'Retrocore' }) 'trs80-fonts\xtrs')
+    [string] $Cache = (Join-Path (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'trs80-fonts') 'xtrs')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,7 +10,7 @@ $commit = '3a2180c063811a715faa28d39a94739c33e0abd0'
 $expected = '1B8BBB9D63A8D598E58F64E831FC11A08F61A82E5C2EB0F631E5CC7BE1464166'
 $Cache = [System.IO.Path]::GetFullPath($Cache)
 $repo = [System.IO.Path]::GetFullPath((Split-Path $PSScriptRoot))
-if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo\", [StringComparison]::OrdinalIgnoreCase)) {
+if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
     throw 'External fixtures must not be cached in the workspace.'
 }
 

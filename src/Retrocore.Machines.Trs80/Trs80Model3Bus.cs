@@ -32,6 +32,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
 {
     private const byte PrinterIdle = 0x30;
     private const byte ClockInterrupt = 0x04;
+    private const byte CassetteRiseInterrupt = 0x01;
+    private const byte CassetteFallInterrupt = 0x02;
     private const byte IntrqNmi = 0x80;
     private const byte MotorTimeoutNmi = 0x40;
     private const byte ResetNmi = 0x20;
@@ -75,7 +77,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         _controller = configuration.DiskController;
         Video = new(roms.CharacterGenerator, _model4);
         Keyboard = new(Trs80Model3Timing.ClockHertz);
-        Cassette = new(500, Trs80Model3Timing.ClockHertz);
+        Cassette = new(500, Trs80Model3Timing.ClockHertz, highSpeed: true);
         Disks = new(Trs80Doubler.None, Trs80Model3Timing.ClockHertz, wd179x: true);
     }
 
@@ -238,7 +240,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
             case >= 0xF8 and <= 0xFB:
                 return PrinterIdle;
             case >= 0xFC:
-                return (byte)((Cassette.Latch ? 0x80 : 0) | (_options & 0x7E));
+                return ReadCassette();
             default:
                 return 0xFF;
         }
@@ -291,6 +293,13 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         }
     }
 
+    // Port $FF: bit 7 the 500 baud latch, bit 0 the 1500 baud level. Reading acknowledges the 1500 baud edges.
+    private byte ReadCassette()
+    {
+        _interrupts &= unchecked((byte)~(CassetteRiseInterrupt | CassetteFallInterrupt));
+        return (byte)((Cassette.Latch ? 0x80 : 0) | (_options & 0x7E) | (Cassette.Level ? 0x01 : 0));
+    }
+
     /// <summary>
     ///  Holds the reset button's signal until the NMI handler reads port <c>$E4</c>.
     /// </summary>
@@ -303,7 +312,16 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     {
         Video.Tick();
         Keyboard.Tick();
-        if (!_model4P) { Cassette.Tick(); }
+        if (!_model4P)
+        {
+            Cassette.Tick();
+
+            // A 1500 baud edge latches its interrupt when the mask enables it, until port $FF is read.
+            byte edges = (byte)((Cassette.Rose ? CassetteRiseInterrupt : 0) | (Cassette.Fell ? CassetteFallInterrupt : 0));
+            _interrupts |= (byte)(edges & _interruptMask);
+            Cassette.TakeEdges();
+        }
+
         if (++_tick == Trs80Model3Timing.CyclesPerTick)
         {
             _tick = 0;

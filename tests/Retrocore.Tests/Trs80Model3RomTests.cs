@@ -4,6 +4,7 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Trs80;
+using Retrocore.Media.Trs80;
 
 namespace Retrocore.Tests;
 
@@ -37,6 +38,81 @@ public class Trs80Model3RomTests
 
         // No RS-232 board is fitted: its UART's status reads $FF, which the ROM's RS-232 set-up takes as none.
         machine.Bus.In(0xEA).Should().Be(0xFF);
+    }
+
+    /// <summary>
+    ///  CSAVE records at the speed Cass? chose, H for 1500 baud and L for 500, and CLOAD reads the tape back. Each tape
+    ///  is in the usual CAS layout for its speed: the leader ($55 bytes at 1500 baud, zeros at 500), the sync byte
+    ///  ($7F or $A5), then the file.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="speed">The answer to Cass?.</param>
+    /// <param name="leader">The tape's first byte.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3, "H", 0x55)]
+    [DataRow(Trs80Model3Variant.Model3, "L", 0x00)]
+    [DataRow(Trs80Model3Variant.Model4, "H", 0x55)]
+    public void SavesAndLoadsAtEachSpeed(Trs80Model3Variant variant, string speed, int leader)
+    {
+        Trs80Model3Machine machine = Model3(variant);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, speed + "\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+        Type(machine, "10 PRINT \"HI\";6*7\r");
+
+        CassetteImage tape = new();
+        machine.Bus.Cassette.Record(tape);
+        Type(machine, "CSAVE \"A\"\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        machine.Bus.Cassette.Stop();
+        tape.Bytes.Should().NotBeEmpty();
+        tape.Bytes[0].Should().Be((byte)leader);
+
+        // The leader, 256 bytes at 1500 baud as the ROM writes it, and the sync byte ($7F at 1500 baud, $A5 at 500),
+        // then the file: three $D3 and its name.
+        byte syncByte = leader == 0x55 ? (byte)0x7F : (byte)0xA5;
+        int sync = tape.Bytes.ToList().IndexOf(syncByte);
+        if (leader == 0x55) { sync.Should().Be(256); }
+        tape.Bytes.Take(sync).Should().AllSatisfy(value => value.Should().Be((byte)leader));
+        tape.Bytes.Skip(sync + 1).Take(4).Should().Equal(0xD3, 0xD3, 0xD3, (byte)'A');
+
+        Type(machine, "NEW\r");
+        machine.Bus.Cassette.Play(tape);
+        Type(machine, "CLOAD \"A\"\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        machine.Bus.Cassette.AtEnd.Should().BeTrue("CLOAD read the whole tape");
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "RUN\r");
+        Screen(machine).Should().Contain("HI 42");
+    }
+
+    /// <summary>
+    ///  A 1500 baud CAS image written by hand in the usual layout loads: 256 leader bytes, the sync byte, then the file,
+    ///  10 PRINT "HI";6*7 named A.
+    /// </summary>
+    [TestMethod]
+    public void LoadsAHighSpeedCasImage()
+    {
+        byte[] file =
+        [
+            0xD3, 0xD3, 0xD3, (byte)'A',
+            0xF8, 0x43, 0x0A, 0x00, 0xB2, 0x20, 0x22, 0x48, 0x49, 0x22, 0x3B, 0x36, 0xCF, 0x37, 0x00,
+            0x00, 0x00
+        ];
+
+        CassetteImage tape = new([.. Enumerable.Repeat((byte)0x55, 256), 0x7F, .. file]);
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model3);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "H\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+        machine.Bus.Cassette.Play(tape);
+        Type(machine, "CLOAD \"A\"\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 30);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "RUN\r");
+        Screen(machine).Should().Contain("HI 42");
     }
 
     /// <summary>
@@ -108,6 +184,14 @@ public class Trs80Model3RomTests
         }
 
         machine.Run(Trs80Model3Timing.ClockHertz);
+    }
+
+    // Runs, a tick at a time, until a condition holds, for at most some seconds of the machine's time.
+    private static void RunUntil(Trs80Model3Machine machine, Func<bool> done, int seconds)
+    {
+        machine.Run(Trs80Model3Timing.CyclesPerTick * 3);
+        for (int ticks = 0; !done() && ticks < seconds * 30; ticks++) { machine.Run(Trs80Model3Timing.CyclesPerTick); }
+        done().Should().BeTrue($"it finished within {seconds} seconds");
     }
 
     private static string Screen(Trs80Model3Machine machine) =>

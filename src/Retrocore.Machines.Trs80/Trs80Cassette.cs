@@ -18,6 +18,11 @@ namespace Retrocore.Machines.Trs80;
 ///   (output going positive) and turns them back into bytes, aligned so the <c>$A5</c> sync byte after the
 ///   leader starts a byte.
 ///  </para>
+///  <para>
+///   The Model III's and 4's interface also plays and records 1500 baud tapes (<see cref="Trs80HighSpeedTape"/>):
+///   a tape that opens with the 1500 baud leader plays at that speed, and a recording holding a 1500 baud leader
+///   and sync byte is saved as one.
+///  </para>
 /// </remarks>
 public sealed class Trs80Cassette
 {
@@ -41,12 +46,43 @@ public sealed class Trs80Cassette
     private long _lastClock = -1;
     private bool _cellHasData;
 
+    // The Model III's and 4's 1500 baud signal, and the same while a 1500 baud tape plays.
+    private readonly Trs80HighSpeedTape? _highSpeed;
+    private Trs80HighSpeedTape? _playingHighSpeed;
+
     /// <summary>
     ///  Creates the interface.
     /// </summary>
     /// <param name="baud">500 for Level II, 250 for Level I.</param>
     /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
-    internal Trs80Cassette(int baud, int clockHertz = Trs80Timing.ClockHertz) => _cellCycles = clockHertz / baud;
+    /// <param name="highSpeed">
+    ///  Whether the interface also plays and records 1500 baud tapes, as the Model III's does.
+    /// </param>
+    internal Trs80Cassette(int baud, int clockHertz = Trs80Timing.ClockHertz, bool highSpeed = false)
+    {
+        _cellCycles = clockHertz / baud;
+        _highSpeed = highSpeed ? new() : null;
+    }
+
+    /// <summary>
+    ///  Gets the 1500 baud signal's level, which port <c>$FF</c> bit 0 reads: true while high.
+    /// </summary>
+    internal bool Level => _playingHighSpeed is { Level: true };
+
+    /// <summary>
+    ///  Gets whether the 1500 baud signal has risen since <see cref="TakeEdges"/>.
+    /// </summary>
+    internal bool Rose => _playingHighSpeed is { Rose: true };
+
+    /// <summary>
+    ///  Gets whether the 1500 baud signal has fallen since <see cref="TakeEdges"/>.
+    /// </summary>
+    internal bool Fell => _playingHighSpeed is { Fell: true };
+
+    /// <summary>
+    ///  Clears the 1500 baud edges seen.
+    /// </summary>
+    internal void TakeEdges() => _highSpeed?.TakeEdges();
 
     /// <summary>
     ///  Gets whether the input latch holds a pulse the program has not cleared.
@@ -75,6 +111,8 @@ public sealed class Trs80Cassette
         _byte = 0;
         _bit = 0;
         _cellStart = -1;
+        _playingHighSpeed = _highSpeed is not null && Trs80HighSpeedTape.IsHighSpeed(tape.Bytes) ? _highSpeed : null;
+        _playingHighSpeed?.Play(tape.Bytes);
     }
 
     /// <summary>
@@ -97,6 +135,7 @@ public sealed class Trs80Cassette
         if (_recording) { Flush(); }
         _tape = null;
         _recording = false;
+        _playingHighSpeed = null;
     }
 
     /// <summary>
@@ -107,7 +146,7 @@ public sealed class Trs80Cassette
     /// <summary>
     ///  Gets the bytes played, or for a recording the whole bytes recorded so far.
     /// </summary>
-    public long Position => _tape is null ? 0 : _recording ? Length : _byte;
+    public long Position => _tape is null ? 0 : _recording ? Length : _playingHighSpeed?.Position ?? _byte;
 
     /// <summary>
     ///  Gets the tape's bytes: its length when playing, and when recording what is recorded, counting the bits
@@ -118,7 +157,7 @@ public sealed class Trs80Cassette
     /// <summary>
     ///  Gets whether a playing tape has run out.
     /// </summary>
-    public bool AtEnd => _tape is { } tape && !_recording && _byte >= tape.Bytes.Count;
+    public bool AtEnd => _tape is { } tape && !_recording && (_playingHighSpeed?.AtEnd ?? _byte >= tape.Bytes.Count);
 
     /// <summary>
     ///  Reads port <c>$FF</c>: bit 7 is the input latch.
@@ -156,6 +195,14 @@ public sealed class Trs80Cassette
         _latch = false;
         int level = value & 0x03;
         if (level == 1 && _outputLevel != 1 && MotorOn && _recording) { Pulse(); }
+
+        // 1500 baud writes each cycle as 2, high, then 1, low.
+        if (_highSpeed is { } highSpeed && MotorOn && _recording)
+        {
+            if (level == 2 && _outputLevel != 2) { highSpeed.RecordRise(_time); }
+            else if (level == 1 && _outputLevel == 2) { highSpeed.RecordFall(_time); }
+        }
+
         _outputLevel = level;
     }
 
@@ -165,6 +212,12 @@ public sealed class Trs80Cassette
     internal void Tick()
     {
         _time++;
+        if (_playingHighSpeed is { } highSpeed)
+        {
+            if (MotorOn) { highSpeed.Tick(); }
+            return;
+        }
+
         if (!MotorOn || _recording || _tape is not { } tape || _byte >= tape.Bytes.Count) { return; }
 
         // CAS drops the silent gaps where the writer paused, such as while CSAVE handled the file name. A pulse
@@ -226,6 +279,15 @@ public sealed class Trs80Cassette
         if (_lastClock >= 0) { _bits.Add(_cellHasData); }
         _lastClock = -1;
         _cellHasData = false;
+
+        // A 1500 baud leader and sync byte make the recording 1500 baud; otherwise it is 500 baud's pulses.
+        if (_highSpeed?.TakeRecording() is { } highSpeed && _tape is { } fast)
+        {
+            foreach (byte value in highSpeed) { fast.Append(value); }
+            _bits.Clear();
+            return;
+        }
+
         if (_tape is not { } tape || _bits.Count == 0) { return; }
         int start = 0;
         for (int index = 0; index + 8 <= _bits.Count; index++)

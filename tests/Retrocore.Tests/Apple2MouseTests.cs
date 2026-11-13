@@ -3,7 +3,6 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Apple2;
-using System.Text;
 
 namespace Retrocore.Tests;
 
@@ -19,6 +18,7 @@ public sealed class Apple2MouseTests
     /// <summary>
     ///  The card's ROM page carries the bytes programs look for to find a mouse, in whatever slot it is in.
     /// </summary>
+    /// <param name="slot">The card's slot.</param>
     [TestMethod]
     [DataRow(2)]
     [DataRow(4)]
@@ -43,6 +43,7 @@ public sealed class Apple2MouseTests
     ///  INITMOUSE, SETMOUSE and READMOUSE: the mouse follows the host only once on, and READMOUSE puts the position,
     ///  button and movement in the slot's screen holes. Y and the interrupt flag come back as they went in.
     /// </summary>
+    /// <param name="model">The model, whose processor runs the firmware.</param>
     [TestMethod]
     [DataRow(Apple2Model.IIe)]
     [DataRow(Apple2Model.IIeEnhanced)]
@@ -395,9 +396,13 @@ public sealed class Apple2MouseTests
 
     private static string InputLine(Apple2Machine machine)
     {
-        StringBuilder line = new();
-        for (ushort address = 0x0200; address <= 0x0211; address++) { line.Append((char)(machine.Bus.Peek(address) & 127)); }
-        return line.ToString();
+        Span<char> line = stackalloc char[0x12];
+        for (int i = 0; i < line.Length; i++)
+        {
+            line[i] = (char)(machine.Bus.Peek((ushort)(0x0200 + i)) & 127);
+        }
+
+        return new string(line);
     }
 
     private static void Frame(Apple2Machine machine)

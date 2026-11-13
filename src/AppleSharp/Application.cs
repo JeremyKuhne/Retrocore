@@ -320,7 +320,7 @@ internal sealed class Application : DisposableBase
 
     private void CaptureMouse()
     {
-        Check(SDL.SetWindowRelativeMouseMode(_window, true));
+        Check(SDL.SetWindowRelativeMouseMode(_window, enabled: true));
         _mouseCaptured = true;
         _mouseX = _mouseY = 0;
         _message = $"The mouse drives the slot {MouseSlot} mouse card. Right-click to release it.";
@@ -339,14 +339,18 @@ internal sealed class Application : DisposableBase
         if (!_mouseCaptured) { return; }
         _mouseCaptured = false;
         _machine?.Bus.Mouse.Button = false;
-        SDL.SetWindowRelativeMouseMode(_window, false);
+        SDL.SetWindowRelativeMouseMode(_window, enabled: false);
         _message = "Click the screen to use the mouse card.";
     }
 
     // Moves the mouse card by the host's movement, one Apple unit for each of the screen's 280 by 192 pixels.
     private void MoveMouse(float windowDx, float windowDy)
     {
-        if (_machine is null || _screen.W <= 0 || !RenderPoint(windowDx, windowDy, out float dx, out float dy)) { return; }
+        if (_machine is null || _screen.W <= 0 || !RenderPoint(windowDx, windowDy, out float dx, out float dy))
+        {
+            return;
+        }
+
         _mouseX += dx * 280 / _screen.W;
         _mouseY += dy * 192 / _screen.H;
         int x = (int)_mouseX;
@@ -613,12 +617,14 @@ internal sealed class Application : DisposableBase
         string state = _dialogOpen ? "choosing media" : _machine is null ? "setup" : _paused ? "paused"
             : _machine.Processor.Status == Retrocore.Cpu.ProcessorExecutionStatus.Running ? "running" : _machine.Processor.Status.ToString();
 
-        string status = $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | {ScreenName(_settings.Screen)} | 1.0205 MHz\n{_message}";
+        string screenName = ScreenName(_settings.Screen);
+        string status = $"{_settings.Model} IIe | {state} | {(_settings.Writable ? "WRITABLE" : "read-only")} | {(_settings.Muted ? "muted" : "sound")} | {screenName} | 1.0205 MHz\n{_message}";
         if (_machine is not null)
         {
             status += _mouseCaptured
                 ? $"\nMOUSE CAPTURED by the slot {MouseSlot} mouse card: right-click to release it."
                 : $"\nMouse card in slot {MouseSlot}: click the screen to capture the mouse.";
+
             for (int drive = 1; drive <= 2; drive++)
             {
                 DiskDriveState disk = _machine.Bus.DiskII.State(drive);

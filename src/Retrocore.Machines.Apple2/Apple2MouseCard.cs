@@ -76,6 +76,10 @@ public sealed class Apple2MouseCard
     private byte _x;
     private bool _carry;
 
+    /// <summary>
+    ///  Creates the bus's mouse card, out of any slot until <see cref="Apple2Bus.InstallMouse"/> puts it in one.
+    /// </summary>
+    /// <param name="bus">The bus whose screen holes and keyboard the card reads and writes.</param>
     internal Apple2MouseCard(Apple2Bus bus) => _bus = bus;
 
     /// <summary>

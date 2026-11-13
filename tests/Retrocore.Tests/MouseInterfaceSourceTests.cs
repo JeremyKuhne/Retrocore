@@ -68,7 +68,11 @@ public sealed class MouseInterfaceSourceTests
 
     private static ReadOnlySpan<byte> Assemble()
     {
-        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0, RomSize) { SourceResolver = new FileAssemblySourceResolver() };
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, origin: 0, RomSize)
+        {
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
         AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(File.ReadAllText(s_source), s_source), options);
         result.Diagnostics.Should().BeEmpty();
         return result.Sections[0].Bytes.Span;

@@ -93,6 +93,7 @@ public class Slot7RomTests
             ? "992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E"
             : "9ECC5E5C6E6F6D57788839ECB0133547D3B775E6704D6A129ACC149C64910459");
     }
+
     /// <summary>
     ///  The device is one volume: $C7FE's volume field says so, and a command for drive two answers $28, no device
     ///  connected, rather than reading drive one's image as a second volume.
@@ -103,7 +104,8 @@ public class Slot7RomTests
         Slot7Rom.Bytes[Slot7Rom.DeviceInfo - Slot7Rom.Origin].Should().Be(0x03, "one volume: bits 5-4 are the count less one");
         byte[] image = new byte[1024];
         Array.Fill(image, (byte)0x5A);
-        Apple2Machine machine = new(Apple2Model.IIe, new Apple2Roms(new byte[16384], new byte[4096]), new MemoryBlockDevice(image, true));
+        MemoryBlockDevice disk = new(image, isReadOnly: true);
+        Apple2Machine machine = new(Apple2Model.IIe, new Apple2Roms(new byte[16384], new byte[4096]), disk);
         machine.Bus.SetRam(auxiliary: false, address: 0x42, value: 1);
         machine.Bus.SetRam(auxiliary: false, address: 0x43, value: 0xF0);
         machine.Bus.SetRam(auxiliary: false, address: 0x45, value: 8);
@@ -121,7 +123,7 @@ public class Slot7RomTests
     [TestMethod]
     public void BlockCountStopsAtProDosLimit()
     {
-        MemoryBlockDevice disk = new(new byte[65536 * 512], true);
+        MemoryBlockDevice disk = new(new byte[65536 * 512], isReadOnly: true);
         Apple2Machine machine = new(Apple2Model.IIe, new Apple2Roms(new byte[16384], new byte[4096]), disk);
         (machine.Bus.Peek(0xC0F1) | (machine.Bus.Peek(0xC0F2) << 8)).Should().Be(0xFFFF);
     }

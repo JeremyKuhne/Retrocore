@@ -245,12 +245,13 @@ public sealed class Apple1MachineTests
         TypeLine(machine, "300: 00 01 7F 80 FF 55 AA 12 34 56 78 9A BC DE F0 C3");
 
         Apple1Tape recording = new();
-        machine.CassetteDrive!.Record(recording, "test.wav");
-        machine.CassetteDrive.Activity.Should().Be(DeviceActivity.Writing);
+        Apple1CassetteDrive drive = machine.CassetteDrive ?? throw new InvalidOperationException("No cassette interface.");
+        drive.Record(recording, "test.wav");
+        drive.Activity.Should().Be(DeviceActivity.Writing);
         TypeLine(machine, "C100R");
         Screen(machine).Should().Contain("C100: A9*", "the Monitor examines C100 before running it");
         TypeLine(machine, "300.30FW", seconds: 20);
-        machine.CassetteDrive.Eject().Should().BeSameAs(recording);
+        drive.Eject().Should().BeSameAs(recording);
 
         // Leader, sync, then 16 bytes of two half cycles a bit.
         recording.HalfCycles.Count.Should().BeGreaterThan(256 * 0x40);
@@ -261,7 +262,7 @@ public sealed class Apple1MachineTests
         // Clear the bytes, then read them back from the tape.
         TypeLine(machine, "\u001B");
         TypeLine(machine, "300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00");
-        machine.CassetteDrive.Play(played, "test.wav");
+        drive.Play(played, "test.wav");
         TypeLine(machine, "C100R");
         TypeLine(machine, "300.30FR", seconds: 20);
         Bytes(machine, 0x300, 16).Should().Equal(0x00, 0x01, 0x7F, 0x80, 0xFF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0xC3);
@@ -275,7 +276,8 @@ public sealed class Apple1MachineTests
     {
         Apple1Machine machine = Boot();
         byte[] data = [.. Enumerable.Range(0, 64).Select(value => (byte)(value * 37))];
-        machine.CassetteDrive!.Play(Apple1Tape.FromData(data), "data");
+        Apple1CassetteDrive drive = machine.CassetteDrive ?? throw new InvalidOperationException("No cassette interface.");
+        drive.Play(Apple1Tape.FromData(data), "data");
         TypeLine(machine, "C100R");
         TypeLine(machine, "E000.E03FR", seconds: 20);
         Bytes(machine, 0xE000, 64).Should().Equal(data);

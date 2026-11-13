@@ -168,7 +168,7 @@ public sealed class Apple1Terminal : IVideoSource
         if (_lastStrobe && !strobe) { Busy = true; }
         _lastStrobe = strobe;
 
-        if (_acknowledge > 0 && --_acknowledge == 0) { _pia.SetCB1(false); }
+        if (_acknowledge > 0 && --_acknowledge == 0) { _pia.SetCB1(level: false); }
 
         if (CycleInFrame == CursorCycle)
         {
@@ -179,7 +179,7 @@ public sealed class Apple1Terminal : IVideoSource
             }
 
             // The one-shot acknowledges as the cursor comes around.
-            _pia.SetCB1(true);
+            _pia.SetCB1(level: true);
             _acknowledge = AcknowledgeCycles;
         }
 

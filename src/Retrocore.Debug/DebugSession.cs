@@ -183,7 +183,11 @@ internal sealed partial class DebugSession
             // debugging, the editor shows this hover in place of the language server's, so a documented name
             // brings its ;; summary along.
             string result = bank is null ? $"${value:X} ({value})" : $"{bank.Name}:${value:X4}";
-            if (args.String("context") == "hover" && SymbolSummary(expression) is { } summary) { result = $"{result} · {summary}"; }
+            if (args.String("context") == "hover" && SymbolSummary(expression) is { } summary)
+            {
+                result = $"{result} · {summary}";
+            }
+
             return new JsonObject
             {
                 ["result"] = result,
@@ -846,14 +850,21 @@ internal sealed partial class DebugSession
     /// <returns>The summary, or null when the name is not a documented one.</returns>
     private string? SymbolSummary(string name)
     {
-        if (name.Length == 0 || !name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '.')) { return null; }
+        if (name.Length == 0 || !name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '.'))
+        {
+            return null;
+        }
+
         DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
         foreach (IDebugModule module in _debug.Modules)
         {
-            if ((module.Documentation.Find(name) ?? module.Documentation.FindRoutine(name)) is not { } topic) { continue; }
-            string summary = new DocumentationResolver(module.Documentation, sets).Effective(topic).Summary;
+            DocumentationSet documentation = module.Documentation;
+            if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { continue; }
+            string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
             if (summary.Length == 0) { continue; }
-            return LinkPattern().Replace(summary, link => link.Groups[1].Value[(link.Groups[1].Value.LastIndexOf(':') + 1)..]);
+
+            // A link shows its name without its module.
+            return LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
         }
 
         return null;

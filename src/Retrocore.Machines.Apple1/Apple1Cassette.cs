@@ -138,17 +138,17 @@ public sealed class Apple1Cassette
     internal void Tick()
     {
         _cycle++;
-        if (Mode != TapeMode.Playing || _cycle < _nextChange) { return; }
+        if (Mode != TapeMode.Playing || _tape is null || _cycle < _nextChange) { return; }
         Input = !Input;
         _position++;
-        _nextChange = _position < Length ? _nextChange + _tape!.HalfCycles[_position] : long.MaxValue;
+        _nextChange = _position < Length ? _nextChange + _tape.HalfCycles[_position] : long.MaxValue;
     }
 
     private void Flip()
     {
         Output = !Output;
-        if (Mode != TapeMode.Recording) { return; }
-        _tape!.Add((int)Math.Min(int.MaxValue, _cycle - _lastChange));
+        if (Mode != TapeMode.Recording || _tape is null) { return; }
+        _tape.Add((int)Math.Min(int.MaxValue, _cycle - _lastChange));
         _lastChange = _cycle;
     }
 }

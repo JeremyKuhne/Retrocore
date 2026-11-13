@@ -26,7 +26,7 @@ public sealed class Apple1Bus : IProcessorBus
     private const int HighRamSize = 0x1000;
 
     private readonly byte[] _ram;
-    private readonly byte[]? _highRam;
+    private readonly byte[] _highRam;
     private readonly byte[] _monitor;
 
     /// <summary>
@@ -37,7 +37,7 @@ public sealed class Apple1Bus : IProcessorBus
     internal Apple1Bus(Apple1Configuration configuration, Apple1Roms roms)
     {
         _ram = new byte[configuration.RamKilobytes * 1024];
-        _highRam = configuration.HighRam ? new byte[HighRamSize] : null;
+        _highRam = configuration.HighRam ? new byte[HighRamSize] : [];
         _monitor = roms.Monitor.ToArray();
         Terminal = new(roms.CharacterGenerator, Pia);
         Keyboard = new(Pia);
@@ -70,10 +70,10 @@ public sealed class Apple1Bus : IProcessorBus
         if (address < _ram.Length) { return _ram[address]; }
         return Area(address) switch
         {
-            Apple1MemoryArea.Ram => _highRam![address - HighRamStart],
+            Apple1MemoryArea.Ram => _highRam[address - HighRamStart],
             Apple1MemoryArea.Monitor => _monitor[address & 0xFF],
             Apple1MemoryArea.Pia => ReadPia(address),
-            Apple1MemoryArea.CassetteInterface or Apple1MemoryArea.CassetteRom => Cassette!.Read(address - CassetteStart),
+            Apple1MemoryArea.CassetteInterface or Apple1MemoryArea.CassetteRom => Cassette?.Read(address - CassetteStart) ?? (byte)(address >> 8),
             _ => (byte)(address >> 8)
         };
     }
@@ -90,14 +90,14 @@ public sealed class Apple1Bus : IProcessorBus
         switch (Area(address))
         {
             case Apple1MemoryArea.Ram:
-                _highRam![address - HighRamStart] = value;
+                _highRam[address - HighRamStart] = value;
                 break;
             case Apple1MemoryArea.Pia:
                 Pia.Write(address, value);
                 break;
             case Apple1MemoryArea.CassetteInterface:
             case Apple1MemoryArea.CassetteRom:
-                Cassette!.Write(address - CassetteStart);
+                Cassette?.Write(address - CassetteStart);
                 break;
         }
     }
@@ -110,7 +110,7 @@ public sealed class Apple1Bus : IProcessorBus
     public byte Peek(ushort address) => Area(address) switch
     {
         Apple1MemoryArea.Pia => PeekPia(address),
-        Apple1MemoryArea.CassetteInterface or Apple1MemoryArea.CassetteRom => Cassette!.Peek(address - CassetteStart),
+        Apple1MemoryArea.CassetteInterface or Apple1MemoryArea.CassetteRom => Cassette?.Peek(address - CassetteStart) ?? (byte)(address >> 8),
         _ => Read(address)
     };
 
@@ -123,7 +123,7 @@ public sealed class Apple1Bus : IProcessorBus
     {
         _ when address < _ram.Length => Apple1MemoryArea.Ram,
         >= 0xF000 => Apple1MemoryArea.Monitor,
-        >= HighRamStart and < HighRamStart + HighRamSize when _highRam is not null => Apple1MemoryArea.Ram,
+        >= HighRamStart and < HighRamStart + HighRamSize when _highRam.Length != 0 => Apple1MemoryArea.Ram,
         >= 0xD000 and < 0xE000 when (address & 0x10) != 0 => Apple1MemoryArea.Pia,
         >= CassetteStart and < CassetteStart + 0x100 when Cassette is not null => Apple1MemoryArea.CassetteInterface,
         >= CassetteStart + 0x100 and < CassetteEnd when Cassette is not null => Apple1MemoryArea.CassetteRom,

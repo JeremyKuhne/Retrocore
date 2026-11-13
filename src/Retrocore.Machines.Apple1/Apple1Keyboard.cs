@@ -75,7 +75,7 @@ public sealed class Apple1Keyboard
     {
         if (_strobe > 0)
         {
-            if (--_strobe == 0) { _pia.SetCA1(false); }
+            if (--_strobe == 0) { _pia.SetCA1(level: false); }
             return;
         }
 
@@ -88,7 +88,7 @@ public sealed class Apple1Keyboard
         if (++_gap < GapCycles) { return; }
         _gap = 0;
         _pia.InputA = (byte)(_keys.Dequeue() | 0x80);
-        _pia.SetCA1(true);
+        _pia.SetCA1(level: true);
         _strobe = StrobeCycles;
     }
 }

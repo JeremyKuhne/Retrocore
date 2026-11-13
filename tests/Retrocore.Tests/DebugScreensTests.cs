@@ -13,6 +13,9 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class DebugScreensTests
 {
+    /// <summary>
+    ///  Green lights the terminals' white fully green, leaves alpha alone, and dims blue as luma does.
+    /// </summary>
     [TestMethod]
     public void MonochromeMonitorsLightThePhosphorByBrightness()
     {
@@ -27,6 +30,9 @@ public sealed class DebugScreensTests
         Assert.AreEqual<byte>(30, pixels[9], "blue is dim on a monochrome monitor");
     }
 
+    /// <summary>
+    ///  White leaves the terminals' white and black as they are; color leaves every pixel alone.
+    /// </summary>
     [TestMethod]
     public void WhiteLeavesTheTerminalsAsTheyAreAndColorLeavesEverything()
     {
@@ -41,12 +47,16 @@ public sealed class DebugScreensTests
         CollectionAssert.AreEqual(colors, unchanged);
     }
 
+    /// <summary>
+    ///  A machine without color refuses it, naming the monitors it has.
+    /// </summary>
     [TestMethod]
     public void AMachineTakesOnlyItsOwnMonitors()
     {
         Assert.AreEqual(DebugScreens.Amber, DebugScreens.Require(DebugScreens.Amber, DebugScreens.Monochrome));
         ArgumentException error = Assert.ThrowsExactly<ArgumentException>(
             () => DebugScreens.Require(DebugScreens.Color, DebugScreens.Monochrome));
+
         Assert.AreEqual("screen must be green, white or amber on this machine.", error.Message);
     }
 }

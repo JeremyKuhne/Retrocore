@@ -81,6 +81,7 @@ internal sealed class Apple1DebugTarget : IDebugTarget
         string sdk = SdkDirectory(args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null);
         byte[] monitor = Rom(dumps, MonitorDump, Apple1Roms.MonitorSize)
             ?? Image(Apple1SdkModules.AssembleMonitor(Path.Join(sdk, "WozMonitor.asm")));
+
         byte[] characters = Image(Apple1SdkModules.AssembleCharacterGenerator(Path.Join(sdk, "CharacterGenerator.asm")));
         byte[] cassette = !configuration.CassetteInterface
             ? []
@@ -444,7 +445,10 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     {
         EjectCassette();
         string full = Path.GetFullPath(path);
-        _machine.CassetteDrive!.Play(Apple1Tape.FromWave(File.ReadAllBytes(full)), full);
+        Apple1CassetteDrive drive = _machine.CassetteDrive
+            ?? throw new InvalidOperationException("This Apple-1 has no cassette interface.");
+
+        drive.Play(Apple1Tape.FromWave(File.ReadAllBytes(full)), full);
     }
 
     // A recording is saved to its path when it is ejected.
@@ -455,18 +459,19 @@ internal sealed class Apple1DebugTarget : IDebugTarget
         _recordingPath = null;
     }
 
-    private JsonObject MediaState() => new JsonObject
+    private JsonObject MediaState()
     {
-        ["cassette"] = _machine.CassetteDrive is { } drive
-            ? new JsonObject
-            {
-                ["path"] = drive.Media?.Label,
-                ["recording"] = _recordingPath is not null,
-                ["motor"] = drive.Transport.Motor,
-                ["atEnd"] = _machine.Bus.Cassette!.AtEnd
-            }
-            : null
-    };
+        if (_machine.CassetteDrive is not { } drive) { return new JsonObject { ["cassette"] = null }; }
+        JsonObject cassette = new()
+        {
+            ["path"] = drive.Media?.Label,
+            ["recording"] = _recordingPath is not null,
+            ["motor"] = drive.Transport.Motor,
+            ["atEnd"] = _machine.Bus.Cassette?.AtEnd ?? true
+        };
+
+        return new JsonObject { ["cassette"] = cassette };
+    }
 
     private JsonObject VideoState() => new JsonObject
     {

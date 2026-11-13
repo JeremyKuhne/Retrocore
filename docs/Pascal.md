@@ -3,10 +3,16 @@
 Retrocore runs Apple's Pascal on both of its Apple machines and debugs the programs it runs:
 
 - **Apple III Pascal** 1.0, 1.1 and 1.2 on the Apple III;
-- **Apple Pascal** 1.0, 1.1 and 1.2 on a 64K Apple II Plus, with the language card, and 1.1 and 1.2 on the IIe.
+- **Apple Pascal** 1.0, 1.1 and 1.2 on a 64K Apple II Plus, with the language card, 1.1 and 1.2 on the IIe, and
+  1.3 on a 128K IIe.
 
-Apple Pascal 1.3 is not checked, as no image of it was at hand. On 1.0, a listing (`$L`) leaves the Compiler's code
-file open, so compile without one there; and R(un) runs no code C(ompile) wrote, so X(ecute) the code file by name.
+On 1.0, a listing (`$L`) leaves the Compiler's code file open, so compile without one there; and R(un) runs no code
+C(ompile) wrote, so X(ecute) the code file by name.
+
+Apple Pascal 1.3's APPLE1 needs 128K: on a II Plus it says `128K MEMORY REQUIRED`. It keeps its code in the IIe's
+auxiliary 64K and its stack and variables in main memory, and the debugger reads each where it is. Its Editor asks
+`Edit what file?` (RETURN starts a new one) and stays in its Quit menu after U(pdate), which E(xit) leaves; its
+Compiler asks for a listing file even with `$L` in the program; and its command line starts with F(ile.
 
 Both are UCSD Pascal II.1. The compiler turns a program into p-code, the instruction set of a stack machine, and a
 6502 interpreter runs it: `SOS.INTERP` on the Apple III, and `SYSTEM.APPLE` in the language card on the Apple II.
@@ -141,11 +147,12 @@ p-code and its disassembler in `Retrocore.Pascal`.
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.
 - With the disks, `PascalMediaTests` and `PcodeTests` read and disassemble every code file on them;
   `Apple3PascalTests` and `Apple2PascalTests` boot Pascal, compile and run a program, and read its frames: Apple III
-  Pascal 1.0, 1.1 and 1.2 (on disks built as above), and Apple Pascal 1.0, 1.1 and 1.2 on the II Plus and 1.1 and
-  1.2 on the IIe. Apple III Pascal's disks are with the other Apple III disks
+  Pascal 1.0, 1.1 and 1.2 (on disks built as above), and Apple Pascal 1.0, 1.1 and 1.2 on the II Plus, 1.1 and 1.2
+  on the IIe, and 1.3 on a 128K IIe. Apple III Pascal's disks are with the other Apple III disks
   (`RETROCORE_APPLE3_DISKS`), and Apple Pascal's in `RETROCORE_APPLE2_PASCAL_DISKS` (by default
-  `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk` and `1.2_0.DSK` to `1.2_3.DSK`).
-- `node tools/Test-PascalDap.mjs` drives the debug host on both machines, and on the Apple III compiles a program
-  and stops in its source.
+  `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk`, and `1.0_0.DSK`, `1.2_0.DSK` and
+  `1.3_0.DSK` to `_3.DSK`).
+- `node tools/Test-PascalDap.mjs` drives the debug host on the Apple III, the II Plus (1.1) and a 128K IIe (1.3),
+  and on the Apple III compiles a program and stops in its source.
 
 The [backlog plan](backlog/ApplePascal.md) says how this was built and what is still to come.

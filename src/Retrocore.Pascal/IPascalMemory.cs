@@ -15,7 +15,7 @@ public interface IPascalMemory
     /// <param name="address">The address.</param>
     /// <param name="bank">
     ///  The Apple III's X-byte for the pointer the interpreter reads through: <c>$80-$8F</c> for a bank pair, or 0 for
-    ///  the memory the CPU sees.
+    ///  the memory the CPU sees. On the Apple II, 0 for main memory and 1 for the auxiliary 64K.
     /// </param>
     /// <returns>The byte.</returns>
     byte Read(ushort address, byte bank);

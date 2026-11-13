@@ -253,14 +253,22 @@ public class PascalMediaTests
     }
 
     /// <summary>
-    ///  Gets the code files on the Apple Pascal 1.1 and Apple III Pascal 1.1 disks, or ends the test as inconclusive
-    ///  without them.
+    ///  Gets the code files on the Apple Pascal 1.1 and 1.3 and Apple III Pascal 1.1 and 1.2 disks, or ends the test as
+    ///  inconclusive without 1.1's.
     /// </summary>
     /// <returns>Each file's disk and name, and its contents.</returns>
     internal static List<(string Name, byte[] Data)> CodeFiles()
     {
         List<(string, byte[])> files = [];
-        foreach (string disk in (string[])["UCSD Pascal 1.1_0.dsk", "UCSD Pascal 1.1_1.dsk", "UCSD Pascal 1.1_2.dsk", "UCSD Pascal 1.1_3.dsk"])
+        // Apple Pascal 1.3's disks join 1.1's where they are present.
+        string[] apple2 =
+        [
+            "UCSD Pascal 1.1_0.dsk", "UCSD Pascal 1.1_1.dsk", "UCSD Pascal 1.1_2.dsk", "UCSD Pascal 1.1_3.dsk",
+            .. ((string[])["UCSD Pascal 1.3_0.DSK", "UCSD Pascal 1.3_1.DSK", "UCSD Pascal 1.3_2.DSK", "UCSD Pascal 1.3_3.DSK"])
+                .Where(disk => File.Exists(Path.Join(Apple2Disks, disk)))
+        ];
+
+        foreach (string disk in apple2)
         {
             PascalVolume volume = Apple2Volume(disk);
             foreach (PascalFileEntry entry in volume.Files)

@@ -244,13 +244,20 @@ internal sealed partial class DebugSession
     private bool EndStops(string kind)
     {
         if (ActiveBasic is null || BasicDirect) { return false; }
-        if (kind is BasicRom.IntegerStop or BasicRom.IntegerEnd)
+        if (kind is BasicRom.IntegerStop or BasicRom.Apple1Stop or BasicRom.IntegerEnd)
         {
-            // Integer BASIC's errors and Control-C stop at STOPPED AT, which runs into END: only the first says why.
+            // Integer BASIC's errors and Control-C, and Apple-1 BASIC's errors and keys, stop at STOPPED AT, which
+            // runs into END: only the first says why.
             bool reported = _basicEnded;
             _basicEnded = true;
             if (reported || !BreaksOn(BasicStopFilter)) { return false; }
-            string why = kind == BasicRom.IntegerStop ? "Ctrl-C" : "END";
+            string why = kind switch
+            {
+                BasicRom.IntegerStop => "Ctrl-C",
+                BasicRom.Apple1Stop => "A key",
+                _ => "END"
+            };
+
             Stopped("exception", description: $"{why} in {CurrentLine}.", exception: "basic-stop", threadId: BasicThread);
             return true;
         }
@@ -389,7 +396,7 @@ internal sealed partial class DebugSession
     private bool CallsMachine()
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return false; }
-        if (dialect == BasicDialect.Integer)
+        if (dialect is IntegerBasicDialect)
         {
             byte[] tokens = new byte[256];
             for (int index = 0; index < tokens.Length; index++)

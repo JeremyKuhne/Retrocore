@@ -60,18 +60,43 @@ E000.EFFFR
 `E000.EFFFW` writes that range instead, after a leader of about ten seconds. Several commands can share a line,
 and Return goes back to the Monitor.
 
+## Apple-1 BASIC
+
+Steve Wozniak's BASIC for the Apple-1 came on cassette and runs in the 4K bank at $E000: `E000.EFFFR` at the
+cassette interface's prompt loads it, `E000R` starts it with an empty program, and `E2B3R` starts it again keeping
+the program. It is the first form of the Apple II's Integer BASIC, which kept its layout and code:
+
+- 16-bit integers, -32767 to 32767, and strings with `DIM`, `LEN(` and substrings such as `A$(2,3)`;
+- a name is a letter and an optional digit (`A`, `B7`), or a letter and `$` for a string;
+- the statements `LET` (or none), `PRINT`, `INPUT`, `IF ... THEN`, `GOTO`, `GOSUB`/`RETURN`, `FOR`/`NEXT`, `DIM`,
+  `REM`, `END`, `POKE`, `CALL` and `TAB`, and the functions `PEEK`, `RND`, `SGN` and `ABS`; GOSUBs and FOR loops
+  nest 8 deep;
+- the commands `LIST`, `RUN`, `DEL`, `SCR` (Integer BASIC's `NEW`), `CLR`, `AUTO`, `HIMEM=` and `LOMEM=`;
+  Control-D ends `AUTO`;
+- several statements to a line only in a numbered line, separated by colons;
+- any key typed while a program runs stops it, `STOPPED AT` its line.
+
+Its tokenizer checks a line's syntax as it is typed, so a stored program never has a syntax error. The cold start
+puts LOMEM at $0800 and HIMEM at $1000, for a 4K machine; `HIMEM=8192` gives an 8K machine its upper 4K, moving the
+program up with it.
+
+Some keywords are left from a version that was still growing. `COLOR=`, `PLOT` and `HLIN` are accepted, but the
+Apple-1 has no graphics: `COLOR=` does nothing, and `PLOT` and `HLIN` run other statements' routines. The operands
+`COLOR`, `HIMEM` and `LOMEM`, the command `OFF` and `USR(` have no working routine; using them runs into other
+code.
+
 ## ROMs
 
 [`Apple1Roms`](../src/Retrocore.Machines.Apple1/Apple1Roms.cs) takes the 256-byte Monitor, the 512-byte character
 generator and, for the cassette interface, its 256-byte PROM. No Apple ROM data is bundled with the library; the
-tests and the SDK assemble them from the sources below.
+tests and the SDK assemble them, and Apple-1 BASIC, from the sources below.
 
 ## The ROM sources
 
 The sources are in [`src/Retrocore.Machines.Apple1/Roms`](../src/Retrocore.Machines.Apple1/Roms), in the native
 dialect, and maintained by hand. [`Apple1RomTests`](../tests/Retrocore.Tests/Apple1RomTests.cs) pins each build by
-SHA-256; with dumps in `RETROCORE_APPLE1_ROMS` (default `<cache>\apple1-roms`), named `wozmon.bin` and `aci.bin`,
-it also compares them byte for byte.
+SHA-256; with dumps in `RETROCORE_APPLE1_ROMS` (default `<cache>\apple1-roms`), named `wozmon.bin`, `aci.bin`
+and `basic.bin`, it also compares them byte for byte.
 
 - [`WozMonitor.asm`](../src/Retrocore.Machines.Apple1/Roms/WozMonitor.asm) is Steve Wozniak's Monitor, with the
   names from his listing in the Apple-1 Operation Manual: `RESET`, `GETLINE`, `NEXTITEM`, `NEXTHEX`, `XAMNEXT`,
@@ -82,7 +107,16 @@ it also compares them byte for byte.
   is published, so the source keeps its own layout: eight bytes a character, bit 4 the leftmost dot. The first Apple
   II boards used the same chip, and the test checks every glyph against the II board's character generator.
 
-`Apple1SdkModules` in the debugger assembles all three.
+- [`Basic/Basic.asm`](../src/Retrocore.Machines.Apple1/Roms/Basic/Basic.asm) is Apple-1 BASIC, in twelve modules
+  that follow the Apple II's [Integer BASIC source](../src/Retrocore.Machines.Apple2/Roms/IntegerBasic) and its
+  names wherever the two share code; Apple-1 BASIC's own routines (its line input, `COUT`, the variable lookup,
+  `HIMEM=`) are named for what they do. Several versions of the BASIC tape were passed around; this one writes the
+  display at $D0F2, and the copies most replicas use write $D012, the same register.
+
+`Apple1SdkModules` in the debugger assembles them all. [`Apple1BasicTests`](../tests/Retrocore.Tests/Apple1BasicTests.cs)
+runs BASIC on the machine: loading it from a WAV tape through the cassette interface, programs, `LIST`, errors and
+a key that stops a program. It also checks the editor's Apple-1 BASIC dialect against the tokens BASIC stores and
+the text its `LIST` prints.
 
 ## Debugging
 
@@ -97,7 +131,9 @@ launch configuration names it with `"machine": "apple1"`. Its options are:
 | `cassette` | | A `.wav` tape, which plays from the start of the session. |
 | `fastCassette` | true | Run unthrottled while a tape plays or records. |
 | `screen` | `green` | The monitor: `green`, `white` (black and white) or `amber`. The display panel's **Screen** changes it. |
-| `romDirectory` | `RETROCORE_APPLE1_ROMS` | Dumps to use in place of the SDK's builds: `wozmon.bin` and `aci.bin`. |
+| `loadBasic` | true | Apple-1 BASIC in the $E000 bank at power-on, as if its tape had been loaded; `E000R` starts it. Needs `highRam`. |
+| `basic` | | An Apple-1 BASIC file (`.apple1.bas`, or `REM retrocore apple1` on its first line) to load and run. |
+| `romDirectory` | `RETROCORE_APPLE1_ROMS` | Dumps to use in place of the SDK's builds: `wozmon.bin`, `aci.bin` and `basic.bin`. |
 | `bootSeconds` | 0.05 with a program | How long the Monitor runs before a program loads, setting up the PIA. |
 
 `WozMonitor.asm` and `Aci.asm` debug as ROM modules, so a breakpoint on `ECHO` stops as each character goes to
@@ -112,7 +148,16 @@ The display panel takes keys: **Backspace** types the back arrow (`_`), which th
 WAV tape, records one (saved when it is ejected) and ejects it, as the `retro/media` request does.
 [`Test-Apple1Dap.mjs`](../tools/Test-Apple1Dap.mjs) runs the debugger through all of this.
 
-**Not emulated yet:**
+**Debugging Apple-1 BASIC.** A `basic` launch starts BASIC, puts the file's program in, and types `RUN`. The
+**BASIC** thread then debugs it by statement, as for the other BASICs:
+- breakpoints and stepping in the file's own lines;
+- a GOSUB's caller below it in the call stack;
+- the variables and FOR loops, and watches in BASIC's arithmetic;
+- Set Next Statement;
+- the program in memory, read and written as text.
 
-- Apple-1 BASIC, which loads from tape to $E000;
-- the RAM refresh's clock stretching.
+`Basic.asm`'s modules debug as source in the $E000 bank while BASIC is there. The exception filters add **BASIC
+errors** and **Program stops**: a key typed while the program runs stops it as `A key in` its line.
+[`Test-Apple1BasicDap.mjs`](../tools/Test-Apple1BasicDap.mjs) runs the debugger through these.
+
+**Not emulated yet:** the RAM refresh's clock stretching.

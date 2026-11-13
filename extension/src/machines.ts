@@ -244,7 +244,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "apple1" },
         diskFormats: [],
         tapeFormats: ["wav"],
-        basicDialects: [],
+        basicDialects: ["apple1"],
         dos: false,
         choices: [
             {

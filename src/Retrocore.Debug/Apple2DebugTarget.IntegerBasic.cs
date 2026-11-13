@@ -69,10 +69,10 @@ internal sealed partial class Apple2DebugTarget
             if (_integerChecked == ulong.MaxValue || now - _integerChecked > BasicCheckCycles || now < _integerChecked)
             {
                 _integerChecked = now;
-                _integerActive = Peek(0xEC00) == IntegerBasicSyntax.s_table[0]
-                    && Peek(0xEC01) == IntegerBasicSyntax.s_table[1]
-                    && Peek(0xEC02) == IntegerBasicSyntax.s_table[2]
-                    && Peek(0xEC03) == IntegerBasicSyntax.s_table[3];
+                _integerActive = Peek(0xEC00) == IntegerBasicSyntax.Integer.Table[0]
+                    && Peek(0xEC01) == IntegerBasicSyntax.Integer.Table[1]
+                    && Peek(0xEC02) == IntegerBasicSyntax.Integer.Table[2]
+                    && Peek(0xEC03) == IntegerBasicSyntax.Integer.Table[3];
             }
 
             return _integerActive;

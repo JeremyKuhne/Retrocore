@@ -37,6 +37,12 @@ internal sealed record BasicRom(
     internal const string IntegerStop = "INTSTOP";
 
     /// <summary>
+    ///  The stop where Apple-1 BASIC prints STOPPED AT, for a key typed while a program runs and for an error in a
+    ///  running program.
+    /// </summary>
+    internal const string Apple1Stop = "A1STOP";
+
+    /// <summary>
     ///  The stop at Integer BASIC's END, which STOPPED AT runs into.
     /// </summary>
     internal const string IntegerEnd = "INTEND";

@@ -25,7 +25,8 @@ public abstract partial class BasicDialect
     internal const int FirstToken = 0x80;
 
     private static readonly BasicDialect[] s_named =
-        [AppleSoftDialect.Enhanced, Level2Dialect.Instance, IntegerBasicDialect.Instance, BusinessBasicDialect.Instance];
+        [AppleSoftDialect.Enhanced, Level2Dialect.Instance, IntegerBasicDialect.Instance, IntegerBasicDialect.Apple1Basic,
+         BusinessBasicDialect.Instance];
 
     /// <summary>
     ///  Gets AppleSoft as the Enhanced IIe's ROM tokenizes it: lowercase outside strings, DATA and REM becomes
@@ -52,6 +53,11 @@ public abstract partial class BasicDialect
     ///  Gets Apple Business BASIC 1.23, the Apple III's.
     /// </summary>
     public static BasicDialect BusinessBasic => BusinessBasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets Apple-1 BASIC, the first form of Integer BASIC.
+    /// </summary>
+    public static BasicDialect Apple1 => IntegerBasicDialect.Apple1Basic;
 
     /// <summary>
     ///  Gets the name pragmas, extensions and settings use, such as <c>applesoft</c>.

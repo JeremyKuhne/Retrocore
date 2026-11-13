@@ -62,7 +62,7 @@ public sealed partial class BasicProgram
                 diagnostics.Add(new(
                     Math.Max(first, 0),
                     BasicSeverity.Error,
-                    $"'{named}' is not a BASIC dialect; use applesoft, integer or level2."));
+                    $"'{named}' is not a BASIC dialect; use applesoft, integer, apple1 or level2."));
 
                 return Failed(diagnostics);
             }

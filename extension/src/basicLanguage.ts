@@ -11,7 +11,7 @@ import { basicLanguages, languageRequest } from "./languageClient";
 const listingScheme = "retrocore-basic-file";
 const dialects: Record<string, string> = {
     applesoft: "retrocore-applesoft", level2: "retrocore-level2", level1: "retrocore-level1", integer: "retrocore-integer",
-    business: "retrocore-business"
+    business: "retrocore-business", apple1: "retrocore-apple1"
 };
 
 interface Diagnostic { line: number; severity: "error" | "warning"; message: string; start: number; end: number; }
@@ -38,6 +38,7 @@ function sessionDialect(): string | undefined {
 
     if (session.configuration.machine === "apple3") return "business";
     if (session.configuration.machine === "trs80-model1") return session.configuration.rom === "level1" ? "level1" : "level2";
+    if (session.configuration.machine === "apple1") return "apple1";
     return undefined;
 }
 

@@ -934,13 +934,23 @@ stack, cycle counts and `Keeps:` checks. The machine is configured by:
 - `cassetteInterface`: the Apple Cassette Interface, started with `C100R` (on by
   default);
 - `cassette` (a `.wav` tape, which plays from the start of the session) and
-  `fastCassette` (on by default: run unthrottled while a tape plays or records).
+  `fastCassette` (on by default: run unthrottled while a tape plays or records);
+- `loadBasic`: Apple-1 BASIC in the `$E000` bank at power-on, as if its tape had
+  been loaded, so `E000R` starts it (on by default with `highRam`).
 
-The Monitor and the cassette interface's PROM are `wozmon.bin` and `aci.bin` from
-`romDirectory` or `RETROCORE_APPLE1_ROMS` when they are there. Otherwise they are
-assembled from the SDK's sources, as the terminal's character generator always is,
-so the Apple-1 needs no external files. `WozMonitor.asm` and `Aci.asm` also debug as
-ROM modules: a breakpoint on `ECHO` stops as each character goes to the screen.
+The Monitor, the cassette interface's PROM and BASIC are `wozmon.bin`, `aci.bin` and
+`basic.bin` from `romDirectory` or `RETROCORE_APPLE1_ROMS` when they are there.
+Otherwise they are assembled from the SDK's sources, as the terminal's character
+generator always is, so the Apple-1 needs no external files. `WozMonitor.asm` and
+`Aci.asm` also debug as ROM modules: a breakpoint on `ECHO` stops as each character
+goes to the screen. So does Apple-1 BASIC's `Basic.asm`, while BASIC is in memory.
+
+A `basic` launch runs an Apple-1 BASIC file: `.apple1.bas`, or a `.bas` whose first
+line is `REM retrocore apple1`. It starts BASIC, puts the program in and types `RUN`,
+and the **BASIC** thread debugs it by statement, as on the other machines: breakpoints
+and stepping in the file's lines, GOSUBs in the call stack, the variables and FOR
+loops, and the program in memory as text. A key typed while the program runs stops
+it, as on the machine; **Program stops** reports that as `A key in` its line.
 
 A program (`source` or `program`, loaded at `$0300` by default) runs after the
 Monitor has set up the PIA, so it can print through `ECHO` ($FFEF) and return to the
@@ -1108,12 +1118,13 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.business.bas` and `.level2.bas` files are
-AppleSoft, Integer BASIC, Business BASIC and Level II BASIC. Business BASIC takes a
-reserved word only between separators, so its highlighting leaves `PRINTER` a name,
-and its names count in full, dots included. A plain `.bas` file takes its dialect
-from a first line such as `REM retrocore applesoft` or `' retrocore level2`, else the
-`retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas` and `.level2.bas`
+files are AppleSoft, Integer BASIC, Apple-1 BASIC, Business BASIC and Level II BASIC.
+Business BASIC takes a reserved word only between separators, so its highlighting
+leaves `PRINTER` a name, and its names count in full, dots included. A plain `.bas`
+file takes its dialect from a first line such as `REM retrocore applesoft` or
+`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of
+the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and

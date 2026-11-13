@@ -563,7 +563,7 @@ internal sealed partial class DebugSession
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
-            DebugMachines.Apple1 => LaunchApple1(args, loads),
+            DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
@@ -678,6 +678,9 @@ internal sealed partial class DebugSession
                 StartIntegerBasic(apple2, basicFile);
             }
 
+            // Apple-1 BASIC is loaded with the machine: E000R starts it.
+            if (Target is Apple1DebugTarget apple1) { apple1.StartBasic(); }
+
             LaunchBasic(basicFile, args.Bool("run") ?? true);
         }
 
@@ -727,7 +730,8 @@ internal sealed partial class DebugSession
         return [];
     }
 
-    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO reaches the terminal.
+    // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches
+    // the terminal: it runs briefly first when a program or a BASIC file loads.
     private static Apple1DebugTarget LaunchApple1(JsonObject args, bool loads)
     {
         Apple1DebugTarget target = Apple1DebugTarget.Launch(args);

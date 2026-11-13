@@ -214,7 +214,7 @@ internal sealed partial class DebugSession
     {
         string line = BasicDirect ? "direct mode" : CurrentLine.ToString(CultureInfo.InvariantCulture);
         string Span(int from, int to) => $"${from:X4}-${Math.Max(from, to - 1):X4} ({Math.Max(0, to - from)} bytes)";
-        if (Basic == BasicDialect.Integer)
+        if (Basic is IntegerBasicDialect)
         {
             // Integer BASIC's variables grow up from LOMEM to PV, and its program down from HIMEM to PP.
             int lomem = Word(IntegerBasicDialect.LoMem);

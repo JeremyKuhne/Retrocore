@@ -380,8 +380,8 @@ internal sealed partial class DebugSession
         return dialect.KeywordAt(token, 0, out _);
     }
 
-    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, or Business BASIC's PERFORM
-    // and EXFN.
+    // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, Business BASIC's PERFORM
+    // and EXFN., or Color BASIC's EXEC.
     private bool CallsMachine()
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return false; }
@@ -409,7 +409,8 @@ internal sealed partial class DebugSession
             ReadOnlySpan<byte> token = [value, text.Read(at + 1)];
             if (!inString && dialect.KeywordAt(token, 0, out int length) is { } word)
             {
-                if (s_machineCalls.Contains(word)) { return true; }
+                // Color BASIC's EXEC runs machine code; Business BASIC's reads a file as typed input.
+                if (s_machineCalls.Contains(word) || (word == "EXEC" && dialect.Name == "colorbasic")) { return true; }
                 at += length - 1;
             }
         }

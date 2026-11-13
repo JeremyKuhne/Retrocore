@@ -90,6 +90,10 @@ writeFileSync(disk, Buffer.alloc(35 * 18 * 256, 0xFF));
 const programLines = ["10 A=1:B$=\"HI\"", "20 FOR I=1 TO 3:GOSUB 100:NEXT I", "30 STOP", "40 PRINT A;B$", "100 A=A+I", "110 RETURN"];
 const program = join(tmpdir(), `retrocore-coco-${process.pid}.colorbasic.bas`);
 writeFileSync(program, `${programLines.join("\n")}\n`);
+
+// One for IF's ELSE, a function's two-byte token before a statement, and a line whose number's low byte is zero.
+const branches = join(tmpdir(), `retrocore-coco-${process.pid}-branches.colorbasic.bas`);
+writeFileSync(branches, "10 IF 0 THEN A=1 ELSE A=2\n20 A=ABS(1):STOP\n30 END\n256 B=1:STOP\n");
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
 
@@ -277,6 +281,36 @@ try {
     assert.equal(written.success, true, JSON.stringify(written.diagnostics));
     assert.equal((await request("retro/basic/program")).text, "10 PRINT HEX$(255)\n20 GOTO 10\n");
 
+    // A false IF steps to its ELSE, which IF runs without the statement loop; ABS ($FF $82) is no REM, so STOP is a
+    // statement of its own; and Set Next Statement to line 256, whose number's low byte is zero, runs B=1 first.
+    events.length = 0;
+    await request("launch", { machine: "coco", model: "coco2", sdkRoms, basic: branches, stopOnEntry: true, speed: "max", sound: "off" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("configurationDone");
+    await stopped("entry");
+    assert.match((await basicFrames())[0].name, /^10: IF 0 THEN A=1/);
+    const steps = [];
+    for (let step = 0; step < 3; step++) {
+        await request("next", { threadId: 2 });
+        await stopped("step");
+        steps.push((await basicFrames())[0].name);
+    }
+    assert.match(steps[0], /^10: ELSE A=2/, JSON.stringify(steps));
+    assert.deepEqual(steps.slice(1), ["20: A=ABS(1)", "20: STOP"]);
+    const jump = (await request("gotoTargets", { source: { path: branches }, line: 4 })).targets;
+    assert.equal(jump[0].label, "256: B=1");
+    await request("goto", { threadId: 2, targetId: jump[0].id });
+    await stopped("goto");
+    assert.equal((await basicFrames())[0].name, "256: B=1");
+    await request("next", { threadId: 2 });
+    await stopped("step");
+    assert.equal((await basicFrames())[0].name, "256: STOP");
+    const variables = await request("variables", {
+        variablesReference: Object.fromEntries((await request("scopes", { frameId: (await basicFrames())[0].id })).scopes
+            .map(scope => [scope.name, scope.variablesReference])).Variables
+    });
+    assert.deepEqual(Object.fromEntries(variables.variables.map(item => [item.name, item.value])), { A: "1", B: "1" });
+
     // A CoCo 2 with a disk boots Disk Extended Color BASIC.
     await launch({ model: "coco2", disks: [disk] });
     await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK");
@@ -347,5 +381,6 @@ try {
     close();
     if (existsSync(disk)) unlinkSync(disk);
     if (existsSync(program)) unlinkSync(program);
+    if (existsSync(branches)) unlinkSync(branches);
 }
 if (failure()) throw failure();

@@ -35,7 +35,16 @@ internal sealed partial class CocoDebugTarget
         "VF", "ER"
     ];
 
+    // ELSE's token, which CRUNCH stores after a colon.
+    private const byte ElseToken = 0x84;
+
     private BasicRom? _basicRom;
+
+    // Where Extended BASIC's statement loop runs CLOAD and CSAVE without GONE2; none without Extended BASIC's source.
+    private ushort[] _cassetteStarts = [];
+
+    // XVEC20_RUN, where Extended BASIC's loop fetches a statement's first character and runs it.
+    private ushort _cassetteRun;
 
     /// <inheritdoc/>
     public BasicDialect? Basic => _machine.Model == CocoModel.Coco3
@@ -67,13 +76,41 @@ internal sealed partial class CocoDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   Color BASIC saves no stack pointer for each statement; at GONE2 its stack is under the call's return.
+    ///   Most statements start at GONE2, which the statement loops call, with TINPTR before the statement. IF also
+    ///   jumps there to run what follows THEN or ELSE, with TINPTR still before the IF: a THEN's statements are the IF
+    ///   statement's own, and an ELSE's start the statement CRUNCH made of <c>:ELSE</c>. Extended BASIC's loop, and
+    ///   Disk BASIC 1.1's, run CLOAD and CSAVE without GONE2, from <c>XVEC20_CLOAD</c> and <c>XVEC20_CSAVE</c>.
+    ///  </para>
+    /// </remarks>
+    public (int Line, int Address)? BasicStatementStart(ushort pc)
+    {
+        if (_basicRom is not { } rom) { return null; }
+        if (Array.IndexOf(_cassetteStarts, pc) >= 0) { return (BasicCurrentLine, BasicTextPointer + 1); }
+        if (pc != rom.Gone) { return null; }
+
+        // The loops leave CHARAD at the statement's first character, past any spaces; IF leaves it past THEN or ELSE.
+        int start = BasicTextPointer + 1;
+        int first = start;
+        while (Peek((ushort)first) == ' ') { first++; }
+        int at = Word(TextPointer);
+        if (at <= first) { return (BasicCurrentLine, start); }
+        int before = at - 1;
+        while (before > start && Peek((ushort)before) == ' ') { before--; }
+        return Peek((ushort)before) == ElseToken ? (BasicCurrentLine, before) : null;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Color BASIC saves no stack pointer for each statement; at GONE2 its stack is under the call's return, and
+    ///   where Extended BASIC's loop runs CLOAD and CSAVE itself, right at the stack pointer.
     ///  </para>
     /// </remarks>
     public int BasicStack => BasicLiveStack;
 
     /// <inheritdoc/>
-    public int BasicLiveStack => _machine.Processor.Registers.S + 2;
+    public int BasicLiveStack => _machine.Processor.Registers.S
+        + (Array.IndexOf(_cassetteStarts, _machine.Processor.Registers.PC) >= 0 ? 0 : 2);
 
     /// <inheritdoc/>
     public int BasicForSize => 18;
@@ -100,17 +137,30 @@ internal sealed partial class CocoDebugTarget
     ///  <para>
     ///   At GONE2 the statement's first character is already fetched, so it is fetched again from the new
     ///   place: <c>CHARAD</c> moves past the spaces to it, A holds it, and the zero flag says whether the statement is
-    ///   empty.
+    ///   empty. Where Extended BASIC's loop was about to run CLOAD or CSAVE, it goes back to <c>XVEC20_RUN</c>
+    ///   instead, which fetches the character and runs the statement, as those return to its loop.
+    ///  </para>
+    ///  <para>
+    ///   Before a line's first statement TINPTR holds the zero that ends the line before, as the loops leave it, and
+    ///   not the line number's low byte, which may itself be zero, or anything that is not a colon for CONT.
     ///  </para>
     /// </remarks>
     public void SetBasicStatement(int line, int textPointer)
     {
         PokeWord(CurrentLine, line);
-        PokeWord(StatementPointer, textPointer);
+        PokeWord(StatementPointer, Peek((ushort)textPointer) == ':' ? textPointer : textPointer - 4);
         int at = textPointer + 1;
         while (Peek((ushort)at) == ' ') { at++; }
-        PokeWord(TextPointer, at);
         M6809Registers registers = _machine.Processor.Registers;
+        if (Array.IndexOf(_cassetteStarts, registers.PC) >= 0 && _cassetteRun != 0)
+        {
+            PokeWord(TextPointer, at - 1);
+            registers.PC = _cassetteRun;
+            _machine.Processor.Registers = registers;
+            return;
+        }
+
+        PokeWord(TextPointer, at);
         byte first = Peek((ushort)at);
         registers.A = first;
         byte zero = (byte)M6809ConditionCode.Zero;

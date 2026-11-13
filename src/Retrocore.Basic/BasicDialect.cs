@@ -151,6 +151,13 @@ public abstract partial class BasicDialect
     internal abstract byte DataToken { get; }
 
     /// <summary>
+    ///  Tests whether a token starts a remark that runs to the line's end: REM, and in Color BASIC the apostrophe.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <returns>Whether it starts a remark.</returns>
+    internal virtual bool IsRemark(byte token) => token == RemToken;
+
+    /// <summary>
     ///  Gets the byte before a <see cref="Functions"/> token, or -1 when the dialect has none.
     /// </summary>
     internal virtual int FunctionPrefix => -1;

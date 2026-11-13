@@ -26,6 +26,7 @@ namespace Retrocore.Basic;
 internal sealed class ColorBasicDialect : BasicDialect
 {
     private const byte PrintToken = 0x87;
+    private const byte RemTokenByte = 0x82;
     private const byte ElseToken = 0x84;
     private const byte ApostropheToken = 0x83;
     private const byte SubToken = 0xA6;
@@ -130,10 +131,13 @@ internal sealed class ColorBasicDialect : BasicDialect
     public override int InputLimit => 250;
 
     /// <inheritdoc/>
-    internal override byte RemToken => 0x82;
+    internal override byte RemToken => RemTokenByte;
 
     /// <inheritdoc/>
     internal override byte DataToken => 0x86;
+
+    /// <inheritdoc/>
+    internal override bool IsRemark(byte token) => token is RemTokenByte or ApostropheToken;
 
     /// <inheritdoc/>
     internal override int FunctionPrefix => FunctionPrefixByte;

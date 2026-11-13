@@ -115,7 +115,7 @@ internal sealed class BasicLineScanner
                 }
 
                 name = null;
-                if (value == _dialect.RemToken) { break; }
+                if (length == 1 && _dialect.IsRemark(value)) { break; }
                 bool range = jump == BasicJump.Range && afterNumber && word == "-";
                 jump = range ? BasicJump.Range : JumpAfter(word);
                 via = range ? via : word;
@@ -211,7 +211,14 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            if (value == _dialect.RemToken) { break; }
+            // A function's token after its prefix is read with it: ABS is $FF $82, and $82 alone is REM.
+            if (value == _dialect.FunctionPrefix && index + 1 < _bytes.Length)
+            {
+                index++;
+                continue;
+            }
+
+            if (_dialect.IsRemark(value)) { break; }
             if (value != ':') { continue; }
             statements.Add(new(index + 1, index + 1 < _bytes.Length ? FirstColumn(index + 1) : _text.Length));
         }

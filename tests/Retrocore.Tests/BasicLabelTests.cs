@@ -43,7 +43,7 @@ public sealed class BasicLabelTests
             @show
                 PRINT A: RETURN
             @done
-                ON A GOSUB @show,@show: END
+                ON A GOSUB @show,@show: GO SUB @show: END ' GOTO @missing
             """);
 
         parsed.Diagnostics.Should().BeEmpty();
@@ -53,7 +53,7 @@ public sealed class BasicLabelTests
             30 IF A<3 THEN 20 ELSE GOSUB 50
             40 GO TO 60
             50 PRINT A: RETURN
-            60 ON A GOSUB 50,50: END
+            60 ON A GOSUB 50,50: GO SUB 50: END ' GOTO @missing
 
             """.ReplaceLineEndings("\n"));
     }

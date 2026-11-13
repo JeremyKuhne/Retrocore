@@ -42,9 +42,9 @@ floating bus and writes go nowhere, so BASIC finds the top of memory where the R
 | Slot | II and II Plus | IIe |
 | --- | --- | --- |
 | 0 | The language card or a firmware card, or empty (`slot0`) | Built in: the IIe's language card |
-| 1, 2, 5 | Disk II controllers | Disk II controllers |
-| 3 | A Disk II controller | The 80-column firmware |
-| 4 | The Mockingboard or a Disk II controller | The Mockingboard or a Disk II controller |
+| 1, 2, 5 | Disk II controllers, or the Z80 SoftCard | Disk II controllers, or the Z80 SoftCard |
+| 3 | A Disk II controller or the Z80 SoftCard | The 80-column firmware |
+| 4 | The Mockingboard, a Disk II controller or the Z80 SoftCard | The Mockingboard, a Disk II controller or the Z80 SoftCard |
 | 6 | The Disk II (`diskImage`, `dos`) | The Disk II (`diskImage`, `dos`) |
 | 7 | Block storage (a `.po` `diskImage`) or a Disk II | Block storage or a Disk II |
 
@@ -61,6 +61,25 @@ SDK's build of them.
 DOS 3.3 ends its boot with two reads of $C081, to leave a language card reading ROM. On a firmware card the same reads
 select the board's ROM, so a II with the AppleSoft card boots a DOS 3.3 disk into its own Integer BASIC, and FP selects
 the card.
+
+**The Z80 SoftCard**, Microsoft's 1980 card, runs CP/M on any model, in any free slot (`Apple2Bus.InstallSoftCard`).
+Its Z80 borrows the Apple's memory while the 6502 waits:
+
+- **Switching.** A write anywhere in the card's `$Cn00-$CnFF` hands the bus to the Z80, and the Z80's write to `$En00`
+  hands it back. Reads do nothing. The Z80 resumes where it stopped, and RESET turns the card off, so the Z80 starts
+  from zero at the next switch.
+- **Addresses.** Z80 `$0000-$AFFF` is the Apple's `$1000-$BFFF`; `$B000-$DFFF` is the Apple's `$D000-$FFFF` (ROM, or
+  the language card); `$E000` is the I/O page and `$F000` page zero. On the IIe the Z80's accesses go through the
+  memory switches, as the 6502's do.
+- **Timing.** Two Z80 T-states to each Apple cycle, with no wait states. In each opcode fetch's refresh the waiting
+  6502 reads once, at its next opcode's address, as the card lets it; `RefreshesHost` turns that off.
+- **What it lacks.** The card has no ROM or RAM, and nothing decodes the Z80's `IN` and `OUT`. The DIP switches that
+  wire the Apple's interrupts to the Z80 are left off, as CP/M expects.
+- **Switches.** In the Retro Devices view, the card's row opens to two checkboxes: **Address translation** (on, as
+  shipped) and **6502 refresh read** (on). The machine state saves them with the card.
+
+CP/M boots from its own disk in slot 6, through the Disk II's firmware. Microsoft's 2.20 and 2.20B (44K) and
+Datasoft's 2.23B (63K) all reach `A>`.
 
 The Retro Devices view lists each model's slots, and **Add Card** puts a card in a free one; [Devices.md](Devices.md)
 describes the view and its requests. Each launch configuration remembers the cards and disks it last ran with.
@@ -126,6 +145,7 @@ rest, in the [extension README](../extension/README.md)):
 | `dos`, `dosYear` | all | Boot a program from a fresh DOS `3.3` (`1983` or `1980`) or `3.2` disk ([Dos.md](Dos.md)) |
 | `fastDisk` | all | Run as fast as possible while any Disk II drive motor turns (`true` by default; toggled by **Fast disk** in the panel) |
 | `controllers` | all | Game controllers on the game port (`true` by default), or `false` for none |
+| `softCard` | all | The Z80 SoftCard in a free slot, 1 to 7 (the manual uses 4); none by default |
 
 **Game controllers** drive the game port on every model, in the debugger and in AppleSharp. SDL reads Xbox,
 PlayStation, Switch Pro and most other controllers, and the first one connected is the Apple joystick:
@@ -149,6 +169,17 @@ The debugger maps the SDK's sources onto whatever ROM is running, so stepping in
 BASIC shows their source wherever the bytes match. The display panel follows the model: its title, and the key bar's
 buttons, which are the Apple keys on the IIe and the game port's buttons 0 and 1 on the II and II Plus.
 
+**The SoftCard's Z80** debugs on its own thread, **SoftCard Z80**, beside the 6502's. Only the CPU with the bus runs,
+so a stop is on its thread, and the other thread shows where its CPU waits. Each thread has its own registers, call
+stack and disassembly; the Z80's addresses are its own, named in memory references as the `z80` bank, such as
+`z80:0x0100` ([Memory.md](Memory.md)). Breakpoints in a `.cpu Z80` source stop the Z80, and `z80:` instruction
+breakpoints set in the Disassembly view; a breakpoint at a bare address is the 6502's. A step on a thread runs until
+its own CPU has stepped, and the other CPU, if it has the bus meanwhile, runs and stops at its breakpoints. Launching a
+`.cpu Z80` source with `softCard` loads it where the Z80's addresses reach (at $0100, the Apple's $1100, unless the
+source or `loadAddress` says otherwise) and gives the Z80 the bus at its entry; `sample/softcard/count.asm` is one.
+CP/M boots from a `diskImage`, and an instruction breakpoint at `z80:0x0000` stops at the Z80's first instruction.
+Data breakpoints watch the Apple's memory, so they see the Z80's accesses there too.
+
 **AppleSoft** debugs on its own BASIC thread on every model that runs it: breakpoints and stepping by statement, GOSUBs
 in the call stack, variables, arrays, `DEF FN` functions, `FOR` loops and AppleSoft expressions. The II Plus's
 AppleSoft is the original IIe's but for its last byte.
@@ -170,10 +201,13 @@ tokenizes it the same way.
 | `Apple2MachineTests`, `Apple2PlusTests`, `Apple2IITests`, `Apple2SlotTests`, `Apple2GamePortTests` | The IIe's soft switches and auxiliary memory, the hardware the II and II Plus lack next to the IIe, slot 0 and peripheral cards, memory sizes, the keyboard, the game port, both Monitors, revision 0, and booting from dumps |
 | `Apple2VideoTests`, `Apple2VideoOracleTests`, `Apple2AudioTests`, `Apple2MockingboardTests` | Text, lo-res, hi-res and double hi-res video (including against apple2ts), the speaker and the Mockingboard |
 | `Apple2DosTests`, `SystemMasterBasicTests` | DOS 3.3's System Master on the II and II Plus, switching BASIC with FP and INT through the language card and firmware cards, and the System Masters' `FPBASIC` and `INTBASIC` files |
+| `Apple2SoftCardTests`, `Apple2CpmTests`, `Apple2SoftCardOracleTests`, `tools/Test-SoftCardDap.mjs` | The SoftCard's switch, translation, clock, refresh read, reset and IIe switches; each SoftCard CP/M disk booting to `A>` and listing its files on the II Plus and the IIe; the Z80's instructions from the first switch to CP/M's prompt against MAME (`tools/SoftCardOracle.lua`); and the Z80 thread through the debug adapter |
 | `IntegerBasicTests`, `IntegerBasicSyntaxTests` | Listing Integer BASIC, and tokenizing with `IntegerBasicSyntax` against the ROM and back |
 | `SdkDocumentationTests` | The documentation lint over every source, each Monitor build linted on its own |
 | `tools/Test-IIeDap.mjs`, `tools/Test-IIDap.mjs`, `tools/Test-IIPlusDap.mjs`, `tools/Test-IntegerBasicDap.mjs` | Each model and Integer BASIC through the debug adapter, from dumps and from the SDK's ROMs |
 
 Dumps are looked for in `RETROCORE_IIE_ROMS`, `RETROCORE_IIPLUS_ROMS` and `RETROCORE_II_ROMS` (or `apple2-roms` under
 `RETROCORE_CACHE`, default `%USERPROFILE%\Retrocore`, for the II and II Plus); without them dump-dependent tests are
-inconclusive, and the SDK's builds are still checked by digest.
+inconclusive, and the SDK's builds are still checked by digest. The CP/M disks are looked for in
+`RETROCORE_SOFTCARD_DISKS` (or `softcard-disks` under `RETROCORE_CACHE`), and the MAME comparison wants a II Plus ROM
+path in `apple2-roms\mame`.

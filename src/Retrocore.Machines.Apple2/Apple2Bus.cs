@@ -59,6 +59,9 @@ public sealed class Apple2Bus : IProcessorBus
     // The installed cards other than slot six's, which tick with it every cycle.
     private DiskIIController[] _otherCards = [];
 
+    // The Z80 SoftCard, in any free slot.
+    private SoftCard? _softCard;
+
     /// <summary>
     ///  Constructs a IIe's bus with externally supplied firmware and an optional slot-seven disk.
     /// </summary>
@@ -134,7 +137,7 @@ public sealed class Apple2Bus : IProcessorBus
     /// </summary>
     /// <param name="slot">The slot, 1 to 7.</param>
     /// <returns>Whether a card can go in.</returns>
-    public bool IsSlotFree(int slot) => slot switch
+    public bool IsSlotFree(int slot) => _softCard?.Slot != slot && slot switch
     {
         1 or 2 or 5 or 6 => Card(slot) is null,
         3 => !_iie && Card(3) is null,
@@ -181,6 +184,10 @@ public sealed class Apple2Bus : IProcessorBus
         CardsChanged();
     }
 
+    // The SoftCard when an address is in its $Cn00-$CnFF page and the IIe's firmware is not answering there.
+    private SoftCard? SoftCardPage(ushort address) =>
+        _softCard is { } card && address >> 8 == 0xC0 + card.Slot && !InternalRom(address) ? card : null;
+
     private DiskIIController? Card(int slot) => _diskCards[slot] is { IsInstalled: true } card ? card : null;
 
     private void CardsChanged()
@@ -226,6 +233,42 @@ public sealed class Apple2Bus : IProcessorBus
         if (!MockingboardInstalled) { throw new InvalidOperationException("Slot 4 has no Mockingboard."); }
         MockingboardInstalled = false;
         Mockingboard.Reset();
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Gets the Z80 SoftCard, or null when none is installed.
+    /// </summary>
+    public SoftCard? SoftCard => _softCard;
+
+    /// <summary>
+    ///  Puts a Z80 SoftCard in a free slot, off, with its Z80 to start from zero at the first switch.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <returns>The card.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///  The slot is not free, or a SoftCard is already installed.
+    /// </exception>
+    public SoftCard InstallSoftCard(int slot)
+    {
+        if (_softCard is not null || slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a SoftCard.");
+        }
+
+        _softCard = new(this, slot);
+        CardChanges++;
+        return _softCard;
+    }
+
+    /// <summary>
+    ///  Takes the SoftCard out. The 6502 gets the bus back if the Z80 had it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No SoftCard is installed.</exception>
+    public void RemoveSoftCard()
+    {
+        if (_softCard is null) { throw new InvalidOperationException("No SoftCard is installed."); }
+        _softCard = null;
         CardChanges++;
     }
 
@@ -440,6 +483,7 @@ public sealed class Apple2Bus : IProcessorBus
         DiskII.Reset();
         foreach (DiskIIController card in _otherCards) { card.Reset(); }
         Mockingboard.Reset();
+        _softCard?.Reset();
         Audio.Reset();
         Speaker = false;
     }
@@ -700,6 +744,10 @@ public sealed class Apple2Bus : IProcessorBus
         else if (address < 0xC100)
         {
             AccessSwitch(address, write: true);
+        }
+        else if (SoftCardPage(address) is { } softCard)
+        {
+            softCard.Switch();
         }
         else if (address is >= 0xC400 and < 0xC500 && MockingboardInstalled && !InternalRom(address))
         {

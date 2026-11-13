@@ -97,6 +97,11 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
     public bool IsHalted => _state.Halted;
 
     /// <summary>
+    ///  Gets whether WAIT held the last T-state's access.
+    /// </summary>
+    public bool IsWaiting => _state.Activity == StalledActivity;
+
+    /// <summary>
     ///  Gets the elapsed T-states.
     /// </summary>
     public ulong CycleCount => _state.CycleCount;

@@ -28,6 +28,17 @@ internal interface IDebugTarget : IDebugMemory
     string ThreadName { get; }
 
     /// <summary>
+    ///  Gets a second CPU's view of the machine, such as the Z80 SoftCard's, shown as its own thread; null when the
+    ///  machine has none. It shares the machine and memory, and runs only while it has the bus.
+    /// </summary>
+    IDebugTarget? Coprocessor => null;
+
+    /// <summary>
+    ///  Gets whether <see cref="Coprocessor"/> has the bus now, so its instructions are the ones running.
+    /// </summary>
+    bool CoprocessorActive => false;
+
+    /// <summary>
     ///  Gets the CPU's name as <c>.cpu</c> gives it, for assembling a launched source.
     /// </summary>
     string Cpu { get; }

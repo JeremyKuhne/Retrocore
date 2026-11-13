@@ -49,6 +49,18 @@
             "type": "retrocore",
             "request": "launch",
             "machine": "apple2",
+            "model": "iiplus",
+            "name": "II Plus: SoftCard Z80 sample",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "softCard": 4,
+            "source": "${workspaceFolder}/sample/softcard/count.asm",
+            "stopOnEntry": true
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "apple2",
             "name": "IIe: ca65 source debugging",
             "preLaunchTask": "Build IIe sample and debug host",
             "romDirectory": "${env:RETROCORE_IIE_ROMS}",

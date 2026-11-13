@@ -772,6 +772,12 @@
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "softCard": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: puts Microsoft's Z80 SoftCard in this slot (1-7; the manual uses 4), so a CP/M diskImage boots. The Z80 shows as its own thread. Not slot 3 on a IIe, nor the Mockingboard's slot 4. None unless given; the Retro Devices view's Add Card puts it in while debugging."
+              },
               "logpointLimit": {
                 "type": "integer",
                 "minimum": 0,

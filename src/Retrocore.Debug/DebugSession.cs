@@ -42,6 +42,8 @@ internal sealed partial class DebugSession
     private DebugInfo _debug = new();
     private DebugFrame[]? _frames;
     private DisplayFrame[]? _display;
+    private DebugFrame[]? _coprocessorFrames;
+    private DisplayFrame[]? _coprocessorDisplay;
 
     // How many innermost macro levels at the PC the top frame hides: a stop on a macro call line shows that line
     // until stepping in moves inward without running anything.
@@ -154,7 +156,8 @@ internal sealed partial class DebugSession
             DebugMemoryBank? bank;
             try
             {
-                value = new ExpressionEvaluator(Target, _debug, expression, FrameRegisters(frameId)).EvaluateReference(out bank);
+                value = new ExpressionEvaluator(FrameTarget(frameId), _debug, expression, FrameRegisters(frameId))
+                    .EvaluateReference(out bank);
             }
             catch (FormatException) when (HasBasicThread && args.String("context") is "hover" or "watch")
             {
@@ -215,21 +218,21 @@ internal sealed partial class DebugSession
         transport.On("next", args => Reply(() =>
         {
             if (OnBasic(args)) { StepBasic(BasicStep.Over); }
-            else { Step(over: true, outOf: false, Instruction(args)); }
+            else { Step(over: true, outOf: false, Instruction(args), args.Int("threadId") ?? 1); }
             return [];
         }));
 
         transport.On("stepIn", args => Reply(() =>
         {
             if (OnBasic(args)) { StepBasic(BasicStep.Into); }
-            else { Step(over: false, outOf: false, Instruction(args)); }
+            else { Step(over: false, outOf: false, Instruction(args), args.Int("threadId") ?? 1); }
             return [];
         }));
 
         transport.On("stepOut", args => Reply(() =>
         {
             if (OnBasic(args)) { StepBasic(BasicStep.Out); }
-            else { Step(over: false, outOf: true, Instruction(args)); }
+            else { Step(over: false, outOf: true, Instruction(args), args.Int("threadId") ?? 1); }
             return [];
         }));
 
@@ -503,14 +506,24 @@ internal sealed partial class DebugSession
         {
             // The retrocore assembler builds any dialect in place, and the debugger reads its source map directly.
             AssemblyDialect? dialect = SourceBuild.Dialect(args.String("dialect"));
+
+            // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
+            // and the Z80 takes the bus at its entry.
+            SoftCardDebugTarget? z80 = null;
+            if (Target.Coprocessor is SoftCardDebugTarget softCard && SourceBuild.DeclaresCpu(sourceFile, softCard.Cpu))
+            {
+                z80 = softCard;
+            }
+
+            IDebugTarget loader = z80 ?? Target;
             AssemblyResult result = SourceBuild.Assemble(
                 sourceFile,
                 dialect,
-                Target.Cpu,
-                args.Int("loadAddress") ?? Target.DefaultLoadAddress,
+                loader.Cpu,
+                args.Int("loadAddress") ?? loader.DefaultLoadAddress,
                 args.String("linkerConfiguration"));
 
-            if (Target is Apple2DebugTarget { Dos: not null } dosTarget)
+            if (z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
             {
                 LoadOnDosDisk(dosTarget, SourceBuild.Emitted(result), args.Int("entryAddress"), sourceFile);
             }
@@ -519,15 +532,16 @@ internal sealed partial class DebugSession
                 int? first = null;
                 foreach ((int address, ReadOnlyMemory<byte> bytes) in SourceBuild.Emitted(result))
                 {
-                    Target.Load(address, bytes.Span);
+                    loader.Load(address, bytes.Span);
                     first ??= address;
                 }
 
-                Target.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? Target.DefaultLoadAddress));
+                z80?.Card.TakeBus();
+                loader.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
             }
 
             // MACRO-10 sources define instructions as macros, so a single-statement expansion debugs as its call.
-            _debug.Add(new SourceMapModule(result, Target.ProgramArea, Target.CollapsesMacros(dialect)));
+            _debug.Add(new SourceMapModule(result, loader.ProgramArea, loader.CollapsesMacros(dialect)));
         }
         else if (program is not null)
         {
@@ -651,7 +665,7 @@ internal sealed partial class DebugSession
 
         // Continue skips the breakpoints where it starts, unless the stop left them unchecked, so that continuing
         // from a breakpoint moves on.
-        ushort pc = Target.ProgramCounter;
+        ushort pc = Cpu.ProgramCounter;
         if (_stopOnEntry)
         {
             Stopped("entry");
@@ -674,24 +688,34 @@ internal sealed partial class DebugSession
 
     private DebugFrame[] Frames => _frames ??= Target.CallStack.Frames(Target.Frame);
 
+    private DebugFrame[] FramesOf(int thread) => thread == SoftCardThread
+        ? _coprocessorFrames ??= ThreadTarget(thread).CallStack.Frames(ThreadTarget(thread).Frame)
+        : Frames;
+
+    private DisplayFrame[] DisplayOf(int thread) =>
+        thread == SoftCardThread ? _coprocessorDisplay ??= BuildDisplay(thread) : Display;
+
     /// <summary>
     ///  Gets the stack as shown: each CPU frame expands into one frame per macro level at its PC, innermost first.
     /// </summary>
-    private DisplayFrame[] Display => _display ??= BuildDisplay();
+    private DisplayFrame[] Display => _display ??= BuildDisplay(1);
 
-    private DisplayFrame[] BuildDisplay()
+    // A thread's frames as shown. The thread that stopped hides the macro levels its stop hides.
+    private DisplayFrame[] BuildDisplay(int thread)
     {
         List<DisplayFrame> frames = [];
-        for (int cpu = 0; cpu < Frames.Length; cpu++)
+        IDebugTarget view = ThreadTarget(thread);
+        DebugFrame[] cpuFrames = FramesOf(thread);
+        for (int cpu = 0; cpu < cpuFrames.Length; cpu++)
         {
-            ushort pc = Frames[cpu].ProgramCounter;
-            if (_debug.Position(Target, pc) is not { } position)
+            ushort pc = cpuFrames[cpu].ProgramCounter;
+            if (_debug.Position(view, pc) is not { } position)
             {
                 frames.Add(new(cpu, pc, Line: null));
                 continue;
             }
 
-            int first = cpu == 0 ? Math.Min(_hidden, position.Chain.Count - 1) : 0;
+            int first = cpu == 0 && thread == _stoppedThread ? Math.Min(_hidden, position.Chain.Count - 1) : 0;
             for (int level = first; level < position.Chain.Count; level++)
             {
                 frames.Add(new(cpu, pc, position.Chain[level]));
@@ -705,13 +729,17 @@ internal sealed partial class DebugSession
     {
         _frames = null;
         _display = null;
+        _coprocessorFrames = null;
+        _coprocessorDisplay = null;
     }
 
     private DebugFrame FrameRegisters(int frameId)
     {
-        return frameId < 1 || frameId > Display.Length
+        (int thread, int index) = FrameIndex(frameId);
+        DisplayFrame[] display = DisplayOf(thread);
+        return index < 0 || index >= display.Length
             ? throw new ArgumentOutOfRangeException(nameof(frameId))
-            : Frames[Display[frameId - 1].Cpu];
+            : FramesOf(thread)[display[index].Cpu];
     }
 
     private JsonObject StackTrace(JsonObject args)
@@ -719,25 +747,30 @@ internal sealed partial class DebugSession
         int start = args.Int("startFrame") ?? 0;
         int levels = args.Int("levels") ?? 0;
         if (start < 0 || levels < 0) { throw new ArgumentOutOfRangeException(nameof(args)); }
+        int thread = args.Int("threadId") == SoftCardThread && _target?.Coprocessor is not null ? SoftCardThread : 1;
+        IDebugTarget view = ThreadTarget(thread);
+        DisplayFrame[] display = DisplayOf(thread);
+        int frameBase = thread == SoftCardThread ? SoftCardFrameBase : 0;
         List<JsonNode?> frames = [];
-        int end = levels == 0 ? Display.Length : (int)Math.Min(Display.Length, (long)start + levels);
+        int end = levels == 0 ? display.Length : (int)Math.Min(display.Length, (long)start + levels);
         for (int index = start; index < end; index++)
         {
-            (_, ushort pc, SourceLine? line) = Display[index];
+            (_, ushort pc, SourceLine? line) = display[index];
 
             // A macro body frame is named by its invocation; other frames by the closest label.
-            string name = line?.Name ?? _debug.Label(Target, pc) ?? $"${pc:X4}";
+            string name = line?.Name ?? _debug.Label(view, pc) ?? $"${pc:X4}";
             frames.Add(new JsonObject
             {
-                ["id"] = index + 1, ["name"] = name, ["source"] = line is { } value ? new JsonObject
+                ["id"] = frameBase + index + 1, ["name"] = name, ["source"] = line is { } value ? new JsonObject
 {
                     ["name"] = Path.GetFileName(value.Path), ["path"] = value.Path
 } : null,
-                ["line"] = line?.Line ?? 1, ["column"] = 1, ["instructionPointerReference"] = $"0x{pc:X4}"
+                ["line"] = line?.Line ?? 1, ["column"] = 1,
+                ["instructionPointerReference"] = Reference(ThreadBank(thread), pc)
             });
         }
 
-        return new JsonObject { ["stackFrames"] = frames.ToJsonArray(), ["totalFrames"] = Display.Length };
+        return new JsonObject { ["stackFrames"] = frames.ToJsonArray(), ["totalFrames"] = display.Length };
     }
 
     private JsonObject Scopes(JsonObject args)
@@ -748,13 +781,13 @@ internal sealed partial class DebugSession
         [
             new JsonObject
             {
-                ["name"] = frameId == 1 ? "Registers" : "Caller registers at call",
+                ["name"] = FrameIndex(frameId).Index == 0 ? "Registers" : "Caller registers at call",
                 ["variablesReference"] = frameId * 2 - 1,
                 ["expensive"] = false
             },
             new JsonObject
             {
-                ["name"] = Target.MemoryScope.Name,
+                ["name"] = FrameTarget(frameId).MemoryScope.Name,
                 ["variablesReference"] = frameId * 2,
                 ["expensive"] = false
             },
@@ -785,8 +818,11 @@ internal sealed partial class DebugSession
     /// </summary>
     private DocumentationTopic? FrameTopic(int frameId)
     {
-        if (frameId < 1 || frameId > Display.Length) { return null; }
-        ushort pc = Display[frameId - 1].Pc;
+        (int thread, int index) = FrameIndex(frameId);
+        DisplayFrame[] display = DisplayOf(thread);
+        if (index < 0 || index >= display.Length) { return null; }
+        ushort pc = display[index].Pc;
+        IDebugTarget view = ThreadTarget(thread);
         DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
         (DocumentationTopic Topic, IDebugModule Module)? best = null;
         foreach (IDebugModule module in _debug.Modules)
@@ -795,7 +831,7 @@ internal sealed partial class DebugSession
             {
                 bool before = topic.Kind == DocumentationKind.Routine && topic.Value is { } value && value <= pc;
                 if (!before || (best is { } found && found.Topic.Value >= topic.Value)) { continue; }
-                if (DebugInfo.Active(module, Target, pc)) { best = (topic, module); }
+                if (DebugInfo.Active(module, view, pc)) { best = (topic, module); }
             }
         }
 
@@ -814,7 +850,8 @@ internal sealed partial class DebugSession
             {
                 foreach (DocumentationEntry entry in section.Entries)
                 {
-                    string value = Current(entry.Name, registers) is { } current ? $"{current} — {entry.Meaning}" : entry.Meaning;
+                    string? current = Current(FrameTarget(frameId), entry.Name, registers);
+                    string value = current is null ? entry.Meaning : $"{current} — {entry.Meaning}";
                     variables.Add(new JsonObject
                     {
                         ["name"] = $"{heading} {entry.Name}",
@@ -834,9 +871,9 @@ internal sealed partial class DebugSession
     }
 
     // The current value of a documented register or byte of memory, or null.
-    private string? Current(string name, in DebugFrame registers)
+    private string? Current(IDebugTarget view, string name, in DebugFrame registers)
     {
-        if (Target.Registers.Value(registers, name) is { } value)
+        if (view.Registers.Value(registers, name) is { } value)
         {
             return value > 0xFF ? $"${value:X4}" : $"${value:X2}";
         }
@@ -845,7 +882,7 @@ internal sealed partial class DebugSession
         {
             if (module.TryResolve(name, out long address) && address is >= 0 and <= 0xFFFF)
             {
-                return $"${Target.Peek((ushort)address):X2}";
+                return $"${view.Peek((ushort)address):X2}";
             }
         }
 
@@ -858,31 +895,35 @@ internal sealed partial class DebugSession
         if (reference > DocumentationScope) { return DocumentationVariables(reference - DocumentationScope); }
         if (reference == BanksScope) { return BankVariables(); }
         List<JsonNode?> variables = [];
-        if (reference < 1 || reference > Display.Length * 2)
+        int frameId = (reference + 1) / 2;
+        (int thread, int index) = FrameIndex(frameId);
+        if (reference < 1 || index < 0 || index >= DisplayOf(thread).Length)
         {
             throw new ArgumentOutOfRangeException(nameof(reference));
         }
 
-        DebugFrame r = FrameRegisters((reference + 1) / 2);
+        IDebugTarget view = ThreadTarget(thread);
+        DebugMemoryBank? bank = ThreadBank(thread);
+        DebugFrame r = FrameRegisters(frameId);
         if ((reference & 1) != 0)
         {
             // The instruction set names the registers; the frame holds their values.
-            foreach (IsaRegister register in Target.Registers.Listed)
+            foreach (IsaRegister register in view.Registers.Listed)
             {
-                long value = Target.Registers.Value(r, register.Name) ?? 0;
-                int? address = Target.PointsTo(register, value);
+                long value = view.Registers.Value(r, register.Name) ?? 0;
+                int? address = view.PointsTo(register, value);
                 variables.Add(new JsonObject
                 {
                     ["name"] = register.Name,
                     ["value"] = $"${value:X}",
                     ["variablesReference"] = 0,
-                    ["memoryReference"] = address is { } pointer ? Reference(bank: null, pointer) : null
+                    ["memoryReference"] = address is { } pointer ? Reference(bank, pointer) : null
                 });
             }
         }
         else
         {
-            (_, ushort start, int length) = Target.MemoryScope;
+            (_, ushort start, int length) = view.MemoryScope;
             for (int i = 0; i < length; i++)
             {
                 ushort address = (ushort)(start + i);
@@ -890,9 +931,9 @@ internal sealed partial class DebugSession
                 variables.Add(new JsonObject
                 {
                     ["name"] = name,
-                    ["value"] = $"${Target.Peek(address):X2}",
+                    ["value"] = $"${view.Peek(address):X2}",
                     ["variablesReference"] = 0,
-                    ["memoryReference"] = Reference(bank: null, address)
+                    ["memoryReference"] = Reference(bank, address)
                 });
             }
         }
@@ -906,47 +947,67 @@ internal sealed partial class DebugSession
     // Whether a step request steps by instruction, as the Disassembly view's steps do.
     private static bool Instruction(JsonObject args) => args.String("granularity") == "instruction";
 
-    private void Step(bool over, bool outOf, bool instruction)
+    private void Step(bool over, bool outOf, bool instruction, int thread)
     {
         _run?.Cancel();
-        bool boundary = Target.IsInstructionBoundary;
-        ushort start = boundary ? Target.ProgramCounter : _instructionStart;
-        if (Resume(boundary) && Hit(start) is { } waiting)
+
+        // A step runs until the thread's own CPU has stepped. While the other CPU has the bus, it runs, and its
+        // breakpoints stop the step.
+        IDebugTarget cpu = ThreadTarget(thread);
+        bool running = ReferenceEquals(cpu, Cpu);
+        bool boundary = cpu.IsInstructionBoundary;
+        ushort start = boundary || !running ? cpu.ProgramCounter : _instructionStart;
+        if (Resume(boundary) && running && Hit(start) is { } waiting)
         {
             Stopped(waiting);
             return;
         }
 
-        DebugPosition? position = _debug.Position(Target, start);
-        int hidden = position is null ? 0 : Math.Min(_hidden, position.Chain.Count - 1);
+        DebugPosition? position = _debug.Position(cpu, start);
+        int hiddenNow = ThreadOf(cpu) == _stoppedThread ? _hidden : 0;
+        int hidden = position is null ? 0 : Math.Min(hiddenNow, position.Chain.Count - 1);
         SourceLine[]? shown = instruction ? null : position?.Chain.Skip(hidden).ToArray();
 
         // On a macro call line whose invocation starts here, stepping in moves one level inward without running.
         if (!instruction && !over && !outOf && boundary && position is not null && hidden > 0 && hidden <= position.EntryDepth)
         {
             _hidden = hidden - 1;
-            Stopped("step", hidden: _hidden);
+            Stopped("step", hidden: _hidden, threadId: ThreadOf(cpu));
             return;
         }
 
         // Stepping out of a macro body leaves its invocation; anywhere else it returns from the current call.
         bool inMacro = shown is { Length: > 1 };
-        var returnTarget = outOf && !inMacro ? Target.CallStack.ReturnTarget() : null;
+        var returnTarget = outOf && !inMacro ? cpu.CallStack.ReturnTarget() : null;
         if (outOf && !inMacro && returnTarget is null)
         {
             throw new InvalidOperationException("No tracked caller is available for step out.");
         }
 
-        int depth = Target.CallStack.Depth();
+        int depth = cpu.CallStack.Depth();
         for (int count = 0; count < 1_000_000; count++)
         {
+            IDebugTarget ran = Cpu;
             if (!Execute()) { return; }
-            DebugFrame r = Target.Frame;
-            DebugPosition? now = _debug.Position(Target, r.ProgramCounter);
+
+            // The other CPU's instruction: only its breakpoints can stop the step.
+            if (!ReferenceEquals(ran, cpu) || !cpu.IsInstructionBoundary)
+            {
+                if (Cpu.IsInstructionBoundary && Hit(Cpu.ProgramCounter) is { } other)
+                {
+                    Stopped(other);
+                    return;
+                }
+
+                continue;
+            }
+
+            DebugFrame r = cpu.Frame;
+            DebugPosition? now = _debug.Position(cpu, r.ProgramCounter);
 
             // Step over and out never stop inside a call or interrupt entered during the step. A call returns at
             // its return address, or past it when the routine skips inline data after the call.
-            int level = Target.CallStack.Depth();
+            int level = cpu.CallStack.Depth();
             bool complete = outOf
                 ? inMacro
                     ? level <= depth && shown is not null && !Within(now, shown[1..], shown.Length)
@@ -958,8 +1019,9 @@ internal sealed partial class DebugSession
                     : shown is null || now is null || !Arrival(now).SequenceEqual(shown);
 
             // A breakpoint inside what the step runs over stops it, as it would stop running; so does one where the
-            // step ends, which counts the hit, applies its condition and writes its log message.
-            if (Hit(r.ProgramCounter) is { } hit)
+            // step ends, which counts the hit, applies its condition and writes its log message. The other CPU may
+            // have the bus now, after an instruction that handed it over.
+            if (Cpu.IsInstructionBoundary && Hit(Cpu.ProgramCounter) is { } hit)
             {
                 Stopped(hit);
                 return;
@@ -967,7 +1029,7 @@ internal sealed partial class DebugSession
 
             if (complete)
             {
-                Stopped("step");
+                Stopped("step", threadId: ThreadOf(cpu));
                 return;
             }
         }
@@ -1009,22 +1071,29 @@ internal sealed partial class DebugSession
     private bool Execute()
     {
         Invalidate();
-        bool instruction = Target.InInstruction;
+
+        // The instruction is that of the CPU with the bus as it starts. One that hands the bus over finishes on the
+        // CPU's own view; the SoftCard's Z80 runs its last T-states beside the 6502.
+        IDebugTarget cpu = Cpu;
+        bool instruction = cpu.InInstruction;
         for (int count = 0; count < InstructionCycleBudget; count++)
         {
-            if (Target.CycleBreak() is { } beam && BeamStop(beam) is { } stop)
+            if (cpu.CycleBreak() is { } beam && BeamStop(beam) is { } stop)
             {
                 Stopped(stop);
-                _unchecked = Target.IsInstructionBoundary;
+                _unchecked = cpu.IsInstructionBoundary;
                 return false;
             }
 
-            if (Target.IsInstructionBoundary && (ResetStops() || !Observe())) { return false; }
-            instruction |= Target.StepCycle();
-            if (_watches.Count != 0) { Watch(Target.LastCycle); }
+            if (cpu.IsInstructionBoundary && (ResetStops() || !Observe(cpu))) { return false; }
+            instruction |= cpu.StepCycle();
+            if (_watches.Count != 0) { Watch(cpu.LastCycle); }
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
-            if (instruction && Target.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+            if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+
+            // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
+            if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(); }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");
@@ -1034,7 +1103,7 @@ internal sealed partial class DebugSession
     private bool ResetStops()
     {
         if (!Target.TakeResetStop() || !BreaksOn(MachineResetFilter)) { return false; }
-        if (Hit(Target.ProgramCounter) is { } hit)
+        if (Hit(Cpu.ProgramCounter) is { } hit)
         {
             Stopped(hit);
         }
@@ -1048,14 +1117,15 @@ internal sealed partial class DebugSession
 
     // Observes an instruction boundary: its source line's cycles, the calls it starts and the contracts calls
     // returning to it break. Returns false when a broken contract stops.
-    private bool Observe()
+    private bool Observe(IDebugTarget cpu)
     {
-        DebugFrame before = Target.Frame;
+        DebugFrame before = cpu.Frame;
         _instructionStart = before.ProgramCounter;
-        ObserveBasic(before.ProgramCounter);
+        bool machineCpu = IsMachineCpu(cpu);
+        if (machineCpu) { ObserveBasic(before.ProgramCounter); }
         FlushLineCycles();
         (string Path, int Line)? previous = _cycleSource;
-        _cycleSource = _debug.Position(Target, before.ProgramCounter)?.Chain[0] is { } line
+        _cycleSource = _debug.Position(cpu, before.ProgramCounter)?.Chain[0] is { } line
             ? (line.Path, line.Line)
             : null;
 
@@ -1063,6 +1133,8 @@ internal sealed partial class DebugSession
         // instructions on one line (a macro, or several statements) add up.
         _lineEntered = _cycleSource is { } entered && entered != previous;
 
+        // Call cycles and contracts follow the machine's CPU, whose routines the SDK documents.
+        if (!machineCpu) { return true; }
         (ushort Target, int Length)? call = Target.CallAt(before.ProgramCounter);
         _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
         if (_contracts?.Observe(before, call, Target.Peek) is { Count: > 0 } broken)
@@ -1088,7 +1160,7 @@ internal sealed partial class DebugSession
         _run?.Dispose();
         _run = new();
         CancellationToken token = _run.Token;
-        bool check = Resume(Target.IsInstructionBoundary);
+        bool check = Resume(Cpu.IsInstructionBoundary);
         _ = Task.Run(async () =>
         {
             bool first = !check;
@@ -1122,8 +1194,10 @@ internal sealed partial class DebugSession
                                 break;
                             }
 
-                            ushort pc = Target.ProgramCounter;
-                            if (Target.IsInstructionBoundary
+                            IDebugTarget cpu = Cpu;
+                            ushort pc = cpu.ProgramCounter;
+                            bool boundary = cpu.IsInstructionBoundary;
+                            if (boundary
                                 && !first
                                 && Hit(pc) is { } hit)
                             {
@@ -1131,13 +1205,13 @@ internal sealed partial class DebugSession
                                 return;
                             }
 
-                            if (Target.IsInstructionBoundary && !first && BasicStops(pc)) { return; }
+                            if (boundary && !first && IsMachineCpu(cpu) && BasicStops(pc)) { return; }
 
                             // Continuing from a BRK stop runs the BRK.
-                            if (Target.IsInstructionBoundary
+                            if (boundary
                                 && !(first && trapReported)
                                 && BreaksOn(BrkFilter)
-                                && Target.Trap(pc) is { } trap)
+                                && cpu.Trap(pc) is { } trap)
                             {
                                 Stopped("exception", description: trap, exception: "brk");
                                 return;
@@ -1340,9 +1414,11 @@ internal sealed partial class DebugSession
         string? description = null,
         int? hidden = null,
         string? exception = null,
-        int threadId = 1)
+        int? threadId = null)
     {
         Invalidate();
+        int thread = threadId ?? (_target is null ? 1 : ThreadOf(Cpu));
+        _stoppedThread = thread;
         _basicGoal = null;
         ForgetBasicReferences();
         _unchecked = false;
@@ -1352,15 +1428,16 @@ internal sealed partial class DebugSession
         if (_target is not null && Target.IsInstructionBoundary) { Target.TakeResetStop(); }
         ReportDropped();
         _exception = reason == "exception" ? (exception ?? "error", description ?? "The machine stopped.") : null;
-        _hidden = hidden ?? (_target is not null && Target.IsInstructionBoundary
-            ? _debug.Position(Target, Target.ProgramCounter)?.EntryDepth ?? 0
+        IDebugTarget? stopped = _target is null ? null : ThreadTarget(thread);
+        _hidden = hidden ?? (stopped is { IsInstructionBoundary: true }
+            ? _debug.Position(stopped, stopped.ProgramCounter)?.EntryDepth ?? 0
             : 0);
 
         Notify("stopped", new JsonObject
         {
             ["reason"] = reason,
             ["description"] = description,
-            ["threadId"] = threadId,
+            ["threadId"] = thread,
             ["allThreadsStopped"] = true,
             ["hitBreakpointIds"] = breakpoints?.ToJsonArray()
         });

@@ -24,10 +24,13 @@ test("devices no row claims, or a host without hardware rows, are listed on thei
     assert.deepEqual(grouped.loose, [{ id: "cassette" }]);
 });
 
-test("the Mockingboard is offered only for slot 4, and Disk II cards for any free slot", () => {
+test("the Mockingboard is offered only for slot 4, and Disk II cards and the SoftCard for any free slot", () => {
     assert.deepEqual(cardsFor("slot4").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mockingboard"]);
-    assert.deepEqual(cardsFor("slot5").map(card => card.label), ["Disk II controller", "Disk II controller, 13-sector"]);
+        ["Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Z80 SoftCard"]);
+    for (const slot of ["slot1", "slot2", "slot3", "slot5", "slot6", "slot7"]) {
+        assert.deepEqual(cardsFor(slot).map(card => card.label), ["Disk II controller", "Disk II controller, 13-sector", "Z80 SoftCard"]);
+    }
+    assert.deepEqual(cardsFor("slot5").find(card => card.label === "Z80 SoftCard")?.args, { action: "addSoftCard" });
     assert.deepEqual(cardsFor("slot0").map(card => card.label), ["Language card", "Firmware card"],
         "slot 0 takes the language and firmware cards");
 });
@@ -39,5 +42,9 @@ test("a saved machine comes back only while the launch's hardware options are th
         "options other than hardware do not matter");
     assert.equal(restorable(saved, { ...launch, diskImage: "b.dsk" }), undefined, "a new diskImage starts afresh");
     assert.equal(restorable(saved, { ...launch, mockingboard: true }), undefined, "so does a new hardware option");
+    assert.equal(restorable(saved, { ...launch, softCard: 4 }), undefined, "and a SoftCard");
+    const softCard = { ...launch, softCard: 4 };
+    const withSoftCard = { fingerprint: fingerprint(softCard), configuration: { cards: { "4": "softCard", "6": "diskII16" } } };
+    assert.deepEqual(restorable(withSoftCard, softCard), withSoftCard.configuration, "a machine with a SoftCard comes back as saved");
     assert.equal(restorable(undefined, launch), undefined);
 });

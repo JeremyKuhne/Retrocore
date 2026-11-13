@@ -229,6 +229,16 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         string sound = args.String("sound") ?? "speaker";
         if (args.Bool("mockingboard") ?? sound == "mockingboard") { machine.Bus.InstallMockingboard(); }
         target.SetSound(sound == "mockingboard" && !machine.Bus.MockingboardInstalled ? "speaker" : sound);
+        if (args.Int("softCard") is { } softCard)
+        {
+            if (softCard is < 1 or > 7 || !machine.Bus.IsSlotFree(softCard))
+            {
+                throw new ArgumentException($"softCard: slot {softCard} is not free for the Z80 SoftCard.");
+            }
+
+            machine.Bus.InstallSoftCard(softCard);
+        }
+
         target.FastDisk = args.Bool("fastDisk") ?? true;
         target.StartControllers(args);
         return target;
@@ -538,9 +548,16 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     {
         ProcessorRegisters before = _machine.Processor.Registers;
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
+        ulong cycles = _machine.Processor.CycleCount;
         _machine.StepCycle();
-        ProcessorCycle cycle = _machine.LastCycle;
-        _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
+
+        // While the SoftCard holds the 6502, its last cycle is an old one.
+        if (_machine.Processor.CycleCount != cycles)
+        {
+            ProcessorCycle cycle = _machine.LastCycle;
+            _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
+        }
+
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
             throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
@@ -548,6 +565,32 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
 
         return _machine.Processor.FetchedOpcode;
     }
+
+    /// <summary>
+    ///  Advances by one of the SoftCard's Z80 T-states while it runs, else by a cycle, for the Z80's view.
+    /// </summary>
+    internal void StepTState()
+    {
+        _machine.StepTState();
+        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
+        {
+            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
+        }
+    }
+
+    /// <inheritdoc/>
+    public IDebugTarget? Coprocessor
+    {
+        get
+        {
+            if (_machine.Bus.SoftCard is not { } card) { return null; }
+            if (_softCard?.Card != card) { _softCard = new(this, card); }
+            return _softCard;
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool CoprocessorActive => _machine.Bus.SoftCard is { OwnsBus: true };
 
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
@@ -622,8 +665,24 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     ///   $D000-$DFFF; bank one has its own banks. The system ROM, with the internal firmware at $C100-$CFFF, and
     ///   the ROMs of the slots that have one are read-only.
     ///  </para>
+    ///  <para>
+    ///   With the SoftCard, <c>z80</c> is memory as its Z80 sees it, through the card's translation.
+    ///  </para>
     /// </remarks>
-    public IReadOnlyList<DebugMemoryBank> Banks => field ??= CreateBanks();
+    public IReadOnlyList<DebugMemoryBank> Banks
+    {
+        get
+        {
+            _banks ??= CreateBanks();
+            if (Coprocessor is not SoftCardDebugTarget softCard) { return _banks; }
+            if (_softCardBanks?[^1] != softCard.Bank) { _softCardBanks = [.. _banks, softCard.Bank]; }
+            return _softCardBanks;
+        }
+    }
+
+    private List<DebugMemoryBank>? _banks;
+    private DebugMemoryBank[]? _softCardBanks;
+    private SoftCardDebugTarget? _softCard;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -1089,8 +1148,34 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     private HardwareRow Slot(int slot)
     {
         string addCard = slot == 4
-            ? "Add Card puts the Mockingboard or a Disk II controller here."
-            : "Add Card puts a Disk II controller here.";
+            ? "Add Card puts the Mockingboard, a Disk II controller or the Z80 SoftCard here."
+            : "Add Card puts a Disk II controller or the Z80 SoftCard here.";
+
+        if (_machine.Bus.SoftCard is { } softCard && softCard.Slot == slot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "Z80 SoftCard",
+                "Microsoft's Z80 card, for CP/M. A write to its slot's page hands the bus to the Z80, which shows as its own "
+                    + "thread. The launch installs it with softCard; Remove Card takes it out.",
+                [],
+                ["removeCard"],
+                [
+                    new(
+                        "translation",
+                        "Address translation",
+                        softCard.Translates,
+                        "DIP switch S1-1 off, as shipped: Z80 $0000-$AFFF is the Apple's $1000-$BFFF, $E000 the I/O page and "
+                            + "$F000 page zero, as CP/M expects. Off, the Z80 sees the Apple's addresses unchanged."),
+                    new(
+                        "refresh",
+                        "6502 refresh read",
+                        softCard.RefreshesHost,
+                        "In each Z80 opcode fetch's refresh, the waiting 6502 reads once at its next opcode's address, as the "
+                            + "card lets it to keep its registers. Off, it makes no reads, as in MAME and AppleWin.")
+                ]);
+        }
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled)
         {
@@ -1185,6 +1270,27 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 // Without the card there is only the speaker to hear.
                 if (_soundMode == "mockingboard") { SetSound("speaker"); }
                 break;
+            case "addSoftCard" when slot > 0 && _machine.Bus.IsSlotFree(slot) && _machine.Bus.SoftCard is null:
+                _machine.Bus.InstallSoftCard(slot);
+                break;
+            case "removeCard" when slot > 0 && _machine.Bus.SoftCard?.Slot == slot:
+                _machine.Bus.RemoveSoftCard();
+                break;
+            case "setSetting" when slot > 0 && _machine.Bus.SoftCard is { } softCard && softCard.Slot == slot:
+                bool on = args.Bool("value") ?? throw new ArgumentException("value is required.");
+                switch (args.String("setting"))
+                {
+                    case "translation":
+                        softCard.Translates = on;
+                        break;
+                    case "refresh":
+                        softCard.RefreshesHost = on;
+                        break;
+                    default:
+                        throw new ArgumentException($"The SoftCard has no setting '{args.String("setting")}'.");
+                }
+
+                break;
             case "removeCard" when slot > 0 && _machine.Bus.DiskIIIn(slot) is not null:
                 _machine.Bus.RemoveDiskII(slot);
                 _diskSectors.Remove(slot);
@@ -1231,6 +1337,9 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                     case "mockingboard":
                         HardwareAction(id, "addMockingboard", []);
                         break;
+                    case "softCard":
+                        HardwareAction(id, "addSoftCard", []);
+                        break;
                     case "languageCard":
                         HardwareAction(id, "addLanguageCard", []);
                         break;
@@ -1256,7 +1365,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return problems;
     }
 
-    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard,
+    // A slot's card, as Cards saves it: languageCard or firmwareCard (slot 0 of the II and II Plus), mockingboard, softCard,
     // diskII16 or diskII13 for a Disk II built from the SDK's ROMs, diskII for one with the launch's ROM dumps,
     // blockStorage, or empty.
     private string CardIn(int slot)
@@ -1269,6 +1378,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         }
 
         if (slot == 4 && _machine.Bus.MockingboardInstalled) { return "mockingboard"; }
+        if (_machine.Bus.SoftCard?.Slot == slot) { return "softCard"; }
         if (_machine.Bus.DiskIIIn(slot) is not null)
         {
             return _diskSectors.TryGetValue(slot, out int sectors) ? $"diskII{sectors}" : "diskII";

@@ -96,11 +96,17 @@ internal sealed partial class DebugSession
     private bool HasBasicThread => _target is { Basic: not null, BasicRom: not null };
 
     // The threads: the CPU's, and BASIC's on a machine with a BASIC the debugger knows.
-    private JsonArray Threads() => HasBasicThread
-        ? new JsonArray(
-            new JsonObject { ["id"] = 1, ["name"] = Target.ThreadName },
-            new JsonObject { ["id"] = BasicThread, ["name"] = "BASIC" })
-        : new JsonArray(new JsonObject { ["id"] = 1, ["name"] = _target?.ThreadName ?? "CPU" });
+    private JsonArray Threads()
+    {
+        List<JsonNode?> threads = [new JsonObject { ["id"] = 1, ["name"] = _target?.ThreadName ?? "CPU" }];
+        if (HasBasicThread) { threads.Add(new JsonObject { ["id"] = BasicThread, ["name"] = "BASIC" }); }
+        if (_target?.Coprocessor is { } coprocessor)
+        {
+            threads.Add(new JsonObject { ["id"] = SoftCardThread, ["name"] = coprocessor.ThreadName });
+        }
+
+        return threads.ToJsonArray();
+    }
 
     // Records the statement that starts at GONE, for the BASIC thread's top frame.
     private void ObserveBasic(ushort pc)

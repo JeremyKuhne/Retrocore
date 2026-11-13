@@ -52,6 +52,26 @@ internal static class SourceBuild
     }
 
     /// <summary>
+    ///  Tests whether a source's first <c>.cpu</c> directive names a CPU, such as the Z80 of a program for the
+    ///  SoftCard.
+    /// </summary>
+    /// <param name="source">The source file.</param>
+    /// <param name="cpu">The CPU's name.</param>
+    /// <returns>Whether it does.</returns>
+    internal static bool DeclaresCpu(string source, string cpu)
+    {
+        foreach (string line in File.ReadLines(source))
+        {
+            string text = line.Trim();
+            if (!text.StartsWith(".cpu", StringComparison.OrdinalIgnoreCase)) { continue; }
+            string name = text[4..].Split(';')[0].Trim().Trim('"');
+            return string.Equals(name, cpu, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///  Gets the sections that hold bytes, each with the address it loads at.
     /// </summary>
     /// <param name="result">The assembly output.</param>

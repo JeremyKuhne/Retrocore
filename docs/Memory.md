@@ -51,6 +51,7 @@ switched out.
 | `rom` | all | The system ROM (read-only): the IIe's internal firmware, AppleSoft and Monitor; on the II and II Plus, the board's ROM (or the slot-0 firmware card's while active) | $C100-$FFFF (IIe); $D000-$FFFF (II, II Plus) |
 | `slot6` | all | Slot 6's Disk II boot ROM, when installed at launch (read-only) | $C600-$C6FF |
 | `slot7` | all | Slot 7's ROM, when block storage or a Disk II is in slot 7 at launch (read-only) | $C700-$C7FF |
+| `z80` | all, with the SoftCard | Memory as the Z80 SoftCard's Z80 sees it, through the card's address translation; it disassembles as Z80 code | $0000-$FFFF |
 
 A bank's addresses are the CPU addresses its bytes answer at when it is mapped, so `aux:$0400` is auxiliary
 RAM's text page one and `bank1:$D000` is the first byte of bank 1. On the IIe, `rom:$C600` is the internal

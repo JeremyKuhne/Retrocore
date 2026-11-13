@@ -8,7 +8,7 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { cardsFor, group, type HardwareRow } from "./hardware";
+import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
 
 /** A device as the debug host's retro/devices describes it. */
@@ -34,7 +34,7 @@ interface Devices { devices: Device[]; hardware?: HardwareRow[] }
 
 /** A row of the view: a piece of installed hardware, a device, or one line of a device's details. */
 type Node = { hardware: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
-    | { basic: BasicSummary };
+    | { basic: BasicSummary } | { setting: HardwareSetting; row: HardwareRow };
 
 /** The BASIC program row's summary, such as AppleSoft · 12 lines. */
 export function basicDescription(summary: BasicSummary): string {
@@ -113,7 +113,12 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
                 ...grouped.loose.map(device => ({ device }))
             ];
         }
-        if ("hardware" in node) return node.devices.map(device => ({ device }));
+        if ("hardware" in node) {
+            return [
+                ...(node.hardware.settings ?? []).map(setting => ({ setting, row: node.hardware })),
+                ...node.devices.map(device => ({ device }))
+            ];
+        }
         if ("device" in node) return details(node.device).map(([detail, value]) => ({ detail, value, parent: node.device.id }));
         return [];
     }
@@ -131,6 +136,19 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
             item.command = { command: "retrocore.basic.open", title: "Open BASIC Program" };
             return item;
         }
+        if ("setting" in node) {
+            // A switch on the hardware: ticking it sets it at once, running or stopped.
+            const item = new vscode.TreeItem(node.setting.label, vscode.TreeItemCollapsibleState.None);
+            item.id = `hardware/${node.row.id}/${node.setting.id}`;
+            item.description = node.setting.value ? "on" : "off";
+            item.tooltip = new vscode.MarkdownString(`**${node.setting.label}**: `
+                + node.setting.description.replace(/[\\`*_]/g, "\\$&"));
+            item.checkboxState = node.setting.value
+                ? vscode.TreeItemCheckboxState.Checked
+                : vscode.TreeItemCheckboxState.Unchecked;
+            item.contextValue = "hardwareSetting";
+            return item;
+        }
         if ("detail" in node) {
             const item = new vscode.TreeItem(node.detail, vscode.TreeItemCollapsibleState.None);
             item.description = node.value;
@@ -142,7 +160,9 @@ class DeviceTree implements vscode.TreeDataProvider<Node> {
             // A slot or option is open when there is a drive on it, as the drives are what is used most.
             const row = node.hardware;
             const item = new vscode.TreeItem(row.name,
-                node.devices.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
+                node.devices.length > 0 ? vscode.TreeItemCollapsibleState.Expanded
+                    : (row.settings?.length ?? 0) > 0 ? vscode.TreeItemCollapsibleState.Collapsed
+                    : vscode.TreeItemCollapsibleState.None);
             item.id = `hardware/${row.id}`;
             item.description = row.value;
             item.tooltip = new vscode.MarkdownString(`**${row.name}**: ${row.value.replace(/[\\`*_]/g, "\\$&")}\n\n`
@@ -204,7 +224,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         try { show(await session.customRequest("retro/devices")); } catch { /* Not launched yet. */ }
     };
 
-    context.subscriptions.push(vscode.window.registerTreeDataProvider("retrocore.devices", tree));
+    const view = vscode.window.createTreeView("retrocore.devices", { treeDataProvider: tree });
+    context.subscriptions.push(view);
     context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
         if (event.event === "retro/devices" && event.session.id === vscode.debug.activeDebugSession?.id) show(event.body);
     }));
@@ -247,6 +268,19 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             await vscode.window.showErrorMessage(`Retrocore: ${String(error)}`);
         }
     };
+    context.subscriptions.push(view.onDidChangeCheckboxState(async event => {
+        for (const [node, state] of event.items) {
+            if (!("setting" in node)) continue;
+            await change({ hardware: node.row, devices: [] }, {
+                action: "setSetting", setting: node.setting.id, value: state === vscode.TreeItemCheckboxState.Checked
+            });
+        }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.setting",
+        async (row: string, setting: string, value: boolean) => {
+            const hardware = tree.hardware.find(entry => entry.id === row);
+            if (hardware) await change({ hardware, devices: [] }, { action: "setSetting", setting, value });
+        }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.addCard", async (node?: Node) => {
         if (node === undefined || !("hardware" in node)) return;
         const card = await vscode.window.showQuickPick(cardsFor(node.hardware.id), { title: `Add a card to ${node.hardware.name}` });

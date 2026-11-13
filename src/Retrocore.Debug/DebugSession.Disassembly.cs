@@ -4,6 +4,7 @@
 
 using System.Text.Json.Nodes;
 using Retrocore.Assembler;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -126,7 +127,8 @@ internal sealed partial class DebugSession
         Span<byte> bytes = stackalloc byte[LongestInstruction];
         int available = Math.Min(LongestInstruction, 0x10000 - address);
         for (int index = 0; index < available; index++) { bytes[index] = memory.Peek((ushort)(address + index)); }
-        return Disassembler.TryDecode(bytes[..available], (ushort)address, Target.InstructionSet, out DisassembledInstruction instruction)
+        InstructionSet set = memory is BankMemory { Bank.InstructionSet: { } own } ? own : Target.InstructionSet;
+        return Disassembler.TryDecode(bytes[..available], (ushort)address, set, out DisassembledInstruction instruction)
             ? (instruction.Size, instruction.ToString())
             : (1, $".byte ${bytes[0]:X2}");
     }

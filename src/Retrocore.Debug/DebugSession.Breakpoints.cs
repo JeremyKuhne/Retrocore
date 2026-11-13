@@ -867,17 +867,23 @@ internal sealed partial class DebugSession
     {
         List<BreakpointSite> sites = _breakpoints.GetValueOrDefault(pc) ?? s_noSites;
         if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
+
+        // Breakpoints apply to the CPU running: an address with no bank or module is the machine CPU's, and a
+        // coprocessor's are in its bank, such as z80:0x0100, or in its modules.
+        IDebugTarget cpu = Cpu;
+        bool machineCpu = IsMachineCpu(cpu);
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];
         int? hidden = null;
         string? description = null;
         foreach (BreakpointSite site in sites)
         {
-            if (site.Bank is { } bank && !bank.Areas.Contains(Target.ReadArea(pc))) { continue; }
+            if (site.Bank is { } bank && !bank.Areas.Contains(cpu.ReadArea(pc))) { continue; }
+            if (site.Bank is null && site.Module is null && !machineCpu) { continue; }
             int? levels = null;
             if (site.Module is { } module)
             {
-                if (!DebugInfo.Active(module, Target, pc) || module.Position(Target, pc) is not { } position)
+                if (!DebugInfo.Active(module, cpu, pc) || module.Position(cpu, pc) is not { } position)
                 {
                     continue;
                 }
@@ -896,7 +902,7 @@ internal sealed partial class DebugSession
             description ??= error;
         }
 
-        if (_systemCallBreakpoints.Count != 0 && Target.SystemCall(pc) is { } call)
+        if (_systemCallBreakpoints.Count != 0 && machineCpu && Target.SystemCall(pc) is { } call)
         {
             foreach ((byte? number, BreakpointState state) in _systemCallBreakpoints)
             {
@@ -974,7 +980,7 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (Evaluate(condition) == 0) { return false; }
+                if (new ExpressionEvaluator(Cpu, _debug, condition).Evaluate() == 0) { return false; }
             }
             catch (Exception exception) when (IsEvaluationError(exception))
             {

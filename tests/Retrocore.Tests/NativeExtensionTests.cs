@@ -171,6 +171,9 @@ public class NativeExtensionTests
         ".cpu 65sc02\n.ifpsc02\n.byte 1\n.endif\n.cpu Rockwell65C02\n.ifpc02\n.byte 2\n.endif",
         new byte[] { 1, 2 })]
     [DataRow(".cpu Z80\n.ifp02\n.byte 1\n.endif\n.byte 2", new byte[] { 2 })]
+    [DataRow(".cpu M6809\n.ifp02\n.byte 1\n.endif\n.byte 2", new byte[] { 2 })]
+    [DataRow(".cpu I8080\n.ifp02\n.byte 1\n.endif\n.byte 2", new byte[] { 2 })]
+    [DataRow(".cpu I8085\n.ifp02\n.byte 1\n.endif\n.byte 2", new byte[] { 2 })]
     public void CpuConditionsFollowCpu(string text, byte[] expected)
     {
         AssemblyResult result = Assemble(text);

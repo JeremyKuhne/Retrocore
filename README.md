@@ -184,6 +184,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | Project | What it holds |
 | --- | --- |
 | [`Retrocore.Core`](src/Retrocore.Core) | Shared instruction-set (`Isa`), CPU, bus, and machine/device abstractions. |
+| [`Retrocore.Cpu.I8080`](src/Retrocore.Cpu.I8080) | State-exact Intel 8080 and 8085, with the 8085's interrupts, `RIM`/`SIM` and undocumented instructions and flags, and their [instruction set](src/Retrocore.Cpu.I8080/I8080Isa.txt). |
 | [`Retrocore.Cpu.M6502`](src/Retrocore.Cpu.M6502) | Cycle-exact 6502 family: NMOS 6502, WDC 65C02, and Rockwell 65C02, with their [opcode tables](src/Retrocore.Cpu.M6502/OpcodeTables.txt). |
 | [`Retrocore.Cpu.M6809`](src/Retrocore.Cpu.M6809) | Cycle-exact Motorola MC6809 with indexed postbytes, interrupts, `SYNC`/`CWAI`, and its [instruction set](src/Retrocore.Cpu.M6809/M6809Isa.txt). |
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
@@ -226,7 +227,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources). |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III and Color Computer oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
-| `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), and `tools\Fetch-M6809Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
+| `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), `tools\Fetch-M6809Tests.ps1`, and `tools\Fetch-I8080Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |
 | `RETROCORE_MERLIN32`, `RETROCORE_MERLIN_CORPUS` | Merlin 32 executable and approved source corpus for the Merlin differential tests. |
@@ -323,6 +324,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III](docs/backlog/Apple3.md);
+- [the Intel 8080 and 8085](docs/backlog/I8080.md), CPUs without a machine yet;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md).

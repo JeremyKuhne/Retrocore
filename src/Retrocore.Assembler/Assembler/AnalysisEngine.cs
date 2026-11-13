@@ -116,7 +116,7 @@ internal sealed class AnalysisEngine
                             FollowVector(vector, low, high);
                         }
 
-                        foreach (ushort entry in _set.Description.EntryPoints) { Enqueue(entry, entryPoint: false); }
+                        foreach (ushort entry in _set.EntryPoints) { Enqueue(entry, entryPoint: false); }
                     }
 
                     foreach (ushort entry in _project.EntryPoints) { Enqueue(entry, entryPoint: true); }
@@ -385,25 +385,39 @@ internal sealed class AnalysisEngine
             }
 
             offset += instruction.Size;
+
             if (instruction.Flow == DisassemblyFlow.Call
                 && instruction.DirectTarget is { } callee
                 && _project.Calls.TryGetValue(callee, out AnalysisCall? call))
             {
-                if (call.Kind == AnalysisCallKind.NoReturn)
+                if (instruction.Encoding.IsConditional)
+                {
+                    // A conditional call, such as the 8080's CNZ or the Z80's CALL NZ, continues at the next
+                    // instruction when it is not taken. When it is taken, a subroutine that reads inline bytes returns
+                    // past them, so that path is traced as well; the bytes are not pinned as data, since the other
+                    // path may run them.
+                    if (call.Kind != AnalysisCallKind.NoReturn && InlineLength(call, offset) is > 0 and var skip)
+                    {
+                        Enqueue((ushort)(_project.Origin + offset + skip), entryPoint: false);
+                    }
+                }
+                else if (call.Kind == AnalysisCallKind.NoReturn)
                 {
                     // A linear scan decodes every byte anyway; only inferred flow ends at the call.
                     if (!linear) { return; }
                     continue;
                 }
-
-                int inline = InlineLength(call, offset);
-                if (inline < 0 || !PinData(offset, inline))
+                else
                 {
-                    Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
-                    return;
-                }
+                    int inline = InlineLength(call, offset);
+                    if (inline < 0 || !PinData(offset, inline))
+                    {
+                        Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
+                        return;
+                    }
 
-                offset += inline;
+                    offset += inline;
+                }
             }
 
             if (!linear && instruction.Flow == DisassemblyFlow.Break && !_project.StopOnBreak)

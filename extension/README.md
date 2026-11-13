@@ -143,6 +143,8 @@ one. The sections below describe each machine's launch options.
 - From a `.cpu Z80` line to the next `.cpu` of another CPU, the Z80's mnemonics
   (including `SLL`), its registers anywhere in an operand (`AF'` included) and
   the condition after a jump, call or return.
+- From a `.cpu I8080` or `.cpu I8085` line to the next `.cpu` of another CPU,
+  Intel's mnemonics and registers, `M` and `PSW` included.
 - Instructions only at the start of a statement or after its label. A label
   named `LDA:`, an operand named `LDA` and `LDA` in a comment are not opcodes.
 - Flow instructions separately from other instructions.
@@ -253,8 +255,9 @@ The native dialect, Retrocore's own, is specified in
 
 - Labels end with a colon, constants are `Name = value`, and data is `.byte`, `.word`, `.res` and the like.
 - Expressions use `$hex`, `%binary` and `'c'` with C's operator precedence, and `*` is the current address.
-- `.cpu` selects `Mos6502`, `Wdc65C02`, `Rockwell65C02`, `65SC02` or `Z80`; one source may switch between
-  families.
+- `.cpu` selects `Mos6502`, `Wdc65C02`, `Rockwell65C02`, `65SC02`, `Z80`, `M6809`, `I8080` or `I8085`; one
+  source may switch between families.
+- 8080 and 8085 operands are Intel's: `MOV A,M`, `LXI H,Table`, `PUSH PSW`, and `RST` with its number 0-7.
 - The 6502 chooses zero page by value, with `a:`, `!`, `.w` and `z:` to force a width.
 - Z80 memory and port operands are written in brackets (`LD A,[HL]`, `LD [IX+5],A`, `IN A,[$FE]`), so
   parentheses always group an expression.

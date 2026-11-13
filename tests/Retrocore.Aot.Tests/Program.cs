@@ -129,6 +129,53 @@ if (!z80Image.Success
 
 Console.WriteLine("Z80: Native AOT T-state execution, mid-instruction restore, assembly and disassembly passed.");
 
+// The 8080 and 8085: native assembly, state-stepped execution with mid-instruction restore, and disassembly.
+foreach (I8080Variant variant in Enum.GetValues<I8080Variant>())
+{
+    Retrocore.Isa.InstructionSet intelSet = I8080Isa.Get(variant);
+    AssemblyResult intelImage = new NativeAssembler().Assemble(
+        new AssemblySource(
+            $"""
+            .cpu {intelSet.Name}
+                    MVI B,$10
+                    LXI H,$3000
+            Loop:   INR M
+                    PUSH PSW
+                    POP PSW
+                    DCR B
+                    JNZ Loop
+                    HLT
+            """),
+        new(intelSet.Name, origin: 0, imageSize: 13));
+
+    byte[] intelMemory = new byte[0x10000];
+    intelImage.Sections[0].Bytes.Span.CopyTo(intelMemory);
+    I8080Processor<Z80RamBus> intel = new(new Z80RamBus(intelMemory), variant);
+    for (int index = 0; index < 40; index++) { intel.StepCycle(); }
+    I8080Snapshot intelSnapshot = intel.CaptureState();
+    while (!intel.IsHalted) { intel.StepCycle(); }
+    ulong intelCycles = intel.CycleCount;
+    intelMemory[0x3000] = 1;
+    intel.RestoreState(intelSnapshot);
+    while (!intel.IsHalted) { intel.StepCycle(); }
+    DisassemblyResult intelDisassembly = Disassembler.Disassemble(intelImage.Sections[0].Bytes.Span, 0, intelSet);
+    AssemblyResult intelRoundTrip = new NativeAssembler().Assemble(
+        new AssemblySource(intelDisassembly.ExportSource()),
+        intelDisassembly.Options);
+
+    if (!intelImage.Success
+        || intelMemory[0x3000] != 0x10
+        || intel.CycleCount != intelCycles
+        || intel.Registers.B != 0
+        || !intelRoundTrip.Success
+        || !intelRoundTrip.Sections[0].Bytes.Span.SequenceEqual(intelImage.Sections[0].Bytes.Span))
+    {
+        throw new InvalidOperationException($"Native AOT {variant} execution, restore, assembly or disassembly failed.");
+    }
+}
+
+Console.WriteLine("8080 and 8085: Native AOT state execution, mid-instruction restore, assembly and disassembly passed.");
+
 // The MC6809: native assembly, cycle-stepped execution with mid-instruction restore, and 5-byte round-trip disassembly.
 AssemblyResult m6809Image = new NativeAssembler().Assemble(
     new AssemblySource(

@@ -18,6 +18,7 @@ public sealed partial class InstructionSet
     /// <param name="excluded">Instructions a subset leaves out, or null.</param>
     /// <param name="message">The subset's diagnostic, with <c>{0}</c> for the operation, or null.</param>
     /// <param name="postbytes">The codec for the set's postbyte fields, or null.</param>
+    /// <param name="entryPoints">The fixed entry points of the set: the description's and its own.</param>
     /// <returns>The set.</returns>
     internal static InstructionSet Create(
         string name,
@@ -26,12 +27,14 @@ public sealed partial class InstructionSet
         IsaRules rules,
         HashSet<string>? excluded,
         string? message,
-        PostbyteCodec? postbytes)
+        PostbyteCodec? postbytes,
+        IReadOnlyList<ushort> entryPoints)
     {
         InstructionSet set = new(name, description)
         {
             IndirectPageWrap = rules.IndirectPageWrap.Contains(name),
-            Postbytes = postbytes
+            Postbytes = postbytes,
+            EntryPoints = entryPoints
         };
 
         foreach (IsaEntry entry in entries.Values)
@@ -49,6 +52,10 @@ public sealed partial class InstructionSet
                 : rules.Flows.TryGetValue(entry.Instruction, out InstructionFlow generalFlow) ? generalFlow : InstructionFlow.Next;
 
             MemoryAccess access = rules.Access.TryGetValue(entry.Instruction, out MemoryAccess general) ? general : MemoryAccess.Read;
+            ushort? target = rules.Targets.TryGetValue($"{entry.Instruction}:{form.Name}", out ushort specificTarget)
+                ? specificTarget
+                : rules.Targets.TryGetValue(entry.Instruction, out ushort generalTarget) ? generalTarget : null;
+
             set.Add(
                 mnemonic,
                 entry,
@@ -56,7 +63,9 @@ public sealed partial class InstructionSet
                 flow,
                 access,
                 rules.Access.TryGetValue($"{entry.Instruction}:{form.Name}", out MemoryAccess specific) ? specific : access,
-                rules.Preferred.Contains(entry.Opcode));
+                rules.Preferred.Contains(entry.Opcode),
+                target,
+                rules.Conditional.Contains(entry.Instruction) || rules.Conditional.Contains($"{entry.Instruction}:{form.Name}"));
         }
 
         foreach (KeyValuePair<string, string> alias in rules.Aliases)

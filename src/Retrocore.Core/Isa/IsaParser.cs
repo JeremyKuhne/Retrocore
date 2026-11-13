@@ -15,7 +15,7 @@ namespace Retrocore.Isa;
 ///   them by, mnemonic rules and subsets), a
 ///   <c>[forms]</c> section (operand forms in matching order), and one section per instruction set holding
 ///   <c>opcode Mnemonic Form</c> lines. <c>[Name : Base]</c> starts from <c>Base</c>'s encodings and replaces
-///   the opcodes it lists. <c>#</c> starts a comment outside quotes.
+///   the opcodes it lists, and inherits its entry points. <c>#</c> starts a comment outside quotes.
 ///  </para>
 ///  <para>
 ///   An opcode is one to four hex bytes. A <c>*</c> among them marks where the operand bytes go when the rest
@@ -133,6 +133,20 @@ public static partial class IsaParser
             AngleWidths = rules.AngleWidths
         };
 
+        // A subset named like a set would replace it; [isa] comes before the sets, so this is checked once both are known.
+        foreach ((string name, _, _, _) in subsets)
+        {
+            if (sets.ContainsKey(name)) { throw Error(0, $"Subset '{name}' repeats the name of an instruction set."); }
+        }
+
+        foreach (string name in rules.SetEntryPoints.Keys)
+        {
+            if (!sets.ContainsKey(name) && !subsets.Exists(subset => string.Equals(subset.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw Error(0, $"Entry points name an unknown instruction set '{name}'.");
+            }
+        }
+
         Dictionary<string, InstructionSet> result = new(StringComparer.OrdinalIgnoreCase);
         foreach (string name in order)
         {
@@ -143,7 +157,8 @@ public static partial class IsaParser
                 rules,
                 excluded: null,
                 message: null,
-                postbytes?.Invoke(name));
+                postbytes?.Invoke(name),
+                EntryPointsOf(name, sets[name].Base));
         }
 
         foreach ((string name, string baseName, HashSet<string> excluded, string message) in subsets)
@@ -153,11 +168,39 @@ public static partial class IsaParser
                 throw Error(0, $"Subset '{name}' names an unknown base '{baseName}'.");
             }
 
-            result[name] = InstructionSet.Create(name, description, source.Entries, rules, excluded, message, postbytes?.Invoke(name));
+            result[name] = InstructionSet.Create(
+                name,
+                description,
+                source.Entries,
+                rules,
+                excluded,
+                message,
+                postbytes?.Invoke(name),
+                EntryPointsOf(name, baseName));
         }
 
         description.InstructionSets = result;
         return description;
+
+        // The description's entry points, then the set's own and those of the sets it is built on.
+        List<ushort> EntryPointsOf(string name, string? baseName)
+        {
+            List<ushort> points = [.. rules.EntryPoints];
+            for (string? current = name; current is not null; )
+            {
+                if (rules.SetEntryPoints.TryGetValue(current, out List<ushort>? own))
+                {
+                    foreach (ushort point in own)
+                    {
+                        if (!points.Contains(point)) { points.Add(point); }
+                    }
+                }
+
+                current = current == name ? baseName : sets.TryGetValue(current, out var set) ? set.Base : null;
+            }
+
+            return points;
+        }
     }
 
     private static void Setting(
@@ -248,6 +291,12 @@ public static partial class IsaParser
                 }
 
                 HashSet<string> excluded = new(tokens.GetRange(5, message - 5), StringComparer.OrdinalIgnoreCase);
+                if (string.Equals(tokens[1], tokens[3], StringComparison.OrdinalIgnoreCase)
+                    || subsets.Exists(subset => string.Equals(subset.Item1, tokens[1], StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw Error(number, $"Subset '{tokens[1]}' repeats the name of its base or of another subset.");
+                }
+
                 subsets.Add((tokens[1], tokens[3], excluded, Unquote(tokens[message + 1])));
                 break;
             case "flow":
@@ -285,7 +334,36 @@ public static partial class IsaParser
                 Addresses(tokens, number, rules.Vectors);
                 break;
             case "entry-points":
+                // entry-points a b ...: every set's; entry-points in Name a b ...: one set's, and those built on it.
+                if (tokens.Count > 1 && tokens[1] == "in")
+                {
+                    if (tokens.Count < 4) { throw Error(number, "Expected 'entry-points in Name address ...'."); }
+                    if (!rules.SetEntryPoints.TryGetValue(tokens[2], out List<ushort>? own))
+                    {
+                        own = [];
+                        rules.SetEntryPoints[tokens[2]] = own;
+                    }
+
+                    Addresses(tokens.GetRange(2, tokens.Count - 2), number, own);
+                    break;
+                }
+
                 Addresses(tokens, number, rules.EntryPoints);
+                break;
+            case "conditional":
+                // conditional Mnemonic[:Form] ...: calls (and returns) that run only when a condition holds.
+                if (tokens.Count < 2) { throw Error(number, "Expected 'conditional Instruction ...'."); }
+                for (int index = 1; index < tokens.Count; index++) { rules.Conditional.Add(tokens[index]); }
+                break;
+            case "target":
+                // target Mnemonic[:Form] address: a fixed target the opcode implies, such as the 8085's RSTV to $40.
+                if (tokens.Count != 3
+                    || !ushort.TryParse(tokens[2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ushort target))
+                {
+                    throw Error(number, "Expected 'target Mnemonic hex-address'.");
+                }
+
+                rules.Targets[tokens[1]] = target;
                 break;
             case "indirect-page-wrap":
                 for (int index = 1; index < tokens.Count; index++) { rules.IndirectPageWrap.Add(tokens[index]); }
@@ -368,6 +446,7 @@ public static partial class IsaParser
                         "disp8" => OperandFieldKind.Displacement8,
                         "bit" => OperandFieldKind.BitNumber,
                         "rst" => OperandFieldKind.Restart,
+                        "rstn" => OperandFieldKind.RestartNumber,
                         "indexed" => OperandFieldKind.IndexedPostbyte,
                         "pair" => OperandFieldKind.RegisterPair,
                         "sysmask" => OperandFieldKind.SystemStackMask,
@@ -460,14 +539,23 @@ public static partial class IsaParser
         return (undocumented, cycles, taken);
     }
 
-    // Leading two-digit hex tokens are the opcode bytes; one '*' among them marks where the operand bytes go.
+    // Leading two-digit hex tokens are the opcode bytes; one '*' among them marks where the operand bytes go. A
+    // mnemonic and a form always follow them, before any options, so a mnemonic that reads as hex, such as the
+    // 8080's CC, is not taken for an opcode byte.
     private static (uint Opcode, byte Length, byte SplitAt, int Next) Opcode(List<string> tokens, int number)
     {
+        int options = tokens.Count;
+        while (options > 0 && (tokens[options - 1] == "undocumented" || tokens[options - 1].StartsWith("t=", StringComparison.Ordinal)))
+        {
+            options--;
+        }
+
+        int limit = options - 2;
         uint opcode = 0;
         int length = 0;
         int splitAt = 0;
         int index = 0;
-        for (; index < tokens.Count; index++)
+        for (; index < limit; index++)
         {
             if (tokens[index] == "*" && splitAt == 0 && length > 0)
             {

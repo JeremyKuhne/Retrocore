@@ -248,6 +248,9 @@ try {
     assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result, "$11 (17) (frozen)");
     assert.equal((await request("evaluate", { expression: "[$4FFF].w", context: "watch" })).result.endsWith("(frozen)"), true);
     assert.equal((await request("evaluate", { expression: "[$5001]", context: "watch" })).result.endsWith("(frozen)"), false);
+    // The brackets' address reads as the evaluator reads it: bare digits are decimal, so [20480] is $5000.
+    assert.equal((await request("evaluate", { expression: "[20480]", context: "watch" })).result.endsWith("(frozen)"), true);
+    assert.equal((await request("evaluate", { expression: "[5000]", context: "watch" })).result.endsWith("(frozen)"), false);
     assert.equal((await request("dataBreakpointInfo", { name: "[$5000]" })).dataId, "mem:5000:1");
 
     at = "running with a frozen byte";

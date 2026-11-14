@@ -190,12 +190,16 @@ async function loaded(offset, count) {
     }
 }
 
+// Reads bytes into the cache, reporting whether it could. A reply to a read begun before a stop or a change still
+// fills in the bytes, so writes waiting on them go on, but does not count toward the changes since the stop: the
+// pages stay unread, to be read and compared again.
 async function read(offset, count) {
     const first = offset / PAGE, last = (offset + count) / PAGE;
     const loading = generation;
     for (let page = first; page < last; page++) pages[page] = 2;
     try {
         const result = await request({ type: "read", offset, count });
+        const current = loading === generation;
         const data = decode(result.data);
         for (let index = 0; index < count; index++) {
             bytes[offset + index] = data[index];
@@ -206,14 +210,15 @@ async function read(offset, count) {
         }
         readOnly.fill(0, offset, offset + count);
         for (const run of result.readOnly ?? []) readOnly.fill(1, offset + run.offset, offset + run.offset + run.count);
-        compare(offset, count);
-        for (let page = first; page < last; page++) pages[page] = loading === generation ? 1 : 0;
+        if (current) compare(offset, count);
+        for (let page = first; page < last; page++) pages[page] = current ? 1 : 0;
     } catch (error) {
         for (let page = first; page < last; page++) pages[page] = 0;
-        status(String(error.message || error), true);
-        return;
+        if (loading === generation) status(String(error.message || error), true);
+        return false;
     }
     render();
+    return true;
 }
 
 // Notes which bytes of freshly read pages changed since the last stop: a page compares once each stop, against
@@ -589,9 +594,11 @@ async function typeKey(key) {
     // the debugger, the cursor stays where they went.
     const started = moves;
     if (pane === "text") {
-        const value = charset === null ? typedText(key, bytes[cursor]) : typedText(key, bytes[cursor], charset.text, charset.looksSame);
-        if (value === undefined) return;
+        // The byte typed over decides the code written, such as normal or inverse text, so it is read first.
         const at = cursor;
+        await loaded(at, 1);
+        const value = charset === null ? typedText(key, bytes[at]) : typedText(key, bytes[at], charset.text, charset.looksSame);
+        if (value === undefined) return;
         if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false);
         return;
     }
@@ -680,14 +687,15 @@ async function toggleFreeze() {
 }
 
 // Reads every byte again, so a snapshot or search sees memory as it is now.
+// Reads the whole space again, reporting whether it could; on a failure the status line says why.
 async function refreshAll() {
     generation++;
     pages.fill(0);
-    await load(0, SIZE);
+    return await load(0, SIZE);
 }
 
 async function takeSnapshot() {
-    await refreshAll();
+    if (!await refreshAll()) return;
     snapshot = { bytes: bytes.slice(), readable: readable.slice() };
     compareLabel.hidden = false;
     comparing = compareBox.checked = true;
@@ -743,7 +751,7 @@ function showSearch() {
 }
 
 async function startSearch() {
-    await refreshAll();
+    if (!await refreshAll()) return;
     search = { candidates: searchStart(readable, readOnly), before: bytes.slice(), steps: [] };
     showSearch();
     status("Searching " + search.candidates.length + " bytes of RAM.");
@@ -757,7 +765,7 @@ async function narrowBy(test, text) {
         if (typeof parsed === "string") { status(parsed, true); return; }
         value = parsed;
     }
-    await refreshAll();
+    if (!await refreshAll()) return;
     search.steps.push({ candidates: search.candidates, before: search.before });
     search.candidates = narrowSearch(search.candidates, search.before, bytes, readable, test, value);
     search.before = bytes.slice();
@@ -844,6 +852,8 @@ async function find(backward) {
     await ensureAll();
     const at = findPattern(bytes, readable, pattern, backward ? cursor - 1 : cursor + 1, backward);
     if (at < 0) { status("Not found.", true); return; }
+    // A match is a move of the cursor, as an edit waiting on the debugger must know.
+    moves++;
     anchor = at + pattern.length - 1;
     cursor = at;
     nibble = null;

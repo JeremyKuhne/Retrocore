@@ -287,6 +287,25 @@ test("moving while a write waits keeps the cursor where it went, and drops a fir
     assert.equal((page.context as { escapeText(text: string): string }).escapeText('START" data-go="4096'), "START&quot; data-go=&quot;4096");
 });
 
+test("a snapshot whose read fails is not taken, and says why", async () => {
+    const page = runPage();
+    page.posted.splice(0);
+    page.send({ type: "init", address: 0x0400, info: { bank: "slot6", label: "Slot 6 ROM", readOnly: true } });
+    for (const read of page.posted.splice(0).filter(message => message.type === "read")) {
+        page.send({ type: "reply", id: read.id, result: { data: Buffer.alloc(read.count as number, 0x20).toString("base64"), unreadable: [] } });
+    }
+    await page.settle();
+    page.posted.splice(0);
+
+    page.send({ type: "test", id: 1, actions: [{ snapshot: true }] });
+    await page.settle();
+    const all = page.take("read");
+    page.send({ type: "reply", id: all.id, error: "The machine has no memory bank named slot6." });
+    await page.settle();
+    assert.equal(page.elements.get("status")!.textContent, "The machine has no memory bank named slot6.");
+    assert.equal(page.elements.get("compareLabel")?.hidden ?? true, true, "Compare does not appear");
+});
+
 // Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.
 function answer(page: ReturnType<typeof runPage>, fill: (offset: number) => number, readOnly: (offset: number) => boolean = () => false): void {
     for (const sent of page.posted.splice(0)) {

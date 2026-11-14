@@ -155,8 +155,9 @@ internal sealed partial class DebugSession
     }
 
     // Whether an expression reads a frozen byte, as [$4100], [aux:$0400] or [$4100].w do, so a watch expression can
-    // say so.
-    private bool FrozenIn(string expression)
+    // say so. The address inside the brackets is read as the expression evaluator reads it, in the frame's CPU, so
+    // [16] is $0010, and a word's second byte wraps from $FFFF to $0000 as the evaluator's does.
+    private bool FrozenIn(string expression, int frameId)
     {
         if (_frozen.Count == 0 || MemoryExpression().Match(expression.Trim()) is not { Success: true } read)
         {
@@ -165,11 +166,14 @@ internal sealed partial class DebugSession
 
         try
         {
-            long address = MemoryReference(read.Groups[1].Value, out DebugMemoryBank? bank);
+            ExpressionEvaluator evaluator = new(FrameTarget(frameId), _debug, read.Groups[1].Value, FrameRegisters(frameId));
+            long address = evaluator.EvaluateReference(out DebugMemoryBank? bank);
+            bank ??= ThreadBank(FrameIndex(frameId).Thread);
+            if (address is < 0 or > 0xFFFF) { return false; }
             int length = read.Groups[2].Success ? 2 : 1;
             for (int index = 0; index < length; index++)
             {
-                if (address + index is >= 0 and <= 0xFFFF && _frozen.ContainsKey((bank?.Name, (ushort)(address + index))))
+                if (_frozen.ContainsKey((bank?.Name, (ushort)(address + index))))
                 {
                     return true;
                 }

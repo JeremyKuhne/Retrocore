@@ -216,7 +216,7 @@ internal sealed partial class DebugSession
                 result = $"{result} · {summary}";
             }
 
-            if (FrozenIn(expression)) { result = $"{result} (frozen)"; }
+            if (FrozenIn(expression, frameId)) { result = $"{result} (frozen)"; }
             return Evaluated(args, new JsonObject
             {
                 ["result"] = result,

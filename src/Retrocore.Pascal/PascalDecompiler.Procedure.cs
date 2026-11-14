@@ -33,9 +33,15 @@ public sealed partial class PascalDecompiler
         public int Number => Code.Index;
 
         /// <summary>
-        ///  Gets its lexical level.
+        ///  Gets its lexical level: an assembled procedure's attributes say 0, but it is declared EXTERNAL in the
+        ///  program, at level 1.
         /// </summary>
-        public int Level => Code.LexicalLevel;
+        public int Level => Code.IsNative ? 1 : Code.LexicalLevel;
+
+        /// <summary>
+        ///  Gets or sets whether an assembled procedure's parameters and result are known, from its first call.
+        /// </summary>
+        public bool Signed { get; set; }
 
         /// <summary>
         ///  Gets or sets the procedure it is declared in, or null for the program.

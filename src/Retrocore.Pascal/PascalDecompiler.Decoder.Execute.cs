@@ -40,7 +40,7 @@ public sealed partial class PascalDecompiler
             switch (code)
             {
                 case 199: // LDCI
-                    stack.Add(new Constant((short)operands[0]));
+                    stack.Add(new Constant((short)operands[0]) { Wide = operands[0] is >= 0 and < 128 });
                     break;
                 case 159: // LDCN
                     stack.Add(new Nil());

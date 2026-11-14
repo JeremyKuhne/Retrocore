@@ -15,6 +15,8 @@ public sealed partial class PascalDecompiler
         // A call of a procedure in the code file: its arguments fill its parameters' words.
         private static void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
         {
+            if (callee.Code.IsNative && !callee.Signed) { Sign(callee, stack); }
+
             int words = callee.Frame.ParameterWords;
             if (callee.IsFunction)
             {
@@ -46,6 +48,27 @@ public sealed partial class PascalDecompiler
                 statements.Add(new CallStatement(target, [.. arguments.Select(argument => new Argument(argument))]));
             }
         }
+
+        // An assembled procedure's code says nothing of its parameters or result, so its first call does: two zero words
+        // on top are a function's room for its result, of a word, and the words below them, which the statement pushed,
+        // its parameters.
+        private static void Sign(Procedure callee, List<Expr> stack)
+        {
+            bool function = stack.Count >= 2 && IsZero(stack[^1]) && IsZero(stack[^2]);
+            int parameters = stack.Take(stack.Count - (function ? 2 : 0)).Sum(argument => argument.Words);
+            callee.Frame = new Frame(callee, callee.Level, parameters + (function ? 2 : 0), dataWords: 0);
+            if (function)
+            {
+                callee.ResultWords = 1;
+                Variable result = callee.Frame.At(1);
+                result.Kind = VariableKind.Result;
+                TypeNode.Unify(result.Type, callee.ResultType);
+            }
+
+            callee.Signed = true;
+        }
+
+        private static bool IsZero(Expr expression) => expression is Constant { Value: 0 };
 
         // A function's caller leaves two words for its result.
         private static void Placeholders(List<Expr> stack)

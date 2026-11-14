@@ -114,6 +114,13 @@ public sealed partial class PascalDecompiler
             Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { });
         }
 
+        // A pointer takes no constant but NIL, which LDCN loads: one a number is stored in is a word used both ways,
+        // as FORMATTER keeps RWTS's address, $3D00, to read it into.
+        foreach (TypeNode stored in _constantStores)
+        {
+            if (stored.Find() is { Kind: TypeKind.Pointer } pointer) { pointer.Punned = true; }
+        }
+
         Settle();
     }
 
@@ -337,6 +344,11 @@ public sealed partial class PascalDecompiler
                 break;
             case Assignment assignment:
                 Assign(assignment.Target.Type, assignment.Value);
+                if ((assignment.Value is Checked check ? check.Value : assignment.Value) is Constant { Value: not 0 })
+                {
+                    _constantStores.Add(assignment.Target.Type);
+                }
+
                 break;
             case CallStatement { Callee.Procedure: { } callee } call:
                 Pass(callee, [.. call.Arguments.Select(argument => argument.Value)]);

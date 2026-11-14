@@ -216,12 +216,28 @@ public sealed partial class PascalDecompiler
         }
     }
 
+    // A constant LDCI loaded though SLDC holds it, whose negation is a declared constant's.
+    private static int? Wide(Expr expression) => expression is Constant { Wide: true } constant ? constant.Value : null;
+
+    // A negative constant the program declares, by the name the source's CONST gives it.
+    private string Declared(int value)
+    {
+        if (!_constants.TryGetValue(value, out string? name))
+        {
+            name = $"NEG{-value}";
+            _constants[value] = name;
+        }
+
+        return name;
+    }
+
     private (string Text, int Level) UnaryText(Unary unary, TypeNode? expected)
     {
         TypeNode integer = TypeNode.Scalar(ScalarKind.Integer);
         TypeNode real = TypeNode.Of(TypeKind.Real);
         return unary.Op switch
         {
+            Operator.Negate when Wide(unary.Operand) is int magnitude => (Declared(-magnitude), Factor),
             Operator.Negate when unary.Operand is Constant constant => ($"-{constant.Value.ToString(CultureInfo.InvariantCulture)}", Adding),
             Operator.Negate => ($"-{Expression(unary.Operand, integer, Multiplying)}", Adding),
             Operator.RealNegate => ($"-{Expression(unary.Operand, real, Multiplying)}", Adding),

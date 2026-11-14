@@ -11,6 +11,7 @@ public sealed partial class PascalDecompiler
 {
     private readonly StringBuilder _source = new();
     private readonly List<TypeNode> _types = [];
+    private readonly SortedDictionary<int, string> _constants = [];
     private int _indent;
     private bool _ioChecked = true;
     private bool _rangeChecked = true;
@@ -36,6 +37,7 @@ public sealed partial class PascalDecompiler
         }
 
         Labels(Program);
+        int constants = _source.Length;
         if (_types.Count > 0)
         {
             Line("TYPE");
@@ -49,6 +51,15 @@ public sealed partial class PascalDecompiler
         Line("BEGIN");
         Statements(Program, Program.Body);
         Line("END.");
+
+        // The constants the statements named, which come before the types.
+        if (_constants.Count > 0)
+        {
+            _source.Insert(
+                constants,
+                $"CONST\n{string.Concat(_constants.Select(constant => $"  {constant.Value} = {constant.Key.ToString(CultureInfo.InvariantCulture)};\n"))}");
+        }
+
         return _source.ToString();
     }
 
@@ -96,7 +107,7 @@ public sealed partial class PascalDecompiler
     }
 
     // A procedure's nested procedures, in the order of their code; one numbered before another whose code comes first
-    // is declared FORWARD before it.
+    // is declared FORWARD before it, or, assembled, EXTERNAL there, as it has no code the Compiler places.
     private void Nested(Procedure parent)
     {
         List<Procedure> children = [.. parent.Children.Where(child => !child.IsSegmentProcedure || parent == _program)];
@@ -107,9 +118,13 @@ public sealed partial class PascalDecompiler
         HashSet<Procedure> declared = [];
         foreach (Procedure child in ordinary.OrderBy(child => child.Code.Attributes))
         {
+            if (child.Code.IsNative && declared.Contains(child)) { continue; }
+
             foreach (Procedure earlier in ordinary.Where(other => other.Number < child.Number && !declared.Contains(other)).OrderBy(other => other.Number))
             {
-                Line($"{Header(earlier, full: true)} FORWARD;");
+                if (earlier.Code.IsNative) { WriteProcedure(earlier, forwarded: false); }
+                else { Line($"{Header(earlier, full: true)} FORWARD;"); }
+
                 declared.Add(earlier);
             }
 

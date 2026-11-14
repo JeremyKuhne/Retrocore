@@ -161,11 +161,18 @@ leaves its own pattern of jumps, and the stack holds each expression whole. What
 - **Types** are inferred from how the code uses each word: arithmetic makes an integer, character I/O and a string's
   elements a character, AND, OR and NOT a boolean; a range check gives a subrange, `IXA` an array, `INC` a record,
   `SAS` a string's length. Where a use disagrees with the type chosen, `ORD`, `CHR`, `ODD`, `SUCC` and `PRED`, which
-  compile to nothing, convert it; a word used both as an integer and a pointer (or as bytes) is a variant record.
+  compile to nothing, convert it; a word used both as an integer and a pointer (or as bytes), or a pointer a number
+  is stored in (FORMATTER keeps RWTS's address so), is a variant record.
+- **Constants** are written in place, but for a negative one the program declared: the Compiler loads `CONST M = -1`
+  as `LDCI 1, NGI` and `-1` written in place as `SLDC 1, NGI`, so the first is a `CONST` (`NEG1 = -1`).
 - **Declarations** are one variable to a line, in the order of their offsets, as the Compiler allocates them, with
   padding where the code never uses a word; files are grouped so they are opened in the same order.
 - **Procedures** nest as the order of their code shows, and one numbered before another whose code comes first is
   declared FORWARD.
+- **Assembled procedures** are declared `EXTERNAL`, where their number puts them. Their code says nothing of their
+  parameters, so their first call does: two zero words on top of the stack are a function's room for its result
+  (`FUNCTION FUNC2(A4: INTEGER; A3: INTEGER): BOOLEAN; EXTERNAL;` in FORMATTER), and the words below them its
+  parameters. A segment the Linker linked them into is marked for the 6502, not p-code; it decompiles all the same.
 - **Options**: `(*$I-*)`, `(*$R-*)`, `(*$G+*)` and `(*$V-*)` are written where the code shows unchecked I/O, unchecked
   indexes, GOTO, or a string passed to a VAR string of another length.
 
@@ -177,8 +184,9 @@ Apple Pascal 1.1's sample programs (HILBERT, TREE, BALANCED, CROSSREF, DISKIO, G
 LINEFEED) and the BINDER utility decompile to sources that compile to the same code, but for the byte the Compiler
 skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
 decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
-units of a program's own (they need the Linker); a unit's variables; assembled procedures, which are declared
-`EXTERNAL`; and `SCAN`, `IDSEARCH` and `TREESEARCH`. A code file from another version's Compiler decompiles, but
+units of a program's own (they need the Linker); a unit's variables; and `SCAN`, `IDSEARCH` and `TREESEARCH`.
+FORMATTER's source compiles to the same p-code, but its assembled procedure needs the Assembler and the Linker to
+make the same code file. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

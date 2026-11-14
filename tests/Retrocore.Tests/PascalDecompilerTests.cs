@@ -137,6 +137,38 @@ public class PascalDecompilerTests
         "Q09ERVsqXQAAAAASAAEAFkFQUExFMjpTWVNURU0uU1dBUERJU0sAAAAAAAAAAAAAAA=="
     ]);
 
+    // P3, compiled by Apple Pascal 1.1: a declared negative constant, and a pointer given an address by a variant
+    // record.
+    //
+    //   PROGRAM P3;
+    //   CONST M = -1;
+    //   VAR X: INTEGER; F: BOOLEAN;
+    //     R: RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (P: ^INTEGER) END;
+    //   BEGIN
+    //     X := M;
+    //     X := -1;
+    //     IF ODD(M) THEN X := 2;
+    //     R.I := 15616;
+    //     R.P^ := X
+    //   END.
+    private static readonly string P3Code = string.Concat(
+    [
+        "AQAuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAzICAgICAgICAg",
+        "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg",
+        "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADX18cBAJGrAwGRqwPH",
+        "AQCRoQMCqwPHAD2rBezqmsEAAAYABAAHACYAAQACAAEBNI5Gjj6O9o4FLkNPREVNLldSSy5DT0RFWypdXUlTSwAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANSNiKnWjRijYqkGo/Wpcg0KAPqNCQByDQoAFo4Y",
+        "jhiOAqZiqV6kFo6IqRiOAqZiqbak9Y5yDQQAAAAAAAEAAAAGAAAABkFQUBaOYI4YjgKmYqmgpfcANg0AADYNXo5gjmCOUKliqQKp",
+        "9/8AAAAA9o42DXINBAAKAAcA//8CABKXAAAHAAZBUFBMRTFUD1NZU1RFTS5XUksuQ09ERTYNvqoAAAAAeo6IqXyO0vN6/sfz9/sS",
+        "jwAAAAD2jjYNAgCSjpKOiKmUjmKYuKAAmPmgAAAAAPaONg0SjyqQLJAskJKguKB/oPsABQAWQVBQTEUyOlNZU1RFTS5TV0FQRElT",
+        "SwAAAAAAAAAAAAAAAAAAAAAAAAARQVBQTEUxOlNZU1RFTS5XUksuVEVYVAAAAAAAAAAAAAAAAAAAAAAAAAATKlNZU1RFTS5XUksu",
+        "Q09ERVsqXQAAAAASAAEAFkFQUExFMjpTWVNURU0uU1dBUERJU0sAAAAAAAAAAAAAAA=="
+    ]);
+
     /// <summary>
     ///  P1 decompiles to source with its functions, loops, CASE, expressions and I/O, which compiles to the same code.
     /// </summary>
@@ -226,6 +258,51 @@ public class PascalDecompilerTests
         source.Should().Contain("G93[G91, 2] := G93[3, G91] + 1;");
         source.Should().Contain("G118 := [G91..9, 1, 3];");
         source.Should().Contain("G118 := G118 + [5] - [G91];");
+    }
+
+    /// <summary>
+    ///  P3 decompiles to a CONST for the negative constant the Compiler loaded by LDCI, where <c>-1</c> written in place
+    ///  loads by SLDC, and to a variant record for the pointer a number is stored in.
+    /// </summary>
+    [TestMethod]
+    public void DeclaredConstantsAndAddressesDecompile()
+    {
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(Convert.FromBase64String(P3Code)));
+        result.Warnings.Should().BeEmpty();
+        string source = result.Source;
+        source.Should().Contain("CONST\n  NEG1 = -1;\nTYPE");
+        source.Should().Contain("G3 := NEG1;").And.Contain("G3 := -1;").And.Contain("IF ODD(NEG1) THEN");
+        source.Should().Contain("T1 = RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (P: ^INTEGER) END;");
+        source.Should().Contain("G5.I := 15616;").And.Contain("G5.P^ := G3");
+    }
+
+    /// <summary>
+    ///  FORMATTER, whose segment the Linker marked M6502 for its assembled procedure, decompiles with that procedure
+    ///  declared EXTERNAL, as a function of the parameters its call passes; Apple Pascal 1.1's Compiler compiles the
+    ///  source to the same p-code, and only the assembled procedure, which the Linker would add, differs.
+    /// </summary>
+    [TestMethod]
+    public void AssembledProceduresDecompileAsExternal()
+    {
+        string samples = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_3.dsk");
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(samples) || !File.Exists(boot) || !File.Exists(compiler))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        byte[] original = PascalVolume.Read(File.ReadAllBytes(samples), proDosOrder: false).ReadFile("FORMATTER.CODE");
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
+        result.Source.Should().Contain("FUNCTION FUNC2(A4: INTEGER; A3: INTEGER): BOOLEAN;\n  EXTERNAL;");
+        result.Source.Should().Contain("G3 := FUNC2(G8, G7);");
+
+        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
+        if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
+
+        // The assembled procedure's code is last in the segment, so the p-code before it is the same.
+        IReadOnlyList<string> differences = PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(code));
+        differences.Should().Contain(difference => difference.StartsWith("FORMATTE: the code differs from $055C in FORMATTE.2:", StringComparison.Ordinal));
     }
 
     /// <summary>

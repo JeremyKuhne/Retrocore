@@ -16,5 +16,11 @@ public sealed partial class PascalDecompiler
         ///  Gets the constant's word.
         /// </summary>
         public int Value { get; } = value;
+
+        /// <summary>
+        ///  Gets whether LDCI loaded it though SLDC holds it: the Compiler loads a negative constant it declares, such as
+        ///  <c>CONST M = -1</c>, as its magnitude by LDCI and NGI, where <c>-1</c> in an expression is SLDC 1 and NGI.
+        /// </summary>
+        public bool Wide { get; init; }
     }
 }

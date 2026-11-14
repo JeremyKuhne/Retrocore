@@ -36,6 +36,9 @@ public sealed partial class PascalDecompiler
     private readonly PascalLibrary? _library;
     private readonly List<string> _warnings = [];
     private readonly List<Procedure> _procedures = [];
+
+    // The types of words a constant other than 0 is stored in: a pointer among them is also an integer.
+    private readonly List<TypeNode> _constantStores = [];
     private readonly Frame _system = new(owner: null, level: -1, parameterWords: 0, dataWords: 0);
     private readonly SortedSet<int> _units = [];
     private readonly List<int> _unitOrder = [];
@@ -91,7 +94,7 @@ public sealed partial class PascalDecompiler
             {
                 if (procedure.Code.IsNative)
                 {
-                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL.");
+                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL, with the parameters and result its first call passes.");
                 }
 
                 // A procedure's code ends before its parent's, which is the next of the level above it.
@@ -146,9 +149,9 @@ public sealed partial class PascalDecompiler
         }
     }
 
-    // Whether a segment holds the program: p-code, with a procedure 1 at the outer level.
+    // Whether a segment holds the program: a p-code procedure 1 at the outer level. The Linker marks a segment it links
+    // assembled procedures into as the machine's (FORMATTER's is M6502), so the machine type does not say.
     private static bool IsProgram(PascalSegment segment) => segment.Code.Length > 0
-        && segment.MachineType is PascalMachineType.PcodeLeastFirst or PascalMachineType.PcodeMostFirst or PascalMachineType.Unknown
         && segment.Procedures.Any(procedure => procedure.Index == 1 && procedure.LexicalLevel <= 0 && procedure.Number != 0);
 
     // The program's segment, once the procedures are loaded.

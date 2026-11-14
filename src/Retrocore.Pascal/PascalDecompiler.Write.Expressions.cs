@@ -41,6 +41,9 @@ public sealed partial class PascalDecompiler
             return Convert(pun, Factor, integer ? ScalarKind.Integer : null, Kind(expected), out _);
         }
 
+        // NIL where an integer is used is ORD(NIL), which compiles to LDCN all the same.
+        if (Kind(expected) is ScalarKind.Integer && expression is Nil) { return "ORD(NIL)"; }
+
         // A pointer where an integer is used is ORD of it, which compiles to nothing.
         if (Kind(expected) is ScalarKind.Integer
             && expression is not (Constant or Nil)

@@ -99,6 +99,13 @@ public sealed partial class PascalDecompiler
         public SortedDictionary<int, int> Labels { get; } = [];
 
         /// <summary>
+        ///  Gets the WITH temporaries the Compiler kept in one word for several WITH statements, by word offset: a
+        ///  variable for each store to the word, by the store's offset in the code, so that each WITH's has a type of
+        ///  its own.
+        /// </summary>
+        public Dictionary<int, SortedDictionary<int, Variable>> Generations { get; } = [];
+
+        /// <summary>
         ///  Gets or sets the name the writer gives it.
         /// </summary>
         public string Name { get; set; } = "";

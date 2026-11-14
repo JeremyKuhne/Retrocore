@@ -18,11 +18,58 @@ public sealed partial class PascalDecompiler
     private static bool MayPoint(Expr value) => value is Address
         || (value is Load or Call && value.Words == 1 && value is not Call { Callee.Procedure.Code.IsNative: true });
 
+    // Finds each procedure's WITH statements. A word the Compiler kept the temporaries of several WITH statements in is
+    // a variable for each, so that their records keep types of their own: the procedure is decoded again, with each
+    // store to the word starting a new one.
     private void Withs()
     {
         foreach (Procedure procedure in _procedures)
         {
             if (procedure.Failed) { continue; }
+
+            HashSet<Variable> temporaries = Withs(procedure);
+            Frame frame = procedure.Level <= 0 ? Globals : procedure.Frame;
+            byte store = procedure.Level <= 0 ? (byte)171 : (byte)204;
+            foreach (Variable temporary in temporaries.Where(temporary => temporary.Frame == frame))
+            {
+                List<int> stores = [.. procedure.Instructions
+                    .Where(instruction => instruction.Opcode.Code == store && instruction.Operands[0] == temporary.Offset)
+                    .Select(instruction => instruction.Offset)];
+
+                if (stores.Count < 2) { continue; }
+
+                SortedDictionary<int, Variable> generations = [];
+                foreach (int offset in stores)
+                {
+                    generations[offset] = new Variable(frame, temporary.Offset, VariableKind.Temporary);
+                }
+
+                procedure.Generations[temporary.Offset] = generations;
+            }
+
+            if (procedure.Generations.Count == 0) { continue; }
+
+            procedure.Labels.Clear();
+            try
+            {
+                new Decoder(this, procedure).Decode();
+            }
+            catch (InvalidDataException exception)
+            {
+                Warn($"{procedure} could not be decompiled: {exception.Message}");
+                procedure.Failed = true;
+                procedure.Body = [new Unsupported($"{procedure} could not be decompiled: {exception.Message}")];
+                continue;
+            }
+
+            Withs(procedure);
+        }
+    }
+
+    // Finds a procedure's WITH statements, and gives the temporaries their records' addresses are kept in.
+    private HashSet<Variable> Withs(Procedure procedure)
+    {
+        {
 
             Frame frame = procedure.Level <= 0 ? Globals : procedure.Frame;
             Dictionary<Variable, bool> candidates = [];
@@ -103,6 +150,7 @@ public sealed partial class PascalDecompiler
 
             foreach (Variable temporary in accepted) { temporary.Kind = VariableKind.Temporary; }
             if (accepted.Count > 0) { With(procedure.Body, accepted); }
+            return accepted;
         }
     }
 

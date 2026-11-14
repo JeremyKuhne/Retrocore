@@ -562,7 +562,14 @@ public sealed partial class PascalDecompiler
                 }
                 else
                 {
-                    Unify(a.Element, b.Element);
+                    // A thing at a record's address is its first field: what points to either points to the record.
+                    TypeNode mine = a.Element.Find();
+                    TypeNode theirs = b.Element.Find();
+                    Unify(mine, theirs);
+                    if (mine.Kind != TypeKind.Record && theirs.Find().Kind == TypeKind.Record)
+                    {
+                        a.Element = theirs.Find();
+                    }
                 }
             }
 
@@ -617,6 +624,15 @@ public sealed partial class PascalDecompiler
                 }
             }
         }
+
+        /// <summary>
+        ///  Puts a type at a record's word offset: into its field there, or a variant's, that it can be one with; or as
+        ///  another variant's field.
+        /// </summary>
+        /// <param name="record">The record.</param>
+        /// <param name="offset">The word offset.</param>
+        /// <param name="type">The type.</param>
+        public static void Place(TypeNode record, int offset, TypeNode type) => Merge(record.Find(), offset, type);
 
         // Puts a type at a record's word offset: into the field there, or a variant's, that it can be; or, where it is
         // a pointer and they integers or the other way round, as another variant's field.

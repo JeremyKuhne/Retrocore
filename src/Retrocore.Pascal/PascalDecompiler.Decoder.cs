@@ -57,6 +57,9 @@ public sealed partial class PascalDecompiler
         private readonly Dictionary<int, (List<Statement> List, int Position)> _boundaries = [];
         private readonly List<int> _gotos = [];
 
+        // The offset of the p-code being run.
+        private int _at;
+
         /// <summary>
         ///  Prepares to decompile a procedure: indexes its p-code by offset and finds the jumps back.
         /// </summary>
@@ -431,9 +434,30 @@ public sealed partial class PascalDecompiler
             _ => new Dereference(address)
         };
 
-        private Variable Local(int offset) => Use(_procedure.Frame.At(offset));
+        private Variable Local(int offset) => Use(Generation(_procedure.Frame, offset));
 
-        private Variable Global(int offset) => Use(_owner.Globals.At(offset));
+        // The program's own variables are the globals.
+        private Variable Global(int offset) =>
+            Use(_procedure.Level <= 0 ? Generation(_owner.Globals, offset) : _owner.Globals.At(offset));
+
+        // A word of the procedure's own frame: for a WITH temporary kept in a word several WITHs share, the one the last
+        // store to it before this p-code set.
+        private Variable Generation(Frame frame, int offset)
+        {
+            if (_procedure.Generations.TryGetValue(offset, out SortedDictionary<int, Variable>? stores))
+            {
+                Variable? current = null;
+                foreach ((int store, Variable variable) in stores)
+                {
+                    if (store > _at) { break; }
+                    current = variable;
+                }
+
+                if (current is not null) { return current; }
+            }
+
+            return frame.At(offset);
+        }
 
         private Variable Intermediate(int levels, int offset) => Use(_owner.Enclosing(_procedure, levels).At(offset));
 

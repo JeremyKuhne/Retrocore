@@ -17,7 +17,15 @@ public sealed partial class PascalDecompiler
         /// </summary>
         public Expr Pointer { get; } = pointer;
 
+        private readonly TypeNode _target = pointer.Type.Target();
+
         /// <inheritdoc/>
-        public override TypeNode Type { get; } = pointer.Type.Target();
+        /// <remarks>
+        ///  <para>
+        ///   What the pointer points to now: a thing it pointed to may since have become a record's first field.
+        ///  </para>
+        /// </remarks>
+        public override TypeNode Type =>
+            Pointer.Type.Find() is { Kind: TypeKind.Pointer, Element: { } element } ? element : _target;
     }
 }

@@ -119,6 +119,39 @@ public class PascalSystemDecompilerTests
         BEGIN K(V); I := V.IVAL + 1; P := V.VALP; P^.X := P END.
         """;
 
+    // Segment procedures inside a segment procedure and inside an ordinary procedure, as the Compiler's are, which
+    // reach their parents' variables.
+    private const string NestedSource = """
+        PROGRAM N;
+        VAR G: INTEGER;
+        SEGMENT PROCEDURE OUTER;
+        VAR L: INTEGER;
+          PROCEDURE HELP; FORWARD;
+          SEGMENT PROCEDURE INNER;
+          VAR M: INTEGER;
+          BEGIN M := G; L := M + 1; HELP END;
+          PROCEDURE DEEP;
+          VAR K: INTEGER;
+            SEGMENT PROCEDURE INNEST;
+            BEGIN K := L * 2 END;
+          BEGIN K := 0; INNEST; G := K END;
+          PROCEDURE HELP; BEGIN G := L END;
+        BEGIN INNER; DEEP END;
+        BEGIN OUTER END.
+        """;
+
+    /// <summary>
+    ///  A segment procedure below level 1 is declared in the procedure its callers are in at the level above, a
+    ///  segment procedure or an ordinary one, so the words it reaches there are that procedure's.
+    /// </summary>
+    [TestMethod]
+    public void SegmentProceduresNestWhereTheirCallersAre()
+    {
+        string source = RoundTrip(NestedSource);
+        source.Should().Contain("  SEGMENT PROCEDURE INNER;\n").And.Contain("    A7X1 := B8X1 + 1;");
+        source.Should().Contain("    SEGMENT PROCEDURE INNEST;\n    BEGIN\n      B7X1 := A7X1 * 2\n    END;");
+    }
+
     /// <summary>
     ///  Records whose words are integers in one place and pointers in another decompile with a variant part, each
     ///  use naming its variant's field.

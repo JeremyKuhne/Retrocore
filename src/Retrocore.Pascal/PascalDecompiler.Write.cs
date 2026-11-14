@@ -246,7 +246,7 @@ public sealed partial class PascalDecompiler
     private void Nested(Procedure parent)
     {
         // A unit's procedures are in its own source.
-        List<Procedure> children = [.. parent.Children.Where(child => (!child.IsSegmentProcedure || parent == _program) && !InUnit(child))];
+        List<Procedure> children = [.. parent.Children.Where(child => !InUnit(child))];
         List<Procedure> segments = [.. children.Where(child => child.IsSegmentProcedure).OrderBy(child => child.Segment.Number)];
         List<Procedure> ordinary = [.. children.Where(child => !child.IsSegmentProcedure)];
 

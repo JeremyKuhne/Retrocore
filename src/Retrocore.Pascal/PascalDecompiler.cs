@@ -154,9 +154,10 @@ public sealed partial class PascalDecompiler
         }
 
         _program = _procedures.First(procedure => procedure.Segment == _main && procedure.Number == 1);
+        NestSegments();
         foreach (Procedure procedure in _procedures)
         {
-            // A segment procedure's parent is the program.
+            // A segment procedure at level 1 is the program's.
             if (procedure.Parent is null && procedure != _program) { procedure.Parent = _program; }
             procedure.Parent?.Children.Add(procedure);
 
@@ -198,6 +199,64 @@ public sealed partial class PascalDecompiler
                 result.Kind = VariableKind.Result;
                 TypeNode.Unify(result.Type, procedure.ResultType);
             }
+        }
+    }
+
+    // A segment procedure deeper than level 1 is declared in a procedure one level up, which may be another segment
+    // procedure or an ordinary procedure in one: the one its callers are in, or are, at that level, as only there is
+    // it seen. A caller's own parent may be such a segment procedure's, so this goes until no more are found.
+    private void NestSegments()
+    {
+        Dictionary<int, List<Procedure>> callers = [];
+        foreach (Procedure caller in _procedures.Where(procedure => !procedure.Code.IsNative))
+        {
+            IReadOnlyList<PcodeInstruction> code;
+            try
+            {
+                code = PcodeDisassembler.Disassemble(caller.Segment, caller.Code);
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+
+            foreach (PcodeInstruction call in code.Where(instruction => instruction.Opcode.Code == Pcode.Cxp && instruction.Operands[1] == 1))
+            {
+                if (!callers.TryGetValue(call.Operands[0], out List<Procedure>? list))
+                {
+                    list = [];
+                    callers[call.Operands[0]] = list;
+                }
+
+                list.Add(caller);
+            }
+        }
+
+        for (bool found = true; found;)
+        {
+            found = false;
+            foreach (Procedure segment in _procedures.Where(procedure => procedure.Parent is null && procedure.IsSegmentProcedure && procedure.Level >= 2))
+            {
+                foreach (Procedure caller in callers.GetValueOrDefault(segment.Segment.Number) ?? [])
+                {
+                    Procedure? outer = caller;
+                    while (outer is not null && outer.Level > segment.Level - 1 && outer != segment)
+                    {
+                        outer = outer.Parent;
+                    }
+
+                    if (outer is null || outer == segment || outer.Level != segment.Level - 1) { continue; }
+
+                    segment.Parent = outer;
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        foreach (Procedure lost in _procedures.Where(procedure => procedure.Parent is null && procedure.IsSegmentProcedure && procedure.Level >= 2))
+        {
+            Warn($"No call shows which procedure {lost} is declared in; it is put in the program's.");
         }
     }
 

@@ -13,6 +13,7 @@ public sealed partial class PascalDecompiler
         {
             byte code = instruction.Opcode.Code;
             IReadOnlyList<int> operands = instruction.Operands;
+            _at = instruction.Offset;
             if (code < 128)
             {
                 stack.Add(new Constant(code));
@@ -89,7 +90,7 @@ public sealed partial class PascalDecompiler
                 case 162: // INC
                     {
                         Expr address = Pop(stack);
-                        stack.Add(operands[0] == 0 ? address : new Address(new FieldDesignator(Designate(address), operands[0])));
+                        stack.Add(operands[0] == 0 ? address : new Address(_owner.Site(Designate(address), operands[0])));
                         break;
                     }
 
@@ -341,10 +342,10 @@ public sealed partial class PascalDecompiler
         }
 
         // SIND and IND: a word at an offset from an address.
-        private static Load Indirect(Expr address, int offset)
+        private Load Indirect(Expr address, int offset)
         {
             Designator designator = Designate(address);
-            return new Load(offset == 0 ? designator : new FieldDesignator(designator, offset), 1);
+            return new Load(offset == 0 ? designator : _owner.Site(designator, offset), 1);
         }
 
         // An index, less its range check and lower bound: CHK leaves the index type's bounds, and the lower bound is

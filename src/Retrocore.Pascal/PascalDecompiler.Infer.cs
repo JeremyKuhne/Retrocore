@@ -8,6 +8,50 @@ public sealed partial class PascalDecompiler
 {
     private readonly List<(TypeNode First, TypeNode Second, bool Flow)> _links = [];
 
+    // The fields the code reaches, each with a type of its own, to put in their records once their kinds are known.
+    private readonly List<(TypeNode Record, int Offset, TypeNode Field)> _sites = [];
+
+    // How many of the fields are in their records; each goes in once.
+    private int _placed;
+
+    // A field the code reaches at an offset from a record's address.
+    private FieldDesignator Site(Designator record, int offset)
+    {
+        FieldDesignator field = new(record, offset, site: true);
+        _sites.Add((record.Type, offset, field.Type));
+        return field;
+    }
+
+    // Puts each field the code reaches in its record: in the field at its offset, or a variant's it can be one with,
+    // or, where it is a pointer and they integers or the other way round, as another variant's.
+    private bool PlaceSites()
+    {
+        bool changed = false;
+        for (; _placed < _sites.Count; _placed++)
+        {
+            (TypeNode record, int offset, TypeNode field) = _sites[_placed];
+            TypeNode root = record.Find();
+            if (root.Kind != TypeKind.Record)
+            {
+                if (root.Field(offset).Find() != field.Find())
+                {
+                    TypeNode.Unify(root.Field(offset), field);
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            root.Field(offset);
+            if (root.Alternatives(offset).Contains(field.Find())) { continue; }
+
+            TypeNode.Place(root, offset, field);
+            changed = true;
+        }
+
+        return changed;
+    }
+
     // PASCALIO, the segment the system loads for reals' I/O and SEEK.
     private const int PascalIo = 31;
 
@@ -577,42 +621,48 @@ public sealed partial class PascalDecompiler
             }
         }
 
+        // The links settle, then the fields the code reaches go into their records, which may link more types.
         HashSet<int> unified = [];
-        for (bool changed = true; changed;)
+        for (bool placed = true; placed;)
         {
-            changed = false;
-            for (int index = 0; index < _links.Count; index++)
+            for (bool changed = true; changed;)
             {
-                (TypeNode first, TypeNode second, bool flow) = _links[index];
-                if (!unified.Contains(index) && first.Find() != second.Find() && (!Scalar(first) || !Scalar(second)))
+                changed = false;
+                for (int index = 0; index < _links.Count; index++)
                 {
-                    // A pointer compared with an integer, or flowing into one, is ORD of it; only an integer that
-                    // flows into a pointer makes a word used both ways.
-                    if (Ordinal(first, second, flow))
+                    (TypeNode first, TypeNode second, bool flow) = _links[index];
+                    if (!unified.Contains(index) && first.Find() != second.Find() && (!Scalar(first) || !Scalar(second)))
                     {
-                        // A word used both ways and a pointer it is read into point to one type.
-                        if (first.Find().Kind == TypeKind.Pointer && second.Find().Kind == TypeKind.Pointer)
+                        // A pointer compared with an integer, or flowing into one, is ORD of it; only an integer that
+                        // flows into a pointer makes a word used both ways.
+                        if (Ordinal(first, second, flow))
                         {
-                            TypeNode.Unify(first.Target(), second.Target());
+                            // A word used both ways and a pointer it is read into point to one type.
+                            if (first.Find().Kind == TypeKind.Pointer && second.Find().Kind == TypeKind.Pointer)
+                            {
+                                TypeNode.Unify(first.Target(), second.Target());
+                            }
+
+                            continue;
                         }
 
-                        continue;
-                    }
+                        // A record linked to a scalar is its first field's link.
+                        if (first.Find().Kind == TypeKind.Record && Scalar(second) || second.Find().Kind == TypeKind.Record && Scalar(first))
+                        {
+                            unified.Add(index);
+                            _links.Add(first.Find().Kind == TypeKind.Record ? (first.Field(0), second, flow) : (first, second.Field(0), flow));
+                            changed = true;
+                            continue;
+                        }
 
-                    // A record linked to a scalar is its first field's link.
-                    if (first.Find().Kind == TypeKind.Record && Scalar(second) || second.Find().Kind == TypeKind.Record && Scalar(first))
-                    {
                         unified.Add(index);
-                        _links.Add(first.Find().Kind == TypeKind.Record ? (first.Field(0), second, flow) : (first, second.Field(0), flow));
+                        TypeNode.Unify(first, second);
                         changed = true;
-                        continue;
                     }
-
-                    unified.Add(index);
-                    TypeNode.Unify(first, second);
-                    changed = true;
                 }
             }
+
+            placed = PlaceSites();
         }
 
         Dictionary<TypeNode, TypeNode> classes = [];
@@ -697,8 +747,7 @@ public sealed partial class PascalDecompiler
             case Comparand.Set when comparison.Op == Operator.In:
                 {
                     TypeNode set = comparison.Right.Type.Find();
-                    set.Element ??= new TypeNode();
-                    TypeNode.Unify(set.Element, comparison.Left.Type);
+                    Link(SetElement(set), comparison.Left.Type);
                     break;
                 }
 
@@ -714,18 +763,28 @@ public sealed partial class PascalDecompiler
         }
     }
 
-    private static void Set(SetValue set)
+    private void Set(SetValue set)
     {
         TypeNode root = set.Type.Find();
         root.Kind = TypeKind.Set;
-        root.Element ??= new TypeNode();
+        TypeNode element = SetElement(root);
         foreach ((Expr low, Expr? high) in set.Members)
         {
-            TypeNode.Unify(root.Element, low.Type);
-            if (high is not null) { TypeNode.Unify(root.Element, high.Type); }
+            Link(element, low.Type);
+            if (high is not null) { Link(element, high.Type); }
         }
 
         if (set.Value is Load load) { TypeNode.Unify(root, load.Type); }
+    }
+
+    // A set's element, a scalar: what is tested for in it, or put in it, only shares its kind, so a word that is also a
+    // pointer, read as an integer, does not make the element one.
+    private static TypeNode SetElement(TypeNode set)
+    {
+        TypeNode root = set.Find();
+        root.Element ??= new TypeNode();
+        if (root.Element.Find().Kind == TypeKind.Unknown) { root.Element.Find().Kind = TypeKind.Scalar; }
+        return root.Element;
     }
 
     // A call of a procedure in the code file: VAR parameters share their arguments' types.

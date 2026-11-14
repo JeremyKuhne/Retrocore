@@ -116,6 +116,46 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  Two programs saved one after the other at 1500 baud share a tape, each with its own leader and sync byte, and
+    ///  CLOAD finds the second by its name, past the first.
+    /// </summary>
+    [TestMethod]
+    public void LoadsTheSecondProgramOnAHighSpeedTape()
+    {
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model3);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "H\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+
+        CassetteImage tape = new();
+        machine.Bus.Cassette.Record(tape);
+        Type(machine, "10 PRINT \"FIRST\"\r");
+        Type(machine, "CSAVE \"A\"\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        Type(machine, "NEW\r");
+        Type(machine, "10 PRINT \"HI\";6*7\r");
+        Type(machine, "CSAVE \"B\"\r");
+        RunUntil(machine, () => !machine.Bus.Cassette.MotorOn, seconds: 60);
+        machine.Bus.Cassette.Stop();
+
+        // The second recording's leader and sync byte follow the first's file.
+        List<byte> bytes = [.. tape.Bytes];
+        int second = bytes.FindIndex(257, value => value == 0x55);
+        second.Should().BePositive();
+        bytes.Skip(second).Take(256).Should().AllSatisfy(value => value.Should().Be(0x55));
+        bytes[second + 256].Should().Be(0x7F);
+
+        Type(machine, "NEW\r");
+        machine.Bus.Cassette.Play(tape);
+        Type(machine, "CLOAD \"B\"\r");
+        RunUntil(machine, () => machine.Bus.Cassette.AtEnd, seconds: 60);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "RUN\r");
+        Screen(machine).Should().Contain("HI 42");
+    }
+
+    /// <summary>
     ///  The Model III with Level I BASIC boots to READY, runs a statement, and saves and loads a program on tape at
     ///  250 baud, the leader zeros and the sync byte $A5.
     /// </summary>

@@ -78,8 +78,8 @@ public sealed partial class DocumentationResolver
     ///   The condition is as the parser records it: tests joined by <c>and</c>, each perhaps after <c>not</c>, and
     ///   each test an <c>.if</c> operand of comparisons (<c>=</c>, <c>==</c>, <c>!=</c>, <c>&lt;</c>, <c>&lt;=</c>,
     ///   <c>&gt;</c>, <c>&gt;=</c>) between symbols, numbers and character literals, joined by <c>&amp;&amp;</c> and
-    ///   <c>||</c>. A test that cannot be evaluated, such as one on a symbol the build does not define, counts as
-    ///   holding, so the section applies.
+    ///   <c>||</c> and grouped by parentheses. A test that cannot be evaluated, such as one on a symbol the build does
+    ///   not define, counts as holding, so the section applies.
     ///  </para>
     /// </remarks>
     /// <param name="condition">The section's condition, or null for one that always applies.</param>
@@ -100,24 +100,66 @@ public sealed partial class DocumentationResolver
         return true;
     }
 
-    // Evaluates an .if operand of comparisons joined by && and ||, or null when it cannot.
+    // Evaluates an .if operand of comparisons joined by && and || and grouped by parentheses, or null when it cannot.
     private static bool? Holds(string test, Func<string, long?> symbol)
     {
-        bool? any = false;
-        foreach (string either in test.Split("||", StringSplitOptions.TrimEntries))
-        {
-            bool? all = true;
-            foreach (string both in either.Split("&&", StringSplitOptions.TrimEntries))
-            {
-                bool? one = Comparison(both.Trim('(', ')', ' '), symbol);
-                all = all == false || one == false ? false : all is null || one is null ? null : true;
-            }
+        int at = 0;
+        bool? value = Either(test, ref at, symbol);
+        return at == test.Length ? value : null;
+    }
 
-            any = any == true || all == true ? true : any is null || all is null ? null : false;
+    // Tests joined by ||, up to a closing parenthesis or the end.
+    private static bool? Either(string text, ref int at, Func<string, long?> symbol)
+    {
+        bool? any = Both(text, ref at, symbol);
+        while (Take(text, ref at, "||"))
+        {
+            bool? next = Both(text, ref at, symbol);
+            any = any == true || next == true ? true : any is null || next is null ? null : false;
         }
 
         return any;
     }
+
+    // Tests joined by &&.
+    private static bool? Both(string text, ref int at, Func<string, long?> symbol)
+    {
+        bool? all = Test(text, ref at, symbol);
+        while (Take(text, ref at, "&&"))
+        {
+            bool? next = Test(text, ref at, symbol);
+            all = all == false || next == false ? false : all is null || next is null ? null : true;
+        }
+
+        return all;
+    }
+
+    // A parenthesized group, or a comparison running to the next &&, || or closing parenthesis.
+    private static bool? Test(string text, ref int at, Func<string, long?> symbol)
+    {
+        if (Take(text, ref at, "("))
+        {
+            bool? group = Either(text, ref at, symbol);
+            return Take(text, ref at, ")") ? group : null;
+        }
+
+        int start = at;
+        while (at < text.Length && text[at] != ')' && !Ahead(text, at, "&&") && !Ahead(text, at, "||")) { at++; }
+        return Comparison(text[start..at], symbol);
+    }
+
+    // Skips spaces, then the token if it is next.
+    private static bool Take(string text, ref int at, string token)
+    {
+        while (at < text.Length && text[at] == ' ') { at++; }
+        if (!Ahead(text, at, token)) { return false; }
+        at += token.Length;
+        while (at < text.Length && text[at] == ' ') { at++; }
+        return true;
+    }
+
+    private static bool Ahead(string text, int at, string token) =>
+        string.CompareOrdinal(text, at, token, 0, token.Length) == 0;
 
     private static bool? Comparison(string text, Func<string, long?> symbol)
     {

@@ -13,7 +13,8 @@ namespace Retrocore.Machines.Trs80;
 ///   Each bit is one cycle of a square wave, high then low: a short cycle for a 1 and a long one for a 0, as the
 ///   ROM's <c>BITOUT</c> writes them, about 380 and 770 T-states a half at 2.03 MHz. A recording opens with a leader of
 ///   <c>$55</c> bytes and a <c>$7F</c> sync byte, written without start bits; each byte after them has a 0 start bit.
-///   A tape image keeps the bytes only, the start bits implied, as the usual high-speed CAS images do. Playing one
+///   A tape image keeps the bytes only, the start bits implied, as the usual high-speed CAS images do; a tape holding
+///   more than one recording has each one's leader and sync byte in turn. Playing one
 ///   ends with one more short cycle, so the reader has an edge after the last bit to time it by.
 ///  </para>
 ///  <para>
@@ -43,6 +44,11 @@ internal sealed class Trs80HighSpeedTape
     /// </summary>
     internal const byte Sync = 0x7F;
 
+    // The leader bytes a later recording on the same tape opens with, at the least, to be taken for one rather than
+    // for a file's bytes, and at the most, the ROM's 256: leader bytes before those end the file before it.
+    private const int LaterLeader = 32;
+    private const int LongestLeader = 256;
+
     // A high half shorter than this is a 1's; much shorter or longer is not a 1500 baud cycle at all.
     private const int Threshold = (OneHalf + ZeroHalf) / 2;
     private const int Shortest = OneHalf / 2;
@@ -51,7 +57,7 @@ internal sealed class Trs80HighSpeedTape
     // Playback: the bytes, the byte and bit (-1 for a start bit) under the head, the half cycle's T-states left, and
     // whether the closing cycle after the last byte has played.
     private IReadOnlyList<byte> _bytes = [];
-    private int _dataStart;
+    private bool[] _unframed = [];
     private int _byte;
     private int _bit;
     private int _left;
@@ -107,16 +113,8 @@ internal sealed class Trs80HighSpeedTape
         _closed = false;
         Level = false;
         TakeEdges();
-
-        // The leader and the sync byte after it have no start bits.
-        int sync = -1;
-        for (int index = 0; index < bytes.Count && sync < 0; index++)
-        {
-            if (bytes[index] == Sync) { sync = index; }
-            else if (bytes[index] != Leader) { break; }
-        }
-
-        _dataStart = sync < 0 ? bytes.Count : sync + 1;
+        _unframed = Unframed(bytes);
+        _bit = _unframed.Length == 0 || _unframed[0] ? 0 : -1;
     }
 
     /// <summary>
@@ -213,6 +211,44 @@ internal sealed class Trs80HighSpeedTape
         return bytes;
     }
 
+    // Which bytes are a leader or its sync byte, which have no start bits: the tape's first recording opens with its
+    // leader, and each later one, appended by another CSAVE, opens with a run of leader bytes (the last 256 of a longer
+    // run, as the ROM writes) and then the sync.
+    // A tape whose opening leader has no sync byte after it is played without start bits throughout.
+    private static bool[] Unframed(IReadOnlyList<byte> bytes)
+    {
+        bool[] unframed = new bool[bytes.Count];
+        int index = 0;
+        while (index < bytes.Count && bytes[index] == Leader) { index++; }
+        if (index == bytes.Count || bytes[index] != Sync)
+        {
+            Array.Fill(unframed, value: true);
+            return unframed;
+        }
+
+        Array.Fill(unframed, value: true, 0, index + 1);
+
+        int run = 0;
+        for (int at = index + 1; at < bytes.Count; at++)
+        {
+            if (bytes[at] == Leader)
+            {
+                run++;
+                continue;
+            }
+
+            if (bytes[at] == Sync && run >= LaterLeader)
+            {
+                int leader = Math.Min(run, LongestLeader);
+                Array.Fill(unframed, value: true, at - leader, leader + 1);
+            }
+
+            run = 0;
+        }
+
+        return unframed;
+    }
+
     private static int HalfOf(bool one) => one ? OneHalf : ZeroHalf;
 
     private static byte ByteAt(List<bool> bits, int index)
@@ -230,6 +266,6 @@ internal sealed class Trs80HighSpeedTape
     {
         if (++_bit < 8) { return; }
         _byte++;
-        _bit = _byte >= _dataStart ? -1 : 0;
+        _bit = _byte < _unframed.Length && _unframed[_byte] ? 0 : -1;
     }
 }

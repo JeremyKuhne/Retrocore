@@ -292,8 +292,8 @@ export const machines: readonly Machine[] = [
             {
                 option: "ramKilobytes",
                 label: "Memory",
-                values: [{ label: "16 KB", value: 16 }, { label: "32 KB", value: 32 }, { label: "48 KB", value: 48 }],
-                default: 16
+                values: [{ label: "48 KB", value: 48 }, { label: "32 KB", value: 32 }, { label: "16 KB", value: 16 }],
+                default: 48
             }
         ]
     },

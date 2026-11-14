@@ -132,9 +132,10 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   above.
 - `--pascal decompile code [--library library] [--listing listing] [--hints hints.json] [output.text]` decompiles a
   program back to Pascal (below);
-- `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]` compiles a source with Apple
-  Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
-  `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`;
+- `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit NAME.CODE]...` compiles a
+  source with Apple Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
+  `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`.
+  Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find;
 - `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
@@ -200,7 +201,7 @@ Apple Pascal 1.1's sample programs (HILBERT, TREE, BALANCED, CROSSREF, DISKIO, G
 LINEFEED) and the BINDER utility decompile to sources that compile to the same code, but for the byte the Compiler
 skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
 decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
-units of a program's own (they need the Linker); a unit's variables; and `IDSEARCH` and `TREESEARCH`. `SCAN` decompiles,
+a unit's variables; and `IDSEARCH` and `TREESEARCH`. `SCAN` decompiles,
 with its test (`SCAN(41, = CH, BUF)`), and so does Apple III Pascal's `UNITSTATUS(UNIT, BUF, CONTROL)`, its `CSP 12`.
 ### Rebuilding a linked program
 
@@ -267,9 +268,31 @@ program and a 6502 function of its own, `SharedNamesRebuildByteForByte` two proc
 with 1.1's tools, `InterpreterWordsRebuildByteForByte` one using `.INTERP` with 1.2's, and
 `Apple3LinkedProgramsRebuildByteForByte` a program and its 6502 function with Apple III Pascal 1.1's on the Apple
 III. AIIFORMAT's assembled procedure, and every one in Apple III Pascal 1.1's Editor, assemble to the same bytes
-with Apple III Pascal's Assembler. AIIFORMAT decompiles, every procedure, but its source does not compile: its two
-units, CODEACCESS and GETUNITNAME, are written as segment procedures rather than UNITs of their own; CODEACCESS
-reaches the system's global at word 630 (`SYS630`), as only a program compiled as part of the system can; and its
+with Apple III Pascal's Assembler.
+
+### Units
+
+A program's own units, which the Linker linked in, decompile to UNIT sources of their own, written beside the
+program as `NAME.UNIT.text`. A unit's segment holds its initialization, procedure 1, and its procedures beside it at
+its level (a segment procedure's are inside it). Its interface declares the procedures something outside it calls,
+from 2, with the types they are declared with, and the program takes those types from it; the rest are its own, in
+its implementation, where the interface's are by name alone and an assembled one is `EXTERNAL`. The program
+`USES (*$U NAME.CODE*) NAME`, in the order of their segments, which numbers them from 7, and the Compiler calls
+their initializations, so the source does not. Each unit is compiled on its own, to `NAME.CODE`; then the program,
+with them beside it; then all are linked:
+
+```text
+Retrocore.Debug --pascal decompile PASCAL3.dsk AIIFORMAT.CODE aiiformat.text
+Retrocore.Debug --pascal compile aiiformat.GETUNITN.text PASCAL1.dsk PASCAL2.dsk GETUNITN.CODE
+Retrocore.Debug --pascal compile aiiformat.text PASCAL1.dsk PASCAL2.dsk HOST.CODE --unit CODEACCE.CODE --unit GETUNITN.CODE
+Retrocore.Debug --pascal link HOST.CODE CODEACCE.CODE GETUNITN.CODE ASM.CODE PASCAL1.dsk PASCAL2.dsk AIIFORMAT.CODE
+```
+
+A program and its two units, one with an assembled function, built so with Apple III Pascal 1.1's tools, rebuild
+from their decompiled sources to the same segments (`UnitsRebuildOnTheApple3`); the blocks' unused ends differ, as
+they hold what the Compiler's buffer had, the units' interface text, whose names the code does not keep.
+AIIFORMAT's GETUNITNAME compiles to the same p-code. Its CODEACCESS does not compile: it reaches the system's global
+at word 630 (`SYS630`), the running code file's, as only a program compiled as part of the system can; and its
 segment 15 is the Apple II boot code it writes onto the disks it formats, data no source makes. Each is a warning. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 

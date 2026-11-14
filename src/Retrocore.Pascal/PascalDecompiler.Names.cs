@@ -192,7 +192,9 @@ public sealed partial class PascalDecompiler
             sources.Add(source.Text);
         }
 
-        return string.Concat(sources);
+        // One source holds them all, so one .END ends it: the Assembler reads no further.
+        const string End = "         .END\n";
+        return string.Concat(sources.Select(text => text.EndsWith(End, StringComparison.Ordinal) ? text[..^End.Length] : text)) + End;
     }
 
     private static string? Comment(IReadOnlyDictionary<string, string> comments, string key) =>

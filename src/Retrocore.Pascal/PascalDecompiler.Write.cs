@@ -9,7 +9,7 @@ namespace Retrocore.Pascal;
 
 public sealed partial class PascalDecompiler
 {
-    private readonly StringBuilder _source = new();
+    private StringBuilder _source = new();
     private readonly List<TypeNode> _types = [];
     private readonly SortedDictionary<int, string> _constants = [];
     private int _indent;
@@ -19,40 +19,45 @@ public sealed partial class PascalDecompiler
     // The WITH statements the writer is inside, innermost last: their records' fields go by name alone.
     private readonly List<Variable> _with = [];
 
+    // The units of the program's own, written by Write after the program.
+    private List<PascalDecompiledUnit> _unitSources = [];
+
     private string Write()
     {
         NameTypes();
+        List<string> options = [];
+
         // A string passes to a VAR string parameter of another length only without the check (*$V-*) turns off.
         bool strings = _parameters.Values.Any(parameters => parameters.Any(parameter => parameter.IsReference && parameter.Type.Target().Find().Kind == TypeKind.String));
-        if (strings) { Line("(*$V-*)"); }
+        if (strings) { options.Add("(*$V-*)"); }
 
         bool labels = _procedures.Any(procedure => procedure.Labels.Count > 0);
-        if (labels) { Line("(*$G+*)"); }
+        if (labels) { options.Add("(*$G+*)"); }
+        foreach (string option in options) { Line(option); }
 
         if (Comment(Program) is { } about) { Line(about); }
         Line($"PROGRAM {Program.Name};");
-        if (_unitOrder.Count > 0)
-        {
-            // The Compiler initializes the units a program uses in the reverse of their order in USES.
-            Line($"USES {string.Join(", ", Enumerable.Reverse(_unitOrder).Select(segment => _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}"))};");
-        }
+
+        // The library's units, whose segments are their own; then the program's, by their code files, whose order in
+        // USES numbers their segments from 7. The Compiler initializes a library's units in the reverse of their order.
+        List<string> uses = [.. Enumerable.Reverse(_unitOrder).Select(segment => _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}")];
+        uses.AddRange(UnitSegments().Select(segment => $"(*$U {segment.Name.Trim()}.CODE*) {segment.Name.Trim()}"));
+        if (uses.Count > 0) { Line($"USES {string.Join(", ", uses)};"); }
 
         Labels(Program);
         int constants = _source.Length;
-        if (_types.Count > 0)
-        {
-            Line("TYPE");
-            _indent++;
-            foreach (TypeNode type in Ordered()) { Line($"{type.Name} = {Declare(type, inline: false)};"); }
-            _indent--;
-        }
+
+        // The types the program's own declarations use, but those a unit's interface declares for it.
+        HashSet<TypeNode> types = TypesOf(_procedures.Where(procedure => !InUnit(procedure)), variables: true, signatures: true);
+        types.ExceptWith(InterfaceTypes());
+        Types(types);
 
         Declarations(Program);
         Nested(Program);
         Line("BEGIN");
         Statements(Program, Program.Body);
         Line("END.");
-        Alignment();
+        Alignment([.. _procedures.Select(procedure => procedure.Segment).Where(segment => !_unitSegments.Contains(segment)).Distinct()]);
 
         // The constants the statements named, which come before the types.
         if (_constants.Count > 0)
@@ -62,16 +67,18 @@ public sealed partial class PascalDecompiler
                 $"CONST\n{string.Concat(_constants.Select(constant => $"  {constant.Value} = {constant.Key.ToString(CultureInfo.InvariantCulture)};\n"))}");
         }
 
-        return _source.ToString();
+        string program = _source.ToString();
+        _unitSources = WriteUnits(options);
+        return program;
     }
 
     // The byte the Compiler skips to put an LDC's or XJP's words on a word boundary holds whatever its buffer had there,
     // which no source says; those that are not 0 are written after END., where the Compiler reads nothing, for
     // --pascal compile to put back.
-    private void Alignment()
+    private void Alignment(List<Media.PascalSegment> only)
     {
         IEnumerable<IGrouping<Media.PascalSegment, Procedure>> segments = _procedures
-            .Where(procedure => !procedure.Code.IsNative && !procedure.Failed)
+            .Where(procedure => !procedure.Code.IsNative && !procedure.Failed && only.Contains(procedure.Segment))
             .GroupBy(procedure => procedure.Segment);
 
         foreach (IGrouping<Media.PascalSegment, Procedure> segment in segments)
@@ -146,12 +153,17 @@ public sealed partial class PascalDecompiler
     // is declared FORWARD before it, or, assembled, EXTERNAL there, as it has no code the Compiler places.
     private void Nested(Procedure parent)
     {
-        List<Procedure> children = [.. parent.Children.Where(child => !child.IsSegmentProcedure || parent == _program)];
+        // A unit's procedures are in its own source.
+        List<Procedure> children = [.. parent.Children.Where(child => (!child.IsSegmentProcedure || parent == _program) && !InUnit(child))];
         List<Procedure> segments = [.. children.Where(child => child.IsSegmentProcedure).OrderBy(child => child.Segment.Number)];
         foreach (Procedure segment in segments) { WriteProcedure(segment, forwarded: false); }
 
-        List<Procedure> ordinary = [.. children.Where(child => !child.IsSegmentProcedure)];
-        HashSet<Procedure> declared = [];
+        Ordinary([.. children.Where(child => !child.IsSegmentProcedure)], []);
+    }
+
+    // Procedures in the order of their code, with those already declared (a unit's interface) by name alone.
+    private void Ordinary(List<Procedure> ordinary, HashSet<Procedure> declared)
+    {
         foreach (Procedure child in ordinary.OrderBy(child => child.Code.Attributes))
         {
             if (child.Code.IsNative && declared.Contains(child)) { continue; }

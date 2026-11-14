@@ -199,6 +199,40 @@ public class PascalDecompilerTests
         "LCBSKHVuLCBGKGlsZSwgQyhvbXAsIEwoaW5rLCBYKGVjdXRlLCBBAACm9cT1qvUaCg=="
     ]);
 
+    // P5, built by Apple III Pascal 1.1's Compiler, Assembler and Linker: a program, USER, that uses two units of its own,
+    // ALPHA (AlphaSource) and BETA (BetaSource), BETA's ADD1 assembled (Add1Source).
+    private static readonly string P5Code = string.Concat(
+    [
+        "AwBGAAEAPAACAFwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFVTRVIgICAgQUxQ",
+        "SEEgICBCRVRBICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg",
+        "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGCB4IIhwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzAMDzATa28ihENna",
+        "AAOIpAHYmtoBgswDufatAAAYAAQABAAJACYAAgGtAAAAAAAGAAgAAQEOAAQABwI6IEJVRjsgTjogSU5URUdFUik7DUlNUExFTUVO",
+        "VEFUSU9OICAgICAgICBFIE9SSzpIT1NULkNPREVERVsqXXSAD1zzgwAAoPlKAR0ASgG+9z71el50gG9e9YNFAET5SgF0gG9e9YNF",
+        "AET5SgFq9CdDb3B5cmlnaHQgQXBwBFdPUks6SE9TVC5DT0RFWFQxOTgxLTE5ODMJV4L0E0N1cnJlbnQgIGRhdGUgIGlzICBjVrT0",
+        "LHxfX19fX19fX19fX19fX19fX19fX19fX19fXxBXT1JLOlNPVVJDRS5URVhUAAAAAAADACAgICAgICAgIEFwcGxlICAvLy8gIFBh",
+        "c2NhbCAgIDEuMSAgICAgICAgIHwBtVUAACsgX19fX19fX18EAAAAAgABAABXT1JL9RJ5dIDrePODAAEBACL1SgFKAQAAKvW+9y71",
+        "cl10gEoBSgEAADr1vvc+9axddICWXfWDHQADACD+TvVO9b73nPWSS9xLjEn3gyD+Xv41SQAARUNvbW1hbmQ6IEUoZGl0LCBSKHVu",
+        "LCBGKGlsZSwgQyhvbXAsIEwoaW5rLCBYKGVjdXRlLCBBKHNzZW0sAACg9cT1pPUaCtoCj8wBrQEAAAAGAAcADgADAa0AAAAAAAYA",
+        "CAABAWiNIABojSEAaGhoaGgYaQGqaGkASIpIrSEASK0gAEhgAAAAACIAIAAQAA4ABAAAAAAAMgAAAEQABAA8AAgDICAgICAgICBF",
+        "IA5XT1JLOkhPU1QuQ09ERURFWypddIAPXPODAACg+UoBHQBKAb73PvV6XnSAb171g0UARPlKAXSAb171g0UARPlKAWr0J0NvcHly",
+        "aWdodCBBcHAEV09SSzpIT1NULkNPREVYVDE5ODEtMTk4MwlXgvQTQ3VycmVudCAgZGF0ZSAgaXMgIGNWtPQsfF9fX19fX19fX19f",
+        "X19fX19fX19fX19fX19fEFdPUks6U09VUkNFLlRFWFQAAAAAAAMAICAgICAgICAgQXBwbGUgIC8vLyAgUGFzY2FsICAgMS4xICAg",
+        "ICAgICAgfAG1VQAAKyBfX19fX19fXwQAAAACAAEAAFdPUkv1Enl0gOt484MAAQEAIvVKAUoBAAAq9b73LvVyXXSASgFKAQAAOvW+",
+        "9z71rF10gJZd9YMdAAMAIP5O9U71vvec9ZJL3EuMSfeDIP5e/jVJAABFQ29tbWFuZDogRShkaXQsIFIodW4sIEYoaWxlLCBDKG9t",
+        "cCwgTChpbmssIFgoZWN1dGUsIEEoc3NlbSwAAKD1xPWk9RoKuSnNBwHNCAGlAwXNBwKlAwIAA4ikAfgAAM0IAgAAzQgDqwcInhYH",
+        "nha5CAeeFQieFbn2wQAANAAKAAQAGQA+AAEAAgABAQ1Db21waWxpbmcuLi4gTvVO9Zz1nPWSS9xLf0v5gwcADldPUks6SE9TVC5D",
+        "T0RFREVbKl10gA9c84MAAKD5SgEdAEoBvvc+9XpedIBvXvWDRQBE+UoBdIBvXvWDRQBE+UoBavQnQ29weXJpZ2h0IEFwcARXT1JL",
+        "OkhPU1QuQ09ERVhUMTk4MS0xOTgzCVeC9BNDdXJyZW50ICBkYXRlICBpcyAgY1a09Cx8X19fX19fX19fX19fX19fX19fX19fX19f",
+        "X18QV09SSzpTT1VSQ0UuVEVYVAAAAAAAAwAgICAgICAgICBBcHBsZSAgLy8vICBQYXNjYWwgICAxLjEgICAgICAgICB8AbVVAAAr",
+        "IF9fX19fX19fBAAAAAIAAQAAV09SS/USeXSA63jzgwABAQAi9UoBSgEAACr1vvcu9XJddIBKAUoBAAA69b73PvWsXXSAll31gx0A",
+        "AwAg/k71TvW+95z1kkvcS4xJ94Mg/l7+NUkAAEVDb21tYW5kOiBFKGRpdCwgUih1biwgRihpbGUsIEMob21wLCBMKGluaywgWChl",
+        "Y3V0ZSwgQShzc2VtLAAAoPXE9aT1Ggo="
+    ]);
+
     /// <summary>
     ///  P1 decompiles to source with its functions, loops, CASE, expressions and I/O, which compiles to the same code.
     /// </summary>
@@ -677,6 +711,151 @@ public class PascalDecompilerTests
         if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
         PascalCodeComparison.Compare(original, PascalCodeFile.Read(code)).Should().BeEmpty(result.Source);
     }
+
+    /// <summary>
+    ///  A program's own units, which the Linker linked in, decompile to UNIT sources of their own: the procedures the
+    ///  program calls in the interface, with the types it declares them with, and their bodies, an assembled one
+    ///  EXTERNAL, in the implementation; the program USES them by their code files, and takes their types from them.
+    /// </summary>
+    [TestMethod]
+    public void UnitsDecompileToUnitSources()
+    {
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(Convert.FromBase64String(P5Code)));
+        result.Units.Select(unit => (unit.Name, unit.Segment)).Should().Equal(("ALPHA", 7), ("BETA", 8));
+        result.Source.Should().Be("""
+            PROGRAM USER;
+            USES (*$U ALPHA.CODE*) ALPHA, (*$U BETA.CODE*) BETA;
+            VAR
+              G3: T1;
+              G7: INTEGER;
+            BEGIN
+              S7P2(G3, 5);
+              G7 := S8F3(S8F2(G3[2]))
+            END.
+
+            """);
+
+        result.Units[0].Source.Should().Be("""
+            UNIT ALPHA;
+            INTERFACE
+              TYPE
+                T1 = ARRAY[0..3] OF INTEGER;
+              PROCEDURE S7P2(VAR A7X2: T1; A7X1: INTEGER);
+            IMPLEMENTATION
+              PROCEDURE S7P2;
+                VAR
+                  A7X3: INTEGER;
+              BEGIN
+                FOR A7X3 := 0 TO 3 DO
+                  A7X2[A7X3] := A7X1
+              END;
+            END.
+
+            """);
+
+        result.Units[1].Source.Should().Contain("""
+              FUNCTION S8F2(A8X3: INTEGER): INTEGER;
+              FUNCTION S8F3(A8X3: INTEGER): INTEGER;
+            IMPLEMENTATION
+              FUNCTION S8F2;
+                EXTERNAL;
+              FUNCTION S8F3;
+            """);
+
+        result.Assembly.Should().StartWith("         .FUNC   S8F2,1\n");
+    }
+
+    /// <summary>
+    ///  P5, built from its sources with Apple III Pascal 1.1's tools on an emulated Apple III, decompiles to a program,
+    ///  its units and its assembled function that build back to the same segments: each unit compiled on its own, the
+    ///  program against their code files, and all linked.
+    /// </summary>
+    [TestMethod]
+    public void UnitsRebuildOnTheApple3()
+    {
+        string system = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk1.dsk");
+        string tools = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk2.dsk");
+        if (!File.Exists(system) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE3_DISKS to a folder with Apple III Pascal 1.1's disks.");
+        }
+
+        byte[] original = BuildWithUnits(UserSource, [("ALPHA", AlphaSource), ("BETA", BetaSource)], Add1Source, system, tools);
+        PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(Convert.FromBase64String(P5Code))).Should().BeEmpty();
+
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
+        byte[] rebuilt = BuildWithUnits(
+            result.Source,
+            [.. result.Units.Select(unit => (unit.Name, unit.Source))],
+            result.Assembly ?? "",
+            system,
+            tools);
+
+        // The blocks' unused ends hold what the Compiler's buffer had, the units' interface text among it, whose names
+        // the code does not keep; the segments are the same.
+        PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(rebuilt)).Should().BeEmpty(result.Source);
+    }
+
+    // A program built with units of its own: each unit compiled to NAME.CODE, the program against them, its assembled
+    // procedures assembled, and all linked.
+    private static byte[] BuildWithUnits(string program, IReadOnlyList<(string Name, string Source)> units, string assembly, string boot, string tools)
+    {
+        Dictionary<string, byte[]> compiled = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string name, string source) in units)
+        {
+            (byte[]? unit, string screen) = EmulatedPascalCompiler.Compile(source, boot, tools, s_inputs);
+            if (unit is null) { Assert.Fail($"The Compiler stopped on {name}:\n{screen}\n{source}"); }
+            compiled[$"{name}.CODE"] = unit;
+        }
+
+        (byte[]? host, string hosted) = EmulatedPascalCompiler.Compile(program, boot, tools, s_inputs, compiled);
+        if (host is null) { Assert.Fail($"The Compiler stopped:\n{hosted}\n{program}"); }
+
+        (byte[]? assembled, string assembling) = EmulatedPascalTools.Assemble(assembly, boot, tools, s_inputs);
+        if (assembled is null) { Assert.Fail($"The Assembler stopped:\n{assembling}\n{assembly}"); }
+
+        (byte[]? linked, string linking) = EmulatedPascalTools.Link(host, [.. units.Select(unit => compiled[$"{unit.Name}.CODE"]), assembled], boot, tools, s_inputs);
+        if (linked is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
+        return linked;
+    }
+
+    private const string AlphaSource = """
+        UNIT ALPHA;
+        INTERFACE
+          TYPE BUF = ARRAY[0..3] OF INTEGER;
+          PROCEDURE FILL(VAR B: BUF; N: INTEGER);
+        IMPLEMENTATION
+          PROCEDURE FILL;
+            VAR I: INTEGER;
+          BEGIN
+            FOR I := 0 TO 3 DO B[I] := N
+          END;
+        END.
+        """;
+
+    private const string BetaSource = """
+        UNIT BETA;
+        INTERFACE
+          FUNCTION ADD1(N: INTEGER): INTEGER;
+          FUNCTION TWICE(N: INTEGER): INTEGER;
+        IMPLEMENTATION
+          FUNCTION ADD1; EXTERNAL;
+          FUNCTION TWICE;
+          BEGIN
+            TWICE := N * 2
+          END;
+        END.
+        """;
+
+    private const string UserSource = """
+        PROGRAM USER;
+        USES (*$U ALPHA.CODE*) ALPHA, (*$U BETA.CODE*) BETA;
+        VAR G: BUF; X: INTEGER;
+        BEGIN
+          FILL(G, 5);
+          X := TWICE(ADD1(G[2]))
+        END.
+        """;
 
     /// <summary>
     ///  A unit's interface text gives its procedures in the order calls number them, from 2, and its enumerated types.

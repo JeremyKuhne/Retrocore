@@ -62,6 +62,25 @@ internal sealed class EmulatedApple3PascalSystem
         }
 
         Run(tenths: 10);
+
+        // Names without a volume, such as a unit's code file a source's (*$U*) names, are /WORK's.
+        Type("F");
+        Expect("Filer:");
+        Type("P");
+        Expect("Prefix");
+        Type("/WORK\n");
+        Expect("Prefix is /WORK");
+        Type("Q");
+        Expect(CommandLine);
+        Run(tenths: 10);
+    }
+
+    private void Expect(string text)
+    {
+        if (WaitFor([text], seconds: 60) is null)
+        {
+            throw new TimeoutException($"Pascal never showed {text}:\n{Screen}");
+        }
     }
 
     /// <summary>

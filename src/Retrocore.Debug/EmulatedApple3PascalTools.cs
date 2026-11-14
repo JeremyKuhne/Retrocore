@@ -48,6 +48,7 @@ internal static partial class EmulatedApple3PascalTools
     /// <param name="toolsDisk">/PASCAL2's image, with <c>SYSTEM.COMPILER</c>.</param>
     /// <param name="listing">A listing file's name to write on /WORK and read back, or null for none.</param>
     /// <param name="roms">The SDK's sources, or null for the copy beside the host.</param>
+    /// <param name="files">Code files to put on /WORK beside the source, by name, such as the units it USES.</param>
     /// <returns>The code file, or null on an error; the screen when it finished; and the listing, or null.</returns>
     /// <exception cref="TimeoutException">The system never booted, or the Compiler never finished.</exception>
     internal static (byte[]? Code, string Screen, string? Listing) Compile(
@@ -55,10 +56,16 @@ internal static partial class EmulatedApple3PascalTools
         string systemDisk,
         string toolsDisk,
         string? listing,
-        string? roms = null)
+        string? roms = null,
+        IReadOnlyDictionary<string, byte[]>? files = null)
     {
         SosVolumeBuilder work = new("WORK");
         work.Add("SOURCE.TEXT", TextType, auxType: 0, PascalTextFile.Write(source));
+        foreach ((string name, byte[] data) in files ?? new Dictionary<string, byte[]>())
+        {
+            work.Add(name, CodeType, auxType: 0, data);
+        }
+
         EmulatedApple3PascalSystem system = new(File.ReadAllBytes(systemDisk), File.ReadAllBytes(toolsDisk), work.Build(proDosOrder: false), roms);
 
         system.Type("C");

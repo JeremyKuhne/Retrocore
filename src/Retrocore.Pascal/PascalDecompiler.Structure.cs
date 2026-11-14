@@ -10,6 +10,11 @@ public sealed partial class PascalDecompiler
     // own, after the declared variables, and reaches the fields through it.
     // Whether a value stored may be a WITH's pointer: an address, or a word loaded or a function returns. An assembled
     // function's result is of no type the code says, so it is a value.
+    private static void Read(Expr expression, HashSet<Variable> read)
+    {
+        if (expression is Load { Designator: VariableDesignator { Variable: var loaded } }) { read.Add(loaded); }
+    }
+
     private static bool MayPoint(Expr value) => value is Address
         || (value is Load or Call && value.Words == 1 && value is not Call { Callee.Procedure.Code.IsNative: true });
 
@@ -75,6 +80,15 @@ public sealed partial class PascalDecompiler
             }, _ => { });
 
             foreach (Variable used in values) { candidates[used] = false; }
+
+            // A WITH's pointer is read to reach its record; a word stored and never read is a variable.
+            HashSet<Variable> read = [];
+            Walk(procedure.Body, _ => { }, expression => Read(expression, read));
+
+            foreach (Variable unread in candidates.Keys.Where(candidate => !read.Contains(candidate)).ToList())
+            {
+                candidates[unread] = false;
+            }
 
             // Temporaries come after every declared variable.
             List<Variable> temporaries = [.. candidates.Where(pair => pair.Value).Select(pair => pair.Key).OrderByDescending(variable => variable.Offset)];

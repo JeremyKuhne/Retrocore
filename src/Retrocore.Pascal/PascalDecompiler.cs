@@ -38,6 +38,9 @@ public sealed partial class PascalDecompiler
     private readonly List<string> _warnings = [];
     private readonly List<Procedure> _procedures = [];
 
+    // The segments that are units of the program's own, linked in.
+    private readonly HashSet<PascalSegment> _unitSegments = [];
+
     // The types of words a constant other than 0 is stored in: a pointer among them is also an integer.
     private readonly List<TypeNode> _constantStores = [];
     private readonly Frame _system = new(owner: null, level: -1, parameterWords: 0, dataWords: 0);
@@ -84,7 +87,11 @@ public sealed partial class PascalDecompiler
         decompiler.Rename();
         string source = decompiler.Write();
         string? assembly = decompiler.Assembly();
-        return new PascalDecompilation(source, decompiler._warnings) { Assembly = assembly };
+        return new PascalDecompilation(source, decompiler._warnings)
+        {
+            Assembly = assembly,
+            Units = decompiler._unitSources
+        };
     }
 
     private void Warn(string warning) => _warnings.Add(warning);
@@ -104,12 +111,9 @@ public sealed partial class PascalDecompiler
                 continue;
             }
 
-            // A unit the Linker linked in has its procedures beside its initialization, at its level; a segment
-            // procedure's are in it.
-            if (segment != _main && segment.Procedures.Count(code => code.LexicalLevel == 1 && !code.IsNative) > 1)
-            {
-                Warn($"The segment {segment.Name} is a unit the program uses, linked in, whose source is a UNIT of its own; it is written as a segment procedure, which does not compile.");
-            }
+            // A unit of the program's own, which the Linker linked in, has its procedures beside its initialization, at
+            // its level; a segment procedure's are in it.
+            if (segment != _main && segment.Procedures.Any(IsUnitProcedure)) { _unitSegments.Add(segment); }
 
             List<Procedure> procedures = [.. segment.Procedures.Select(code => new Procedure(segment, code))];
             foreach (Procedure procedure in procedures)
@@ -170,6 +174,9 @@ public sealed partial class PascalDecompiler
             }
         }
     }
+
+    // A procedure beside a segment's procedure 1, at its level: a unit's.
+    private static bool IsUnitProcedure(PascalProcedure code) => code.Index != 1 && (code.IsNative || code.LexicalLevel == 1);
 
     // Whether a segment holds the program: a p-code procedure 1 at the outer level. The Linker marks a segment it links
     // assembled procedures into as the machine's (FORMATTER's is M6502), so the machine type does not say.

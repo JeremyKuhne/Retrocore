@@ -128,8 +128,10 @@ What the decompiler does not decompile yet, found by decompiling every code file
   limit, 0 for `=` or 1 for `<>`, the character, the array's address and byte offset, and a 0.
 - **GOTO into a statement:** a jump the structurer cannot place at the start of a statement (LIBRARY, the Linker), and
   an FJP that leaves its statement (LIBMAP), as a GOTO out of a REPEAT's condition makes.
-- **Units:** a program's own units (linked in by the Linker), a unit's variables (`LDE`, `LAE`, `STE`), and units
-  other than the library's.
+- **Units:** a unit's variables (`LDE`, `LAE`, `STE`), and a unit that USES another. A program's own units, linked
+  in, decompile to UNIT sources (2026-11-14), found with probes built by Apple III Pascal's tools: a unit compiled
+  alone is segment 7, and the program's USES renumbers its units from 7 in order; the host keeps an empty segment
+  for each, which the Linker fills; the Compiler calls their initializations at the program's start.
 - **Segment procedures** are handled, but no sample has one: check them with a program written to.
 - **Other Compilers:** recompiling with Apple Pascal 1.0's and 1.2's Compilers, and Apple III Pascal's on the emulated
   Apple III, so code files they wrote can be checked as 1.1's are.

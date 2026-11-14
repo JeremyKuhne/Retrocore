@@ -18,4 +18,9 @@ public sealed record PascalDecompilation(string Source, IReadOnlyList<string> Wa
     ///  compiled source; null when it has none.
     /// </summary>
     public string? Assembly { get; init; }
+
+    /// <summary>
+    ///  Gets the units of the program's own, which the Linker linked into it, as sources to compile before it.
+    /// </summary>
+    public IReadOnlyList<PascalDecompiledUnit> Units { get; init; } = [];
 }

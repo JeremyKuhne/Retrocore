@@ -99,6 +99,9 @@ public sealed partial class PascalDecompiler
 
             if (_owner.FindSegment(segment, number) is { } procedure && procedure.Segment != _owner._main)
             {
+                // A unit's initialization, which the Compiler calls for its USES.
+                if (number == 1 && _owner._unitSegments.Contains(procedure.Segment)) { return; }
+
                 CallProcedure(procedure, stack, statements);
                 return;
             }

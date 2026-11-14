@@ -46,7 +46,7 @@ internal static partial class PascalCommand
                --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
-               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]
+               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]...
                --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
@@ -72,8 +72,7 @@ internal static partial class PascalCommand
                 ["assemble", string source, string output] => Assemble(source, output),
                 ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
                 ["decompile", .. string[] rest] => Decompile(rest),
-                ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null),
-                ["compile", string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing),
+                ["compile", .. string[] rest] => Compile(rest),
                 ["assembly", .. string[] rest] when rest.Length >= 2 && CodeFile(rest[..^1], out _) is { } file => Assembly(file, rest[..^1], rest[^1]),
                 ["assemble-native", string source, string boot, string tools, string output] => AssembleNative(source, boot, tools, output),
                 ["link", string host, .. string[] rest] when rest.Length >= 3 => Link(host, rest[..^3], rest[^3], rest[^2], rest[^1]),
@@ -353,6 +352,14 @@ internal static partial class PascalCommand
             File.WriteAllText(rest[inputs], result.Source);
             Console.WriteLine($"Wrote {rest[inputs]}.");
 
+            // The program's own units go beside it, NAME.UNIT.text, to compile before it, each to UNIT.CODE.
+            foreach (PascalDecompiledUnit unit in result.Units)
+            {
+                string unitPath = $"{Path.ChangeExtension(rest[inputs], extension: null)}.{unit.Name}.text";
+                File.WriteAllText(unitPath, unit.Source);
+                Console.WriteLine($"Wrote the unit {unit.Name}, segment {unit.Segment}, to {unitPath}; compile it to {unit.Name}.CODE.");
+            }
+
             // Assembled procedures go beside it, as source for the Assembler: NAME.asm.text.
             if (result.Assembly is { } assembly)
             {
@@ -448,7 +455,27 @@ internal static partial class PascalCommand
         return 0;
     }
 
-    private static int Compile(string source, string boot, string compiler, string output, string? listing)
+    // compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]...
+    private static int Compile(string[] args)
+    {
+        List<string> rest = [.. args];
+        Dictionary<string, byte[]> units = new(StringComparer.OrdinalIgnoreCase);
+        for (int at = rest.IndexOf("--unit"); at >= 0; at = rest.IndexOf("--unit"))
+        {
+            if (at + 1 >= rest.Count) { return Fail(Usage, code: 2); }
+            units[Path.GetFileName(rest[at + 1]).ToUpperInvariant()] = File.ReadAllBytes(rest[at + 1]);
+            rest.RemoveRange(at, 2);
+        }
+
+        return rest switch
+        {
+            [string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null, units),
+            [string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing, units),
+            _ => Fail(Usage, code: 2)
+        };
+    }
+
+    private static int Compile(string source, string boot, string compiler, string output, string? listing, Dictionary<string, byte[]> units)
     {
         // A listing the source asks for, (*$L APPLE1:NAME.TEXT*), is read back from APPLE1 to the host.
         string text = File.ReadAllText(source);
@@ -460,7 +487,7 @@ internal static partial class PascalCommand
         }
 
 
-        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed);
+        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed, roms: null, units);
         if (code is null)
         {
             Console.Error.WriteLine(screen);

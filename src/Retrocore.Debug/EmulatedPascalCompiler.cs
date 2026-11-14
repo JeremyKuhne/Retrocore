@@ -28,14 +28,20 @@ internal static partial class EmulatedPascalCompiler
     /// <param name="bootDisk">APPLE1's image, as a 140K <c>.dsk</c>.</param>
     /// <param name="compilerDisk">APPLE2's image, with <c>SYSTEM.COMPILER</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="files">Code files to put beside the source, by name, such as the units it USES.</param>
     /// <returns>
     ///  The code file the Compiler wrote, or null when it stopped with an error; and the screen when it finished, which
     ///  shows an error.
     /// </returns>
     /// <exception cref="TimeoutException">The system never booted, or the Compiler never finished.</exception>
-    internal static (byte[]? Code, string Screen) Compile(string source, string bootDisk, string compilerDisk, string? roms = null)
+    internal static (byte[]? Code, string Screen) Compile(
+        string source,
+        string bootDisk,
+        string compilerDisk,
+        string? roms = null,
+        IReadOnlyDictionary<string, byte[]>? files = null)
     {
-        (byte[]? code, string screen, _) = CompileWithListing(source, bootDisk, compilerDisk, listing: null, roms);
+        (byte[]? code, string screen, _) = CompileWithListing(source, bootDisk, compilerDisk, listing: null, roms, files);
         return (code, screen);
     }
 
@@ -49,6 +55,9 @@ internal static partial class EmulatedPascalCompiler
     ///  The listing file the source's <c>(*$L APPLE1:NAME.TEXT*)</c> names, on APPLE1, to read back; null for none.
     /// </param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="files">
+    ///  Code files to put beside the source, by name, such as the units it USES, which its <c>(*$U NAME.CODE*)</c> names.
+    /// </param>
     /// <returns>
     ///  The code file, or null on an error; the screen when it finished; and the listing's text, or null.
     /// </returns>
@@ -58,12 +67,13 @@ internal static partial class EmulatedPascalCompiler
         string bootDisk,
         string compilerDisk,
         string? listing,
-        string? roms = null)
+        string? roms = null,
+        IReadOnlyDictionary<string, byte[]>? files = null)
     {
         // An Apple III Pascal system disk is SOS: its Compiler runs on an emulated Apple III.
         if (EmulatedApple3PascalTools.IsSos(bootDisk))
         {
-            (byte[]? compiled, string shown, string? listed) = EmulatedApple3PascalTools.Compile(source, bootDisk, compilerDisk, listing, roms);
+            (byte[]? compiled, string shown, string? listed) = EmulatedApple3PascalTools.Compile(source, bootDisk, compilerDisk, listing, roms, files);
             if (compiled is not null) { RestoreAlignment(compiled, source); }
             return (compiled, shown, listed);
         }
@@ -73,6 +83,11 @@ internal static partial class EmulatedPascalCompiler
         // compile does not need, makes room.
         if (listing is not null) { PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.EDITOR"); }
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
+        foreach ((string name, byte[] data) in files ?? new Dictionary<string, byte[]>())
+        {
+            PascalVolume.WriteFile(boot, proDosOrder: false, name, PascalFileKind.Code, data);
+        }
+
 
         EmulatedPascalSystem system = new(boot, compilerDisk, roms);
         system.Type("C");

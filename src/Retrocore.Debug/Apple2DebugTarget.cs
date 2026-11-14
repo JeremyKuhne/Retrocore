@@ -656,6 +656,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// </summary>
     internal bool StartsCycle => !_machine.MidCycle;
 
+    /// <summary>
+    ///  Gets whether the last step ran a 6502 cycle, which it does beside the Z80 while the Z80 finishes its instruction
+    ///  after giving the bus back.
+    /// </summary>
+    internal bool Stepped { get; private set; }
+
     // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard holds it, its last cycle is
     // an old one, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
     private void Advance(bool halfCycle)
@@ -672,7 +678,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             _machine.StepCycle();
         }
 
-        if (_machine.Processor.CycleCount != cycles)
+        Stepped = _machine.Processor.CycleCount != cycles;
+        if (Stepped)
         {
             ProcessorCycle cycle = _machine.LastCycle;
             if (cycle.IsOpcodeFetch && !cycle.IsStalled) { ObserveFetch(cycle.Address, cycle.Value); }

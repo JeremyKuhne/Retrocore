@@ -1263,6 +1263,14 @@ internal sealed partial class DebugSession
         // CPU's own view; the SoftCard's Z80 runs its last T-states beside the 6502.
         IDebugTarget cpu = Cpu;
         bool instruction = cpu.InInstruction;
+
+        // What the 6502 hit beside the Z80 counts toward the 6502's instruction, which goes on here.
+        if (_hostDataHits.Count != 0 && IsMachineCpu(cpu))
+        {
+            _dataHits.AddRange(_hostDataHits);
+            _hostDataHits.Clear();
+        }
+
         for (int count = 0; count < InstructionCycleBudget; count++)
         {
             if (cpu.CycleBreak() is { } beam && BeamStop(beam) is { } stop)
@@ -1289,6 +1297,10 @@ internal sealed partial class DebugSession
             if (_watches.Count != 0)
             {
                 Watch(cpu.LastCycle, cpu is SoftCardDebugTarget z80 ? z80.Card.Processor.LastCycle : null);
+                if (cpu is SoftCardDebugTarget { HostCycle: { } beside })
+                {
+                    Watch(beside, ownCycle: null, _hostDataHits);
+                }
             }
 
             if (_cycleSource is not null) { _pendingLineCycles++; }

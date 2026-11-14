@@ -241,6 +241,11 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     /// </summary>
     internal bool StartsHostCycle => _host.StartsCycle;
 
+    /// <summary>
+    ///  Gets the 6502's cycle in the last step, when it ran one beside the Z80; null when it was held.
+    /// </summary>
+    internal ProcessorCycle? HostCycle => _host.Stepped ? _host.LastCycle : null;
+
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address)
     {

@@ -39,6 +39,10 @@ internal sealed partial class DebugSession
 
     // Data breakpoints the current instruction has hit, checked when it finishes.
     private readonly List<(BreakpointState Breakpoint, string Description)> _dataHits = [];
+
+    // The data breakpoints the 6502 hit while it ran beside a Z80 finishing its instruction: they belong to the 6502's
+    // instruction, so they wait for it to end on the 6502's own view.
+    private readonly List<(BreakpointState Breakpoint, string Description)> _hostDataHits = [];
     private JsonObject? _functionRequest;
     private JsonObject? _instructionRequest;
     private JsonObject? _dataRequest;
@@ -233,6 +237,7 @@ internal sealed partial class DebugSession
         _basicSites.Clear();
         _watches.Clear();
         _dataHits.Clear();
+        _hostDataHits.Clear();
         foreach (JsonObject request in _requested.Values.ToArray())
         {
             Breakpoints(request);
@@ -549,6 +554,7 @@ internal sealed partial class DebugSession
         _basicWatches.Clear();
         _basicWatchValues.Clear();
         _dataHits.Clear();
+        _hostDataHits.Clear();
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -949,7 +955,9 @@ internal sealed partial class DebugSession
 
     // Notes the data breakpoints a bus cycle hits, for when its instruction finishes. A coprocessor's cycle comes in its
     // own addresses too: a watch on its bank, such as z80:$0100, matches those, and every other watch the machine's.
-    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle)
+    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle) => Watch(hostCycle, ownCycle, _dataHits);
+
+    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle, List<(BreakpointState Breakpoint, string Description)> hits)
     {
         foreach (DataWatch watch in _watches)
         {
@@ -961,7 +969,7 @@ internal sealed partial class DebugSession
                 cycle = z80;
             }
 
-            if (!watch.Matches(cycle, out bool write) || _dataHits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
+            if (!watch.Matches(cycle, out bool write) || hits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
             {
                 continue;
             }
@@ -978,7 +986,7 @@ internal sealed partial class DebugSession
             int address = watch.Port && watch.Start + watch.Length <= 0x100 ? cycle.Address & 0xFF : cycle.Address;
             string place = Describe(watch.Port, address, length: 1, watch.Bank?.Name);
             string description = write ? $"Wrote ${cycle.Value:X2} to {place}." : $"Read ${cycle.Value:X2} from {place}.";
-            _dataHits.Add((watch.Breakpoint, description));
+            hits.Add((watch.Breakpoint, description));
         }
     }
 

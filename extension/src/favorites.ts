@@ -7,7 +7,7 @@
 // starts it. favorite.ts has the favorite itself.
 
 import * as vscode from "vscode";
-import { differences, favoriteFrom, favoriteSetup, isFavorite, local, portable, resolveVariables, type Favorite } from "./favorite";
+import { differences, expanded, favoriteFrom, favoriteSetup, isFavorite, local, portable, resolveVariables, type Favorite } from "./favorite";
 import { machineById } from "./machines";
 import { folder, type OffMachine, type OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
@@ -243,7 +243,7 @@ export function registerFavorites(context: vscode.ExtensionContext, off: OffMach
         const kept = linked();
         if (kept === undefined) return { state: "none" };
         const now = capture(kept.favorite.name, kept.favorite.description, kept.scope, true);
-        const found = now === undefined ? [] : differences(kept.favorite, now);
+        const found = now === undefined ? [] : differences(expanded(kept.favorite, workspacePath()), expanded(now, workspacePath()));
         return found.length === 0 ? { state: "saved", kept } : { state: "changed", kept, differences: found };
     };
 

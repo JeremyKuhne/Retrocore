@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { differences, favoriteFrom, favoriteSetup, isFavorite, local, portable, resolveVariables, type Favorite } from "../favorite";
+import { differences, expanded, favoriteFrom, favoriteSetup, isFavorite, local, portable, resolveVariables, type Favorite } from "../favorite";
 import { setupConfiguration, setupFromConfiguration, type Setup } from "../startFlow";
 
 test("a favorite is a setup under its own name, with its saved machine", () => {
@@ -42,23 +42,27 @@ test("a launch configuration becomes the setup Start Machine would make", () => 
     assert.equal(setupFromConfiguration({ machine: "pdp10" }), undefined);
 
     // Disks and tapes it starts with are what it runs, and a Color Computer's disks bring their controller.
-    assert.deepEqual(setupFromConfiguration({ machine: "apple2", diskImage: "C:\dos.dsk" }),
-        { machineId: "apple2-iie-enhanced", kind: "disk", path: "C:\dos.dsk", options: {} });
-    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\a.dsk", "C:\b.dsk"] }),
-        { machineId: "coco2", kind: "disk", path: "C:\a.dsk", options: { diskController: true } });
-    assert.deepEqual(setupFromConfiguration({ machine: "coco", source: "C:\a.asm", disks: ["C:\a.dsk"] }),
-        { machineId: "coco2", kind: "source", path: "C:\a.asm", options: { diskController: true } }, "the controller stays when it runs a source");
-    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\a.dsk"], diskController: false })?.options, {},
+    assert.deepEqual(setupFromConfiguration({ machine: "apple2", diskImage: "C:\\dos.dsk" }),
+        { machineId: "apple2-iie-enhanced", kind: "disk", path: "C:\\dos.dsk", options: {} });
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\\a.dsk", "C:\\b.dsk"] }),
+        { machineId: "coco2", kind: "disk", path: "C:\\a.dsk", options: { diskController: true } });
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", source: "C:\\a.asm", disks: ["C:\\a.dsk"] }),
+        { machineId: "coco2", kind: "source", path: "C:\\a.asm", options: { diskController: true } }, "the controller stays when it runs a source");
+    assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\\a.dsk"], diskController: false })?.options, {},
         "a controller turned off stays off");
-    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", source: "C:\a.asm", disks: ["C:\d.dsk"] })?.options, { diskController: true },
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", source: "C:\\a.asm", disks: ["C:\\d.dsk"] })?.options, { diskController: true },
         "the Model I keeps its implied controller as the launch option");
-    const dos32 = setupFromConfiguration({ machine: "apple2", model: "iiplus", source: "C:\a.s", dos: "3.2" });
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model3", model: "4", source: "C:\\a.asm", disks: ["C:\\d.dsk"] })?.options, { diskController: true },
+        "the Model 4 keeps its implied controller");
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", diskController: true })?.options, { diskController: true },
+        "and an explicit one is kept where the catalog has no such choice");
+    const dos32 = setupFromConfiguration({ machine: "apple2", model: "iiplus", source: "C:\\a.s", dos: "3.2" });
     assert.equal(dos32?.dos, "3.2", "a DOS 3.2 source stays one");
     assert.equal(dos32 === undefined ? undefined : setupConfiguration(dos32).dos, "3.2");
-    assert.equal(setupFromConfiguration({ machine: "apple2", source: "C:\a.s", dos: "3.3" })?.dos, undefined);
+    assert.equal(setupFromConfiguration({ machine: "apple2", source: "C:\\a.s", dos: "3.3" })?.dos, undefined);
     assert.equal(favoriteSetup(favoriteFrom(dos32!, "D", undefined, undefined)).dos, "3.2", "and through a favorite");
-    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", cassette: "C:\a.cas" }),
-        { machineId: "trs80-model1-level2", kind: "tape", path: "C:\a.cas", options: {} });
+    assert.deepEqual(setupFromConfiguration({ machine: "trs80-model1", cassette: "C:\\a.cas" }),
+        { machineId: "trs80-model1-level2", kind: "tape", path: "C:\\a.cas", options: {} });
 });
 
 test("paths inside the workspace are kept as ${workspaceFolder} and come back as they were", () => {
@@ -77,6 +81,17 @@ test("paths inside the workspace are kept as ${workspaceFolder} and come back as
     assert.equal(portable(favorite, undefined), favorite, "with no workspace nothing changes");
     assert.equal(portable({ path: "/home/me/project/a.dsk" }, "/home/me/project").path, "${workspaceFolder}/a.dsk");
     assert.equal(portable({ path: "/home/me/Project/a.dsk" }, "/home/me/project").path, "/home/me/Project/a.dsk", "elsewhere, case matters");
+});
+
+test("a favorite is compared with its variables expanded and its separators made one", () => {
+    const kept: Favorite = { name: "E", machine: "apple2-iiplus", run: { kind: "disk", path: "${env:RETRO_TEST_DISKS}/dos.dsk" } };
+    const now: Favorite = { name: "E", machine: "apple2-iiplus", run: { kind: "disk", path: "C:\\disks\\dos.dsk" } };
+    process.env.RETRO_TEST_DISKS = "C:\\disks";
+    try {
+        assert.deepEqual(differences(expanded(kept, undefined), expanded(now, undefined)), [], "the same disk, written two ways");
+    } finally {
+        delete process.env.RETRO_TEST_DISKS;
+    }
 });
 
 test("a workspace path comes back as the workspace's own, with its separators", () => {

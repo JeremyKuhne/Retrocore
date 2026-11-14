@@ -12,7 +12,7 @@ import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { describeSetup, isUsable, setupConfiguration, setupFromConfiguration, withOption, type Setup } from "./startFlow";
+import { describeSetup, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -125,7 +125,10 @@ export class OffMachine {
         const setup = this.state.get<Setup>(lastSetupKey);
         const machine = catalogMachine(configuration);
         let source: OffSource = { kind: "configuration", folder: session.workspaceFolder?.uri.toString() };
-        if (isUsable(setup) && setupConfiguration(setup).name === name) source = { kind: "setup", setup };
+        // Start Machine says it started it; otherwise a launch.json entry of its name, or a catalog machine's own.
+        if (configuration[startOrigin] === "startMachine" && isUsable(setup) && setupConfiguration(setup).name === name) {
+            source = { kind: "setup", setup };
+        }
         // Its own folder's launch.json, as a multi-root workspace can have one in each.
         else if (typeof name === "string" && launchConfigurations(session.workspaceFolder ?? folder()).some(entry => entry.name === name)) {
             source = { kind: "launch", name, folder: (session.workspaceFolder ?? folder())?.uri.toString() };
@@ -134,7 +137,7 @@ export class OffMachine {
             const setup = setupFromConfiguration(configuration);
             if (setup !== undefined) source = { kind: "setup", setup };
         }
-        const { machineState: _saved, ...rest } = configuration;
+        const { machineState: _saved, [startOrigin]: _origin, ...rest } = configuration;
         this.target = { configuration: rest, source };
         this.body = undefined;
         await this.state.update(targetKey, this.target);
@@ -145,7 +148,26 @@ export class OffMachine {
         await this.serially(() => this.describeNow());
     }
 
+    /**
+     * A launch.json machine as its entry is now, resolved, so an edit to launch.json shows and is what changes are
+     * saved under; an entry that is gone keeps the last one seen.
+     */
+    private async reread(): Promise<void> {
+        const target = this.target;
+        if (target?.source.kind !== "launch") return;
+        const name = target.source.name;
+        const workspace = folderOf(target.source.folder);
+        const entry = launchConfigurations(workspace).find(candidate => candidate.name === name);
+        if (entry === undefined) return;
+        const { machineState: _saved, ...configuration } = resolveVariables(entry, workspace?.uri.fsPath);
+        if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
+        this.target = { ...target, configuration };
+        this.body = undefined;
+        await this.state.update(targetKey, this.target);
+    }
+
     private async describeNow(): Promise<void> {
+        await this.reread();
         const target = this.target;
         if (target === undefined) return;
         await this.ask("retrocore/machine/describe", { configuration: target.configuration, machineState: this.saved.get(target.configuration) });
@@ -155,6 +177,7 @@ export class OffMachine {
     async change(request: "hardware" | "device", args: Record<string, unknown>): Promise<void> {
         // The saved machine is read once the change before has saved its own.
         await this.serially(async () => {
+            await this.reread();
             const target = this.target;
             if (target === undefined) return;
             await this.ask("retrocore/machine/change", {
@@ -180,15 +203,17 @@ export class OffMachine {
     }
 
     private async setSettingNow(option: string, value: string | number | boolean): Promise<void> {
+        await this.reread();
         const target = this.target;
         const machine = this.machine;
         const choice = machine?.choices.find(candidate => candidate.option === option);
         if (target === undefined || machine === undefined || choice === undefined) {
             throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
         }
-        // Its disks need their controller: without it the launch would have no drives to put them in.
-        if (option === "diskController" && value === false && startsWithDisks(target.configuration)) {
-            throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its disk controller.`);
+        // Its disks need their controller, and the Model I's controller its Expansion Interface: without them the launch
+        // would have no drives to put them in.
+        if ((option === "diskController" || option === "expansionInterface") && value === false && startsWithDisks(target.configuration)) {
+            throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its ${choice.label.toLowerCase()}.`);
         }
 
         let next: OffTarget;

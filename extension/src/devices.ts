@@ -479,6 +479,12 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         // Once this session ends, the views show its machine, off.
         void off.started(session);
     }));
+    // An edit to launch.json may be the off machine's own entry, which it reads again when next described.
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
+        if (tree.session !== undefined || off.target?.source.kind !== "launch" || !event.affectsConfiguration("launch")) return;
+        stale = true;
+        seen();
+    }));
     context.subscriptions.push(saved.onDidReset(() => {
         if (tree.session !== undefined) return;
         stale = true;

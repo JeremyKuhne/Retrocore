@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import { favoriteChoices } from "./favorites";
 import { machines, type Machine } from "./machines";
 import {
-    describeSetup, isUsable, optionValue, runChoices, setupConfiguration, withOption, type RunChoice, type Setup
+    describeSetup, isUsable, optionValue, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
 } from "./startFlow";
 
 const lastKey = "retrocore.lastSetup";
@@ -34,7 +34,8 @@ export function registerStartMachine(context: vscode.ExtensionContext): void {
 
     const start = async (setup: Setup): Promise<boolean> => {
         await state.update(lastKey, setup);
-        return vscode.debug.startDebugging(folder(), setupConfiguration(setup) as vscode.DebugConfiguration);
+        // Tagged, so the machine shown off once it ends knows Start Machine started it, whatever launch.json has.
+        return vscode.debug.startDebugging(folder(), { ...setupConfiguration(setup), [startOrigin]: "startMachine" } as unknown as vscode.DebugConfiguration);
     };
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.startMachine", async (given?: Setup) => {

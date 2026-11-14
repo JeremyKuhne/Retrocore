@@ -158,3 +158,19 @@ export function differences(kept: Favorite, now: Favorite): string[] {
     if (part(kept, "media") !== part(now, "media")) found.push("its disks and tapes");
     return found;
 }
+
+/**
+ * A favorite or a machine as compared: variables expanded and paths' separators made one, so a favorite written with
+ * ${userHome}, ${env:NAME} or ${workspaceFolder} matches the machine it loads as.
+ */
+export function expanded<T>(value: T, workspace: string | undefined): T {
+    const walk = (item: unknown): unknown => {
+        if (typeof item === "string") return item.replace(/\\/g, "/");
+        if (Array.isArray(item)) return item.map(walk);
+        if (typeof item === "object" && item !== null) {
+            return Object.fromEntries(Object.entries(item).map(([key, entry]) => [key, walk(entry)]));
+        }
+        return item;
+    };
+    return walk(resolveVariables(value, workspace)) as T;
+}

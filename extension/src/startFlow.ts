@@ -8,6 +8,9 @@
 
 import { catalogMachine, launchConfiguration, machineById, type Machine } from "./machines";
 
+/** The launch property Start Machine marks its launches with, so where a session came from is known; the debug host ignores it. */
+export const startOrigin = "retrocoreOrigin";
+
 /** What a machine is started with. */
 export type RunKind = "machine" | "source" | "program" | "basic" | "disk" | "tape" | "dosSource";
 
@@ -188,12 +191,14 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
     const disks = Array.isArray(configuration.disks) ? configuration.disks.filter((disk): disk is string => typeof disk === "string") : [];
 
-    // A Color Computer or Model I given disks has its disk controller without saying so; kept, it is the setting it
-    // amounts to, so the drives its saved media go in are there whatever it runs. The Model I has no such choice in
-    // the catalog, so it is kept as the launch option.
+    // A Color Computer, Model I or Model III family given disks has its disk controller without saying so; kept, it is
+    // the setting it amounts to, so the drives its saved media go in are there whatever it runs. The TRS-80s have no
+    // such choice in the catalog, so theirs is kept as the launch option, an explicit one too.
     const controller = machine.choices.find(choice => choice.option === "diskController");
-    const implied = controller !== undefined ? controller.default === false : machine.configuration.machine === "trs80-model1";
+    const trs80 = ["trs80-model1", "trs80-model3"].includes(machine.configuration.machine);
+    const implied = controller !== undefined ? controller.default === false : trs80;
     if (implied && disks.length !== 0 && configuration.diskController === undefined) options.diskController = true;
+    if (controller === undefined && trs80 && configuration.diskController === true) options.diskController = true;
 
     const source = text("source");
     if (source !== undefined) {

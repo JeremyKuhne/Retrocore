@@ -114,6 +114,36 @@ public sealed partial class PascalDecompiler
         public SortedDictionary<int, TypeNode>? Fields { get; set; }
 
         /// <summary>
+        ///  Gets or sets a record's other fields by word offset: the variants' fields at offsets where the code uses
+        ///  one word as a pointer and another as an integer, as in a record with a variant part.
+        /// </summary>
+        public SortedDictionary<int, List<TypeNode>>? Variants { get; set; }
+
+        /// <summary>
+        ///  Gets a record's fields and its variants' fields.
+        /// </summary>
+        public IEnumerable<TypeNode> AllFields =>
+            (Fields?.Values ?? Enumerable.Empty<TypeNode>()).Concat(Variants?.Values.SelectMany(list => list) ?? []);
+
+        /// <summary>
+        ///  Gets the distinct types of a record's fields at a word offset: its field's first, then its variants'.
+        /// </summary>
+        /// <param name="offset">The word offset.</param>
+        /// <returns>The types, none where the record has no field there.</returns>
+        public List<TypeNode> Alternatives(int offset)
+        {
+            TypeNode root = Find();
+            List<TypeNode> alternatives = [];
+            if (root.Fields?.TryGetValue(offset, out TypeNode? field) == true) { alternatives.Add(field.Find()); }
+            foreach (TypeNode variant in root.Variants?.GetValueOrDefault(offset) ?? [])
+            {
+                if (!alternatives.Contains(variant.Find())) { alternatives.Add(variant.Find()); }
+            }
+
+            return alternatives;
+        }
+
+        /// <summary>
         ///  Gets or sets a record's packed fields by word and first bit, with their widths.
         /// </summary>
         public SortedDictionary<(int Word, int Bit), (int Width, TypeNode Type)>? PackedFields { get; set; }
@@ -464,13 +494,15 @@ public sealed partial class PascalDecompiler
             // A record and a thing of another kind at its address: the thing is its first field.
             if (a.Kind == TypeKind.Record && b.Kind is not (TypeKind.Record or TypeKind.Unknown))
             {
-                Unify(a.Field(0), b);
+                a.Field(0);
+                Merge(a, 0, b);
                 return;
             }
 
             if (b.Kind == TypeKind.Record && a.Kind is not (TypeKind.Record or TypeKind.Unknown))
             {
-                Unify(b.Field(0), a);
+                b.Field(0);
+                Merge(b, 0, a);
                 return;
             }
 
@@ -539,13 +571,32 @@ public sealed partial class PascalDecompiler
                 a.Fields ??= [];
                 foreach ((int offset, TypeNode field) in b.Fields)
                 {
-                    if (a.Fields.TryGetValue(offset, out TypeNode? existing))
+                    if (a.Fields.ContainsKey(offset))
                     {
-                        Unify(existing, field);
+                        Merge(a, offset, field);
                     }
                     else
                     {
                         a.Fields[offset] = field;
+                    }
+                }
+            }
+
+            if (b.Variants is not null)
+            {
+                foreach ((int offset, List<TypeNode> variants) in b.Variants)
+                {
+                    foreach (TypeNode variant in variants)
+                    {
+                        if (a.Fields?.ContainsKey(offset) == true)
+                        {
+                            Merge(a, offset, variant);
+                        }
+                        else
+                        {
+                            a.Fields ??= [];
+                            a.Fields[offset] = variant;
+                        }
                     }
                 }
             }
@@ -565,6 +616,54 @@ public sealed partial class PascalDecompiler
                     }
                 }
             }
+        }
+
+        // Puts a type at a record's word offset: into the field there, or a variant's, that it can be; or, where it is
+        // a pointer and they integers or the other way round, as another variant's field.
+        private static void Merge(TypeNode record, int offset, TypeNode type)
+        {
+            List<TypeNode> alternatives = record.Alternatives(offset);
+            TypeNode root = type.Find();
+            if (alternatives.Contains(root)) { return; }
+
+            foreach (TypeNode alternative in alternatives)
+            {
+                if (!Conflicts(alternative, root))
+                {
+                    Unify(alternative, root);
+                    return;
+                }
+            }
+
+            record.Variants ??= [];
+            if (!record.Variants.TryGetValue(offset, out List<TypeNode>? variants))
+            {
+                variants = [];
+                record.Variants[offset] = variants;
+            }
+
+            variants.Add(root);
+        }
+
+        /// <summary>
+        ///  Whether two types cannot be one: they are of two kinds, neither unknown nor a record, but for an array and a
+        ///  string, or an array of bytes and the word they make.
+        /// </summary>
+        /// <param name="first">One type.</param>
+        /// <param name="second">The other.</param>
+        /// <returns>Whether they are kept apart.</returns>
+        public static bool Conflicts(TypeNode first, TypeNode second)
+        {
+            TypeKind a = first.Find().Kind;
+            TypeKind b = second.Find().Kind;
+            if (a == b || a is TypeKind.Unknown or TypeKind.Record || b is TypeKind.Unknown or TypeKind.Record)
+            {
+                return false;
+            }
+
+            bool strings = (a, b) is (TypeKind.Array, TypeKind.String) or (TypeKind.String, TypeKind.Array);
+            bool bytes = (a, b) is (TypeKind.Array, TypeKind.Scalar) or (TypeKind.Scalar, TypeKind.Array);
+            return !strings && !bytes;
         }
 
         /// <summary>

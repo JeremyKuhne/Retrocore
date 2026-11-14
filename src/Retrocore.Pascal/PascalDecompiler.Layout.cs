@@ -84,7 +84,7 @@ public sealed partial class PascalDecompiler
         }
 
         if (root.Element is { } element) { Blocks(element, seen); }
-        foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>()) { Blocks(field, seen); }
+        foreach (TypeNode field in root.AllFields) { Blocks(field, seen); }
     }
 
     // A procedure's parameters in the order they are declared: the first has the highest words.
@@ -302,6 +302,14 @@ public sealed partial class PascalDecompiler
                         foreach ((int offset, TypeNode field) in root.Fields)
                         {
                             words = Math.Max(words, offset + (SizeOf(field) ?? 1));
+                        }
+                    }
+
+                    foreach ((int offset, List<TypeNode> variants) in root.Variants ?? [])
+                    {
+                        foreach (TypeNode variant in variants)
+                        {
+                            words = Math.Max(words, offset + (SizeOf(variant) ?? 1));
                         }
                     }
 

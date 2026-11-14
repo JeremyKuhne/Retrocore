@@ -65,7 +65,7 @@ public sealed partial class PascalDecompiler
         if (root.Name is not null && !types.Add(root)) { return; }
 
         IEnumerable<TypeNode> parts = root.Kind == TypeKind.Record
-            ? [.. root.Fields?.Values ?? Enumerable.Empty<TypeNode>(), .. root.PackedFields?.Values.Select(field => field.Type) ?? []]
+            ? [.. root.AllFields, .. root.PackedFields?.Values.Select(field => field.Type) ?? []]
             : root.Element is { } element ? [element] : [];
 
         foreach (TypeNode part in parts) { Reach(part, types); }

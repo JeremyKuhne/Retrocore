@@ -506,11 +506,23 @@ public sealed partial class PascalDecompiler
 
     // Whether a link is of a pointer and an integer that stay apart: a pointer compared with an integer, or a pointer
     // that flows into an integer.
+    // A word used both ways and a plain integer or pointer stay apart too: the one is read and written as the other
+    // by its view, .I or .P.
     private static bool Ordinal(TypeNode first, TypeNode second, bool flow)
     {
-        TypeKind a = first.Find().Kind;
-        TypeKind b = second.Find().Kind;
-        return (a, b) is (TypeKind.Scalar, TypeKind.Pointer) || (!flow && (a, b) is (TypeKind.Pointer, TypeKind.Scalar));
+        TypeNode a = first.Find();
+        TypeNode b = second.Find();
+        if (Viewed(a, b) || Viewed(b, a)) { return true; }
+        if ((a.Kind, b.Kind) is (TypeKind.Pointer, TypeKind.Scalar)) { return !flow; }
+        return TypeNode.Conflicts(a, b);
+    }
+
+    // Whether one type is a word used both ways and the other a plain integer or pointer.
+    private static bool Viewed(TypeNode punned, TypeNode plain)
+    {
+        bool both = punned.Kind == TypeKind.Pointer && punned.Punned;
+        bool single = plain.Kind == TypeKind.Scalar || (plain.Kind == TypeKind.Pointer && !plain.Punned);
+        return both && single;
     }
 
     private static void Characters(TypeNode type, HashSet<TypeNode> seen)
@@ -524,7 +536,7 @@ public sealed partial class PascalDecompiler
         }
 
         if (root.Element is { } inner) { Characters(inner, seen); }
-        foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>()) { Characters(field, seen); }
+        foreach (TypeNode field in root.AllFields) { Characters(field, seen); }
     }
 
     // Two types a value flows between: a scalar's kind is shared, but not a subrange; anything else is one type.
@@ -576,7 +588,16 @@ public sealed partial class PascalDecompiler
                 {
                     // A pointer compared with an integer, or flowing into one, is ORD of it; only an integer that
                     // flows into a pointer makes a word used both ways.
-                    if (Ordinal(first, second, flow)) { continue; }
+                    if (Ordinal(first, second, flow))
+                    {
+                        // A word used both ways and a pointer it is read into point to one type.
+                        if (first.Find().Kind == TypeKind.Pointer && second.Find().Kind == TypeKind.Pointer)
+                        {
+                            TypeNode.Unify(first.Target(), second.Target());
+                        }
+
+                        continue;
+                    }
 
                     // A record linked to a scalar is its first field's link.
                     if (first.Find().Kind == TypeKind.Record && Scalar(second) || second.Find().Kind == TypeKind.Record && Scalar(first))

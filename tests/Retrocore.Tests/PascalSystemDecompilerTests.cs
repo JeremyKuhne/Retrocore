@@ -87,6 +87,62 @@ public class PascalSystemDecompilerTests
         BEGIN NEW(P); P^.A := 1; I := ORD(P); I := ORD(P) + 4; IF ORD(P) = I THEN I := 0 END.
         """;
 
+    // A record with a variant part, like the Compiler's identifiers: VALUE, an integer, and TYP, a pointer, share a
+    // word, reached through different procedures' parameters.
+    private const string VariantSource = """
+        PROGRAM V;
+        TYPE K = (KONST, VARS, PROC);
+          P = ^N;
+          N = RECORD NAME: INTEGER; LINK: P;
+            CASE KLASS: K OF
+              KONST: (VALUE: INTEGER; NEXT: P);
+              VARS: (TYP: P; ADDR: INTEGER);
+              PROC: (LEV: INTEGER)
+          END;
+        VAR A: P; I: INTEGER;
+        PROCEDURE USE(Q: P);
+        BEGIN I := Q^.VALUE * 3 END;
+        PROCEDURE USE2(Q: P);
+        BEGIN I := Q^.TYP^.NAME; Q^.TYP^.LINK := Q; Q^.ADDR := Q^.NEXT^.NAME END;
+        BEGIN NEW(A); USE(A); USE2(A); A := A^.LINK END.
+        """;
+
+    // A word that is an integer or a pointer, like the Compiler's VALU, set through a VAR parameter and read into a
+    // plain integer and a plain pointer.
+    private const string ValueSource = """
+        PROGRAM W;
+        TYPE CP = ^C; C = RECORD N: INTEGER; X: CP END;
+          VALU = RECORD CASE BOOLEAN OF TRUE: (IVAL: INTEGER); FALSE: (VALP: CP) END;
+        VAR V: VALU; I: INTEGER; P: CP;
+        PROCEDURE K(VAR F: VALU);
+        BEGIN IF I > 0 THEN F.IVAL := I * 2 ELSE BEGIN NEW(F.VALP); F.VALP^.N := 1 END END;
+        BEGIN K(V); I := V.IVAL + 1; P := V.VALP; P^.X := P END.
+        """;
+
+    /// <summary>
+    ///  Records whose words are integers in one place and pointers in another decompile with a variant part, each
+    ///  use naming its variant's field.
+    /// </summary>
+    [TestMethod]
+    public void RecordsWithVariantsDecompileWithAVariantPart()
+    {
+        string source = RoundTrip(VariantSource);
+        source.Should().Contain("CASE INTEGER OF 0: (F3: INTEGER; F4: T3); 1: (F3V1: T4) END;");
+        source.Should().Contain(" := A1^.F3 * 3").And.Contain(" := A1^.F3V1^.F0;");
+    }
+
+    /// <summary>
+    ///  A word used both ways keeps its views through a VAR parameter and NEW, and the integer and the pointer read
+    ///  from it keep their own types.
+    /// </summary>
+    [TestMethod]
+    public void WordsUsedBothWaysKeepTheirViews()
+    {
+        string source = RoundTrip(ValueSource);
+        source.Should().Contain("A1.I := G4 * 2").And.Contain("NEW(A1.P);").And.Contain("A1.P^.F0 := 1");
+        source.Should().Contain("  G4: INTEGER;\n  G5: T3;\n").And.Contain("G5 := G3.P;");
+    }
+
     /// <summary>
     ///  A pointer used as an integer decompiles to ORD of it, the pointer keeping its own type, rather than to a word
     ///  used both ways.

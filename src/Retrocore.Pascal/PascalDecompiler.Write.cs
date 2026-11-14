@@ -324,7 +324,7 @@ public sealed partial class PascalDecompiler
         if (!full) { return $"{segment}{kind} {procedure.Name};"; }
 
         string list = ParameterList(procedure);
-        string result = procedure.IsFunction ? $": {TypeName(procedure.ResultType, parameter: true)}" : "";
+        string result = !procedure.IsFunction ? "" : Plain(procedure.ResultType) ? ": INTEGER" : $": {TypeName(procedure.ResultType, parameter: true)}";
         return $"{segment}{kind} {procedure.Name}{list}{result};";
     }
 
@@ -386,7 +386,7 @@ public sealed partial class PascalDecompiler
 
                     break;
                 case TypeKind.Record:
-                    foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>())
+                    foreach (TypeNode field in root.AllFields)
                     {
                         Visit(field, parameter: false);
                     }
@@ -415,7 +415,7 @@ public sealed partial class PascalDecompiler
         IEnumerable<TypeNode> parts = root.Kind switch
         {
             TypeKind.Pointer => [],
-            TypeKind.Record => [.. root.Fields?.Values ?? Enumerable.Empty<TypeNode>(), .. root.PackedFields?.Values.Select(field => field.Type) ?? []],
+            TypeKind.Record => [.. root.AllFields, .. root.PackedFields?.Values.Select(field => field.Type) ?? []],
             _ => root.Element is { } element ? [element] : []
         };
 
@@ -512,37 +512,90 @@ public sealed partial class PascalDecompiler
                 }
 
             case TypeKind.Record:
-                {
-                    int words = SizeOf(root) ?? 0;
-                    int offset = 0;
-                    List<string> parts = [];
-                    SortedDictionary<int, TypeNode> known = root.Fields ?? [];
-                    while (offset < words)
-                    {
-                        if (known.TryGetValue(offset, out TypeNode? field))
-                        {
-                            int next = known.Keys.Where(key => key > offset).DefaultIfEmpty(words).Min();
-                            int size = Math.Min(SizeOf(field) ?? (next - offset), next - offset);
-                            Fit(field, size);
-                            parts.Add($"F{offset}: {TypeName(field, parameter: false)}");
-                            offset += Math.Max(1, size);
-                        }
-                        else
-                        {
-                            int next = known.Keys.Where(key => key > offset).DefaultIfEmpty(words).Min();
-                            parts.Add($"F{offset}: {Declare(Padding(next - offset), inline: true)}");
-                            offset = next;
-                        }
-                    }
-
-                    return $"RECORD {string.Join("; ", parts)} END";
-                }
+                return RecordType(root);
 
             default:
                 _ = inline;
                 return Simple(root) ?? "INTEGER";
         }
     }
+
+    // A record's fields in order, with padding where the code uses no word. From the first offset where its words are
+    // used both as pointers and as integers, it has a variant part: the first variant holds the fields the record
+    // has anyway, and each other some of the other fields, those that do not overlap, with padding between them.
+    private string RecordType(TypeNode root)
+    {
+        int words = SizeOf(root) ?? 0;
+        SortedDictionary<int, TypeNode> known = root.Fields ?? [];
+        int start = known.Keys.Where(offset => root.Alternatives(offset).Count > 1).DefaultIfEmpty(words).Min();
+        List<string> fixedPart = Run(0, Math.Min(start, words));
+        if (start >= words) { return $"RECORD {string.Join("; ", fixedPart)} END"; }
+
+        // The other fields, each in the first variant it does not overlap a field of.
+        List<List<string>> variants = [Run(start, words)];
+        List<int> ends = [words];
+        foreach (int offset in known.Keys.Where(key => key >= start))
+        {
+            List<TypeNode> alternatives = root.Alternatives(offset);
+            for (int index = 1; index < alternatives.Count; index++)
+            {
+                TypeNode field = alternatives[index];
+                int size = Math.Max(1, SizeOf(field) ?? 1);
+                Fit(field, size);
+                int variant = Enumerable.Range(1, ends.Count - 1).FirstOrDefault(other => ends[other] <= offset);
+                if (variant == 0)
+                {
+                    variants.Add([]);
+                    ends.Add(start);
+                    variant = variants.Count - 1;
+                }
+
+                if (ends[variant] < offset)
+                {
+                    variants[variant].Add($"X{ends[variant]}V{variant}: {Declare(Padding(offset - ends[variant]), inline: true)}");
+                }
+
+                variants[variant].Add($"{FieldName(offset, index)}: {TypeName(field, parameter: false)}");
+                ends[variant] = offset + size;
+            }
+        }
+
+        string cases = string.Join("; ", variants.Select((fields, index) => $"{index}: ({string.Join("; ", fields)})"));
+        string head = fixedPart.Count == 0 ? "" : $"{string.Join("; ", fixedPart)}; ";
+        return $"RECORD {head}CASE INTEGER OF {cases} END";
+
+        List<string> Run(int from, int to)
+        {
+            List<string> parts = [];
+            int offset = from;
+            while (offset < to)
+            {
+                int next = known.Keys.Where(key => key > offset).DefaultIfEmpty(words).Min();
+                next = Math.Min(next, to);
+                if (known.TryGetValue(offset, out TypeNode? field))
+                {
+                    int size = Math.Min(SizeOf(field) ?? (next - offset), next - offset);
+                    Fit(field, size);
+                    parts.Add($"F{offset}: {TypeName(field, parameter: false)}");
+                    offset += Math.Max(1, size);
+                }
+                else
+                {
+                    parts.Add($"F{offset}: {Declare(Padding(next - offset), inline: true)}");
+                    offset = next;
+                }
+            }
+
+            return parts;
+        }
+    }
+
+    // A field's name: its offset's, and for another variant's field, which of the offset's it is.
+    private static string FieldName(int offset, int alternative) => alternative <= 0 ? $"F{offset}" : $"F{offset}V{alternative}";
+
+    // The name of the field a designator reaches: the one at its offset whose type is the designator's.
+    private static string FieldName(FieldDesignator field) =>
+        FieldName(field.Offset, field.Record.Type.Find().Alternatives(field.Offset).IndexOf(field.Type.Find()));
 
     private void Statements(Procedure procedure, List<Statement> statements)
     {
@@ -757,14 +810,13 @@ public sealed partial class PascalDecompiler
                     Expr value = Narrow(assignment.Value);
                     Designator target = Descend(assignment.Target, value is Constant ? null : value.Type);
                     string text = DesignatorText(target);
-                    if (target is VariableDesignator { Variable: var viewed }
-                        && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
+                    if (Viewed(target) && target.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
                     {
                         lines.Add(Indented($"{text}.I := {Expression(value, TypeNode.Scalar(ScalarKind.Integer), 0)}"));
                         break;
                     }
 
-                    if (target is VariableDesignator { Variable: var punned } && IsPunned(punned.Type))
+                    if (Viewed(target) && IsPunned(target.Type))
                     {
                         bool pointer = assignment.Value is Nil || Natural(assignment.Value) is null && assignment.Value is not Constant;
                         text += pointer ? ".P" : ".I";
@@ -919,6 +971,10 @@ public sealed partial class PascalDecompiler
             parts.Add(argument.Value switch
             {
                 Keyword keyword => keyword.Text,
+
+                // NEW and MARK set a pointer: a word used both ways by its pointer view.
+                Address address when name is "NEW" or "MARK" or "RELEASE" && IsPunned(address.Designator.Type) =>
+                    $"{DesignatorText(address.Designator)}.P",
                 Address address => DesignatorText(address.Designator),
                 ByteAddress address => DesignatorText(address.Designator),
                 Load
@@ -998,7 +1054,7 @@ public sealed partial class PascalDecompiler
             case ResultDesignator result:
                 return result.Procedure.Name;
             case FieldDesignator field:
-                return $"{Record(field.Record)}F{field.Offset}";
+                return $"{Record(field.Record)}{FieldName(field)}";
             case PackedFieldDesignator field:
                 return $"{Record(field.Record)}F{field.Word}B{field.Bit}";
             case IndexDesignator

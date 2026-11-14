@@ -26,17 +26,18 @@ public sealed partial class PascalDecompiler
         }
 
         // A word also read by bytes is a variant record's.
-        if (expression is Load { Designator: VariableDesignator { Variable: var viewed } }
+        if (expression is Load { Designator: var viewed }
+            && Viewed(viewed)
             && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
         {
-            return Convert($"{viewed.Name}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
+            return Convert($"{DesignatorText(viewed)}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
         }
 
         // A word used both as a pointer and as an integer is a variant record's.
-        if (expression is Load { Designator: VariableDesignator { Variable: var punned } } && IsPunned(punned.Type))
+        if (expression is Load { Designator: var punned } && Viewed(punned) && IsPunned(punned.Type))
         {
             bool integer = Kind(expected) is not null;
-            string pun = $"{punned.Name}.{(integer ? "I" : "P")}";
+            string pun = $"{DesignatorText(punned)}.{(integer ? "I" : "P")}";
             return Convert(pun, Factor, integer ? ScalarKind.Integer : null, Kind(expected), out _);
         }
 
@@ -91,6 +92,14 @@ public sealed partial class PascalDecompiler
 
         return field == designator ? expression : new Load(field, load.Words);
     }
+
+    // Whether a designator's word is read and written by a variant record's views: a function's result is not, as a
+    // function returns no record; it is declared an integer.
+    private static bool Viewed(Designator designator) =>
+        designator is not (ResultDesignator or VariableDesignator { Variable.Kind: VariableKind.Result });
+
+    // A function's result type: a word used both ways, or read by bytes, is an integer.
+    private static bool Plain(TypeNode type) => IsPunned(type) || (type.Find().Kind == TypeKind.Scalar && type.Find().ByteView);
 
     private static bool IsPunned(TypeNode type) => type.Find() is { Kind: TypeKind.Pointer, Punned: true };
 

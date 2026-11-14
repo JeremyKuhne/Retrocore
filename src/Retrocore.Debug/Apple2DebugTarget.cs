@@ -706,6 +706,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public bool CoprocessorActive => _machine.Bus.SoftCard is { OwnsBus: true };
 
+    /// <summary>
+    ///  Gets the SoftCard in the machine now, or null.
+    /// </summary>
+    internal SoftCard? InstalledSoftCard => _machine.Bus.SoftCard;
+
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         Peek(address) == JsrOpcode ? ((ushort)(Peek((ushort)(address + 1)) | (Peek((ushort)(address + 2)) << 8)), 3) : null;

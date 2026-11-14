@@ -186,6 +186,32 @@ public sealed class Apple2SoftCardTests
     }
 
     /// <summary>
+    ///  The waiting 6502's read comes in the fetch's refresh T-state, the one after the opcode's read, as the card
+    ///  times it, not with the opcode's read.
+    /// </summary>
+    [TestMethod]
+    public void RefreshReadComesInTheRefreshTState()
+    {
+        Apple2Machine machine = Machine(Apple2Model.IIPlus);
+        SoftCard card = machine.Bus.InstallSoftCard(slot: 4);
+        Load(machine, 0x1000, [0x00, 0x18, 0xFD]);  // nop; jr $-1
+        machine.Bus.Write(0xC400, 0);
+        bool speaker = machine.Bus.Speaker;
+        int toggles = 0;
+        for (int tState = 0; tState < 32; tState++)
+        {
+            card.StepTState(heldAddress: 0xC030);
+            if (machine.Bus.Speaker == speaker) { continue; }
+            speaker = machine.Bus.Speaker;
+            toggles++;
+            card.Processor.IsRefreshing.Should().BeTrue($"T-state {tState} toggled the speaker");
+            card.Processor.FetchedOpcode.Should().BeFalse();
+        }
+
+        toggles.Should().Be(4, "32 T-states are four fetches");
+    }
+
+    /// <summary>
     ///  The Z80 reads the keyboard at $E000 and clears its strobe at $E010, as the 6502 does at $C000 and $C010.
     /// </summary>
     [TestMethod]

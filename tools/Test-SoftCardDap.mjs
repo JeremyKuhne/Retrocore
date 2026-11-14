@@ -77,6 +77,10 @@ try {
     assert.match(await register(1, "PC"), /^\$[0-9A-F]+$/);
     assert.equal(await register(z80Frame, "PC"), "$100");
 
+    // A byte of the Z80 frame's memory scope is watched in the Z80's address space.
+    const scopeWatch = await request("dataBreakpointInfo", { variablesReference: z80Frame * 2, name: "$F000" });
+    assert.equal(scopeWatch.dataId, "bank:z80:F000:1");
+
     // The Z80's code disassembles as Z80 instructions, and its memory reads through the card's translation.
     const disassembly = await request("disassemble", { memoryReference: "z80:0x0100", instructionCount: 2 });
     assert.deepEqual(disassembly.instructions.map(instruction => instruction.address), ["z80:0x0100", "z80:0x0102"]);

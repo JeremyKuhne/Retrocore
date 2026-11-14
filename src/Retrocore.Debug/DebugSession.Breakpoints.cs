@@ -697,8 +697,9 @@ internal sealed partial class DebugSession
         };
     }
 
-    // A variable in the Variables view: the memory scope's bytes can be watched, and registers cannot.
-    private static (bool, DebugMemoryBank?, int, int)? Variable(int reference, string name, out string? reason)
+    // A variable in the Variables view: the memory scope's bytes can be watched, and registers cannot. A coprocessor
+    // frame's scope, whose reference is twice its frame's id, is in that CPU's address space, such as the Z80's.
+    private (bool, DebugMemoryBank?, int, int)? Variable(int reference, string name, out string? reason)
     {
         reason = null;
         if (reference == BanksScope)
@@ -713,7 +714,7 @@ internal sealed partial class DebugSession
             return null;
         }
 
-        return (false, null, Address(name), 1);
+        return (false, ThreadBank(FrameIndex(reference / 2).Thread), Address(name), 1);
     }
 
     // Add Data Breakpoint at Address: an address expression, which may name a bank, such as aux:$0400.

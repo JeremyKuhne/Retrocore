@@ -173,6 +173,12 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
                 or Z80MachineCycle.NonMaskableFetch);
 
     /// <summary>
+    ///  Gets whether the last T-state put a refresh address on the bus, once in each opcode fetch and interrupt
+    ///  acknowledge. Cheaper than <see cref="LastCycle"/>.
+    /// </summary>
+    public bool IsRefreshing => _state.Activity == BusOperation.Refresh;
+
+    /// <summary>
     ///  Advances one T-state; <see cref="LastCycle"/> then describes its bus activity.
     /// </summary>
     public void StepCycle()

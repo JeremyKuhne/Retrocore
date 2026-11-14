@@ -80,7 +80,9 @@ Its Z80 borrows the Apple's memory while the 6502 waits:
   the language card); `$E000` is the I/O page and `$F000` page zero. On the IIe the Z80's accesses go through the
   memory switches, as the 6502's do.
 - **Timing.** Two Z80 T-states to each Apple cycle, with no wait states. In each opcode fetch's refresh the waiting
-  6502 reads once, at its next opcode's address, as the card lets it; `RefreshesHost` turns that off.
+  6502 reads once, at its next opcode's address, as the card lets it; `RefreshesHost` turns that off. A Z80 source
+  line's cycle count is in Z80 T-states, as Zilog's timings give them (a `NOP` is 4), while the machine's total is in
+  Apple cycles.
 - **What it lacks.** The card has no ROM or RAM, and nothing decodes the Z80's `IN` and `OUT`. The DIP switches that
   wire the Apple's interrupts to the Z80 are left off, as CP/M expects.
 - **Switches.** In the Machine view, the card's row opens to two checkboxes: **Address translation** (on, as

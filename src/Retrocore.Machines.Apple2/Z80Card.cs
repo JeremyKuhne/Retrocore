@@ -106,7 +106,8 @@ public abstract class Z80Card
     {
         if (!Running) { return; }
         Processor.StepCycle();
-        if (RefreshesHost && OwnsBus && Processor.FetchedOpcode) { HostRead(heldAddress); }
+        // The 6502's read comes in the refresh T-state of each opcode fetch, the one after the opcode's read.
+        if (RefreshesHost && OwnsBus && Processor.IsRefreshing) { HostRead(heldAddress); }
         if (!OwnsBus)
         {
             _drained |= Processor.IsInstructionBoundary;

@@ -40,13 +40,16 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
         Card = card;
         _calls = new(this);
         card.InstructionBoundary = Boundary;
+
+        // The bank reads through whichever card is in, as a memory view kept open across a card's replacement does;
+        // with none, it has no bytes.
         Bank = new(
             "z80",
             "The SoftCard Z80's memory",
             [SoftCardMemoryArea.Z80],
             [(0x0000, 0x10000)],
-            address => card.Peek(address),
-            (address, value) => PokeHost(host, card.Translate(address), value),
+            address => host.InstalledSoftCard is { } current ? current.Peek(address) : null,
+            (address, value) => host.InstalledSoftCard is { } current && PokeHost(host, current.Translate(address), value),
             Z80Isa.InstructionSet);
     }
 

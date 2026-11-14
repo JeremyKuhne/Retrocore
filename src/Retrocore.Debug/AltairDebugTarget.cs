@@ -421,6 +421,11 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
                     throw new ArgumentException($"The folder for {full} does not exist.");
                 }
 
+                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
+                {
+                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
+                }
+
                 EjectCassette();
                 cassette.Record(full);
                 _recordingPath = full;

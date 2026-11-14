@@ -301,6 +301,7 @@ try {
     const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.tap");
     await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
     await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: tmpdir() }), "a folder is no file");
     const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
     assert.equal(recorder.media?.label, resolve(tape), "the recording is still in");
     assert.equal(recorder.activity, "writing");

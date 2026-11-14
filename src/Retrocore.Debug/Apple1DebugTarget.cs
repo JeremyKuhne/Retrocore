@@ -449,6 +449,11 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
                     throw new ArgumentException($"The folder for {full} does not exist.");
                 }
 
+                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
+                {
+                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
+                }
+
                 EjectCassette();
                 cassette.Record(new Apple1Tape(), full);
                 _recordingPath = full;

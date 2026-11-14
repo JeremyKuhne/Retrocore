@@ -204,6 +204,7 @@ try {
     const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.wav");
     await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
     await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: tmpdir() }), "a folder is no file");
     const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
     assert.equal(recorder.media?.label, resolve(second), "the recording is still in");
     // The refused insert saved the recording in place before reading, so that copy goes; the relaunch writes it again.

@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { differences, expanded, favoriteFrom, favoriteSetup, isFavorite, local, portable, resolveVariables, type Favorite } from "../favorite";
+import { differences, expanded, favoriteFrom, favoriteSetup, isFavorite, keepResolved, local, portable, resolveVariables, type Favorite } from "../favorite";
 import { setupConfiguration, setupFromConfiguration, type Setup } from "../startFlow";
 
 test("a favorite is a setup under its own name, with its saved machine", () => {
@@ -81,6 +81,16 @@ test("paths inside the workspace are kept as ${workspaceFolder} and come back as
     assert.equal(portable(favorite, undefined), favorite, "with no workspace nothing changes");
     assert.equal(portable({ path: "/home/me/project/a.dsk" }, "/home/me/project").path, "${workspaceFolder}/a.dsk");
     assert.equal(portable({ path: "/home/me/Project/a.dsk" }, "/home/me/project").path, "/home/me/Project/a.dsk", "elsewhere, case matters");
+});
+
+test("a launch entry read again keeps what only a launch resolves, and takes everything else as it is now", () => {
+    const previous = { name: "Run", machine: "apple2", source: "C:\\work\\main.s", ramKilobytes: 48, disks: ["C:\\work\\a.dsk"] };
+    const fresh = { name: "Run", machine: "apple2", source: "${file}", ramKilobytes: 32, disks: ["${fileDirname}\\a.dsk"], model: "iiplus" };
+    assert.deepEqual(keepResolved(fresh, previous), {
+        name: "Run", machine: "apple2", source: "C:\\work\\main.s", ramKilobytes: 32, disks: ["C:\\work\\a.dsk"], model: "iiplus"
+    });
+    assert.equal(keepResolved({ source: "${file}" }, {}).source, "${file}", "with nothing resolved before, it stays as written");
+    assert.equal(keepResolved({ source: "${file}" }, { source: "${file}" }).source, "${file}");
 });
 
 test("a favorite is compared with its variables expanded and its separators made one", () => {

@@ -7,7 +7,7 @@
 // what is changed while it is off is its launch configuration's saved machine, which its next launch restores.
 
 import * as vscode from "vscode";
-import { resolveVariables } from "./favorite";
+import { keepResolved, resolveVariables } from "./favorite";
 import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
@@ -159,7 +159,9 @@ export class OffMachine {
         const workspace = folderOf(target.source.folder);
         const entry = launchConfigurations(workspace).find(candidate => candidate.name === name);
         if (entry === undefined) return;
-        const { machineState: _saved, ...configuration } = resolveVariables(entry, workspace?.uri.fsPath);
+        // What only a launch resolves, such as ${file}, keeps the value the session it came from resolved it to.
+        const { machineState: _saved, ...fresh } = resolveVariables(entry, workspace?.uri.fsPath);
+        const configuration = keepResolved(fresh, target.configuration);
         if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
         this.target = { ...target, configuration };
         this.body = undefined;

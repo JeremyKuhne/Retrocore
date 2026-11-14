@@ -174,3 +174,20 @@ export function expanded<T>(value: T, workspace: string | undefined): T {
     };
     return walk(resolveVariables(value, workspace)) as T;
 }
+
+// Whether a value still holds a variable only VS Code resolves when it starts a launch, such as ${file}.
+function hasVariable(value: unknown): boolean {
+    if (typeof value === "string") return /\$\{[^}]+\}/.test(value);
+    if (Array.isArray(value)) return value.some(hasVariable);
+    if (typeof value === "object" && value !== null) return Object.values(value).some(hasVariable);
+    return false;
+}
+
+/**
+ * A launch.json entry read again, as resolved as it can be here, keeping for each option that still holds a variable
+ * only a launch resolves (such as ${file}) the value it was last resolved to.
+ */
+export function keepResolved(fresh: Record<string, unknown>, previous: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(fresh).map(([key, value]) =>
+        [key, hasVariable(value) && key in previous && !hasVariable(previous[key]) ? previous[key] : value]));
+}

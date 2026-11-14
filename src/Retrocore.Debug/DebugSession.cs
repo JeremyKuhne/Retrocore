@@ -1475,11 +1475,20 @@ internal sealed partial class DebugSession
             bool trapReported = _exception is ("brk", _);
             long frameTime = Stopwatch.GetTimestamp();
 
-            // Sound made while stopped would play as a burst; the panel hears only what runs from here.
-            Target.TakeAudio();
+            // A launch or stop can cancel this worker before it starts and replace or clear the target, so the worker
+            // reads the target only under the lock, and only while it has not been cancelled.
             long paceTime = frameTime;
-            ulong paceCycles = Target.CycleCount;
-            lock (_gate) { StartMeasuring(); }
+            ulong paceCycles;
+            lock (_gate)
+            {
+                if (token.IsCancellationRequested) { return; }
+
+                // Sound made while stopped would play as a burst; the panel hears only what runs from here.
+                Target.TakeAudio();
+                paceCycles = Target.CycleCount;
+                StartMeasuring();
+            }
+
             bool ahead = false;
             try
             {
@@ -1487,6 +1496,8 @@ internal sealed partial class DebugSession
                 {
                     lock (_gate)
                     {
+                        if (token.IsCancellationRequested) { return; }
+
                         // Each slice runs until it has kept up with the machine's clock, or for a few milliseconds.
                         long slice = Stopwatch.GetTimestamp();
                         ulong due = Due(ref paceTime, ref paceCycles);
@@ -1529,6 +1540,7 @@ internal sealed partial class DebugSession
                             if (!Execute()) { return; }
                         }
 
+                        if (token.IsCancellationRequested) { return; }
                         ahead = Target.CycleCount >= due;
                         if (Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
                         {
@@ -1562,8 +1574,9 @@ internal sealed partial class DebugSession
                     }
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            catch (Exception exception) when (token.IsCancellationRequested && IsRunFailure(exception))
             {
+                // A worker cancelled by a launch or stop reports nothing: its machine may be gone.
             }
             catch (InvalidOperationException exception)
             {
@@ -1583,6 +1596,13 @@ internal sealed partial class DebugSession
             }
         }, token);
     }
+
+    // The exceptions a run's worker catches: its cancellation, and the failures it reports.
+    private static bool IsRunFailure(Exception exception) => exception is OperationCanceledException
+        or InvalidOperationException
+        or FormatException
+        or OverflowException
+        or IOException;
 
     private const double SliceMilliseconds = 10;
 

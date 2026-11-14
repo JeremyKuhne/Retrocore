@@ -404,9 +404,22 @@ try {
         console.log(`MITS's 4K BASIC 3.2 tape (${mitsTape}) is missing, so no tape was loaded.`);
     }
 
-    // A launch that fails leaves no machine, rather than the one it replaced, which it has disposed.
-    await assert.rejects(request("launch", { machine: "altair", ramKilobytes: 99 }), /RAM must be 1 to 64 KB/);
-    await assert.rejects(request("evaluate", { expression: "PC" }), /No machine has been launched/);
+    // A launch that fails leaves no machine, rather than the one it replaced, which it has disposed. The running
+    // machine's worker, cancelled by the launch, must not touch the missing machine or report its absence as a
+    // failure, however the two interleave, so it is tried many times with the machine running at full speed.
+    phase("failing relaunches while running");
+    writeFileSync(source, [".cpu I8080", "Spin:   jmp Spin", ""].join("\n"));
+    for (let attempt = 0; attempt < 20; attempt++) {
+        events.length = 0;
+        await request("launch", { machine: "altair", source, stopOnEntry: false, speed: "max" });
+        await request("configurationDone");
+        await new Promise(resolve => setTimeout(resolve, 20 + attempt * 5));
+        await assert.rejects(request("launch", { machine: "altair", ramKilobytes: 99 }), /RAM must be 1 to 64 KB/);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await assert.rejects(request("evaluate", { expression: "PC" }), /No machine has been launched/);
+        const failures = events.filter(message => message.event === "stopped" && message.body.reason === "exception");
+        assert.deepEqual(failures.map(message => message.body.description), [], "the cancelled worker reported nothing");
+    }
 
     await request("disconnect", {});
 

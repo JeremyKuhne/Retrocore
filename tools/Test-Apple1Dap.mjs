@@ -87,6 +87,7 @@ async function stoppedAt(reason, description) {
 
 const tape = join(tmpdir(), `retrocore-apple1-${process.pid}.wav`);
 const hello = join(tmpdir(), `retrocore-apple1-${process.pid}.asm`);
+const second = join(tmpdir(), `retrocore-apple1-${process.pid}-2.wav`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
 
@@ -197,8 +198,26 @@ try {
     await type("300.303\r");
     await screen(screen => screen.includes("0300: 11 22 33 44"), "the bytes read from tape");
 
+    // A tape that cannot be read, or a recording with nowhere to go, is refused and leaves the recording in; a
+    // recording still in is saved when the session relaunches, as ejecting it would.
+    await request("retro/media", { device: "cassette", action: "record", path: second });
+    const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.wav");
+    await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
+    const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(recorder.media?.label, resolve(second), "the recording is still in");
+    // The refused insert saved the recording in place before reading, so that copy goes; the relaunch writes it again.
+    assert.ok(existsSync(second), "the insert saved the recording before reading");
+    unlinkSync(second);
+    await type("C100R\r");
+    await screen(screen => screen.includes("C100: A9*"), "the cassette interface's prompt for the second tape");
+    await type("300.303W\r");
+    await screen(screen => /300\.303W\n\\/.test(screen), "the Monitor again after the second tape");
+    assert.ok(!existsSync(second), "nothing is written until the recording comes out");
+
     // Machine reset stops as the machine powers on, at the Monitor's first instruction.
     await launch({}, ["machineReset"]);
+    assert.equal(readFileSync(second).subarray(0, 4).toString(), "RIFF", "the relaunch saved the recording");
     const powerOn = await stoppedAt("breakpoint", "The machine reset as it powered on.");
     assert.equal(powerOn.source.path.toLowerCase(), monitor.toLowerCase());
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$FF00 (65280)");
@@ -234,7 +253,7 @@ try {
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [tape, hello]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [tape, hello, second]) if (existsSync(file)) unlinkSync(file);
 }
 
 if (failure()) throw failure();

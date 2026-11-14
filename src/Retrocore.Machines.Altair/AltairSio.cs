@@ -8,7 +8,7 @@ namespace Retrocore.Machines.Altair;
 
 /// <summary>
 ///  A MITS 88-SIO serial board: one port, a UART with a transmit holding register ahead of its shift register, and
-///  status bits that are low when ready. The 88-ACR cassette interface is an 88-SIO with a modem for the tape.
+///  ready bits that are low when ready. The 88-ACR cassette interface is an 88-SIO with a modem for the tape.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -26,17 +26,18 @@ namespace Retrocore.Machines.Altair;
 public sealed class AltairSio : ISerialLine
 {
     /// <summary>
-    ///  Status bit 0: low while a received character waits.
+    ///  Status bit 0, set while no received character waits: it goes low when one arrives.
     /// </summary>
     public const byte InputNotReady = 0x01;
 
     /// <summary>
-    ///  Status bit 4: a character was lost because the last was not read.
+    ///  Status bit 4, set when a character was lost because the last was not read; unlike the ready bits, it is high
+    ///  when it means something.
     /// </summary>
     public const byte Overflow = 0x10;
 
     /// <summary>
-    ///  Status bit 7: low while the transmitter can take a character.
+    ///  Status bit 7, set while the transmitter cannot take a character: it is low while it can.
     /// </summary>
     public const byte OutputNotReady = 0x80;
 

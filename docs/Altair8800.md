@@ -205,15 +205,18 @@ Screen**.
 ## How it is checked
 
 - [`AltairMachineTests`](../tests/Retrocore.Tests/AltairMachineTests.cs) run 8080 programs: printing, echoing,
-  receive interrupts, the ACIA's master reset and overrun, the 88-SIO's status, interrupts and overflow, the
-  88-ACR's tape at 300 baud, playing and recording, sense switches, RAM size, the front panel and the terminal's
-  controls.
-- [`AltairBasicTests`](../tests/Retrocore.Tests/AltairBasicTests.cs) run 4K BASIC 3.2 and 4.0, 8K BASIC 4.0
-  and Extended BASIC 4.0 on both serial boards, and 8K BASIC's `CSAVE` and `CLOAD`, when SIMH's images are in the
-  external test data's `altair-basic` folder (or `RETROCORE_ALTAIR_BASIC`). Each prints what SIMH's does, with the
-  same bytes free at 32 KB, and `CSAVE` records the same bytes SIMH's tape punch does. With MITS's tapes in its
-  `tapes` folder, they also load 4K BASIC 3.2 and 4.0, 8K BASIC 3.2 and 4.0 and Extended BASIC 4.1 through the
-  front panel's bootstrap and the 88-ACR. Without the files they are inconclusive.
+  receive interrupts, the ACIA's master reset and overrun, the 88-SIO's status, input interrupt and overflow (its
+  output interrupt is not tested), the 88-ACR's tape at 300 baud, playing and recording, sense switches, RAM size,
+  the front panel and the terminal's controls.
+- [`AltairBasicTests`](../tests/Retrocore.Tests/AltairBasicTests.cs) need SIMH's images in the external test
+  data's `altair-basic` folder (or `RETROCORE_ALTAIR_BASIC`), and are inconclusive without them.
+  - **From the images:** 4K BASIC 3.2 and 4.0 on both serial boards, and 8K BASIC 4.0 and Extended BASIC 4.0 on
+    the 88-2SIO, each with SIMH's banner and bytes free at 32 KB, and a program's output.
+  - **`CSAVE` and `CLOAD`:** 8K BASIC's `CSAVE` records the same bytes SIMH's tape punch does, and `CLOAD` reads them
+    back.
+  - **From MITS's tapes**, in the folder's `tapes` folder: 4K BASIC 3.2 and 4.0, 8K BASIC 3.2 and 4.0 and Extended
+    BASIC 4.1 load through the front panel's bootstrap and the 88-ACR. The three SIMH has images of come up with
+    the images' bytes free; SIMH has no 8K BASIC 3.2 or Extended BASIC 4.1 to compare with.
 - The same programs, a greeting, an echo and a table of squares in decimal, print identically on SIMH's
   `altairz80` (open-simh `87eb7d5`, in 8080 mode), built outside the repository.
 - [`Test-AltairDap.mjs`](../tools/Test-AltairDap.mjs) drives the debug adapter: breakpoints, the call stack,

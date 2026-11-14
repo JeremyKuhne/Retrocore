@@ -18,8 +18,9 @@ namespace Retrocore.Tests;
 ///   <c>4kbas32.bin</c>, <c>4kbas40.bin</c>, <c>8kbas.bin</c> and <c>exbas.bin</c>, the images in SIMH's
 ///   <c>altsw.zip</c>, from <c>RETROCORE_ALTAIR_BASIC</c> or the <c>altair-basic</c> folder of the external test
 ///   data, and MITS's tapes, from altairclone.com's "MITS Tapes" CP/M disk, from its <c>tapes</c> folder; each test
-///   is inconclusive without its file. Digests pin the images and tapes. What each prints, its bytes free at 32 KB
-///   and 8K BASIC's tape match SIMH's <c>altairz80</c> (open-simh <c>87eb7d5</c>) with the same RAM.
+///   is inconclusive without its file. Digests pin the images and tapes. The images' banners and bytes free at 32 KB,
+///   and 8K BASIC's tape, match SIMH's <c>altairz80</c> (open-simh <c>87eb7d5</c>) with the same RAM; the tapes'
+///   BASICs that SIMH has images of come up with the images' bytes free.
 ///  </para>
 /// </remarks>
 [TestClass]

@@ -39,6 +39,11 @@ internal sealed partial class DebugSession
     }
 
     /// <summary>
+    ///  The evaluate context Retrocore Memory resolves addresses with, which gets memory references.
+    /// </summary>
+    private const string AddressContext = "retrocore";
+
+    /// <summary>
     ///  An evaluate result, without its memory reference for the Watch view and hovers, which would show VS Code's
     ///  Hex Editor icon on it; Open in Retrocore Memory evaluates with its own context.
     /// </summary>

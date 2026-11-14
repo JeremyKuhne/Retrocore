@@ -269,6 +269,9 @@ try {
                 memoryReference: (await request("retro/memory/variable", { variablesReference: locals.variablesReference, name: marked.name })).memoryReference
             };
             assert.match(word.memoryReference, /^main:0x/);
+            // Open in Retrocore Memory on a watch of the local finds the same bank, not memory as the CPU maps it.
+            const frame = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+            assert.equal((await request("evaluate", { expression: word.name, frameId: frame.id, context: "retrocore" })).memoryReference, word.memoryReference);
             const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
             const original = await bytes();
             const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");

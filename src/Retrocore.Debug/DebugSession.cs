@@ -174,7 +174,13 @@ internal sealed partial class DebugSession
         {
             string expression = Required(args, "expression");
             int frameId = args.Int("frameId") ?? 1;
-            if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
+            if (frameId >= BasicFrameBase && HasBasicThread)
+            {
+                // BASIC names no memory, so an address Retrocore Memory opens while a BASIC frame is focused, such
+                // as a label, is the CPU's.
+                if (args.String("context") != AddressContext) { return EvaluateBasic(expression); }
+                frameId = 1;
+            }
 
             // In a Pascal frame, a variable its listing names; other expressions are the CPU's, as the machine is now.
             if (frameId is >= PascalFrameBase and < BasicFrameBase)
@@ -186,7 +192,8 @@ internal sealed partial class DebugSession
                         ["result"] = PascalValue(pascal.Memory, named.At, named.Variable),
                         ["type"] = named.Variable.Type,
                         ["variablesReference"] = 0,
-                        ["memoryReference"] = named.At.Bank == 0 ? Reference(bank: null, named.At.Address) : null
+                        // On the Apple II, in main or auxiliary RAM by its bank, where Apple Pascal 1.3 keeps it.
+                        ["memoryReference"] = PascalReference(named.At)
                     });
                 }
 

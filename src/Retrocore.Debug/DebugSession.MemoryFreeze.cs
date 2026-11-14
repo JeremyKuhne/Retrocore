@@ -10,8 +10,10 @@ namespace Retrocore.Debug;
 internal sealed partial class DebugSession
 {
     // The frozen bytes and the values they are held at, by bank name (null for memory as the CPU maps it), as the
-    // Apple II builds its bank records again when a card changes.
-    private readonly Dictionary<(string? Bank, ushort Address), byte> _frozen = [];
+    // Apple II builds its bank records again when a card changes. A byte of memory as the CPU maps it keeps the area
+    // its write reached when frozen, such as the language card's bank 2, and is held only while writes reach it there,
+    // so switching to bank 1 does not write the value into bank 1.
+    private readonly Dictionary<(string? Bank, ushort Address), (byte Value, Enum? Area)> _frozen = [];
 
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
@@ -75,7 +77,11 @@ internal sealed partial class DebugSession
             ["frozen"] = _frozen
                 .Where(pair => string.Equals(pair.Key.Bank, bank?.Name, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(pair => pair.Key.Address)
-                .Select(pair => (JsonNode?)new JsonObject { ["address"] = pair.Key.Address, ["value"] = pair.Value })
+                .Select(pair => (JsonNode?)new JsonObject
+                {
+                    ["address"] = pair.Key.Address,
+                    ["value"] = pair.Value.Value
+                })
                 .ToJsonArray()
         };
     }
@@ -84,14 +90,14 @@ internal sealed partial class DebugSession
     // they were.
     private void Freeze(DebugMemoryBank? bank, List<(ushort Address, byte Value)> freezes)
     {
-        List<(ushort Address, byte Old, byte? Frozen)> done = [];
+        List<(ushort Address, byte Old, (byte, Enum?)? Frozen)> done = [];
         foreach ((ushort address, byte value) in freezes)
         {
             byte old = MemoryByte(bank, address) ?? 0;
-            byte? before = _frozen.TryGetValue((bank?.Name, address), out byte held) ? held : null;
+            (byte, Enum?)? before = _frozen.TryGetValue((bank?.Name, address), out (byte, Enum?) held) ? held : null;
             if (!Write(bank, address, value))
             {
-                foreach ((ushort written, byte restore, byte? frozen) in Enumerable.Reverse(done))
+                foreach ((ushort written, byte restore, (byte, Enum?)? frozen) in Enumerable.Reverse(done))
                 {
                     Write(bank, written, restore);
                     if (frozen is { } kept) { _frozen[(bank?.Name, written)] = kept; }
@@ -101,7 +107,7 @@ internal sealed partial class DebugSession
                 throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
             }
 
-            _frozen[(bank?.Name, address)] = value;
+            _frozen[(bank?.Name, address)] = (value, bank is null ? Target.WriteArea(address) : null);
             done.Add((address, old, before));
         }
     }
@@ -140,7 +146,7 @@ internal sealed partial class DebugSession
     private void ApplyFreezes()
     {
         List<(string? Bank, ushort Address)>? gone = null;
-        foreach (((string? name, ushort address), byte value) in _frozen)
+        foreach (((string? name, ushort address), (byte value, Enum? area)) in _frozen)
         {
             DebugMemoryBank? bank = FrozenBank(name, out bool missing);
             if (missing)
@@ -149,6 +155,8 @@ internal sealed partial class DebugSession
                 continue;
             }
 
+            // A byte of the CPU's memory waits while another area is mapped where it was frozen.
+            if (area is not null && !Equals(Target.WriteArea(address), area)) { continue; }
             if (MemoryByte(bank, address) == value || !Writable(bank, address)) { continue; }
             Write(bank, address, value);
         }

@@ -548,19 +548,21 @@ test("an address resolves in the focused frame, else in the CPU's", async () => 
     await assert.rejects(resolveIn(evaluate, null, "HL", 1), /not a 6502 register/);
 });
 
-test("a label opened while a BASIC frame is focused is the CPU's", async () => {
-    // As the debugger answers: a BASIC frame, 2000, evaluates BASIC, which names no memory, and fails on a CPU label.
+test("a name the focused frame cannot place is not read in the CPU's frame", async () => {
+    // As the debugger answers: a Pascal frame, 1500, has a local X it cannot place, and the CPU's frame reads X as the
+    // 6502's X register.
     const evaluate = async (expression: string, frameId?: number): Promise<string | undefined> => {
-        if (frameId === 2000) {
-            if (expression === "A") return undefined;
-            throw new Error(`${expression} is not a BASIC expression.`);
+        if (frameId === 1500) {
+            if (expression === "X") return undefined;
+            if (expression === "COUNT") return "aux:0x2000";
+            throw new Error(`${expression} is not a Pascal variable.`);
         }
-        return expression === "TEXT_PAGE" ? "0x0400" : undefined;
+        return expression === "X" ? "0x0012" : expression === "TEXT_PAGE" ? "0x0400" : undefined;
     };
-    assert.equal(await referenceIn(evaluate, "TEXT_PAGE", 2000), "0x0400");
+    assert.equal(await referenceIn(evaluate, "X", 1500), undefined, "not the X register's value");
+    assert.equal(await referenceIn(evaluate, "COUNT", 1500), "aux:0x2000");
     assert.equal(await referenceIn(evaluate, "TEXT_PAGE"), "0x0400");
-    assert.equal(await referenceIn(evaluate, "A", 2000), undefined);
-    await assert.rejects(referenceIn(evaluate, "NOWHERE", 2000), /not a BASIC expression/);
+    await assert.rejects(referenceIn(evaluate, "NOWHERE", 1500), /not a Pascal variable/);
 });
 
 // Runs the page's test hook, answering what it asks as the debugger would.
@@ -719,4 +721,7 @@ test("the label or address under the cursor is what the editor's menu opens", ()
     assert.equal(addressAt(line, line.indexOf("aux") + 5), "aux:$0400", "a bank prefix comes along");
     assert.equal(addressAt(line, line.length - 2), "0400h");
     assert.equal(addressAt(line, 6), undefined, "between words there is nothing");
+    const scoped = "        jsr screen::clear";
+    assert.equal(addressAt(scoped, scoped.length - 1), "screen::clear", "a scoped label is whole from its name");
+    assert.equal(addressAt(scoped, scoped.indexOf("screen") + 1), "screen::clear", "and from its scope");
 });

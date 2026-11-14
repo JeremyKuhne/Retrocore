@@ -40,11 +40,11 @@ export function hex(value: number, digits: number): string {
 }
 
 /**
- * The label or address under the cursor in an assembly file, such as TEXT_PAGE, $0400, 0400h or aux:$0400; a
- * label's own colon is left off.
+ * The label or address under the cursor in an assembly file, such as TEXT_PAGE, $0400, 0400h, aux:$0400 or a
+ * scoped label, such as ca65's screen::clear, whole wherever the cursor is in it; a label's own colon is left off.
  */
 export function addressAt(line: string, character: number): string | undefined {
-    const pattern = /[A-Za-z0-9_.@?$]+(?::[A-Za-z0-9_.@?$]+)?/g;
+    const pattern = /(?:[A-Za-z][A-Za-z0-9]*:(?!:)(?=[A-Za-z0-9_.@?$]))?[A-Za-z0-9_.@?$]+(?:::[A-Za-z0-9_.@?$]+)*/g;
     for (let match = pattern.exec(line); match !== null; match = pattern.exec(line)) {
         if (character >= match.index && character <= match.index + match[0].length) return match[0];
     }
@@ -67,9 +67,9 @@ export function parseReference(reference: string): ParsedReference | undefined {
 /**
  * Where an address, label or expression points in a view's bank, through the debugger's evaluate, which gives the
  * memory reference an expression names in a frame. It is evaluated in the focused frame first, so a register such as
- * the Z80's PC, or SP in a caller's frame, reads as that frame shows it; when that gives no address in the bank, as
- * $0400 does in the CPU's view while the Z80's frame is focused, in the CPU's own frame. Undefined when neither names
- * an address in the bank; the focused frame's error when it has one. The extension runs this, not the page.
+ * the Z80's PC, or SP in a caller's frame, reads as that frame shows it; when that gives an address in another bank,
+ * as $0400 does in the CPU's view while the Z80's frame is focused, in the CPU's own frame; see referenceIn.
+ * Undefined when neither names an address in the bank. The extension runs this, not the page.
  */
 export async function resolveIn(
     evaluate: (expression: string, frameId?: number) => Promise<string | undefined>,
@@ -91,28 +91,24 @@ export function cpuWatches(expressions: string[], coprocessor: boolean): string[
 }
 
 /**
- * The memory reference an expression names, evaluated in the focused frame first and, when that gives none it
- * accepts, in the CPU's own frame: a BASIC frame evaluates BASIC, which names no memory, so a label or address opened
- * while one is focused is the CPU's. Undefined when neither does; the focused frame's error when it has one. The
- * extension runs this, not the page.
+ * The memory reference an expression names, evaluated in the focused frame and, when that names one the caller does
+ * not accept, such as the Z80's $0400 in the CPU's view, in the CPU's own frame. A frame that names none, as a Pascal
+ * local the debugger cannot place, or that fails, is the answer: the CPU's frame would read the name as something
+ * else, such as a Pascal local X as the 6502's X register. (The debugger itself evaluates an address in the CPU's
+ * frame while a BASIC frame is focused, as BASIC names no memory.) The extension runs this, not the page.
  */
 export async function referenceIn(
     evaluate: (expression: string, frameId?: number) => Promise<string | undefined>,
     expression: string,
     frameId?: number,
     accept: (parsed: ParsedReference) => boolean = () => true): Promise<string | undefined> {
-    let failure: unknown;
-    for (const frame of frameId === undefined ? [undefined] : [frameId, undefined]) {
-        try {
-            const reference = await evaluate(expression, frame);
-            const parsed = reference === undefined ? undefined : parseReference(reference);
-            if (parsed !== undefined && accept(parsed)) return reference;
-        } catch (error) {
-            failure ??= error;
-        }
-    }
-    if (failure !== undefined) throw failure;
-    return undefined;
+    const reference = await evaluate(expression, frameId);
+    const parsed = reference === undefined ? undefined : parseReference(reference);
+    if (parsed === undefined || accept(parsed)) return parsed === undefined ? undefined : reference;
+    if (frameId === undefined) return undefined;
+    const again = await evaluate(expression, undefined);
+    const reparsed = again === undefined ? undefined : parseReference(again);
+    return reparsed !== undefined && accept(reparsed) ? again : undefined;
 }
 
 /**

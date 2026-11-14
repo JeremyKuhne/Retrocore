@@ -82,7 +82,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Freezing** holds a byte at a value while the machine runs: the debugger writes it back before each slice it
   runs, every few milliseconds. Frozen bytes show in blue, and the **Frozen** tab lists them to watch or thaw;
   typing over one changes the value it is held at. Only RAM can be frozen. Frozen bytes are the session's, so
-  every editor on that memory shows them.
+  every editor on that memory shows them. A byte frozen in the CPU's memory is held in the RAM it was frozen in,
+  such as the language card's bank 2 at $D000, and waits while the program switches other memory there.
 - **Moving and selecting.** The arrow keys, **Page Up**, **Page Down**, **Home** and **End** (with **Ctrl**, the
   ends of memory) move; **Shift** or dragging selects. **Tab** moves from the hex column to the text column and
   **Shift+Tab** back; past them, they move focus on to the side panel or the toolbar as usual.

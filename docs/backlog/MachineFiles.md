@@ -25,9 +25,9 @@ workspace cannot see it, and a user cannot back it up or copy it to another PC.
 | Place | Windows | macOS | Linux | Holds | Backed up |
 | --- | --- | --- | --- | --- | --- |
 | **Roaming settings** | `%APPDATA%\Retrocore\settings.json` | `~/Library/Application Support/Retrocore/settings.json` | `~/.config/retrocore/settings.json` | preferences both hosts share: display, history, what stop does | roams with a roaming profile |
-| **Local data** | `%LOCALAPPDATA%\Retrocore\` | `~/Library/Application Support/Retrocore/Local/` | `~/.local/share/retrocore/` | `locations.json`, the history, caches | never |
+| **Local data** | `%LOCALAPPDATA%\Retrocore\` | `~/Library/Application Support/Retrocore/Local/` | `~/.local/share/retrocore/` | `locations.json`, the history, recent quick starts, caches | never |
 | **Data folders** | `Documents\Retrocore\` by default; more can be added | `~/Documents/Retrocore/` | `~/Documents/Retrocore/`, or `~/Retrocore/` without a Documents folder | machines, their disks, the default library | yes, wherever the user's Documents are backed up |
-| **Libraries** | each data folder's `Images\`, and any folder added | | | the user's images, with metadata | as their folder is |
+| **Libraries** | each data folder's `Software\`, and any folder added | | | the user's disk and tape images, with metadata | as their folder is |
 
 The .NET special folders give these on every system (`ApplicationData`, `LocalApplicationData`, `MyDocuments`), so
 the debug host, the language server and the standalone emulator find them alike; the extension asks the language
@@ -57,7 +57,7 @@ Documents\Retrocore\
     TRS-80 Model I with NEWDOS\
       TRS-80 Model I with NEWDOS.machine.retrocore
       Disks\
-  Images\                                      the data folder's library
+  Software\                                    the data folder's library: its disks and tapes
     library.retrocore
     Apple II\
     TRS-80\
@@ -72,7 +72,7 @@ Documents\Retrocore\
   sharing a machine is one folder, and renaming or moving it cannot part the file from its state. Renaming the machine
   in Retrocore renames both; a folder renamed by hand still opens, and the machine takes the folder's name.
 - **Subfolders appear when used.** A new machine is its file alone; `Disks\` comes with its first disk.
-- A data folder is any folder with a `Machines\` or `Images\` folder in it. A project's repository can be one, so its
+- A data folder is any folder with a `Machines\` or `Software\` folder in it. A project's repository can be one, so its
   machines are checked in with its code.
 
 ## The machine file
@@ -90,9 +90,9 @@ on every device event:
   "run": null,
   "cards": { "4": "mockingboard", "5": "disk35", "6": "diskII16", "7": "empty" },
   "media": {
-    "disk1":    { "library": "Images", "path": "Apple II/DOS 3.3/dos33.dsk", "sha256": "…", "locked": true },
+    "disk1":    { "library": "Software", "path": "Apple II/DOS 3.3/dos33.dsk", "sha256": "…", "locked": true },
     "disk2":    { "path": "Disks/Scratch.woz", "locked": false },
-    "disk35d1": { "library": "Images", "path": "Apple II/ProDOS/work.2mg", "sha256": "…", "locked": false,
+    "disk35d1": { "library": "Software", "path": "Apple II/ProDOS/work.2mg", "sha256": "…", "locked": false,
                   "unsaved": { "path": "Unsaved/work.2mg", "stamp": { "length": 819264, "written": "2026-11-14T10:02:11Z" } } },
     "disk35d2": null
   },
@@ -127,7 +127,7 @@ A library is a folder of images, organized however its owner likes, with one `li
 ```json
 {
   "format": 1,
-  "name": "Images",
+  "name": "Software",
   "id": "5d2c…",
   "items": {
     "Apple II/Games/Lode Runner.woz": {
@@ -153,8 +153,10 @@ A library is a folder of images, organized however its owner likes, with one `li
   images, so OneDrive's files-on-demand placeholders stay in the cloud until a disk is inserted.
 - **Read-only libraries**, such as a mirror of an archive, are marked so in `locations.json`; their images are
   read-only images, so the machine's changes go to `Unsaved\` and save as.
+- **Why `Software`.** It is what people put there (games, DOS masters, programs), and it does not read as pictures,
+  as `Images` would beside screen pictures Retrocore saves. The folders inside it are the user's.
 - **Names are unique.** A library's name is how machines refer to it; two libraries of one name are reported and the
-  second is not used until one is renamed. Each data folder's `Images\` is named for its data folder when it is not the
+  second is not used until one is renamed. Each data folder's `Software\` is named for its data folder when it is not the
   default one.
 - **ROM libraries** are libraries of ROM dumps (`"kind": "roms"`), found by SHA-256. A machine needing a dump looks in
   them before `RETROCORE_CACHE`; a launch's explicit paths still win.
@@ -185,11 +187,13 @@ A library is a folder of images, organized however its owner likes, with one `li
 ```
 
 Libraries in data folders are found by looking; `libraries` adds the others. New machines go in the default data
-folder. Local data holds `History\` and `Cache\` beside it.
+folder. Local data holds `History\`, `Recent\` and `Cache\` beside it.
 
-In VS Code, the shared settings are also VS Code settings (`retrocore.media.*`), so the Settings editor, the gear and
-the clock show and change them. The extension keeps the two in step at the user level: a change to either is written
-to the other. A workspace value applies in that workspace only and is not written to the shared file.
+In VS Code, the shared settings are also VS Code settings (`retrocore.media.*`), so the Settings editor, the gear
+and the clock show and change them. The extension keeps the two in step at the user level, both ways: a change to
+either is written to the other, and only when the values differ, so neither write sets off the other again. When
+both changed while VS Code was closed, the shared file wins, as the standalone emulator may have changed it. A
+workspace value applies in that workspace only and is not written to the shared file.
 
 ## The hosts
 
@@ -206,7 +210,13 @@ to the other. A workspace value applies in that workspace only and is not writte
 - **The extension.** The Favorites view becomes the **Machines** view: the machines in every data folder and in the
   workspace, grouped by data folder, with the heart marking the ones starred. Starting one launches it; the Machine and
   Drives views show it, running or off, as they do now. **New Machine...** is Start Machine's setup saved as a machine
-  file. Start Machine without saving still works, with its state in local data until it is saved as a machine.
+  file.
+- **Quick starts.** Start Machine without saving still works, and keeps the machine in local data
+  (`Recent\`), not in a data folder, so throwaway machines do not fill the folder people browse and back up. The
+  Machines view lists the last 10 under **Recent**, each with **Save as Machine...**, which moves it, with its unsaved
+  disks, into the default data folder. When a quick start stops with changed disks, the stop notification adds **Save
+  as Machine...**, since local data is not backed up. Starting an eleventh drops the oldest, unless it holds unsaved
+  disks; those wait until saved or discarded.
 - **The standalone emulator** opens `.machine.retrocore` files, by file association and from its own list of the data
   folders' machines, and writes them as the debug host does. AppleSharp's own settings move into the shared
   `settings.json`.
@@ -247,6 +257,10 @@ On the first start of a version with machine files, the extension, asking once:
 - **Moving to it.** Favorites and saved machines from fixtures become machine files with nothing lost, and running it
   twice does nothing the second time.
 - **In use.** A second opener sees the marker; a stale one is ignored.
+- **Settings in step.** A change on either side reaches the other once; both changed while closed keeps the shared
+  file's value; a workspace value stays out of the shared file.
+- **Recent.** The eleventh quick start drops the oldest, but not one with unsaved disks; Save as Machine... moves its
+  unsaved disks with it.
 
 ## Phases
 
@@ -255,8 +269,9 @@ On the first start of a version with machine files, the extension, asking once:
 2. **The machine file.** Its schema, reading and writing; the launch's `machine` option; `retrocore/machine/describe`
    and `change` on files; the host writing it as the machine changes. Done when a machine file launches as its launch
    configuration did, off and running.
-3. **VS Code moves over.** The Machines view in place of Favorites, New Machine..., linking launch configurations, and
-   moving existing favorites and saved machines. Done when an existing user's favorites and saved machines open as
+3. **VS Code moves over.** The Machines view in place of Favorites, New Machine..., Recent quick starts and Save as
+   Machine..., keeping the settings in step, linking launch configurations, and moving existing favorites and saved
+   machines. Done when an existing user's favorites and saved machines open as
    machine files with nothing lost.
 4. **References and the machine's own media.** Library, relative and absolute references, finding by hash, `Disks\`,
    `Tapes\` and `Unsaved\`. This is where [the media plan's](MediaPersistence.md#phases) session end lands.
@@ -275,10 +290,8 @@ On the first start of a version with machine files, the extension, asking once:
 - **The history stays in local data**, never in a data folder, so syncing does not churn; a machine's unsaved disks
   as of its last stop are in its folder, and are backed up with it.
 - **Roaming settings hold preferences; local `locations.json` holds paths.**
-
-Still open:
-1. Should a machine started without saving it (Start Machine's quick start) become a machine file at once, in a
-   `Machines\Unsaved machines\` folder, or stay in local data until saved?
-2. Should the shared settings and VS Code's be kept in step both ways, as proposed, or should the gear open Retrocore's
-   own settings file and VS Code show them read-only?
-3. Library names: is "Images" right for a data folder's library, or "Library"?
+- **Quick starts stay in local data**, the last 10 under **Recent**, until **Save as Machine...** makes them machine
+  files; the stop notification offers it when one stopped with changed disks.
+- **VS Code's settings and the shared `settings.json` are kept in step both ways** at the user level; workspace values
+  stay VS Code's own.
+- **A data folder's library is `Software\`**, beside `Machines\` and `ROMs\`.

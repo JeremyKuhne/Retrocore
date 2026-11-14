@@ -274,8 +274,8 @@ replaces VS Code's saved machines and favorites. Its `media` entries say which o
 
 ```json
 "media": {
-  "disk1":    { "library": "Images", "path": "Apple II/Games/games.dsk", "sha256": "…", "locked": false },
-  "disk2":    { "library": "Images", "path": "Apple II/Work/work.woz", "sha256": "…", "locked": false,
+  "disk1":    { "library": "Software", "path": "Apple II/Games/games.dsk", "sha256": "…", "locked": false },
+  "disk2":    { "library": "Software", "path": "Apple II/Work/work.woz", "sha256": "…", "locked": false,
                 "unsaved": { "path": "Unsaved/work.woz", "stamp": { "length": 232960, "written": "2026-11-14T10:02:11Z", "sha256": "…" } } },
   "disk35d1": { "medium": "m-a71e…", "format": "800K", "locked": false, "unsaved": { "path": "Unsaved/New 800K disk.po" } }
 }

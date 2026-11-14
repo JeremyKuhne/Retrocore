@@ -13,9 +13,11 @@ byte-identical to MAME's dumps, and boot to their prompts. This is what remains 
    wrong, now fixed: the Model III's RS-232 ports read `$FF`, as with no board, and the Model II's hard disk board's
    ports read zero, so versions 2 and 3 of its boot ROM boot from the floppy. Still open:
    - The Model 4's real-time clock and the function keys' codes (`$60`, `$1B` and `$08` with shift) are untested.
-2. **Boot their DOSes.** TRSDOS 1.3 and LDOS 5.3 on the Model III, TRSDOS 6 (LS-DOS) on the Model 4 and 4P, and
-   TRSDOS-II on the Model II, from DMK, JV3 or IMD images; check the FD1793's wait states, the Model II's DMA and the
-   keyboard codes against them.
+2. **Boot their DOSes.** Done for the Model III family: TRSDOS 1.3 and LDOS 5.1.3 on the Model III, TRSDOS 6.0 and
+   6.2 and LS-DOS 6.3 on the Model 4, and LS-DOS 6.3 on the 4P boot from DMK, JV3 and IMD images, take the date and
+   list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait
+   was only masked by INTRQ, so the ROM's NMI handler hung reading the status; INTRQ and DRQ now end it. Still open:
+   TRSDOS-II on the Model II, which needs an image, and its DMA and keyboard codes against it.
 3. **An oracle.** As `Trs80OracleTests` compares the Model I with MAME, compare the same keystrokes on MAME's
    `trs80m3`, `trs80m4` and `trs80m2`.
 4. **ROM sources.** Done: `Model3.asm` (sharing Level II's BASIC through `Level2.asm`), `Model4PBoot.asm`,

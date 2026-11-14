@@ -8,8 +8,9 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
 The SDK has native sources for all of these machines' ROMs, byte-identical to the chips (see [ROMs](#roms)), so they
-run with nothing external, or from dumps. The real ROMs boot to their prompts, but no DOS or program has been run on
-these machines yet; see [What is not done yet](#what-is-not-done-yet).
+run with nothing external, or from dumps. The real ROMs boot to their prompts, and the Model III, 4 and 4P boot their
+DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
+[What is not done yet](#what-is-not-done-yet).
 
 ## The Model III, 4 and 4P
 
@@ -47,7 +48,8 @@ raises the NMI whatever the mask, with `$E4` bit 5 showing why.
 
 **Disks.** The FD1793 is the Model I's controller in WD179x mode: both densities, 179x step rates and record types. A
 drive select with bit 6 set holds the Z80 in WAIT until the controller asks for data or finishes, as Model III DOSes
-use for double density. Selecting a drive runs the motors for 3 seconds. Four drives take JV1, JV3, DMK or IMD images
+use for double density. Either ends the wait until drive select sets it again, so the NMI handler's read of the
+status after INTRQ, which clears INTRQ, is not held: the ROM's boot reads the boot sector this way. Selecting a drive runs the motors for 3 seconds. Four drives take JV1, JV3, DMK or IMD images
 (see [Disk images](#disk-images)).
 
 **Cassette.** Tapes play and record from CAS images through port `$FF`, with the motor on port `$EC` bit 1, at either
@@ -100,6 +102,24 @@ The new machines, and now the Model I too, read four formats, by extension or, f
 | IMD | ImageDisk, the usual format for Model II disks: FM and MFM, compressed, deleted and bad sectors. |
 
 Writing changed disks back to their image files is not emulated yet, as on the Model I.
+
+## DOSes
+
+These boot from drive 0, take the date and list their directories, on the SDK's ROMs (`Trs80Model3RomTests`'s
+`BootsItsDos`). The images are not in the repository: the test reads them from `trs80-disks` in the external data
+folder (`RETROCORE_CACHE`, or `Retrocore` in the user's profile) and is inconclusive without them. They are from the
+Internet Archive.
+
+| Machine | DOS | File | Internet Archive item | SHA-256 |
+| --- | --- | --- | --- | --- |
+| Model III | TRSDOS 1.3 | `TRSDOS13.dmk` | `model-iii-trsdos-disk-operating-system-and-basic-interpreter-v-01.03.00-1980` | `e3b191b4…` |
+| Model III | LDOS 5.1.3 (SMAL-LDOS) | `LDOS513.dsk` (JV3) | `os-m-3-smal-ldosv-513` | `7407ac56…` |
+| Model 4 | TRSDOS 6.0.0 | `TRSDOS60.dmk` | `model-4-trsdos-and-basic-interpreter-v-6.0-1983` | `710543cd…` |
+| Model 4 | TRSDOS 6.2.0 | `TRSDOS62.imd` (`T80M4DOS.IMD`) | `cpm22_202207` | `bed5f992…` |
+| Model 4 and 4P | LS-DOS 6.3.0 level J | `LSDOS63J.dsk` (JV3, `ldos63j.dsk`) | `cpm22_202207` | `c419e101…` |
+
+The item names are the download pages' last path segment, `https://archive.org/details/<item>`. The Model II's
+TRSDOS-II and the Model I's NEWDOS/80 are not there.
 
 ## ROMs
 
@@ -172,16 +192,16 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 
 | Test | Checks |
 | --- | --- |
-| `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI; the cassette motor. |
+| `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; and Level I booting to `READY` and saving and loading at 250 baud. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY` and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## What is not done yet
 
-- **Real software.** No TRSDOS, LDOS, NEWDOS or TRSDOS-II has been run; the hardware follows the technical
-  references and MAME's drivers, and needs checking against them.
+- **The Model II's TRSDOS-II**, which needs an image, and a check of the Model III family's DOSes against MAME. The
+  hardware follows the technical references and MAME's drivers.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

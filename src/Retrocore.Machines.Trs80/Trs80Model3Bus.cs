@@ -147,7 +147,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     public bool NmiRequested => (NmiStatus() & (_nmiMask | ResetNmi)) != 0;
 
     /// <summary>
-    ///  Gets whether drive select's wait holds the CPU until the controller asks for data or finishes.
+    ///  Gets whether drive select's wait holds the CPU until the controller asks for data or finishes. Either ends
+    ///  it until drive select sets it again, so reading the status after INTRQ, which clears INTRQ, is not held.
     /// </summary>
     public bool WaitRequested => _waitRequested && !Disks.DataRequest && !Disks.InterruptRequest;
 
@@ -338,6 +339,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
 
         if (!_controller) { return; }
         Disks.Tick();
+        if (Disks.DataRequest || Disks.InterruptRequest) { _waitRequested = false; }
         bool motor = Disks.MotorOn;
         if (_wasMotorOn && !motor) { _motorTimedOut = true; }
         _wasMotorOn = motor;

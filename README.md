@@ -323,6 +323,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;
 - [machine files, data folders and libraries](docs/backlog/MachineFiles.md), shared by VS Code and the standalone emulator;
+- [Retrocore Desktop](docs/backlog/Desktop.md), the standalone emulator, with the extension's views in an Avalonia window;
 - [Apple Pascal](docs/backlog/ApplePascal.md) on the Apple II and Apple III;
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and

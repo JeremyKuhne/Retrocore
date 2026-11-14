@@ -25,15 +25,8 @@ public sealed partial class PascalDecompiler
     private string Write()
     {
         NameTypes();
-        List<string> options = [];
 
-        // A string passes to a VAR string parameter of another length only without the check (*$V-*) turns off.
-        bool strings = _parameters.Values.Any(parameters => parameters.Any(parameter => parameter.IsReference && parameter.Type.Target().Find().Kind == TypeKind.String));
-        if (strings) { options.Add("(*$V-*)"); }
-
-        bool labels = _procedures.Any(procedure => procedure.Labels.Count > 0);
-        if (labels) { options.Add("(*$G+*)"); }
-        foreach (string option in options) { Line(option); }
+        Options([.. _procedures.Where(procedure => !InUnit(procedure))]);
 
         if (Comment(Program) is { } about) { Line(about); }
         Line($"PROGRAM {Program.Name};");
@@ -42,6 +35,11 @@ public sealed partial class PascalDecompiler
         // USES numbers their segments from 7. The Compiler initializes a library's units in the reverse of their order.
         List<string> uses = [.. Enumerable.Reverse(_unitOrder).Select(segment => _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}")];
         uses.AddRange(UnitSegments().Select(segment => $"(*$U {segment.Name.Trim()}.CODE*) {segment.Name.Trim()}"));
+        if (_unitSegments.Count > 0)
+        {
+            Line("(* Each unit's interface is read from the code file its $U option names. *)");
+        }
+
         if (uses.Count > 0) { Line($"USES {string.Join(", ", uses)};"); }
 
         Labels(Program);
@@ -68,9 +66,40 @@ public sealed partial class PascalDecompiler
         }
 
         string program = _source.ToString();
-        _unitSources = WriteUnits(options);
+        _unitSources = WriteUnits();
         return program;
     }
+
+    // The options a source needs, each with what it does and why: GOTO, where its procedures have labels; and no
+    // string length checks, where they call a procedure with a VAR string parameter, which a string of another length
+    // may go to.
+    private void Options(List<Procedure> procedures)
+    {
+        HashSet<Procedure> called = [];
+        foreach (Procedure procedure in procedures)
+        {
+            Walk(procedure.Body, statement => Calls(statement is CallStatement call ? call.Callee : null), expression => Calls(expression is Call call ? call.Callee : null));
+        }
+
+        void Calls(Callee? callee)
+        {
+            if (callee?.Procedure is { } target) { called.Add(target); }
+        }
+
+        if (called.Any(procedure => _parameters[procedure].Any(IsStringReference)))
+        {
+            Line("(*$V-*)  (* No string length checks: a string goes to a VAR string of another length. *)");
+        }
+
+        if (procedures.Any(procedure => procedure.Labels.Count > 0))
+        {
+            Line("(*$G+*)  (* GOTO allowed: the code jumps to labels. *)");
+        }
+
+    }
+
+    private static bool IsStringReference(Variable parameter) =>
+        parameter.IsReference && parameter.Type.Target().Find().Kind == TypeKind.String;
 
     // The byte the Compiler skips to put an LDC's or XJP's words on a word boundary holds whatever its buffer had there,
     // which no source says; those that are not 0 are written after END., where the Compiler reads nothing, for
@@ -485,7 +514,9 @@ public sealed partial class PascalDecompiler
     {
         if (on == _ioChecked) { return; }
         _ioChecked = on;
-        lines.Add(Indented(on ? "(*$I+*)" : "(*$I-*)"));
+        lines.Add(Indented(on
+            ? "(*$I+*)  (* I/O checks on again: an I/O error stops the program. *)"
+            : "(*$I-*)  (* I/O checks off: errors are left for IORESULT. *)"));
     }
 
     // Turns range checking on or off ahead of a statement whose indexes are checked (CHK) or not.
@@ -493,7 +524,9 @@ public sealed partial class PascalDecompiler
     {
         if (on == _rangeChecked) { return; }
         _rangeChecked = on;
-        lines.Add(Indented(on ? "(*$R+*)" : "(*$R-*)"));
+        lines.Add(Indented(on
+            ? "(*$R+*)  (* Range checks on again: an index out of its bounds stops the program. *)"
+            : "(*$R-*)  (* Range checks off: the code checks no indexes here. *)"));
     }
 
     // Whether a statement's own expressions, not those of the statements inside it, check ranges: true where one

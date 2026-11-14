@@ -89,7 +89,7 @@ public sealed partial class PascalDecompiler
 
     // Each unit's source: its interface's types and headings; then its implementation's types, its procedures, those
     // of its interface by name alone, and its initialization.
-    private List<PascalDecompiledUnit> WriteUnits(List<string> options)
+    private List<PascalDecompiledUnit> WriteUnits()
     {
         List<PascalDecompiledUnit> units = [];
         HashSet<TypeNode> shared = [];
@@ -97,10 +97,9 @@ public sealed partial class PascalDecompiler
         {
             _source = new StringBuilder();
             _constants.Clear();
-            foreach (string option in options) { Line(option); }
-
             string name = segment.Name.Trim();
             List<Procedure> procedures = [.. _procedures.Where(procedure => procedure.Segment == segment)];
+            Options(procedures);
             Procedure? initialization = procedures.FirstOrDefault(procedure => procedure.Number == 1);
             List<Procedure> exported = Interface(segment);
             List<Procedure> outer = [.. procedures.Where(procedure => procedure.Number >= 2 && procedure.Parent == _program)];

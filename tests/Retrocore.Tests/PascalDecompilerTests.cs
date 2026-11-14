@@ -724,6 +724,7 @@ public class PascalDecompilerTests
         result.Units.Select(unit => (unit.Name, unit.Segment)).Should().Equal(("ALPHA", 7), ("BETA", 8));
         result.Source.Should().Be("""
             PROGRAM USER;
+            (* Each unit's interface is read from the code file its $U option names. *)
             USES (*$U ALPHA.CODE*) ALPHA, (*$U BETA.CODE*) BETA;
             VAR
               G3: T1;

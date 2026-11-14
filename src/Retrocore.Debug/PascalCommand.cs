@@ -47,6 +47,7 @@ internal static partial class PascalCommand
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]
+               --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
                --pascal compare (file.code | disk NAME) (file.code | disk NAME)
@@ -73,6 +74,7 @@ internal static partial class PascalCommand
                 ["decompile", .. string[] rest] => Decompile(rest),
                 ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null),
                 ["compile", string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing),
+                ["assembly", .. string[] rest] when rest.Length >= 2 && CodeFile(rest[..^1], out _) is { } file => Assembly(file, rest[..^1], rest[^1]),
                 ["assemble-native", string source, string boot, string tools, string output] => AssembleNative(source, boot, tools, output),
                 ["link", string host, .. string[] rest] when rest.Length >= 3 => Link(host, rest[..^3], rest[^3], rest[^2], rest[^1]),
                 ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
@@ -368,6 +370,49 @@ internal static partial class PascalCommand
     }
 
     // Compiles a source with Apple Pascal's Compiler on an emulated Apple II.
+    // Writes each segment's assembled procedures as source for Apple's Assembler, one file a segment: output.NAME.text.
+    // A library's units name their procedures and parameters from their interface text.
+    private static int Assembly(PascalCodeFile file, string[] input, string output)
+    {
+        PascalLibrary? library = null;
+        try
+        {
+            library = PascalLibrary.Read(input is [string disk, string name] && IsDisk(disk) ? Open(disk).Read(name) : File.ReadAllBytes(input[0]));
+        }
+        catch (InvalidDataException)
+        {
+        }
+
+        int written = 0;
+        foreach (PascalSegment segment in file.Segments.Where(segment => segment.Procedures.Any(procedure => procedure.IsNative)))
+        {
+            PascalUnit? unit = library?.Unit(segment.Number);
+            List<PascalAssembledProcedure> procedures = [];
+            foreach (PascalProcedure procedure in segment.Procedures.Where(procedure => procedure.IsNative).OrderBy(procedure => procedure.Attributes))
+            {
+                PascalUnitProcedure? declared = unit?.Procedure(procedure.Index);
+                int words = declared?.Parameters.Sum(parameter => parameter.IsReference || parameter.Type is null
+                    ? 1
+                    : PascalListing.WordsOf(parameter.Type) is 2 ? 2 : 1) ?? 0;
+
+                procedures.Add(new PascalAssembledProcedure(
+                    declared?.Name ?? $"S{segment.Number}P{procedure.Index}",
+                    procedure.Index,
+                    declared?.IsFunction ?? false,
+                    words));
+            }
+
+            PascalAssemblySource source = PascalAssemblyWriter.Write(segment, procedures);
+            string path = $"{Path.ChangeExtension(output, extension: null)}.{segment.Name.Trim()}.text";
+            File.WriteAllText(path, source.Text);
+            foreach (string note in source.Notes) { Console.WriteLine($"note: {note}"); }
+            Console.WriteLine($"Wrote {path}: {procedures.Count} assembled procedures.");
+            written++;
+        }
+
+        return written > 0 ? 0 : Fail("The code file has no assembled procedures.");
+    }
+
     // Assembles a 6502 source with Apple's Assembler, on an emulated Apple II.
     private static int AssembleNative(string source, string boot, string tools, string output)
     {

@@ -135,6 +135,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]` compiles a source with Apple
   Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`;
+- `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
+  `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
   Assembler, and `--pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code` links a host with
   libraries with Apple's own Linker, both on an emulated Apple II, as `compile` runs the Compiler (below);
@@ -223,16 +225,32 @@ Retrocore.Debug --pascal assemble-native formatter.asm.text APPLE1.dsk APPLE2.ds
 Retrocore.Debug --pascal link FORMATTER.HOST.CODE FORMATTER.ASM.CODE APPLE1.dsk APPLE2.dsk FORMATTER.CODE
 ```
 
-Hints name the assembled procedure's places as labels (`FORMATTE.2+$40` for `IOB`) and comment them. Not written
-yet: words relative to the interpreter, the segment or the host's globals (`.INTERP`, `.DEF` and `.REF`, and
-`.PUBLIC`), which the system's Editor and Library use but no program on the disks at hand does; and data before a
-procedure's entry. A procedure with them is a warning. Apple III Pascal's AIIFORMAT's assembled procedure
-assembles to the same bytes with Apple Pascal 1.1's Assembler, though it links with Apple III Pascal's Linker.
+Hints name the assembled procedure's places as labels (`FORMATTE.2+$40` for `IOB`) and comment them. Each of an
+assembled procedure's four relocation lists is written as what its words are relative to, as Apple's tools turn
+them into words when they link:
+
+| Words relative to | Linked as | Written as |
+| --- | --- | --- |
+| the procedure | an offset from its entry | a label |
+| the segment, to another procedure | an offset in the segment | its name, `.REF PROC3`; or a label it defines, `.DEF D0B79` and `.REF D0B79` |
+| the host's globals (BASE) | 10 + 2 bytes a word: word 3 is 16 | the global the decompiled source declares, `.PUBLIC G3` |
+| the interpreter | an offset in it | `.INTERP+4` |
+
+`.INTERP` is relocated only by Apple Pascal 1.2's Assembler and Linker, whose interpreter moves; 1.1's write it as
+the offset alone, so code that uses it is rebuilt with 1.2's disks. Code is decoded from the procedure's entry, its
+branches, and each place a JSR or JMP reaches, from it or from another procedure; the rest is data. An indirect JMP
+is written `JMP @3D00`, as the Assembler takes no parentheses there; and a global named `A`, `X` or `Y`, or a
+mnemonic, cannot be `.PUBLIC`. Not written: data before a procedure's entry, a segment-relative word to a place no
+assembled procedure has or to its own procedure, and a global the host does not name, as for a system program; each
+is a warning. Every assembled procedure in Apple Pascal 1.2's SYSTEM.LIBRARY and Apple III Pascal 1.1's Editor, and
+all but the one with a word of the Editor's globals in 1.2's, assemble back to the same bytes with Apple Pascal
+1.2's Assembler; so does Apple III Pascal's AIIFORMAT's, though it links with Apple III Pascal's Linker.
 
 The Assembler's prompt for a listing is answered with none, and the Linker's for a host, libraries, map and output
 with the workfile, the libraries in order, none, and the output; the Editor comes off APPLE1's copy to make room.
-`PascalDecompilerTests.FormatterRebuildsByteForByte` rebuilds FORMATTER so, and `LinkedProgramsRebuildByteForByte`
-a program and a 6502 function of its own. A code file from another version's Compiler decompiles, but
+`PascalDecompilerTests.FormatterRebuildsByteForByte` rebuilds FORMATTER so, `LinkedProgramsRebuildByteForByte` a
+program and a 6502 function of its own, `SharedNamesRebuildByteForByte` two procedures sharing a label and a global
+with 1.1's tools, and `InterpreterWordsRebuildByteForByte` one using `.INTERP` with 1.2's. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

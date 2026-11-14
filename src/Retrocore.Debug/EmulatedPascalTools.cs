@@ -33,8 +33,8 @@ internal static partial class EmulatedPascalTools
         Expect(system, "LISTING", "The Assembler never asked for a listing");
         system.Type("\n");
 
-        // It ends with its count of errors, or stops at an error with a prompt to go on or stop.
-        string ended = system.WaitFor(["ERRORS FLAGGED", "(CONTINUE)"], seconds: 600)
+        // It ends with its count of errors, or stops at an error with a prompt to edit, go on or stop.
+        string ended = system.WaitFor(["ERRORS FLAGGED", "(CONTINUE)", "<ESC>"], seconds: 600)
             ?? throw new TimeoutException($"The Assembler never finished:\n{system.Screen}");
 
         string screen = system.Screen;

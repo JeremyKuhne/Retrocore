@@ -187,7 +187,7 @@ public sealed partial class PascalDecompiler
                 });
             }
 
-            PascalAssemblySource source = PascalAssemblyWriter.Write(segment.Key, written);
+            PascalAssemblySource source = PascalAssemblyWriter.Write(segment.Key, written, Global);
             foreach (string note in source.Notes) { Warn(note); }
             sources.Add(source.Text);
         }
@@ -197,6 +197,17 @@ public sealed partial class PascalDecompiler
 
     private static string? Comment(IReadOnlyDictionary<string, string> comments, string key) =>
         comments.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value;
+
+    // The program's global a base-relative word's value names, and the bytes into it: BASE points 10 bytes below
+    // the program's word 1, so word W is at 10 + 2W.
+    private (string Name, int Bytes)? Global(int value)
+    {
+        if (value < 12) { return null; }
+
+        int word = (value - 10) / 2;
+        Variable? global = _declared[Program.Frame].FirstOrDefault(variable => variable.Offset <= word && word < variable.Offset + Math.Max(1, variable.Words));
+        return global is null ? null : (global.Name, ((word - global.Offset) * 2) + ((value - 10) % 2));
+    }
 
     // The hints for places in a procedure, by offset from its entry: SEGMENT.N+$3E, or +62.
     private static Dictionary<int, string> Places(IReadOnlyDictionary<string, string> values, string prefix)

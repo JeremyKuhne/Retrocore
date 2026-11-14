@@ -269,7 +269,7 @@ public class PcodeAssemblyTests
     {
         byte[] code = Assemble(MixedSource.Replace(
             "Entry:  lda.w Value - Entry\n        rts",
-            "Entry:  lda.w Value - Entry\nAgain:  lda.w $0030\n        beq Again\n        jsr $3D00\n        rts",
+            "Entry:  lda.w Value - Entry\nAgain:  lda.w $0030\n        beq Again\n        jsr $3D00\n        jmp ($3D00)",
             StringComparison.Ordinal));
 
         PascalSegment segment = PascalCodeFile.Read(code).Segments.Single(own => own.Code.Length > 0);
@@ -278,12 +278,50 @@ public class PcodeAssemblyTests
         source.Notes.Should().BeEmpty();
         source.Text.Should().Be("""
                      .PROC   LOAD
-                     LDA     L000C
+                     LDA     L000E
             L0003    .BYTE   0AD,30,0    ; LDA $0030
                      BEQ     L0003
                      JSR     3D00
+                     JMP     @3D00
+            L000E    .WORD   L000E
+                     .END
+
+            """);
+    }
+
+    /// <summary>
+    ///  Relocated words other than procedure-relative ones are written as what they are relative to: another
+    ///  procedure's entry by its name and a place in it by a label it defines (<c>.REF</c>, <c>.DEF</c>), the host's
+    ///  global by its name (<c>.PUBLIC</c>), and the interpreter's base and an offset (<c>.INTERP</c>).
+    /// </summary>
+    [TestMethod]
+    public void SharedNamesAreWrittenForTheAssembler()
+    {
+        byte[] code = Assemble(SharedSource);
+        PascalSegment segment = PascalCodeFile.Read(code).Segments.Single(own => own.Code.Length > 0);
+        PascalAssemblySource source = PascalAssemblyWriter.Write(
+            segment,
+            [
+                new PascalAssembledProcedure("LEFT", 2, IsFunction: false, ParameterWords: 0),
+                new PascalAssembledProcedure("RIGHT", 3, IsFunction: false, ParameterWords: 0)
+            ],
+            value => value == 16 ? ("Count", 0) : null);
+
+        source.Notes.Should().BeEmpty();
+        source.Text.Should().Be("""
+                     .PROC   LEFT
+                     .REF    D0023,RIGHT
+                     .PUBLIC COUNT
+                     LDA     D0023
+                     JSR     RIGHT
+                     LDA     COUNT
+                     LDA     .INTERP+4
                      RTS
-            L000C    .WORD   L000C
+                     .BYTE   0
+                     .PROC   RIGHT
+                     .DEF    D0023
+                     RTS
+            D0023    .BYTE   0
                      .END
 
             """);
@@ -330,6 +368,65 @@ public class PcodeAssemblyTests
         int end = result.SourceMap.Where(entry => entry.Size != 0).Max(entry => entry.Offset + entry.Size);
         return result.Sections[0].Bytes.Span[..end].ToArray();
     }
+
+    // A code file of one segment: procedure 1, p-code, calls procedure 2, assembled, which loads a byte of procedure 3
+    // and calls it through the segment, loads a global through BASE (word 3, 16 bytes from it) and a word of the
+    // interpreter's.
+    private const string SharedSource = """
+                .include "Pcode.asm"
+                .word Segment0 / 512, Segment0End - Segment0
+                .res 60, 0
+                .byte "SHARED  "
+                .res 120, 0
+                .res 64, 0
+                .word (2 << 13) | (2 << 8) | 1
+                .res 254, 0
+        Segment0:
+        .scope Seg0
+                .cpu Mos6502
+        .scope P2
+        Entry:  lda.w P3::Shared - Segment0
+        Call:   jsr P3::Entry - Segment0
+        Global: lda.w $0010
+        Interp: lda.w $0004
+                rts
+                .byte 0
+                .word * - (Interp + 1)
+                .word 1
+                .word 0
+                .word * - (Entry + 1), * - (Call + 1)
+                .word 2
+                .word * - (Global + 1)
+                .word 1
+                .word * - Entry
+        Attributes: .byte 0, 1
+        .endscope
+        .scope P3
+        Entry:  rts
+        Shared: .byte 0
+                .word 0
+                .word 0
+                .word 0
+                .word 0
+                .word * - Entry
+        Attributes: .byte 0, 1
+        .endscope
+                .cpu Pcode
+        .scope P1
+        Entry:  CLP 2
+        Exit:   RBP 0
+                .word 4, 0
+                .word * - Exit, * - Entry
+        Attributes: .byte 1, 0
+        .endscope
+                .word * - P3::Attributes
+                .word * - P2::Attributes
+                .word * - P1::Attributes
+                .byte 1, 3
+        .endscope
+        Segment0End:
+                .align 512, 0
+        """;
 
     // A code file of one segment: procedure 1, p-code, calls procedure 2, assembled 6502 code that loads a word of its
     // own through a procedure-relative operand, and keeps a procedure-relative word as data.

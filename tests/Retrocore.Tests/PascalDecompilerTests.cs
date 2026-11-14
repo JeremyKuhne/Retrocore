@@ -433,6 +433,104 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
+    ///  Two 6502 procedures that share a label and call each other through the segment, one of which reaches the host's
+    ///  global, built with Apple Pascal 1.1's tools, decompile to Pascal and Assembler source with <c>.DEF</c>,
+    ///  <c>.REF</c> and <c>.PUBLIC</c> that build back to the same bytes.
+    /// </summary>
+    [TestMethod]
+    public void SharedNamesRebuildByteForByte()
+    {
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string tools = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(boot) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        byte[] linked = Build(SharedPascal, SharedAssembly, boot, tools);
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(linked));
+        result.Assembly.Should().Contain("         .REF    D").And.Contain(",PROC3\n").And.Contain("         .PUBLIC G3\n");
+        result.Assembly.Should().Contain("         .DEF    D").And.Contain("         JSR     PROC3\n");
+        Build(result.Source, result.Assembly ?? "", boot, tools).Should().Equal(linked);
+    }
+
+    /// <summary>
+    ///  A 6502 procedure that reaches the interpreter, built with Apple Pascal 1.2's tools, whose interpreter moves,
+    ///  decompiles to Assembler source with <c>.INTERP</c> that builds back to the same bytes.
+    /// </summary>
+    [TestMethod]
+    public void InterpreterWordsRebuildByteForByte()
+    {
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.2_1.DSK");
+        string tools = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.2_2.DSK");
+        if (!File.Exists(boot) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.2's disks.");
+        }
+
+        byte[] linked = Build(InterpreterPascal, InterpreterAssembly, boot, tools);
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(linked));
+        result.Assembly.Should().Contain("         LDA     .INTERP+2\n").And.Contain("         JMP     @.INTERP\n");
+        Build(result.Source, result.Assembly ?? "", boot, tools).Should().Equal(linked);
+    }
+
+    // A program compiled, its assembled procedures assembled, and the two linked, with the tools on the disks.
+    private static byte[] Build(string pascal, string assembly, string boot, string tools)
+    {
+        (byte[]? host, string compiled) = EmulatedPascalCompiler.Compile(pascal, boot, tools, s_inputs);
+        if (host is null) { Assert.Fail($"The Compiler stopped:\n{compiled}\n{pascal}"); }
+
+        (byte[]? assembled, string assembling) = EmulatedPascalTools.Assemble(assembly, boot, tools, s_inputs);
+        if (assembled is null) { Assert.Fail($"The Assembler stopped:\n{assembling}\n{assembly}"); }
+
+        (byte[]? linked, string linking) = EmulatedPascalTools.Link(host, [assembled], boot, tools, s_inputs);
+        if (linked is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
+        return linked;
+    }
+
+    private const string SharedPascal = """
+        PROGRAM SHARED;
+        VAR COUNT: INTEGER;
+        PROCEDURE LEFT; EXTERNAL;
+        PROCEDURE RIGHT; EXTERNAL;
+        BEGIN
+          COUNT := 7;
+          LEFT;
+          RIGHT
+        END.
+        """;
+
+    private const string SharedAssembly = """
+                .PROC   LEFT
+                .REF    FLAG,RIGHT
+                .PUBLIC COUNT
+                LDA     COUNT
+                STA     FLAG
+                JSR     RIGHT
+                RTS
+                .PROC   RIGHT
+                .DEF    FLAG
+                RTS
+        FLAG    .BYTE   0
+                .END
+        """;
+
+    private const string InterpreterPascal = """
+        PROGRAM INTERP;
+        PROCEDURE PEEK; EXTERNAL;
+        BEGIN
+          PEEK
+        END.
+        """;
+
+    private const string InterpreterAssembly = """
+                .PROC   PEEK
+                LDA     .INTERP+2
+                JMP     @.INTERP
+                .END
+        """;
+
+    /// <summary>
     ///  The alignment bytes a decompiled source records after its <c>END.</c> are put back in the segment it names,
     ///  where the Compiler left 0.
     /// </summary>

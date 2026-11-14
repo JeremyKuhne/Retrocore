@@ -137,6 +137,9 @@ What the decompiler does not decompile yet, found by decompiling every code file
   **Found:** the 1.1 Compiler on APPLE2 leaves 0 in an alignment byte where the Compilers Apple built the samples with
   left their buffer's bytes (in FORMATTER, the previous procedure's at the same offset), so a decompiled source
   records them. `PascalAssemblyWriter` writes assembled procedures as source in the Assembler's syntax, beside a
-  decompiled source, so FORMATTER rebuilds from the disk with nothing written by hand. **Not done:** interpreter-,
-  segment- and base-relative words (`.INTERP`, `.DEF`/`.REF`, `.PUBLIC`), which only the system's Editor and Library
-  use; and linking Apple III Pascal's code with its own Linker.
+  decompiled source, so FORMATTER rebuilds from the disk with nothing written by hand. Interpreter-, segment- and
+  base-relative words are written as `.INTERP`, `.DEF`/`.REF` and `.PUBLIC` (the same day), found by assembling and
+  linking probes with Apple's own tools: BASE-relative words are 10 + 2 bytes a word; `.INTERP` is relocated only by
+  1.2's tools; `JMP (X)` is `JMP @X` to the Assembler; `A` cannot be a `.PUBLIC`. `--pascal assembly` writes any code
+  file's assembled procedures so; all of 1.2's SYSTEM.LIBRARY assembles back. **Not done:** linking Apple III Pascal's
+  code with its own Linker; naming a system program's globals for `.PUBLIC`.

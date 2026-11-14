@@ -47,4 +47,11 @@ test("a saved machine comes back only while the launch's hardware options are th
     assert.equal(restorable(saved, { ...launch, diskImage: "b.dsk" }), undefined, "a new diskImage starts afresh");
     assert.equal(restorable(saved, { ...launch, mockingboard: true }), undefined, "so does a new hardware option");
     assert.equal(restorable(undefined, launch), undefined);
+
+    // An Altair's saved cassette belongs to the 88-ACR and the terminal board it was saved with.
+    const altair = { machine: "altair" };
+    const tape = { fingerprint: fingerprint(altair), configuration: { media: { cassette: { path: "a.tap", writeProtected: true } } } };
+    assert.deepEqual(restorable(tape, altair), tape.configuration);
+    assert.equal(restorable(tape, { ...altair, cassetteInterface: false }), undefined, "without the 88-ACR it starts afresh");
+    assert.equal(restorable(tape, { ...altair, console: "sio" }), undefined, "so it does on the other terminal board");
 });

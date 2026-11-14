@@ -262,6 +262,58 @@ The description joins them, such as `work.woz · changed · image changed on dis
 such as "changed: 14 sectors on tracks 17-18", and for a conflict the file's size and date then and now. The badge
 counts changed media, recovered copies included.
 
+The mockups below draw VS Code's views in text. `●` is the changed dot, `⚠` stale or a conflict, `🔒` a lock, `◆`
+the protect icon. Buttons in brackets are a row's inline buttons, shown as their tooltips.
+
+The Drives view while an Apple IIe runs, with one drive in each state:
+
+```text
+DRIVES                                                                            (3)
+▾ Slot 5 · 3.5 disk controller · 2 drives
+    ● 3.5 drive 1    prodos.2mg · changed · block 412 · writing        [Save] [Eject] [Protect]
+    🔒 3.5 drive 2    system.po · changed · locked: read-only           [Save As...] [Eject] [Protect]
+▾ Slot 6 · Disk II controller · 2 drives
+    ⚠ Drive 1        work.woz · changed · image changed on disk         [Save...] [Eject] [Protect]
+    ◆ Drive 2        dos33.dsk · protected · track 0                   [Eject] [Unprotect]
+```
+
+- `(3)` is the badge: three media changed and not saved. Its tooltip names them.
+- A drive whose disk is the same as its image has no Save button, as Drive 2 shows.
+- **Save...** has an ellipsis when it will ask (stale, lossy); a locked drive's button is **Save As...**.
+
+A changed drive's tooltip:
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Drive 1: 5¼-inch floppy drive                                │
+│                                                              │
+│ work.woz (WOZ), C:\disks\work.woz                            │
+│ Changed: 14 sectors on tracks 17-18, not saved to the image  │
+│ Image changed on disk: 10:52 today; it was 10:02 when read   │
+│ Tab: writable                                                │
+│ Track 17, sector 4, writing                                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Once the media library reads the disk's filesystem, the changed line names files: `Changed: HELLO, DATA (new);
+14 sectors on tracks 17-18`.
+
+A drive's menu (right-click, or **...** on the row):
+
+```text
+┌──────────────────────────────────┐
+│ Save                             │
+│ Save As...                       │
+│ Revert to Image...               │
+│ Reload from File                 │   only while stale
+│ Restore Previous Version...      │   only after a save
+├──────────────────────────────────┤
+│ Insert...                        │
+│ Eject                            │
+│ Write Protect                    │
+└──────────────────────────────────┘
+```
+
 ### Saving in each state
 
 **Save** (the inline button, today's **Save to Its Image**) asks only when something is off:
@@ -277,6 +329,85 @@ counts changed media, recovered copies included.
 The drive's menu has **Save As...**, **Revert to Image** (which asks, as it drops work), **Reload from File** while
 stale, and **Restore Previous Version** after a save.
 
+A quiet save says so in the status bar for five seconds, and asks nothing:
+
+```text
+ ✓ Saved work.woz from Drive 1 (the previous version is kept)
+```
+
+The prompts are VS Code's modal dialogs. A lossy format, where the disk no longer fits its image's format:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ ⚠ games.dsk can't hold the disk in Drive 1 as it is              │
+│                                                                  │
+│   Track 3 no longer reads as 16 sectors, so a .dsk would lose    │
+│   it. A .woz keeps every track as it is.                         │
+│                                                                  │
+│             [Save as WOZ...]   [Save Anyway]   [Cancel]          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+A TRS-80 disk reads `newdos.dsk is JV1, which can't hold track 0's double-density sectors. JV3 keeps them.` with
+**Save as JV3...**.
+
+A stale image or a conflict:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ ⚠ work.woz changed on disk after Drive 1 read it                 │
+│                                                                  │
+│   The machine changed 14 sectors on tracks 17-18.                │
+│   The file changed at 10:52 today; it was 10:02 when read.       │
+│   Overwriting replaces the file's changes; its version is kept.  │
+│                                                                  │
+│   [Overwrite]   [Save As...]   [Reload from File]   [Cancel]     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Reload from File** asks again only when the machine had changed the disk, since that drops its changes.
+
+A locked image:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ 🔒 system.po is read-only                                         │
+│                                                                  │
+│   Save the disk in 3.5 drive 2 under another name, or make the   │
+│   file writable and save over it.                                │
+│                                                                  │
+│        [Save As...]   [Make Writable and Save]   [Cancel]        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+An image in the cache says `prodos.po is in Retrocore's image cache, which is never changed.` and offers only
+**Save As...** and **Cancel**.
+
+Revert:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ Revert Drive 1 to work.woz?                                      │
+│                                                                  │
+│   The machine's changes to 14 sectors on tracks 17-18 are lost.  │
+│                                                                  │
+│                        [Revert]   [Cancel]                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Restore Previous Version is a quick pick of the backups, newest first:
+
+```text
+┌ Restore a previous version of work.woz ──────────────────────────┐
+│ Before the save at 10:43 today       232,960 bytes               │
+│ Before the save at 10:31 today       232,960 bytes               │
+│ Before the save at 16:05 yesterday   232,960 bytes               │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Restoring writes the backup over the image, keeping the image it replaces as a backup too, and reloads the drive,
+asking first if the machine had changed the disk.
+
 ### Eject, stop and the off machine
 
 - **Eject** of a changed disk asks: **Save**, **Save As...**, **Discard** or cancel. A machine's own eject cannot ask;
@@ -288,6 +419,71 @@ stale, and **Restore Previous Version** after a save.
 - **The off machine** shows recovered media as changed, and saves, saves as, reverts and discards it.
 - **The display panel** shows `changed` for every drive, not only the Disk II, with no save controls; clicking a
   drive reveals it in the Drives view. Its ended-session banner says how many media were left changed.
+
+Ejecting a changed disk:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ Save the changes to work.woz before ejecting it from Drive 1?    │
+│                                                                  │
+│   The machine changed 14 sectors on tracks 17-18.                │
+│                                                                  │
+│      [Save]   [Save As...]   [Discard]   [Cancel]                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Save** here goes through the same checks as the Save button, so a stale, lossy or locked image asks as above
+before the disk comes out.
+
+A disk the machine ejected itself, kept under its drive:
+
+```text
+▾ Slot 5 · 3.5 disk controller · 2 drives
+    3.5 drive 1      empty                                              [Insert...]
+      ● ejected      prodos.2mg · changed · ejected by the machine      [Save] [Insert Again] [Discard]
+```
+
+Stopping, with changed media, shows one notification in the corner:
+
+```text
+                         ┌─────────────────────────────────────────────────┐
+                         │ ⓘ Apple IIe stopped with 2 disks not saved:      │
+                         │   work.woz, prodos.2mg. They are kept.           │
+                         │                                                 │
+                         │               [Save All]   [Review]   [Discard] │
+                         └─────────────────────────────────────────────────┘
+```
+
+**Save All** saves each in turn, and a disk that needs a prompt (stale, lossy, locked) asks as above; **Discard**
+asks once more, naming them. Dismissing the notification keeps them.
+
+The machine, now off, with what it kept:
+
+```text
+MACHINE
+▾ 🖥 Apple IIe        Enhanced, 65C02 · off · 2 disks not saved
+DRIVES                                                                            (2)
+▾ Slot 5 · 3.5 disk controller · 2 drives
+    ● 3.5 drive 1    prodos.2mg · changed · kept from the last run      [Save] [Eject]
+      3.5 drive 2    empty                                              [Insert...]
+▾ Slot 6 · Disk II controller · 2 drives
+    ● Drive 1        work.woz · changed · kept from the last run        [Save] [Eject]
+      Drive 2        empty                                              [Insert...]
+```
+
+Starting it again boots with those disks as they were left, still changed.
+
+The display panel's drive line while it runs, and its banner after:
+
+```text
+D1: track 17.00 · bit 2311/51024 · motor on · changed | D2: track 0.00 · motor off · protected
+```
+
+```text
+Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives.         [Restart]
+```
+
+"Review them in Drives" reveals the Drives view.
 
 ## Decisions (agreed 2026-11-14)
 

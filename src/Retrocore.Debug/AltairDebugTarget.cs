@@ -21,7 +21,7 @@ namespace Retrocore.Debug;
 ///   are the sense switches) and <c>baudRate</c> (the 88-2SIO's, default 9600).
 ///  </para>
 /// </remarks>
-internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget
+internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
 {
     private static readonly DebugRegisters s_registers = new(I8080Isa.Description);
 
@@ -482,6 +482,9 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget
         EjectCassette();
         drive.Play(tape, full);
     }
+
+    /// <inheritdoc/>
+    public void SaveRecordings() => SaveRecording();
 
     // Writes a recording to its path, leaving it in the recorder.
     private void SaveRecording()

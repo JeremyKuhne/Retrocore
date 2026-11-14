@@ -14,7 +14,7 @@ namespace Retrocore.Debug;
 ///  The Apple-1 as the debugger sees it: a 6502, the Apple-1's memory areas, its 40x24 terminal, keyboard and
 ///  cassette interface.
 /// </summary>
-internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget
+internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -507,6 +507,9 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget
         EjectCassette();
         drive.Play(tape, full);
     }
+
+    /// <inheritdoc/>
+    public void SaveRecordings() => SaveRecording();
 
     // Writes a recording to its path, leaving it in the recorder.
     private void SaveRecording()

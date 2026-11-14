@@ -459,18 +459,30 @@ internal sealed partial class DebugSession
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
 
     /// <summary>
-    ///  Ends the session, once: the machine stops and its target is disposed, which saves what disposing saves, such
-    ///  as a cassette recording. Disconnect ends it, and so does the client closing the input without one.
+    ///  Ends the session: the machine stops, its recordings are saved and its target is disposed. Disconnect ends it,
+    ///  and so does the client closing the input without one.
     /// </summary>
+    /// <exception cref="IOException">
+    ///  A recording could not be written. The session has not ended, so ending it again tries the save again.
+    /// </exception>
+    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written; likewise.</exception>
     internal void End()
     {
         lock (_gate)
         {
             if (_ended) { return; }
-            _ended = true;
             _run?.Cancel();
-            (_target as IDisposable)?.Dispose();
+            ReleaseTarget();
+            _ended = true;
         }
+    }
+
+    // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
+    // happens only once: if it fails, the target is left as it was.
+    private void ReleaseTarget()
+    {
+        (_target as IRecordingTarget)?.SaveRecordings();
+        (_target as IDisposable)?.Dispose();
     }
 
     private JsonObject Reply(Func<JsonObject> action)
@@ -580,7 +592,7 @@ internal sealed partial class DebugSession
         }
 
         bool loads = sourceFile is not null || program is not null;
-        (_target as IDisposable)?.Dispose();
+        ReleaseTarget();
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),

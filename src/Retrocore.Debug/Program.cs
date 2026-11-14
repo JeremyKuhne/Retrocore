@@ -137,6 +137,14 @@ try
 }
 finally
 {
-    // A client that closes the pipe without disconnecting still gets its recordings saved.
-    session.End();
+    // A client that closes the pipe without disconnecting still gets its recordings saved. There is no client to tell
+    // if that fails, so it goes to standard error.
+    try
+    {
+        session.End();
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"A recording could not be saved: {exception.Message}");
+    }
 }

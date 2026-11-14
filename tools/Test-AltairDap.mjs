@@ -12,7 +12,7 @@
 // MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
 
 import { resolve, join } from "node:path";
-import { writeFileSync, existsSync, unlinkSync, readFileSync } from "node:fs";
+import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -403,10 +403,15 @@ try {
 
     await request("disconnect", {});
 
-    // A client that closes the adapter's input without disconnecting still gets its recording saved.
-    phase("closing the input while recording");
-    const third = join(tmpdir(), `retrocore-altair-${process.pid}-3.tap`);
+    // A recording whose save fails is kept, so the save can be tried again: here the disconnect fails while the
+    // recording's folder is gone, and closing the adapter's input without another disconnect saves it once the folder
+    // is back. This adapter has its own timeout, which kills it, since the script's covers only the first.
+    phase("a failed save, then closing the input while recording");
+    const folder = join(tmpdir(), `retrocore-altair-${process.pid}-folder`);
+    const third = join(folder, "third.tap");
+    mkdirSync(folder, { recursive: true });
     const other = startDap(root);
+    const guard = setTimeout(() => other.fail(new Error("The second adapter timed out.")), 60000);
     try {
         writeFileSync(source, recording.join("\n"));
         await other.request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
@@ -418,12 +423,15 @@ try {
         await new Promise(resolve => setTimeout(resolve, 1500));
         await other.request("pause", { threadId: 1 });
         await other.event("stopped");
-        assert.ok(!existsSync(third), "nothing is written until the recording comes out");
+        rmSync(folder, { recursive: true });
+        await assert.rejects(other.request("disconnect", {}), "the save fails while the folder is gone");
+        mkdirSync(folder);
         await other.endInput();
-        assert.equal(readFileSync(third, "latin1"), "TAPE", "closing the input saved the recording");
+        assert.equal(readFileSync(third, "latin1"), "TAPE", "closing the input saved the recording on the second try");
     } finally {
+        clearTimeout(guard);
         other.close();
-        if (existsSync(third)) unlinkSync(third);
+        rmSync(folder, { recursive: true, force: true });
     }
 
     console.log("Altair DAP integration passed.");

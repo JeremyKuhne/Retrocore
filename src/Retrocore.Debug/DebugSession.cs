@@ -1286,11 +1286,16 @@ internal sealed partial class DebugSession
             // starts an Apple cycle may fetch the 6502's next opcode, so a breakpoint there stops first.
             if (cpu is SoftCardDebugTarget { StartsHostCycle: true }
                 && !ReferenceEquals(Cpu, cpu)
-                && Cpu.IsInstructionBoundary
-                && Hit(Cpu.ProgramCounter) is { } resumed)
+                && Cpu.IsInstructionBoundary)
             {
-                Stopped(resumed);
-                return false;
+                // The Z80's write that gave the bus back was its last access, so its data breakpoints apply now, on
+                // its own thread, before the 6502's breakpoint can take the stop.
+                if (_dataHits.Count != 0 && !DataStop(cpu)) { return false; }
+                if (Hit(Cpu.ProgramCounter) is { } resumed)
+                {
+                    Stopped(resumed);
+                    return false;
+                }
             }
 
             instruction |= cpu.StepCycle();

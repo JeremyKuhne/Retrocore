@@ -219,7 +219,15 @@ try {
     await stoppedOn("entry", 4);
     const resume = (await top(1)).instructionPointerReference;
     await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: resume }] });
+
+    // A data breakpoint on the Z80's switch write stops the Z80's thread first, as the write is the Z80's; the 6502's
+    // breakpoint is next.
+    const handBackWatch = await request("dataBreakpointInfo", { name: "z80:$E400", asAddress: true });
+    await request("setDataBreakpoints", { breakpoints: [{ dataId: handBackWatch.dataId, accessType: "write" }] });
     await request("continue", { threadId: 4 });
+    await stoppedOn("data breakpoint", 4);
+    await request("setDataBreakpoints", { breakpoints: [] });
+    await request("continue", { threadId: 1 });
     frame = await stoppedOn("instruction breakpoint", 1);
     assert.equal(frame.instructionPointerReference, resume);
     await request("setInstructionBreakpoints", { breakpoints: [] });

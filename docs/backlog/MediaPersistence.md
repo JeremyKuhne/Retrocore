@@ -658,7 +658,7 @@ Turning history off, from either clock, asks once:
 │   312 MB of versions are kept now. Changed disks will still keep │
 │   their newest version when the machine stops.                   │
 │                                                                  │
-│     [Turn Off, Keep Versions]   [Turn Off and Clear]   [Cancel]     │
+│   [Turn Off, Keep Versions]  [Turn Off and Clear]  [Cancel]     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 

@@ -197,6 +197,8 @@ public static partial class PcodeSourceWriter
             items.Add((instruction, at, text, late));
         }
 
+        ForLimits(code, items.ConvertAll(item => item.At), attributes, segment, number, naming, notes);
+
         // The jump table's words start on a word boundary; a byte before them is padding.
         int first = at + (at & 1);
         if (first > tableLow) { first = tableLow; }
@@ -341,6 +343,75 @@ public static partial class PcodeSourceWriter
         string text = value.ToString("R", CultureInfo.InvariantCulture);
         string digits = text.Split('E')[0].Replace("-", "", StringComparison.Ordinal).Replace(".", "", StringComparison.Ordinal);
         return digits.Trim('0').Length <= 6 ? text : null;
+    }
+
+    // A FOR loop keeps its limit in a word the Compiler adds, which no listing declares. The loop stores the limit,
+    // then at its top, where its end jumps back to, tests its control variable against it: load the variable, load
+    // the limit, LEQI (GEQI for DOWNTO), FJP. That store and load, where the word has no name of its own, are noted as
+    // the loop's limit: "FOR N's limit", or "FOR limit" where the variable has no name. An IF's comparison has no jump
+    // back to it.
+    private static void ForLimits(
+        byte[] code,
+        List<int> starts,
+        int attributes,
+        PascalSegment segment,
+        int number,
+        PcodeNaming naming,
+        Dictionary<int, string> notes)
+    {
+        // The places a jump back reaches: a UJP back goes through the jump table.
+        HashSet<int> tops = [];
+        foreach (int at in starts)
+        {
+            if (code[at] == 185 && (sbyte)code[at + 1] < 0)
+            {
+                int entry = attributes + (sbyte)code[at + 1];
+                tops.Add(entry - Word(code, entry));
+            }
+        }
+
+        for (int index = 1; index + 3 < starts.Count; index++)
+        {
+            if (!tops.Contains(starts[index])
+                || Access(code, starts[index]) is not { Load: true } control
+                || Access(code, starts[index + 1]) is not { Load: true } limit
+                || Access(code, starts[index - 1]) is not { Load: false } stored
+                || (stored.Global, stored.Word) != (limit.Global, limit.Word)
+                || code[starts[index + 2]] is not (200 or 196)
+                || code[starts[index + 3]] != 161)
+            {
+                continue;
+            }
+
+            // The limit is stored before the loop and loaded at its top, and nowhere else: the word may hold another
+            // loop's limit, or a WITH's pointer, elsewhere.
+            string? name = control.Global ? naming.Global(control.Word) : naming.Variable(segment.Number, number, control.Word);
+            string note = name is null ? "FOR limit" : $"FOR {name}'s limit";
+            notes.TryAdd(starts[index - 1], note);
+            notes.TryAdd(starts[index + 1], note);
+        }
+    }
+
+    // A load or store of a local or global word: SLDL, LDL and STL, and SLDO, LDO and SRO.
+    private static (bool Global, int Word, bool Load)? Access(byte[] code, int at)
+    {
+        byte op = code[at];
+        int Operand()
+        {
+            int first = code[at + 1];
+            return first < 0x80 ? first : ((first & 0x7F) << 8) | code[at + 2];
+        }
+
+        return op switch
+        {
+            >= 216 and <= 231 => (false, op - 215, true),
+            >= 232 and <= 247 => (true, op - 231, true),
+            202 => (false, Operand(), true),
+            204 => (false, Operand(), false),
+            169 => (true, Operand(), true),
+            171 => (true, Operand(), false),
+            _ => null
+        };
     }
 
     // A reference as the operand of a subtraction: in parentheses when it is a sum, such as L0565 + 33.

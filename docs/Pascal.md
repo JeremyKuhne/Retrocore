@@ -226,6 +226,9 @@ Calls and constants are named whatever is at hand:
   INPUT, OUTPUT and KEYBOARD; a program's globals; and, with a listing, any other procedure's, as HILBERT's HIL1
   reaches HIL's `A` (`LOD 1, 3 ; A`). The listing gives the nesting: a procedure is declared in the last procedure
   a level out whose heading comes before its own.
+- **A FOR loop's limit**, the word the Compiler adds to keep it, which no source declares: where the loop stores
+  it and where its top tests the control variable against it (`SRO 8 ; FOR N's limit`). The word can serve another
+  loop or a `WITH` elsewhere, so only those two places are named.
 - **Hints** (`--hints`, a JSON file) name and comment anything else, keyed as `pascal` breakpoints name code:
   `SEGMENT` for a segment, `SEGMENT.N` for procedure N, and `SEGMENT.N+$OFFSET` for a place in it, by its offset
   from the procedure's entry; and `SEGMENT.N@WORD` for a variable, by its word in procedure N's frame, as `LDL`

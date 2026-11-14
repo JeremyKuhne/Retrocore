@@ -153,7 +153,8 @@ public class PcodeAssemblyTests
 
     /// <summary>
     ///  Hints name variables by their word in a procedure's frame, a program's globals as its procedure 1's; a load of
-    ///  the system's standard files names them.
+    ///  the system's standard files names them, and a FOR loop's limit, a word no source declares, is named for its
+    ///  control variable where it is stored and tested.
     /// </summary>
     [TestMethod]
     public void HintsNameVariables()
@@ -171,6 +172,8 @@ public class PcodeAssemblyTests
         text.Should().MatchRegex(@"SRO 4 +; Total\n");
         text.Should().MatchRegex(@"SLDO3 +; Count\n");
         text.Should().MatchRegex(@"LOD 1, 3 +; OUTPUT\n");
+        text.Should().MatchRegex(@"SRO 9 +; FOR Count's limit\n", "a DOWNTO loop on Count keeps its limit in word 9");
+        text.Should().MatchRegex(@"SLDO9 +; FOR Count's limit\n");
         Assemble(text).Should().Equal(original);
     }
 

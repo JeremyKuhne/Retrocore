@@ -975,15 +975,27 @@ conditional calls, `RST` and interrupts. The machine is configured by:
 - `ramKilobytes`: 1 to 64 from `$0000` (64 by default);
 - `switches`: the front panel's 16 switches, whose high 8 are the sense switches
   `IN $FF` reads;
-- `baudRate`: the 88-2SIO's, 9600 by default.
+- `baudRate`: the terminal's, on the 88-2SIO and the 88-SIO, 9600 by default;
+- `console`: the board the terminal is on, `2sio` (ports `$10` and `$11`, the default)
+  or `sio` (the 88-SIO, ports `$00` and `$01`);
+- `upperCase`: caps lock, so letters type as capitals, as Altair BASIC needs;
+- `cassetteInterface`: the 88-ACR at ports `$06` and `$07` (on by default), and
+  `cassette`, a `.tap` tape that plays at 300 baud from the start;
+- `fastCassette`: run as fast as possible while a tape plays or records (on by default).
 
 The Altair has no ROM. A program (`source` or `program`, loaded at `$0100` by default)
-starts there; it sets up the 88-2SIO's first ACIA (`$03`, then `$15`, to port `$10`)
-and talks to the terminal through ports `$10` and `$11`. The panel shows the 80x24
-terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
+starts there; on the 88-2SIO it sets up the first ACIA (`$03`, then `$15`, to port
+`$10`) and talks to the terminal through ports `$10` and `$11`. The panel shows the
+80x24 terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
 control character, the arrow keys send ^H, ^J, ^K and ^L, and **Ctrl+F12** or
 **Ctrl+Break** is RESET; the key bar has **Esc**, **Reset** and **Clear Screen**.
-[The Altair guide](../docs/Altair8800.md) covers the hardware.
+Tapes go in and out from the cassette's row in [Retro Devices](#retro-devices); a
+recording is saved when it is ejected.
+
+Altair BASIC runs from an image you supply: launch it as a `program` with
+`"loadAddress": 0`, `"entryAddress": 0` and `"upperCase": true`, and set the sense
+switches for the terminal's board. [The Altair guide](../docs/Altair8800.md) has the
+settings for each version, and covers the hardware.
 
 ## Debugging on the TRS-80 Color Computer
 

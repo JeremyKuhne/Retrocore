@@ -11,8 +11,8 @@ using NativeAssembler = Retrocore.Assembler.Assembler;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  The Altair 8800: 8080 programs on the 88-2SIO's terminal, its interrupts, the sense switches, RAM and the front
-///  panel, and the terminal's ADM-3A controls.
+///  The Altair 8800: 8080 programs on the 88-2SIO's and 88-SIO's terminal, their interrupts, the 88-ACR's cassette,
+///  the sense switches, RAM and the front panel, and the terminal's ADM-3A controls.
 /// </summary>
 [TestClass]
 public class AltairMachineTests
@@ -306,6 +306,190 @@ public class AltairMachineTests
         machine.Processor.Registers.PC.Should().Be(0);
         machine.Bus.SerialA.Status.Should().Be(0);
         machine.Bus.Peek(0x2000).Should().Be(0x55);
+    }
+
+    /// <summary>
+    ///  With the terminal on the 88-SIO, a program prints and echoes through ports $00 and $01, whose status bits are
+    ///  low when ready: bit 0 for a received character, bit 7 for the transmitter.
+    /// </summary>
+    [TestMethod]
+    public void SioPrintsAndEchoes()
+    {
+        AltairMachine machine = Build("""
+            .cpu I8080
+                    .org 0
+                    lxi sp,$1000
+                    lxi h,Text
+            Print:  in 0                ; wait for bit 7 low
+                    ani $80
+                    jnz Print
+                    mov a,m
+                    ora a
+                    jz Loop
+                    out 1
+                    inx h
+                    jmp Print
+            Loop:   in 0                ; wait for bit 0 low
+                    rrc
+                    jc Loop
+                    in 1
+                    mov b,a
+            Wait:   in 0
+                    ani $80
+                    jnz Wait
+                    mov a,b
+                    out 1
+                    cpi '.'
+                    jnz Loop
+                    hlt
+            Text:   .byte "88-SIO", 13, 10, 0
+            """,
+            new AltairConfiguration { Console = AltairConsole.Sio });
+
+        AltairSio sio = machine.Bus.Sio ?? throw new InvalidOperationException("The 88-SIO is missing.");
+        sio.Status.Should().Be(AltairSio.InputNotReady, "nothing is received and the transmitter is ready");
+        foreach (char key in "Echo.") { machine.Terminal.Type((byte)key); }
+        RunToHalt(machine);
+        machine.Terminal.Line(0).TrimEnd().Should().Be("88-SIO");
+        machine.Terminal.Line(1).TrimEnd().Should().Be("Echo.");
+        machine.Bus.PeekPort(AltairBus.SerialPort).Should().Be(0, "the 88-2SIO is still there, held in master reset");
+    }
+
+    /// <summary>
+    ///  The 88-SIO's input interrupt runs RST 7 for a key; a second character before the first is read sets the
+    ///  overflow bit, and RESET disables the interrupts.
+    /// </summary>
+    [TestMethod]
+    public void SioInterruptsAndOverflows()
+    {
+        AltairMachine machine = Build("""
+            .cpu I8080
+                    .org 0
+                    lxi sp,$1000
+                    mvi a,1             ; input interrupt enabled
+                    out 0
+                    ei
+                    hlt
+                    hlt
+                    .org $38
+                    in 1
+                    sta $2000
+                    hlt
+            """,
+            new AltairConfiguration { Console = AltairConsole.Sio });
+
+        AltairSio sio = machine.Bus.Sio ?? throw new InvalidOperationException("The 88-SIO is missing.");
+        RunToHalt(machine);
+        machine.Processor.Registers.PC.Should().Be(0x0009, "HLT waits for an interrupt");
+        machine.Terminal.Type((byte)'K');
+        machine.Run(10_000);
+        machine.Bus.Peek(0x2000).Should().Be((byte)'K');
+        machine.Processor.Registers.PC.Should().Be(0x003E, "the handler at $0038 read the key and halted");
+
+        sio.Receive((byte)'X');
+        sio.Receive((byte)'Y');
+        sio.Status.Should().Be(AltairSio.Overflow, "X waits, Y was lost, and the transmitter is ready");
+        sio.Read(1).Should().Be((byte)'X');
+        sio.Status.Should().Be(AltairSio.InputNotReady);
+        sio.Control.Should().Be(1);
+        machine.Reset();
+        sio.Control.Should().Be(0);
+    }
+
+    /// <summary>
+    ///  A tape on the 88-ACR plays a byte each 300-baud character time, whether or not the program reads it, and a
+    ///  program reads it at ports $06 and $07.
+    /// </summary>
+    [TestMethod]
+    public void CassettePlaysAtThreeHundredBaud()
+    {
+        AltairMachine machine = Build("""
+            .cpu I8080
+                    .org 0
+                    lxi sp,$1000
+                    lxi h,$2000
+                    mvi b,4
+            Read:   in 6                ; wait for bit 0 low
+                    rrc
+                    jc Read
+                    in 7
+                    mov m,a
+                    inx h
+                    dcr b
+                    jnz Read
+                    hlt
+            """);
+
+        AltairCassette cassette = machine.Bus.Cassette ?? throw new InvalidOperationException("The 88-ACR is missing.");
+        machine.Devices.Should().ContainSingle().Which.Should().BeSameAs(cassette);
+        cassette.Play([0xD3, 0x00, 0x41, 0xFF], "test.tap");
+        cassette.Activity.Should().Be(Machines.Devices.DeviceActivity.Reading);
+        RunToHalt(machine);
+        byte[] read = [.. Enumerable.Range(0x2000, 4).Select(address => machine.Bus.Peek((ushort)address))];
+        read.Should().Equal(0xD3, 0x00, 0x41, 0xFF);
+        int character = AltairTiming.CyclesPerCharacter(AltairBus.CassetteBaudRate);
+        character.Should().Be(66_666);
+        ((long)machine.Processor.CycleCount).Should().BeGreaterThanOrEqualTo(4L * character);
+        cassette.AtEnd.Should().BeTrue();
+        cassette.Transport.Position.Should().Be(4);
+    }
+
+    /// <summary>
+    ///  A tape that records takes each byte the 88-ACR sends; bytes sent with no tape recording are lost.
+    /// </summary>
+    [TestMethod]
+    public void CassetteRecords()
+    {
+        AltairMachine machine = Build("""
+            .cpu I8080
+                    .org 0
+                    lxi sp,$1000
+                    lxi h,Bytes
+            Write:  in 6                ; wait for bit 7 low
+                    ani $80
+                    jnz Write
+                    mov a,m
+                    ora a
+                    jz Done
+                    out 7
+                    inx h
+                    jmp Write
+            Done:   hlt
+            Bytes:  .byte "TAPE", 0
+            """);
+
+        AltairCassette cassette = machine.Bus.Cassette ?? throw new InvalidOperationException("The 88-ACR is missing.");
+        cassette.Record("out.tap");
+        RunToHalt(machine);
+        machine.Run((ulong)AltairTiming.CyclesPerCharacter(AltairBus.CassetteBaudRate));
+        (cassette.Media?.Changed).Should().BeTrue();
+        cassette.Eject().Should().Equal("TAPE"u8.ToArray());
+        cassette.Media.Should().BeNull();
+        cassette.Eject().Should().BeNull("the recorder is empty");
+    }
+
+    /// <summary>
+    ///  Boards that are not there read $FF: the 88-SIO while the terminal is on the 88-2SIO, and the 88-ACR when it
+    ///  is left out. Caps lock types lowercase letters as capitals.
+    /// </summary>
+    [TestMethod]
+    public void BoardsFollowTheConfiguration()
+    {
+        AltairMachine machine = new(new AltairConfiguration { CassetteInterface = false, UpperCase = true });
+        machine.Bus.Sio.Should().BeNull();
+        machine.Bus.Cassette.Should().BeNull();
+        machine.Devices.Should().BeEmpty();
+        machine.Bus.In(AltairBus.SioPort).Should().Be(0xFF);
+        machine.Bus.In(AltairBus.CassettePort).Should().Be(0xFF);
+        machine.Bus.PeekPort(AltairBus.CassettePort + 1).Should().Be(0xFF);
+
+        machine.Bus.Write(0, 0x76);
+        machine.Bus.SerialA.Write(0, 0x15);
+        foreach (char key in "a{") { machine.Terminal.Type((byte)key); }
+        machine.Run(10);
+        machine.Bus.SerialA.Read(1).Should().Be((byte)'A');
+        machine.Run((ulong)AltairTiming.CyclesPerCharacter(9600) + 10);
+        machine.Bus.SerialA.Read(1).Should().Be((byte)'{', "only letters change");
     }
 
     private static AltairMachine Run(string source, AltairConfiguration? configuration = null)

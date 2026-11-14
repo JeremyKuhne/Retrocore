@@ -113,8 +113,10 @@ Internet Archive.
 | Machine | DOS | File | Internet Archive item | SHA-256 |
 | --- | --- | --- | --- | --- |
 | Model III | TRSDOS 1.3 | `TRSDOS13.dmk` | `model-iii-trsdos-disk-operating-system-and-basic-interpreter-v-01.03.00-1980` | `e3b191b4…` |
+| Model III | TRSDOS 1.3 | `TRSDOS13.imd`, the same item's IMD copy | as above | `c58adf34…` |
 | Model III | LDOS 5.1.3 (SMAL-LDOS) | `LDOS513.dsk` (JV3) | `os-m-3-smal-ldosv-513` | `7407ac56…` |
 | Model 4 | TRSDOS 6.0.0 | `TRSDOS60.dmk` | `model-4-trsdos-and-basic-interpreter-v-6.0-1983` | `710543cd…` |
+| Model 4 | TRSDOS 6.0.0 | `TRSDOS60.imd`, the same item's IMD copy | as above | `99df9574…` |
 | Model 4 | TRSDOS 6.2.0 | `TRSDOS62.imd` (`T80M4DOS.IMD`) | `cpm22_202207` | `bed5f992…` |
 | Model 4 and 4P | LS-DOS 6.3.0 level J | `LSDOS63J.dsk` (JV3, `ldos63j.dsk`) | `cpm22_202207` | `c419e101…` |
 
@@ -196,12 +198,34 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
 | `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY` and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
+| `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
+
+## Comparing with MAME
+
+`Trs80Model3OracleTests` runs MAME with [`tools/Trs80Model3Oracle.lua`](../tools/Trs80Model3Oracle.lua). The script
+types the same keystrokes at the same emulated seconds and dumps the screen's video RAM, from MAME's `:videoram` or
+`:video_ram` share. The machine here runs the SDK's builds of the same ROMs over the same devices' time, counting 2 MHz
+T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
+`RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
+mame` puts it in `/usr/games`). Its ROM sets, `trs80m3` and `trs80m2`, are in `trs80-roms/mame`. Without them the
+tests are inconclusive.
+
+What the comparison has to allow for:
+
+- **Drives.** MAME's Model III and 4 drives are a configuration switch, off by default: its controller then reads
+  `$FF` and the ROM starts BASIC. The DOS tests turn the switch on. The BASIC tests run without the controller here.
+  With the switch on and drive 0 empty, MAME's ROM waits at `Diskette?`, as this one does.
+- **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
+- **Keys.** MAME types an uppercase letter with shift, and `Trs80Keyboard.Type` without it. The test swaps the case
+  on this side, so both press the same keys; TRSDOS 6.0 starts with caps lock off, where the two differ.
+- **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
+- **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
+  and 5.
 
 ## What is not done yet
 
-- **The Model II's TRSDOS-II**, which needs an image, and a check of the Model III family's DOSes against MAME. The
-  hardware follows the technical references and MAME's drivers.
+- **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

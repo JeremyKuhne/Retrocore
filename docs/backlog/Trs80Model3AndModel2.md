@@ -18,8 +18,11 @@ byte-identical to MAME's dumps, and boot to their prompts. This is what remains 
    list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait
    was only masked by INTRQ, so the ROM's NMI handler hung reading the status; INTRQ and DRQ now end it. Still open:
    TRSDOS-II on the Model II, which needs an image, and its DMA and keyboard codes against it.
-3. **An oracle.** As `Trs80OracleTests` compares the Model I with MAME, compare the same keystrokes on MAME's
-   `trs80m3`, `trs80m4` and `trs80m2`.
+3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`
+   after the same keystrokes. It covers BASIC on the Model III and 4, the five DOS images booting and listing their
+   directories, and each Model II boot ROM asking for a diskette (see
+   [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)). Still open: the Model II with TRSDOS-II, once
+   there is an image.
 4. **ROM sources.** Done: `Model3.asm` (sharing Level II's BASIC through `Level2.asm`), `Model4PBoot.asm`,
    `Model2Boot.asm` and the character generators, with each build's `Keeps:` contracts checked by its own `MODEL`.
    The Model III's Level I ROM (`8040032`) is `Level1.asm` with `MODEL = 3`, and a Model III launches with it. Still to

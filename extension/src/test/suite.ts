@@ -14,6 +14,8 @@ import { testBasicThread } from "./basicThread";
 import { testBasicVariables } from "./basicVariables";
 import { testAppleSoftLaunch, testBasicLaunch } from "./basicLaunch";
 import { testMachineMenu } from "./machineMenu";
+import { testOffMachine } from "./offMachine";
+import { testFavorites } from "./favorites";
 import { testProgramBreakpoints } from "./basicBreakpoints";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
@@ -27,6 +29,8 @@ export async function run(): Promise<void> {
     await testBasicLanguage(workspace.uri.fsPath);
     if (process.env.RETROCORE_TEST_LANGUAGE_ONLY === "1") return;
     await testMachineMenu(workspace);
+    await testOffMachine(workspace);
+    await testFavorites(workspace);
     await testProgramBreakpoints(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
@@ -205,7 +209,7 @@ export async function run(): Promise<void> {
         assert.ok(display.rows.join("\n").includes("MEM SIZE?"));
         assert.equal(Buffer.from(display.video.pixels, "base64").length, 384 * 192 * 4);
 
-        // The Retro Devices view has the machine's devices from retro/devices: this configuration has no disk
+        // The Machine and Drives views have the machine's devices from retro/devices: this configuration has no disk
         // controller, so the cassette alone, empty and stopped.
         let listed: { id: string; media: unknown; transport?: { mode: string } }[] = [];
         for (let attempt = 0; attempt < 20 && listed.length === 0; attempt++) {
@@ -295,7 +299,7 @@ export async function run(): Promise<void> {
         assert.equal(await stop(), "step");
         assert.equal((await softCard.customRequest("stackTrace", { threadId: 4 })).stackFrames[0].name, "NEXT");
 
-        // The card's switches are checkboxes under its row in the Retro Devices view.
+        // The card's switches are checkboxes under its row in the Machine view.
         let rows: HardwareRow[] = [];
         for (let attempt = 0; attempt < 40 && !rows.some(row => row.id === "slot4" && row.settings?.length); attempt++) {
             await vscode.commands.executeCommand("retrocore.device.refresh");
@@ -303,12 +307,12 @@ export async function run(): Promise<void> {
             rows = await vscode.commands.executeCommand<HardwareRow[]>("retrocore.device.hardware");
         }
         assert.deepEqual(rows.find(row => row.id === "slot4")?.settings?.map(setting => setting.id), ["translation", "refresh"]);
-        await vscode.commands.executeCommand("retrocore.device.setting", "slot4", "refresh", false);
+        await vscode.commands.executeCommand("retrocore.machine.change", "hardware", { id: "slot4", action: "setSetting", setting: "refresh", value: false });
         const switched = await softCard.customRequest("retro/devices");
         assert.equal(switched.hardware.find((row: HardwareRow) => row.id === "slot4").settings[1].value, false);
         await vscode.debug.stopDebugging(softCard);
         vscode.debug.removeBreakpoints([z80Breakpoint]);
-        console.log("Isolated VS Code passed: the SoftCard sample stops at its entry and at a source breakpoint on the SoftCard Z80 thread, steps into its call, and its switches show and change in the Retro Devices view.");
+        console.log("Isolated VS Code passed: the SoftCard sample stops at its entry and at a source breakpoint on the SoftCard Z80 thread, steps into its call, and its switches show and change in the Machine view.");
     } finally {
         tracker.dispose();
         await vscode.debug.stopDebugging();

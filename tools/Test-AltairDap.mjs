@@ -190,9 +190,9 @@ try {
 
     // HLT waits for an interrupt: a breakpoint after it holds until a key's receive interrupt runs RST 7, whose
     // handler shows on the call stack above the halted instruction it interrupted.
-    // The session's configuration is done, so the launch starts at once with the filters set now: the reset filter
-    // goes first, or the power-on reset would stop.
     writeFileSync(source, halting.join("\n"));
+    // A launch after configurationDone starts at once, so the machineReset filter set above goes first: cleared after
+    // the launch, it could still stop the new machine as it powers on.
     await request("setExceptionBreakpoints", { filters: [] });
     events.length = 0;
     await request("launch", { machine: "altair", source, loadAddress: 0x38, entryAddress: 0x100, stopOnEntry: false, speed: "max" });

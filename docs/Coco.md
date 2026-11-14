@@ -131,7 +131,7 @@ The options are:
 
 The panel's key bar has **Break** (Esc), **Clear** (Home) and **Reset** (Ctrl+F12 or Ctrl+Break), which restarts
 the 6809 through its reset vector; Color BASIC starts again with the program kept. **Machine reset** stops at the
-first instruction after it. The Retro Devices view shows the cassette and the drives, and inserts, records and
+first instruction after it. The Drives view shows the cassette and the drives, and inserts, records and
 ejects media, as on the Model I; `retro/media` takes the same requests.
 
 **What the debugger knows about the 6809.**

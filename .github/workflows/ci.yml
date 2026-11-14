@@ -76,6 +76,7 @@ jobs:
           node tools/Test-BusinessBasicDap.mjs
           node tools/Test-CocoDap.mjs
           node tools/Test-AltairDap.mjs
+          node tools/Test-OffMachine.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension

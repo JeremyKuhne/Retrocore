@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The installed hardware the Retro Devices view lists: each built-in part, slot or option, from retro/devices.
+// The installed hardware the Machine view lists: each built-in part, slot or option, from retro/devices.
 
 /** A row of a machine's installed hardware, as the debug host's retro/devices describes it. */
 export interface HardwareRow {
@@ -113,4 +113,21 @@ export function fingerprint(configuration: Record<string, unknown>): string {
  */
 export function restorable(saved: SavedMachine | undefined, configuration: Record<string, unknown>): unknown {
     return saved !== undefined && saved.fingerprint === fingerprint(configuration) ? saved.configuration : undefined;
+}
+
+/**
+ * What of a saved machine differs from the machine its launch gives by itself (base, as retrocore/machine/describe
+ * answers with no saved machine): the cards and media someone changed. Saved alone, they go on top of whatever a
+ * change of setting makes the launch give, where the whole saved machine would put back what the setting replaced.
+ */
+export function changesFrom(saved: unknown, base: unknown): Record<string, Record<string, unknown>> {
+    const changes: Record<string, Record<string, unknown>> = {};
+    for (const section of ["cards", "media"]) {
+        const ours = (saved as Record<string, unknown> | undefined)?.[section];
+        if (typeof ours !== "object" || ours === null) continue;
+        const theirs = ((base as Record<string, unknown> | undefined)?.[section] ?? {}) as Record<string, unknown>;
+        changes[section] = Object.fromEntries(Object.entries(ours as Record<string, unknown>)
+            .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(theirs[key])));
+    }
+    return changes;
 }

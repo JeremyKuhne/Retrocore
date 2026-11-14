@@ -122,6 +122,10 @@ internal static class LanguageHost
         server.OnRequest("retrocore/basic/list", parameters => BasicFiles.List(parameters ?? []));
         server.OnRequest("retrocore/basic/store", parameters => BasicFiles.Store(parameters ?? []));
 
+        // A machine set up while it is off, for the Machine and Drives views with no debug session.
+        server.OnRequest("retrocore/machine/describe", parameters => OffMachine.Describe(parameters ?? []));
+        server.OnRequest("retrocore/machine/change", parameters => OffMachine.Change(parameters ?? []));
+
         await server.Run().ConfigureAwait(continueOnCapturedContext: false);
     }
 

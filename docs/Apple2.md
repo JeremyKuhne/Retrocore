@@ -83,13 +83,13 @@ Its Z80 borrows the Apple's memory while the 6502 waits:
   6502 reads once, at its next opcode's address, as the card lets it; `RefreshesHost` turns that off.
 - **What it lacks.** The card has no ROM or RAM, and nothing decodes the Z80's `IN` and `OUT`. The DIP switches that
   wire the Apple's interrupts to the Z80 are left off, as CP/M expects.
-- **Switches.** In the Retro Devices view, the card's row opens to two checkboxes: **Address translation** (on, as
+- **Switches.** In the Machine view, the card's row opens to two checkboxes: **Address translation** (on, as
   shipped) and **6502 refresh read** (on). The machine state saves them with the card.
 
 CP/M boots from its own disk in slot 6, through the Disk II's firmware. Microsoft's 2.20 and 2.20B (44K) and
 Datasoft's 2.23B (63K) all reach `A>`.
 
-The Retro Devices view lists each model's slots, and **Add Card** puts a card in a free one; [Devices.md](Devices.md)
+The Retrocore activity bar's Machine view lists each model's slots, and **Add Card** puts a card in a free one; [Devices.md](Devices.md)
 describes the view and its requests. Each launch configuration remembers the cards and disks it last ran with.
 
 ## ROMs
@@ -159,7 +159,7 @@ black and white, green and amber, and keeps the choice.
 
 **The ProFile card** goes in any free slot (`proFiles`, or Add Card), as many as there are slots, each with Apple's
 ProFile hard disk cabled to it. The ProFile takes a ProDOS-order image (`.po` or `.hdv`) of up to 65535 blocks, inserted
-from the Retro Devices view or the launch; the machine can write to it, and the changes stay in memory. The card's
+from the Drives view or the launch; the machine can write to it, and the changes stay in memory. The card's
 256-byte firmware (`ProFile.rom.asm`) is the SDK's own, not Apple's: it is a ProDOS block device ($20, $00 and $03 at
 $Cn01-$Cn05, its driver's offset at $CnFF), so ProDOS lists it and the startup scan boots it, from the highest slot
 first. The firmware talks to the ProFile as Apple's SOS driver does on the Apple III: CMD and BSY handshakes, the
@@ -288,7 +288,7 @@ PlayStation, Switch Pro and most other controllers, and the first one connected 
 The paddles are the game port's 558 timers: accessing $C070-$C07F starts all four, and $C064-$C067 read bit 7 high
 until each times out, so the Monitor's PREAD and BASIC's `PDL` count the stick's position. A paddle with no controller
 reads 255, as an unconnected one does. The debugger reads controllers whenever the machine runs, even with VS Code in
-the background, and lists them in the Retro Devices view's **Game port** row; the launch option `controllers: false`
+the background, and lists them in the Machine view's **Game port** row; the launch option `controllers: false`
 turns them off. AppleSharp reads them while its window has focus.
 
 The debugger maps the SDK's sources onto whatever ROM is running, so stepping into the Monitor, AppleSoft or Integer

@@ -59,7 +59,7 @@ Agreed 2026-11-12 ("Looks right"):
 - The Z80 is its own debugger thread, not a CPU thread that changes ISA when the bus changes hands.
 - The SoftCard models the 6502's refresh cycle after each M1, with two T-states per Apple cycle. An option leaves the
   refresh out, so the oracle test can match MAME. The SoftCard /// starts with it off, as no source says it has one.
-- The SoftCard is a card added in the Retro Devices view (or with the launch's `softCard`), not an entry in the Run
+- The SoftCard is a card added in the Machine view (the Retro Devices view when decided), or with the launch's `softCard`, not an entry in the Run
   and Debug dropdown (decided 2026-11-12). The SoftCard /// follows suit.
 - Each fixture download is approved on its own, with its site, file and checksum, and saved under
   `%USERPROFILE%\Retrocore`, never committed.

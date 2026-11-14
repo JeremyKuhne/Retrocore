@@ -200,9 +200,37 @@ procedure says so in a comment, the command lists it as a warning, and exits wit
 Apple Pascal 1.1's sample programs (HILBERT, TREE, BALANCED, CROSSREF, DISKIO, GRAFDEMO, GRAFCHARS, SPIRODEMO,
 LINEFEED) and the BINDER utility decompile to sources that compile to the same code, but for the byte the Compiler
 skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
-decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
-a unit's variables; and `IDSEARCH` and `TREESEARCH`. `SCAN` decompiles,
-with its test (`SCAN(41, = CH, BUF)`), and so does Apple III Pascal's `UNITSTATUS(UNIT, BUF, CONTROL)`, its `CSP 12`.
+decompiled yet: a unit's variables. `SCAN` decompiles,
+with its test (`SCAN(41, = CH, BUF)`), and so does Apple III Pascal's `UNITSTATUS(UNIT, BUF, CONTROL)`, its `CSP 12`,
+and the Compiler's own `IDSEARCH(CURSOR, BUF^)` and `TREESEARCH(ROOT, FOUND, NAME)` (`CSP IDS`, `CSP TRS`), which a
+program can name too. A segment procedure that calls one of the program's procedures (`CXP 1, n`) has it declared
+`FORWARD` before it, as the Compiler takes no segment procedure after a procedure's code; a segment procedure is named
+after its segment.
+
+A program compiled as part of the system, `(*$U-*)`, such as Apple's Compilers, is told from its body, which does not
+start with the two `NOP`s (or the jump) a program's does. Found by compiling probes: with `(*$U-*)` before `PROGRAM`,
+the program is the system's outer block, at level -1, segment 0, and its variables are the system's globals, from
+word 1, beside the `INPUT`, `OUTPUT` and `KEYBOARD` the Compiler still declares at words 2 to 4; its segment
+procedures are numbered from 1, and `(*$U-*)` turns off I/O and range checks. Apple's Compiler is segment procedure 1
+with its own from 7, so it is decompiled as
+
+    (*$U-*)
+    PROGRAM PASCALSYSTEM;
+    VAR SYS1: T1; ... SYS8: T4; ...        (* the system's globals the code reaches *)
+    SEGMENT PROCEDURE PASCALCO(G2: ...; G1: ...); FORWARD;
+    SEGMENT PROCEDURE SYSSEG2; FORWARD;    (* ... to 6, which the Compiler numbers but writes empty *)
+    SEGMENT PROCEDURE PASCALCO;
+      ...
+    BEGIN ... END;
+    BEGIN
+    END.
+
+A global the code passes as a file holds the file's address (`LOD`), so it is a pointer to an untyped file, written
+`BLOCKREAD(SYS8^, ...)`: the Compiler takes that for `BLOCKREAD`, but not `WRITE(P^, ...)`. Apple's file then had
+its own segments copied out by the Librarian, into other slots and without segment 0; `--pascal compare` pairs
+segments by number and leaves out those with no code and the outer block. A source too long for APPLE1 beside its
+code file, such as a Compiler's, is compiled from a volume of its own, SOURCE:, in a second Disk II in slot 5 (units
+11 and 12), to CODE: beside it; Apple Pascal 1.1 sees both.
 ### Rebuilding a linked program
 
 The byte the Compiler skips to put an `LDC`'s or `XJP`'s words on a word boundary holds whatever its buffer had,

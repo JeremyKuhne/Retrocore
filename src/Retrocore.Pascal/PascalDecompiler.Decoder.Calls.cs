@@ -97,7 +97,7 @@ public sealed partial class PascalDecompiler
                 return;
             }
 
-            if (_owner.FindSegment(segment, number) is { } procedure && procedure.Segment != _owner._main)
+            if (_owner.FindSegment(segment, number) is { } procedure)
             {
                 // A unit's initialization, which the Compiler calls for its USES.
                 if (number == 1 && _owner._unitSegments.Contains(procedure.Segment)) { return; }
@@ -468,6 +468,24 @@ public sealed partial class PascalDecompiler
                         Expr array = BytePointer(stack);
                         Expr unit = Pop(stack);
                         Statement(statements, number == 5 ? "UNITREAD" : "UNITWRITE", new(unit), new(array), new(count), new(block), new(mode));
+                        break;
+                    }
+
+                case 7: // IDS(VAR cursor, VAR buffer): the Compiler's IDSEARCH, which scans an identifier
+                    {
+                        Designator buffer = Designate(Pop(stack));
+                        Designator cursor = Designate(Pop(stack));
+                        Statement(statements, "IDSEARCH", new Argument(new Address(cursor)), new Argument(new Address(buffer)));
+                        break;
+                    }
+
+                case 8: // TRS(root, VAR found, VAR name): the Compiler's TREESEARCH, which finds a name in a tree
+                    {
+                        Designator name = Designate(Pop(stack));
+                        Designator found = Designate(Pop(stack));
+                        Expr root = Pop(stack);
+                        TypeNode.Unify(root.Type, found.Type);
+                        stack.Add(Builtin("TREESEARCH", ScalarKind.Integer, root, new Address(found), new Address(name)));
                         break;
                     }
 

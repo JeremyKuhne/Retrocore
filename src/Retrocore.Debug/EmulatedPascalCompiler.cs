@@ -79,6 +79,11 @@ internal static partial class EmulatedPascalCompiler
         }
 
         byte[] boot = File.ReadAllBytes(bootDisk);
+        if (listing is null && files is null or { Count: 0 } && !Fits(boot, source))
+        {
+            return (CompileLarge(source, boot, compilerDisk, roms, out string large), large, null);
+        }
+
         // A listing takes a free area of its own besides the code file's: APPLE1 has one, so the Editor, which a
         // compile does not need, makes room.
         if (listing is not null) { PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.EDITOR"); }
@@ -112,6 +117,60 @@ internal static partial class EmulatedPascalCompiler
         byte[] code = volume.ReadFile("SYSTEM.WRK.CODE");
         RestoreAlignment(code, source);
         return (code, screen, text);
+    }
+
+    // Whether a source fits on APPLE1 as the workfile, beside the code file the Compiler writes, about as long.
+    private static bool Fits(byte[] boot, string source)
+    {
+        byte[] copy = (byte[])boot.Clone();
+        byte[] text = PascalTextFile.Write(source);
+        try
+        {
+            PascalVolume.WriteFile(copy, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, text);
+            PascalVolume.WriteFile(copy, proDosOrder: false, "SYSTEM.WRK.CODE", PascalFileKind.Code, new byte[text.Length / 2]);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    // A source too long for APPLE1, such as a Compiler's own, goes on a volume of its own in a second card's first
+    // drive, SOURCE:, and the code file onto another in its second, CODE:; the Compiler asks for both by name.
+    private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, out string screen)
+    {
+        byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
+        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
+        byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
+
+        EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes]);
+        system.Type("C");
+        if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
+        {
+            throw new TimeoutException($"The Compiler never asked for its source:\n{system.Screen}");
+        }
+
+        system.Type("SOURCE:PROGRAM\n");
+        if (system.WaitFor(["TO WHAT CODEFILE"], seconds: 30) is null)
+        {
+            throw new TimeoutException($"The Compiler never asked for its code file:\n{system.Screen}");
+        }
+
+        system.Type("CODE:PROGRAM\n");
+        string ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds: 7_200)
+            ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
+
+        screen = system.Screen;
+        if (ended != "SMALLEST AVAILABLE") { return null; }
+
+        system.Run(tenths: 50);
+        PascalVolume volume = system.EjectSlot5(drive: 2);
+        if (!volume.Files.Any(file => file.Name == "PROGRAM.CODE")) { return null; }
+
+        byte[] code = volume.ReadFile("PROGRAM.CODE");
+        RestoreAlignment(code, source);
+        return code;
     }
 
     /// <summary>

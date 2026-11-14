@@ -47,6 +47,12 @@ public sealed partial class PascalDecompiler
     private readonly SortedSet<int> _units = [];
     private readonly List<int> _unitOrder = [];
     private PascalSegment? _main;
+
+    // Whether the program was compiled as part of the system, (*$U-*): its body does not start as a program's does.
+    private bool _systemProgram;
+
+    // The segment of the system's outer block a (*$U-*) program is nested in, which holds no code of the program's.
+    private PascalSegment? _shell;
     private Procedure? _program;
 
     private PascalDecompiler(PascalCodeFile file, PascalDecompilerOptions options)
@@ -99,12 +105,26 @@ public sealed partial class PascalDecompiler
     // Finds the program's segment and its segment procedures, and each procedure's parent and frame.
     private void LoadProcedures()
     {
-        _main = _file.Segments.FirstOrDefault(IsProgram)
+        // A (*$U-*) program is a segment procedure at level 0 in the system's outer block, at level -1, which the
+        // Compiler writes as segment 0.
+        _main = _file.Segments.FirstOrDefault(segment => IsProgram(segment) && segment.Procedure(1)?.LexicalLevel == 0)
+            ?? _file.Segments.FirstOrDefault(IsProgram)
             ?? throw new InvalidDataException("The code file holds no p-code program.");
 
         foreach (PascalSegment segment in _file.Segments)
         {
             if (segment.Code.Length == 0 || segment.Kind == PascalSegmentKind.Data) { continue; }
+            if (segment != _main && segment.Procedure(1) is { LexicalLevel: < 0 } outer)
+            {
+                _shell = segment;
+                if (segment.Procedures.Count > 1 || outer.Entry != outer.Exit)
+                {
+                    Warn($"The system's outer block, {segment.Name}, holds code, which is left out.");
+                }
+
+                continue;
+            }
+
             if (segment != _main && segment.Procedure(1) is not { LexicalLevel: >= 1 })
             {
                 Warn($"The segment {segment.Name} is not the program's or a segment procedure's, and is left out.");
@@ -158,6 +178,12 @@ public sealed partial class PascalDecompiler
                 Warn($"{procedure} does not decode: {exception.Message}");
                 procedure.Failed = true;
                 continue;
+            }
+
+            // A program's body starts with a jump to the segments it loads, or two NOPs; a (*$U-*) program's does not.
+            if (procedure == _program)
+            {
+                _systemProgram = procedure.Instructions.Count == 0 || procedure.Instructions[0].Opcode.Code is not (Pcode.Ujp or 210 or 215);
             }
 
             // A function returns its result's words.

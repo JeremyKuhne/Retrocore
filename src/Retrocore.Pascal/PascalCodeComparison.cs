@@ -16,6 +16,11 @@ namespace Retrocore.Pascal;
 ///   there in each file. The byte the Compiler skips to put an <c>LDC</c>'s or an <c>XJP</c>'s words on a word
 ///   boundary holds whatever its buffer last had, so no source decides it, and it is not compared.
 ///  </para>
+///  <para>
+///   Segments are paired in the order of their numbers, leaving out those with no code and the system's outer block
+///   that a program compiled as part of the system, <c>(*$U-*)</c>, is nested in. Apple built its system programs that
+///   way, then copied out their own segments with the Librarian, which also puts them in other slots.
+///  </para>
 /// </remarks>
 public static class PascalCodeComparison
 {
@@ -30,22 +35,24 @@ public static class PascalCodeComparison
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
         List<string> differences = [];
-        int count = Math.Max(expected.Segments.Count, actual.Segments.Count);
+        List<PascalSegment> first = Compared(expected);
+        List<PascalSegment> second = Compared(actual);
+        int count = Math.Max(first.Count, second.Count);
         for (int index = 0; index < count; index++)
         {
-            if (index >= expected.Segments.Count)
+            if (index >= first.Count)
             {
-                differences.Add($"An extra segment {actual.Segments[index].Name}.");
+                differences.Add($"An extra segment {second[index].Name}.");
                 continue;
             }
 
-            if (index >= actual.Segments.Count)
+            if (index >= second.Count)
             {
-                differences.Add($"The segment {expected.Segments[index].Name} is missing.");
+                differences.Add($"The segment {first[index].Name} is missing.");
                 continue;
             }
 
-            Compare(expected.Segments[index], actual.Segments[index], differences);
+            Compare(first[index], second[index], differences);
         }
 
         if (expected.IntrinsicUnits != actual.IntrinsicUnits)
@@ -55,6 +62,12 @@ public static class PascalCodeComparison
 
         return differences;
     }
+
+    // The segments to compare, by number: those with code, but the system's outer block, at lexical level -1.
+    private static List<PascalSegment> Compared(PascalCodeFile file) =>
+        [.. file.Segments
+            .Where(segment => segment.Length > 0 && segment.Procedure(1)?.LexicalLevel is not < 0)
+            .OrderBy(segment => segment.Number)];
 
     private static void Compare(PascalSegment expected, PascalSegment actual, List<string> differences)
     {

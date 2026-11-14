@@ -9,6 +9,15 @@ public sealed partial class PascalDecompiler
     private readonly Dictionary<Frame, List<Variable>> _declared = [];
     private readonly Dictionary<Procedure, List<Variable>> _parameters = [];
 
+    // The system globals a (*$U-*) program passes as files, each a pointer to its file.
+    private readonly HashSet<Variable> _systemFiles = [];
+
+    // The built-in procedures and functions whose first argument is a file.
+    private static readonly HashSet<string> s_fileFirst =
+    [
+        "BLOCKREAD", "BLOCKWRITE", "EOF", "EOLN", "RESET", "REWRITE", "CLOSE", "GET", "PUT", "SEEK"
+    ];
+
     // Lays out each frame: its parameters, and the variables to declare in offset order, with padding where the code
     // uses no word, so that each variable keeps its offset.
     private void Layout()
@@ -25,11 +34,18 @@ public sealed partial class PascalDecompiler
         _system.At(4).Name = "KEYBOARD";
 
         // Any other word of the system's globals is one only a program compiled as part of the system, (*$U-*), with
-        // the system's declarations, can reach.
-        foreach (Variable variable in _system.Variables.Values.Where(variable => variable.Name.Length == 0))
+        // the system's declarations, can reach; such a program declares them.
+        if (_systemProgram)
         {
-            variable.Name = $"SYS{variable.Offset}";
-            Warn($"The code reaches the system's global at word {variable.Offset}, which only a program compiled as part of the system, (*$U-*), can name; it is written {variable.Name}.");
+            SystemGlobals();
+        }
+        else
+        {
+            foreach (Variable variable in _system.Variables.Values.Where(variable => variable.Name.Length == 0))
+            {
+                variable.Name = $"SYS{variable.Offset}";
+                Warn($"The code reaches the system's global at word {variable.Offset}, which only a program compiled as part of the system, (*$U-*), can name; it is written {variable.Name}.");
+            }
         }
 
         foreach (Procedure procedure in _procedures)
@@ -38,7 +54,7 @@ public sealed partial class PascalDecompiler
             string prefix = procedure.Level <= 0 ? "G" : ((char)('A' + Math.Min(procedure.Level, 25) - 1)).ToString();
             if (procedure.Segment != _main && procedure.Level > 0) { prefix = $"{prefix}{procedure.Segment.Number}X"; }
 
-            _parameters[procedure] = Parameters(procedure, prefix);
+            _parameters[procedure] = Parameters(procedure, prefix, outer: _systemProgram && procedure == _program);
             _declared[frame] = Variables(frame, prefix);
             procedure.Name = procedure == _program
                 ? Identifier(procedure.Segment.Name)
@@ -72,10 +88,10 @@ public sealed partial class PascalDecompiler
     }
 
     // A procedure's parameters in the order they are declared: the first has the highest words.
-    private static List<Variable> Parameters(Procedure procedure, string prefix)
+    private static List<Variable> Parameters(Procedure procedure, string prefix, bool outer)
     {
         List<Variable> parameters = [];
-        if (procedure.Level <= 0) { return parameters; }
+        if (procedure.Level <= 0 && !outer) { return parameters; }
 
         Frame frame = procedure.Frame;
         int offset = procedure.IsFunction ? 3 : 1;
@@ -94,12 +110,70 @@ public sealed partial class PascalDecompiler
         return parameters;
     }
 
-    // The variables to declare, from the first after the parameters up to the compiler's temporaries.
-    private List<Variable> Variables(Frame frame, string prefix)
+    // The system's globals a (*$U-*) program reaches, which its outer block declares up to the last: one the code
+    // passes as a file holds the file's address, a pointer to the file. INPUT, OUTPUT and KEYBOARD, at words 2 to 4,
+    // the Compiler declares itself.
+    private void SystemGlobals()
+    {
+        HashSet<Variable> files = _systemFiles;
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, statement =>
+            {
+                if (statement is CallStatement { Callee.Builtin: { } name } call
+                    && s_fileFirst.Contains(name)
+                    && call.Arguments.Count > 0)
+                {
+                    SystemFile(call.Arguments[0].Value, files);
+                }
+            }, expression =>
+            {
+                if (expression is Call { Callee.Builtin: { } name } call
+                    && s_fileFirst.Contains(name)
+                    && call.Arguments.Count > 0)
+                {
+                    SystemFile(call.Arguments[0], files);
+                }
+            });
+        }
+
+        // One type of untyped file, and one of a pointer to it, serve them all.
+        TypeNode pointer = TypeNode.Of(TypeKind.Pointer);
+        pointer.Element = TypeNode.Of(TypeKind.File);
+        foreach (Variable file in files) { file.Type = pointer; }
+
+        Dictionary<int, Variable> predeclared = [];
+        for (int word = 2; word <= 4; word++)
+        {
+            if (_system.Variables.Remove(word, out Variable? file)) { predeclared[word] = file; }
+        }
+
+        int last = _system.Variables.Values
+            .Select(variable => variable.Offset + Math.Max(1, SizeOf(variable.Type) ?? 1) - 1)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        _declared[_system] = last == 0 ? [] : Variables(_system, "SYS", last);
+        foreach ((int word, Variable file) in predeclared) { _system.Variables[word] = file; }
+    }
+
+    // A system global the code passes as a file.
+    private static void SystemFile(Expr argument, HashSet<Variable> files)
+    {
+        if (argument is Load { Designator: VariableDesignator { Variable: { Kind: VariableKind.System } system } }
+            && system.Offset is < 2 or > 4)
+        {
+            files.Add(system);
+        }
+    }
+
+    // The variables to declare, from the first after the parameters up to the compiler's temporaries, or, in the
+    // system's frame, up to a number of words.
+    private List<Variable> Variables(Frame frame, string prefix, int? systemWords = null)
     {
         List<Variable> declared = [];
         int start = frame.ParameterWords + 1;
-        int end = frame.Words + 1;
+        int end = (systemWords ?? frame.Words) + 1;
         foreach (Variable variable in frame.Variables.Values)
         {
             if (variable.Offset >= start && variable.Kind == VariableKind.Temporary)

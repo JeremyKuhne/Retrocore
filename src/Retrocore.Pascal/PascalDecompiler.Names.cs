@@ -22,7 +22,7 @@ public sealed partial class PascalDecompiler
         "EXIT", "EXP", "FILLCHAR", "GET", "GOTOXY", "HALT", "INSERT", "IORESULT", "LENGTH", "LN", "LOG", "MARK",
         "MEMAVAIL", "MOVELEFT", "MOVERIGH", "NEW", "ODD", "ORD", "PAGE", "POS", "PRED", "PUT", "PWROFTEN", "READ",
         "READLN", "RELEASE", "RESET", "REWRITE", "ROUND", "SCAN", "SEEK", "SIN", "SIZEOF", "SQR", "SQRT", "STR",
-        "SUCC", "TIME", "TREESEAR", "TRUNC", "UNITBUSY", "UNITCLEA", "UNITREAD", "UNITSTAT", "UNITWAIT", "UNITWRIT",
+        "SUCC", "TIME", "TREESEAR", "IDSEARCH", "TRUNC", "UNITBUSY", "UNITCLEA", "UNITREAD", "UNITSTAT", "UNITWAIT", "UNITWRIT",
         "WRITE", "WRITELN"
     };
 
@@ -33,6 +33,19 @@ public sealed partial class PascalDecompiler
         {
             string key = $"{procedure.Segment.Name}.{procedure.Number}";
             string? given = Given(key) ?? _options.Listing?.ProcedureName(procedure.Segment.Number, procedure.Number);
+
+            // Without a name given, a segment procedure takes its segment's, which the code file keeps, where it is safe.
+            if (given is null && procedure.IsSegmentProcedure)
+            {
+                string segment = new([.. procedure.Segment.Name.Where(char.IsAsciiLetterOrDigit)]);
+                if (segment.Length > 0 && char.IsAsciiLetter(segment[0]) && Clash(Key(segment), procedure.Parent ?? procedure, procedure) is null)
+                {
+                    procedure.Name = segment;
+                }
+
+                continue;
+            }
+
             if (given is not null && Safe(given, key, procedure.Parent ?? procedure, procedure, out string? name))
             {
                 // The program's and a segment procedure's names are their segments' names, which the code file keeps.

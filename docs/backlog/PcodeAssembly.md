@@ -121,8 +121,14 @@ A dialect for the native assembler, or a format of its own, that says all of a c
 What the decompiler does not decompile yet, found by decompiling every code file on the disks at hand:
 
 - **System programs:** code compiled with `(*$U-*)` (SOROCGOTO, HAZELGOTO, the system's Filer, Editor, Compiler and
-  Linker), which reach the system's globals and call its procedures beyond the ones a program can name.
-- **`IDSEARCH` and `TREESEARCH`** (`CSP IDS`, `TRS`), and the system's procedures past `CXP 0, 29`. `SCAN` and Apple
+  Linker). Done (2026-11-14) for their globals: the outer block declares them, the program is its segment procedure
+  1, with FORWARD segments 2 to 6 before its own ([Pascal.md](../Pascal.md#decompiling)). **Not done:** the system's
+  procedures past `CXP 0, 29` (the 1.1 Compiler calls `CXP 0, 43` in COMPOPTI), which the outer block can declare
+  FORWARD and never define, as a probe shows (`PROCEDURE P2; FORWARD;` there compiles to `CXP 0, 2`), but whose
+  parameters the call alone does not give; and the Compiler's types: a few words used as both pointers and integers
+  join, through unification, most of its words into one punned type, which a function cannot return (error 120).
+  The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all.
+- ~~**`IDSEARCH` and `TREESEARCH`**~~ (`CSP IDS`, `TRS`): done (2026-11-14). `SCAN` and Apple
   III Pascal's `UNITSTATUS` (`CSP 12`, named `USTAT`) decompile, found by compiling probes with Apple III Pascal's
   Compiler: `UNITSTATUS` pushes the unit, the buffer's address and byte offset, and the control word; `SCAN` the
   limit, 0 for `=` or 1 for `<>`, the character, the array's address and byte offset, and a 0.
@@ -132,7 +138,10 @@ What the decompiler does not decompile yet, found by decompiling every code file
   in, decompile to UNIT sources (2026-11-14), found with probes built by Apple III Pascal's tools: a unit compiled
   alone is segment 7, and the program's USES renumbers its units from 7 in order; the host keeps an empty segment
   for each, which the Linker fills; the Compiler calls their initializations at the program's start.
-- **Segment procedures** are handled, but no sample has one: check them with a program written to.
+- **Segment procedures:** a segment procedure's `CXP 1, n` to the program's procedures decompiles, with them declared
+  FORWARD first (2026-11-14); the 1.1 Compiler's nested segment procedures (ROUTINE and STATEMEN inside BODYPART)
+  decompile but are not yet recompiled. Its `GSEG`/`RSEG` prologues (PASCALCO.28 and .29) are not decompiled: a
+  procedure that jumps to `GSEG`s and back, then `RSEG`s at its exit.
 - **Other Compilers:** recompiling with Apple Pascal 1.0's and 1.2's Compilers, and Apple III Pascal's on the emulated
   Apple III, so code files they wrote can be checked as 1.1's are.
 - ~~**Names from a listing:**~~ done, with hints too: `--pascal decompile --listing --hints`

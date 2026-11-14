@@ -28,8 +28,19 @@ public sealed partial class PascalDecompiler
 
         Options([.. _procedures.Where(procedure => !InUnit(procedure))]);
 
-        if (Comment(Program) is { } about) { Line(about); }
-        Line($"PROGRAM {Program.Name};");
+        // A (*$U-*) program is a segment procedure in the system's outer block, which declares the system's globals.
+        if (_systemProgram)
+        {
+            Line("(*$U-*)  (* Compiled as part of the system: its globals are the system's, I/O and range checks off. *)");
+            _ioChecked = false;
+            _rangeChecked = false;
+            Line($"PROGRAM {(_shell is null ? "PASCALSYSTEM" : Identifier(_shell.Name))};");
+        }
+        else
+        {
+            if (Comment(Program) is { } about) { Line(about); }
+            Line($"PROGRAM {Program.Name};");
+        }
 
         // The library's units, whose segments are their own; then the program's, by their code files, whose order in
         // USES numbers their segments from 7. The Compiler initializes a library's units in the reverse of their order.
@@ -42,19 +53,33 @@ public sealed partial class PascalDecompiler
 
         if (uses.Count > 0) { Line($"USES {string.Join(", ", uses)};"); }
 
-        Labels(Program);
+        if (!_systemProgram) { Labels(Program); }
         int constants = _source.Length;
 
         // The types the program's own declarations use, but those a unit's interface declares for it.
         HashSet<TypeNode> types = TypesOf(_procedures.Where(procedure => !InUnit(procedure)), variables: true, signatures: true);
         types.ExceptWith(InterfaceTypes());
+        if (_systemProgram)
+        {
+            foreach (Variable global in _declared[_system]) { Reach(global.Type, types); }
+        }
+
         Types(types);
 
-        Declarations(Program);
-        Nested(Program);
-        Line("BEGIN");
-        Statements(Program, Program.Body);
-        Line("END.");
+        if (_systemProgram)
+        {
+            Declarations(_system);
+            SystemSegment();
+        }
+        else
+        {
+            Declarations(Program);
+            Nested(Program);
+            Line("BEGIN");
+            Statements(Program, Program.Body);
+            Line("END.");
+        }
+
         Alignment([.. _procedures.Select(procedure => procedure.Segment).Where(segment => !_unitSegments.Contains(segment)).Distinct()]);
 
         // The constants the statements named, which come before the types.
@@ -100,6 +125,42 @@ public sealed partial class PascalDecompiler
 
     private static bool IsStringReference(Variable parameter) =>
         parameter.IsReference && parameter.Type.Target().Find().Kind == TypeKind.String;
+
+    // A (*$U-*) program's segment procedure, segment 1, after FORWARD declarations of it and the system's segments up
+    // to the first of its own, which the Compiler numbers on from them; then the system's outer block, empty.
+    private void SystemSegment()
+    {
+        if (Main.Number != 1)
+        {
+            Warn($"The program's segment is {Main.Number}, not 1, as the system's user program is.");
+        }
+
+        string header = $"SEGMENT PROCEDURE {Program.Name}{ParameterList(Program)};";
+        int first = _procedures.Where(procedure => procedure.IsSegmentProcedure).Select(procedure => procedure.Segment.Number).DefaultIfEmpty(2).Min();
+        if (first > 2)
+        {
+            if (Comment(Program) is { } early) { Line(early); }
+            Line($"{header} FORWARD;");
+            for (int segment = 2; segment < first; segment++) { Line($"SEGMENT PROCEDURE SYSSEG{segment}; FORWARD;"); }
+            Line($"SEGMENT PROCEDURE {Program.Name};");
+        }
+        else
+        {
+            if (Comment(Program) is { } about) { Line(about); }
+            Line(header);
+        }
+
+        _indent++;
+        Labels(Program);
+        Declarations(Program);
+        Nested(Program);
+        _indent--;
+        Line("BEGIN");
+        Statements(Program, Program.Body);
+        Line("END;");
+        Line("BEGIN");
+        Line("END.");
+    }
 
     // The byte the Compiler skips to put an LDC's or XJP's words on a word boundary holds whatever its buffer had there,
     // which no source says; those that are not 0 are written after END., where the Compiler reads nothing, for
@@ -147,9 +208,11 @@ public sealed partial class PascalDecompiler
         if (procedure.Labels.Count > 0) { Line($"LABEL {string.Join(", ", procedure.Labels.Values)};"); }
     }
 
-    private void Declarations(Procedure procedure)
+    private void Declarations(Procedure procedure) => Declarations(procedure.Frame);
+
+    private void Declarations(Frame frame)
     {
-        List<Variable> variables = _declared[procedure.Frame];
+        List<Variable> variables = _declared[frame];
         if (variables.Count == 0) { return; }
 
         Line("VAR");
@@ -185,9 +248,23 @@ public sealed partial class PascalDecompiler
         // A unit's procedures are in its own source.
         List<Procedure> children = [.. parent.Children.Where(child => (!child.IsSegmentProcedure || parent == _program) && !InUnit(child))];
         List<Procedure> segments = [.. children.Where(child => child.IsSegmentProcedure).OrderBy(child => child.Segment.Number)];
+        List<Procedure> ordinary = [.. children.Where(child => !child.IsSegmentProcedure)];
+
+        // A segment procedure comes before the ordinary procedures, so those it calls (CXP 1, n) are declared FORWARD
+        // first, with every one numbered before them.
+        HashSet<Procedure> declared = [];
+        int called = segments.Count == 0 ? 0 : ordinary.Where(child => segments.Any(segment => Reaches(segment, child))).Select(child => child.Number).DefaultIfEmpty(0).Max();
+        foreach (Procedure earlier in ordinary.Where(child => child.Number <= called).OrderBy(child => child.Number))
+        {
+            if (earlier.Code.IsNative) { WriteProcedure(earlier, forwarded: false); }
+            else { Line($"{Header(earlier, full: true)} FORWARD;"); }
+
+            declared.Add(earlier);
+        }
+
         foreach (Procedure segment in segments) { WriteProcedure(segment, forwarded: false); }
 
-        Ordinary([.. children.Where(child => !child.IsSegmentProcedure)], []);
+        Ordinary(ordinary, declared);
     }
 
     // Procedures in the order of their code, with those already declared (a unit's interface) by name alone.
@@ -208,6 +285,16 @@ public sealed partial class PascalDecompiler
             WriteProcedure(child, declared.Contains(child));
             declared.Add(child);
         }
+    }
+
+    // Whether a procedure, or one nested in it, calls another.
+    private static bool Reaches(Procedure caller, Procedure callee)
+    {
+        bool found = false;
+        Walk(caller.Body, statement => found |= statement is CallStatement call && call.Callee.Procedure == callee,
+            expression => found |= expression is Call call && call.Callee.Procedure == callee);
+
+        return found || caller.Children.Any(child => Reaches(child, callee));
     }
 
     private void WriteProcedure(Procedure procedure, bool forwarded)
@@ -236,13 +323,17 @@ public sealed partial class PascalDecompiler
         string segment = procedure.IsSegmentProcedure ? "SEGMENT " : "";
         if (!full) { return $"{segment}{kind} {procedure.Name};"; }
 
-        List<Variable> parameters = _parameters[procedure];
-        string list = parameters.Count == 0
-            ? ""
-            : $"({string.Join("; ", parameters.Select(parameter => $"{(parameter.IsReference ? "VAR " : "")}{parameter.Name}: {ParameterType(parameter)}"))})";
-
+        string list = ParameterList(procedure);
         string result = procedure.IsFunction ? $": {TypeName(procedure.ResultType, parameter: true)}" : "";
         return $"{segment}{kind} {procedure.Name}{list}{result};";
+    }
+
+    private string ParameterList(Procedure procedure)
+    {
+        List<Variable> parameters = _parameters[procedure];
+        return parameters.Count == 0
+            ? ""
+            : $"({string.Join("; ", parameters.Select(parameter => $"{(parameter.IsReference ? "VAR " : "")}{parameter.Name}: {ParameterType(parameter)}"))})";
     }
 
     private string ParameterType(Variable parameter)
@@ -255,6 +346,11 @@ public sealed partial class PascalDecompiler
     // any type a parameter has that is not a single word.
     private void NameTypes()
     {
+        if (_declared.TryGetValue(_system, out List<Variable>? globals))
+        {
+            foreach (Variable global in globals) { Visit(global.Type, parameter: false); }
+        }
+
         foreach (Procedure procedure in _procedures)
         {
             foreach (Variable variable in _declared[procedure.Frame]) { Visit(variable.Type, parameter: false); }
@@ -267,11 +363,12 @@ public sealed partial class PascalDecompiler
         }
     }
 
-    private void Visit(TypeNode type, bool parameter)
+    // A pointer's target is a type's name, so an untyped file it points to is named too.
+    private void Visit(TypeNode type, bool parameter, bool pointed = false)
     {
         TypeNode root = type.Find();
         bool named = root.Kind is TypeKind.Record or TypeKind.Pointer or TypeKind.Array or TypeKind.Set
-            || (root.Kind == TypeKind.File && root.RecordWords > 0)
+            || (root.Kind == TypeKind.File && (root.RecordWords > 0 || pointed))
             || root.ByteView
             || (parameter && Simple(root) is null);
 
@@ -282,7 +379,11 @@ public sealed partial class PascalDecompiler
             switch (root.Kind)
             {
                 case TypeKind.Pointer or TypeKind.Array or TypeKind.Set or TypeKind.File:
-                    if (root.Element is { } element) { Visit(element, parameter: root.Kind == TypeKind.Pointer); }
+                    if (root.Element is { } element)
+                    {
+                        Visit(element, parameter: root.Kind == TypeKind.Pointer, pointed: root.Kind == TypeKind.Pointer);
+                    }
+
                     break;
                 case TypeKind.Record:
                     foreach (TypeNode field in root.Fields?.Values ?? Enumerable.Empty<TypeNode>())
@@ -638,7 +739,9 @@ public sealed partial class PascalDecompiler
 
     private string FileName(Argument file) => file.Value switch
     {
-        Load { Designator: VariableDesignator { Variable: { Kind: VariableKind.System } system } } => system.Name,
+        // A (*$U-*) program's own system globals hold their files' addresses; INPUT, OUTPUT and KEYBOARD are files.
+        Load { Designator: VariableDesignator { Variable: { Kind: VariableKind.System } system } } =>
+            _systemFiles.Contains(system) ? $"{system.Name}^" : system.Name,
         Address address => DesignatorText(address.Designator),
         var other => DesignatorText(Designate(other))
     };

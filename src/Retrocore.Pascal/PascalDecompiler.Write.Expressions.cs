@@ -444,6 +444,11 @@ public sealed partial class PascalDecompiler
         List<string> parts = name switch
         {
             "EOF" or "EOLN" => [FileName(new Argument(call.Arguments[0]))],
+            "BLOCKREAD" or "BLOCKWRITE" =>
+            [
+                FileName(new Argument(call.Arguments[0])),
+                .. call.Arguments.Skip(1).Select(argument => Expression(argument, expected: null, 0))
+            ],
             "TRUNC" or "ROUND" => [Expression(call.Arguments[0], TypeNode.Of(TypeKind.Real), 0)],
             "UNITBUSY" or "PWROFTEN" => [Expression(call.Arguments[0], TypeNode.Scalar(ScalarKind.Integer), 0)],
             "SCAN" =>

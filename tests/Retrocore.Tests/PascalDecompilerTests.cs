@@ -990,20 +990,6 @@ public class PascalDecompilerTests
         PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(code)).Should().BeEmpty(result.Source);
     }
 
-    // A 140K image with an empty Pascal volume: its directory header in block 2, of 280 blocks.
-    private static byte[] EmptyVolume(string name)
-    {
-        byte[] header = new byte[512];
-        header[2] = 6;
-        header[6] = (byte)name.Length;
-        System.Text.Encoding.ASCII.GetBytes(name).CopyTo(header, 7);
-        header[14] = 280 & 0xFF;
-        header[15] = 280 >> 8;
-
-        // In DOS order, block 2 is track 0's sectors 11 and 10 (ProDOS sectors 4 and 5).
-        byte[] image = new byte[143_360];
-        header.AsSpan(0, 256).CopyTo(image.AsSpan(11 * 256));
-        header.AsSpan(256, 256).CopyTo(image.AsSpan(10 * 256));
-        return image;
-    }
+    // A 140K image with an empty Pascal volume.
+    private static byte[] EmptyVolume(string name) => PascalVolume.Format(name, proDosOrder: false);
 }

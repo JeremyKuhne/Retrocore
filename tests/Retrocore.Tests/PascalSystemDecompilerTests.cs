@@ -1,0 +1,139 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Debug;
+using Retrocore.Media;
+using Retrocore.Pascal;
+
+namespace Retrocore.Tests;
+
+/// <summary>
+///  Decompiling the encodings Apple's system programs, such as its Compilers, use: segment procedures that call the
+///  program's procedures, programs compiled as part of the system, <c>(*$U-*)</c>, and IDSEARCH and TREESEARCH.
+/// </summary>
+/// <remarks>
+///  <para>
+///   Each probe is compiled by Apple Pascal 1.1's Compiler on an emulated Apple II, decompiled, compiled again, and
+///   compared with the first compile. They need Apple Pascal's disks (<c>RETROCORE_APPLE2_PASCAL_DISKS</c>).
+///  </para>
+/// </remarks>
+[TestClass]
+public class PascalSystemDecompilerTests
+{
+    private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
+
+    // A segment procedure calls the program's procedure through CXP 1, 2; the procedure, whose body comes after the
+    // segment procedure's, is declared FORWARD before it.
+    private const string SegmentCallSource = """
+        PROGRAM SEGP;
+        VAR G: INTEGER;
+        PROCEDURE A(X: INTEGER); FORWARD;
+        SEGMENT PROCEDURE INIT;
+        BEGIN A(3) END;
+        PROCEDURE A;
+        BEGIN G := X END;
+        BEGIN INIT END.
+        """;
+
+    // A program compiled as part of the system: the system's outer block declares its globals, a pointer to its
+    // SYSCOM record and pointers to files among them, and the program is its segment procedure 1, whose own segment
+    // procedures follow the system's, 2 to 6, as Apple's Compilers' do.
+    private const string SystemSource = """
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        TYPE UF = FILE; FP = ^UF; SR = RECORD A, B: INTEGER END;
+        VAR SYSCOM: ^SR; IN1, OUT1, TERM1, SWAP: INTEGER; G6, G7: INTEGER;
+            CODEF, SYMF: FP; ERRNUM, ERRBLK, ERRSYM: INTEGER; SLOW, STUPID: BOOLEAN; ALT: CHAR;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER); FORWARD;
+        SEGMENT PROCEDURE D2; FORWARD;
+        SEGMENT PROCEDURE D3; FORWARD;
+        SEGMENT PROCEDURE D4; FORWARD;
+        SEGMENT PROCEDURE D5; FORWARD;
+        SEGMENT PROCEDURE D6; FORWARD;
+        SEGMENT PROCEDURE COMPILER;
+        VAR B: PACKED ARRAY[0..511] OF CHAR; N: INTEGER;
+        PROCEDURE ERROR(E: INTEGER); FORWARD;
+        SEGMENT PROCEDURE INIT;
+        BEGIN
+          IF BLOCKREAD(SYMF^, B, 1, 0) <> 1 THEN ERROR(3);
+          IF STUPID AND (ALT = 'E') THEN N := BLOCKWRITE(CODEF^, B, 1, ERRSYM);
+          WRITELN(OUTPUT, 'X')
+        END;
+        PROCEDURE ERROR;
+        BEGIN ERRNUM := E; IF SYSCOM^.A = 0 THEN ERRBLK := N END;
+        BEGIN INIT END;
+        BEGIN END.
+        """;
+
+    // The Compiler's own IDSEARCH and TREESEARCH, CSP IDS and CSP TRS.
+    private const string SearchSource = """
+        PROGRAM SEARCH;
+        TYPE ALPHA = PACKED ARRAY[1..8] OF CHAR;
+          CTP = ^NODE; NODE = RECORD NAME: ALPHA; L, R: CTP END;
+          BUF = PACKED ARRAY[0..1023] OF CHAR;
+        VAR CUR: INTEGER; BP: ^BUF; ROOT, FOUND: CTP; ID: ALPHA; I: INTEGER;
+        BEGIN
+          IDSEARCH(CUR, BP^);
+          I := TREESEARCH(ROOT, FOUND, ID)
+        END.
+        """;
+
+    /// <summary>
+    ///  A segment procedure's call of the program's procedure, CXP 1, n, decompiles to a call of it, declared FORWARD
+    ///  before the segment procedure, which takes its segment's name.
+    /// </summary>
+    [TestMethod]
+    public void SegmentProceduresCallTheProgramsProcedures()
+    {
+        string source = RoundTrip(SegmentCallSource);
+        source.Should().Contain("PROCEDURE PROC2(A1: INTEGER); FORWARD;\nSEGMENT PROCEDURE INIT;\nBEGIN\n  PROC2(3)\nEND;");
+    }
+
+    /// <summary>
+    ///  A program compiled as part of the system decompiles to the system's outer block, which declares the globals
+    ///  the program reaches, with a pointer for each it passes as a file, around the program as its segment procedure.
+    /// </summary>
+    [TestMethod]
+    public void SystemProgramsDeclareTheSystemsGlobals()
+    {
+        string source = RoundTrip(SystemSource);
+        source.Should().StartWith("(*$U-*)  (* Compiled as part of the system: its globals are the system's, I/O and range checks off. *)\nPROGRAM PASCALSY;\n");
+        source.Should().Contain("  SYS8: T4;\n  SYS9: T4;\n").And.Contain("IF BLOCKREAD(SYS8^, G3, 1, 0) <> 1 THEN");
+        source.Should().Contain("SEGMENT PROCEDURE COMPILER(G2: INTEGER; G1: INTEGER); FORWARD;\nSEGMENT PROCEDURE SYSSEG2; FORWARD;");
+        source.Should().Contain("SEGMENT PROCEDURE SYSSEG6; FORWARD;\nSEGMENT PROCEDURE COMPILER;\n");
+        source.Should().EndWith("END;\nBEGIN\nEND.\n");
+    }
+
+    /// <summary>
+    ///  CSP IDS and CSP TRS decompile to IDSEARCH and TREESEARCH.
+    /// </summary>
+    [TestMethod]
+    public void IdSearchAndTreeSearchDecompile()
+    {
+        string source = RoundTrip(SearchSource);
+        source.Should().Contain("IDSEARCH(G3, G4^);").And.Contain(" := TREESEARCH(G6, G5, G7)");
+    }
+
+    // Compiles a probe, decompiles it, and checks the decompiled source compiles to the same segments.
+    private static string RoundTrip(string probe)
+    {
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(boot) || !File.Exists(compiler))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        (byte[]? original, string compiled) = EmulatedPascalCompiler.Compile(probe, boot, compiler, s_inputs);
+        if (original is null) { Assert.Fail($"The Compiler stopped:\n{compiled}"); }
+
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
+        result.Warnings.Should().BeEmpty(result.Source);
+
+        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
+        if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
+        PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(code)).Should().BeEmpty(result.Source);
+        return result.Source;
+    }
+}

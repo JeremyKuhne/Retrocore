@@ -23,15 +23,26 @@ internal sealed class EmulatedPascalSystem
     /// <param name="boot">APPLE1's image, as a 140K <c>.dsk</c>, with the files the work needs written onto it.</param>
     /// <param name="toolsDisk">APPLE2's image.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="more">
+    ///  Images for the drives of a second Disk II card, in slot 5, Pascal's units 11 and 12; null or empty for none.
+    /// </param>
     /// <exception cref="TimeoutException">The system never booted.</exception>
-    public EmulatedPascalSystem(byte[] boot, string toolsDisk, string? roms)
+    public EmulatedPascalSystem(byte[] boot, string toolsDisk, string? roms, IReadOnlyList<byte[]>? more = null)
     {
         _machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, roms, autostart: true));
         _machine.Bus.InstallDiskII(slot: 6, SdkModules.BuildDiskII(16, roms));
+        if (more is { Count: > 0 }) { _machine.Bus.InstallDiskII(slot: 5, SdkModules.BuildDiskII(16, roms)); }
         _machine.Bus.InstallLanguageCard();
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
         _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
         _machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(toolsDisk), proDosOrder: false), "APPLE2", "DSK");
+        IReadOnlyList<byte[]> extras = more ?? [];
+        for (int drive = 0; drive < Math.Min(2, extras.Count); drive++)
+        {
+            WozDisk extra = SectorDiskConverter.Convert(extras[drive], proDosOrder: false);
+            _machine.DrivesIn(5)[drive].Insert(WozDisk.Load(extra.Export(), writable: true), $"SLOT5D{drive + 1}", "DSK");
+        }
+
         _machine.Bus.ResetSwitches();
         _machine.Processor.Reset();
 
@@ -98,6 +109,18 @@ internal sealed class EmulatedPascalSystem
     public PascalVolume Eject()
     {
         WozDisk disk = _machine.Drives[0].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
+        return PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
+    }
+
+    /// <summary>
+    ///  Takes a disk out of a drive of the card in slot 5, and reads its volume.
+    /// </summary>
+    /// <param name="drive">The drive, 1 or 2.</param>
+    /// <returns>The volume as the system left it.</returns>
+    /// <exception cref="InvalidOperationException">The drive has no disk.</exception>
+    public PascalVolume EjectSlot5(int drive)
+    {
+        WozDisk disk = _machine.DrivesIn(5)[drive - 1].Eject() ?? throw new InvalidOperationException("The drive has no disk.");
         return PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
     }
 }

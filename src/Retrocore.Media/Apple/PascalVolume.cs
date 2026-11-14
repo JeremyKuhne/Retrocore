@@ -220,6 +220,31 @@ public sealed class PascalVolume
         return true;
     }
 
+    /// <summary>
+    ///  Makes an empty Pascal volume, as the Filer's Z(ero) does, on a 140K image with no boot blocks.
+    /// </summary>
+    /// <param name="name">The volume's name, 1-7 characters.</param>
+    /// <param name="proDosOrder">Whether the image's sectors are in ProDOS order.</param>
+    /// <returns>The image.</returns>
+    /// <exception cref="ArgumentException">The name is not 1-7 characters.</exception>
+    public static byte[] Format(string name, bool proDosOrder)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (name.Length is 0 or > 7)
+        {
+            throw new ArgumentException("A volume's name is 1-7 characters.", nameof(name));
+        }
+
+        byte[] image = new byte[DiskBlocks.DiskSize];
+        byte[] header = new byte[DiskBlocks.BlockSize];
+        SetWord(header, 2, DirectoryBlock + DirectoryBlocks);
+        header[6] = (byte)name.Length;
+        Encoding.ASCII.GetBytes(name.ToUpperInvariant()).CopyTo(header, 7);
+        SetWord(header, 14, DiskBlocks.DiskSize / DiskBlocks.BlockSize);
+        DiskBlocks.Write(image, proDosOrder, DirectoryBlock, header);
+        return image;
+    }
+
     // Rewrites a volume's directory with its files.
     private static void WriteDirectory(byte[] image, bool proDosOrder, PascalVolume volume, List<PascalFileEntry> files)
     {

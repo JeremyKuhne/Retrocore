@@ -443,6 +443,10 @@ internal sealed partial class DebugSession
 
         JsonObject result = handler(args);
 
+        // A tape or disk that goes in or comes out changes the devices, so Retro Devices hears of it even while the
+        // machine is stopped, as it does for retro/device.
+        if (name == "retro/media") { NotifyDevices(); }
+
         // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
         if (name is "apple1/clearScreen" or "altair/clearScreen" && _run is not { IsCancellationRequested: false })
         {

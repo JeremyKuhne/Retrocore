@@ -290,8 +290,12 @@ try {
     await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: done }] });
     await request("configurationDone");
     assert.equal((await event("stopped")).reason, "entry");
+    drop("retro/devices");
     let media = await request("retro/media", { device: "cassette", action: "record", path: tape });
     assert.equal(media.cassette.recording, true);
+    // Retro Devices hears of the new tape while the machine is stopped.
+    const devices = await event("retro/devices");
+    assert.equal(devices.devices.find(device => device.id === "cassette").media?.label, resolve(tape));
     assert.equal(media.cassette.motor, true);
     // A tape that cannot be read, or a recording with nowhere to go, is refused before the recording comes out.
     const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.tap");
@@ -330,6 +334,25 @@ try {
     assert.equal((await request("evaluate", { expression: "DE" })).result, "$5045 (20549)", "P and E");
     // The breakpoint stays with the source's path, which the tape step below reuses.
     await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
+
+    // A recording still in the recorder is saved when the session relaunches, as ejecting it would.
+    phase("relaunching while recording");
+    const second = join(tmpdir(), `retrocore-altair-${process.pid}-2.tap`);
+    writeFileSync(source, recording.join("\n"));
+    events.length = 0;
+    await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    await request("retro/media", { device: "cassette", action: "record", path: second });
+    await request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    assert.ok(!existsSync(second), "nothing is written until the recording comes out");
+    writeFileSync(source, playing.join("\n"));
+    await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+    assert.equal(readFileSync(second, "latin1"), "TAPE", "the relaunch saved the recording");
+    unlinkSync(second);
 
     // 8K BASIC, when its image is in the cache, on the 88-2SIO with caps lock.
     if (existsSync(basic)) {

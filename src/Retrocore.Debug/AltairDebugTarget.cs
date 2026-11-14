@@ -7,6 +7,7 @@ using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using Retrocore.Machines.Altair;
 using Retrocore.Machines.Devices;
+using Touki;
 
 namespace Retrocore.Debug;
 
@@ -20,7 +21,7 @@ namespace Retrocore.Debug;
 ///   are the sense switches) and <c>baudRate</c> (the 88-2SIO's, default 9600).
 ///  </para>
 /// </remarks>
-internal sealed class AltairDebugTarget : IDebugTarget
+internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget
 {
     private static readonly DebugRegisters s_registers = new(I8080Isa.Description);
 
@@ -457,29 +458,45 @@ internal sealed class AltairDebugTarget : IDebugTarget
         return MediaState();
     }
 
+    /// <summary>
+    ///  Saves a recording still in the recorder, as ejecting it would, when the session ends or relaunches.
+    /// </summary>
+    /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
+    /// <exception cref="IOException">The recording could not be written.</exception>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) { EjectCassette(); }
+    }
+
     // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
-    // recording reinserted from its own path is saved first, so the tape that goes in is the one just recorded.
+    // recording is saved first, where it stays in, so a tape reinserted from the recording's own path is the one
+    // just recorded, whatever the file system's case rules.
     private void Insert(string path)
     {
         string full = Path.GetFullPath(path);
         AltairCassette drive = _machine.Bus.Cassette
             ?? throw new InvalidOperationException("This Altair has no 88-ACR.");
 
-        if (string.Equals(full, _recordingPath, StringComparison.OrdinalIgnoreCase)) { EjectCassette(); }
+        SaveRecording();
         byte[] tape = File.ReadAllBytes(full);
         EjectCassette();
         drive.Play(tape, full);
+    }
+
+    // Writes a recording to its path, leaving it in the recorder.
+    private void SaveRecording()
+    {
+        if (_recordingPath is { } path && _machine.Bus.Cassette is { Media: not null } cassette)
+        {
+            File.WriteAllBytes(path, cassette.Tape);
+        }
     }
 
     // A recording is saved to its path when it is ejected.
     private void EjectCassette()
     {
         // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
-        if (_recordingPath is { } path && _machine.Bus.Cassette is { Media: not null } cassette)
-        {
-            File.WriteAllBytes(path, cassette.Tape);
-        }
-
+        SaveRecording();
         _machine.Bus.Cassette?.Eject();
         _recordingPath = null;
     }

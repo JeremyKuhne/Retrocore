@@ -502,8 +502,10 @@ function reveal(offset, center) {
     }
 }
 
-function moveTo(offset, extend, center) {
-    moves++;
+// Moves the cursor. A move the queue makes itself, as typing a byte steps on, is not a move of the user's, which
+// keys typed before it must know.
+function moveTo(offset, extend, center, queued = false) {
+    if (!queued) moves++;
     cursor = Math.min(SIZE - 1, Math.max(0, offset));
     if (!extend) anchor = cursor;
     nibble = null;
@@ -570,7 +572,7 @@ async function undo() {
     if (edit === undefined) { status("Nothing to undo."); return; }
     if (await write(edit.offset, edit.before, false)) {
         redoStack.push(edit);
-        moveTo(edit.offset, false, false);
+        moveTo(edit.offset, false, false, true);
     } else {
         undoStack.push(edit);
     }
@@ -581,25 +583,28 @@ async function redo() {
     if (edit === undefined) { status("Nothing to redo."); return; }
     if (await write(edit.offset, edit.after, false)) {
         undoStack.push(edit);
-        moveTo(edit.offset, false, false);
+        moveTo(edit.offset, false, false, true);
     } else {
         redoStack.push(edit);
     }
 }
 
 // Typing a character: a hex digit in the hex column, which writes the byte at its second digit, or a character in
-// the text column, which writes it at once.
-async function typeKey(key) {
+// the text column, which writes it at once. Pressed is the count of the user's moves when the key was pressed.
+async function typeKey(key, pressed) {
+    // A key waits for the keys before it, which can wait on the debugger; one pressed before the user moved is
+    // dropped rather than written where they went.
+    if (moves !== pressed) return;
     // An edit goes to the byte the cursor was on when its key was pressed; should the user move while it waits on
     // the debugger, the cursor stays where they went.
-    const started = moves;
+    const started = pressed;
     if (pane === "text") {
         // The byte typed over decides the code written, such as normal or inverse text, so it is read first.
         const at = cursor;
         await loaded(at, 1);
         const value = charset === null ? typedText(key, bytes[at]) : typedText(key, bytes[at], charset.text, charset.looksSame);
         if (value === undefined) return;
-        if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false);
+        if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false, true);
         return;
     }
     const digit = parseInt(key, 16);
@@ -619,7 +624,7 @@ async function typeKey(key) {
     }
     const value = nibble * 16 + digit, at = cursor;
     nibble = null;
-    if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false);
+    if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false, true);
     else render();
 }
 
@@ -938,7 +943,8 @@ grid.addEventListener("keydown", event => {
         nibble = null;
         render();
     } else if (!control && !event.altKey && key.length === 1) {
-        queue(() => typeKey(key));
+        const pressed = moves;
+        queue(() => typeKey(key, pressed));
     } else {
         handled = false;
     }
@@ -981,7 +987,7 @@ async function test(actions) {
     for (const action of actions) {
         if (action.goto !== undefined) moveTo(action.goto, false, true);
         if (action.pane !== undefined) { pane = action.pane; render(); }
-        if (action.type !== undefined) { for (const key of action.type) await typeKey(key); }
+        if (action.type !== undefined) { for (const key of action.type) await typeKey(key, moves); }
         if (action.find !== undefined) { findBox.value = action.find; await find(false); }
         if (action.undo) await undo();
         if (action.redo) await redo();

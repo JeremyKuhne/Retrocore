@@ -59,7 +59,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Go to** (**Ctrl+G**) takes an address, label or expression, in the editor's bank. Digits alone are hex. A
   register reads as the focused frame shows it, so `PC` in the SoftCard's `z80` editor is the Z80's while its
   frame is focused, and `SP` in a caller's frame is the caller's; an address that frame puts in another bank, such
-  as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's.
+  as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's, as an address does while
+  a BASIC frame is focused. Opening a label or a Watch expression does the same.
 - **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`, or text in quotes, such as
   `"HELLO"`, which matches each character in any of the machine's codes for it (or, without the machine's
   characters, with bit 7 clear or set). **Enter** or **F3** finds the next, with **Shift** the one before,

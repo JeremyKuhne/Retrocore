@@ -74,13 +74,27 @@ export async function resolveIn(
     bank: string | null,
     text: string,
     frameId?: number): Promise<number | undefined> {
-    const expression = bank === null ? text : `${bank}:${text}`;
+    const reference = await referenceIn(evaluate, bank === null ? text : `${bank}:${text}`, frameId, parsed => parsed.bank === bank);
+    return reference === undefined ? undefined : parseReference(reference)?.address;
+}
+
+/**
+ * The memory reference an expression names, evaluated in the focused frame first and, when that gives none it
+ * accepts, in the CPU's own frame: a BASIC frame evaluates BASIC, which names no memory, so a label or address opened
+ * while one is focused is the CPU's. Undefined when neither does; the focused frame's error when it has one. The
+ * extension runs this, not the page.
+ */
+export async function referenceIn(
+    evaluate: (expression: string, frameId?: number) => Promise<string | undefined>,
+    expression: string,
+    frameId?: number,
+    accept: (parsed: ParsedReference) => boolean = () => true): Promise<string | undefined> {
     let failure: unknown;
     for (const frame of frameId === undefined ? [undefined] : [frameId, undefined]) {
         try {
             const reference = await evaluate(expression, frame);
             const parsed = reference === undefined ? undefined : parseReference(reference);
-            if (parsed !== undefined && parsed.bank === bank) return parsed.address;
+            if (parsed !== undefined && accept(parsed)) return reference;
         } catch (error) {
             failure ??= error;
         }

@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
+import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -283,6 +283,62 @@ test("moving while a write waits keeps the cursor where it went, and drops a fir
     await page.settle();
     assert.match(page.elements.get("inspector")!.innerHTML, /\$0410/, "the write does not pull the cursor back to $0401");
 
+    // Answers the reads waiting, such as a write's read-back, leaving the writes.
+    const answerReads = async () => {
+        for (let index = page.posted.findIndex(message => message.type === "read"); index >= 0; index = page.posted.findIndex(message => message.type === "read")) {
+            const read = page.posted.splice(index, 1)[0];
+            page.send({ type: "reply", id: read.id, result: { data: Buffer.alloc(read.count as number, 0x20).toString("base64"), unreadable: [] } });
+        }
+        await page.settle();
+    };
+    // Keys pressed while a write waits, before a move, are dropped rather than written where the cursor went.
+    page.key("4");
+    page.key("2");
+    page.key("4");
+    page.key("3");
+    await page.settle();
+    await answerReads();
+    const next = page.take("write");
+    assert.equal(next.offset, 0x0410);
+    page.key("ArrowDown");
+    page.send({ type: "reply", id: next.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    await answerReads();
+    assert.equal(page.posted.filter(message => message.type === "write").length, 0, "43 is not written at $0420");
+    assert.match(page.elements.get("inspector")!.innerHTML, /\$0420/);
+
+    // Typing on without moving steps on byte by byte.
+    page.posted.splice(0);
+    page.key("4");
+    page.key("4");
+    page.key("4");
+    page.key("5");
+    await page.settle();
+    await answerReads();
+    const first = page.take("write");
+    page.send({ type: "reply", id: first.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    await answerReads();
+    const second = page.take("write");
+    assert.deepEqual({ offset: second.offset, data: second.data }, { offset: 0x0421, data: [0x45] });
+    page.send({ type: "reply", id: second.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    await answerReads();
+
+    // In the text column, too, a character typed before a move is not written where the cursor went.
+    page.key("Tab");
+    page.key("A");
+    page.key("B");
+    await page.settle();
+    await answerReads();
+    const typed = page.take("write");
+    assert.equal(typed.offset, 0x0422);
+    page.key("ArrowDown");
+    page.send({ type: "reply", id: typed.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    await answerReads();
+    assert.equal(page.posted.filter(message => message.type === "write").length, 0, "B is not written at $0432");
+
     // HTML from labels is escaped inside attributes, quotes too.
     assert.equal((page.context as { escapeText(text: string): string }).escapeText('START" data-go="4096'), "START&quot; data-go=&quot;4096");
 });
@@ -422,6 +478,21 @@ test("an address resolves in the focused frame, else in the CPU's", async () => 
     assert.equal(await resolveIn(evaluate, null, "z80:$0100", 1), undefined, "another bank's address is not this view's");
     await assert.rejects(resolveIn(evaluate, null, "HL"), /not a 6502 register/);
     await assert.rejects(resolveIn(evaluate, null, "HL", 1), /not a 6502 register/);
+});
+
+test("a label opened while a BASIC frame is focused is the CPU's", async () => {
+    // As the debugger answers: a BASIC frame, 2000, evaluates BASIC, which names no memory, and fails on a CPU label.
+    const evaluate = async (expression: string, frameId?: number): Promise<string | undefined> => {
+        if (frameId === 2000) {
+            if (expression === "A") return undefined;
+            throw new Error(`${expression} is not a BASIC expression.`);
+        }
+        return expression === "TEXT_PAGE" ? "0x0400" : undefined;
+    };
+    assert.equal(await referenceIn(evaluate, "TEXT_PAGE", 2000), "0x0400");
+    assert.equal(await referenceIn(evaluate, "TEXT_PAGE"), "0x0400");
+    assert.equal(await referenceIn(evaluate, "A", 2000), undefined);
+    await assert.rejects(referenceIn(evaluate, "NOWHERE", 2000), /not a BASIC expression/);
 });
 
 // Runs the page's test hook, answering what it asks as the debugger would.

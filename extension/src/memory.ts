@@ -9,7 +9,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, hex, parseReference, resolveIn } from "./memoryModel";
+import { addressAt, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -78,9 +78,9 @@ async function evaluateIn(session: vscode.DebugSession, expression: string, fram
     return (await session.customRequest("evaluate", { expression, frameId, context: addressContext }) as { memoryReference?: string }).memoryReference;
 }
 
-/** The memory reference an expression evaluates to in the focused frame. */
+/** The memory reference an expression evaluates to in the focused frame, else in the CPU's; see referenceIn. */
 async function evaluateAddress(session: vscode.DebugSession, expression: string): Promise<string | undefined> {
-    return await evaluateIn(session, expression, focusedFrame(session));
+    return await referenceIn((text, frameId) => evaluateIn(session, text, frameId), expression, focusedFrame(session));
 }
 
 /** What VS Code passes a Variables or Watch view command: the session, the variable's container and the variable. */

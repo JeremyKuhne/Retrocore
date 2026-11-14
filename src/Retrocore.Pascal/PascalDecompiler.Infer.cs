@@ -374,7 +374,14 @@ public sealed partial class PascalDecompiler
                 when packed.Target.Type.Find() is { Kind: TypeKind.Array, Bytes: true } array:
                 {
                     int length = packed.Value is PackedConstant p ? p.Bytes.Length : ((StringConstant)packed.Value).Characters.Length;
-                    if (array.IndexLow is { } low) { array.IndexHigh ??= low + length - 1; }
+
+                    // A packed array takes a constant as long as it is.
+                    array.Size((length + 1) / 2);
+                    if (array.IndexLow is { } low)
+                    {
+                        array.IndexHigh = Math.Max(array.IndexHigh ?? 0, low + length - 1);
+                    }
+
                     break;
                 }
 
@@ -389,9 +396,13 @@ public sealed partial class PascalDecompiler
                 break;
             case Assignment assignment:
                 Assign(assignment.Target.Type, assignment.Value);
-                if ((assignment.Value is Checked check ? check.Value : assignment.Value) is Constant { Value: not 0 })
+                if ((assignment.Value is Checked check ? check.Value : assignment.Value) is Constant number)
                 {
-                    _constantStores.Add(assignment.Target.Type);
+                    if (number.Value != 0) { _constantStores.Add(assignment.Target.Type); }
+
+                    // A pointer takes no number but NIL, which LDCN loads: a place a number is stored in is a scalar.
+                    TypeNode stored = assignment.Target.Type.Find();
+                    if (stored.Kind == TypeKind.Unknown) { stored.Kind = TypeKind.Scalar; }
                 }
 
                 break;
@@ -400,6 +411,10 @@ public sealed partial class PascalDecompiler
                 break;
             case CallStatement { Callee.UnitProcedure: { } declared } call:
                 PassUnit(declared, [.. call.Arguments.Select(argument => argument.Value)]);
+                break;
+            case CallStatement { Callee.Builtin: "MARK" or "RELEASE", Arguments: [{ Value: Address mark }] }:
+                // MARK and RELEASE take the variable that keeps the heap's mark, a pointer.
+                mark.Designator.Type.Target();
                 break;
             case CallStatement { Callee.Builtin: "UNITSTATUS" or "UNITREAD" or "UNITWRITE" } unitCall:
                 // A unit's number, and the counts, block and mode or control after the buffer, are integers.
@@ -419,6 +434,9 @@ public sealed partial class PascalDecompiler
                 loop.Condition.Type.Vote(ScalarKind.Boolean, 2);
                 break;
             case ForStatement loop:
+                // A FOR loop counts in a scalar.
+                TypeNode counter = loop.Control.Type.Find();
+                if (counter.Kind == TypeKind.Unknown) { counter.Kind = TypeKind.Scalar; }
                 Assign(loop.Control.Type, loop.From);
                 Assign(loop.Control.Type, loop.To);
                 break;
@@ -640,7 +658,7 @@ public sealed partial class PascalDecompiler
                             // A word used both ways and a pointer it is read into point to one type.
                             if (first.Find().Kind == TypeKind.Pointer && second.Find().Kind == TypeKind.Pointer)
                             {
-                                TypeNode.Unify(first.Target(), second.Target());
+                                TypeNode.Targets(first, second);
                             }
 
                             continue;

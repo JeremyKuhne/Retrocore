@@ -4,6 +4,7 @@
 
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 
 namespace Retrocore.Debug;
@@ -58,6 +59,9 @@ internal static partial class EmulatedPascalCompiler
     /// <param name="files">
     ///  Code files to put beside the source, by name, such as the units it USES, which its <c>(*$U NAME.CODE*)</c> names.
     /// </param>
+    /// <param name="model">
+    ///  The machine: a 64K II Plus, or a 128K IIe, where Apple Pascal 1.2 keeps code in auxiliary memory.
+    /// </param>
     /// <returns>
     ///  The code file, or null on an error; the screen when it finished; and the listing's text, or null.
     /// </returns>
@@ -68,7 +72,8 @@ internal static partial class EmulatedPascalCompiler
         string compilerDisk,
         string? listing,
         string? roms = null,
-        IReadOnlyDictionary<string, byte[]>? files = null)
+        IReadOnlyDictionary<string, byte[]>? files = null,
+        Apple2Model model = Apple2Model.IIPlus)
     {
         // An Apple III Pascal system disk is SOS: its Compiler runs on an emulated Apple III.
         if (EmulatedApple3PascalTools.IsSos(bootDisk))
@@ -81,7 +86,7 @@ internal static partial class EmulatedPascalCompiler
         byte[] boot = File.ReadAllBytes(bootDisk);
         if (listing is null && files is null or { Count: 0 } && !Fits(boot, source))
         {
-            return (CompileLarge(source, boot, compilerDisk, roms, out string large), large, null);
+            return (CompileLarge(source, boot, compilerDisk, roms, model, out string large), large, null);
         }
 
         // A listing takes a free area of its own besides the code file's: APPLE1 has one, so the Editor, which a
@@ -94,7 +99,7 @@ internal static partial class EmulatedPascalCompiler
         }
 
 
-        EmulatedPascalSystem system = new(boot, compilerDisk, roms);
+        EmulatedPascalSystem system = new(boot, compilerDisk, roms, model: model);
         system.Type("C");
 
         // The Compiler ends with the space it had left, or stops at an error with a prompt to go on, stop or edit.
@@ -138,13 +143,13 @@ internal static partial class EmulatedPascalCompiler
 
     // A source too long for APPLE1, such as a Compiler's own, goes on a volume of its own in a second card's first
     // drive, SOURCE:, and the code file onto another in its second, CODE:; the Compiler asks for both by name.
-    private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, out string screen)
+    private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
     {
         byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
         byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
 
-        EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes]);
+        EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
         system.Type("C");
         if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
         {

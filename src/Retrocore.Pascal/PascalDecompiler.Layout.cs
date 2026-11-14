@@ -184,7 +184,11 @@ public sealed partial class PascalDecompiler
 
         // A record's fields are inside it.
         List<Variable> fields = [.. frame.Variables.Values.Where(variable => variable.Container is not null)];
-        foreach (Variable field in fields) { frame.Variables.Remove(field.Offset); }
+        foreach (Variable field in fields)
+        {
+            frame.Variables.Remove(field.Offset);
+            if (field.Container is { } container) { _namedFields.Add((container.Type.Find(), field.FieldOffset)); }
+        }
 
         int offset = start;
         while (offset < end)

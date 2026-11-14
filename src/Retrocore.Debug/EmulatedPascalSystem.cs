@@ -26,13 +26,17 @@ internal sealed class EmulatedPascalSystem
     /// <param name="more">
     ///  Images for the drives of a second Disk II card, in slot 5, Pascal's units 11 and 12; null or empty for none.
     /// </param>
+    /// <param name="model">
+    ///  The machine: a 64K II Plus with the language card, or a 128K IIe, whose auxiliary memory Apple Pascal 1.2 keeps
+    ///  code in.
+    /// </param>
     /// <exception cref="TimeoutException">The system never booted.</exception>
-    public EmulatedPascalSystem(byte[] boot, string toolsDisk, string? roms, IReadOnlyList<byte[]>? more = null)
+    public EmulatedPascalSystem(byte[] boot, string toolsDisk, string? roms, IReadOnlyList<byte[]>? more = null, Apple2Model model = Apple2Model.IIPlus)
     {
-        _machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, roms, autostart: true));
+        _machine = new(model, SdkModules.BuildRoms(model, roms, autostart: true));
         _machine.Bus.InstallDiskII(slot: 6, SdkModules.BuildDiskII(16, roms));
         if (more is { Count: > 0 }) { _machine.Bus.InstallDiskII(slot: 5, SdkModules.BuildDiskII(16, roms)); }
-        _machine.Bus.InstallLanguageCard();
+        if (!model.IsIIe()) { _machine.Bus.InstallLanguageCard(); }
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
         _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
         _machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(toolsDisk), proDosOrder: false), "APPLE2", "DSK");

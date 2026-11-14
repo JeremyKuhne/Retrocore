@@ -49,22 +49,59 @@ public sealed partial class PascalDecompiler
 
             if (procedure.Generations.Count == 0) { continue; }
 
-            procedure.Labels.Clear();
-            try
+            // Each store to the word starts a WITH or holds a FOR loop's limit, or the word is a variable after all,
+            // kept as one.
+            for (bool again = true; again && procedure.Generations.Count > 0;)
             {
-                new Decoder(this, procedure).Decode();
-            }
-            catch (InvalidDataException exception)
-            {
-                Warn($"{procedure} could not be decompiled: {exception.Message}");
-                procedure.Failed = true;
-                procedure.Body = [new Unsupported($"{procedure} could not be decompiled: {exception.Message}")];
-                continue;
-            }
+                Redecode(procedure);
+                HashSet<Variable> assigned = [];
+                Walk(procedure.Body, statement =>
+                {
+                    if (statement is Assignment { Target: VariableDesignator { Variable: var target } })
+                    {
+                        assigned.Add(target);
+                    }
+                }, _ => { });
 
-            Withs(procedure);
+                List<int> variables = [.. procedure.Generations
+                    .Where(pair => pair.Value.Values.Any(assigned.Contains))
+                    .Select(pair => pair.Key)];
+
+                foreach (int offset in variables) { procedure.Generations.Remove(offset); }
+                again = variables.Count > 0;
+                if (again && procedure.Generations.Count == 0) { Redecode(procedure); }
+            }
         }
     }
+
+    // Decodes a procedure again, and finds its WITH statements.
+    private HashSet<Variable> Redecode(Procedure procedure)
+    {
+        // The WITH statements' temporaries are found again; a word kept for several is one still.
+        Frame frame = procedure.Level <= 0 ? Globals : procedure.Frame;
+        foreach (Variable temporary in frame.Variables.Values.Where(_withTemporaries.Contains))
+        {
+            temporary.Kind = procedure.Generations.ContainsKey(temporary.Offset) ? VariableKind.Temporary : VariableKind.Variable;
+        }
+
+        procedure.Labels.Clear();
+        try
+        {
+            new Decoder(this, procedure).Decode();
+        }
+        catch (InvalidDataException exception)
+        {
+            Warn($"{procedure} could not be decompiled: {exception.Message}");
+            procedure.Failed = true;
+            procedure.Body = [new Unsupported($"{procedure} could not be decompiled: {exception.Message}")];
+            return [];
+        }
+
+        return Withs(procedure);
+    }
+
+    // The words found to keep WITH statements' records' addresses.
+    private readonly HashSet<Variable> _withTemporaries = [];
 
     // Finds a procedure's WITH statements, and gives the temporaries their records' addresses are kept in.
     private HashSet<Variable> Withs(Procedure procedure)
@@ -148,7 +185,12 @@ public sealed partial class PascalDecompiler
                 }
             }
 
-            foreach (Variable temporary in accepted) { temporary.Kind = VariableKind.Temporary; }
+            foreach (Variable temporary in accepted)
+            {
+                temporary.Kind = VariableKind.Temporary;
+                _withTemporaries.Add(temporary);
+            }
+
             if (accepted.Count > 0) { With(procedure.Body, accepted); }
             return accepted;
         }

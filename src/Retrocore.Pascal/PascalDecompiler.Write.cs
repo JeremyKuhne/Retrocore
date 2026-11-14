@@ -24,6 +24,7 @@ public sealed partial class PascalDecompiler
 
     private string Write()
     {
+        NamedFields();
         NameTypes();
 
         Options([.. _procedures.Where(procedure => !InUnit(procedure))]);
@@ -572,6 +573,18 @@ public sealed partial class PascalDecompiler
             {
                 int next = known.Keys.Where(key => key > offset).DefaultIfEmpty(words).Min();
                 next = Math.Min(next, to);
+
+                // Fields no code names, but the first, which a record's address reaches, are padding with the words
+                // after them up to the next one named.
+                if (offset > 0 && root.PackedFields is null && !_namedFields.Contains((root, offset)))
+                {
+                    int named = known.Keys.Where(key => key > offset && _namedFields.Contains((root, key))).DefaultIfEmpty(to).Min();
+                    named = Math.Min(named, to);
+                    parts.Add($"F{offset}: {Declare(Padding(named - offset), inline: true)}");
+                    offset = named;
+                    continue;
+                }
+
                 if (known.TryGetValue(offset, out TypeNode? field))
                 {
                     int size = Math.Min(SizeOf(field) ?? (next - offset), next - offset);
@@ -587,6 +600,50 @@ public sealed partial class PascalDecompiler
             }
 
             return parts;
+        }
+    }
+
+    // The fields the code names, by their records: a record's other words are padding, which keeps the Compiler's
+    // symbol table, in which every field's name takes room, small.
+    private readonly HashSet<(TypeNode Record, int Offset)> _namedFields = [];
+
+    private void NamedFields()
+    {
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, statement =>
+            {
+                if (statement is Assignment assignment) { Name(assignment.Target); }
+                if (statement is WithStatement with) { Name(with.Record); }
+            }, expression =>
+            {
+                switch (expression)
+                {
+                    case Load load: Name(load.Designator); break;
+                    case Address address: Name(address.Designator); break;
+                    case ByteAddress address: Name(address.Designator); break;
+                    case PackedAddress address: Name(address.Designator); break;
+                    default: break;
+                }
+            });
+
+        }
+
+        void Name(Designator designator)
+        {
+            switch (designator)
+            {
+                case FieldDesignator field:
+                    _namedFields.Add((field.Record.Type.Find(), field.Offset));
+                    Name(field.Record);
+                    break;
+                case PackedFieldDesignator field: Name(field.Record); break;
+                case IndexDesignator index: Name(index.Array); break;
+                case StringIndexDesignator index: Name(index.Text); break;
+                case LengthDesignator length: Name(length.Text); break;
+                case WindowDesignator window: Name(window.File); break;
+                default: break;
+            }
         }
     }
 
@@ -1006,6 +1063,13 @@ public sealed partial class PascalDecompiler
             {
                 TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
                 parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));
+            }
+            else if (argument is Load { Designator: var whole }
+                && IsPunned(parameter.Type)
+                && whole.Type.Find() == parameter.Type.Find())
+            {
+                // A word used both ways passes whole to a parameter that is one.
+                parts.Add(DesignatorText(whole));
             }
             else
             {

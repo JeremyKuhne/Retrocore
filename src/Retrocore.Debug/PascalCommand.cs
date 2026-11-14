@@ -5,6 +5,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Retrocore.Assembler;
+using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 using Retrocore.Pascal;
 
@@ -46,7 +47,7 @@ internal static partial class PascalCommand
                --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
-               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]...
+               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
                --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
@@ -459,6 +460,7 @@ internal static partial class PascalCommand
     private static int Compile(string[] args)
     {
         List<string> rest = [.. args];
+        Apple2Model model = rest.Remove("--iie") ? Apple2Model.IIeEnhanced : Apple2Model.IIPlus;
         Dictionary<string, byte[]> units = new(StringComparer.OrdinalIgnoreCase);
         for (int at = rest.IndexOf("--unit"); at >= 0; at = rest.IndexOf("--unit"))
         {
@@ -469,13 +471,13 @@ internal static partial class PascalCommand
 
         return rest switch
         {
-            [string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null, units),
-            [string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing, units),
+            [string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null, units, model),
+            [string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing, units, model),
             _ => Fail(Usage, code: 2)
         };
     }
 
-    private static int Compile(string source, string boot, string compiler, string output, string? listing, Dictionary<string, byte[]> units)
+    private static int Compile(string source, string boot, string compiler, string output, string? listing, Dictionary<string, byte[]> units, Apple2Model model)
     {
         // A listing the source asks for, (*$L APPLE1:NAME.TEXT*), is read back from APPLE1 to the host.
         string text = File.ReadAllText(source);
@@ -487,7 +489,7 @@ internal static partial class PascalCommand
         }
 
 
-        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed, roms: null, units);
+        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed, roms: null, units, model);
         if (code is null)
         {
             Console.Error.WriteLine(screen);

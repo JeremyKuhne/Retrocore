@@ -33,7 +33,7 @@ public sealed partial class PascalDecompiler
             return Convert($"{DesignatorText(viewed)}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
         }
 
-        // A word used both as a pointer and as an integer is a variant record's.
+        // A word used both as a pointer and as an integer is a variant record's, read by its view.
         if (expression is Load { Designator: var punned } && Viewed(punned) && IsPunned(punned.Type))
         {
             bool integer = Kind(expected) is not null;

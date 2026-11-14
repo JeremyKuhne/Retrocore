@@ -626,6 +626,24 @@ public sealed partial class PascalDecompiler
         }
 
         /// <summary>
+        ///  Makes what two pointers point to one type; where it is a record, both point to the record, as a thing at a
+        ///  record's address is its first field.
+        /// </summary>
+        /// <param name="first">One pointer.</param>
+        /// <param name="second">The other.</param>
+        public static void Targets(TypeNode first, TypeNode second)
+        {
+            TypeNode one = first.Target().Find();
+            TypeNode other = second.Target().Find();
+            Unify(one, other);
+            TypeNode record = one.Find().Kind == TypeKind.Record ? one.Find() : other.Find();
+            if (record.Kind != TypeKind.Record) { return; }
+
+            first.Find().Element = record;
+            second.Find().Element = record;
+        }
+
+        /// <summary>
         ///  Puts a type at a record's word offset: into its field there, or a variant's, that it can be one with; or as
         ///  another variant's field.
         /// </summary>
@@ -644,7 +662,7 @@ public sealed partial class PascalDecompiler
 
             foreach (TypeNode alternative in alternatives)
             {
-                if (!Conflicts(alternative, root))
+                if (!Differ(alternative, root, depth: 3))
                 {
                     Unify(alternative, root);
                     return;
@@ -659,6 +677,42 @@ public sealed partial class PascalDecompiler
             }
 
             variants.Add(root);
+        }
+
+        // Whether two types at one offset of a record are two variants' fields: they cannot be one, or are pointers to
+        // records whose fields cannot be, as a variant's pointer to one record and another's to another; or one is a
+        // packed array of more than a word's two bytes and the other a word.
+        private static bool Differ(TypeNode first, TypeNode second, int depth)
+        {
+            TypeNode a = first.Find();
+            TypeNode b = second.Find();
+            if (a == b) { return false; }
+            if (Conflicts(a, b) || Longer(a, b) || Longer(b, a)) { return true; }
+            if (depth == 0) { return false; }
+
+            if (a.Kind == TypeKind.Pointer && b.Kind == TypeKind.Pointer)
+            {
+                return a.Element is { } one && b.Element is { } other && Differ(one, other, depth - 1);
+            }
+
+            if (a.Kind == TypeKind.Record && b.Kind == TypeKind.Record && a.Fields is { } fields && b.Fields is { } others)
+            {
+                foreach ((int offset, TypeNode field) in fields)
+                {
+                    if (others.TryGetValue(offset, out TypeNode? match) && Differ(field, match, depth - 1))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+
+            static bool Longer(TypeNode array, TypeNode word)
+            {
+                bool bytes = array.Kind == TypeKind.Array && array.Bytes;
+                return bytes && word.Kind == TypeKind.Scalar && array.IndexHigh - array.IndexLow + 1 > 2;
+            }
         }
 
         /// <summary>

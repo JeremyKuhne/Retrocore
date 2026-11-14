@@ -13,6 +13,16 @@ export interface HardwareRow {
     devices: string[];
     /** What retro/hardware can do to the row: addCard for a free slot, removeCard for a card that can come out. */
     actions?: string[];
+    /** The switches on it, such as a card's DIP switches, which retro/hardware's setSetting changes. */
+    settings?: HardwareSetting[];
+}
+
+/** A switch on a piece of hardware, shown as a checkbox under its row. */
+export interface HardwareSetting {
+    id: string;
+    label: string;
+    value: boolean;
+    description: string;
 }
 
 /**
@@ -40,6 +50,10 @@ export const cards: Card[] = [
     {
         label: "3.5 disk controller", detail: "Two SuperDrives: 400K and 800K Apple disks, 720K and 1.44 MB MFM disks",
         args: { action: "addDisk35" }
+    },
+    {
+        label: "Z80 SoftCard", detail: "Microsoft's Z80 card, for CP/M; one at a time",
+        args: { action: "addSoftCard" }
     },
     {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
@@ -79,7 +93,7 @@ export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
-    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid"
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */

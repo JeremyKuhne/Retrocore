@@ -330,6 +330,64 @@ public class Apple3BusTests
         (((0x9F & bus.Read(0xC0F1)) + bus.Read(0xC0F2) + bus.Read(0xC0F3)) & 0xFF).Should().Be(0x10);
     }
 
+    /// <summary>
+    ///  A slot's card answers its I/O at <c>$C080 + slot * 16</c> and its ROM page while I/O is on; a read of the page
+    ///  selects its expansion ROM at <c>$C800</c>, and <c>$CFFF</c> deselects it. With I/O off, RAM is there.
+    /// </summary>
+    [TestMethod]
+    public void SlotsDecodeTheirIoAndRom()
+    {
+        Apple3Bus bus = Bus();
+        SetEnvironment(bus, BaseEnvironment);
+        Apple3TestCard card = new(slot: 2);
+        bus.InstallCard(card);
+
+        bus.Read(0xC0A3).Should().Be(0x23);
+        bus.Write(0xC0A5, 0x77);
+        card.Written.Should().Be((5, 0x77));
+        bus.Read(0xC0B3).Should().Be(0xFF, "slot 3 is empty");
+
+        bus.Read(0xC810).Should().Be(0xFF, "no expansion ROM is selected");
+        bus.Peek(0xC245).Should().Be(0x45);
+        bus.Peek(0xC810).Should().Be(0xFF, "a peek selects no expansion ROM");
+        bus.Read(0xC245).Should().Be(0x45);
+        bus.Peek(0xC810).Should().Be(0xE0);
+        bus.Read(0xC810).Should().Be(0xE0);
+        bus.Read(0xCFFF);
+        bus.Read(0xC810).Should().Be(0xFF);
+
+        SetEnvironment(bus, BaseEnvironment & ~Apple3Bus.IoEnable);
+        bus.Read(0xC245).Should().Be(bus.Ram[bus.Ram.Length - 0x8000 + 0x4245]);
+        bus.RemoveCard(2);
+        bus.Card(2).Should().BeNull();
+    }
+
+    /// <summary>
+    ///  A card's DMA sees memory as the 6502 does, through the zero-page register, but neither starts nor follows
+    ///  extended addressing.
+    /// </summary>
+    [TestMethod]
+    public void DmaIgnoresExtendedAddressing()
+    {
+        Apple3Bus bus = Bus();
+        SetEnvironment(bus, BaseEnvironment);
+        SetBank(bus, 0);
+        SetZeroPage(bus, 0x1A);
+        int system = bus.Ram.Length - 0x8000;
+        bus.Ram[system + 0x1621] = 0x81;
+        bus.Ram[system + 0x1A21] = 0x33;
+        bus.Ram[0x3005 - 0x2000] = 0xA5;
+
+        bus.ReadOpcode(0xF000);
+        bus.DmaRead(0x0021).Should().Be(0x33, "zero page is page $1A");
+        bus.ExtendedBank.Should().Be(0);
+
+        bus.Read(0x0021);
+        bus.ExtendedBank.Should().Be(0x81);
+        bus.DmaRead(0x3005).Should().Be(0xA5);
+        bus.ExtendedBank.Should().Be(0x81, "the 6502's latch stays for its instruction");
+    }
+
     private static Apple3Bus Bus(int ramKilobytes = 256) => new(Roms([0xA9]), ramKilobytes);
 
     // A ROM with the program at $F000 and every vector pointing there.

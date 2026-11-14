@@ -9,7 +9,7 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { cardsFor, group, type HardwareRow } from "./hardware";
+import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
 import { catalogMachine, settingValue, type MachineChoice } from "./machines";
 import { favoriteChoices, type Favorites } from "./favorites";
@@ -39,11 +39,11 @@ interface Devices { devices: Device[]; hardware?: HardwareRow[] }
 
 /**
  * A row of the Machine or Drives view: the machine itself, its settings and each setting, a piece of its installed
- * hardware, a controller its drives are listed under, a device, one line of a device's details, or the BASIC program
- * in memory.
+ * hardware and the switches on it, a controller its drives are listed under, a device, one line of a device's details,
+ * or the BASIC program in memory.
  */
 type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settings: MachineChoice[] } | { setting: MachineChoice }
-    | { hardware: HardwareRow; devices: Device[] }
+    | { hardware: HardwareRow; devices: Device[] } | { switch: HardwareSetting; row: HardwareRow }
     | { controller: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
     | { basic: BasicSummary };
 
@@ -184,6 +184,7 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
             ];
         }
         if ("settings" in node) return node.settings.map(setting => ({ setting }));
+        if ("hardware" in node) return (node.hardware.settings ?? []).map(setting => ({ switch: setting, row: node.hardware }));
         return [];
     }
 
@@ -195,6 +196,7 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
     // Revealing a row, as bringing the views back does, needs its parent: the machine for a piece of hardware.
     getParent(node: Node): Node | undefined {
         if ("setting" in node) return { settings: catalogMachine(this.configuration())?.choices ?? [] };
+        if ("switch" in node) return { hardware: node.row, devices: [] };
         return "hardware" in node || "settings" in node ? { machine: this.state.hardware.find(row => row.id === "model") } : undefined;
     }
 
@@ -211,10 +213,13 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
             item.command = { command: "retrocore.machine.switch", title: "Switch Machine" };
             return item;
         }
+        if ("switch" in node) return switchItem(node.switch, node.row);
         if (!("hardware" in node)) return new vscode.TreeItem("");
 
+        // A row with switches opens to them.
         const row = node.hardware;
-        const item = new vscode.TreeItem(row.name, vscode.TreeItemCollapsibleState.None);
+        const item = new vscode.TreeItem(row.name,
+            (row.settings?.length ?? 0) > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
         item.id = `hardware/${row.id}`;
         // A row with drives says how many; the Drives view lists them.
         const drives = node.devices.length;
@@ -296,6 +301,17 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         item.contextValue = [off !== undefined ? "machine off" : "machine", `heart-${mark.state}`].join(" ");
         return item;
     }
+}
+
+/** A switch on a card, as a checkbox: ticking it sets it at once, running or off. */
+function switchItem(setting: HardwareSetting, row: HardwareRow): vscode.TreeItem {
+    const item = new vscode.TreeItem(setting.label, vscode.TreeItemCollapsibleState.None);
+    item.id = `hardware/${row.id}/${setting.id}`;
+    item.description = setting.value ? "on" : "off";
+    item.tooltip = new vscode.MarkdownString(`**${escape(setting.label)}**: ${escape(setting.description)}`);
+    item.checkboxState = setting.value ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    item.contextValue = "hardwareSetting";
+    return item;
 }
 
 /** The BASIC program row: the program in memory, opened in an editor where saving puts it back. */
@@ -577,6 +593,15 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const change = async (node: Node | undefined, args: Record<string, unknown>): Promise<void> => {
         if (node !== undefined && "hardware" in node) await send("hardware", { id: node.hardware.id, ...args });
     };
+    // A switch on a card, such as the SoftCard's address translation, is a checkbox: ticking it sets it at once.
+    context.subscriptions.push(machineView.onDidChangeCheckboxState(async event => {
+        for (const [node, state] of event.items) {
+            if (!("switch" in node)) continue;
+            await change({ hardware: node.row, devices: [] }, {
+                action: "setSetting", setting: node.switch.id, value: state === vscode.TreeItemCheckboxState.Checked
+            });
+        }
+    }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.hardware.addCard", async (node?: Node) => {
         if (node === undefined || !("hardware" in node)) return;
         const machine = (tree.session?.configuration ?? tree.off)?.machine as string | undefined;

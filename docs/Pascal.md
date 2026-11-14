@@ -207,22 +207,32 @@ source records those that are not 0 after its `END.`, where the Compiler reads n
 `(* Alignment bytes FORMATTE $009F=$54 $00C9=$02 *)`, and `--pascal compile` puts them back.
 
 A program with assembled procedures is rebuilt as Apple built it: the source compiled, the procedures assembled
-with Apple's Assembler, and the two linked with Apple's Linker. A linked file keeps no name for an assembled
-procedure, and the Linker matches an `EXTERNAL` to its code by name, so a hint names it as its `.PROC` or `.FUNC`
-does. FORMATTER rebuilds byte for byte from its decompiled source, with its hints, and a source for FormatDisk in
-the Assembler's syntax:
+with Apple's Assembler, and the two linked with Apple's Linker. `--pascal decompile` writes the assembled
+procedures beside its output, as `NAME.asm.text`, in the Assembler's syntax: each a `.PROC` or `.FUNC` with the
+parameters' words its call passes, named as the Pascal source declares it `EXTERNAL`, which is how the Linker
+matches the two (a linked file keeps no name of its own for it). Hexadecimal is written without `$`, as the
+Assembler reads it; an operand or word the procedure-relative list names is written by label, and the Assembler
+lists it again in the order the code has it; and a three-byte instruction with an absolute operand below $100 is
+written as its bytes, since the Assembler would make it zero page. FORMATTER rebuilds byte for byte from the disk,
+hints or not:
 
 ```text
-Retrocore.Debug --pascal decompile APPLE3.dsk FORMATTER.CODE --hints formatter.json formatter.text
+Retrocore.Debug --pascal decompile APPLE3.dsk FORMATTER.CODE formatter.text
 Retrocore.Debug --pascal compile formatter.text APPLE1.dsk APPLE2.dsk FORMATTER.HOST.CODE
-Retrocore.Debug --pascal assemble-native fdisk.text APPLE1.dsk APPLE2.dsk FDISK.CODE
-Retrocore.Debug --pascal link FORMATTER.HOST.CODE FDISK.CODE APPLE1.dsk APPLE2.dsk FORMATTER.CODE
+Retrocore.Debug --pascal assemble-native formatter.asm.text APPLE1.dsk APPLE2.dsk FORMATTER.ASM.CODE
+Retrocore.Debug --pascal link FORMATTER.HOST.CODE FORMATTER.ASM.CODE APPLE1.dsk APPLE2.dsk FORMATTER.CODE
 ```
+
+Hints name the assembled procedure's places as labels (`FORMATTE.2+$40` for `IOB`) and comment them. Not written
+yet: words relative to the interpreter, the segment or the host's globals (`.INTERP`, `.DEF` and `.REF`, and
+`.PUBLIC`), which the system's Editor and Library use but no program on the disks at hand does; and data before a
+procedure's entry. A procedure with them is a warning. Apple III Pascal's AIIFORMAT's assembled procedure
+assembles to the same bytes with Apple Pascal 1.1's Assembler, though it links with Apple III Pascal's Linker.
 
 The Assembler's prompt for a listing is answered with none, and the Linker's for a host, libraries, map and output
 with the workfile, the libraries in order, none, and the output; the Editor comes off APPLE1's copy to make room.
-`PascalDecompilerTests.LinkedProgramsRebuildByteForByte` does all of it with a program and a 6502 function of its
-own. A code file from another version's Compiler decompiles, but
+`PascalDecompilerTests.FormatterRebuildsByteForByte` rebuilds FORMATTER so, and `LinkedProgramsRebuildByteForByte`
+a program and a 6502 function of its own. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

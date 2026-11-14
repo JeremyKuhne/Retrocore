@@ -11,4 +11,11 @@ namespace Retrocore.Pascal;
 /// <param name="Warnings">
 ///  What could not be decompiled, or may not compile to the same code; empty when all could.
 /// </param>
-public sealed record PascalDecompilation(string Source, IReadOnlyList<string> Warnings);
+public sealed record PascalDecompilation(string Source, IReadOnlyList<string> Warnings)
+{
+    /// <summary>
+    ///  Gets the program's assembled procedures as source for Apple Pascal's Assembler, to assemble and link into the
+    ///  compiled source; null when it has none.
+    /// </summary>
+    public string? Assembly { get; init; }
+}

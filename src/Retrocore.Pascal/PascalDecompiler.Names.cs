@@ -155,6 +155,68 @@ public sealed partial class PascalDecompiler
         return text is null ? null : $"(* {text.Replace("*)", "* )", StringComparison.Ordinal)} *)";
     }
 
+    // The program's assembled procedures as source for the Assembler, by the names the source declares them EXTERNAL
+    // by, with the hints' names and comments for their places.
+    private string? Assembly()
+    {
+        List<Procedure> assembled = [.. _procedures.Where(procedure => procedure.Code.IsNative)];
+        if (assembled.Count == 0) { return null; }
+
+        List<string> sources = [];
+        foreach (IGrouping<Media.PascalSegment, Procedure> segment in assembled.GroupBy(procedure => procedure.Segment))
+        {
+            List<PascalAssembledProcedure> written = [];
+            foreach (Procedure procedure in segment)
+            {
+                if (!procedure.Signed)
+                {
+                    Warn($"{procedure} is never called, so its parameters are not known; it is written with none.");
+                }
+
+
+                string prefix = $"{procedure.Segment.Name}.{procedure.Number}+";
+                written.Add(new PascalAssembledProcedure(
+                    procedure.Name,
+                    procedure.Number,
+                    procedure.IsFunction,
+                    procedure.Signed ? procedure.Frame.ParameterWords - (procedure.IsFunction ? 2 : 0) : 0)
+                {
+                    Comment = Comment(_options.Comments, prefix[..^1]),
+                    Names = Places(_options.Names, prefix),
+                    Comments = Places(_options.Comments, prefix)
+                });
+            }
+
+            PascalAssemblySource source = PascalAssemblyWriter.Write(segment.Key, written);
+            foreach (string note in source.Notes) { Warn(note); }
+            sources.Add(source.Text);
+        }
+
+        return string.Concat(sources);
+    }
+
+    private static string? Comment(IReadOnlyDictionary<string, string> comments, string key) =>
+        comments.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Value;
+
+    // The hints for places in a procedure, by offset from its entry: SEGMENT.N+$3E, or +62.
+    private static Dictionary<int, string> Places(IReadOnlyDictionary<string, string> values, string prefix)
+    {
+        Dictionary<int, string> places = [];
+        foreach ((string key, string value) in values)
+        {
+            if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { continue; }
+
+            string offset = key[prefix.Length..];
+            bool parsed = offset.StartsWith('$')
+                ? int.TryParse(offset.AsSpan(1), System.Globalization.NumberStyles.HexNumber, provider: null, out int at)
+                : int.TryParse(offset, System.Globalization.NumberStyles.Integer, provider: null, out at);
+
+            if (parsed) { places[at] = value; }
+        }
+
+        return places;
+    }
+
     // The decompiler's own names for types and declared constants: T1, NEG1.
     [GeneratedRegex("^(T|NEG)[0-9]+$")]
     private static partial Regex DecompilerName();

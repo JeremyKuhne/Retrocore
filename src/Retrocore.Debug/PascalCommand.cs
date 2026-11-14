@@ -350,6 +350,14 @@ internal static partial class PascalCommand
         {
             File.WriteAllText(rest[inputs], result.Source);
             Console.WriteLine($"Wrote {rest[inputs]}.");
+
+            // Assembled procedures go beside it, as source for the Assembler: NAME.asm.text.
+            if (result.Assembly is { } assembly)
+            {
+                string assemblyPath = $"{Path.ChangeExtension(rest[inputs], extension: null)}.asm.text";
+                File.WriteAllText(assemblyPath, assembly);
+                Console.WriteLine($"Wrote its assembled procedures to {assemblyPath}.");
+            }
         }
         else
         {

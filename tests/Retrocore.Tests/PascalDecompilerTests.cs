@@ -277,17 +277,18 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
-    ///  FORMATTER, whose segment the Linker marked M6502 for its assembled procedure, decompiles with that procedure
-    ///  declared EXTERNAL, as a function of the parameters its call passes; Apple Pascal 1.1's Compiler compiles the
-    ///  source to the same p-code, and only the assembled procedure, which the Linker would add, differs.
+    ///  FORMATTER, whose segment the Linker marked M6502 for its assembled procedure, decompiles to Pascal, with that
+    ///  procedure declared EXTERNAL as a function of the parameters its call passes, and to source for the Assembler
+    ///  for the procedure; compiled, assembled and linked with Apple Pascal 1.1's own tools, they make the same code
+    ///  file, byte for byte.
     /// </summary>
     [TestMethod]
-    public void AssembledProceduresDecompileAsExternal()
+    public void FormatterRebuildsByteForByte()
     {
         string samples = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_3.dsk");
         string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
-        string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
-        if (!File.Exists(samples) || !File.Exists(boot) || !File.Exists(compiler))
+        string tools = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(samples) || !File.Exists(boot) || !File.Exists(tools))
         {
             Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
         }
@@ -297,13 +298,18 @@ public class PascalDecompilerTests
         result.Source.Should().Contain("FUNCTION FUNC2(A4: INTEGER; A3: INTEGER): BOOLEAN;\n  EXTERNAL;");
         result.Source.Should().Contain("G3 := FUNC2(G8, G7);");
         result.Source.Should().EndWith("END.\n(* Alignment bytes FORMATTE $009F=$54 $00C9=$02 $03E1=$10 $046F=$30 *)\n");
+        result.Assembly.Should().StartWith("         .FUNC   FUNC2,2\n         PLA\n         STA     L003E\n");
+        result.Assembly.Should().Contain("         JSR     3D00\n").And.Contain("L003C    .WORD   L0040\n").And.EndWith("         .END\n");
 
-        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
-        if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
+        (byte[]? host, string compiled) = EmulatedPascalCompiler.Compile(result.Source, boot, tools, s_inputs);
+        if (host is null) { Assert.Fail($"The Compiler stopped:\n{compiled}\n{result.Source}"); }
 
-        // The assembled procedure's code is last in the segment, so the p-code before it is the same.
-        IReadOnlyList<string> differences = PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(code));
-        differences.Should().Contain(difference => difference.StartsWith("FORMATTE: the code differs from $055C in FORMATTE.2:", StringComparison.Ordinal));
+        (byte[]? assembled, string assembling) = EmulatedPascalTools.Assemble(result.Assembly ?? "", boot, tools, s_inputs);
+        if (assembled is null) { Assert.Fail($"The Assembler stopped:\n{assembling}\n{result.Assembly}"); }
+
+        (byte[]? linked, string linking) = EmulatedPascalTools.Link(host, [assembled], boot, tools, s_inputs);
+        if (linked is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
+        linked.Should().Equal(original);
     }
 
     /// <summary>
@@ -386,7 +392,7 @@ public class PascalDecompilerTests
 
     /// <summary>
     ///  A program that calls a 6502 function, compiled, assembled and linked with Apple's own Compiler, Assembler and
-    ///  Linker, decompiles to a source that, with the function's name from a hint, compiles and links back to the same
+    ///  Linker, decompiles to Pascal and to source for the Assembler that compile, assemble and link back to the same
     ///  bytes, file and all.
     /// </summary>
     [TestMethod]
@@ -406,20 +412,21 @@ public class PascalDecompilerTests
         PascalCodeFile file = PascalCodeFile.Read(linked);
         file.Segments.Single(segment => segment.Code.Length > 0).Procedure(2).Should().Match<PascalProcedure>(procedure => procedure.IsNative);
 
-        PascalDecompilation result = PascalDecompiler.Decompile(file, new PascalDecompilerOptions
-        {
-            Names = new Dictionary<string, string> { ["LINKED.2"] = "ADD1" }
-        });
+        // The linked file keeps no name for the function, so the source and the Assembler's both call it FUNC2.
+        PascalDecompilation result = PascalDecompiler.Decompile(file);
+        result.Source.Should().Contain("FUNCTION FUNC2(A3: INTEGER): INTEGER;\n  EXTERNAL;").And.Contain("G3 := FUNC2(41)");
+        result.Assembly.Should().StartWith("         .FUNC   FUNC2,1\n");
 
-        result.Source.Should().Contain("FUNCTION ADD1(A3: INTEGER): INTEGER;\n  EXTERNAL;").And.Contain("G3 := ADD1(41)");
-        Build(result.Source).Should().Equal(linked);
+        (byte[]? generated, string regenerated) = EmulatedPascalTools.Assemble(result.Assembly ?? "", boot, tools, s_inputs);
+        if (generated is null) { Assert.Fail($"The Assembler stopped:\n{regenerated}\n{result.Assembly}"); }
+        Build(result.Source, generated).Should().Equal(linked);
 
-        byte[] Build(string source)
+        byte[] Build(string source, byte[]? assembled = null)
         {
             (byte[]? host, string screen) = EmulatedPascalCompiler.Compile(source, boot, tools, s_inputs);
             if (host is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{source}"); }
 
-            (byte[]? code, string linking) = EmulatedPascalTools.Link(host, [function], boot, tools, s_inputs);
+            (byte[]? code, string linking) = EmulatedPascalTools.Link(host, [assembled ?? function], boot, tools, s_inputs);
             if (code is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
             return code;
         }

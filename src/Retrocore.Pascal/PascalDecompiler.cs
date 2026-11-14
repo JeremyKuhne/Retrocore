@@ -83,7 +83,8 @@ public sealed partial class PascalDecompiler
         decompiler.Layout();
         decompiler.Rename();
         string source = decompiler.Write();
-        return new PascalDecompilation(source, decompiler._warnings);
+        string? assembly = decompiler.Assembly();
+        return new PascalDecompilation(source, decompiler._warnings) { Assembly = assembly };
     }
 
     private void Warn(string warning) => _warnings.Add(warning);
@@ -108,7 +109,7 @@ public sealed partial class PascalDecompiler
             {
                 if (procedure.Code.IsNative)
                 {
-                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL, with the parameters and result its first call passes.");
+                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL, with the parameters and result its first call passes, and written as source for the Assembler.");
                 }
 
                 // A procedure's code ends before its parent's, which is the next of the level above it.

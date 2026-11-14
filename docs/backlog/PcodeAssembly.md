@@ -136,5 +136,7 @@ What the decompiler does not decompile yet, found by decompiling every code file
   `--pascal link`): FORMATTER rebuilds byte for byte ([Pascal.md](../Pascal.md#rebuilding-a-linked-program)).
   **Found:** the 1.1 Compiler on APPLE2 leaves 0 in an alignment byte where the Compilers Apple built the samples with
   left their buffer's bytes (in FORMATTER, the previous procedure's at the same offset), so a decompiled source
-  records them. **Not done:** writing an assembled procedure as source in the Assembler's syntax; FormatDisk's was
-  written by hand, and is not in the repository, as it is Apple's.
+  records them. `PascalAssemblyWriter` writes assembled procedures as source in the Assembler's syntax, beside a
+  decompiled source, so FORMATTER rebuilds from the disk with nothing written by hand. **Not done:** interpreter-,
+  segment- and base-relative words (`.INTERP`, `.DEF`/`.REF`, `.PUBLIC`), which only the system's Editor and Library
+  use; and linking Apple III Pascal's code with its own Linker.

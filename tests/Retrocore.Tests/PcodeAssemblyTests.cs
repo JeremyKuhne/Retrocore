@@ -260,6 +260,36 @@ public class PcodeAssemblyTests
     }
 
     /// <summary>
+    ///  An assembled procedure is written as source for Apple Pascal's Assembler: hexadecimal without <c>$</c>, an
+    ///  operand or word the procedure-relative list names by label, a branch by label, and a three-byte instruction
+    ///  with an absolute operand below $100 as its bytes, which the Assembler would make zero page.
+    /// </summary>
+    [TestMethod]
+    public void AssembledProceduresAreWrittenForTheAssembler()
+    {
+        byte[] code = Assemble(MixedSource.Replace(
+            "Entry:  lda.w Value - Entry\n        rts",
+            "Entry:  lda.w Value - Entry\nAgain:  lda.w $0030\n        beq Again\n        jsr $3D00\n        rts",
+            StringComparison.Ordinal));
+
+        PascalSegment segment = PascalCodeFile.Read(code).Segments.Single(own => own.Code.Length > 0);
+        PascalAssemblySource source = PascalAssemblyWriter.Write(segment, [new PascalAssembledProcedure("LOAD", 2, IsFunction: false, ParameterWords: 0)]);
+
+        source.Notes.Should().BeEmpty();
+        source.Text.Should().Be("""
+                     .PROC   LOAD
+                     LDA     L000C
+            L0003    .BYTE   0AD,30,0    ; LDA $0030
+                     BEQ     L0003
+                     JSR     3D00
+                     RTS
+            L000C    .WORD   L000C
+                     .END
+
+            """);
+    }
+
+    /// <summary>
     ///  Every code file on Apple Pascal's disks is written as source that assembles back to the same bytes; a system
     ///  segment whose procedures are elsewhere is written as data.
     /// </summary>

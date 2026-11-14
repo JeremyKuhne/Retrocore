@@ -84,9 +84,13 @@ internal static class Trs80SdkModules
     ///  Assembles Level I BASIC.
     /// </summary>
     /// <param name="path">The <c>Level1.asm</c> source.</param>
-    /// <returns>The assembly, byte-identical to the Level I ROM.</returns>
+    /// <param name="model">
+    ///  1 for the Model I's ROM, or 3 for the Model III's, given to the source as <c>MODEL</c>.
+    /// </param>
+    /// <returns>The assembly, byte-identical to that model's Level I ROM.</returns>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
-    internal static AssemblyResult AssembleLevel1(string path) => Assemble(path, Level1Size, symbols: null);
+    internal static AssemblyResult AssembleLevel1(string path, int model = 1) =>
+        Assemble(path, Level1Size, new Dictionary<string, long> { ["MODEL"] = model });
 
     /// <summary>
     ///  Assembles the character generator.

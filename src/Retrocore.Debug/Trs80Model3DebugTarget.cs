@@ -231,7 +231,8 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The source is the build of <c>Model3.asm</c> or <c>Model4PBoot.asm</c> whose bytes are the running ROM's,
+    ///   The source is the build of <c>Model3.asm</c>, <c>Model4PBoot.asm</c> or, for Level I, <c>Level1.asm</c>
+    ///   with <c>MODEL = 3</c>, whose bytes are the running ROM's,
     ///   so a dump of another revision gets none. The Model III's and Model 4's BASIC is Level II's, at Level II's
     ///   addresses, so the BASIC debugger reads it as it reads the Model I's.
     ///  </para>
@@ -239,6 +240,18 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
         string roms = Trs80DebugTarget.SdkDirectory(directory);
+        if (_machine.Configuration.Rom == Trs80Rom.Level1)
+        {
+            string level1 = Path.Join(roms, "Level1.asm");
+            if (File.Exists(level1)
+                && Trs80SdkModules.Matching(SystemRomImage, [() => Trs80SdkModules.AssembleLevel1(level1, 3)]) is { } built)
+            {
+                debug.Add(new SourceMapModule(built, Trs80Model3MemoryArea.Rom));
+            }
+
+            return;
+        }
+
         if (_machine.Configuration.Variant == Trs80Model3Variant.Model4P)
         {
             string boot = Path.Join(roms, "Model4PBoot.asm");
@@ -275,7 +288,10 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     internal byte[] SystemRomImage { get; init; } = [];
 
     /// <inheritdoc/>
-    public BasicDialect? Basic => _machine.Configuration.Variant == Trs80Model3Variant.Model4P ? null : BasicDialect.Level2;
+    public BasicDialect? Basic =>
+        _machine.Configuration.Variant == Trs80Model3Variant.Model4P || _machine.Configuration.Rom == Trs80Rom.Level1
+            ? null
+            : BasicDialect.Level2;
 
     /// <inheritdoc/>
     public BasicRom? BasicRom => _basicRom;
@@ -379,8 +395,8 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
             new(
                 "rom",
                 "ROM",
-                model4P ? "Boot ROM (4K)" : "Model III ROM (14K)",
-                "From the dumps in romDirectory."),
+                model4P ? "Boot ROM (4K)" : configuration.Rom == Trs80Rom.Level1 ? "Level I BASIC (4K)" : "Model III ROM (14K)",
+                "From the dumps in romDirectory, or built from the SDK's sources; the launch's rom option picks Level I."),
             new(
                 "memory",
                 "Memory",

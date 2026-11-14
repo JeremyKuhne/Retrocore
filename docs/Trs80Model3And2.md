@@ -28,14 +28,14 @@ The ports are:
 
 | Port | Read | Write |
 | --- | --- | --- |
-| `$E0`-`$E3` | Interrupt status, active low: bit 2 the 30 Hz clock | Interrupt mask |
+| `$E0`-`$E3` | Interrupt status, active low: bit 0 the tape's signal rose, 1 it fell, 2 the 30 Hz clock | Interrupt mask |
 | `$E4`-`$E7` | NMI status, active low: bit 7 the controller's INTRQ, 6 the motor timeout, 5 the reset button | NMI mask: bit 7 INTRQ, bit 6 the motor timeout |
-| `$E8`-`$EB` | The RS-232 UART, with nothing connected | |
+| `$E8`-`$EB` | `$FF`: no RS-232 board, which the ROM's set-up takes as none fitted | |
 | `$EC`-`$EF` | Acknowledges the clock | Bit 1 cassette motor, 2 wide characters, 3 alternate characters, 6 the Model 4's 4 MHz |
 | `$F0`-`$F3` | The FD1793 | The FD1793 |
 | `$F4`-`$F7` | | Drive select: bits 0-3 the drive, 4 the side, 6 wait, 7 double density |
 | `$F8`-`$FB` | Printer status | Printer |
-| `$FC`-`$FF` | Cassette: bit 7 the 500 baud latch | Cassette output |
+| `$FC`-`$FF` | Cassette: bit 7 the 500 baud latch, bit 0 the 1500 baud signal's level; acknowledges the edge interrupts | Cassette output |
 | `$84`-`$87` | | Model 4: the memory map, 80x24, inverse video, paging and the video page |
 | `$88`-`$89` | | Model 4: the 6845 (only the start address changes the picture) |
 | `$90`-`$93` | | Model 4: the speaker |
@@ -50,7 +50,13 @@ drive select with bit 6 set holds the Z80 in WAIT until the controller asks for 
 use for double density. Selecting a drive runs the motors for 3 seconds. Four drives take JV1, JV3, DMK or IMD images
 (see [Disk images](#disk-images)).
 
-**Cassette.** 500 baud tapes play and record from CAS images through port `$FF`, with the motor on port `$EC` bit 1.
+**Cassette.** Tapes play and record from CAS images through port `$FF`, with the motor on port `$EC` bit 1, at either
+speed `Cass?` offers. At 500 baud (L) each bit is a clock pulse and maybe a data pulse, which latch port `$FF` bit 7,
+as on the Model I. At 1500 baud (H) each bit is one cycle of a square wave, short for a 1 and long for a 0: its edges
+interrupt through port `$E0` bits 0 and 1 when the mask enables them, port `$FF` bit 0 reads its level, and reading
+port `$FF` acknowledges them. A tape that opens with `$55`, the 1500 baud leader, plays at 1500 baud, its bytes after
+the `$7F` sync byte each with an implied start bit, and a recording that holds the leader and sync byte is saved that
+way; this is the usual high-speed CAS layout.
 The Model 4P has no cassette port.
 
 ## The Model II, 12 and 16
@@ -66,6 +72,7 @@ The Model 4P has no cassette port.
 | FD1791 | `$E4`-`$E7`, drive select `$EF` | 8-inch drives at 360 rpm, both densities. Drive select: bits 0-3 the drive (active low), bit 6 clear side 1, bit 7 double density. |
 | CTC | `$F0`-`$F3` | Four counter/timer channels in timer and counter modes. |
 | SIO | `$F4`-`$F7` | Two serial channels with nothing connected. |
+| Hard disk board | `$C0`-`$CF` | Not fitted: the ports read zero, which the boot ROMs that boot from a hard disk take as no board. |
 | DMA | `$F8` | A Z80 DMA, ready on the disk controller's DRQ: memory and I/O ports, byte, continuous and burst modes, end-of-block interrupts and auto restart. |
 
 The peripherals interrupt in mode 2 through the Z80 daisy chain, from the CTC through the SIO and DMA to the PIO: the
@@ -102,20 +109,26 @@ hand and assemble byte-identically to each chip:
 | Source | ROM |
 | --- | --- |
 | [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
+| [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm) | With `MODEL = 3`, the Model III's Level I ROM (`8040032`): the Model I's Level I with `LPRINT` and `LLIST`, the Model III's ports and NMI, and its restarts moved. |
 | [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
 | [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). |
 | [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
 | [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
 
-Without a ROM directory, a launch runs the SDK's builds: the Model III's revision C ROM, the Model 4's, the 4P's boot ROM
-and the Model II's newest boot ROM (version 5). `sdkRoms` names another copy of the sources.
+Without a ROM directory, a launch runs the SDK's builds: the Model III's revision C ROM (or with `"rom": "level1"` its
+Level I ROM), the Model 4's, the 4P's boot ROM and the Model II's newest boot ROM (version 5). `sdkRoms` names another
+copy of the sources.
+
+**Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
+250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has no BASIC thread, as Level I on the
+Model I has none.
 
 Dumps are under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_ROMS`), or its `trs80m3`, `trs80m4`,
 `trs80m4p`, `trs80m2` or `trs80m16` folder:
 
 | Machine | System ROM | Character generator |
 | --- | --- | --- |
-| Model III | `8041364.u104`, `8040332.u105` and `8040316c.u106` (or `8040316b.u106`), or one 14K `trs80m3.rom` | `8044316a.u36` |
+| Model III | `8041364.u104`, `8040332.u105` and `8040316c.u106` (or `8040316b.u106`), or one 14K `trs80m3.rom`; Level I's is `8040032.u104` | `8044316a.u36` |
 | Model 4 | `trs80m4.rom`, or the Model III's | `8044316a.u36` |
 | Model 4P | `8075332.u69` | `8049007.u103` |
 | Model II, 12, 16 | The newest of `u54.u11`, `cpu_fc86.u11`, `cpu_2119.u11`, `cpu_11be.u11`, `8047316.u11` and `8043216.u11`, or the one `bootRom` names | `8043316.u9` |
@@ -141,7 +154,7 @@ The machines are in the Run and Debug dropdown and **Retrocore: Start Machine…
 }
 ```
 
-The options are `romDirectory`, `sdkRoms`, `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
+The options are `romDirectory`, `sdkRoms`, `rom` (Model III: `level2`, the default, or `level1`), `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
 given), `cassette` and `fastCassette` (Model III and 4), `fastDisk` (Model II: flat out while the controller works),
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. A `source` or `program` loads at `$7000`.
 
@@ -161,7 +174,7 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 | --- | --- |
 | `Trs80Model3Tests` | The Model III's map, clock interrupt, keyboard and NMI; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; the Model II asks for a diskette. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; and Level I booting to `READY` and saving and loading at 250 baud. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
@@ -169,7 +182,6 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 
 - **Real software.** No TRSDOS, LDOS, NEWDOS or TRSDOS-II has been run; the hardware follows the technical
   references and MAME's drivers, and needs checking against them.
-- **1500 baud cassettes** on the Model III and 4, which interrupt on the tape's edges.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

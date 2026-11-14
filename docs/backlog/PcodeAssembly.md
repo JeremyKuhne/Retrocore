@@ -128,9 +128,14 @@ What the decompiler does not decompile yet, found by decompiling every code file
   parameters the call alone does not give; and the Compiler's types: a few words used as both pointers and integers
   join, through unification, most of its words into one punned type, which a function cannot return (error 120).
   The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all. A pointer used as an integer is now
-  `ORD(P)`, which compiles to nothing, so it no longer puns (2026-11-14); what still joins the Compiler's words is
-  records unified field by field, whose pointer and integer fields at one offset are its variant records' (its
-  identifier and type records), which want modelling as variants rather than as one type per offset.
+  `ORD(P)`, which compiles to nothing, so it no longer puns (2026-11-14). Records with variant parts decompile
+  (the same day): a pointer field and an integer field at one offset of records that meet are two variants' fields,
+  written `CASE INTEGER OF 0: (...); 1: (...)`, and a word used both ways (the Compiler's VALU) no longer draws in
+  the integers and pointers read from it. The decompiled 1.1 Compiler now compiles past its declarations to line
+  389 of about 7,200 (COMPINIT's `S7P3`). **Next:** its identifier records (NAME, an ALPHA, at offset 0) and type
+  records (SIZE, an integer, at offset 0) still meet as one record, T2, through a few integer-to-pointer flows
+  (the first: a field at offset 6 of DECLARAT.19's local record, word 10, into G12); a packed array and an integer
+  at one offset are taken for a word read by bytes, so they do not become variants.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

@@ -59,7 +59,8 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
    `program` launches, and a DAP test script like the other machines'.
 3. **BASIC.** Altair BASIC 4K and 8K from user-supplied images, over the 2SIO; the 88-SIO and 88-ACR for the
    versions that need them, with tape images. *Built:* the 88-SIO and the 88-ACR with a cassette recorder for
-   byte-stream `.tap` tapes, caps lock, and tests that run 4K BASIC 3.2 and 4.0 and 8K BASIC 4.0 against SIMH.
+   byte-stream `.tap` tapes, and caps lock. Tests run 4K BASIC 3.2 and 4.0, 8K BASIC 4.0 and Extended BASIC 4.0
+   against SIMH, and load MITS's own tapes through the front panel's bootstrap.
 4. **Disks.** The 88-DCDD and its drives, SIMH disk images, the boot loaders as SDK sources, and CP/M 2.2.
 5. **The front panel view** in the extension.
 
@@ -87,10 +88,13 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **Images and tapes.** BASIC loads from memory images; the 88-SIO and the 88-ACR's cassette come with it, for the
   versions and tapes that need them.
 - **Where the images came from.** The user pointed at
-  [option8/Altair-BASIC](https://github.com/option8/Altair-BASIC) (4K BASIC 3.2's annotated listing and image) and
-  asked for binary images; [avwohl/mbasic2025](https://github.com/avwohl/mbasic2025) has 4K BASIC 3.2 and 4.0 and 8K
-  BASIC 4.0, the same three SIMH's `altsw.zip` has. They are kept in the external test data's `altair-basic`
-  folder, never in the repository, and the tests pin them by digest.
+  [option8/Altair-BASIC](https://github.com/option8/Altair-BASIC) (4K BASIC 3.2's annotated listing) and asked for
+  binary images. The tests use SIMH's `altsw.zip` from schorn.ch (4K BASIC 3.2 and 4.0, 8K BASIC 4.0 and Extended
+  BASIC 4.0), and MITS's tapes from altairclone.com's "MITS Tapes" CP/M disk, which add 8K BASIC 3.2 and Extended
+  BASIC 4.1. [avwohl/mbasic2025](https://github.com/avwohl/mbasic2025) has the same 4.0 images. option8's 3.2 image,
+  a reassembly, differs from SIMH's in one byte, a self-modified port number BASIC sets before it is used. The
+  images and tapes stay in the external test data's `altair-basic` folder, never in the repository, and the tests
+  pin them by digest.
 - **The terminal's board.** The terminal is on the 88-2SIO or the 88-SIO (the `console` option); the BASICs pick
   their terminal by the sense switches, as MITS documented.
 - **The cassette.** The 88-ACR has no motor control, so a tape plays from the moment it goes in, a byte each
@@ -98,10 +102,13 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 
 ## Still open
 
-- **MITS's own tapes.** The tapes MITS sold, which an operator loaded with a bootstrap keyed in at the front panel,
-  are untried: altairclone.com, which has them, is not allowed by this environment's network. The 88-ACR and
-  `.tap` tapes are tested with 8K BASIC's CSAVE and CLOAD, whose bytes match SIMH's.
-- **Extended BASIC.** No image was found; SIMH's `altsw.zip` (at schorn.ch) has one.
-- **The 1975 source listing** on gatesnotes.com, which the user named, could not be fetched: its host is not
-  allowed either.
+- **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
+  automated downloads with "Access Denied", so it needs downloading by hand.
 - **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.
+- **For phase 4: the disk format.** Reading the MITS Tapes disk worked out the layout CP/M uses on Altair 8-inch
+  disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two blocks a
+  track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's logical
+  record r is in the sector numbered h, where k = r mod 16 and h = 8(k mod 4) + 2(k div 4), plus 1 for r of 16 or
+  more. On tracks 0-5 that sector is image sector h; from track 6 it is image sector 17h mod 32, as the sector
+  headers' numbers show. Every record of the twelve tapes on that disk passes its checksum this way, and Extended
+  BASIC 4.0's tape rebuilds SIMH's `exbas.bin` byte for byte.

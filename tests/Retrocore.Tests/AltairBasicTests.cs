@@ -8,16 +8,18 @@ using Retrocore.Machines.Altair;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Altair BASIC on the Altair 8800: 4K BASIC 3.2 and 4.0 and 8K BASIC 4.0, from memory images, on the 88-2SIO and
-///  the 88-SIO, and 8K BASIC's CSAVE and CLOAD through the 88-ACR.
+///  Altair BASIC on the Altair 8800: 4K BASIC 3.2 and 4.0, 8K BASIC 4.0 and Extended BASIC 4.0, from memory images,
+///  on the 88-2SIO and the 88-SIO; 8K BASIC's CSAVE and CLOAD through the 88-ACR; and MITS's own tapes, loaded through
+///  the 88-ACR with the bootstrap keyed in at the front panel.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   Altair BASIC is MITS's and Microsoft's, so the images are not in the repository: the tests read
-///   <c>4kbas32.bin</c>, <c>4kbas40.bin</c> and <c>8kbas.bin</c>, the images SIMH's <c>altsw.zip</c> has, from
-///   <c>RETROCORE_ALTAIR_BASIC</c> or the <c>altair-basic</c> folder of the external test data, and are inconclusive
-///   without them. Digests pin the images. What each prints, its bytes free at 32 KB and 8K BASIC's tape match SIMH's
-///   <c>altairz80</c> (open-simh <c>87eb7d5</c>) with the same RAM.
+///   <c>4kbas32.bin</c>, <c>4kbas40.bin</c>, <c>8kbas.bin</c> and <c>exbas.bin</c>, the images in SIMH's
+///   <c>altsw.zip</c>, from <c>RETROCORE_ALTAIR_BASIC</c> or the <c>altair-basic</c> folder of the external test
+///   data, and MITS's tapes, from altairclone.com's "MITS Tapes" CP/M disk, from its <c>tapes</c> folder; each test
+///   is inconclusive without its file. Digests pin the images and tapes. What each prints, its bytes free at 32 KB
+///   and 8K BASIC's tape match SIMH's <c>altairz80</c> (open-simh <c>87eb7d5</c>) with the same RAM.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -26,6 +28,7 @@ public sealed class AltairBasicTests
     private const string Basic32 = "4kbas32.bin";
     private const string Basic40 = "4kbas40.bin";
     private const string Basic8K = "8kbas.bin";
+    private const string BasicExtended = "exbas.bin";
 
     // What 8K BASIC's CSAVE "P" records for its program: three $D3s and the name, then the program as it is in memory.
     private const string Tape =
@@ -33,9 +36,15 @@ public sealed class AltairBasicTests
 
     private static readonly Dictionary<string, string> s_digests = new()
     {
-        [Basic32] = "15DDC7023137106EE7421DF60F182726FEC395F6BCA573040AF39019AC83B508",
+        ["tapes/4KBAS32.TAP"] = "0C9850FE5F4FD36CDA7DAEEC4123D987AE5252EEEC69D14EF661E79A58CD9DC3",
+        ["tapes/4KBAS40.TAP"] = "20D104EBC703054A8F7A6E766639E14AB85560FD78D82F2915B2C493EAC11A0E",
+        ["tapes/8KBAS40.TAP"] = "E610937291D20860FF12068E5BB41EDECDD7473097E1344CF504046E120CBB6A",
+        ["tapes/8KBAS32.TAP"] = "677FBB00C53C843A98F4272F26AB93E3E236805F2F3A1B3645F0C7EF68C668F4",
+        ["tapes/EXTBAS41.TAP"] = "05539C6BD3E662473764BD6FC072B30988E032FA0A7F0F4D84DC0D29440A3E37",
+        [Basic32] = "6946B7718068DAA0C70219071824C78937C0C79554B5579B7F118B826D8968ED",
         [Basic40] = "3AAA9907F8A2C32452B9B4580C9B4CCED2146D7877129CDCD0B9A50C798FB616",
-        [Basic8K] = "DFE4B1576C6AC9FE1A47E9BA0FE697F098209EF8EAB61CD54CFFC626A84152D3"
+        [Basic8K] = "DFE4B1576C6AC9FE1A47E9BA0FE697F098209EF8EAB61CD54CFFC626A84152D3",
+        [BasicExtended] = "5A01407CA65C1B0CD49BF2E4D88DA292315DADDE8D3FE89CA8794645916EEEE0"
     };
 
     /// <summary>
@@ -96,6 +105,25 @@ public sealed class AltairBasicTests
     }
 
     /// <summary>
+    ///  Extended BASIC 4.0 on the 88-2SIO: integer variables, statements on a line, and powers.
+    /// </summary>
+    [TestMethod]
+    public void BasicExtendedRuns()
+    {
+        AltairBasicSession basic = new(BasicExtended, AltairConsole.Serial2Sio, switches: 0);
+        basic.Start("", "Y");
+        basic.Output.Should().Contain("18094 BYTES FREE")
+            .And.Contain("[EXTENDED VERSION]")
+            .And.Contain("COPYRIGHT 1977 BY MITS INC.");
+
+        basic.Type("10 DEFINT I:FOR I=1 TO 3:PRINT I*I;:NEXT");
+        basic.Clear();
+        basic.Type("RUN");
+        basic.Type("PRINT 2^10");
+        basic.Output.Should().Be("RUN\n 1  4  9 \nOK\nPRINT 2^10\n 1024 \nOK\n");
+    }
+
+    /// <summary>
     ///  8K BASIC's CSAVE records the program through the 88-ACR, the same bytes SIMH punches, and CLOAD reads it
     ///  back into a cleared program.
     /// </summary>
@@ -120,6 +148,40 @@ public sealed class AltairBasicTests
         basic.Clear();
         basic.Type("RUN");
         basic.Output.Should().Be("RUN\nHELLO\n 1 \n 4 \n 9 \nOK\n");
+    }
+
+    /// <summary>
+    ///  MITS's own tapes load through the 88-ACR with MITS's bootstrap keyed in at the front panel, and BASIC comes up
+    ///  as from its image: the 3.2 loaders take the 88-ACR with A15 up, and the 4.x loaders take device 3, the 88-ACR,
+    ///  in A11-A8. 8K BASIC 3.2 and Extended BASIC 4.1, which SIMH's images lack, come only from tapes; 4.1 asks
+    ///  whether there is a line printer, and C answers that there is none but the console.
+    /// </summary>
+    /// <param name="tape">The tape in the external test data's <c>altair-basic/tapes</c> folder.</param>
+    /// <param name="loadAddress">The bootstrap's load address.</param>
+    /// <param name="console">The board the terminal is on.</param>
+    /// <param name="switches">The sense switches, for the loader and BASIC.</param>
+    /// <param name="answers">The answers to BASIC's questions, separated by bars.</param>
+    /// <param name="banner">What BASIC prints when it is ready.</param>
+    [TestMethod]
+    [DataRow("4KBAS32.TAP", 0x0FAE, AltairConsole.Sio, 0x8000, "||Y", "29399 BYTES FREE")]
+    [DataRow("4KBAS40.TAP", 0x0FC2, AltairConsole.Serial2Sio, 0x0300, "||Y", "29388 BYTES FREE")]
+    [DataRow("8KBAS40.TAP", 0x1FC2, AltairConsole.Serial2Sio, 0x0300, "||Y", "26244 BYTES FREE")]
+    [DataRow("8KBAS32.TAP", 0x1FAE, AltairConsole.Sio, 0x8000, "||Y", "26696 BYTES FREE")]
+    [DataRow("EXTBAS41.TAP", 0x3FC2, AltairConsole.Serial2Sio, 0x0300, "|C|Y", "ALTAIR BASIC REV. 4.1")]
+    public void BasicLoadsFromMitsTape(
+        string tape,
+        int loadAddress,
+        AltairConsole console,
+        int switches,
+        string answers,
+        string banner)
+    {
+        byte[] bytes = Image($"tapes/{tape}");
+        AltairBasicSession basic = AltairBasicSession.FromTape(bytes, (ushort)loadAddress, console, (ushort)switches);
+        basic.Output.Should().Contain("MEMORY SIZE?");
+        basic.Start(answers.Split('|'));
+        basic.Output.Should().Contain(banner);
+        Squares(basic);
     }
 
     // Types a program that prints squares, and runs it.

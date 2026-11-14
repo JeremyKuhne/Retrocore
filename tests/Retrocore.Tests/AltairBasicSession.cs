@@ -22,6 +22,13 @@ internal sealed class AltairBasicSession
     /// <param name="console">The board the terminal is on.</param>
     /// <param name="switches">The front panel's switches, whose high 8 BASIC reads to pick its terminal.</param>
     internal AltairBasicSession(string name, AltairConsole console, ushort switches)
+        : this(console, switches)
+    {
+        byte[] image = AltairBasicTests.Image(name);
+        for (int index = 0; index < image.Length; index++) { Machine.Bus.Write((ushort)index, image[index]); }
+    }
+
+    private AltairBasicSession(AltairConsole console, ushort switches)
     {
         Machine = new(new AltairConfiguration
         {
@@ -31,8 +38,6 @@ internal sealed class AltairBasicSession
             UpperCase = true
         });
 
-        byte[] image = AltairBasicTests.Image(name);
-        for (int index = 0; index < image.Length; index++) { Machine.Bus.Write((ushort)index, image[index]); }
         ISerialLine line = console == AltairConsole.Sio
             ? Machine.Bus.Sio ?? throw new InvalidOperationException("The 88-SIO is missing.")
             : Machine.Bus.SerialA;
@@ -44,6 +49,66 @@ internal sealed class AltairBasicSession
             if (code is 0x0A or (>= 0x20 and < 0x7F)) { _output.Append((char)code); }
             terminal?.Invoke(value);
         };
+    }
+
+    /// <summary>
+    ///  Loads a MITS tape as an operator did: keys MITS's bootstrap for the 88-ACR in at $0000 with the front panel's
+    ///  EXAMINE and DEPOSIT, puts the tape in, and runs until it has played. The bootstrap reads the tape's checksum
+    ///  loader backwards into memory below the load address, skipping the leader, whose bytes are the load address's
+    ///  low byte, then jumps to it; the checksum loader reads the rest and starts BASIC.
+    /// </summary>
+    /// <param name="tape">The tape's bytes.</param>
+    /// <param name="loadAddress">
+    ///  Where the checksum loader ends: $0FAE and $1FAE for 4K and 8K 3.2, $0FC2 and $1FC2 for 4K and 8K 4.0, and
+    ///  $3FC2 for Extended BASIC.
+    /// </param>
+    /// <param name="console">The board the terminal is on.</param>
+    /// <param name="switches">The front panel's switches: the checksum loader reads its device from them too.</param>
+    /// <returns>The session, with BASIC asking its first question.</returns>
+    internal static AltairBasicSession FromTape(byte[] tape, ushort loadAddress, AltairConsole console, ushort switches)
+    {
+        AltairBasicSession session = new(console, switches);
+        AltairFrontPanel panel = session.Machine.FrontPanel;
+        byte[] bootstrap =
+        [
+            0x21, (byte)loadAddress, (byte)(loadAddress >> 8),  // LXI H,load address
+            0x31, 0x12, 0x00,                                   // LXI SP,$0012, where RET finds $0003
+            0xDB, 0x06,                                         // IN $06
+            0x0F,                                               // RRC: bit 0 low when a byte waits
+            0xD8,                                               // RC
+            0xDB, 0x07,                                         // IN $07
+            0xBD,                                               // CMP L: a leader byte?
+            0xC8,                                               // RZ
+            0x2D,                                               // DCR L
+            0x77,                                               // MOV M,A
+            0xC0,                                               // RNZ
+            0xE9,                                               // PCHL
+            0x03, 0x00                                          // $0003, the loop
+        ];
+
+        panel.Switches = 0;
+        panel.Examine();
+        for (int index = 0; index < bootstrap.Length; index++)
+        {
+            panel.Switches = bootstrap[index];
+            if (index == 0)
+            {
+                panel.Deposit();
+            }
+            else
+            {
+                panel.DepositNext();
+            }
+        }
+
+        panel.Switches = switches;
+        AltairCassette cassette = session.Machine.Bus.Cassette
+            ?? throw new InvalidOperationException("The 88-ACR is missing.");
+
+        cassette.Play(tape, "tape");
+        int character = AltairTiming.CyclesPerCharacter(AltairBus.CassetteBaudRate);
+        session.Machine.Run((ulong)(((long)tape.Length * character) + AltairTiming.ClockHertz));
+        return session;
     }
 
     /// <summary>
@@ -62,7 +127,7 @@ internal sealed class AltairBasicSession
     /// <param name="answers">The answers, each typed as a line.</param>
     internal void Start(params string[] answers)
     {
-        Machine.Run(AltairTiming.ClockHertz / 2);
+        if (Machine.Processor.CycleCount == 0) { Machine.Run(AltairTiming.ClockHertz / 2); }
         foreach (string answer in answers) { Type(answer); }
     }
 

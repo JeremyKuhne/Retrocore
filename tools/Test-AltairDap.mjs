@@ -8,7 +8,8 @@
 // where the machine resets, and holds a breakpoint after HLT until a key's interrupt wakes the 8080. Then the 88-ACR's
 // cassette records a tape through retro/media, which saves it on eject, and plays it back from the launch's cassette
 // option. The Altair has no ROM, so nothing is needed but the repository; with 8K BASIC's image in the external test
-// data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs BASIC on the terminal.
+// data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs BASIC on the terminal, and with
+// MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
 
 import { resolve, join } from "node:path";
 import { writeFileSync, existsSync, unlinkSync, readFileSync } from "node:fs";
@@ -119,6 +120,27 @@ const playing = [
 
 const cache = process.env.RETROCORE_CACHE || join(homedir(), "Retrocore");
 const basic = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "8kbas.bin");
+const mitsTape = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "tapes", "4KBAS32.TAP");
+
+// MITS's bootstrap for the 88-ACR, as the guide gives it, for 4K BASIC 3.2's tape.
+const bootstrap = [
+    ".cpu I8080",
+    "        .org 0",
+    "Boot:   lxi h,$0FAE",
+    "Loop:   lxi sp,Stack",
+    "        in $06",
+    "        rrc",
+    "        rc",
+    "        in $07",
+    "        cmp l",
+    "        rz",
+    "        dcr l",
+    "        mov m,a",
+    "        rnz",
+    "        pchl",
+    "Stack:  .word Loop",
+    ""
+];
 
 // Forgets queued events of a kind, so a wait sees only what happens next.
 function drop(name) {
@@ -295,6 +317,8 @@ try {
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await request("evaluate", { expression: "BC" })).result, "$5441 (21569)", "T and A");
     assert.equal((await request("evaluate", { expression: "DE" })).result, "$5045 (20549)", "P and E");
+    // The breakpoint stays with the source's path, which the tape step below reuses.
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
 
     // 8K BASIC, when its image is in the cache, on the 88-2SIO with caps lock.
     if (existsSync(basic)) {
@@ -317,6 +341,30 @@ try {
         await screen(screen => screen.includes(" 42"), "8K BASIC's answer");
     } else {
         console.log(`8K BASIC (${basic}) is missing, so BASIC was not run.`);
+    }
+
+    // 4K BASIC 3.2 from MITS's tape, when it is in the cache: the bootstrap launched as a source, the tape in the
+    // 88-ACR, the terminal on the 88-SIO and A15 up for the checksum loader. 32 KB, since 3.2's memory test runs past
+    // the top of 64 KB.
+    if (existsSync(mitsTape)) {
+        phase("loading 4K BASIC 3.2 from tape");
+        writeFileSync(source, bootstrap.join("\n"));
+        events.length = 0;
+        await request("launch", {
+            machine: "altair", source, loadAddress: 0, entryAddress: 0, cassette: mitsTape, console: "sio",
+            switches: 0x8000, ramKilobytes: 32, upperCase: true, stopOnEntry: false, speed: "max"
+        });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await screen(screen => screen.includes("MEMORY SIZE?"), "4K BASIC 3.2's first question, after the tape");
+        for (const answer of ["", "", "y"]) {
+            await type(`${answer}\r`);
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        await screen(screen => screen.includes("[4K VERSION]") && screen.trimEnd().endsWith("OK"), "4K BASIC 3.2's banner");
+    } else {
+        console.log(`MITS's 4K BASIC 3.2 tape (${mitsTape}) is missing, so no tape was loaded.`);
     }
 
     await request("disconnect", {});

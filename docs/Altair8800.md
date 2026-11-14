@@ -91,6 +91,69 @@ BASIC picks its terminal by the sense switches:
 
 The 4.0 BASICs read A15-A12 as the terminal's device number, where 0 is the 88-2SIO and 2 the 88-SIO.
 
+### From MITS's tapes
+
+MITS sold BASIC on cassette and paper tape. Loading one takes three steps:
+
+1. The operator keys a 20-byte bootstrap in at `$0000` with the front panel.
+2. The bootstrap reads the tape's checksum loader backwards into memory below the load address, skipping the
+   leader (whose bytes are the load address's low byte), and jumps to it.
+3. The checksum loader reads the rest of the tape in checksummed records, and starts BASIC.
+
+As a source to launch with the tape in the 88-ACR:
+
+```asm
+.cpu I8080
+        .org 0
+Boot:   lxi h,$0FAE         ; the load address: see the table
+Loop:   lxi sp,Stack        ; so each RET goes back to Loop
+        in $06              ; the 88-ACR's status
+        rrc                 ; bit 0 is low when a byte waits
+        rc
+        in $07
+        cmp l               ; a leader byte?
+        rz
+        dcr l
+        mov m,a             ; store it, backwards
+        rnz
+        pchl                ; run the checksum loader
+Stack:  .word Loop
+```
+
+```json
+{
+    "type": "retrocore",
+    "request": "launch",
+    "name": "4K BASIC 3.2 from tape",
+    "machine": "altair",
+    "source": "${workspaceFolder}/boot.asm",
+    "loadAddress": 0,
+    "entryAddress": 0,
+    "cassette": "${workspaceFolder}/4KBAS32.TAP",
+    "console": "sio",
+    "switches": 32768,
+    "ramKilobytes": 32,
+    "upperCase": true
+}
+```
+
+The checksum loader reads its device from the sense switches too: the 3.2 loaders take the 88-ACR with A15 up, and
+the 4.x loaders take device 3, the 88-ACR, in A11-A8. With the terminal's switches from the table above:
+
+| Tape | Load address | Terminal | `switches` |
+| --- | --- | --- | --- |
+| 4K BASIC 3.2 | `$0FAE` | 88-SIO | `32768` (`$8000`) |
+| 8K BASIC 3.2 | `$1FAE` | 88-SIO | `32768` (`$8000`) |
+| 4K BASIC 4.0 | `$0FC2` | 88-2SIO | `768` (`$0300`) |
+| 8K BASIC 4.0 | `$1FC2` | 88-2SIO | `768` (`$0300`) |
+| Extended BASIC 4.0, 4.1 | `$3FC2` | 88-2SIO | `768` (`$0300`) |
+
+A tape plays at 30 bytes a second, so 4K BASIC takes two and a half minutes and Extended BASIC nine; with
+`fastCassette`, on by default, the machine runs as fast as it can meanwhile. Extended BASIC 4.1 also asks
+`LINEPRINTER?`, where `C` answers that there is none but the console. The example gives 4K BASIC 3.2 32 KB, since
+its memory test runs past the top of 64 KB (below). The tapes come from altairclone.com's "MITS
+Tapes" CP/M disk; the `.TAP` files on it are the tapes' bytes.
+
 Things to know:
 
 - **Type a line at a time.** BASIC reads the keyboard while it prints, to check for ^C, and drops what it reads
@@ -145,14 +208,17 @@ Screen**.
   receive interrupts, the ACIA's master reset and overrun, the 88-SIO's status, interrupts and overflow, the
   88-ACR's tape at 300 baud, playing and recording, sense switches, RAM size, the front panel and the terminal's
   controls.
-- [`AltairBasicTests`](../tests/Retrocore.Tests/AltairBasicTests.cs) run 4K BASIC 3.2 and 4.0 and 8K BASIC 4.0
-  on both serial boards, and 8K BASIC's `CSAVE` and `CLOAD`, when the images are in the external test data's
-  `altair-basic` folder (or `RETROCORE_ALTAIR_BASIC`); without them they are inconclusive. Each prints what SIMH's
-  does, with the same bytes free at 32 KB, and `CSAVE` records the same bytes SIMH's tape punch does.
+- [`AltairBasicTests`](../tests/Retrocore.Tests/AltairBasicTests.cs) run 4K BASIC 3.2 and 4.0, 8K BASIC 4.0
+  and Extended BASIC 4.0 on both serial boards, and 8K BASIC's `CSAVE` and `CLOAD`, when SIMH's images are in the
+  external test data's `altair-basic` folder (or `RETROCORE_ALTAIR_BASIC`). Each prints what SIMH's does, with the
+  same bytes free at 32 KB, and `CSAVE` records the same bytes SIMH's tape punch does. With MITS's tapes in its
+  `tapes` folder, they also load 4K BASIC 3.2 and 4.0, 8K BASIC 3.2 and 4.0 and Extended BASIC 4.1 through the
+  front panel's bootstrap and the 88-ACR. Without the files they are inconclusive.
 - The same programs, a greeting, an echo and a table of squares in decimal, print identically on SIMH's
   `altairz80` (open-simh `87eb7d5`, in 8080 mode), built outside the repository.
 - [`Test-AltairDap.mjs`](../tools/Test-AltairDap.mjs) drives the debug adapter: breakpoints, the call stack,
   registers, step out, the terminal's frames, Clear Screen, typed keys, a port watchpoint, RESET, and a breakpoint
   after `HLT` that holds until a key's interrupt wakes the 8080, with the interrupt on the call stack. It records
-  a tape through `retro/media` and plays it back from the `cassette` option, and with 8K BASIC's image in the
-  external test data it runs BASIC on the terminal.
+  a tape through `retro/media` and plays it back from the `cassette` option. With 8K BASIC's image in the external
+  test data it runs BASIC on the terminal, and with MITS's 4K BASIC 3.2 tape it loads BASIC with the bootstrap as
+  a source and the tape in the 88-ACR.

@@ -40,6 +40,14 @@ public sealed partial class PascalDecompiler
             return Convert(pun, Factor, integer ? ScalarKind.Integer : null, Kind(expected), out _);
         }
 
+        // A pointer where an integer is used is ORD of it, which compiles to nothing.
+        if (Kind(expected) is ScalarKind.Integer
+            && expression is not (Constant or Nil)
+            && expression.Type.Find() is { Kind: TypeKind.Pointer, Punned: false })
+        {
+            return $"ORD({Expression(expression, expected: null, 0)})";
+        }
+
         // SUCC and PRED step a character or an enumerated value.
         if (Kind(expected) is ScalarKind.Char or ScalarKind.Enumeration
             && expression is Binary { Op: Operator.Add or Operator.Subtract, Right: Constant { Value: 1 } } step

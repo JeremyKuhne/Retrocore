@@ -215,8 +215,9 @@ public sealed partial class PascalDecompiler
         {
             TypeNode root = Find();
 
-            // A pointer used as an integer is a word used both ways; so is an integer read by bytes.
-            if (root.Kind == TypeKind.Pointer && kind == ScalarKind.Integer) { root.Punned = true; }
+            // A pointer used as an integer is ORD of it, which compiles to nothing; an integer read by bytes is a word
+            // used both ways.
+            if (root.Kind == TypeKind.Pointer && kind == ScalarKind.Integer) { return; }
             if (root.Kind == TypeKind.Array && root.Bytes && kind == ScalarKind.Integer) { root.View(); }
             if (root.Kind == TypeKind.Record)
             {

@@ -79,6 +79,25 @@ public class PascalSystemDecompilerTests
         END.
         """;
 
+    // A pointer used as an integer: ORD of it compiles to nothing.
+    private const string OrdinalSource = """
+        PROGRAM O;
+        TYPE R = RECORD A, B: INTEGER END;
+        VAR P: ^R; I: INTEGER;
+        BEGIN NEW(P); P^.A := 1; I := ORD(P); I := ORD(P) + 4; IF ORD(P) = I THEN I := 0 END.
+        """;
+
+    /// <summary>
+    ///  A pointer used as an integer decompiles to ORD of it, the pointer keeping its own type, rather than to a word
+    ///  used both ways.
+    /// </summary>
+    [TestMethod]
+    public void PointersUsedAsIntegersAreOrd()
+    {
+        string source = RoundTrip(OrdinalSource);
+        source.Should().Contain("G4 := ORD(G3);").And.Contain("G4 := ORD(G3) + 4;").And.NotContain("CASE BOOLEAN");
+    }
+
     /// <summary>
     ///  A segment procedure's call of the program's procedure, CXP 1, n, decompiles to a call of it, declared FORWARD
     ///  before the segment procedure, which takes its segment's name.

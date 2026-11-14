@@ -6,7 +6,7 @@ namespace Retrocore.Pascal;
 
 public sealed partial class PascalDecompiler
 {
-    private readonly List<(TypeNode First, TypeNode Second)> _links = [];
+    private readonly List<(TypeNode First, TypeNode Second, bool Flow)> _links = [];
 
     // PASCALIO, the segment the system loads for reals' I/O and SEEK.
     private const int PascalIo = 31;
@@ -499,9 +499,18 @@ public sealed partial class PascalDecompiler
                 Assign(target, written.Value);
                 break;
             default:
-                Link(target, value.Type);
+                Flow(target, value.Type);
                 break;
         }
+    }
+
+    // Whether a link is of a pointer and an integer that stay apart: a pointer compared with an integer, or a pointer
+    // that flows into an integer.
+    private static bool Ordinal(TypeNode first, TypeNode second, bool flow)
+    {
+        TypeKind a = first.Find().Kind;
+        TypeKind b = second.Find().Kind;
+        return (a, b) is (TypeKind.Scalar, TypeKind.Pointer) || (!flow && (a, b) is (TypeKind.Pointer, TypeKind.Scalar));
     }
 
     private static void Characters(TypeNode type, HashSet<TypeNode> seen)
@@ -519,7 +528,11 @@ public sealed partial class PascalDecompiler
     }
 
     // Two types a value flows between: a scalar's kind is shared, but not a subrange; anything else is one type.
-    private void Link(TypeNode first, TypeNode second) => _links.Add((first, second));
+    private void Link(TypeNode first, TypeNode second) => _links.Add((first, second, false));
+
+    // A value that flows into a place: an integer that flows into a pointer makes a word used both ways, but a pointer
+    // that flows into an integer is ORD of it, which compiles to nothing, so they stay apart.
+    private void Flow(TypeNode target, TypeNode value) => _links.Add((target, value, true));
 
     // Settles the links: those that met pointers or structures become one type, and the scalars on each set of links
     // pool their votes for a kind, though each keeps a kind it is forced to and its own subrange.
@@ -534,20 +547,42 @@ public sealed partial class PascalDecompiler
 
         static bool Scalar(TypeNode type) => type.Find().Kind is TypeKind.Scalar or TypeKind.Unknown;
 
+        // A type that is linked to a scalar is a scalar before any pointer meets it, so that a pointer that flows into
+        // it stays ORD of the pointer.
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            foreach ((TypeNode first, TypeNode second, _) in _links)
+            {
+                TypeNode a = first.Find();
+                TypeNode b = second.Find();
+                if ((a.Kind, b.Kind) is (TypeKind.Scalar, TypeKind.Unknown) or (TypeKind.Unknown, TypeKind.Scalar))
+                {
+                    a.Kind = TypeKind.Scalar;
+                    b.Kind = TypeKind.Scalar;
+                    changed = true;
+                }
+            }
+        }
+
         HashSet<int> unified = [];
         for (bool changed = true; changed;)
         {
             changed = false;
             for (int index = 0; index < _links.Count; index++)
             {
-                (TypeNode first, TypeNode second) = _links[index];
+                (TypeNode first, TypeNode second, bool flow) = _links[index];
                 if (!unified.Contains(index) && first.Find() != second.Find() && (!Scalar(first) || !Scalar(second)))
                 {
+                    // A pointer compared with an integer, or flowing into one, is ORD of it; only an integer that
+                    // flows into a pointer makes a word used both ways.
+                    if (Ordinal(first, second, flow)) { continue; }
+
                     // A record linked to a scalar is its first field's link.
                     if (first.Find().Kind == TypeKind.Record && Scalar(second) || second.Find().Kind == TypeKind.Record && Scalar(first))
                     {
                         unified.Add(index);
-                        _links.Add(first.Find().Kind == TypeKind.Record ? (first.Field(0), second) : (first, second.Field(0)));
+                        _links.Add(first.Find().Kind == TypeKind.Record ? (first.Field(0), second, flow) : (first, second.Field(0), flow));
                         changed = true;
                         continue;
                     }
@@ -571,7 +606,7 @@ public sealed partial class PascalDecompiler
             return top;
         }
 
-        foreach ((TypeNode first, TypeNode second) in _links)
+        foreach ((TypeNode first, TypeNode second, _) in _links)
         {
             TypeNode a = Class(first);
             TypeNode b = Class(second);

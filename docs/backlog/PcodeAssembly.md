@@ -127,7 +127,15 @@ What the decompiler does not decompile yet, found by decompiling every code file
   FORWARD and never define, as a probe shows (`PROCEDURE P2; FORWARD;` there compiles to `CXP 0, 2`), but whose
   parameters the call alone does not give; and the Compiler's types: a few words used as both pointers and integers
   join, through unification, most of its words into one punned type, which a function cannot return (error 120).
-  The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all.
+  The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all. A pointer used as an integer is now
+  `ORD(P)`, which compiles to nothing, so it no longer puns (2026-11-14); what still joins the Compiler's words is
+  records unified field by field, whose pointer and integer fields at one offset are its variant records' (its
+  identifier and type records), which want modelling as variants rather than as one type per offset.
+- **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
+  GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
+  is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that
+  built the samples only stepped over it. PASCALCO.20 is `GENBYTE`; an `LSA` is preceded by a `NOP` when the counter
+  is even (BODYPART, `S9P3`).
 - ~~**`IDSEARCH` and `TREESEARCH`**~~ (`CSP IDS`, `TRS`): done (2026-11-14). `SCAN` and Apple
   III Pascal's `UNITSTATUS` (`CSP 12`, named `USTAT`) decompile, found by compiling probes with Apple III Pascal's
   Compiler: `UNITSTATUS` pushes the unit, the buffer's address and byte offset, and the control word; `SCAN` the

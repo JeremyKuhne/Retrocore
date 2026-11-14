@@ -186,7 +186,7 @@ internal sealed partial class DebugSession
             byte? value = MemoryByte(bank, at);
             data[index] = value ?? 0;
             unreadable.Add(index, value is null);
-            readOnly.Add(index, value is not null && (bank is null ? !Target.CanPoke((ushort)at) : bank.Poke is null));
+            readOnly.Add(index, value is not null && !Writable(bank, (ushort)at));
         }
 
         Track(reference, bank, address, offset, count);
@@ -222,7 +222,7 @@ internal sealed partial class DebugSession
                 if (value is < 0 or > 0xFFFF || labels.ContainsKey((int)value)) { continue; }
                 ushort address = (ushort)value;
                 if (bank is not null && bank.AreaOf(address) is null) { continue; }
-                if (DebugInfo.Active(module, memory, address) && module.Position(memory, address) is not null)
+                if (DebugInfo.Active(module, memory, address) && module.LabelApplies(memory, address))
                 {
                     labels[address] = name;
                 }

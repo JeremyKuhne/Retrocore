@@ -35,7 +35,8 @@ test("find wraps around, skips unreadable bytes and matches text with bit 7 eith
     assert.equal(findPattern(bytes, readable, text, 1, false), 3);
     assert.equal(findPattern(bytes, readable, text, 4, false), 0, "wraps to the start");
     assert.equal(findPattern(bytes, readable, text, 2, true), 0, "backward");
-    assert.equal(findPattern(bytes, readable, text, -1, true), 0, "backward from before the start");
+    assert.equal(findPattern(bytes, readable, text, -1, true), 3, "backward from before the start wraps to the end");
+    assert.equal(findPattern(bytes, readable, text, 7, false), 0, "forward from past the end wraps to the start");
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), 6);
     readable[6] = 2;
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), -1);

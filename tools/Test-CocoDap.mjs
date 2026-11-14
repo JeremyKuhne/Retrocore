@@ -111,6 +111,10 @@ try {
     assert.equal((await event("stopped")).reason, "entry");
     const sdkHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.equal(sdkHardware.rom.value, "Color BASIC 1.2, Extended Color BASIC 1.1, from the SDK's sources");
+    // Retrocore Memory reads the CoCo 2's text as its MC6847 draws it: uppercase in either style.
+    const cocoCharacters = (await request("retro/memory/characters")).text;
+    assert.equal(cocoCharacters[0x01], "A", "$01 draws an uppercase A, dark on green");
+    assert.equal(cocoCharacters[0x41], "A", "and $41 the same A, light on dark");
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     await request("stepIn", { threadId: 1 });

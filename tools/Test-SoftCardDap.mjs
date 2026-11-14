@@ -93,6 +93,15 @@ try {
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 
+    // Z80 $E000 is the Apple's I/O through the card's translation: Retrocore Memory shades it read-only, and it
+    // cannot be frozen, while the Z80's RAM can.
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "z80:0x0000", offset: 0xE000, count: 2 })).readOnly, [{ offset: 0, count: 2 }]);
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "z80:0x0000", offset: 0x0100, count: 2 })).readOnly, []);
+    await assert.rejects(request("retro/memory/freeze", { memoryReference: "z80:0x0000", freeze: [{ offset: 0xE000, value: 0 }] }), /not RAM now/);
+    const frozen = await request("retro/memory/freeze", { memoryReference: "z80:0x0000", freeze: [{ offset: 0x0100, value: 0x3E }] });
+    assert.deepEqual(frozen.frozen, [{ address: 0x0100, value: 0x3E }]);
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "z80:0x0000", thaw: [0x0100] })).frozen, []);
+
     await request("next", { threadId: 4 });
     frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("ld b,$34"));

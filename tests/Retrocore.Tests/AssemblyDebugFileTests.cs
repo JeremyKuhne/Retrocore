@@ -190,6 +190,31 @@ public sealed class AssemblyDebugFileTests
         return result;
     }
 
+    /// <summary>
+    ///  A VICE label file's labels apply wherever the module does, so Retrocore Memory shows them although they
+    ///  have no source lines.
+    /// </summary>
+    [TestMethod]
+    public void ViceLabelsApplyWithoutSourceLines()
+    {
+        string path = Path.Join(Path.GetTempPath(), $"{Guid.NewGuid():N}.lbl");
+        File.WriteAllText(path, "al C:7000 .START");
+        try
+        {
+            SymbolTable symbols = new();
+            symbols.Load(path);
+            IDebugModule module = new DebugFileModule(symbols);
+            DebugTestMemory memory = new();
+            module.Labels.Should().Contain(("START", 0x7000L));
+            module.Position(memory, address: 0x7000).Should().BeNull("a VICE label has no source line");
+            module.LabelApplies(memory, address: 0x7000).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static SymbolTable Load(AssemblyResult result, string directory)
     {
         using StringWriter writer = new();

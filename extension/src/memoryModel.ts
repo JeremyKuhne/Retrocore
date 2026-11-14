@@ -123,7 +123,8 @@ export function findPattern(bytes: Uint8Array, readable: Uint8Array, pattern: Pa
         return true;
     };
     const starts = last + 1;
-    const first = Math.min(Math.max(from, 0), last);
+    // A start past either end wraps, so Find Next from the last match and Find Previous from the first go on.
+    const first = ((from % starts) + starts) % starts;
     for (let step = 0; step < starts; step++) {
         const start = backward ? (first - step + starts) % starts : (first + step) % starts;
         if (matches(start)) return start;

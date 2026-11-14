@@ -76,7 +76,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   typing over one changes the value it is held at. Only RAM can be frozen. Frozen bytes are the session's, so
   every editor on that memory shows them.
 - **Moving and selecting.** The arrow keys, **Page Up**, **Page Down**, **Home** and **End** (with **Ctrl**, the
-  ends of memory) move; **Shift** or dragging selects; **Tab** switches between the hex and text columns.
+  ends of memory) move; **Shift** or dragging selects. **Tab** moves from the hex column to the text column and
+  **Shift+Tab** back; past them, they move focus on to the side panel or the toolbar as usual.
   **Ctrl+C** copies the selection as hex bytes, or as the characters it shows from the text column.
 
 ## Memory references

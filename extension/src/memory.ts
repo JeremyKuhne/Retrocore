@@ -128,6 +128,14 @@ export function registerMemory(context: vscode.ExtensionContext): void {
     // Sessions by id, since a memory URI names its session and VS Code lists only the active one.
     const sessions = new Map<string, vscode.DebugSession>();
     const editors = new Set<MemoryEditor>();
+    // Posts a message to the other editors showing the same session's same space as an editor.
+    const others = (editor: MemoryEditor, body: Record<string, unknown>): void => {
+        for (const other of editors) {
+            if (other !== editor && other.session.id === editor.session.id && other.reference === editor.reference) {
+                void other.panel.webview.postMessage(body);
+            }
+        }
+    };
     let lastEditor: MemoryEditor | undefined;
     context.subscriptions.push(vscode.debug.onDidStartDebugSession(session => sessions.set(session.id, session)));
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
@@ -230,9 +238,13 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "characters":
                             await reply(await session.customRequest("retro/memory/characters"));
                             break;
-                        case "freeze":
-                            await reply(await session.customRequest("retro/memory/freeze", { memoryReference: base, freeze: received.freeze, thaw: received.thaw }));
+                        case "freeze": {
+                            const result = await session.customRequest("retro/memory/freeze", { memoryReference: base, freeze: received.freeze, thaw: received.thaw }) as { frozen: unknown };
+                            await reply(result);
+                            // Other editors on the same space show the same frozen bytes.
+                            others(editor, { type: "frozen", frozen: result.frozen });
                             break;
+                        }
                         case "watch":
                             // VS Code's own Add to Watch, which takes a variable's evaluate name; there is no API for it.
                             for (const expression of received.expressions as string[]) {
@@ -246,6 +258,9 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 offset: received.offset,
                                 data: Buffer.from(received.data as number[]).toString("base64")
                             }));
+                            // The debugger tells no view of the writer's reference, which other editors on the same
+                            // space share, so they read again here.
+                            others(editor, { type: "changed" });
                             break;
                         case "goto":
                             await reply({ address: await goTo(session, start.bank, String(received.text)) });

@@ -43,6 +43,15 @@ internal sealed class DebugFileModule(SymbolTable symbols, Enum? area = null) : 
         symbols.Labels.Select(pair => (pair.Key, pair.Value));
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A debug file's labels apply wherever the module does: it does not check memory's bytes, and a VICE label
+    ///   file has labels without source lines.
+    ///  </para>
+    /// </remarks>
+    public bool LabelApplies(IDebugMemory memory, ushort address) => true;
+
+    /// <inheritdoc/>
     public DocumentationSet Documentation => field ??= DocumentationSet.Create(
         DebugDocumentation.Parse(symbols.Paths),
         symbols.Labels);

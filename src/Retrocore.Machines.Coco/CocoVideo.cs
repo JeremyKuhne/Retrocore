@@ -235,7 +235,25 @@ public sealed class CocoVideo : IVideoSource, ICharacterSet
     }
 
     /// <inheritdoc/>
-    char ICharacterSet.Character(byte code) => (code & 0x80) != 0 ? '\0' : Character(code);
+    /// <remarks>
+    ///  <para>
+    ///   The character as the screen draws it now: uppercase in either style, except that the MC6847T1 with GM0 set
+    ///   draws codes 0 to 31 without the inverse bit as its lowercase, as <see cref="RenderCharacter"/> does.
+    ///   Semigraphics have none.
+    ///  </para>
+    /// </remarks>
+    char ICharacterSet.Character(byte code)
+    {
+        if ((code & 0x80) != 0) { return '\0'; }
+        int character = code & 0x3F;
+        char ascii = (char)(character < 32 ? character + 64 : character);
+        bool lowercase = _t1
+            && (code & 0x40) == 0
+            && (_bus.VideoMode & GraphicsMode0Bit) != 0
+            && character < 32;
+
+        return lowercase ? char.ToLowerInvariant(ascii) : ascii;
+    }
 
     /// <inheritdoc/>
     public void Render(Span<byte> pixels, bool scanned)

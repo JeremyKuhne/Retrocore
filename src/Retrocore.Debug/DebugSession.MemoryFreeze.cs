@@ -9,8 +9,9 @@ namespace Retrocore.Debug;
 // Retrocore Memory's frozen bytes: bytes held at a value while the machine runs.
 internal sealed partial class DebugSession
 {
-    // The frozen bytes and the values they are held at.
-    private readonly Dictionary<(DebugMemoryBank? Bank, ushort Address), byte> _frozen = [];
+    // The frozen bytes and the values they are held at, by bank name (null for memory as the CPU maps it), as the
+    // Apple II builds its bank records again when a card changes.
+    private readonly Dictionary<(string? Bank, ushort Address), byte> _frozen = [];
 
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
@@ -30,7 +31,7 @@ internal sealed partial class DebugSession
         {
             foreach (JsonNode? offset in thaw)
             {
-                _frozen.Remove((bank, ByteAddress(start + (offset?.GetValue<long>() ?? 0))));
+                _frozen.Remove((bank?.Name, ByteAddress(start + (offset?.GetValue<long>() ?? 0))));
             }
         }
 
@@ -40,12 +41,12 @@ internal sealed partial class DebugSession
             {
                 ushort address = ByteAddress(start + (item.Long("offset") ?? 0));
                 byte value = (byte)(item.Int("value") ?? throw new ArgumentException("A frozen byte needs a value."));
-                if (!Writable(bank, address))
+                if (!Writable(bank, address) || !Write(bank, address, value))
                 {
                     throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
                 }
 
-                _frozen[(bank, address)] = value;
+                _frozen[(bank?.Name, address)] = value;
             }
 
             ApplyFreezes();
@@ -58,7 +59,7 @@ internal sealed partial class DebugSession
         return new JsonObject
         {
             ["frozen"] = _frozen
-                .Where(pair => pair.Key.Bank == bank)
+                .Where(pair => string.Equals(pair.Key.Bank, bank?.Name, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(pair => pair.Key.Address)
                 .Select(pair => (JsonNode?)new JsonObject { ["address"] = pair.Key.Address, ["value"] = pair.Value })
                 .ToJsonArray()
@@ -73,16 +74,48 @@ internal sealed partial class DebugSession
     // Whether a write can reach a byte now.
     private bool Writable(DebugMemoryBank? bank, ushort address) => bank is null
         ? Target.CanPoke(address)
-        : bank.Poke is not null && bank.Peek(address) is not null;
+        : bank.Writable(address);
 
-    // Writes the frozen bytes back where the program changed them; one whose memory is mapped away waits.
+    // Writes a byte, reporting whether the write reached it.
+    private bool Write(DebugMemoryBank? bank, ushort address, byte value)
+    {
+        if (bank is not null) { return bank.Poke?.Invoke(address, value) ?? false; }
+        Target.Poke(address, value);
+        return true;
+    }
+
+    // The bank a frozen byte's bank name names now; null for memory as the CPU maps it, or for a bank that is gone,
+    // such as a slot's ROM after its card comes out.
+    private DebugMemoryBank? FrozenBank(string? name, out bool gone)
+    {
+        gone = false;
+        if (name is null) { return null; }
+        DebugMemoryBank? bank = Target.Banks.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+        gone = bank is null;
+        return bank;
+    }
+
+    // Writes the frozen bytes back where the program changed them; one whose memory is mapped away waits, and one
+    // whose bank is gone is thawed.
     private void ApplyFreezes()
     {
-        foreach (((DebugMemoryBank? bank, ushort address), byte value) in _frozen)
+        List<(string? Bank, ushort Address)>? gone = null;
+        foreach (((string? name, ushort address), byte value) in _frozen)
         {
+            DebugMemoryBank? bank = FrozenBank(name, out bool missing);
+            if (missing)
+            {
+                (gone ??= []).Add((name, address));
+                continue;
+            }
+
             if (MemoryByte(bank, address) == value || !Writable(bank, address)) { continue; }
-            if (bank is null) { Target.Poke(address, value); }
-            else { bank.Poke?.Invoke(address, value); }
+            Write(bank, address, value);
+        }
+
+        foreach ((string? Bank, ushort Address) key in gone ?? [])
+        {
+            _frozen.Remove(key);
         }
     }
 
@@ -101,7 +134,7 @@ internal sealed partial class DebugSession
             int length = read.Groups[2].Success ? 2 : 1;
             for (int index = 0; index < length; index++)
             {
-                if (address + index is >= 0 and <= 0xFFFF && _frozen.ContainsKey((bank, (ushort)(address + index))))
+                if (address + index is >= 0 and <= 0xFFFF && _frozen.ContainsKey((bank?.Name, (ushort)(address + index))))
                 {
                     return true;
                 }

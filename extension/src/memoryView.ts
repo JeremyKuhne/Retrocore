@@ -892,8 +892,9 @@ grid.addEventListener("keydown", event => {
         moveTo(control ? 0 : cursor - cursor % ROW, event.shiftKey, false);
     } else if (key === "End") {
         moveTo(control ? SIZE - 1 : cursor - cursor % ROW + ROW - 1, event.shiftKey, false);
-    } else if (key === "Tab") {
-        pane = pane === "hex" ? "text" : "hex";
+    } else if (key === "Tab" && (event.shiftKey ? pane === "text" : pane === "hex")) {
+        // Tab goes from the hex column to the text column and Shift+Tab back; past them, focus moves on as usual.
+        pane = event.shiftKey ? "hex" : "text";
         nibble = null;
         render();
     } else if (key === "Escape" && nibble !== null) {
@@ -997,6 +998,11 @@ window.addEventListener("message", event => {
     } else if (message.type === "changed") {
         generation++;
         pages.fill(0);
+        render();
+    } else if (message.type === "frozen") {
+        // Another editor on this space froze or thawed bytes.
+        frozen = new Map(message.frozen.map(item => [item.address, item.value]));
+        showFrozen();
         render();
     } else if (message.type === "stopped") {
         // Changes count from here, and banks may have switched the labels and characters.

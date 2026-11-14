@@ -70,6 +70,17 @@ try {
     assert.equal((await read(message.memoryReference, 5)).bytes.toString("latin1"), "HELLO");
     assert.equal((await read("MESSAGE", 4, 6)).bytes.toString("latin1"), "FROM");
     assert.equal((await read("0x7000", 1)).bytes[0], 0x21);
+
+    // A hover on a mnemonic fails, so the editor shows the language server's hover with the instruction's summary,
+    // rather than Level II's BASIC variable LD. Registers and labels still evaluate, and a BASIC file's CP is BASIC's.
+    at = "hovering mnemonics";
+    const source = { path: hello };
+    await rejects(request("evaluate", { expression: "LD", context: "hover", frameId: 1, source }), /./);
+    await rejects(request("evaluate", { expression: "djnz", context: "hover", frameId: 1 }), /./);
+    assert.match((await request("evaluate", { expression: "HL", context: "hover", frameId: 1, source })).result, /^\$[0-9A-F]+ \(\d+\)$/);
+    assert.match((await request("evaluate", { expression: "MESSAGE", context: "hover", frameId: 1, source })).result, /^\$700F/);
+    assert.equal((await request("evaluate", { expression: "CP", context: "hover", frameId: 1, source: { path: join(root, "game.bas") } })).result, "0");
+    assert.equal((await request("evaluate", { expression: "LD", context: "watch", frameId: 1 })).result, "0");
     const top = await read("0xFFFE", 4);
     assert.equal(top.bytes.length, 2);
     assert.equal(top.unreadable, 2);

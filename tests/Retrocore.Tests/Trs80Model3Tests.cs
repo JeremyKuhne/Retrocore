@@ -313,6 +313,13 @@ public class Trs80Model3Tests
         bus.WaitRequested.Should().BeFalse("INTRQ ended the wait, until drive select sets it again");
         bus.Out(0xF4, 0xC1);
         bus.WaitRequested.Should().BeTrue();
+
+        // INTRQ alone, with no DRQ, ends it too: a forced interrupt.
+        bus.Out(0xF0, 0xD8);
+        bus.Tick();
+        bus.In(0xF0);
+        bus.Disks.InterruptRequest.Should().BeFalse("reading status clears INTRQ");
+        bus.WaitRequested.Should().BeFalse("INTRQ ended the wait without a DRQ");
     }
 
     /// <summary>

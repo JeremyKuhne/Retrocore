@@ -73,7 +73,8 @@ All four share one model and differ only in presentation:
 ## Order of work
 
 1. The three-layer interfaces, with what exists today moved behind them.
-2. Media slots, with dirty tracking and save on eject; then the Model I's disk write-back.
+2. Media slots, with dirty tracking and save on eject; then the Model I's disk write-back. These are planned in
+   full, for every machine, in [saving media back to images](MediaPersistence.md).
 3. TRSDOS and NEWDOS/80 directories, read-only first, then the CLI's `ls`, `get` and `info`.
 4. The CiderPress2 adapter, and the Apple II's Disk II on media slots.
 5. Writes, `put` and `convert`, and then the VS Code view and the Avalonia app.

@@ -29,6 +29,7 @@ public sealed partial class PascalDecompiler
         bool labels = _procedures.Any(procedure => procedure.Labels.Count > 0);
         if (labels) { Line("(*$G+*)"); }
 
+        if (Comment(Program) is { } about) { Line(about); }
         Line($"PROGRAM {Program.Name};");
         if (_unitOrder.Count > 0)
         {
@@ -135,6 +136,7 @@ public sealed partial class PascalDecompiler
 
     private void WriteProcedure(Procedure procedure, bool forwarded)
     {
+        if (Comment(procedure) is { } about) { Line(about); }
         Line(Header(procedure, full: !forwarded));
         if (procedure.Code.IsNative)
         {

@@ -34,6 +34,7 @@ public sealed partial class PascalDecompiler
 {
     private readonly PascalCodeFile _file;
     private readonly PascalLibrary? _library;
+    private readonly PascalDecompilerOptions _options;
     private readonly List<string> _warnings = [];
     private readonly List<Procedure> _procedures = [];
 
@@ -45,10 +46,11 @@ public sealed partial class PascalDecompiler
     private PascalSegment? _main;
     private Procedure? _program;
 
-    private PascalDecompiler(PascalCodeFile file, PascalLibrary? library)
+    private PascalDecompiler(PascalCodeFile file, PascalDecompilerOptions options)
     {
         _file = file;
-        _library = library;
+        _library = options.Library;
+        _options = options;
     }
 
     /// <summary>
@@ -58,16 +60,28 @@ public sealed partial class PascalDecompiler
     /// <param name="library">The library its units are in, such as <c>SYSTEM.LIBRARY</c>; null without one.</param>
     /// <returns>The source, and what could not be decompiled.</returns>
     /// <exception cref="InvalidDataException">The code file holds no p-code program.</exception>
-    public static PascalDecompilation Decompile(PascalCodeFile file, PascalLibrary? library = null)
+    public static PascalDecompilation Decompile(PascalCodeFile file, PascalLibrary? library = null) =>
+        Decompile(file, new PascalDecompilerOptions { Library = library });
+
+    /// <summary>
+    ///  Decompiles a program's code file, with names from its listing and hints.
+    /// </summary>
+    /// <param name="file">The code file.</param>
+    /// <param name="options">The library, listing, names and comments.</param>
+    /// <returns>The source, and what could not be decompiled or named.</returns>
+    /// <exception cref="InvalidDataException">The code file holds no p-code program.</exception>
+    public static PascalDecompilation Decompile(PascalCodeFile file, PascalDecompilerOptions options)
     {
         ArgumentNullException.ThrowIfNull(file);
-        PascalDecompiler decompiler = new(file, library);
+        ArgumentNullException.ThrowIfNull(options);
+        PascalDecompiler decompiler = new(file, options);
         decompiler.LoadProcedures();
         decompiler.DecodeAll();
         decompiler.Withs();
         decompiler.Absorb();
         decompiler.Infer();
         decompiler.Layout();
+        decompiler.Rename();
         string source = decompiler.Write();
         return new PascalDecompilation(source, decompiler._warnings);
     }

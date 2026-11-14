@@ -130,4 +130,5 @@ What the decompiler does not decompile yet, found by decompiling every code file
 - **Segment procedures** are handled, but no sample has one: check them with a program written to.
 - **Other Compilers:** recompiling with Apple Pascal 1.0's and 1.2's Compilers, and Apple III Pascal's on the emulated
   Apple III, so code files they wrote can be checked as 1.1's are.
-- **Names from a listing:** where a compiler listing is at hand, the source's own names for procedures and variables.
+- ~~**Names from a listing:**~~ done, with hints too: `--pascal decompile --listing --hints`
+  ([Pascal.md](../Pascal.md#decompiling)).

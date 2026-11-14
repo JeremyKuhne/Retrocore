@@ -130,7 +130,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   whole code file as source that assembles back to the same bytes, and checks it does (below); `--pascal assemble source.asm output.code` assembles such a source;
 - `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
   above.
-- `--pascal decompile code [--library library] [output.text]` decompiles a program back to Pascal (below);
+- `--pascal decompile code [--library library] [--listing listing] [--hints hints.json] [output.text]` decompiles a
+  program back to Pascal (below);
 - `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]` compiles a source with Apple
   Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`;
@@ -157,7 +158,8 @@ The Compiler translates a statement at a time, without optimizing, so each IF, W
 leaves its own pattern of jumps, and the stack holds each expression whole. What the code does not keep is made up:
 
 - **Names** come from offsets: `G3` for the program's variable at word 3, `A3` for a level-1 procedure's, `B3` a
-  level-2 one's, `PROC2` and `FUNC2` for procedure 2, `T1` for a type, `F4` for a record's field at word 4.
+  level-2 one's, `PROC2` and `FUNC2` for procedure 2, `T1` for a type, `F4` for a record's field at word 4; or from a
+  listing and hints (below).
 - **Types** are inferred from how the code uses each word: arithmetic makes an integer, character I/O and a string's
   elements a character, AND, OR and NOT a boolean; a range check gives a subrange, `IXA` an array, `INC` a record,
   `SAS` a string's length. Where a use disagrees with the type chosen, `ORD`, `CHR`, `ODD`, `SUCC` and `PRED`, which
@@ -175,6 +177,15 @@ leaves its own pattern of jumps, and the stack holds each expression whole. What
   parameters. A segment the Linker linked them into is marked for the 6502, not p-code; it decompiles all the same.
 - **Options**: `(*$I-*)`, `(*$R-*)`, `(*$G+*)` and `(*$V-*)` are written where the code shows unchecked I/O, unchecked
   indexes, GOTO, or a string passed to a VAR string of another length.
+
+With the Compiler's listing of the program (`--listing`), procedures, parameters and variables are named as the
+source named them; with HILBERT's, the decompiled source reads as the original. Hints (`--hints`, the JSON file
+[`--pascal disassemble`](#names) takes) name them too, keyed `SEGMENT.N` for procedure N and `SEGMENT.N@WORD` for a
+variable, and win over the listing; a hint's comment for `SEGMENT.N` goes above the procedure's heading. A name must
+leave the code as it is, so one is refused, with a warning, where it is a reserved or predeclared word (FORMATTER's
+`IoResult` would hide the `IORESULT` its code calls), a library unit's, or the same in its first eight letters, all
+the Compiler reads, as another the procedure reaches or is reached from; and the program's and a segment
+procedure's names must be their segments'.
 
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
 `--library disk NAME`); the source `USES` them as the program did. Where some code cannot be decompiled, the

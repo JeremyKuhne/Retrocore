@@ -306,6 +306,84 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
+    ///  Hints name procedures, parameters and variables, and comment procedures; a name that would change what the
+    ///  source compiles to is left as the decompiler names it, with a warning: a predeclared name the code calls, one
+    ///  the same as another in its first eight letters, the Compiler's, and a program's that is not its segment's.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameAndCommentTheSource()
+    {
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(P1Bytes), new PascalDecompilerOptions
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["P1.1"] = "Other",
+                ["P1.2"] = "Next",
+                ["P1.2@3"] = "X",
+                ["P1.4@5"] = "A",
+                ["P1.4@$3"] = "B",
+                ["P1.1@3"] = "Counter1A",
+                ["P1.1@4"] = "IoResult",
+                ["P1.1@5"] = "Counter1B",
+                ["P1.1@6"] = "Begin"
+            },
+            Comments = new Dictionary<string, string> { ["P1.4"] = "Multiplies (*reals*)." }
+        });
+
+        string source = result.Source;
+        source.Should().StartWith("PROGRAM P1;");
+        source.Should().Contain("FUNCTION Next(X: INTEGER): INTEGER;\nBEGIN\n  Next := X + 1\nEND;");
+        source.Should().Contain("(* Multiplies (*reals* ). *)\nFUNCTION FUNC4(A: REAL; B: REAL): REAL;");
+        source.Should().Contain("  Counter1A: INTEGER;\n  G4: INTEGER;\n  G5: BOOLEAN;\n  G6: CHAR;");
+        source.Should().Contain("G4 := Next(3);");
+        result.Warnings.Should().Contain(warning => warning.Contains("Other for P1.1 is not its segment's name", StringComparison.Ordinal));
+        result.Warnings.Should().Contain(warning => warning.Contains("IoResult for P1.1@4 would clash with IORESULT", StringComparison.Ordinal));
+        result.Warnings.Should().Contain(warning => warning.Contains("Counter1B for P1.1@5 would clash with Counter1A", StringComparison.Ordinal));
+        result.Warnings.Should().Contain(warning => warning.Contains("Begin for P1.1@6 would clash with BEGIN", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  With the listing the Compiler wrote of HILBERT's own source, its decompilation names its procedures and
+    ///  variables as the source did, nested procedures' too, and still compiles to the same code.
+    /// </summary>
+    [TestMethod]
+    public void AListingNamesTheSource()
+    {
+        string samples = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_3.dsk");
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(samples) || !File.Exists(boot) || !File.Exists(compiler))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        PascalVolume volume = PascalVolume.Read(File.ReadAllBytes(samples), proDosOrder: false);
+        string original = PascalTextFile.Read(volume.ReadFile("HILBERT.TEXT"));
+        (_, string screen, string? text) = EmulatedPascalCompiler.CompileWithListing(
+            $"(*$L APPLE1:HIL.LST.TEXT*)\n{original}",
+            boot,
+            compiler,
+            "HIL.LST.TEXT",
+            s_inputs);
+
+        if (text is null) { Assert.Fail($"The Compiler wrote no listing:\n{screen}"); }
+
+        byte[] code = volume.ReadFile("HILBERT.CODE");
+        PascalLibrary library = PascalLibrary.Read(PascalVolume.Read(File.ReadAllBytes(boot), proDosOrder: false).ReadFile("SYSTEM.LIBRARY"));
+        PascalDecompilation result = PascalDecompiler.Decompile(
+            PascalCodeFile.Read(code),
+            new PascalDecompilerOptions { Library = library, Listing = PascalListing.Parse(text) });
+
+        result.Warnings.Should().BeEmpty();
+        result.Source.Should().Contain("PROCEDURE HIL(I: INTEGER);\n  VAR\n    B: INTEGER;\n    A: INTEGER;\n  PROCEDURE HIL1;");
+        result.Source.Should().Contain("FOR N := 2 TO ORDER DO");
+
+        (byte[]? recompiled, string stopped) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
+        if (recompiled is null) { Assert.Fail($"The Compiler stopped:\n{stopped}\n{result.Source}"); }
+        PascalCodeComparison.Compare(PascalCodeFile.Read(code), PascalCodeFile.Read(recompiled)).Should().BeEmpty(result.Source);
+    }
+
+    /// <summary>
     ///  A unit's interface text gives its procedures in the order calls number them, from 2, and its enumerated types.
     /// </summary>
     [TestMethod]

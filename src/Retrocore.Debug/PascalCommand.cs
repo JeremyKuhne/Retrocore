@@ -45,7 +45,7 @@ internal static partial class PascalCommand
                --pascal disassemble (file.code | disk NAME) [--library L] [--listing L] [--hints file.json] output.asm
                --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
-               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [output.text]
+               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]
                --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
@@ -253,8 +253,15 @@ internal static partial class PascalCommand
     // A hints file: { "names": { "FORMATTE.2": "Format", "FORMATTE.2+$3E": "Return" }, "comments": { ... } }.
     private static PcodeSourceOptions Hints(PcodeSourceOptions options, byte[] data)
     {
+        (Dictionary<string, string> names, Dictionary<string, string> comments) = Hints(data);
+        return options with { Names = names, Comments = comments };
+    }
+
+    // A hints file's names and comments, by key.
+    private static (Dictionary<string, string> Names, Dictionary<string, string> Comments) Hints(byte[] data)
+    {
         JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
-        return options with { Names = Strings(root["names"]), Comments = Strings(root["comments"]) };
+        return (Strings(root["names"]), Strings(root["comments"]));
 
         static Dictionary<string, string> Strings(JsonNode? node)
         {
@@ -302,16 +309,9 @@ internal static partial class PascalCommand
     private static int Decompile(string[] args)
     {
         List<string> rest = [.. args];
-        byte[]? library = null;
-        int at = rest.IndexOf("--library");
-        if (at >= 0)
-        {
-            if (at + 1 >= rest.Count) { return Fail(Usage, code: 2); }
-            bool disk = IsDisk(rest[at + 1]);
-            if (disk && at + 2 >= rest.Count) { return Fail(Usage, code: 2); }
-            library = disk ? Open(rest[at + 1]).Read(rest[at + 2]) : File.ReadAllBytes(rest[at + 1]);
-            rest.RemoveRange(at, disk ? 3 : 2);
-        }
+        byte[]? library = Option(rest, "--library");
+        byte[]? listing = Option(rest, "--listing");
+        byte[]? hints = Option(rest, "--hints");
 
         if (rest.Count == 0) { return Fail(Usage, code: 2); }
         bool onDisk = IsDisk(rest[0]);
@@ -328,7 +328,19 @@ internal static partial class PascalCommand
             }
         }
 
-        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(data), library is null ? null : PascalLibrary.Read(library));
+        PascalDecompilerOptions options = new()
+        {
+            Library = library is null ? null : PascalLibrary.Read(library),
+            Listing = listing is null ? null : PascalListing.Parse(Text(listing))
+        };
+
+        if (hints is not null)
+        {
+            (Dictionary<string, string> names, Dictionary<string, string> comments) = Hints(hints);
+            options = options with { Names = names, Comments = comments };
+        }
+
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(data), options);
         foreach (string warning in result.Warnings) { Console.Error.WriteLine($"warning: {warning}"); }
         if (rest.Count > inputs)
         {

@@ -121,6 +121,8 @@ async function resolveReference(session: vscode.DebugSession, reference: string)
  * reference, such as 0x0400 or 0400, needs no evaluating.
  */
 async function addressIn(session: vscode.DebugSession, bank: string | null, text: string): Promise<number> {
+    // The bank's own name may lead, as in aux:$0400 in the aux editor.
+    if (bank !== null && text.toLowerCase().startsWith(`${bank.toLowerCase()}:`)) text = text.slice(bank.length + 1).trim();
     const parsed = parseReference(bank === null ? text : `${bank}:${text}`);
     if (parsed !== undefined && parsed.bank === bank) return parsed.address;
     const address = await resolveIn((expression, frameId) => evaluateIn(session, expression, frameId), bank, text, focusedFrame(session));
@@ -339,11 +341,14 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         });
         if (address === undefined || address.trim().length === 0) return;
 
-        // The debug host resolves the expression once, in the focused frame, so the view opens at that address.
-        const name = picked.bank.name;
+        // The debug host resolves the expression once, in the focused frame, so the view opens at that address. One
+        // that names a bank, such as aux:$0400, opens that bank whichever was picked.
+        const typed = /^\s*([A-Za-z][A-Za-z0-9]*)\s*:(.*)$/.exec(address);
+        const named = typed === null ? undefined : banks.find(bank => bank.name !== null && bank.name.toLowerCase() === typed[1].toLowerCase());
+        const name = named === undefined ? picked.bank.name : named.name;
         let at: number;
         try {
-            at = await addressIn(session, name, address.trim());
+            at = await addressIn(session, name, (named === undefined || typed === null ? address : typed[2]).trim());
         } catch (error) {
             void vscode.window.showErrorMessage(`Retrocore: ${message(error)}`);
             return;

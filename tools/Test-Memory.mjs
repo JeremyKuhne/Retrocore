@@ -240,6 +240,11 @@ try {
     await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0x5001, value: before ^ 0xFF }, { offset: 0, value: 0 }] }), /not RAM now/);
     assert.equal((await read("0x5001", 1)).bytes[0], before, "the RAM byte is not written");
     assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000" })).frozen, [{ address: 0x5000, value: 0x55 }], "nor frozen");
+    // A value a byte cannot hold, or a byte with no offset, is refused rather than written as something else.
+    await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0x5001, value: 0x12C }] }), /0 to 255, not 300/);
+    await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0x5001, value: -1 }] }), /0 to 255, not -1/);
+    await rejects(request("retro/memory/freeze", { memoryReference: "0x5001", freeze: [{ value: 1 }] }), /needs an offset/);
+    assert.equal((await read("0x5001", 1)).bytes[0], before, "none of them is written");
     await write("0x5000", [0x11]);
 
     // Retrocore Memory watches a byte as the expression [$5000], which says when it is frozen and which a data

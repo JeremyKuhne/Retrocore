@@ -34,20 +34,25 @@ internal sealed partial class DebugSession
         List<ushort> thaws = [];
         foreach (JsonNode? offset in args["thaw"] as JsonArray ?? [])
         {
-            thaws.Add(ByteAddress(start + (offset?.GetValue<long>() ?? 0)));
+            thaws.Add(ByteAddress(start + (offset?.GetValue<long>() ?? throw new ArgumentException("A thawed byte needs an offset."))));
         }
 
         List<(ushort Address, byte Value)> freezes = [];
         foreach (JsonNode? item in args["freeze"] as JsonArray ?? [])
         {
-            ushort address = ByteAddress(start + (item.Long("offset") ?? 0));
-            byte value = (byte)(item.Int("value") ?? throw new ArgumentException("A frozen byte needs a value."));
+            ushort address = ByteAddress(start + (item.Long("offset") ?? throw new ArgumentException("A frozen byte needs an offset.")));
+            int value = item.Int("value") ?? throw new ArgumentException("A frozen byte needs a value.");
+            if (value is < 0 or > 0xFF)
+            {
+                throw new ArgumentException($"A byte holds 0 to 255, not {value}, so {Reference(bank, address)} cannot be frozen at it.");
+            }
+
             if (!Writable(bank, address))
             {
                 throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
             }
 
-            freezes.Add((address, value));
+            freezes.Add((address, (byte)value));
         }
 
         foreach (ushort address in thaws)

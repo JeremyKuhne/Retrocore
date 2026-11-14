@@ -131,4 +131,20 @@ if (args.Length > 0 && args[0] is "--boot-probe" or "--boot-state")
 DebugSession session = new();
 DapTransport transport = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
 session.Register(transport, transport.Stop);
-transport.Run();
+try
+{
+    transport.Run();
+}
+finally
+{
+    // A client that closes the pipe without disconnecting still gets its recordings saved. There is no client to tell
+    // if that fails, so it goes to standard error.
+    try
+    {
+        session.End();
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"A recording could not be saved: {exception.Message}");
+    }
+}

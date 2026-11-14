@@ -53,6 +53,7 @@ internal sealed partial class DebugSession
     // until stepping in moves inward without running anything.
     private int _hidden;
     private IDebugTarget? _target;
+    private bool _ended;
     private DapTransport? _transport;
 
     // The pixels the last retro/frame carried, which a running frame with the same picture leaves out.
@@ -298,8 +299,7 @@ internal sealed partial class DebugSession
 
         transport.On("disconnect", args => Reply(() =>
         {
-            _run?.Cancel();
-            (_target as IDisposable)?.Dispose();
+            End();
             disconnect();
             return [];
         }));
@@ -470,6 +470,10 @@ internal sealed partial class DebugSession
 
         JsonObject result = handler(args);
 
+        // A tape or disk that goes in or comes out changes the devices, so Retro Devices hears of it even while the
+        // machine is stopped, as it does for retro/device.
+        if (name == "retro/media") { NotifyDevices(); }
+
         // Clearing the screen changes the picture, so a stopped machine sends the panel a frame showing it.
         if (name is "apple1/clearScreen" or "altair/clearScreen" && _run is not { IsCancellationRequested: false })
         {
@@ -480,6 +484,33 @@ internal sealed partial class DebugSession
     }
 
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
+
+    /// <summary>
+    ///  Ends the session: the machine stops, its recordings are saved and its target is disposed. Disconnect ends it,
+    ///  and so does the client closing the input without one.
+    /// </summary>
+    /// <exception cref="IOException">
+    ///  A recording could not be written. The session has not ended, so ending it again tries the save again.
+    /// </exception>
+    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written; likewise.</exception>
+    internal void End()
+    {
+        lock (_gate)
+        {
+            if (_ended) { return; }
+            _run?.Cancel();
+            ReleaseTarget();
+            _ended = true;
+        }
+    }
+
+    // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
+    // happens only once: if it fails, the target is left as it was.
+    private void ReleaseTarget()
+    {
+        (_target as IRecordingTarget)?.SaveRecordings();
+        (_target as IDisposable)?.Dispose();
+    }
 
     private JsonObject Reply(Func<JsonObject> action)
     {
@@ -588,7 +619,12 @@ internal sealed partial class DebugSession
         }
 
         bool loads = sourceFile is not null || program is not null;
-        (_target as IDisposable)?.Dispose();
+
+        // The old machine's recordings are saved and it is disposed before the new one is built, as machines can
+        // share host resources, such as the game controllers SDL reads. A launch that then fails leaves no machine,
+        // rather than the disposed one.
+        ReleaseTarget();
+        _target = null;
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
@@ -1442,11 +1478,20 @@ internal sealed partial class DebugSession
             bool trapReported = _exception is ("brk", _);
             long frameTime = Stopwatch.GetTimestamp();
 
-            // Sound made while stopped would play as a burst; the panel hears only what runs from here.
-            Target.TakeAudio();
+            // A launch or stop can cancel this worker before it starts and replace or clear the target, so the worker
+            // reads the target only under the lock, and only while it has not been cancelled.
             long paceTime = frameTime;
-            ulong paceCycles = Target.CycleCount;
-            lock (_gate) { StartMeasuring(); }
+            ulong paceCycles;
+            lock (_gate)
+            {
+                if (token.IsCancellationRequested) { return; }
+
+                // Sound made while stopped would play as a burst; the panel hears only what runs from here.
+                Target.TakeAudio();
+                paceCycles = Target.CycleCount;
+                StartMeasuring();
+            }
+
             bool ahead = false;
             try
             {
@@ -1454,6 +1499,8 @@ internal sealed partial class DebugSession
                 {
                     lock (_gate)
                     {
+                        if (token.IsCancellationRequested) { return; }
+
                         // Each slice runs until it has kept up with the machine's clock, or for a few milliseconds.
                         long slice = Stopwatch.GetTimestamp();
                         ulong due = Due(ref paceTime, ref paceCycles);
@@ -1496,6 +1543,7 @@ internal sealed partial class DebugSession
                             if (!Execute()) { return; }
                         }
 
+                        if (token.IsCancellationRequested) { return; }
                         ahead = Target.CycleCount >= due;
                         if (Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
                         {
@@ -1529,27 +1577,35 @@ internal sealed partial class DebugSession
                     }
                 }
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            catch (Exception exception) when (token.IsCancellationRequested && IsRunFailure(exception))
             {
+                // A worker cancelled by a launch or stop reports nothing: its machine may be gone.
             }
             catch (InvalidOperationException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (FormatException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (OverflowException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (IOException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
         }, token);
     }
+
+    // The exceptions a run's worker catches: its cancellation, and the failures it reports.
+    private static bool IsRunFailure(Exception exception) => exception is OperationCanceledException
+        or InvalidOperationException
+        or FormatException
+        or OverflowException
+        or IOException;
 
     private const double SliceMilliseconds = 10;
 
@@ -1630,10 +1686,16 @@ internal sealed partial class DebugSession
         return speed;
     }
 
-    private void ExecutionFailed(Exception exception)
+    // Reports a run that failed, unless a launch or stop cancelled it first: the check is under the lock, as a launch
+    // that takes the lock between the failure and this report replaces or clears the machine the failure was in.
+    private void ExecutionFailed(Exception exception, CancellationToken token)
     {
-        Console.Error.WriteLine(exception);
-        lock (_gate) { Stopped("exception", description: exception.Message, exception: "error"); }
+        lock (_gate)
+        {
+            if (token.IsCancellationRequested) { return; }
+            Console.Error.WriteLine(exception);
+            Stopped("exception", description: exception.Message, exception: "error");
+        }
     }
 
     /// <summary>

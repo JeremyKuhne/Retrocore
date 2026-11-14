@@ -153,6 +153,7 @@ p-code and its disassembler in `Retrocore.Pascal`.
   `<cache>\apple2-pascal-disks`, as `UCSD Pascal 1.1_0.dsk` to `1.1_3.dsk`, and `1.0_0.DSK`, `1.2_0.DSK` and
   `1.3_0.DSK` to `_3.DSK`).
 - `node tools/Test-PascalDap.mjs` drives the debug host on the Apple III, the II Plus (1.1) and a 128K IIe (1.3),
-  and on the Apple III compiles a program and stops in its source.
+  and on the Apple III compiles a program and stops in its source. On the IIe, with 1.3_2.DSK (the Compiler) beside
+  1.3_1.DSK, it compiles one too and checks that Retrocore Memory finds its variable in the bank 1.3 keeps it in.
 
 The [backlog plan](backlog/ApplePascal.md) says how this was built and what is still to come.

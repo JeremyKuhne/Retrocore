@@ -184,7 +184,7 @@ The other options are:
 The disk controller is on by default only when disks are given, since with a controller and no disk the ROM
 waits for a disk to boot.
 
-**Media.** The Retro Devices view in VS Code shows the cassette and the drives with their media, head and
+**Media.** The Drives view in VS Code shows the cassette and the drives with their media, head and
 activity, and inserts, records, ejects and write-protects through the `retro/device` request
 ([Devices.md](Devices.md)). The TRS-80 commands insert, record and eject tapes, and insert and eject disks,
 through the older `retro/media` request:

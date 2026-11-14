@@ -134,7 +134,7 @@ The debugger supports:
   and runtime checks of documented `;; Keeps:` contracts;
 - **Display and hardware controls:** a live display panel with paused video-beam overlay, 1x–8x and unthrottled
   (`Max`) speed, automatic fast disk and fast tape while drive motors run, speaker and stereo Mockingboard audio,
-  and the **Retro Devices** view for hot-plugging Apple II slot cards and managing disks and tapes
+  and the **Retrocore** activity bar's Machine and Drives views for hot-plugging Apple II slot cards and managing disks and tapes
   ([Devices.md](docs/Devices.md)).
 
 Your program and the SDK's ROM and DOS sources debug together in the same session. Each source module is bound to
@@ -203,7 +203,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
 | [`AppleSharp`](src/AppleSharp) | Standalone SDL3 Native AOT desktop emulator for the Apple IIe (uses caller-supplied ROM dumps). |
 | [`tools/DosDisk`](tools/DosDisk) | CLI tool that builds bootable DOS 3.3 and 3.2 disk images from the SDK's DOS sources and a folder of files ([Dos.md](docs/Dos.md#building-disks)). |
-| [`extension`](extension) | The VS Code extension: assembly and BASIC language features, debugging, live machine display, and the Retro Devices view. |
+| [`extension`](extension) | The VS Code extension: assembly and BASIC language features, debugging, live machine display, and the Retrocore activity bar's Machine and Drives views. |
 
 ## External files
 
@@ -257,6 +257,7 @@ node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps i
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
+node tools/Test-OffMachine.mjs        # needs nothing external
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
 node tools/Test-IIeDap.mjs            # SDK-built ROMs, or the dumps in RETROCORE_IIE_ROMS

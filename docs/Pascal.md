@@ -55,7 +55,7 @@ an empty one.
 
 ### Editing and saving
 
-Disks load write-protected. For the Editor and Compiler to write, take the protection off in the **Retro Devices**
+Disks load write-protected. For the Editor and Compiler to write, take the protection off in the **Drives**
 view (**Allow Writes** on the drive). What the machine writes stays in memory until you save the disk: **Save to
 Its Image** on the drive, or **Save Disk As...** to keep the original.
 CONTROL-C, which ends an insertion in the Editor, is the panel's Ctrl+C.

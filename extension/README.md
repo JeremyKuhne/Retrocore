@@ -105,8 +105,7 @@ Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
 Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
-the Command Palette, and it is the ▶ button on the **Retro Devices** view while no
-session runs. It asks three things:
+the Command Palette and on the **Machine** view's **...** menu. It asks three things:
 
 1. **Which machine.** The last setup you started comes first, so one pick repeats it.
 2. **What it runs.** The choices depend on the machine:
@@ -122,7 +121,7 @@ session runs. It asks three things:
    The open editor's file is offered first when the machine can run it.
 3. **Start, Options… or Save as Launch Configuration.**
    - **Start** boots it with the machine's defaults. Cards and disks the machine
-     last ran with come back, as [Retro Devices](#retro-devices) describes.
+     last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
      Expansion Interface and lowercase, and the Apple-1's memory and cassette interface. Each shows its current value; Esc goes back.
@@ -690,7 +689,7 @@ beside them when they are not there.
   the other model's BASIC and Monitor in ROM, AppleSoft on a II and Integer BASIC on a II
   Plus, from `firmwareCardRoms` or the other model's dumps; $C080 selects it and $C081
   the board's ROM, as DOS 3.3's FP and INT do. Without the other model's dumps, the card
-  holds the SDK's build of them. The Retro Devices view's **Add Card** puts either card in.
+  holds the SDK's build of them. The Machine view's **Add Card** puts either card in.
 
 On a II running Integer BASIC, or a II Plus with its Integer BASIC firmware card, a
 `basic` launch takes an Integer BASIC file (named `.integer.bas`, or with
@@ -855,7 +854,7 @@ checks for it without reading other keys.
 A game controller (Xbox, PlayStation, Switch Pro and most others) is the Apple
 joystick while the machine runs, even with VS Code in the background: its left
 stick or d-pad moves paddles 0 and 1, and A, B and X (Cross, Circle and Square)
-press buttons 0, 1 and 2. A second controller is paddles 2 and 3. The Retro Devices
+press buttons 0, 1 and 2. A second controller is paddles 2 and 3. The Machine
 view's **Game port** row names the controllers it sees, and the launch option
 `"controllers": false` turns them off.
 
@@ -870,7 +869,7 @@ you hear, and the key bar's **Sound** button changes it during the session:
 
 The Mockingboard is a card in slot 4, and a launch leaves it out unless `sound` is
 `mockingboard` or `mockingboard` is `true`; `"mockingboard": false` keeps it out even
-then, and you hear the speaker. The Retro Devices view's **Add Card** puts it in
+then, and you hear the speaker. The Machine view's **Add Card** puts it in
 during a session. The **Sound** button offers the Mockingboard only while it is in,
 and taking it out goes back to the speaker.
 
@@ -964,7 +963,7 @@ The panel shows the 40x24 terminal, which takes about 60 characters a second as 
 real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
 **Ctrl+F12** or **Ctrl+Break** RESET; the key bar has **Esc**, **Reset** and **Clear
 Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
-[Retro Devices](#retro-devices); a recording is saved as a WAV file when it is
+the [Drives](#machine-and-drives) view; a recording is saved as a WAV file when it is
 ejected.
 
 ## Debugging on the Altair 8800
@@ -1093,7 +1092,7 @@ Extended Color BASIC's words when their ROMs are fitted. Level I and the CoCo 3'
 BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
-- the **BASIC program** row at the top of the Retro Devices view, which shows the
+- the **BASIC program** row under the machine in the Machine view, which shows the
   dialect and how many lines the program has; click it, or its Open button;
 - a `basic` launch, which opens the editor by itself once the program is in memory.
 
@@ -1232,17 +1231,58 @@ string shows as `{$A2}`.
 [BasicDebugging.md](../docs/backlog/BasicDebugging.md) is the plan for the rest of
 BASIC debugging.
 
-## Retro Devices
+## Machine and Drives
 
-With no session running, the **Retro Devices** view in the Run and Debug sidebar
-offers **Start Machine** ([Starting a machine](#starting-a-machine)). While a
-Retrocore session runs, it lists the machine's installed hardware and, under each part, its devices.
-On the IIe that's the model, memory, the extended 80-column card every launch has,
-and slots 1 to 7, empty ones included: the Mockingboard in slot 4, the Disk II and
-its drives in slot 6, and block storage in slot 7 when the launch installs them. On
-the Model I it's the ROM, memory, cassette, Expansion Interface, disk controller
-with its drives, and the lowercase modification. Hovering a row says which launch
-option installs or changes it.
+Retrocore has its own icon in the activity bar, a small computer, with two views:
+**Machine** and **Drives**.
+
+With no session running, they show a machine that is off: the last one started, or the
+one **Switch Machine** (the ⇄ button) picks from your launch configurations and the
+machines Retrocore knows. Its row says `off`, and you can set it up before it starts:
+add and remove cards, insert and eject disks and tapes, and write-protect them. Its
+**Settings** are the choices **Start Machine → Options…** offers, such as memory, slot
+0, the II's Monitor or the Model I's Expansion Interface: click one to change it. The
+cards and disks you added stay, where they still fit. A machine from launch.json gets
+the setting written into its configuration. While it runs, the settings show what it
+was built with. Its ▶
+starts it with those changes, and when the session ends the views show it off again,
+with what changed while it ran. The **...** menu has **Start Machine**
+([Starting a machine](#starting-a-machine)) and **Start Last Machine**. Before any
+machine has been started, the view offers **Start Machine** and **Set Up a Machine**.
+
+While a Retrocore session runs, the Machine view is headed by the machine, such as
+**Apple IIe** `Enhanced, 65C02 · running`, its screen lit while it runs and dark while
+it is stopped in the debugger. Under it is the machine's installed hardware. On the
+IIe that's memory, the extended 80-column card every launch has, and slots 1 to 7,
+empty ones included (and dimmed): the Mockingboard in slot 4, the Disk II in slot 6,
+and block storage in slot 7 when the launch installs them. On the Model I it's the
+ROM, memory, cassette, Expansion Interface, disk controller, and the lowercase
+modification. A part with drives says how many, and hovering a row says which launch
+option installs or changes it. Its title bar opens memory and refreshes the views.
+VS Code opens Run and Debug as a session starts and when it breaks; if the Retrocore
+views were showing, they come straight back, leaving the keyboard where it was. Run
+and Debug's icon still has the call stack and variables.
+
+The Drives view lists each part that has drives, with its drives under it: slot 6's
+two Disk II drives, the Model I's cassette and its disk drives. Its badge counts the
+disks changed in the machine and not yet saved to their images.
+
+The machine's row has a heart, running or off. Empty, the machine is not in your
+favorites, and clicking it saves it at once, named for the machine (such as **Apple II
+Plus**), with its settings, what it runs, and its cards and disks; the note that follows
+offers to rename it or add a description. Filled, it is saved as it is, and clicking it
+shows it in the **Favorites** view. Broken, it was saved but its settings, cards or
+disks have changed since, and clicking it updates the favorite. Hovering the machine
+says which favorite it is and what changed.
+
+The **Favorites** view lists them with their descriptions, marking the one the Machine
+view shows. Clicking a favorite sets it up off in the Machine and Drives views, and its
+▶ starts it; Start Machine and Switch Machine list favorites first. Its menu edits its
+description, renames it, updates it from the Machine view, and removes it. Favorites
+live in the `retrocore.favorites` setting: in your user settings they are in every
+workspace, and **Share with Workspace** moves one into the workspace's settings,
+shared with the project, with paths inside the workspace written as
+`${workspaceFolder}/...`.
 
 On the IIe, a free slot's **Add Card** button puts a Disk II controller there
 (16-sector, or 13-sector for DOS 3.2), even while the machine runs: `PR#5` boots it,
@@ -1266,9 +1306,9 @@ the disks and tapes you insert, eject or write-protect come back the next time y
 launch the same configuration, by its `name`. launch.json stays as written: it sets
 up the first launch, and changing one of its hardware or media options (such as
 `diskImage`, `dos`, `model` or `mockingboard`) starts that configuration afresh.
-**Retrocore: Reset Saved Machine** (also on the view's **...** menu) does the same by
+**Retrocore: Reset Saved Machine** (also on the Machine view's **...** menu) does the same by
 hand. A disk a `dos` launch builds, and a tape being recorded, are not remembered;
-the launch makes them again. Each device shows its media, its
+the launch makes them again. Each drive shows its media, its
 track, side and sector or its tape position, whether it is write-protected or
 changed, and whether it is seeking, reading or writing. Expanding a device lists
 its state and what it is (its controller, formats and geometry). Its inline
@@ -1278,7 +1318,7 @@ Image** (the disk icon on a changed drive) replaces the image it came from, afte
 asking, and **Save Disk As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po`.
 
 [Devices.md](../docs/Devices.md) describes the device model and the
-`retro/devices` and `retro/device` requests behind the view.
+`retro/devices` and `retro/device` requests behind the views.
 
 ## Themes and optional colors
 

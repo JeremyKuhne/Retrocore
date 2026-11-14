@@ -29,7 +29,7 @@ function activeRetrocore(): vscode.DebugSession {
     return session;
 }
 
-// The memory row's value in the Retro Devices list, such as 48 KB.
+// The memory row's value in the Machine view, such as 48 KB.
 async function memoryRow(session: vscode.DebugSession): Promise<string | undefined> {
     const devices = await session.customRequest("retro/devices") as { hardware?: { id: string; value: string }[] };
     return devices.hardware?.find(row => row.id === "memory")?.value;

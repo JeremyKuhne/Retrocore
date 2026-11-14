@@ -459,7 +459,9 @@ export const machines: readonly Machine[] = [
         detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
         configuration: { machine: "altair" },
         diskFormats: [],
-        tapeFormats: ["tap"],
+        // A tape alone cannot start an Altair, which needs a bootstrap keyed in to read it, so tapes go in through
+        // Retro Devices or a launch's cassette option instead.
+        tapeFormats: [],
         basicDialects: [],
         dos: false,
         choices: [

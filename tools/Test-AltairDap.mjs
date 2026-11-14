@@ -293,6 +293,13 @@ try {
     let media = await request("retro/media", { device: "cassette", action: "record", path: tape });
     assert.equal(media.cassette.recording, true);
     assert.equal(media.cassette.motor, true);
+    // A tape that cannot be read, or a recording with nowhere to go, is refused before the recording comes out.
+    const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.tap");
+    await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
+    const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(recorder.media?.label, resolve(tape), "the recording is still in");
+    assert.equal(recorder.activity, "writing");
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
@@ -309,11 +316,15 @@ try {
     phase("playing the tape");
     writeFileSync(source, playing.join("\n"));
     events.length = 0;
-    await request("launch", { machine: "altair", source, cassette: tape, stopOnEntry: false, speed: "max" });
+    // It stops on entry, as a relaunch runs as soon as it is answered: otherwise the program could read the four bytes
+    // and halt before the breakpoint is set.
+    await request("launch", { machine: "altair", source, cassette: tape, stopOnEntry: true, speed: "max" });
     await request("setExceptionBreakpoints", { filters: [] });
     const end = playing.findIndex(line => line.startsWith("Done:")) + 1;
     await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: end }] });
     await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await request("evaluate", { expression: "BC" })).result, "$5441 (21569)", "T and A");
     assert.equal((await request("evaluate", { expression: "DE" })).result, "$5045 (20549)", "P and E");

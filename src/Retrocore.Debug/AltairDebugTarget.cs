@@ -411,10 +411,16 @@ internal sealed class AltairDebugTarget : IDebugTarget
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (AltairCassette cassette, "record"):
-                EjectCassette();
+                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
                 string full = Path.GetFullPath(
                     path ?? throw new ArgumentException("path is required, for saving the recording."));
 
+                if (!Directory.Exists(Path.GetDirectoryName(full)))
+                {
+                    throw new ArgumentException($"The folder for {full} does not exist.");
+                }
+
+                EjectCassette();
                 cassette.Record(full);
                 _recordingPath = full;
                 break;
@@ -451,14 +457,18 @@ internal sealed class AltairDebugTarget : IDebugTarget
         return MediaState();
     }
 
+    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
+    // recording reinserted from its own path is saved first, so the tape that goes in is the one just recorded.
     private void Insert(string path)
     {
-        EjectCassette();
         string full = Path.GetFullPath(path);
         AltairCassette drive = _machine.Bus.Cassette
             ?? throw new InvalidOperationException("This Altair has no 88-ACR.");
 
-        drive.Play(File.ReadAllBytes(full), full);
+        if (string.Equals(full, _recordingPath, StringComparison.OrdinalIgnoreCase)) { EjectCassette(); }
+        byte[] tape = File.ReadAllBytes(full);
+        EjectCassette();
+        drive.Play(tape, full);
     }
 
     // A recording is saved to its path when it is ejected.

@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Isa;
+using Retrocore.Machines;
 using Retrocore.Machines.Devices;
 
 namespace Retrocore.Debug;
@@ -326,6 +327,20 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="address">The address.</param>
     /// <param name="value">The value.</param>
     void Poke(ushort address, byte value);
+
+    /// <summary>
+    ///  Gets whether <see cref="Poke"/> can write an address now: whether it reads RAM rather than ROM, I/O or
+    ///  nothing.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>Whether a write would succeed.</returns>
+    bool CanPoke(ushort address);
+
+    /// <summary>
+    ///  Gets the characters the machine's text screen shows for its bytes, for memory views; null when the
+    ///  debugger cannot draw them.
+    /// </summary>
+    ICharacterSet? CharacterSet => null;
 
     /// <summary>
     ///  Reads memory through an Apple III extended address, as an indirect access through zero page with that X-byte

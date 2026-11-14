@@ -220,6 +220,9 @@ internal sealed partial class SourceMapModule : IDebugModule
     }
 
     /// <inheritdoc/>
+    public IEnumerable<(string Name, long Value)> Labels => _labels;
+
+    /// <inheritdoc/>
     public bool TryResolve(string name, out long value) => _symbols.TryGetValue(name.TrimStart('.'), out value);
 
     // A location and the macro and include lines it came from.

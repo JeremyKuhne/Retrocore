@@ -12,10 +12,20 @@ export interface ParsedReference {
     address: number;
 }
 
-/** One byte of a find pattern: the bits of a byte to compare (0 for a wildcard) and what they must be. */
+/**
+ * One byte of a find pattern: the bits of a byte to compare (0 for a wildcard) and what they must be, or for text in
+ * the machine's character set, every code that shows the character.
+ */
 export interface PatternByte {
     value: number;
     mask: number;
+    codes?: boolean[];
+}
+
+/** A label the debugger gives an address. */
+export interface MemoryLabel {
+    address: number;
+    name: string;
 }
 
 /** A row of the inspector: what a value is and how it reads. */
@@ -41,11 +51,12 @@ export function parseReference(reference: string): ParsedReference | undefined {
 }
 
 /**
- * Reads a find pattern: hex bytes, with ?? for any byte, such as "A9 ?? 20", or text in quotes, such as "HELLO",
- * whose characters match with bit 7 clear or set, as the Apple II keeps text with it set. Returns a message for
- * a pattern it cannot read.
+ * Reads a find pattern: hex bytes, with ?? for any byte, such as "A9 ?? 20", or text in quotes, such as "HELLO".
+ * Text matches every code the machine's character set shows as each character, given the set as one character a
+ * code; without it, ASCII with bit 7 clear or set, as the Apple II keeps text with it set. Returns a message for a
+ * pattern it cannot read.
  */
-export function parsePattern(text: string): PatternByte[] | string {
+export function parsePattern(text: string, characters?: string): PatternByte[] | string {
     const trimmed = text.trim();
     if (trimmed.length === 0) return "Type bytes such as A9 ?? 20, or text in quotes.";
     const quoted = /^(["'])(.*)\1$/.exec(trimmed);
@@ -53,6 +64,12 @@ export function parsePattern(text: string): PatternByte[] | string {
         if (quoted[2].length === 0) return "The text is empty.";
         const bytes: PatternByte[] = [];
         for (const character of quoted[2]) {
+            if (characters !== undefined) {
+                const codes = Array.from(characters, shown => shown === character);
+                if (!codes.includes(true)) return `The machine has no ${character} character.`;
+                bytes.push({ value: 0, mask: 0, codes });
+                continue;
+            }
             const code = character.charCodeAt(0);
             if (code > 0x7F) return `${character} is not ASCII.`;
             bytes.push({ value: code, mask: 0x7F });
@@ -87,7 +104,9 @@ export function findPattern(bytes: Uint8Array, readable: Uint8Array, pattern: Pa
     const matches = (start: number): boolean => {
         for (let index = 0; index < pattern.length; index++) {
             const offset = start + index;
-            if (readable[offset] !== 1 || (bytes[offset] & pattern[index].mask) !== (pattern[index].value & pattern[index].mask)) return false;
+            const part = pattern[index];
+            if (readable[offset] !== 1) return false;
+            if (part.codes !== undefined ? !part.codes[bytes[offset]] : (bytes[offset] & part.mask) !== (part.value & part.mask)) return false;
         }
         return true;
     };
@@ -101,29 +120,72 @@ export function findPattern(bytes: Uint8Array, readable: Uint8Array, pattern: Pa
 }
 
 /**
- * The character the text column shows for a byte: its low seven bits when printable, so the Apple II's text, kept
- * with bit 7 set, reads as text, or a dot.
+ * The character a byte shows as text, or a dot: from the machine's character set, given as one character a code
+ * with NUL for graphics; without it, the low seven bits when printable, so the Apple II's text, kept with bit 7 set,
+ * reads as text.
  */
-export function textOf(value: number): string {
+export function textOf(value: number, characters?: string): string {
+    if (characters !== undefined) {
+        const shown = characters.charAt(value);
+        return shown >= " " && shown !== "\x7F" ? shown : ".";
+    }
     const code = value & 0x7F;
     return code >= 0x20 && code < 0x7F ? String.fromCharCode(code) : ".";
 }
 
 /**
- * The byte typing a character in the text column writes: the character's code, keeping the old byte's bit 7, so
- * text stays as the column showed it. Undefined for a character that has no seven-bit code.
+ * The byte typing a character in the text column writes, so text stays as the column showed it. With the machine's
+ * character set, a code that shows the character: its ASCII code with the old byte's bit 7, unless that looks
+ * different from the code that also keeps the old byte's bit 6, as the Apple II's inverse and flashing text do;
+ * then that one. Without the set, the character's code with the old byte's bit 7. Undefined for a character the
+ * machine cannot show.
  */
-export function typedText(character: string, old: number): number | undefined {
+export function typedText(character: string, old: number, characters?: string, looksSame?: (first: number, second: number) => boolean): number | undefined {
     const code = character.charCodeAt(0);
-    if (character.length !== 1 || code < 0x20 || code > 0x7E) return undefined;
+    if (character.length !== 1) return undefined;
+    if (characters !== undefined) {
+        const keepHigh = (old & 0x80) | (code & 0x7F), keepBoth = (old & 0xC0) | (code & 0x3F);
+        const high = characters.charAt(keepHigh) === character, both = characters.charAt(keepBoth) === character;
+        if (high && both) return looksSame === undefined || looksSame(keepHigh, keepBoth) ? keepHigh : keepBoth;
+        if (high) return keepHigh;
+        if (both) return keepBoth;
+        let any: number | undefined;
+        for (let value = 0; value < characters.length; value++) {
+            if (characters.charAt(value) !== character) continue;
+            if ((value & 0x80) === (old & 0x80)) return value;
+            any ??= value;
+        }
+        return any;
+    }
+    if (code < 0x20 || code > 0x7E) return undefined;
     return (old & 0x80) | code;
+}
+
+/**
+ * Names an offset by the closest label at or before it, such as "COUT" or "COUT+3", given the labels in address
+ * order; undefined when none is within a page before it.
+ */
+export function labelOf(labels: MemoryLabel[], offset: number): string | undefined {
+    let low = 0, high = labels.length - 1, found = -1;
+    while (low <= high) {
+        const middle = (low + high) >> 1;
+        if (labels[middle].address <= offset) {
+            found = middle;
+            low = middle + 1;
+        } else {
+            high = middle - 1;
+        }
+    }
+    if (found < 0 || offset - labels[found].address > 0xFF) return undefined;
+    const distance = offset - labels[found].address;
+    return distance === 0 ? labels[found].name : `${labels[found].name}+${distance}`;
 }
 
 /**
  * What the bytes at an offset are, for the inspector: as a byte, signed and unsigned, binary and text, then as a
  * word in each byte order. Rows needing bytes past the readable ones are left out.
  */
-export function inspect(bytes: Uint8Array, readable: Uint8Array, offset: number): InspectorRow[] {
+export function inspect(bytes: Uint8Array, readable: Uint8Array, offset: number, characters?: string): InspectorRow[] {
     if (readable[offset] !== 1) return [{ label: "Byte", value: "unreadable" }];
     const byte = bytes[offset];
     const rows: InspectorRow[] = [
@@ -131,7 +193,12 @@ export function inspect(bytes: Uint8Array, readable: Uint8Array, offset: number)
         { label: "Unsigned", value: String(byte) },
         { label: "Signed", value: String(byte > 0x7F ? byte - 0x100 : byte) },
         { label: "Binary", value: `%${byte.toString(2).padStart(8, "0").replace(/^(....)/, "$1 ")}` },
-        { label: "Text", value: (byte & 0x7F) < 0x20 || (byte & 0x7F) === 0x7F ? "none" : `${textOf(byte)}${byte > 0x7F ? " (bit 7 set)" : ""}` }
+        {
+            label: "Text",
+            value: characters !== undefined
+                ? characters.charAt(byte) < " " ? "graphics" : textOf(byte, characters)
+                : (byte & 0x7F) < 0x20 || (byte & 0x7F) === 0x7F ? "none" : `${textOf(byte)}${byte > 0x7F ? " (bit 7 set)" : ""}`
+        }
     ];
     if (offset + 1 < bytes.length && readable[offset + 1] === 1) {
         const little = byte | (bytes[offset + 1] << 8);
@@ -143,18 +210,18 @@ export function inspect(bytes: Uint8Array, readable: Uint8Array, offset: number)
     return rows;
 }
 
-/** The selection as text to copy: hex bytes separated by spaces, or the text column's characters. */
-export function copyText(bytes: Uint8Array, readable: Uint8Array, start: number, end: number, asText: boolean): string {
+/** The selection as text to copy: hex bytes separated by spaces, or the characters the bytes show. */
+export function copyText(bytes: Uint8Array, readable: Uint8Array, start: number, end: number, asText: boolean, characters?: string): string {
     const parts: string[] = [];
     for (let offset = start; offset <= end; offset++) {
         if (readable[offset] !== 1) {
             parts.push(asText ? "." : "??");
         } else {
-            parts.push(asText ? textOf(bytes[offset]) : hex(bytes[offset], 2));
+            parts.push(asText ? textOf(bytes[offset], characters) : hex(bytes[offset], 2));
         }
     }
     return parts.join(asText ? "" : " ");
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, inspect, copyText];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText];

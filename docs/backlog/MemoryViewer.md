@@ -1,7 +1,10 @@
 # Backlog: a memory viewer and editor
 
-Status: **step 1 built** ([Memory.md](../Memory.md#retrocore-memory)), with the debug host's `retro/memory/read`
-reading past a bank's gaps. Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file
+Status: **steps 1 and 2 built** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
+`retro/memory/read`, `retro/memory/labels` and `retro/memory/characters`. Step 2 left for later: **Align rows to
+labels**; the Apple-1's, Apple III's and CoCo 3's character sets, which show as ASCII until their video classes draw
+them; and constants such as zero page equates, which are not labels, so `CH` does not yet name $24 (step 5's
+regions and doc comments cover those). Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file
 system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor
 as its baseline, that shows assembly at any address and says what the bytes under the cursor are.

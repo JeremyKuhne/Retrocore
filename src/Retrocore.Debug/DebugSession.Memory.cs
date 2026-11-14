@@ -119,27 +119,15 @@ internal sealed partial class DebugSession
         }
 
         byte[] data = new byte[count];
-        List<JsonNode?> unreadable = [];
-        int? gap = null;
+        MemoryRuns unreadable = new();
+        MemoryRuns readOnly = new();
         for (int index = 0; index < count; index++)
         {
-            if (MemoryByte(bank, address + offset + index) is not { } value)
-            {
-                gap ??= index;
-                continue;
-            }
-
-            data[index] = value;
-            if (gap is { } from)
-            {
-                unreadable.Add(new JsonObject { ["offset"] = from, ["count"] = index - from });
-                gap = null;
-            }
-        }
-
-        if (gap is { } last)
-        {
-            unreadable.Add(new JsonObject { ["offset"] = last, ["count"] = count - last });
+            long at = address + offset + index;
+            byte? value = MemoryByte(bank, at);
+            data[index] = value ?? 0;
+            unreadable.Add(index, value is null);
+            readOnly.Add(index, value is not null && (bank is null ? !Target.CanPoke((ushort)at) : bank.Poke is null));
         }
 
         Track(reference, bank, address, offset, count);
@@ -147,7 +135,92 @@ internal sealed partial class DebugSession
         {
             ["address"] = $"0x{address + offset:X4}",
             ["data"] = Convert.ToBase64String(data),
-            ["unreadable"] = unreadable.ToJsonArray()
+            ["unreadable"] = unreadable.End(count),
+            ["readOnly"] = readOnly.End(count)
+        };
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/labels: the labels in a memory view's space, from the debug modules that apply at each
+    ///  address now, for Retrocore Memory's gutter and inspector.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
+    ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
+    ///   and within a module the first name in order.
+    ///  </para>
+    /// </remarks>
+    private JsonObject MemoryLabels(JsonObject args)
+    {
+        MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        SortedDictionary<int, string> labels = [];
+        foreach (IDebugModule module in _debug.Modules)
+        {
+            foreach ((string name, long value) in module.Labels)
+            {
+                if (value is < 0 or > 0xFFFF || labels.ContainsKey((int)value)) { continue; }
+                ushort address = (ushort)value;
+                if (bank is not null && bank.AreaOf(address) is null) { continue; }
+                if (DebugInfo.Active(module, memory, address) && module.Position(memory, address) is not null)
+                {
+                    labels[address] = name;
+                }
+            }
+        }
+
+        return new JsonObject
+        {
+            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
+            {
+                ["address"] = pair.Key,
+                ["name"] = pair.Value
+            }).ToJsonArray()
+        };
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/characters: the machine's character set as its screen shows it now, so Retrocore
+    ///  Memory's text column draws the machine's own characters.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   <c>glyphs</c> holds each code's rows in turn, one byte a row with the leftmost pixel in bit 7, and
+    ///   <c>flashed</c> the same for the other phase of flashing characters, when there are any. <c>text</c> is the
+    ///   character each code shows, NUL for graphics. A machine the debugger cannot draw gives no character set.
+    ///  </para>
+    /// </remarks>
+    private JsonObject MemoryCharacters()
+    {
+        if (Target.CharacterSet is not { } characters) { return []; }
+        int width = Math.Min(characters.CharacterWidth, 8);
+        int height = characters.CharacterHeight;
+        byte[] glyphs = new byte[256 * height];
+        byte[] flashed = new byte[256 * height];
+        char[] text = new char[256];
+        for (int code = 0; code < 256; code++)
+        {
+            text[code] = characters.Character((byte)code);
+            for (int line = 0; line < height; line++)
+            {
+                for (int pixel = 0; pixel < width; pixel++)
+                {
+                    byte bit = (byte)(0x80 >> pixel);
+                    int row = (code * height) + line;
+                    if (characters.IsLit((byte)code, line, pixel, flashed: false)) { glyphs[row] |= bit; }
+                    if (characters.IsLit((byte)code, line, pixel, flashed: true)) { flashed[row] |= bit; }
+                }
+            }
+        }
+
+        return new JsonObject
+        {
+            ["width"] = width,
+            ["height"] = height,
+            ["glyphs"] = Convert.ToBase64String(glyphs),
+            ["flashed"] = glyphs.AsSpan().SequenceEqual(flashed) ? null : Convert.ToBase64String(flashed),
+            ["text"] = new string(text)
         };
     }
 

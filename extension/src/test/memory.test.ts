@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { copyText, findPattern, inspect, parsePattern, parseReference, textOf, typedText, type PatternByte } from "../memoryModel";
+import { copyText, findPattern, inspect, labelOf, parsePattern, parseReference, textOf, typedText, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -61,6 +61,56 @@ test("the inspector reads a byte and the words in each order", () => {
     assert.equal(rows["Word, high first"], "$EDFD  60925  -4611");
     assert.equal(inspect(bytes, readable, 1).length, 5, "no word past the end");
     assert.deepEqual(inspect(bytes, Uint8Array.from([2, 1]), 0), [{ label: "Byte", value: "unreadable" }]);
+});
+
+// The Apple II's character set as the debugger describes it: inverse below $40, flashing to $7F, then normal, with
+// lowercase at $E0.
+function appleText(): string {
+    let text = "";
+    for (let code = 0; code < 256; code++) {
+        const glyph = code >= 0x40 && code < 0x80 ? (code & 0x3F) | 0x80 : code;
+        const low = glyph & 0x7F;
+        text += String.fromCharCode((low & 0x60) === 0 ? low + 0x40 : low);
+    }
+    return text;
+}
+
+test("with the machine's characters, typing keeps the byte's style and find matches any style", () => {
+    const apple = appleText();
+    assert.equal(textOf(0x01, apple), "A");
+    assert.equal(textOf(0xE1, apple), "a");
+    // Inverse, flashing and normal text each look different.
+    const style = (code: number) => code < 0x40 ? 0 : code < 0x80 ? 1 : 2;
+    const looksSame = (first: number, second: number) => style(first) === style(second);
+    assert.equal(typedText("A", 0xA0, apple, looksSame), 0xC1, "normal text stays normal");
+    assert.equal(typedText("A", 0x20, apple, looksSame), 0x01, "inverse stays inverse");
+    assert.equal(typedText("A", 0x60, apple, looksSame), 0x41, "flashing stays flashing");
+    assert.equal(typedText("A", 0x20, apple, () => true), 0x41, "where both look the same, the ASCII code");
+    assert.equal(typedText("a", 0xA0, apple, looksSame), 0xE1);
+    assert.equal(typedText("é", 0xA0, apple, looksSame), undefined);
+    const graphics = apple.slice(0, 0x80) + "\0".repeat(0x80);
+    assert.equal(textOf(0x80, graphics), ".", "graphics show as a dot");
+    const graphicsRows = inspect(Uint8Array.of(0x80), Uint8Array.of(1), 0, graphics);
+    assert.equal(graphicsRows.find(row => row.label === "Text")?.value, "graphics");
+    assert.equal(typedText("A", 0x80, graphics), 0x01, "a code from the other half when this half has none");
+
+    const pattern = parsePattern('"HI"', apple) as PatternByte[];
+    const bytes = Uint8Array.from([0x00, 0x08, 0x09, 0x00, 0xC8, 0xC9]);
+    const readable = new Uint8Array(bytes.length).fill(1);
+    assert.equal(findPattern(bytes, readable, pattern, 0, false), 1, "inverse HI");
+    assert.equal(findPattern(bytes, readable, pattern, 2, false), 4, "normal HI");
+    assert.equal(parsePattern('"~"', graphics.replace("~", "\0")), "The machine has no ~ character.");
+    assert.equal(copyText(bytes, readable, 1, 2, true, apple), "HI");
+    assert.equal(Object.fromEntries(inspect(bytes, readable, 1, apple).map(row => [row.label, row.value]))["Text"], "H");
+});
+
+test("an address is named by the closest label before it", () => {
+    const labels = [{ address: 0x0300, name: "START" }, { address: 0x0310, name: "MSG" }];
+    assert.equal(labelOf(labels, 0x0300), "START");
+    assert.equal(labelOf(labels, 0x0305), "START+5");
+    assert.equal(labelOf(labels, 0x0320), "MSG+16");
+    assert.equal(labelOf(labels, 0x02FF), undefined);
+    assert.equal(labelOf(labels, 0x0411), undefined, "too far past any label");
 });
 
 test("copying gives hex or text, with unreadable bytes marked", () => {
@@ -169,6 +219,84 @@ test("the page reads what it shows, writes a byte at its second hex digit, and u
     await page.settle();
     assert.equal(page.elements.get("status")!.textContent, "$0400 reads the system ROM now, not RAM.");
     assert.match(page.elements.get("inspector")!.innerHTML, /\$A0/);
+});
+
+// Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.
+function answer(page: ReturnType<typeof runPage>, fill: (offset: number) => number, readOnly: (offset: number) => boolean = () => false): void {
+    for (const sent of page.posted.splice(0)) {
+        if (sent.type === "read") {
+            const offset = sent.offset as number, count = sent.count as number;
+            const data = Buffer.alloc(count);
+            for (let index = 0; index < count; index++) data[index] = fill(offset + index);
+            const runs = [];
+            for (let index = 0; index < count; index++) {
+                if (readOnly(offset + index)) runs.push({ offset: index, count: 1 });
+            }
+            page.send({ type: "reply", id: sent.id, result: { data: data.toString("base64"), unreadable: [], readOnly: runs } });
+        } else if (sent.type === "labels") {
+            page.send({ type: "reply", id: sent.id, result: { labels: [{ address: 0x0400, name: "TEXT_PAGE" }] } });
+        } else if (sent.type === "characters") {
+            page.send({ type: "reply", id: sent.id, result: {} });
+        }
+    }
+}
+
+test("labels show in the gutter and the inspector", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    assert.match(page.elements.get("rows")!.innerHTML, /class="lab" style="width:9ch" title="TEXT_PAGE">TEXT_PAGE</);
+    assert.match(page.elements.get("rows")!.innerHTML, /class=" lb" data-o="1024" title="TEXT_PAGE"/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /\$0402 · TEXT_PAGE\+2/);
+});
+
+test("bytes that are not RAM are shaded and refuse typing", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    answer(page, () => 0, offset => offset >= 0x0400 && offset < 0x0410);
+    await page.settle();
+    page.posted.splice(0);
+    assert.match(page.elements.get("rows")!.innerHTML, /class=" ro[^"]*" data-o="1024"/);
+    page.key("1");
+    await page.settle();
+    assert.equal(page.posted.filter(message => message.type === "write").length, 0);
+    assert.equal(page.elements.get("status")!.textContent, "$0400 is not RAM now, so it cannot be written.");
+});
+
+test("a stop colors the bytes that changed since the stop before", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
+
+    page.send({ type: "stopped" });
+    for (let round = 0; round < 3; round++) {
+        answer(page, offset => offset === 0x0400 ? 0xC1 : 0xA0);
+        await page.settle();
+    }
+    assert.match(page.elements.get("rows")!.innerHTML, /class=" chg lb[^"]*" data-o="1024"/);
+    assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /data-o="1025"[^>]*chg|chg[^"]*" data-o="1025"/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /At the last stop.*\$A0/);
+
+    // A read between stops, such as after a memory event, keeps what the stop found.
+    page.send({ type: "changed" });
+    answer(page, offset => offset === 0x0400 ? 0xC1 : 0xA0);
+    await page.settle();
+    assert.match(page.elements.get("rows")!.innerHTML, /chg/);
+
+    // The next stop compares with this one.
+    page.send({ type: "stopped" });
+    for (let round = 0; round < 3; round++) {
+        answer(page, offset => offset === 0x0400 ? 0xC1 : 0xA0);
+        await page.settle();
+    }
+    assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
 });
 
 test("a read-only bank refuses typing before writing", async () => {

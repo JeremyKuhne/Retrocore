@@ -239,7 +239,10 @@ export async function run(): Promise<void> {
         await openMemory(model, "0x3C00");
         const memoryTab = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
         assert.ok(memoryTab instanceof vscode.TabInputCustom && memoryTab.viewType === "retrocore.memory", "Retrocore Memory opens");
-        type MemoryState = { cursor: number; status: string; inspector: { label: string; value: string }[] };
+        type MemoryState = {
+            cursor: number; status: string; label: string | null; text: string; glyphs: boolean; readOnly: boolean;
+            inspector: { label: string; value: string }[];
+        };
         const drive = async (actions: unknown[]): Promise<MemoryState> => {
             for (let attempt = 0; ; attempt++) {
                 try {
@@ -259,9 +262,16 @@ export async function run(): Promise<void> {
         assert.equal(await videoByte(), 0x2A, "undo writes the byte back");
         memoryState = await drive([{ goto: 0x3C00 }, { pane: "text" }, { type: "A" }]);
         assert.equal(await videoByte(), 0x41);
-        memoryState = await drive([{ goto: 0x3C00 }]);
+        memoryState = await drive([{ extras: true }, { goto: 0x3C00 }]);
         assert.equal(memoryState.inspector.find(row => row.label === "Byte")?.value, "$41");
-        memoryState = await drive([{ goto: 0x0000 }, { pane: "hex" }, { type: "00" }]);
+        assert.equal(memoryState.glyphs, true, "the text column draws the Model I's characters");
+        assert.equal(memoryState.text, "A");
+        memoryState = await drive([{ goto: 0x7002 }]);
+        assert.equal(memoryState.label, "START+2", "the program's labels name its bytes");
+        memoryState = await drive([{ goto: 0x0000 }]);
+        assert.equal(memoryState.label, "RESET", "and the ROM's, from the SDK's source");
+        assert.equal(memoryState.readOnly, true);
+        memoryState = await drive([{ pane: "hex" }, { type: "00" }]);
         assert.match(memoryState.status, /not RAM/, "ROM refuses the write");
         await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
 

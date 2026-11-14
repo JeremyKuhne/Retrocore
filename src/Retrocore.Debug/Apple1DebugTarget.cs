@@ -280,13 +280,16 @@ internal sealed partial class Apple1DebugTarget : IDebugTarget
     /// <exception cref="ArgumentException">The address is not RAM.</exception>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) != Apple1MemoryArea.Ram)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) == Apple1MemoryArea.Ram;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

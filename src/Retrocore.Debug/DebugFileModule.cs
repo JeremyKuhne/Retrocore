@@ -39,6 +39,10 @@ internal sealed class DebugFileModule(SymbolTable symbols, Enum? area = null) : 
     public string? Label(ushort address) => symbols.Label(address);
 
     /// <inheritdoc/>
+    public IEnumerable<(string Name, long Value)> Labels =>
+        symbols.Labels.Select(pair => (pair.Key, pair.Value));
+
+    /// <inheritdoc/>
     public DocumentationSet Documentation => field ??= DocumentationSet.Create(
         DebugDocumentation.Parse(symbols.Paths),
         symbols.Labels);

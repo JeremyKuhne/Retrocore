@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Retrocore Memory's page: a hex and text grid over a whole 64K space, with go to, find, copy, editing with undo
-// and an inspector. The page asks the extension for bytes and writes; the extension asks the debugger.
+// Retrocore Memory's page: a hex and text grid over a whole 64K space, with labels, the machine's own characters,
+// read-only shading, changes since the last stop, go to, find, copy, editing with undo and an inspector. The page
+// asks the extension for bytes, labels, characters and writes; the extension asks the debugger.
 
 import { pageFunctions } from "./memoryModel";
 
@@ -11,7 +12,7 @@ import { pageFunctions } from "./memoryModel";
 export function memoryEditorHtml(nonce: string): string {
     return `<!doctype html><html><head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'nonce-${nonce}'">
 <style>
 [hidden]{display:none!important}
 html,body{height:100%}
@@ -20,6 +21,7 @@ body{margin:0;display:flex;flex-direction:column;background:var(--vscode-editor-
 .bar label{display:flex;gap:4px;align-items:center;white-space:nowrap}
 .bar .title{font-weight:600;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 input{font-family:var(--vscode-editor-font-family);font-size:12px;padding:2px 4px;border-radius:2px;width:150px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent)}
+input[type=checkbox]{width:auto;margin:0}
 input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 .main{flex:1;display:flex;min-height:0}
 #grid{flex:none;overflow:auto;position:relative;outline:none;font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre;user-select:none;cursor:text}
@@ -27,6 +29,12 @@ input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #rows{position:absolute;top:0;left:0;right:0}
 .row{height:20px;line-height:20px;padding:0 10px;width:max-content}
 .addr{display:inline-block;width:6ch;color:var(--vscode-editorLineNumber-foreground)}
+.lab{display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:top;margin-right:1ch;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
+.lab.in{opacity:.6}
+.hex span.lb{background-image:linear-gradient(135deg,var(--vscode-symbolIcon-functionForeground,var(--vscode-focusBorder)) 5px,transparent 5px)}
+.ro{background-color:color-mix(in srgb,var(--vscode-editor-foreground) 8%,transparent)}
+.chg{background-color:var(--vscode-debugView-valueChangedHighlight,rgba(86,156,214,.35))}
+.txt.g span{height:16px;vertical-align:middle;background-size:100% 100%;background-repeat:no-repeat;image-rendering:pixelated}
 .hex span{display:inline-block;width:3ch;text-align:left}
 .hex span.mid{margin-left:1ch}
 .txt{margin-left:2ch}
@@ -53,6 +61,7 @@ body.narrow .item .k{width:auto}
 </style></head>
 <body>
 <div class="bar"><span class="title" id="title">Memory</span>
+<label id="machineLabel" title="Draw the text column in the machine's own characters, or as ASCII" hidden><input type="checkbox" id="machineText" checked> Machine text</label>
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
 <label title="Hex bytes with ?? for any byte, such as A9 ?? 20, or text in quotes; Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20 or &quot;TEXT&quot;"></label>
 </div>
@@ -72,6 +81,32 @@ const pages = new Uint8Array(SIZE / PAGE);
 const grid = document.getElementById("grid"), rows = document.getElementById("rows"), inspector = document.getElementById("inspector");
 const statusLine = document.getElementById("status"), gotoBox = document.getElementById("goto"), findBox = document.getElementById("find");
 document.getElementById("spacer").style.height = (ROWS * LINE) + "px";
+// 1 where a write cannot reach now, such as ROM.
+const readOnly = new Uint8Array(SIZE);
+// Changes since the last stop: each byte as first read after it, the stop each page was last compared at, which
+// bytes differ and what they were.
+const seen = new Uint8Array(SIZE), seenStop = new Int32Array(SIZE / PAGE).fill(-1);
+const changed = new Uint8Array(SIZE), was = new Uint8Array(SIZE);
+let stops = 0;
+// The labels in address order and by address, and how wide the gutter shows them.
+let labels = [], labelAt = new Map(), labelWidth = 0;
+// The machine's character set: the character each code shows, and whether any flash; null to show ASCII.
+// The set as the debugger gave it, whether the text column uses it (the page remembers), and the set in effect.
+let machineSet = null, machineText = true, charset = null, glyphStyle = null, flashTimer = null;
+try {
+    const saved = vscode.getState();
+    if (saved && typeof saved.machineText === "boolean") machineText = saved.machineText;
+} catch {
+    // A page without saved state uses the machine's characters.
+}
+const machineBox = document.getElementById("machineText"), machineLabel = document.getElementById("machineLabel");
+
+// Puts the machine's characters in effect, or ASCII, as the toggle says; the toggle shows when there is a set.
+function applyText() {
+    charset = machineText ? machineSet : null;
+    machineLabel.hidden = machineSet === null;
+    machineBox.checked = machineText;
+}
 let info = { bank: null, label: "", readOnly: false };
 let cursor = 0, anchor = 0, pane = "hex", nibble = null, ended = false, dragging = false, generation = 0;
 const undoStack = [], redoStack = [];
@@ -132,11 +167,111 @@ async function read(offset, count) {
         for (const gap of result.unreadable) {
             for (let index = 0; index < gap.count; index++) readable[offset + gap.offset + index] = 2;
         }
+        readOnly.fill(0, offset, offset + count);
+        for (const run of result.readOnly ?? []) readOnly.fill(1, offset + run.offset, offset + run.offset + run.count);
+        compare(offset, count);
         for (let page = first; page < last; page++) pages[page] = loading === generation ? 1 : 0;
     } catch (error) {
         for (let page = first; page < last; page++) pages[page] = 0;
         status(String(error.message || error), true);
         return;
+    }
+    render();
+}
+
+// Notes which bytes of freshly read pages changed since the last stop: a page compares once each stop, against
+// what it held when it was first read after the stop before.
+function compare(offset, count) {
+    for (let page = offset / PAGE; page < (offset + count) / PAGE; page++) {
+        if (seenStop[page] === stops) continue;
+        for (let at = page * PAGE; at < (page + 1) * PAGE; at++) {
+            const differs = seenStop[page] >= 0 && readable[at] === 1 && seen[at] !== bytes[at];
+            changed[at] = differs ? 1 : 0;
+            if (differs) was[at] = seen[at];
+            seen[at] = bytes[at];
+        }
+        seenStop[page] = stops;
+    }
+}
+
+// Asks for the labels and the character set, which can change at each stop as banks switch.
+async function loadExtras() {
+    try {
+        const result = await request({ type: "labels" });
+        labels = result.labels;
+        labelAt = new Map(labels.map(label => [label.address, label.name]));
+        labelWidth = Math.min(16, labels.reduce((widest, label) => Math.max(widest, label.name.length), 0));
+        render();
+    } catch {
+        // Labels are extra; the bytes show without them.
+    }
+    try {
+        useCharacters(await request({ type: "characters" }));
+    } catch {
+        // As are the machine's characters.
+    }
+}
+
+// The glyphs' height in the text column; their width keeps the machine's proportions.
+const GLYPH = 16;
+
+// Draws each code's character from the machine's character generator into a class the text column uses, with the
+// other phase of flashing characters shown while the page's flash class is on.
+function useCharacters(result) {
+    if (result === null || result === undefined || typeof result.text !== "string") {
+        machineSet = null;
+        applyText();
+        render();
+        return;
+    }
+    const width = result.width, height = result.height;
+    const glyphs = decode(result.glyphs), flashed = typeof result.flashed === "string" ? decode(result.flashed) : null;
+    const ink = getComputedStyle(document.body).color;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    const image = (data, code) => {
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = ink;
+        for (let line = 0; line < height; line++) {
+            for (let pixel = 0; pixel < width; pixel++) {
+                if (data[code * height + line] & (0x80 >> pixel)) context.fillRect(pixel, line, 1, 1);
+            }
+        }
+        return canvas.toDataURL();
+    };
+    let css = ".txt.g span{width:" + Math.round(width * GLYPH / height) + "px}";
+    let flashing = false;
+    for (let code = 0; code < 256; code++) {
+        css += ".k" + code + "{background-image:url(" + image(glyphs, code) + ")}";
+        if (flashed === null) continue;
+        const rows = flashed.subarray(code * height, (code + 1) * height);
+        if (rows.every((row, line) => row === glyphs[code * height + line])) continue;
+        css += "body.flash .k" + code + "{background-image:url(" + image(flashed, code) + ")}";
+        flashing = true;
+    }
+    if (glyphStyle === null) {
+        glyphStyle = document.createElement("style");
+        document.head.appendChild(glyphStyle);
+    }
+    glyphStyle.textContent = css;
+    // Two codes look the same when they draw the same rows in each phase.
+    const looksSame = (first, second) => {
+        for (let line = 0; line < height; line++) {
+            if (glyphs[first * height + line] !== glyphs[second * height + line]) return false;
+            if (flashed !== null && flashed[first * height + line] !== flashed[second * height + line]) return false;
+        }
+        return true;
+    };
+    machineSet = { text: result.text, looksSame };
+    applyText();
+    // The Apple II flashes about twice a second.
+    if (flashing && flashTimer === null) flashTimer = setInterval(() => document.body.classList.toggle("flash"), 270);
+    if (!flashing && flashTimer !== null) {
+        clearInterval(flashTimer);
+        flashTimer = null;
+        document.body.classList.remove("flash");
     }
     render();
 }
@@ -179,11 +314,22 @@ function rowHtml(row) {
         const offset = base + index;
         let classes = index === 8 ? "mid" : "";
         if (low !== high && offset >= low && offset <= high) classes += " sel";
-        let shown = "  ", character = " ", textClasses = classes.replace("mid", "");
+        if (readable[offset] === 1 && changed[offset]) classes += " chg";
+        else if (readable[offset] === 1 && readOnly[offset]) classes += " ro";
+        let shown = "  ", character = " ", textClasses = classes.replace("mid", ""), title = "";
+        if (labelAt.has(offset)) {
+            classes += " lb";
+            title = ' title="' + escapeText(labelAt.get(offset)) + '"';
+        }
         if (readable[offset] === 1) {
             shown = hex(bytes[offset], 2);
-            character = escape(textOf(bytes[offset]));
-            if (bytes[offset] > 0x7F) textClasses += " hi";
+            if (charset !== null) {
+                character = "";
+                textClasses += " k" + bytes[offset];
+            } else {
+                character = escape(textOf(bytes[offset]));
+                if (bytes[offset] > 0x7F) textClasses += " hi";
+            }
         } else if (readable[offset] === 2) {
             shown = "··";
             character = "·";
@@ -198,11 +344,23 @@ function rowHtml(row) {
                 classes += " pending";
             }
         }
-        hexPart += '<span class="' + classes + '" data-o="' + offset + '">' + shown + "</span>";
+        hexPart += '<span class="' + classes + '" data-o="' + offset + '"' + title + ">" + shown + "</span>";
         textPart += '<span class="' + textClasses + '" data-o="' + offset + '" data-t="1">' + character + "</span>";
     }
-    return '<div class="row"><span class="addr">' + hex(base, 4) + '</span><span class="hex">' + hexPart
-        + '</span><span class="txt">' + textPart + "</span></div>";
+    let gutter = "";
+    if (labelWidth > 0) {
+        let name = "", inside = false;
+        for (let index = 0; index < ROW && name === ""; index++) {
+            if (labelAt.has(base + index)) {
+                name = labelAt.get(base + index);
+                inside = index > 0;
+            }
+        }
+        gutter = '<span class="lab' + (inside ? " in" : "") + '" style="width:' + labelWidth + 'ch"'
+            + (name === "" ? "" : ' title="' + escapeText(name) + '"') + ">" + escapeText(name) + "</span>";
+    }
+    return '<div class="row"><span class="addr">' + hex(base, 4) + "</span>" + gutter + '<span class="hex">' + hexPart
+        + '</span><span class="txt' + (charset !== null ? " g" : "") + '">' + textPart + "</span></div>";
 }
 
 function render() {
@@ -224,9 +382,14 @@ function where(offset) {
 function showInspector() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
     let html = '<div class="where">' + where(cursor);
+    const name = labelOf(labels, cursor);
+    if (name !== undefined) html += " · " + escapeText(name);
     if (high > low) html += " · " + (high - low + 1) + " bytes, " + where(low) + "-$" + hex(high, 4);
     html += "</div>";
-    for (const row of inspect(bytes, readable, cursor)) {
+    const rows = inspect(bytes, readable, cursor, charset === null ? undefined : charset.text);
+    if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
+    if (readable[cursor] === 1 && readOnly[cursor]) rows.push({ label: "Writes", value: "refused: not RAM now" });
+    for (const row of rows) {
         html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
     }
     inspector.innerHTML = html;
@@ -281,6 +444,7 @@ function writeProblem(offset, count) {
     if (info.readOnly) return info.label + " is read-only.";
     for (let index = 0; index < count; index++) {
         if (readable[offset + index] !== 1) return "There is no byte to write at " + where(offset + index) + ".";
+        if (readOnly[offset + index]) return where(offset + index) + " is not RAM now, so it cannot be written.";
     }
     return null;
 }
@@ -337,7 +501,7 @@ async function redo() {
 // the text column, which writes it at once.
 async function typeKey(key) {
     if (pane === "text") {
-        const value = typedText(key, bytes[cursor]);
+        const value = charset === null ? typedText(key, bytes[cursor]) : typedText(key, bytes[cursor], charset.text, charset.looksSame);
         if (value === undefined) return;
         const at = cursor;
         if (await write(at, [value], true)) moveTo(at + 1, false, false);
@@ -381,7 +545,7 @@ async function goTo(text) {
 }
 
 async function find(backward) {
-    const pattern = parsePattern(findBox.value);
+    const pattern = parsePattern(findBox.value, charset === null ? undefined : charset.text);
     if (typeof pattern === "string") { status(pattern, true); return; }
     await ensureAll();
     const at = findPattern(bytes, readable, pattern, backward ? cursor - 1 : cursor + 1, backward);
@@ -396,7 +560,7 @@ async function find(backward) {
 
 function copy() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
-    void request({ type: "copy", text: copyText(bytes, readable, low, high, pane === "text") });
+    void request({ type: "copy", text: copyText(bytes, readable, low, high, pane === "text", charset === null ? undefined : charset.text) });
 }
 
 grid.addEventListener("scroll", render);
@@ -479,6 +643,18 @@ grid.addEventListener("keydown", event => {
     }
 });
 
+machineBox.addEventListener("change", () => {
+    machineText = machineBox.checked;
+    try {
+        vscode.setState({ machineText });
+    } catch {
+        // Remembering is a convenience.
+    }
+    applyText();
+    render();
+    grid.focus();
+});
+
 gotoBox.addEventListener("keydown", event => {
     if (event.key === "Enter") void goTo(gotoBox.value);
     else if (event.key === "Escape") grid.focus();
@@ -503,12 +679,23 @@ async function test(actions) {
         if (action.find !== undefined) { findBox.value = action.find; await find(false); }
         if (action.undo) await undo();
         if (action.redo) await redo();
+        if (action.extras) await loadExtras();
+        if (action.machineText !== undefined) {
+            machineText = action.machineText;
+            applyText();
+            render();
+        }
         await loaded(cursor, 1);
     }
     return {
         cursor, anchor, pane,
         status: statusLine.textContent,
-        inspector: inspect(bytes, readable, cursor),
+        label: labelOf(labels, cursor) ?? null,
+        text: textOf(bytes[cursor], charset === null ? undefined : charset.text),
+        glyphs: charset !== null,
+        readOnly: readOnly[cursor] === 1,
+        changed: changed[cursor] === 1,
+        inspector: inspect(bytes, readable, cursor, charset === null ? undefined : charset.text),
         hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64)
     };
 }
@@ -528,10 +715,18 @@ window.addEventListener("message", event => {
         reveal(cursor, true);
         render();
         grid.focus();
+        void loadExtras();
     } else if (message.type === "changed") {
         generation++;
         pages.fill(0);
         render();
+    } else if (message.type === "stopped") {
+        // Changes count from here, and banks may have switched the labels and characters.
+        stops++;
+        generation++;
+        pages.fill(0);
+        render();
+        void loadExtras();
     } else if (message.type === "ended") {
         ended = true;
         document.getElementById("ended").hidden = false;

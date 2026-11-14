@@ -300,13 +300,16 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public void Poke(ushort address, byte value)
     {
         Apple3Bus bus = _machine.Bus;
-        if (bus.ReadArea(address) is Apple3MemoryArea.Rom or Apple3MemoryArea.Io or Apple3MemoryArea.Vias or Apple3MemoryArea.None)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} reads {bus.ReadArea(address)} now, not RAM.");
         }
 
         bus.Ram[bus.RamOffset(address)] = value;
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.ReadArea(address) is not (Apple3MemoryArea.Rom or Apple3MemoryArea.Io or Apple3MemoryArea.Vias or Apple3MemoryArea.None);
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

@@ -109,7 +109,17 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             sessions.set(session.id, session);
             return {
                 onDidSendMessage(sent: unknown) {
-                    if (typeof sent !== "object" || sent === null || !("event" in sent) || sent.event !== "memory" || !("body" in sent)) return;
+                    if (typeof sent !== "object" || sent === null || !("event" in sent)) return;
+
+                    // A stop is when changes are counted from, and when labels and the character set may change.
+                    if (sent.event === "stopped") {
+                        for (const editor of editors) {
+                            if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "stopped" });
+                        }
+                        return;
+                    }
+
+                    if (sent.event !== "memory" || !("body" in sent)) return;
                     const body: unknown = sent.body;
                     if (typeof body !== "object" || body === null || !("memoryReference" in body)) return;
                     for (const editor of editors) {
@@ -181,6 +191,12 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     switch (received.type) {
                         case "read":
                             await reply(await session.customRequest("retro/memory/read", { memoryReference: base, offset: received.offset, count: received.count }));
+                            break;
+                        case "labels":
+                            await reply(await session.customRequest("retro/memory/labels", { memoryReference: base }));
+                            break;
+                        case "characters":
+                            await reply(await session.customRequest("retro/memory/characters"));
                             break;
                         case "write":
                             await reply(await session.customRequest("writeMemory", {

@@ -48,6 +48,11 @@ internal interface IDebugModule
     string? Label(ushort address);
 
     /// <summary>
+    ///  Gets the module's labels: the names it gives addresses, not its constants.
+    /// </summary>
+    IEnumerable<(string Name, long Value)> Labels { get; }
+
+    /// <summary>
     ///  Gets the documentation comments of the module's sources, with its symbol values.
     /// </summary>
     DocumentationSet Documentation { get; }

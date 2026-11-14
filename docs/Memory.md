@@ -30,20 +30,34 @@ Retrocore Memory shows the whole 64K of memory as the CPU maps it, or of one ban
 the address asked for. A bank's gaps show as `··`. The design for what comes next is in
 [MemoryViewer.md](backlog/MemoryViewer.md).
 
+- **Labels** from the program and the SDK's ROM sources name the bytes: the first label in each row shows in a
+  gutter beside the address (dimmed when it starts partway along the row), and a mark on the byte where each
+  starts. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
+- **The machine's characters.** On the Apple II, the TRS-80 Models I, II, III and 4 and the CoCo 1 and 2, the
+  text column draws each byte as the machine's own character generator does under its current modes: the Apple
+  II's inverse and flashing text, flashing as it does, the Model I's block graphics, the CoCo's semigraphics.
+  Elsewhere it shows each byte's low seven bits as ASCII, so the Apple II's text, kept with bit 7 set, still reads.
+  **Machine text** in the toolbar turns this off to show ASCII instead, for typing, finding and copying too; each
+  editor remembers the choice.
+- **Read-only bytes** (ROM, I/O, keyboard and unmapped addresses) are shaded, and typing there is refused before
+  anything is written.
+- **Changes.** Bytes that differ from what they held at the stop before are highlighted at each stop, and the
+  inspector shows what they were.
 - **Editing.** Type two hex digits in the hex column to write a byte, or a character in the text column. Writes
-  go to RAM at once; a read-only bank refuses typing, and the debugger refuses a write that reaches ROM, saying
-  why. **Ctrl+Z** undoes and **Ctrl+Y** or **Ctrl+Shift+Z** redoes, by writing the bytes back.
-- **The text column** shows each byte's low seven bits as text, so the Apple II's text, kept with bit 7 set,
-  reads as text, in another color. Typing there keeps the byte's bit 7.
+  go to RAM at once; a read-only bank or byte refuses typing. **Ctrl+Z** undoes and **Ctrl+Y** or
+  **Ctrl+Shift+Z** redoes, by writing the bytes back. Typing a character writes a code the machine shows it with,
+  keeping the byte's style where the machine has several, such as the Apple II's normal, inverse and flashing
+  text; so `A` over normal text on an Apple II writes $C1, and over inverse text $01.
 - **Go to** (**Ctrl+G**) takes an address, label or expression, in the editor's bank. Digits alone are hex.
 - **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`, or text in quotes, such as
-  `"HELLO"`, which matches with bit 7 clear or set. **Enter** or **F3** finds the next, with **Shift** the one
-  before, wrapping around.
-- **The inspector** beside the bytes shows the byte at the cursor as unsigned, signed, binary and text, and the
-  word there with either byte first.
+  `"HELLO"`, which matches each character in any of the machine's codes for it (or, without the machine's
+  characters, with bit 7 clear or set). **Enter** or **F3** finds the next, with **Shift** the one before,
+  wrapping around.
+- **The inspector** beside the bytes shows the address with the label it is in, such as `COUT+3`, the byte at
+  the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
 - **Moving and selecting.** The arrow keys, **Page Up**, **Page Down**, **Home** and **End** (with **Ctrl**, the
   ends of memory) move; **Shift** or dragging selects; **Tab** switches between the hex and text columns.
-  **Ctrl+C** copies the selection as hex bytes, or as text from the text column.
+  **Ctrl+C** copies the selection as hex bytes, or as the characters it shows from the text column.
 
 ## Memory references
 
@@ -106,14 +120,21 @@ its labels and lines do not show for auxiliary RAM switched in at the same addre
 ## The debug protocol
 
 The debugger answers `readMemory` and `writeMemory`, and its launch `capabilities` event adds
-`supportsWriteMemoryRequest`. Retrocore Memory reads through `retro/memory/read`, which takes the same
-`memoryReference`, `offset` and `count` but reads past unreadable bytes: it returns all `count` bytes in `data`,
-with each unreadable run as `{ offset, count }` in `unreadable` and its bytes as zero, so a bank shows where it is
-inside the CPU's 64K. Memory events track its reads as they do `readMemory`'s. `readMemory` returns the bytes up to the first it cannot read, and counts the rest
-of the request as `unreadableBytes`, as VS Code expects. It keeps, for each reference a view has read, the range
-read and a hash of its bytes. After each stop, every eighth running frame and each `writeMemory`, it sends a
-`memory` event for each view whose bytes have changed, naming the view's reference exactly, as VS Code requires,
-with offset 0 and the end of the range read as its count. The view that wrote is not told. A `writeMemory` also
+`supportsWriteMemoryRequest`. `readMemory` returns the bytes up to the first it cannot read, and counts the rest
+of the request as `unreadableBytes`, as VS Code expects.
+
+Retrocore Memory uses three more requests:
+
+| Request | Returns |
+| --- | --- |
+| `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
+| `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now. |
+| `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
+
+The debugger keeps, for each reference a view has read, the range read and a hash of its bytes. After each stop,
+every eighth running frame and each `writeMemory`, it sends a `memory` event for each view whose bytes have
+changed, naming the view's reference exactly, as VS Code requires, with offset 0 and the end of the range read as
+its count. The view that wrote is not told. A `writeMemory` also
 sends `invalidated` for the variables.
 
 Variables carry a `memoryReference` when they hold an address: the 6502's PC and S (into page one), the Z80's
@@ -121,10 +142,12 @@ Variables carry a `memoryReference` when they hold an address: the 6502's PC and
 
 ## Testing
 
-`node tools/Test-Memory.mjs` checks memory references, unreadable bytes and `retro/memory/read`'s gaps, writes and their rollback, memory events
-for changed views and variables on the Model I, which needs nothing external, along with resuming after a data
-breakpoint, a step landing on a breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the
-IIe's banks, their mapping, bank expressions, disassembly and data, function and instruction breakpoints. The extension's editor test reads and writes the
-Model I's video memory through VS Code's debug memory file system, as the Hex Editor does, then opens it in Retrocore
-Memory and types, undoes and inspects bytes there. `npm run test:grammar` runs the editor page's script with a
-stand-in DOM, for reading, writing, undo and read-only banks.
+`node tools/Test-Memory.mjs` checks memory references, unreadable bytes, `retro/memory/read`'s gaps and read-only
+runs, labels and the character set, writes and their rollback, memory events for changed views and variables on
+the Model I, which needs nothing external, along with resuming after a data breakpoint, a step landing on a
+breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the IIe's banks, their mapping, bank
+expressions, disassembly and data, function and instruction breakpoints. The extension's editor test reads and
+writes the Model I's video memory through VS Code's debug memory file system, as the Hex Editor does, then opens it
+in Retrocore Memory and types, undoes and inspects bytes there, with their labels, characters and read-only ROM.
+`npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
+banks and bytes, labels and changes since the last stop.

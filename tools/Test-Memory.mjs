@@ -3,7 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 // Memory view DAP integration: readMemory and writeMemory as VS Code's memory views use them, retro/memory/read as
-// Retrocore Memory uses it, memory references on variables and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's
+// Retrocore Memory uses it with retro/memory/labels and retro/memory/characters, memory references on variables and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's
 // memory banks with breakpoints and disassembly in them. It also checks the breakpoints a data breakpoint's stop
 // leaves for resuming, a step that lands on a breakpoint, and the logpoint limit. The Model I part needs nothing
 // external; the IIe part runs when RETROCORE_IIE_ROMS names the IIe ROMs.
@@ -81,6 +81,35 @@ try {
     assert.deepEqual([...Buffer.from(range.data, "base64").subarray(0, 2)], [...top.bytes]);
     assert.deepEqual([...Buffer.from(range.data, "base64").subarray(2)], [0, 0]);
     assert.deepEqual(range.unreadable, [{ offset: 2, count: 2 }]);
+
+    // It marks the bytes a write cannot reach: the keyboard, but not video RAM after it.
+    at = "reading which bytes are read-only";
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "0x3BFE", count: 4 })).readOnly, [{ offset: 0, count: 2 }]);
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "0x3C00", count: 4 })).readOnly, []);
+
+    // Labels come from the program and the SDK's ROM source, where their code is in memory now.
+    at = "reading memory labels";
+    const labels = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.name, label.address]));
+    assert.equal(labels.get("RESET"), 0x0000);
+    assert.equal(labels.get("START"), 0x7000);
+    assert.equal(labels.get("MESSAGE"), Number(message.memoryReference));
+    assert.equal(labels.get("DISPLAY_CHAR"), 0x0033, "the ROM's label, which the program's constant names too");
+    assert.equal(labels.has("ERR_SN"), false, "a constant is not a label");
+
+    // The character set is the Model I's: 6x12, with block graphics from $80.
+    at = "reading the character set";
+    const characters = await request("retro/memory/characters");
+    assert.deepEqual([characters.width, characters.height], [6, 12]);
+    assert.equal(characters.text.length, 256);
+    assert.equal(characters.text[0x41], "A");
+    assert.equal(characters.text[0x01], "A", "without the lowercase modification, $01 shows A");
+    assert.equal(characters.text[0x80], "\0");
+    const glyphs = Buffer.from(characters.glyphs, "base64");
+    assert.equal(glyphs.length, 256 * 12);
+    assert.ok(glyphs.subarray(0x80 * 12, 0x81 * 12).every(row => row === 0), "$80 is blocks all off");
+    assert.ok(glyphs.subarray(0xBF * 12, 0xC0 * 12).every(row => row === 0xFC), "$BF is blocks all on");
+    assert.ok(glyphs.subarray(0x41 * 12, 0x41 * 12 + 8).some(row => row !== 0), "A draws");
+    assert.equal(characters.flashed ?? null, null, "nothing flashes");
 
     at = "memory references on variables";
     const registers = await variables(1, "Registers");

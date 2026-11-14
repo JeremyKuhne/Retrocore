@@ -27,7 +27,7 @@ namespace Retrocore.Machines.Apple2;
 ///   their edges and colored areas are solid. Text is white; lo-res and double hi-res are as on a composite monitor.
 ///  </para>
 /// </remarks>
-public sealed class Apple2Video : IVideoSource
+public sealed class Apple2Video : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  Number of CPU clocks in an NTSC frame.
@@ -195,6 +195,54 @@ public sealed class Apple2Video : IVideoSource
 
     /// <inheritdoc/>
     void IVideoSource.Render(Span<byte> pixels, bool scanned) => Render(pixels, scanned);
+
+    /// <inheritdoc/>
+    public int CharacterWidth => 7;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => 8;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Codes <c>$40</c>-<c>$7F</c> flash between their inverse character and their normal one unless the IIe's
+    ///   alternate character set is on; <paramref name="flashed"/> draws the normal one.
+    ///  </para>
+    /// </remarks>
+    public bool IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        int glyph = Glyph(code, flashed);
+        return ((_roms.Characters[(glyph * 8) + line] >> pixel) & 1) == 0;
+    }
+
+    /// <inheritdoc/>
+    public char Character(byte code)
+    {
+        int glyph = Glyph(code, flashed: true);
+
+        // MouseText, in the alternate set's $40-$5F.
+        if (glyph is >= 0x40 and < 0x60) { return '\0'; }
+        int low = glyph & 0x7F;
+        return (low & 0x60) switch
+        {
+            0x00 => (char)(low + 0x40),
+
+            // $60-$7F and $E0-$FF are lowercase where the character generator has it, and otherwise repeat
+            // uppercase.
+            0x60 => (char)(SameGlyph(glyph, glyph - 0x20) ? low - 0x20 : low),
+            _ => (char)low
+        };
+    }
+
+    // The character generator's code for a byte: flashing codes show their inverse code, or flashed their normal one.
+    private int Glyph(byte code, bool flashed) =>
+        code is >= 0x40 and < 0x80 && !Has(_bus.Switches, Apple2Switches.AlternateCharacters)
+            ? (code & 0x3F) | (flashed ? 0x80 : 0)
+            : code;
+
+    // Whether two codes draw the same character.
+    private bool SameGlyph(int first, int second) =>
+        _roms.Characters.Slice(first * 8, 8).SequenceEqual(_roms.Characters.Slice(second * 8, 8));
 
     private bool FlashPhase => (_bus.CycleCount / (65 * 4203)) % 2 != 0;
 

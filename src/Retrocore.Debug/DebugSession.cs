@@ -141,6 +141,8 @@ internal sealed partial class DebugSession
         transport.On("retro/breakpoints", args => Reply(() => BreakpointList(args)));
         transport.On("retro/memoryBanks", _ => Reply(MemoryBankList));
         transport.On("retro/memory/read", args => Reply(() => ReadMemoryRange(args)));
+        transport.On("retro/memory/labels", args => Reply(() => MemoryLabels(args)));
+        transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
         transport.On("configurationDone", args => Reply(() =>
         {
             _configured = true;

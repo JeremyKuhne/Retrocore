@@ -888,6 +888,14 @@ public sealed class Apple2Bus : IProcessorBus
     }
 
     /// <summary>
+    ///  Gets whether a memory area is RAM holding a byte at an address, so <see cref="PokeArea"/> can write it.
+    /// </summary>
+    /// <param name="area">The area.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>Whether the area holds RAM there.</returns>
+    public bool HoldsRam(Apple2MemoryArea area, ushort address) => Storage(area, address) is not null;
+
+    /// <summary>
     ///  Writes physical main or auxiliary RAM, bypassing I/O and ROM mapping.
     /// </summary>
     /// <param name="auxiliary">Whether to write auxiliary RAM.</param>

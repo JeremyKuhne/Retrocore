@@ -24,7 +24,7 @@ namespace Retrocore.Machines.Coco;
 ///   the next.
 ///  </para>
 /// </remarks>
-public sealed class CocoVideo : IVideoSource
+public sealed class CocoVideo : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  The first active line.
@@ -204,6 +204,38 @@ public sealed class CocoVideo : IVideoSource
         char ascii = (char)(code < 32 ? code + 64 : code);
         return (value & 0x40) == 0 && char.IsAsciiLetterUpper(ascii) ? char.ToLowerInvariant(ascii) : ascii;
     }
+
+    /// <inheritdoc/>
+    public int CharacterWidth => 8;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => 12;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Codes from <c>$80</c> are semigraphics in the current mode, lit where an element is on whatever its color.
+    ///  </para>
+    /// </remarks>
+    public bool IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        byte mode = _bus.VideoMode;
+        if ((code & 0x80) != 0)
+        {
+            bool four = _t1 || (mode & GraphicsMode0Bit) == 0;
+            int element = four ? (line < 6 ? 3 : 1) : (line < 4 ? 5 : line < 8 ? 3 : 1);
+            if (pixel >= 4) { element--; }
+            return (code & (1 << element)) != 0;
+        }
+
+        Span<uint> cell = stackalloc uint[8];
+        RenderCharacter(cell, code, mode, css: false, line);
+        // The ink is the dark color, so normal text draws as dark characters on the green screen.
+        return cell[pixel] != s_palette[0];
+    }
+
+    /// <inheritdoc/>
+    char ICharacterSet.Character(byte code) => (code & 0x80) != 0 ? '\0' : Character(code);
 
     /// <inheritdoc/>
     public void Render(Span<byte> pixels, bool scanned)

@@ -27,25 +27,70 @@ public sealed partial class PascalDecompiler
     private bool PlaceSites()
     {
         bool changed = false;
-        for (; _placed < _sites.Count; _placed++)
-        {
-            (TypeNode record, int offset, TypeNode field) = _sites[_placed];
-            TypeNode root = record.Find();
-            if (root.Kind != TypeKind.Record)
-            {
-                if (root.Field(offset).Find() != field.Find())
-                {
-                    TypeNode.Unify(root.Field(offset), field);
-                    changed = true;
-                }
 
+        // What a scalar is used as shows in what it is linked to as well as in itself.
+        Dictionary<TypeNode, List<TypeNode>> linked = [];
+        foreach ((TypeNode first, TypeNode second, _) in _links)
+        {
+            TypeNode a = first.Find();
+            TypeNode b = second.Find();
+            if (a == b || a.Kind is not (TypeKind.Scalar or TypeKind.Unknown) || b.Kind is not (TypeKind.Scalar or TypeKind.Unknown))
+            {
                 continue;
             }
 
-            root.Field(offset);
+            Neighbors(a).Add(b);
+            Neighbors(b).Add(a);
+        }
+
+        Dictionary<TypeNode, ScalarKind?> shown = [];
+        ScalarKind? Evidence(TypeNode type)
+        {
+            TypeNode start = type.Find();
+            if (shown.TryGetValue(start, out ScalarKind? known)) { return known; }
+
+            (int integer, int boolean, int character) = (0, 0, 0);
+            HashSet<TypeNode> seen = [start];
+            Queue<TypeNode> next = new([start]);
+            while (next.TryDequeue(out TypeNode? node) && seen.Count < 256)
+            {
+                integer += node.IntegerVotes + (node.Forced == ScalarKind.Integer || node.Low is not null ? 4 : 0);
+                boolean += node.BooleanVotes + (node.Forced == ScalarKind.Boolean ? 4 : 0);
+                character += node.CharVotes + (node.Forced == ScalarKind.Char ? 4 : 0);
+                foreach (TypeNode other in (linked.GetValueOrDefault(node) ?? []).Where(seen.Add))
+                {
+                    next.Enqueue(other);
+                }
+            }
+
+            ScalarKind? kind = null;
+            if (boolean > integer + character) { kind = ScalarKind.Boolean; }
+            else if (integer + character > boolean) { kind = ScalarKind.Integer; }
+
+            shown[start] = kind;
+            return kind;
+        }
+
+        List<TypeNode> Neighbors(TypeNode node)
+        {
+            if (!linked.TryGetValue(node, out List<TypeNode>? list))
+            {
+                list = [];
+                linked[node] = list;
+            }
+
+            return list;
+        }
+
+        for (; _placed < _sites.Count; _placed++)
+        {
+            // Reaching a field makes a record of what is at the address.
+            (TypeNode record, int offset, TypeNode field) = _sites[_placed];
+            record.Field(offset);
+            TypeNode root = record.Find();
             if (root.Alternatives(offset).Contains(field.Find())) { continue; }
 
-            TypeNode.Place(root, offset, field);
+            TypeNode.Place(root, offset, field, Evidence);
             changed = true;
         }
 
@@ -749,6 +794,14 @@ public sealed partial class PascalDecompiler
         {
             case Comparand.Word:
                 Link(comparison.Left.Type, comparison.Right.Type);
+
+                // Words ordered are numbers: pointers are only equal or not.
+                if (comparison.Op is not (Operator.Equal or Operator.NotEqual))
+                {
+                    comparison.Left.Type.Vote(ScalarKind.Integer);
+                    comparison.Right.Type.Vote(ScalarKind.Integer);
+                }
+
                 break;
             case Comparand.Boolean:
                 comparison.Left.Type.Force(ScalarKind.Boolean);

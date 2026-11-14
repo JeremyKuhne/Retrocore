@@ -19,6 +19,9 @@ public sealed partial class PascalDecompiler
     // The WITH statements the writer is inside, innermost last: their records' fields go by name alone.
     private readonly List<Variable> _with = [];
 
+    // The records of the WITH statements, by their temporaries.
+    private readonly Dictionary<Variable, Designator> _withRecords = [];
+
     // The units of the program's own, written by Write after the program.
     private List<PascalDecompiledUnit> _unitSources = [];
 
@@ -526,6 +529,8 @@ public sealed partial class PascalDecompiler
     // has anyway, and each other some of the other fields, those that do not overlap, with padding between them.
     private string RecordType(TypeNode root)
     {
+        if (root.PackedFields is { Count: > 0 }) { return PackedRecordType(root); }
+
         int words = SizeOf(root) ?? 0;
         SortedDictionary<int, TypeNode> known = root.Fields ?? [];
         int start = known.Keys.Where(offset => root.Alternatives(offset).Count > 1).DefaultIfEmpty(words).Min();
@@ -645,6 +650,48 @@ public sealed partial class PascalDecompiler
                 default: break;
             }
         }
+    }
+
+    // A record with fields packed into words: the Compiler packs a packed record's fields in order from each word's low
+    // bit, starting a word where one does not fit, so each word's fields go in order, with fillers for the bits before
+    // and between them and to the word's end; a word with none is a field of its own.
+    private string PackedRecordType(TypeNode root)
+    {
+        int words = SizeOf(root) ?? 0;
+        SortedDictionary<(int Word, int Bit), (int Width, TypeNode Type)> packed = root.PackedFields ?? [];
+        SortedDictionary<int, TypeNode> known = root.Fields ?? [];
+        List<string> parts = [];
+        for (int word = 0; word < words; word++)
+        {
+            List<KeyValuePair<(int Word, int Bit), (int Width, TypeNode Type)>> fields = [.. packed.Where(pair => pair.Key.Word == word)];
+            if (fields.Count == 0)
+            {
+                if (known.TryGetValue(word, out TypeNode? whole) && SizeOf(whole) is 1)
+                {
+                    parts.Add($"F{word}: {TypeName(whole, parameter: false)}");
+                }
+                else
+                {
+                    parts.Add($"F{word}: INTEGER");
+                }
+
+                continue;
+            }
+
+            int bit = 0;
+            foreach (((int _, int at), (int width, TypeNode type)) in fields)
+            {
+                if (at > bit) { parts.Add($"X{word}B{bit}: 0..{(1 << (at - bit)) - 1}"); }
+                TypeNode field = type.Find();
+                string name = width == 1 && field.Kind == TypeKind.Scalar && field.ScalarKind == ScalarKind.Boolean ? "BOOLEAN" : $"0..{(1 << width) - 1}";
+                parts.Add($"F{word}B{at}: {name}");
+                bit = Math.Max(bit, at + width);
+            }
+
+            if (bit is > 0 and < 16) { parts.Add($"X{word}B{bit}: 0..{(1 << (16 - bit)) - 1}"); }
+        }
+
+        return $"PACKED RECORD {string.Join("; ", parts)} END";
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
@@ -943,6 +990,7 @@ public sealed partial class PascalDecompiler
             case WithStatement with:
                 lines.Add(Indented($"WITH {DesignatorText(with.Record)} DO"));
                 _with.Add(with.Temporary);
+                _withRecords[with.Temporary] = with.Record;
                 Block(procedure, with.Body, lines, forceCompound: false);
                 _with.RemoveAt(_with.Count - 1);
                 break;
@@ -1118,7 +1166,7 @@ public sealed partial class PascalDecompiler
             case ResultDesignator result:
                 return result.Procedure.Name;
             case FieldDesignator field:
-                return $"{Record(field.Record)}{FieldName(field)}";
+                return $"{Record(field.Record, field.Offset)}{FieldName(field)}";
             case PackedFieldDesignator field:
                 return $"{Record(field.Record)}F{field.Word}B{field.Bit}";
             case IndexDesignator
@@ -1135,8 +1183,9 @@ public sealed partial class PascalDecompiler
                 return $"{bytes.Name}.B[{Expression(byteIndex.Index, expected: null, 0)}]";
             case IndexDesignator index:
                 {
+                    // Arrays are declared with integer subranges for indexes.
                     string array = DesignatorText(index.Array);
-                    string value = Expression(index.Index, expected: null, 0);
+                    string value = Expression(index.Index, TypeNode.Scalar(ScalarKind.Integer), 0);
 
                     // Without range checks, the bound an index lost may not be the one the array has.
                     if (index.Low is { } lost
@@ -1145,7 +1194,7 @@ public sealed partial class PascalDecompiler
                         && !index.Neutral)
                     {
                         int difference = lost - declared;
-                        value = $"{Expression(index.Index, expected: null, Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
+                        value = $"{Expression(index.Index, TypeNode.Scalar(ScalarKind.Integer), Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
                     }
 
                     return array.EndsWith(']') && index.Array is IndexDesignator ? $"{array[..^1]}, {value}]" : $"{array}[{value}]";
@@ -1174,15 +1223,28 @@ public sealed partial class PascalDecompiler
     }
 
     // A record's designator before a field's name; nothing inside a WITH statement on it.
-    private string Record(Designator record)
+    private string Record(Designator record, int offset = -1)
     {
         if (record is Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var temporary } } }
             && _with.Contains(temporary))
         {
-            return "";
+            // A field of an outer WITH's record that an inner one's has a field at the offset of, which its name would
+            // name, is named with its record's.
+            bool hidden = offset >= 0 && _with.Skip(_with.IndexOf(temporary) + 1).Any(inner => Hides(inner, temporary, offset));
+
+            return hidden && _withRecords.TryGetValue(temporary, out Designator? whole) ? DesignatorText(whole) + "." : "";
         }
 
         return DesignatorText(record) + ".";
+    }
+
+    // Whether an inner WITH's record, of another type, has words at an offset, whose field there an outer one's shares
+    // a name with.
+    private static bool Hides(Variable inner, Variable outer, int offset)
+    {
+        TypeNode? record = inner.Type.Find().Element?.Find();
+        if (record is null || record.Kind != TypeKind.Record) { return false; }
+        return record != outer.Type.Find().Element?.Find() && (SizeOf(record) ?? 0) > offset;
     }
 
     private string Value(int value, TypeNode type) => type.Find().Kind == TypeKind.Scalar

@@ -152,6 +152,27 @@ public class PascalSystemDecompilerTests
         source.Should().Contain("    SEGMENT PROCEDURE INNEST;\n    BEGIN\n      B7X1 := A7X1 * 2\n    END;");
     }
 
+    // A packed record, whose fields share words, in an array.
+    private const string PackedSource = """
+        PROGRAM PK;
+        TYPE R = PACKED RECORD A: 0..7; B: BOOLEAN; C: 0..255; D: INTEGER; E: 0..15 END;
+        VAR X: ARRAY[0..9] OF R; I: INTEGER;
+        BEGIN
+          X[I].A := 5; X[I].C := I; IF X[2].B THEN I := X[3].E; X[1].D := 7
+        END.
+        """;
+
+    /// <summary>
+    ///  A record whose fields the code reaches by word and bit is a packed record with each field at its word and bit,
+    ///  with fillers before and between them and to each word's end.
+    /// </summary>
+    [TestMethod]
+    public void PackedRecordsKeepTheirFieldsBits()
+    {
+        string source = RoundTrip(PackedSource);
+        source.Should().Contain("PACKED RECORD F0B0: 0..7; F0B3: BOOLEAN; X0B4: 0..15; F0B8: 0..255; F1: INTEGER; F2B0: 0..15; X2B4: 0..4095 END;");
+    }
+
     /// <summary>
     ///  Records whose words are integers in one place and pointers in another decompile with a variant part, each
     ///  use naming its variant's field.

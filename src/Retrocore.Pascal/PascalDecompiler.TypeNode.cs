@@ -650,11 +650,15 @@ public sealed partial class PascalDecompiler
         /// <param name="record">The record.</param>
         /// <param name="offset">The word offset.</param>
         /// <param name="type">The type.</param>
-        public static void Place(TypeNode record, int offset, TypeNode type) => Merge(record.Find(), offset, type);
+        /// <param name="evidence">
+        ///  What a scalar's uses show it is, so that a boolean and an integer at one offset are two variants' fields.
+        /// </param>
+        public static void Place(TypeNode record, int offset, TypeNode type, Func<TypeNode, ScalarKind?> evidence) =>
+            Merge(record.Find(), offset, type, evidence);
 
         // Puts a type at a record's word offset: into the field there, or a variant's, that it can be; or, where it is
         // a pointer and they integers or the other way round, as another variant's field.
-        private static void Merge(TypeNode record, int offset, TypeNode type)
+        private static void Merge(TypeNode record, int offset, TypeNode type, Func<TypeNode, ScalarKind?>? evidence = null)
         {
             List<TypeNode> alternatives = record.Alternatives(offset);
             TypeNode root = type.Find();
@@ -662,7 +666,7 @@ public sealed partial class PascalDecompiler
 
             foreach (TypeNode alternative in alternatives)
             {
-                if (!Differ(alternative, root, depth: 3))
+                if (!Differ(alternative, root, depth: 3) && !Booleans(alternative, root, evidence))
                 {
                     Unify(alternative, root);
                     return;
@@ -677,6 +681,19 @@ public sealed partial class PascalDecompiler
             }
 
             variants.Add(root);
+        }
+
+        // Whether two scalars at one offset of a record are two variants' fields, as a boolean and an integer are.
+        private static bool Booleans(TypeNode first, TypeNode second, Func<TypeNode, ScalarKind?>? evidence)
+        {
+            if (evidence is null || first.Find().Kind != TypeKind.Scalar || second.Find().Kind is not (TypeKind.Scalar or TypeKind.Unknown))
+            {
+                return false;
+            }
+
+            ScalarKind? one = evidence(first);
+            ScalarKind? other = evidence(second);
+            return one is not null && other is not null && one != other;
         }
 
         // Whether two types at one offset of a record are two variants' fields: they cannot be one, or are pointers to

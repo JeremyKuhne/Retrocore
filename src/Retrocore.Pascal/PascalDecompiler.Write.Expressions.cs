@@ -328,6 +328,25 @@ public sealed partial class PascalDecompiler
             _ => left
         };
 
+        // Pointers are only equal or not, and to pointers or NIL: words ordered, or compared with a number, are
+        // integers, a word used both ways by its integer view.
+        bool numbers = comparison.Op is not (Operator.Equal or Operator.NotEqual) || comparison.Left is Constant || comparison.Right is Constant;
+        if (comparison.Comparand == Comparand.Word && numbers)
+        {
+            left = left?.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : left;
+            right = right?.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : right;
+        }
+
+        // Words of two kinds compare as the integers the p-code compares: ORD of each.
+        if (comparison.Comparand == Comparand.Word
+            && Natural(comparison.Left) is { } one
+            && Natural(comparison.Right) is { } other
+            && one != other)
+        {
+            left = TypeNode.Scalar(ScalarKind.Integer);
+            right = left;
+        }
+
         return ($"{Expression(comparison.Left, left, Adding)} {symbol} {Expression(comparison.Right, right, Adding)}", Relational);
     }
 

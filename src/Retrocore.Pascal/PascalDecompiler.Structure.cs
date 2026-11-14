@@ -292,6 +292,9 @@ public sealed partial class PascalDecompiler
             Designator record = assignment.Value is Address address ? address.Designator : new Dereference(assignment.Value);
             List<Statement> body = statements.GetRange(index + 1, last - index);
             statements.RemoveRange(index, last - index + 1);
+
+            // A WITH inside it starts in its body.
+            With(body, temporaries);
             statements.Insert(index, new WithStatement(record, temporary, body) { Offset = assignment.Offset });
         }
     }

@@ -1580,19 +1580,19 @@ internal sealed partial class DebugSession
             }
             catch (InvalidOperationException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (FormatException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (OverflowException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
             catch (IOException exception)
             {
-                ExecutionFailed(exception);
+                ExecutionFailed(exception, token);
             }
         }, token);
     }
@@ -1683,10 +1683,16 @@ internal sealed partial class DebugSession
         return speed;
     }
 
-    private void ExecutionFailed(Exception exception)
+    // Reports a run that failed, unless a launch or stop cancelled it first: the check is under the lock, as a launch
+    // that takes the lock between the failure and this report replaces or clears the machine the failure was in.
+    private void ExecutionFailed(Exception exception, CancellationToken token)
     {
-        Console.Error.WriteLine(exception);
-        lock (_gate) { Stopped("exception", description: exception.Message, exception: "error"); }
+        lock (_gate)
+        {
+            if (token.IsCancellationRequested) { return; }
+            Console.Error.WriteLine(exception);
+            Stopped("exception", description: exception.Message, exception: "error");
+        }
     }
 
     /// <summary>

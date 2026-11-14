@@ -162,11 +162,17 @@ try {
         /no setting 'speed'/);
     devices = await request("retro/hardware", { id: "slot4", action: "setSetting", setting: "translation", value: true });
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
+    // Taking the card out ends the Z80's thread, and putting one in starts it.
+    const threadEvents = () => events.filter(message => message.event === "thread" && message.body.threadId === 4)
+        .map(message => message.body.reason);
+    events.length = 0;
     devices = await request("retro/hardware", { id: "slot4", action: "removeCard" });
     assert.equal(devices.hardware.find(row => row.id === "slot4").value, "empty");
     assert.deepEqual((await request("threads")).threads.map(thread => thread.id), [1, 2]);
+    assert.deepEqual(threadEvents(), ["exited"]);
     devices = await request("retro/hardware", { id: "slot5", action: "addSoftCard" });
     assert.equal(devices.hardware.find(row => row.id === "slot5").value, "Z80 SoftCard");
+    assert.deepEqual(threadEvents(), ["exited", "started"]);
     assert.equal(devices.configuration.cards["5"], "softCard");
 
     // A saved machine brings the card back with its switches.
@@ -231,6 +237,15 @@ try {
     frame = await stoppedOn("instruction breakpoint", 1);
     assert.equal(frame.instructionPointerReference, resume);
     await request("setInstructionBreakpoints", { breakpoints: [] });
+
+    // A source is the Z80's when a build for the 6502 would make it Z80 code, as .ifp02 around its .cpu does.
+    writeFileSync(second, ["        .ifp02", "        .cpu Z80", "        .endif", "start:  ld a,$12", "spin:   jr spin"]
+        .join("\n") + "\n");
+    events.length = 0;
+    await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, source: second, stopOnEntry: true, speed: "max" });
+    await request("configurationDone");
+    frame = await stoppedOn("entry", 4);
+    assert.equal(frame.instructionPointerReference, "z80:0x0100");
 
     if (!existsSync(cpm)) {
         console.log("SoftCard CP/M boot skipped: set RETROCORE_SOFTCARD_DISKS to the SoftCard CP/M disks.");

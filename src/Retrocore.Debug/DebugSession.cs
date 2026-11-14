@@ -349,8 +349,26 @@ internal sealed partial class DebugSession
         {
             string id = args.String("id") ?? throw new ArgumentException("id is required.");
             string action = args.String("action") ?? throw new ArgumentException("action is required.");
+            bool hadCoprocessor = Target.Coprocessor is not null;
             Target.HardwareAction(id, action, args);
             Invalidate();
+
+            // Putting a SoftCard in or taking it out starts or ends the Z80's thread.
+            bool hasCoprocessor = Target.Coprocessor is not null;
+            if (hasCoprocessor != hadCoprocessor)
+            {
+                if (!hasCoprocessor && _stoppedThread == SoftCardThread)
+                {
+                    _stoppedThread = 1;
+                }
+
+                Notify("thread", new JsonObject
+                {
+                    ["reason"] = hasCoprocessor ? "started" : "exited",
+                    ["threadId"] = SoftCardThread
+                });
+            }
+
             if (_run is not { IsCancellationRequested: false })
             {
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
@@ -624,7 +642,8 @@ internal sealed partial class DebugSession
             // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
             // and the Z80 takes the bus at its entry.
             SoftCardDebugTarget? z80 = null;
-            if (Target.Coprocessor is SoftCardDebugTarget softCard && SourceBuild.DeclaresCpu(sourceFile, dialect, softCard.Cpu))
+            if (Target.Coprocessor is SoftCardDebugTarget softCard
+                && SourceBuild.DeclaresCpu(sourceFile, dialect, Target.Cpu, softCard.Cpu))
             {
                 z80 = softCard;
             }

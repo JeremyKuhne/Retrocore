@@ -369,7 +369,7 @@ public static class Pcode
         "TIM",
         "FLC",
         "SCN",
-        "",
+        "USTAT",
         "",
         "",
         "",

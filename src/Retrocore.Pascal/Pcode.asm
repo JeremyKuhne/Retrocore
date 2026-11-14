@@ -22,6 +22,7 @@ TRS = 8
 TIM = 9
 FLC = 10
 SCN = 11
+USTAT = 12
 GSEG = 21
 RSEG = 22
 TNC = 23

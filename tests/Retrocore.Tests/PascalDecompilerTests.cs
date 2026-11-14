@@ -169,6 +169,36 @@ public class PascalDecompilerTests
         "Q09ERVsqXQAAAAASAAEAFkFQUExFMjpTWVNURU0uU1dBUERJU0sAAAAAAAAAAAAAAA=="
     ]);
 
+    // P4, compiled by Apple III Pascal 1.1: UNITSTATUS, its CSP 12, and SCAN, into a word array and a packed one.
+    //
+    //   PROGRAM T;
+    //   VAR B: ARRAY[0..19] OF INTEGER; N, I: INTEGER; C: CHAR;
+    //     S: PACKED ARRAY[0..40] OF CHAR;
+    //   BEGIN
+    //     UNITSTATUS(0, B, 0);
+    //     UNITSTATUS(N, B[3], 5);
+    //     I := SCAN(41, = CHR(N), B);
+    //     I := SCAN(-10, <> C, S[2]);
+    //     I := SCAN(N, = 'A', S)
+    //   END.
+    private static readonly string P4Code = string.Concat(
+    [
+        "AQBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFQgICAgICAgICAg",
+        "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg",
+        "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGCAIIAggCCAIIAggCCAIIAggCCAIIAggCCAIIAggCCAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADX1wClAwAAngypGKUD",
+        "AwATiKQBAAWeDCkAqRilAwAAngurFwqRAakZpRoCACiIAJ4LqxepGABBpRoAAJ4LqxfBAABYAAQABwBIAAEAAgABAXBpbGluZy4u",
+        "LiBa9Vr1qPWo9ZJL3Et/S/mDBwAOV09SSzpIT1NULkNPREVERVsqXXSAD1zzgwAAoPlKAR0ASgG+90r1el50gG9e9YNFAET5SgFq",
+        "9CdDb3B5cmlnaHQgQXBwbGUgQ29tcHV0ZXIgBFdPUks6SE9TVC5DT0RFWFT0E0N1cnJlbnQgIGRhdGUgIGlzICBjVrT0LHxfX19f",
+        "X19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fXxBXT1JLOlNPVVJDRS5URVhUICAgIEFwcGxlICAvLy8gIFBhc2NhbCAg",
+        "IDEuMSAgICAgICAgIHwBtVUAACsgX19fX19fX19fX19fX19fX19fX18EAAAAAgABAABXT1JL9RJ5dIDrePODAAEBAC71SgFKAQAA",
+        "NvW+9zr1cl10gEoBSgEAAEb1vvdK9axddICWXfWDHQADACD+WvVa9b73qPWSS9xLjEn3gyD+Xv41SQAARUNvbW1hbmQ6IEUoZGl0",
+        "LCBSKHVuLCBGKGlsZSwgQyhvbXAsIEwoaW5rLCBYKGVjdXRlLCBBAACm9cT1qvUaCg=="
+    ]);
+
     /// <summary>
     ///  P1 decompiles to source with its functions, loops, CASE, expressions and I/O, which compiles to the same code.
     /// </summary>
@@ -611,6 +641,42 @@ public class PascalDecompilerTests
           I := ADD1(41)
         END.
         """;
+
+    /// <summary>
+    ///  Apple III Pascal's UNITSTATUS (CSP 12) and SCAN decompile: SCAN's test as <c>=</c> or <c>&lt;&gt;</c> and its
+    ///  character, and a packed array's bounds from the range check of the element it starts at.
+    /// </summary>
+    [TestMethod]
+    public void UnitStatusAndScanDecompile()
+    {
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(Convert.FromBase64String(P4Code)));
+        result.Warnings.Should().BeEmpty();
+        string source = result.Source;
+        source.Should().Contain("T2 = PACKED ARRAY[0..40] OF CHAR;").And.Contain("G24: INTEGER;").And.Contain("G25: CHAR;");
+        source.Should().Contain("UNITSTATUS(0, G3, 0);").And.Contain("UNITSTATUS(G24, G3[3], 5);");
+        source.Should().Contain("G23 := SCAN(41, = CHR(G24), G3);").And.Contain("G23 := SCAN(-10, <> G25, G26[2]);");
+        source.Should().Contain("G23 := SCAN(G24, = 'A', G26)");
+    }
+
+    /// <summary>
+    ///  P4's source compiles with Apple III Pascal 1.1's Compiler, on an emulated Apple III, to the same code.
+    /// </summary>
+    [TestMethod]
+    public void UnitStatusAndScanRecompileOnTheApple3()
+    {
+        string system = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk1.dsk");
+        string tools = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk2.dsk");
+        if (!File.Exists(system) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE3_DISKS to a folder with Apple III Pascal 1.1's disks.");
+        }
+
+        PascalCodeFile original = PascalCodeFile.Read(Convert.FromBase64String(P4Code));
+        PascalDecompilation result = PascalDecompiler.Decompile(original);
+        (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, system, tools, s_inputs);
+        if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
+        PascalCodeComparison.Compare(original, PascalCodeFile.Read(code)).Should().BeEmpty(result.Source);
+    }
 
     /// <summary>
     ///  A unit's interface text gives its procedures in the order calls number them, from 2, and its enumerated types.

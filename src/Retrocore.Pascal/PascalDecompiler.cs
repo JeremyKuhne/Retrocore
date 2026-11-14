@@ -104,6 +104,13 @@ public sealed partial class PascalDecompiler
                 continue;
             }
 
+            // A unit the Linker linked in has its procedures beside its initialization, at its level; a segment
+            // procedure's are in it.
+            if (segment != _main && segment.Procedures.Count(code => code.LexicalLevel == 1 && !code.IsNative) > 1)
+            {
+                Warn($"The segment {segment.Name} is a unit the program uses, linked in, whose source is a UNIT of its own; it is written as a segment procedure, which does not compile.");
+            }
+
             List<Procedure> procedures = [.. segment.Procedures.Select(code => new Procedure(segment, code))];
             foreach (Procedure procedure in procedures)
             {

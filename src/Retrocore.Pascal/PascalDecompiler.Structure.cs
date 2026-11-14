@@ -105,6 +105,7 @@ public sealed partial class PascalDecompiler
             case ByteAddress a: Values(a.Designator, values); break;
             case PackedAddress a: Values(a.Designator, values); break;
             case Unary unary: Values(unary.Operand, values, address: false); break;
+            case ScanTest test: Values(test.Character, values, address: false); break;
             case Binary binary:
                 Values(binary.Left, values, address: false);
                 Values(binary.Right, values, address: false);

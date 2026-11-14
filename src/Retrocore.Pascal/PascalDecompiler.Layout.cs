@@ -23,6 +23,15 @@ public sealed partial class PascalDecompiler
         _system.At(2).Name = "INPUT";
         _system.At(3).Name = "OUTPUT";
         _system.At(4).Name = "KEYBOARD";
+
+        // Any other word of the system's globals is one only a program compiled as part of the system, (*$U-*), with
+        // the system's declarations, can reach.
+        foreach (Variable variable in _system.Variables.Values.Where(variable => variable.Name.Length == 0))
+        {
+            variable.Name = $"SYS{variable.Offset}";
+            Warn($"The code reaches the system's global at word {variable.Offset}, which only a program compiled as part of the system, (*$U-*), can name; it is written {variable.Name}.");
+        }
+
         foreach (Procedure procedure in _procedures)
         {
             Frame frame = procedure.Frame;

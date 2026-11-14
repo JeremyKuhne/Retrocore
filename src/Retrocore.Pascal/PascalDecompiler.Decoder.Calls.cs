@@ -485,6 +485,30 @@ public sealed partial class PascalDecompiler
                         break;
                     }
 
+                case 11: // SCN(limit, unequal, character, array, offset, 0): SCAN's result
+                    {
+                        Pop(stack);
+                        Expr array = BytePointer(stack);
+                        Expr character = Pop(stack);
+                        if (Pop(stack) is not Constant { Value: 0 or 1 } unequal)
+                        {
+                            throw new InvalidDataException("A SCAN's test is neither = nor <>.");
+                        }
+
+                        Expr limit = Pop(stack);
+                        stack.Add(Builtin("SCAN", ScalarKind.Integer, limit, new ScanTest(unequal.Value == 1, character), array));
+                        break;
+                    }
+
+                case 12: // USTAT(unit, array, offset, control), Apple III Pascal's UNITSTATUS
+                    {
+                        Expr control = Pop(stack);
+                        Expr array = BytePointer(stack);
+                        Expr unit = Pop(stack);
+                        Statement(statements, "UNITSTATUS", new Argument(unit), new Argument(array), new Argument(control));
+                        break;
+                    }
+
                 case 21 or 22: // GSEG, RSEG
                     Pop(stack);
                     break;
@@ -523,7 +547,15 @@ public sealed partial class PascalDecompiler
                 return address is StringConstant or PackedConstant ? address : new Address(Designate(address));
             }
 
+            // A checked index, as SCAN's into a packed array, keeps its bounds; an offset alone says nothing of them.
             Designator array = Designate(address);
+            (Expr value, int? low, int? high) = Bounds(offset);
+            if (high is not null)
+            {
+                return new Address(new IndexDesignator(array, value, low, high, array.Type.ByteElement(low, high)));
+            }
+
+
             TypeNode element = array.Type.ByteElement(0, high: null);
             return new Address(new IndexDesignator(array, offset, 0, high: null, element) { Neutral = true });
         }

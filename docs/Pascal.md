@@ -200,7 +200,8 @@ Apple Pascal 1.1's sample programs (HILBERT, TREE, BALANCED, CROSSREF, DISKIO, G
 LINEFEED) and the BINDER utility decompile to sources that compile to the same code, but for the byte the Compiler
 skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
 decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
-units of a program's own (they need the Linker); a unit's variables; and `SCAN`, `IDSEARCH` and `TREESEARCH`.
+units of a program's own (they need the Linker); a unit's variables; and `IDSEARCH` and `TREESEARCH`. `SCAN` decompiles,
+with its test (`SCAN(41, = CH, BUF)`), and so does Apple III Pascal's `UNITSTATUS(UNIT, BUF, CONTROL)`, its `CSP 12`.
 ### Rebuilding a linked program
 
 The byte the Compiler skips to put an `LDC`'s or `XJP`'s words on a word boundary holds whatever its buffer had,
@@ -266,7 +267,10 @@ program and a 6502 function of its own, `SharedNamesRebuildByteForByte` two proc
 with 1.1's tools, `InterpreterWordsRebuildByteForByte` one using `.INTERP` with 1.2's, and
 `Apple3LinkedProgramsRebuildByteForByte` a program and its 6502 function with Apple III Pascal 1.1's on the Apple
 III. AIIFORMAT's assembled procedure, and every one in Apple III Pascal 1.1's Editor, assemble to the same bytes
-with Apple III Pascal's Assembler; AIIFORMAT itself does not decompile yet (its `CSP 12`). A code file from another version's Compiler decompiles, but
+with Apple III Pascal's Assembler. AIIFORMAT decompiles, every procedure, but its source does not compile: its two
+units, CODEACCESS and GETUNITNAME, are written as segment procedures rather than UNITs of their own; CODEACCESS
+reaches the system's global at word 630 (`SYS630`), as only a program compiled as part of the system can; and its
+segment 15 is the Apple II boot code it writes onto the disks it formats, data no source makes. Each is a warning. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

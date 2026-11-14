@@ -276,6 +276,7 @@ public sealed partial class PascalDecompiler
                 break;
             case Checked check: Walk(check.Value, visit); break;
             case Written written: Walk(written.Value, visit); break;
+            case ScanTest test: Walk(test.Character, visit); break;
             case SetValue set:
                 if (set.Value is not null) { Walk(set.Value, visit); }
                 foreach ((Expr low, Expr? high) in set.Members)
@@ -355,6 +356,14 @@ public sealed partial class PascalDecompiler
                 break;
             case CallStatement { Callee.UnitProcedure: { } declared } call:
                 PassUnit(declared, [.. call.Arguments.Select(argument => argument.Value)]);
+                break;
+            case CallStatement { Callee.Builtin: "UNITSTATUS" or "UNITREAD" or "UNITWRITE" } unitCall:
+                // A unit's number, and the counts, block and mode or control after the buffer, are integers.
+                for (int index = 0; index < unitCall.Arguments.Count; index++)
+                {
+                    if (index != 1) { unitCall.Arguments[index].Value.Type.Vote(ScalarKind.Integer, 2); }
+                }
+
                 break;
             case IfStatement branch:
                 branch.Condition.Type.Vote(ScalarKind.Boolean, 2);
@@ -448,6 +457,10 @@ public sealed partial class PascalDecompiler
                 Callee.Builtin: "TRUNC" or "ROUND" or "SIN" or "COS" or "LOG" or "ATAN" or "LN" or "EXP" or "SQRT"
             } call:
                 Real(call.Arguments[0]);
+                break;
+            case Call { Callee.Builtin: "SCAN" } scan when scan.Arguments is [{ } limit, ScanTest test, _]:
+                limit.Type.Vote(ScalarKind.Integer, 2);
+                test.Character.Type.Vote(ScalarKind.Char, 2);
                 break;
             case Load { Designator: IndexDesignator index }:
                 index.Index.Type.Vote(ScalarKind.Integer);

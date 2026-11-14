@@ -174,6 +174,8 @@ public sealed partial class PascalDecompiler
                 return Text(written.Value, expected);
             case Unary unary:
                 return UnaryText(unary, expected);
+            case ScanTest test:
+                return ($"{(test.Unequal ? "<>" : "=")} {Expression(test.Character, TypeNode.Scalar(ScalarKind.Char), Factor)}", Factor);
             case Binary binary:
                 return BinaryText(binary);
             case Comparison comparison:
@@ -444,6 +446,12 @@ public sealed partial class PascalDecompiler
             "EOF" or "EOLN" => [FileName(new Argument(call.Arguments[0]))],
             "TRUNC" or "ROUND" => [Expression(call.Arguments[0], TypeNode.Of(TypeKind.Real), 0)],
             "UNITBUSY" or "PWROFTEN" => [Expression(call.Arguments[0], TypeNode.Scalar(ScalarKind.Integer), 0)],
+            "SCAN" =>
+            [
+                Expression(call.Arguments[0], TypeNode.Scalar(ScalarKind.Integer), 0),
+                Expression(call.Arguments[1], expected: null, 0),
+                Expression(call.Arguments[2], expected: null, 0)
+            ],
             _ => [.. call.Arguments.Select(argument => Expression(argument, expected: null, 0))]
         };
 

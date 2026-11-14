@@ -122,7 +122,10 @@ What the decompiler does not decompile yet, found by decompiling every code file
 
 - **System programs:** code compiled with `(*$U-*)` (SOROCGOTO, HAZELGOTO, the system's Filer, Editor, Compiler and
   Linker), which reach the system's globals and call its procedures beyond the ones a program can name.
-- **`SCAN`, `IDSEARCH` and `TREESEARCH`** (`CSP SCN`, `IDS`, `TRS`), and the system's procedures past `CXP 0, 29`.
+- **`IDSEARCH` and `TREESEARCH`** (`CSP IDS`, `TRS`), and the system's procedures past `CXP 0, 29`. `SCAN` and Apple
+  III Pascal's `UNITSTATUS` (`CSP 12`, named `USTAT`) decompile, found by compiling probes with Apple III Pascal's
+  Compiler: `UNITSTATUS` pushes the unit, the buffer's address and byte offset, and the control word; `SCAN` the
+  limit, 0 for `=` or 1 for `<>`, the character, the array's address and byte offset, and a 0.
 - **GOTO into a statement:** a jump the structurer cannot place at the start of a statement (LIBRARY, the Linker), and
   an FJP that leaves its statement (LIBMAP), as a GOTO out of a REPEAT's condition makes.
 - **Units:** a program's own units (linked in by the Linker), a unit's variables (`LDE`, `LAE`, `STE`), and units
@@ -144,5 +147,6 @@ What the decompiler does not decompile yet, found by decompiling every code file
   file's assembled procedures so; all of 1.2's SYSTEM.LIBRARY assembles back. Apple III Pascal's Compiler,
   Assembler and Linker run on an emulated Apple III (`EmulatedApple3PascalTools`), for the same commands given its
   SOS disks: a program and its 6502 function rebuild byte for byte with 1.1's. **Not done:** naming a system
-  program's globals for `.PUBLIC`; decompiling AIIFORMAT (`CSP 12`, and a segment the decompiler leaves out), to
-  rebuild it whole.
+  program's globals for `.PUBLIC`; rebuilding AIIFORMAT whole: it decompiles, `CSP 12`
+  included, but its units need writing as UNITs of their own (compiled, then linked), CODEACCESS reaches the
+  system's global at word 630, and segment 15 is boot code kept as data.

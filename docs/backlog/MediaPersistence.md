@@ -2,8 +2,8 @@
 
 How disks, tapes and other media the machines change get back to image files, on every machine and in every format.
 
-**Status:** proposed 2026-11-14, for review; nothing here is approved or built. The [UI workflow](#the-ui-workflow)
-is a first proposal to settle together before the rest.
+**Status:** proposed 2026-11-14, for review; nothing here is built. The [UI workflow](#the-ui-workflow) and the
+[decisions](#decisions-agreed-2026-11-14) below it were agreed on 2026-11-14; the rest is still for review.
 
 Today one drive saves: the Disk II's `save` ([Devices.md](../Devices.md#the-debug-protocol)), on the Apple II and
 the Apple III. Every other disk keeps its changes in memory until the session ends, and then they are gone. Tapes
@@ -54,6 +54,9 @@ Every medium in a drive has three things, which the machines' types share throug
   - **blank**: a new disk or tape, with no file;
   - **recovered**: an unsaved copy the host kept at the end of a session (below), with the image it belongs to, if
     any.
+- **Its loaded bytes**: the image as it was read, kept beside the medium. A disk is small (a ProFile, the largest,
+  is at most 32 MB), and the loaded bytes let the host say what changed against the image and what changed in the
+  file since, and revert without reading the file again.
 - **Its version**: a count that changes on every write, as `WozDisk.Version` and `Disk35Disk.Version` do now.
   Media whose writes are not counted yet (`FloppyDisk`, `MemoryBlockDevice`, the ProFile) get one.
 - **Its saved version**: the version last written to its source, or loaded from it. The medium is **changed** when
@@ -114,7 +117,7 @@ to its own format gives back the same bytes, and the tests check that for every 
 | **WOZ** | lossless: `Export` keeps the tracks, their lengths, quarter-track map and unknown chunks | a WOZ1 image is written as WOZ2; the plan keeps that and says so on save, as WOZ1 writers are rare |
 | **`.dsk`, `.do`, `.po` (5.25)** | lossless while every track decodes as 16 standard sectors | a track that no longer decodes (a copy-protected track, a half-finished format, a track written by a nibble copier) fails the save, naming the tracks; save as `.woz` keeps them. Sector images carry no volume number, so a DOS volume other than 254 is lost; that is reported too |
 | **`.d13`** | reads only | no 13-sector reader back from WOZ yet; save as `.woz` until there is one |
-| **2MG** | lossless once the header is kept: the creator, version, comment and creator-data chunks, and the flags | today `Disk35Disk` drops the header on load. It keeps the header and rewraps the blocks on export. The **locked** flag is the image's own write protection: a locked image loads protected, unprotecting it in the drive does not unlock the file, and saving to it is refused (save as, or unlock it on purpose with a separate `unlock` save option) |
+| **2MG** | lossless once the header is kept: the creator, version, comment and creator-data chunks, and the flags | today `Disk35Disk` drops the header on load. It keeps the header and rewraps the blocks on export. The **locked** flag is the disk's write-protect tab ([below](#write-protection)): a locked image loads protected, and saving writes the drive's protection back as the flag |
 | **`.po`, `.hdv`, `.img`, 3.5 `.dsk`** | lossless: raw blocks | nothing |
 | **JV1** | lossless while the disk stays single-sided, single-density, ten 256-byte sectors on every track, with `$FA` marks only on track 17 | a double-density track, another sector size, a missing sector or a deleted mark elsewhere; save as JV3 |
 | **JV3** | lossless for what `FloppyDisk` holds: IDs, density, sizes, data marks, sides, the write-protect byte, and its CRC-error flags | nothing `FloppyDisk` holds; `Jv3Format.Write` already writes its 2,901-entry tables and the protect byte |
@@ -126,34 +129,42 @@ to its own format gives back the same bytes, and the tests check that for every 
 
 ## Write protection
 
-One rule for every disk: **a disk loads with the protection its image gives it, and otherwise writable.** The image
-gives it protection when:
-- its format says so: a WOZ's INFO write-protected flag, a locked 2MG, a JV3's write-protect byte;
-- its file is read-only, or its folder cannot be written;
-- it is under `RETROCORE_CACHE`, which holds images we fetched and never change.
+Two things are kept apart:
 
-This is safe because writing the disk changes only the copy in memory; nothing reaches the file until a save.
-The Disk II changes from loading every disk protected, so a program can write its own disk without first taking
-the tab off. The saved machine keeps the user's choice per drive, as now, and it wins over the default.
+- **The tab** says whether the machine can write the disk, as a real disk's write-protect notch does. Some formats
+  store it: a WOZ's INFO write-protected flag, a 2MG's locked flag, a JV3's write-protect byte. The drive's protect
+  toggle is that tab; saving writes it back into the image in those formats, and formats without one forget it.
+- **The lock** says whether the host can write the image file: it cannot when the file is read-only, its folder
+  cannot be written, or it is under `RETROCORE_CACHE`, which holds images we fetched and never change. A locked
+  image saves only with save as.
 
-Protection the image gives cannot be saved over: such media saves only with save as, and its tab can still be taken
-off in the drive so the machine can write the copy in memory.
+One rule for the tab on every disk: **a disk loads with the tab its image stores, and otherwise writable.** This is
+safe because writing the disk changes only the copy in memory; nothing reaches the file until a save. A locked image
+loads with its tab as stored too, since the lock stops the save, not the machine. The Disk II changes from loading
+every disk protected, so a program can write its own disk without first taking the tab off. The saved machine keeps
+the user's choice per drive, as now, and it wins over the default.
 
 ## Safety
 
-- **Never silently.** Save asks first, unless the user turns that off. Save as uses the save dialog's own replace
-  question. A recording does not replace a file that existed when it started without asking.
+- **Never silently.** Save writes without asking only when nothing is off: the disk fits the image's format, the
+  file has not changed since it was read, and it is not locked; a backup is kept. Anything else asks
+  ([below](#saving-in-each-state)). Save as uses the save dialog's own replace question. A recording does not
+  replace a file that existed when it started without asking.
 - **Atomic.** `MediaFiles.Write` writes beside the image as `.name.<guid>.saving`, flushes it to disk, and moves it
   over the image (`File.Replace` where a backup is kept), so a failed write leaves the image as it was. This is
   today's Disk II code, moved to one place, with the flush added. Tapes use it too.
-- **Conflicts.** Before writing, the host reads the image's stamp again. If the file changed since it was read (by
-  another program, another session, or the same image in two drives), the save stops with a `conflict` error; the
-  user can overwrite, save as, or reload the file and drop the machine's changes. The same image may be in two
-  drives at once, but only one of them can save it without a conflict.
-- **Backups.** The first save over an image in a session keeps the image it replaces as `name.ext.bak` beside it;
-  later saves in that session replace the image only. A setting turns this off.
-- **Read only.** An image the host cannot write (protection above, or a write that fails with access denied) offers
-  save as only, and says why.
+- **Stale images and conflicts.** The extension watches each inserted image's file and tells the host when it
+  changes (by another program, another session, or the same image saved from another drive); the host compares it
+  with the loaded bytes and marks the medium **stale** when it differs. Before writing, the host also reads the
+  image's stamp again, so a change the watcher missed is still caught. Saving a stale medium stops with a
+  `conflict` error; the user can overwrite, save as, or reload the file and drop the machine's changes. The same
+  image may be in two drives at once, but once one saves it, the other is stale.
+- **Backups.** Each save over an image keeps the image it replaces in the extension's storage
+  (`context.globalStorageUri/backups`), never beside the image, so workspaces and repositories stay clean. The last
+  five per image are kept, and **Restore Previous Version** puts one back. A setting turns this off.
+- **Locked.** An image the host cannot write (a lock above, or a write that fails with access denied) offers save as
+  only, and says why; a read-only file also offers **Make Writable**, which clears its attribute. The cache never
+  does.
 - **No open files.** The host reads an image whole and closes it, as now, so other programs can open it; only
   write-through keeps a file open, shared for reading.
 - **Recovered copies** live in the extension's global storage (`context.globalStorageUri/media`), never in the
@@ -191,14 +202,19 @@ as their images are.
 
 ```json
 "media": { "label": "C:\\disks\\work.woz", "format": "WOZ", "writeProtected": false, "changed": true,
-           "source": { "kind": "image", "path": "C:\\disks\\work.woz", "protected": false },
+           "source": { "kind": "image", "path": "C:\\disks\\work.woz", "locked": null, "stale": false },
            "version": 1874, "savedVersion": 1200,
+           "differences": { "unit": "sector", "count": 14, "summary": "tracks 17-18" },
            "saveFormats": [ { "format": "woz", "losses": [] },
                             { "format": "dsk", "losses": ["track 3 does not read as 16 sectors"] } ] }
 ```
 
-`source.kind` is `image`, `built`, `blank` or `recovered`; `source.protected` says the image cannot be saved over,
-and why (`readOnly`, `locked`, `cache`). `saveFormats` is worked out only when asked (`retro/devices` with
+`source.kind` is `image`, `built`, `blank` or `recovered`; `source.locked` says why the image cannot be saved over
+(`readOnly`, `folder` or `cache`), null when it can; `source.stale` says the file changed since it was read.
+`differences` compares the medium with its loaded bytes, by the medium's own unit: sectors for TRS-80 and Disk II
+sector images (and the sectors a WOZ's tracks decode to, or tracks when they do not), blocks for block images, bytes
+for tapes. Once the media library reads the disk's filesystem it adds the files changed, added and removed.
+`saveFormats` and `differences` are worked out only when asked (`retro/devices` with
 `"saveFormats": true`, or on the drive's own request), since decoding a WOZ's tracks is not free.
 
 `retro/device` actions:
@@ -214,9 +230,11 @@ and why (`readOnly`, `locked`, `cache`). `saveFormats` is worked out only when a
 ```
 
 - `save` fails with an error whose `id` the extension acts on: `conflict` (the image changed on disk), `losses` (the
-  format cannot hold the medium; the message lists what), `protected` (the image cannot be saved over) or `ioError`.
+  format cannot hold the medium; the message lists what), `locked` (the image cannot be saved over) or `ioError`.
   `overwrite` and `acceptLosses` answer the first two.
-- `revert` reads the image again and drops the machine's changes.
+- `revert` drops the machine's changes, back to the loaded bytes; `reload` reads the file again, for a stale image.
+- `imageChanged` (`{ "id": "disk2", "action": "imageChanged" }`) is the extension's file watcher telling the host to
+  check the image's stamp.
 - `new` inserts a blank medium, which only save as can write.
 - `eject` of a changed medium is refused with `changed` unless it says `"discard": true` or saved first, so a
   client that does not know about changed media cannot lose it. The extension asks and resends.
@@ -229,32 +247,65 @@ recovered copies.
 
 ## The UI workflow
 
-The pieces, to settle together before building:
+### What a drive shows
 
-- **The Drives view.** A changed drive's description says `changed`, and its icon gets a dot, as an unsaved editor
-  tab does. Its inline button is **Save** (today's **Save to Its Image**); its menu has **Save As...**, **Revert to
-  Image** and, for a conflict, **Compare** (sizes and dates; there is no diff of disks). The badge keeps counting
-  changed media, now including recovered copies.
-- **Save prompts.** Saving to its image asks once per medium per session, with "don't ask again" as a setting
-  (`retrocore.media.confirmSave`). A lossy format, a conflict or a protected image asks with what is wrong and the
-  ways out: save anyway, save as, cancel.
-- **Eject.** Ejecting a changed disk asks: **Save**, **Save As...**, **Discard** or cancel.
-- **Stopping.** VS Code cannot hold a debug session open to ask, so stopping never waits. The host keeps the
-  changed media as recovered copies, and the extension then shows one notification: "2 disks changed in *Apple
-  IIe*: **Save All**, **Review**, **Discard**". Review reveals them in the Drives view, where the off machine shows
-  them changed. A setting (`retrocore.media.onSessionEnd`: `keep`, `save`, `discard`) changes this.
-- **The display panel.** Its drive line keeps `changed`, now for every drive and not only the Disk II, and a changed
-  drive's name is a link that saves it. Its ended-session banner says how many media were left changed.
-- **The off machine.** Recovered media shows changed, and Save, Save As, Revert and Discard work while the machine is
-  off.
+Each medium has four independent states, and the Drives view shows each:
 
-Open questions:
-1. Is keep-and-ask on stop right, or should stop save automatically (with backups) by default?
-2. Should Save ask every time, once per session, or never, given the backup?
-3. Is a `.bak` beside the image welcome, or should backups go to global storage too?
-4. Should Revert ask?
-5. Does the display panel want save controls at all, or only the indicator?
-6. Should the write-protection change for the Disk II land now, or wait until every drive saves?
+| State | Values | Shown as |
+| --- | --- | --- |
+| **Diff** | same · **changed** (the machine wrote it) · **stale** (the file changed since it was read) · both, a conflict | a dot on the icon for changed, as an unsaved editor tab has; ⚠ for stale or a conflict |
+| **Lock** | open · read-only file or folder · under `RETROCORE_CACHE` | a lock icon |
+| **Tab** | protected · writable | today's protect icon |
+| **Fit** | fits its image's format · lossy | only when saving |
+
+The description joins them, such as `work.woz · changed · image changed on disk`. The tooltip adds the differences,
+such as "changed: 14 sectors on tracks 17-18", and for a conflict the file's size and date then and now. The badge
+counts changed media, recovered copies included.
+
+### Saving in each state
+
+**Save** (the inline button, today's **Save to Its Image**) asks only when something is off:
+
+| State | Save |
+| --- | --- |
+| same | disabled |
+| changed, fits, open | writes at once, keeping a backup |
+| changed, lossy | asks, listing what would be lost: **Save as WOZ / JV3...**, **Save Anyway**, cancel |
+| stale or a conflict | asks, with the differences: **Overwrite**, **Save As...**, **Reload from File** (drops the machine's changes), cancel |
+| locked | save as only; says why, and offers **Make Writable** for a read-only file |
+
+The drive's menu has **Save As...**, **Revert to Image** (which asks, as it drops work), **Reload from File** while
+stale, and **Restore Previous Version** after a save.
+
+### Eject, stop and the off machine
+
+- **Eject** of a changed disk asks: **Save**, **Save As...**, **Discard** or cancel. A machine's own eject cannot ask;
+  the disk is kept as a recovered copy and shown under its drive until it is saved or discarded.
+- **Stop** never waits, as VS Code does not let a debug session hold off ending. The host keeps changed media as
+  recovered copies, and one notification follows: "2 disks changed in *Apple IIe*: **Save All**, **Review**,
+  **Discard**". Review reveals them in the Drives view, on the machine now off. `retrocore.media.onSessionEnd`
+  (`keep`, the default, or `discard`) changes this.
+- **The off machine** shows recovered media as changed, and saves, saves as, reverts and discards it.
+- **The display panel** shows `changed` for every drive, not only the Disk II, with no save controls; clicking a
+  drive reveals it in the Drives view. Its ended-session banner says how many media were left changed.
+
+## Decisions (agreed 2026-11-14)
+
+- **Stop keeps and asks.** Changed media becomes recovered copies and a notification offers to save it; the user's
+  images are never written without them.
+- **Save asks only when something is off**: a lossy format, a stale image or a lock. Backups cover the quiet case.
+- **Backups go to the extension's storage**, never beside the image, with **Restore Previous Version**.
+- **Image flags are the disk's tab.** A WOZ's write-protected flag, a 2MG's locked flag and a JV3's protect byte are
+  what the drive's protect toggle changes and saving writes back. Only a read-only file or folder, or the cache,
+  locks an image.
+- **Differences by sector now, by file later.** The host keeps the loaded bytes and reports changed sectors, tracks
+  or blocks; file names come with the media library's filesystems.
+- **Images are watched.** The extension watches each image's file, so a stale image shows as soon as it changes, and
+  the stamp is checked again on save.
+- **The display panel shows only the indicator.**
+
+Still to confirm: Revert always asks (proposed), and the Disk II's write-protection change lands with phase 6, not
+before (proposed).
 
 ## Tests
 
@@ -263,21 +314,26 @@ Open questions:
   than one header block, JVC, CAS and WAV. Fixtures are built in code; external images under `RETROCORE_CACHE` only
   add cases and skip when absent.
 - **Losses.** A JV3 disk with a double-density track, saved as JV1, reports it; a WOZ with an unreadable track,
-  saved as DSK, names the track; a 2MG that is locked refuses.
+  saved as DSK, names the track; a locked 2MG loads protected and saves its tab back as the flag.
 - **`MediaFiles`.** A write that fails partway (a stream that throws) leaves the image as it was and no temporary
-  file; a changed stamp is a conflict; a read-only file and a cache path are protected; the backup is made once.
+  file; a changed stamp is a conflict; a read-only file and a cache path are locked; each save keeps a backup in storage,
+  and only the last five per image.
 - **Machines, by digest.** As the Disk II save test does now, a machine writes a file (DOS `SAVE`, ProDOS
   `SAVE`, TRSDOS `SAVE`, Disk BASIC on the CoCo), the disk is saved, and the image's SHA-256 is pinned; loading it
   again and reading the file back gives what was written.
-- **The protocol.** `save`, `revert`, `new`, refused eject and the error ids, through the debug host's tests.
+- **Differences.** A disk with known writes reports exactly the sectors, tracks or blocks written; reverting gives
+  back the loaded bytes.
+- **The protocol.** `save`, `revert`, `reload`, `imageChanged`, `new`, refused eject and the error ids, through the
+  debug host's tests.
 - **Saved machines.** Capture and restore with unsaved and new media, a missing copy, and a conflicting image;
   `tools/Test-OffMachine.mjs` covers the off machine.
-- **The extension.** The stop notification, the eject prompt and the badge, in `extension/src/test`.
+- **The extension.** The stop notification, the eject prompt, the prompts for each state, a watched image going
+  stale, Restore Previous Version and the badge, in `extension/src/test`.
 
 ## Phases
 
 1. **The model and the host's file writing.** `MediaSource`, versions and `ISavableMedia` in `Retrocore.Core`;
-   `MediaFiles` with atomic writes, stamps, conflicts, backups and protection; the Disk II's save moved onto them,
+   the loaded bytes and differences; `MediaFiles` with atomic writes, stamps, conflicts, backups and locks; the Disk II's save moved onto them,
    and tapes written through them. Done when the Disk II saves as it does now, plus conflicts and backups, with
    tests.
 2. **Every block device saves.** The 3.5 drive (keeping the 2MG header), the ProFile and slot 7. Done when each
@@ -285,14 +341,14 @@ Open questions:
 3. **TRS-80 and CoCo floppies save.** Versions on `FloppyDisk`, JV1, JV3 and JVC saving with losses checked, and
    save as JV3 for DMK and IMD. Done when a Model I, a Model III and a CoCo disk each save a file and boot again
    from the image.
-4. **The protocol's errors and the UI's prompts.** Error ids, `revert`, the refused eject, the Drives view's
-   changes and the prompts, after the [UI workflow](#the-ui-workflow) is agreed. Done when every path in it works
-   in the self-hosted extension.
+4. **The protocol's errors and the UI's prompts.** Error ids, `revert`, `reload`, the refused eject, the file
+   watcher, the Drives view's states and the prompts of the [UI workflow](#the-ui-workflow), and Restore Previous
+   Version. Done when every row of [saving in each state](#saving-in-each-state) works in the self-hosted extension.
 5. **Session end and recovery.** Recovered copies, autosave to them, `unsaved` in `machineState`, the stop
    notification and the off machine's save. Done when a changed disk survives stopping, restarting VS Code and
    starting the machine again, and can be saved from the off machine.
-6. **The write-protection rule.** Applied to every drive, with the image's own protection. Done when the table
-   above holds for each device and the docs say so.
+6. **The write-protection rule.** The tab as its image stores it, otherwise writable, on every drive, and saved
+   back in the formats that store it. Done when each device follows it and the docs say so.
 7. **New media and write-through.** `new` for blank disks; write-through for raw block images. Done when a blank
    800K disk formatted under ProDOS saves as `.po`, and a write-through ProFile matches AppleSharp's.
 8. **Later.** DMK and IMD writers, a 13-sector reader back from WOZ, WAV to CAS for the TRS-80 and the CoCo, and

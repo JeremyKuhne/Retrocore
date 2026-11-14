@@ -11,6 +11,8 @@ import { memoryEditorHtml } from "../memoryView";
 test("memory references split into a bank and an address; expressions do not", () => {
     assert.deepEqual(parseReference("0x0400"), { bank: null, address: 0x0400 });
     assert.deepEqual(parseReference("aux:0x0400"), { bank: "aux", address: 0x0400 });
+    assert.deepEqual(parseReference("cpu:0400"), { bank: null, address: 0x0400 }, "cpu: is the CPU's memory, and its digits hex");
+    assert.deepEqual(parseReference("CPU:0x0400"), { bank: null, address: 0x0400 });
     assert.deepEqual(parseReference("0400"), { bank: null, address: 0x0400 });
     assert.deepEqual(parseReference("bank1:0xD000"), { bank: "bank1", address: 0xD000 });
     assert.equal(parseReference("HL"), undefined);
@@ -438,6 +440,42 @@ test("a stop colors the bytes that changed since the stop before", async () => {
         await page.settle();
     }
     assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
+});
+
+test("a copy or freeze whose read fails acts on nothing, and says why", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    page.key("End", { ctrlKey: true, shiftKey: true });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    page.send({ type: "stopped" });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xC1);
+        await page.settle();
+    }
+
+    // The selection's start is out of view, so it is read again first, and that read fails.
+    const fail = async () => {
+        for (let round = 0; round < 5; round++) {
+            await page.settle();
+            for (const sent of page.posted.splice(0)) {
+                if (sent.type === "read") page.send({ type: "reply", id: sent.id, error: "The debug session ended." });
+                else if (sent.type === "copy" || sent.type === "freeze") throw new Error(`The page sent ${sent.type as string}.`);
+            }
+        }
+    };
+    page.key("c", { ctrlKey: true });
+    await fail();
+    assert.equal(page.elements.get("status")!.textContent, "The debug session ended.");
+    page.send({ type: "test", id: 6, actions: [{ freeze: true }] });
+    await fail();
+    assert.equal(page.elements.get("status")!.textContent, "The debug session ended.");
 });
 
 test("copying after a stop copies what memory holds now, out of view too", async () => {

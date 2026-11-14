@@ -180,19 +180,33 @@ function load(offset, count) {
 }
 
 // Waits until the bytes from an offset are as memory holds them now, reading the pages not read since the last stop
-// or change, as one scrolled out of view is not; copying, freezing and typing take the bytes they act on from here.
+// or change, as one scrolled out of view is not; copying, freezing, typing and undo take the bytes they act on from
+// here. Reports whether they are: a read that fails, or that a stop or change overtakes a few times running, leaves
+// bytes from before, which the caller must not act on. A failed read's status line says why.
 async function loaded(offset, count) {
-    await Promise.all(Array.from(loads));
-    if (count <= 0) return;
+    if (count <= 0) return true;
     const first = Math.floor(offset / PAGE), last = Math.floor((offset + count - 1) / PAGE);
-    // Each run of such pages is one read.
-    for (let page = first; page <= last; page++) {
-        if (pages[page] === 1) continue;
-        let end = page;
-        while (end < last && pages[end + 1] !== 1) end++;
-        await load(page * PAGE, (end - page + 1) * PAGE);
-        page = end;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        await Promise.all(Array.from(loads));
+        let current = true;
+        // Each run of such pages is one read.
+        for (let page = first; page <= last; page++) {
+            if (pages[page] === 1) continue;
+            current = false;
+            let end = page;
+            while (end < last && pages[end + 1] !== 1) end++;
+            if (!await load(page * PAGE, (end - page + 1) * PAGE)) return false;
+            page = end;
+        }
+        if (current) return true;
     }
+    for (let page = first; page <= last; page++) {
+        if (pages[page] !== 1) {
+            status("Memory kept changing while it was read; try again.", true);
+            return false;
+        }
+    }
+    return true;
 }
 
 // Reads bytes into the cache, reporting whether it could. A reply to a read begun before a stop or a change still
@@ -530,7 +544,8 @@ function writeProblem(offset, count) {
 }
 
 async function write(offset, values, record) {
-    await loaded(offset, values.length);
+    // Undo puts back the bytes from before, so they must be what memory held.
+    if (!await loaded(offset, values.length)) return false;
     const problem = writeProblem(offset, values.length);
     if (problem !== null) {
         status(problem, true);
@@ -606,7 +621,7 @@ async function typeKey(key, pressed) {
     if (pane === "text") {
         // The byte typed over decides the code written, such as normal or inverse text, so it is read first.
         const at = cursor;
-        await loaded(at, 1);
+        if (!await loaded(at, 1)) return;
         const value = charset === null ? typedText(key, bytes[at]) : typedText(key, bytes[at], charset.text, charset.looksSame);
         if (value === undefined) return;
         if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false, true);
@@ -615,7 +630,7 @@ async function typeKey(key, pressed) {
     const digit = parseInt(key, 16);
     if (isNaN(digit) || key.length !== 1) return;
     if (nibble === null) {
-        await loaded(cursor, 1);
+        if (!await loaded(cursor, 1)) return;
         // A first digit does not carry over to a byte the user moved to meanwhile.
         if (moves !== started || pane !== "hex") return;
         const problem = writeProblem(cursor, 1);
@@ -688,7 +703,7 @@ async function toggleFreeze() {
         if (offsets.every(offset => frozen.has(offset))) {
             await freeze([], offsets);
         } else {
-            await loaded(low, high - low + 1);
+            if (!await loaded(low, high - low + 1)) return;
             await freeze(offsets.filter(offset => !frozen.has(offset)).map(offset => ({ offset, value: bytes[offset] })), []);
         }
         status("");
@@ -882,7 +897,7 @@ async function find(backward) {
 // Copies the selection as memory holds it now, reading the bytes out of view first.
 async function copy() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
-    await loaded(low, high - low + 1);
+    if (!await loaded(low, high - low + 1)) return;
     await request({ type: "copy", text: copyText(bytes, readable, low, high, pane === "text", charset === null ? undefined : charset.text) });
 }
 

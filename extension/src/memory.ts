@@ -354,7 +354,9 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         // The debug host resolves the expression once, in the focused frame, so the view opens at that address. One
         // that names a bank, such as aux:$0400, opens that bank whichever was picked.
         const typed = /^\s*([A-Za-z][A-Za-z0-9]*)\s*:(.*)$/.exec(address);
-        const named = typed === null ? undefined : banks.find(bank => bank.name !== null && bank.name.toLowerCase() === typed[1].toLowerCase());
+        // cpu: names the CPU's memory, which the list has as the bank with no name.
+        const prefix = typed?.[1].toLowerCase();
+        const named = prefix === undefined ? undefined : banks.find(bank => (bank.name?.toLowerCase() ?? "cpu") === prefix);
         const name = named === undefined ? picked.bank.name : named.name;
         let at: number;
         try {

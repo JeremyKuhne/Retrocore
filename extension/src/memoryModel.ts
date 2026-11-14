@@ -59,7 +59,9 @@ export function parseReference(reference: string): ParsedReference | undefined {
     const match = /^\s*(?:([A-Za-z][A-Za-z0-9]*):)?\s*(?:0[xX]([0-9A-Fa-f]+)|([0-9][0-9A-Fa-f]*))\s*$/.exec(reference);
     if (match === null) return undefined;
     const address = parseInt(match[2] ?? match[3], 16);
-    return address > 0xFFFF ? undefined : { bank: match[1]?.toLowerCase() ?? null, address };
+    // cpu: names memory as the machine's own CPU maps it, as no bank does.
+    const bank = match[1]?.toLowerCase();
+    return address > 0xFFFF ? undefined : { bank: bank === undefined || bank === "cpu" ? null : bank, address };
 }
 
 /**

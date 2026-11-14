@@ -78,20 +78,20 @@ public interface ISavableMedia
 ```
 
 The machines never touch files. They export bytes and say what is lost; the host (`Retrocore.Debug`) does all file
-work in one place, `MediaFiles`, so atomic writes, stamps, conflicts and backups are written once. `Saved` takes the
+work in one place, `MediaFiles`, so atomic writes, stamps, conflicts and the history are written once. `Saved` takes the
 version that was exported, so a write the machine makes while the file is being written leaves the medium changed.
 
 ## When media is written
 
 | When | What happens | Default |
 | --- | --- | --- |
-| **Save** | The medium is written to its source image, in the source's format, keeping a backup. | asks only when something is off |
+| **Save** | The medium is written to its source image, in the source's format; the image it replaces is kept in the [history](#history). | asks only when something is off |
 | **Save as** | Written to a path and format the user picks; the medium then comes from it. | the dialog asks about replacing a file |
 | **Eject**, by the user | A changed disk: the user picks save, save as, discard or cancel. | asks |
 | **Eject**, by the machine (a 3.5 drive's CONTROL eject) | Nothing can ask in time: the ejected disk is kept as a recovered medium, and the drive offers it until the session ends. | keeps |
 | **Recording a tape** | Written to its path when ejected, or when the session ends, as now, but atomically and without replacing a file that was there before the recording started unless the user said so. | writes |
-| **Session end** | Changed media is kept as recovered copies, never written to its images; the off machine shows it changed and offers to save it. | keeps |
-| **Autosave** | Only to recovered copies: while the machine runs, changed media is copied there every 30 seconds, so a crash loses little. Never to the user's images. | on |
+| **Session end** | Changed media is kept as a version in its history, never written to its image; the off machine shows it changed and offers to save it. | keeps |
+| **Autosave** | Only to the history: while the machine runs, a changed disk gets a version every 30 seconds, so a crash loses little. Never to the user's images. | on |
 | **Write-through** | Each write goes straight to the file, as AppleSharp's `FileBlockDevice` does. Only for raw block images (`.po`, `.hdv`, `.img`, ProFile, slot 7), only when asked per drive, and the file stays open. | off |
 
 What each device allows:
@@ -157,7 +157,7 @@ it wins over the default.
   ([below](#saving-in-each-state)). Save as uses the save dialog's own replace question. A recording does not
   replace a file that existed when it started without asking.
 - **Atomic.** `MediaFiles.Write` writes beside the image as `.name.<guid>.saving`, flushes it to disk, and moves it
-  over the image (`File.Replace` where a backup is kept), so a failed write leaves the image as it was. This is
+  over the image, so a failed write leaves the image as it was. This is
   today's Disk II code, moved to one place, with the flush added. Tapes use it too.
 - **Stale images and conflicts.** The extension watches each inserted image's file and tells the host when it
   changes (by another program, another session, or the same image saved from another drive); the host compares it
@@ -165,18 +165,80 @@ it wins over the default.
   image's stamp again, so a change the watcher missed is still caught. Saving a stale medium stops with a
   `conflict` error; the user can overwrite, save as, or reload the file and drop the machine's changes. The same
   image may be in two drives at once, but once one saves it, the other is stale.
-- **Backups.** Each save over an image keeps the image it replaces in the extension's storage
-  (`context.globalStorageUri/backups`), never beside the image, so workspaces and repositories stay clean. The last
-  five per image are kept, and **Restore Previous Version** puts one back. A setting turns this off.
+- **Backups.** Each save over an image keeps the image it replaces as a version in its [history](#history), in the
+  extension's storage, never beside the image, so workspaces and repositories stay clean.
 - **Read-only images.** An image the host cannot write ([above](#write-protection), or a write that fails with
   access denied) offers save as only, and says why; a read-only file also offers **Make Writable**, which clears its attribute. The cache never
   does.
 - **No open files.** The host reads an image whole and closes it, as now, so other programs can open it; only
   write-through keeps a file open, shared for reading.
-- **Recovered copies** live in the extension's global storage (`context.globalStorageUri/media`), never in the
-  repository or beside the image, one file per medium in its own format with a small JSON record of its source and
-  stamp. The host is given the folder at launch (`mediaRecoveryDirectory`). Resetting a saved machine, or saving or
-  discarding a medium, deletes its copy.
+- **Recovered copies** are versions in the history, so they are as safe as it is. Resetting a saved machine, or
+  saving or discarding a medium, stops the saved machine naming its version; the history keeps it until it is
+  thinned or cleared.
+
+## History
+
+Every medium keeps a history of versions, as Time Machine keeps a file's: what the disk held at each moment that
+matters, and any of them can come back. It covers media only. A whole-machine snapshot (CPU, memory and devices) is
+a separate, later feature, which can name the media versions here rather than copy the disks.
+
+The history is also the plan's backups and recovered copies: a backup is the version taken before a save, and a
+medium's **recovered copy** is its newest version not saved to its image. One store, one rule for keeping versions,
+and one view do for all three.
+
+### Versions
+
+| A version is taken | Which keeps |
+| --- | --- |
+| on insert | the image as loaded |
+| before and after each save | the image the save replaces (the backup), and what it wrote |
+| every 30 seconds while the machine runs, when the disk changed since the last version | at most 30 seconds of work lost to a crash |
+| when the session stops | the disk as the session left it |
+| before a revert, a reload, a restore or a discard | what those drop |
+| when the machine ejects a disk | the disk it ejected |
+
+Each version records its time; what took it (`insert`, `save`, `checkpoint`, `stop`, `beforeRevert`, `eject` and so
+on); the machine and its launch configuration; whether it is the image as last saved; the differences from the
+version before, such as "6 sectors on track 17"; and a pin and a label when the user gives them. A tape's history
+has a version on insert and one when a recording is ejected.
+
+### Whose history
+
+A history belongs to a medium: an image by its full path, or a built or blank medium by an id the host gives it,
+which the saved machine keeps. The same image in two drives shares one history. Save as moves the medium to the new
+path's history, which starts with a link to the old one, so the earlier versions still list.
+
+### Storage
+
+The history is kept in the extension's global storage (`context.globalStorageUri/history`), never in the
+repository or beside the image. The host is given the folder at launch (`mediaHistoryDirectory`), and the language
+server is too, for the off machine.
+
+Content is stored in chunks named by their SHA-256: a Disk II track, a TRS-80 track's sectors, or 4 KB of a block
+image. A version is a small JSON manifest of its chunks and the format to rebuild its image from them, so versions
+share whatever they have in common, and a hundred versions of an 800K disk that differ by a few sectors cost little
+more than one copy. A version is written as images are, atomically, and is complete once its manifest is. The host
+copies the changed chunks on the machine's thread and writes them on another, so the machine never waits on the
+disk.
+
+### Thinning
+
+As Time Machine thins: every version from the last hour, the newest of each hour for the last day, of each day for
+the last month, and of each week before that. Never thinned: pinned versions, each medium's newest version, the
+version that matches each image as last saved, and any version a saved machine names. A size cap
+(`retrocore.media.historySize`, 1 GB) then drops the oldest versions that may be thinned, across all media.
+Thinning runs when a version is taken and when the extension starts, not on a timer. **Clear History** empties one
+medium's history or all of them, asking first, and keeps the versions saved machines name.
+
+### Using a version
+
+- **Restore to Drive** makes the disk that version, changed against its image. The disk it replaces becomes a
+  version first, so nothing is lost and nothing asks.
+- **Restore to Image** writes the version over the image, with Save's checks; the image it replaces becomes a version.
+- **Save As...** writes it to a new image, in any format that holds it.
+- **Compare with Disk** and **Compare with Previous** list the differences: by sector, track or block now, and by
+  file once the media library reads the disk's filesystem.
+- **Pin**, **Label...** and **Delete**.
 
 ## Saved machines
 
@@ -186,19 +248,19 @@ it wins over the default.
 { "media": {
     "disk1": { "path": "C:\\disks\\games.dsk", "writeProtected": false },
     "disk2": { "path": "C:\\disks\\work.woz", "writeProtected": false,
-               "unsaved": { "copy": "…/media/3f9c….woz", "stamp": { "length": 232960, "written": "2026-11-14T10:02:11Z", "sha256": "…" } } },
-    "disk35d1": { "format": "800K", "writeProtected": false, "unsaved": { "copy": "…/media/a71e….po" } }
+               "unsaved": { "version": "9b1e…", "stamp": { "length": 232960, "written": "2026-11-14T10:02:11Z", "sha256": "…" } } },
+    "disk35d1": { "medium": "m-a71e…", "format": "800K", "writeProtected": false, "unsaved": { "version": "c04d…" } }
 } }
 ```
 
 - **Saved**: a `path`, as now.
-- **Unsaved changes**: a `path` and `unsaved`, the recovered copy and the stamp the image had when it was read.
-  Restoring inserts the copy, changed against that image. If the image changed since, the copy still goes in, with
+- **Unsaved changes**: a `path` and `unsaved`, the version the session left it at and the stamp the image had when
+  it was read. Restoring inserts that version, changed against that image. If the image changed since, the version still goes in, with
   a conflict the Machine view reports.
-- **New**: no `path`, only `unsaved`; a built or blank disk that was changed, so a `dos` disk with a program saved
+- **New**: no `path`, only the medium's id and `unsaved`; a built or blank disk that was changed, so a `dos` disk with a program saved
   on it survives the session. An unchanged built disk is still left out, as the launch builds it again.
 
-A recovered copy whose file is gone is reported in `problems` and skipped, as a missing image is now. Favorites store
+A version the history no longer has (its storage was deleted by hand) is reported in `problems` and skipped, as a missing image is now. Favorites store
 saved media only: making a favorite from a machine with unsaved media asks to save it first or leaves those drives
 as their images are.
 
@@ -233,6 +295,27 @@ for tapes. Once the media library reads the disk's filesystem it adds the files 
 { "id": "disk0", "action": "revert" }
 { "id": "disk35d1", "action": "new", "format": "800K" }
 { "id": "slot7", "action": "writeThrough", "enabled": true }
+{ "id": "disk2", "action": "restoreVersion", "version": "9b1e…" }
+{ "id": "disk2", "action": "restoreVersion", "version": "9b1e…", "toImage": true }
+{ "id": "disk2", "action": "saveVersion", "version": "9b1e…", "path": "before-format.woz" }
+{ "id": "disk2", "action": "pinVersion", "version": "9b1e…", "pinned": true, "label": "before FORMAT" }
+{ "id": "disk2", "action": "deleteVersion", "version": "9b1e…" }
+```
+
+`retro/mediaHistory` lists a drive's versions, newest first, and compares two:
+
+```json
+{ "id": "disk2" }
+{ "id": "disk2", "compare": ["9b1e…", "now"] }
+```
+
+```json
+{ "versions": [
+    { "version": "now", "time": "2026-11-14T10:52:41Z", "kind": "current", "saved": false,
+      "differences": { "unit": "sector", "count": 6, "summary": "track 17" } },
+    { "version": "9b1e…", "time": "2026-11-14T10:43:02Z", "kind": "save", "saved": true,
+      "pinned": true, "label": "before FORMAT", "machine": "Apple IIe" } ],
+  "size": 3250176 }
 ```
 
 - `save` fails with an error whose `id` the extension acts on: `conflict` (the image changed on disk), `losses` (the
@@ -246,12 +329,12 @@ for tapes. Once the media library reads the disk's filesystem it adds the files 
   `writeProtected` in `media` is the lock.
 - `eject` of a changed medium is refused with `changed` unless it says `"discard": true` or saved first, so a
   client that does not know about changed media cannot lose it. The extension asks and resends.
-- A machine's own eject sends a `retro/mediaEjected` event naming the drive and its recovered copy.
-- On `disconnect`, before it answers, the host writes the recovered copies and sends a last `retro/devices` event
+- A machine's own eject sends a `retro/mediaEjected` event naming the drive and the version it took.
+- On `disconnect`, before it answers, the host takes the stop versions and sends a last `retro/devices` event
   whose `configuration` names them, so the extension keeps them in the saved machine.
 
 `retrocore/machine/change` takes the same actions for an off machine, where `save` and `revert` act on the
-recovered copies.
+recovered copies, and `retrocore/machine/history` answers as `retro/mediaHistory` does.
 
 ## The UI workflow
 
@@ -327,9 +410,9 @@ A drive's menu (right-click, or **...** on the row):
 ┌──────────────────────────────────┐
 │ Save                             │
 │ Save As...                       │
-│ Revert to Image...               │
+│ Revert to Image                  │
 │ Reload from File                 │   only while stale
-│ Restore Previous Version...      │   only after a save
+│ Show History                     │
 ├──────────────────────────────────┤
 │ Insert...                        │
 │ Eject                            │
@@ -349,8 +432,8 @@ A drive's menu (right-click, or **...** on the row):
 | stale or a conflict | asks, with the differences: **Overwrite**, **Save As...**, **Reload from File** (drops the machine's changes), cancel |
 | read-only image | save as only; says why, and offers **Make Writable** for a read-only file |
 
-The drive's menu has **Save As...**, **Revert to Image** (which asks, as it drops work), **Reload from File** while
-stale, and **Restore Previous Version** after a save.
+The drive's menu has **Save As...**, **Revert to Image**, **Reload from File** while stale, and **Show History**.
+Revert and Reload ask nothing, as the disk they drop becomes a version first.
 
 A quiet save says so in the status bar for five seconds, and asks nothing:
 
@@ -388,7 +471,7 @@ A stale image or a conflict:
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Reload from File** asks again only when the machine had changed the disk, since that drops its changes.
+**Reload from File** drops the machine's changes, which stay in the history.
 
 A read-only image:
 
@@ -406,35 +489,69 @@ A read-only image:
 An image in the cache says `prodos.po is in Retrocore's image cache, which is never changed.` and offers only
 **Save As...** and **Cancel**.
 
-Revert:
+### The History row
+
+Each drive with a disk has a **History** row among its details, which lists its versions, newest first, the older
+ones grouped:
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ Revert Drive 1 to work.woz?                                      │
-│                                                                  │
-│   The machine's changes to 14 sectors on tracks 17-18 are lost.  │
-│                                                                  │
-│                        [Revert]   [Cancel]                       │
-└──────────────────────────────────────────────────────────────────┘
+▾ 🔓 Drive 1        work.woz · track 17 · writing                    ●   [Lock] [Save] [Eject]
+    Image            C:\disks\work.woz (WOZ 2)
+    Changed          6 sectors on track 17, not saved
+  ▾ History          14 versions · 3.1 MB
+      ● now          not saved · 6 sectors on track 17
+        10:52:30     checkpoint · 2 sectors on track 17                    [Restore] [Compare]
+        10:52:00     checkpoint · 8 sectors on tracks 17-18
+      📌 10:43        saved to work.woz · before FORMAT
+        10:31        saved to work.woz
+        09:58        inserted
+      ▸ Yesterday    5 versions
+      ▸ Last week    2 versions
 ```
 
-Restore Previous Version is a quick pick of the backups, newest first:
+- `📌` marks a pinned version, and its label follows its kind.
+- A version's inline buttons are **Restore** (to the drive) and **Compare** (with the disk). Its menu:
 
 ```text
-┌ Restore a previous version of work.woz ──────────────────────────┐
-│ Before the save at 10:43 today       232,960 bytes               │
-│ Before the save at 10:31 today       232,960 bytes               │
-│ Before the save at 16:05 yesterday   232,960 bytes               │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────┐
+│ Restore to Drive                 │
+│ Restore to Image                 │
+│ Save As...                       │
+├──────────────────────────────────┤
+│ Compare with Disk                │
+│ Compare with Previous            │
+├──────────────────────────────────┤
+│ Pin  (Unpin when pinned)         │
+│ Label...                         │
+│ Delete                           │
+└──────────────────────────────────┘
 ```
 
-Restoring writes the backup over the image, keeping the image it replaces as a backup too, and reloads the drive,
-asking first if the machine had changed the disk.
+Compare opens a read-only document beside the editor:
+
+```text
+work.woz: 10:31 (saved) against now (not saved)
+
+Track 17   sectors 3, 4, 9            changed
+Track 18   sectors 0, 1, 2            changed
+Track 18   sector 11                  unreadable now
+```
+
+Once the media library reads the disk's filesystem, a section above the sectors names the files:
+
+```text
+Files      HELLO                      changed, 3 sectors
+           DATA                       new, 4 sectors
+```
+
+The History row of a medium kept from the last run is there on the off machine too, so a disk can be restored to
+any version before the machine starts.
 
 ### Eject, stop and the off machine
 
-- **Eject** of a changed disk asks: **Save**, **Save As...**, **Discard** or cancel. A machine's own eject cannot ask;
-  the disk is kept as a recovered copy and shown under its drive until it is saved or discarded.
+- **Eject** of a changed disk asks: **Save**, **Save As...**, **Discard** or cancel; a discarded disk stays in its
+  history. A machine's own eject cannot ask; the disk is kept as a recovered copy and shown under its drive until it
+  is saved or discarded.
 - **Stop** never waits, as VS Code does not let a debug session hold off ending. The host keeps changed media as
   recovered copies, and one notification follows: "2 disks changed in *Apple IIe*: **Save All**, **Review**,
   **Discard**". Review reveals them in the Drives view, on the machine now off. `retrocore.media.onSessionEnd`
@@ -478,7 +595,7 @@ Stopping, with changed media, shows one notification in the corner:
 ```
 
 **Save All** saves each in turn, and a disk that needs a prompt (stale, lossy, read-only) asks as above; **Discard**
-asks once more, naming them. Dismissing the notification keeps them.
+asks nothing, as the versions stay in each disk's history. Dismissing the notification keeps them.
 
 The machine, now off, with what it kept:
 
@@ -512,8 +629,12 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
 
 - **Stop keeps and asks.** Changed media becomes recovered copies and a notification offers to save it; the user's
   images are never written without them.
-- **Save asks only when something is off**: a lossy format, a stale image or a lock. Backups cover the quiet case.
-- **Backups go to the extension's storage**, never beside the image, with **Restore Previous Version**.
+- **Save asks only when something is off**: a lossy format, a stale image or a read-only image. The history covers the quiet case.
+- **A time-machine history of media.** Every medium keeps versions on insert, around each save, every 30 seconds
+  while it changes, on stop, on the machine's eject, and before anything drops changes. They are thinned as Time
+  Machine thins, kept within a 1 GB cap, and listed in a History row under each drive. Backups and recovered copies
+  are versions in it. Whole-machine snapshots are not part of it.
+- **The history is in the extension's storage**, never beside the image.
 - **Every disk shows a lock.** The drive's icon is a lock or an open lock, so a writable disk is plain at a glance,
   and its first inline button locks or unlocks it. The ProFile and slot 7 get the lock too.
 - **Image flags are the disk's lock.** A WOZ's write-protected flag, a 2MG's locked flag and a JV3's protect byte are
@@ -525,8 +646,9 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
   the stamp is checked again on save.
 - **The display panel shows only the indicator.**
 
-Still to confirm: Revert always asks (proposed), and the Disk II's write-protection change lands with phase 6, not
-before (proposed).
+Still to confirm, both proposed: Revert, Reload and Discard ask nothing, now that the history keeps what they drop
+(this replaces the earlier proposal that Revert always asks); and the Disk II's write-protection change lands with
+phase 6, not before.
 
 ## Tests
 
@@ -537,8 +659,12 @@ before (proposed).
 - **Losses.** A JV3 disk with a double-density track, saved as JV1, reports it; a WOZ with an unreadable track,
   saved as DSK, names the track; a locked 2MG loads locked and saves its lock back as the flag.
 - **`MediaFiles`.** A write that fails partway (a stream that throws) leaves the image as it was and no temporary
-  file; a changed stamp is a conflict; a read-only file and a cache path are read-only images; each save keeps a backup in storage,
-  and only the last five per image.
+  file; a changed stamp is a conflict; a read-only file and a cache path are read-only images; a save adds the image it replaced to the
+  history.
+- **History.** A version restores to the same bytes it was taken from, pinned by digest; versions share chunks, so
+  a hundred checkpoints of an 800K disk with a few sectors changed stay under twice its size; a version cut off
+  mid-write leaves the history as it was; thinning, on a test clock, keeps what the [rule](#thinning) says, pinned
+  and saved-machine versions included; the size cap drops the oldest first.
 - **Machines, by digest.** As the Disk II save test does now, a machine writes a file (DOS `SAVE`, ProDOS
   `SAVE`, TRSDOS `SAVE`, Disk BASIC on the CoCo), the disk is saved, and the image's SHA-256 is pinned; loading it
   again and reading the file back gives what was written.
@@ -549,25 +675,26 @@ before (proposed).
 - **Saved machines.** Capture and restore with unsaved and new media, a missing copy, and a conflicting image;
   `tools/Test-OffMachine.mjs` covers the off machine.
 - **The extension.** The stop notification, the eject prompt, the prompts for each state, a watched image going
-  stale, Restore Previous Version and the badge, in `extension/src/test`.
+  stale, the History rows and their actions, Compare, and the badge, in `extension/src/test`.
 
 ## Phases
 
 1. **The model and the host's file writing.** `MediaSource`, versions and `ISavableMedia` in `Retrocore.Core`;
-   the loaded bytes and differences; `MediaFiles` with atomic writes, stamps, conflicts, backups and locks; the Disk II's save moved onto them,
-   and tapes written through them. Done when the Disk II saves as it does now, plus conflicts and backups, with
-   tests.
+   the loaded bytes and differences; `MediaFiles` with atomic writes, stamps, conflicts and read-only images; the history's store, with versions on
+   insert and around each save; the Disk II's save moved onto them,
+   and tapes written through them. Done when the Disk II saves as it does now, plus conflicts, and the image a save
+   replaced restores from the history, with tests.
 2. **Every block device saves.** The 3.5 drive (keeping the 2MG header), the ProFile and slot 7. Done when each
    saves and saves as, with round trips and a ProDOS `SAVE` pinned by digest.
 3. **TRS-80 and CoCo floppies save.** Versions on `FloppyDisk`, JV1, JV3 and JVC saving with losses checked, and
    save as JV3 for DMK and IMD. Done when a Model I, a Model III and a CoCo disk each save a file and boot again
    from the image.
 4. **The protocol's errors and the UI's prompts.** Error ids, `revert`, `reload`, the refused eject, the file
-   watcher, the Drives view's states and the prompts of the [UI workflow](#the-ui-workflow), and Restore Previous
-   Version. Done when every row of [saving in each state](#saving-in-each-state) works in the self-hosted extension.
-5. **Session end and recovery.** Recovered copies, autosave to them, `unsaved` in `machineState`, the stop
-   notification and the off machine's save. Done when a changed disk survives stopping, restarting VS Code and
-   starting the machine again, and can be saved from the off machine.
+   watcher, the Drives view's states and the prompts of the [UI workflow](#the-ui-workflow), and the History rows with
+   restore and Compare. Done when every row of [saving in each state](#saving-in-each-state) works in the self-hosted extension.
+5. **Session end and the full history.** Versions every 30 seconds, on stop and on the machine's eject; thinning
+   and the size cap; `unsaved` in `machineState`; the stop notification, and the off machine's save and history. Done when a changed disk survives stopping, restarting VS Code and
+   starting the machine again, and can be saved, or restored to an earlier version, from the off machine.
 6. **The write-protection rule.** The lock as its image stores it, otherwise unlocked, on every drive, and saved
    back in the formats that store it; the ProFile's and slot 7's lock, answering writes with $2B. Done when every
    drive with a disk shows and changes its lock, each device follows the rule, and the docs say so.

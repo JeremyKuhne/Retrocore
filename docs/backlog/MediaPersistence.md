@@ -240,6 +240,30 @@ medium's history or all of them, asking first, and keeps the versions saved mach
   file once the media library reads the disk's filesystem.
 - **Pin**, **Label...** and **Delete**.
 
+### On, off and settings
+
+History is on by default, for all media, and can be turned off for all of it or for one disk; both are a click
+away ([below](#turning-history-on-and-off)). A disk's own choice wins over the global one and is kept in the saved
+machine.
+
+With history off, a disk keeps no checkpoints and no old versions, but still keeps **one** version, its newest,
+when the session stops or the machine ejects it, so stopping never loses work. As nothing else is kept, Revert,
+Reload and Discard ask first again, and a save keeps no backup. Turning history off asks whether to keep or clear the
+versions already there.
+
+The settings, all under `retrocore.media`:
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `history.enabled` | `true` | Keep a history of versions for each disk and tape. |
+| `history.interval` | `30` | Seconds between checkpoints while a disk changes; `0` keeps only the versions events take. |
+| `history.size` | `1024` | Megabytes the history may use, across all media, before the oldest versions go. |
+| `onSessionEnd` | `keep` | `keep` changed media and ask, or `discard` it. |
+| `watchImages` | `true` | Watch each image's file, so a stale image shows at once. |
+
+They are ordinary VS Code settings, so they can be set per user or per workspace; the host is given them at launch,
+and a change applies to a running machine at once.
+
 ## Saved machines
 
 `machineState`'s media entries grow from `{ path, writeProtected }` to say which of three states the medium is in:
@@ -253,7 +277,8 @@ medium's history or all of them, asking first, and keeps the versions saved mach
 } }
 ```
 
-- **Saved**: a `path`, as now.
+- **Saved**: a `path`, as now. Any drive may add `"history": false` or `true`, its own choice; without it, the disk
+  follows the global setting.
 - **Unsaved changes**: a `path` and `unsaved`, the version the session left it at and the stamp the image had when
   it was read. Restoring inserts that version, changed against that image. If the image changed since, the version still goes in, with
   a conflict the Machine view reports.
@@ -300,7 +325,14 @@ for tapes. Once the media library reads the disk's filesystem it adds the files 
 { "id": "disk2", "action": "saveVersion", "version": "9b1e…", "path": "before-format.woz" }
 { "id": "disk2", "action": "pinVersion", "version": "9b1e…", "pinned": true, "label": "before FORMAT" }
 { "id": "disk2", "action": "deleteVersion", "version": "9b1e…" }
+{ "id": "disk2", "action": "history", "enabled": false }
+{ "id": "disk2", "action": "history", "enabled": null }
 ```
+
+`history` sets a disk's own choice, and `null` makes it follow the global setting. The global settings come in the
+launch as `mediaHistory` (`{ "enabled": true, "interval": 30, "size": 1024 }`), and a `retro/mediaSettings` request
+changes them in a running session. `media` in `retro/devices` adds `history`: `{ "enabled": true, "own": false,
+"versions": 14, "size": 3250176 }`.
 
 `retro/mediaHistory` lists a drive's versions, newest first, and compares two:
 
@@ -433,7 +465,8 @@ A drive's menu (right-click, or **...** on the row):
 | read-only image | save as only; says why, and offers **Make Writable** for a read-only file |
 
 The drive's menu has **Save As...**, **Revert to Image**, **Reload from File** while stale, and **Show History**.
-Revert and Reload ask nothing, as the disk they drop becomes a version first.
+Revert and Reload ask nothing while the disk has history on, as the disk they drop becomes a version first; with
+history off they ask.
 
 A quiet save says so in the status bar for five seconds, and asks nothing:
 
@@ -498,7 +531,7 @@ ones grouped:
 ▾ 🔓 Drive 1        work.woz · track 17 · writing                    ●   [Lock] [Save] [Eject]
     Image            C:\disks\work.woz (WOZ 2)
     Changed          6 sectors on track 17, not saved
-  ▾ History          14 versions · 3.1 MB
+  ▾ 🕘 History       14 versions · 3.1 MB                                      [🕘] [⚙]
       ● now          not saved · 6 sectors on track 17
         10:52:30     checkpoint · 2 sectors on track 17                    [Restore] [Compare]
         10:52:00     checkpoint · 8 sectors on tracks 17-18
@@ -546,6 +579,88 @@ Files      HELLO                      changed, 3 sectors
 
 The History row of a medium kept from the last run is there on the off machine too, so a disk can be restored to
 any version before the machine starts.
+
+### Turning history on and off
+
+Two icons do it everywhere: a **clock** turns history on and off, lit while it is on and grayed while it is off, and
+a **gear** opens its settings. In the mockups `[🕘]` is the lit clock, `[🕘̸]` the grayed one and `[⚙]` the gear.
+
+The Drives view's title bar has both, for all media, beside Refresh:
+
+```text
+DRIVES   History on · 312 MB of 1 GB                                     [🕘] [⚙] [↻]   (3)
+```
+
+```text
+DRIVES   History off                                                     [🕘̸] [⚙] [↻]   (3)
+```
+
+- The clock is a toggle (VS Code's `toggled` menu state), so it also shows pressed while history is on. Its tooltip
+  says what a click does: "Turn Off Media History" or "Turn On Media History".
+- VS Code shows a view's title buttons only while the pointer is over the view, unless
+  `workbench.view.alwaysShowHeaderActions` is set, so the state is also in the view's description ("History on ·
+  312 MB of 1 GB"), which always shows. Clicking the description does nothing; the buttons do.
+- The gear opens the Settings editor filtered to `retrocore.media`:
+
+```text
+┌ Settings ──────────────────────────────────────────── 🔎 retrocore.media ┐
+│ Retrocore › Media › History: Enabled                                     │
+│ [✓] Keep a history of versions for each disk and tape.                   │
+│                                                                          │
+│ Retrocore › Media › History: Interval                                    │
+│ [ 30 ] Seconds between checkpoints while a disk changes; 0 keeps only    │
+│        the versions events take.                                         │
+│                                                                          │
+│ Retrocore › Media › History: Size                                        │
+│ [ 1024 ] Megabytes the history may use before the oldest versions go.    │
+│                                                                          │
+│ Retrocore › Media › On Session End                          [ keep  ▾ ]  │
+│ Retrocore › Media › Watch Images                                   [✓]   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Each disk's History row carries the same two icons, for that disk. Its own icon is the clock, lit or grayed, so a
+disk's state shows without the pointer on it:
+
+```text
+  ▾ 🕘 History       14 versions · 3.1 MB                                      [🕘] [⚙]
+```
+
+```text
+    🕘̸ History       off for this disk · keeps its newest version only         [🕘̸] [⚙]
+```
+
+```text
+    🕘̸ History       off for all media                                         [🕘̸] [⚙]
+```
+
+The last is a disk following the global setting; its clock turns history on for this disk alone. The row's gear opens
+a quick pick for the disk:
+
+```text
+┌ History of work.woz ──────────────────────────────────────────────┐
+│ 🕘 Turn Off History for This Disk                                  │
+│ 🕘 Follow the Media Setting (on)                                   │
+│ 🗑 Clear This Disk's History...       14 versions · 3.1 MB          │
+│ ⚙ Media Settings...                                                │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+The Command Palette has the same: **Retrocore: Turn On Media History**, **Retrocore: Turn Off Media History**,
+**Retrocore: Media Settings** and **Retrocore: Clear Media History...**.
+
+Turning history off, from either clock, asks once:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│ Turn off history for all media?                                  │
+│                                                                  │
+│   312 MB of versions are kept now. Changed disks will still keep │
+│   their newest version when the machine stops.                   │
+│                                                                  │
+│     [Turn Off, Keep Versions]   [Turn Off and Clear]   [Cancel]     │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ### Eject, stop and the off machine
 
@@ -595,7 +710,7 @@ Stopping, with changed media, shows one notification in the corner:
 ```
 
 **Save All** saves each in turn, and a disk that needs a prompt (stale, lossy, read-only) asks as above; **Discard**
-asks nothing, as the versions stay in each disk's history. Dismissing the notification keeps them.
+asks nothing while history is on, as the versions stay in each disk's history, and asks once with it off. Dismissing the notification keeps them.
 
 The machine, now off, with what it kept:
 
@@ -635,6 +750,10 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
   Machine thins, kept within a 1 GB cap, and listed in a History row under each drive. Backups and recovered copies
   are versions in it. Whole-machine snapshots are not part of it.
 - **The history is in the extension's storage**, never beside the image.
+- **History is easy to turn on and off.** A clock, lit or grayed, toggles it for all media in the Drives view's
+  title bar and for one disk on its History row, and a gear beside each opens its settings. The state also shows in
+  the view's description and the row's own icon, which are always visible. With history off, a disk still keeps its
+  newest version at stop.
 - **Every disk shows a lock.** The drive's icon is a lock or an open lock, so a writable disk is plain at a glance,
   and its first inline button locks or unlocks it. The ProFile and slot 7 get the lock too.
 - **Image flags are the disk's lock.** A WOZ's write-protected flag, a 2MG's locked flag and a JV3's protect byte are
@@ -646,7 +765,7 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
   the stamp is checked again on save.
 - **The display panel shows only the indicator.**
 
-Still to confirm, both proposed: Revert, Reload and Discard ask nothing, now that the history keeps what they drop
+Still to confirm, both proposed: Revert, Reload and Discard ask nothing while history is on, now that the history keeps what they drop
 (this replaces the earlier proposal that Revert always asks); and the Disk II's write-protection change lands with
 phase 6, not before.
 
@@ -664,7 +783,8 @@ phase 6, not before.
 - **History.** A version restores to the same bytes it was taken from, pinned by digest; versions share chunks, so
   a hundred checkpoints of an 800K disk with a few sectors changed stay under twice its size; a version cut off
   mid-write leaves the history as it was; thinning, on a test clock, keeps what the [rule](#thinning) says, pinned
-  and saved-machine versions included; the size cap drops the oldest first.
+  and saved-machine versions included; the size cap drops the oldest first. With history off, globally or for one
+  disk, no checkpoints are taken but the stop version is, and a disk's own choice wins over the global one.
 - **Machines, by digest.** As the Disk II save test does now, a machine writes a file (DOS `SAVE`, ProDOS
   `SAVE`, TRSDOS `SAVE`, Disk BASIC on the CoCo), the disk is saved, and the image's SHA-256 is pinned; loading it
   again and reading the file back gives what was written.
@@ -693,7 +813,8 @@ phase 6, not before.
    watcher, the Drives view's states and the prompts of the [UI workflow](#the-ui-workflow), and the History rows with
    restore and Compare. Done when every row of [saving in each state](#saving-in-each-state) works in the self-hosted extension.
 5. **Session end and the full history.** Versions every 30 seconds, on stop and on the machine's eject; thinning
-   and the size cap; `unsaved` in `machineState`; the stop notification, and the off machine's save and history. Done when a changed disk survives stopping, restarting VS Code and
+   and the size cap; `unsaved` in `machineState`; the stop notification, and the off machine's save and history;
+   the clocks and gears, the settings and the history's commands. Done when a changed disk survives stopping, restarting VS Code and
    starting the machine again, and can be saved, or restored to an earlier version, from the off machine.
 6. **The write-protection rule.** The lock as its image stores it, otherwise unlocked, on every drive, and saved
    back in the formats that store it; the ProFile's and slot 7's lock, answering writes with $2B. Done when every

@@ -51,6 +51,7 @@ internal sealed partial class DebugSession
     // until stepping in moves inward without running anything.
     private int _hidden;
     private IDebugTarget? _target;
+    private bool _ended;
     private DapTransport? _transport;
 
     // The pixels the last retro/frame carried, which a running frame with the same picture leaves out.
@@ -289,8 +290,7 @@ internal sealed partial class DebugSession
 
         transport.On("disconnect", args => Reply(() =>
         {
-            _run?.Cancel();
-            (_target as IDisposable)?.Dispose();
+            End();
             disconnect();
             return [];
         }));
@@ -457,6 +457,21 @@ internal sealed partial class DebugSession
     }
 
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
+
+    /// <summary>
+    ///  Ends the session, once: the machine stops and its target is disposed, which saves what disposing saves, such
+    ///  as a cassette recording. Disconnect ends it, and so does the client closing the input without one.
+    /// </summary>
+    internal void End()
+    {
+        lock (_gate)
+        {
+            if (_ended) { return; }
+            _ended = true;
+            _run?.Cancel();
+            (_target as IDisposable)?.Dispose();
+        }
+    }
 
     private JsonObject Reply(Func<JsonObject> action)
     {

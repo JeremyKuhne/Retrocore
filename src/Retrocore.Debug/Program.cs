@@ -131,4 +131,12 @@ if (args.Length > 0 && args[0] is "--boot-probe" or "--boot-state")
 DebugSession session = new();
 DapTransport transport = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
 session.Register(transport, transport.Stop);
-transport.Run();
+try
+{
+    transport.Run();
+}
+finally
+{
+    // A client that closes the pipe without disconnecting still gets its recordings saved.
+    session.End();
+}

@@ -402,6 +402,30 @@ try {
     }
 
     await request("disconnect", {});
+
+    // A client that closes the adapter's input without disconnecting still gets its recording saved.
+    phase("closing the input while recording");
+    const third = join(tmpdir(), `retrocore-altair-${process.pid}-3.tap`);
+    const other = startDap(root);
+    try {
+        writeFileSync(source, recording.join("\n"));
+        await other.request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+        await other.request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+        await other.request("configurationDone");
+        assert.equal((await other.event("stopped")).reason, "entry");
+        await other.request("retro/media", { device: "cassette", action: "record", path: third });
+        await other.request("continue", { threadId: 1 });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await other.request("pause", { threadId: 1 });
+        await other.event("stopped");
+        assert.ok(!existsSync(third), "nothing is written until the recording comes out");
+        await other.endInput();
+        assert.equal(readFileSync(third, "latin1"), "TAPE", "closing the input saved the recording");
+    } finally {
+        other.close();
+        if (existsSync(third)) unlinkSync(third);
+    }
+
     console.log("Altair DAP integration passed.");
 } finally {
     clearTimeout(timeout);

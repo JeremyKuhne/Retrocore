@@ -4,6 +4,8 @@
 
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -14,27 +16,25 @@ namespace Retrocore.Desktop;
 
 /// <summary>
 ///  The window: an activity bar on the left, a side pane that collapses, the machine's screen, and a status bar
-///  across the bottom, laid out as VS Code lays out its own.
+///  across the bottom, laid out as VS Code lays out its own, in its light or dark colours, and zoomed as it zooms.
 /// </summary>
 internal sealed class MainWindow : Window
 {
-    // VS Code's dark theme, so the window reads as the extension's views do.
-    private static readonly IBrush s_activityBar = new SolidColorBrush(Color.Parse("#333333"));
-    private static readonly IBrush s_sideBar = new SolidColorBrush(Color.Parse("#252526"));
-    private static readonly IBrush s_statusBar = new SolidColorBrush(Color.Parse("#007ACC"));
-    private static readonly IBrush s_text = new SolidColorBrush(Color.Parse("#CCCCCC"));
-    private static readonly IBrush s_dim = new SolidColorBrush(Color.Parse("#8B8B8B"));
-    private static readonly IBrush s_reading = new SolidColorBrush(Color.Parse("#89D185"));
-    private static readonly IBrush s_writing = new SolidColorBrush(Color.Parse("#F14C4C"));
-    private static readonly IBrush s_seeking = new SolidColorBrush(Color.Parse("#CCA700"));
-
     // The small computer the extension's activity bar shows.
     private const string MachineIcon = "M2,4 H22 V16 H2 Z M4,6 V14 H20 V6 Z M9,19 H15 V21 H9 Z M11,16 H13 V19 H11 Z";
 
     private readonly MachineHost _host;
+    private readonly DesktopSettings _settings;
     private readonly ScreenView _screen;
     private readonly Grid _body = new();
-    private readonly ScrollViewer _pane;
+    private readonly Border _pane = new() { BorderThickness = new Thickness(0, 0, 1, 0) };
+    private readonly LayoutTransformControl _paneZoom = new();
+    private readonly LayoutTransformControl _activityZoom = new();
+    private readonly LayoutTransformControl _statusZoom = new();
+    private readonly ScrollViewer _machineView;
+    private readonly ScrollViewer _settingsView;
+    private readonly ActivityButton _machineButton;
+    private readonly ActivityButton _settingsButton;
     private readonly GridSplitter _splitter = new()
     {
         Background = Brushes.Transparent,
@@ -42,31 +42,53 @@ internal sealed class MainWindow : Window
     };
     private readonly StackPanel _hardware = new();
     private readonly StackPanel _drives = new();
-    private readonly TextBlock _machineState = new() { Foreground = s_dim, Margin = new Thickness(6, 0, 0, 0) };
-    private readonly TextBlock _status = new()
+    private readonly TextBlock _machineState = new TextBlock
     {
-        Foreground = Brushes.White,
+        Margin = new Thickness(6, 0, 0, 0)
+    }.Themed(TextBlock.ForegroundProperty, Palette.Dim);
+    private readonly TextBlock _status = new TextBlock
+    {
         VerticalAlignment = VerticalAlignment.Center,
         Margin = new Thickness(8, 0)
-    };
+    }.Themed(TextBlock.ForegroundProperty, Palette.StatusText);
+    private readonly Button _zoomStatus;
+    private readonly TextBlock _zoomSetting = new TextBlock
+    {
+        VerticalAlignment = VerticalAlignment.Center,
+        MinWidth = 48,
+        TextAlignment = TextAlignment.Center
+    }
+
+        .Themed(TextBlock.ForegroundProperty, Palette.Text);
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private GridLength _paneWidth = new(280);
+
+    // The zoom the pane's width was last set for, so zooming widens or narrows it with its contents.
+    private double _paneScale = 1;
     private string? _drivesShown;
+    private bool _settingsShown;
 
     /// <summary>
     ///  Creates the window for a running machine.
     /// </summary>
     /// <param name="host">The machine.</param>
-    internal MainWindow(MachineHost host)
+    /// <param name="settings">The theme and zoom.</param>
+    internal MainWindow(MachineHost host, DesktopSettings settings)
     {
         _host = host;
+        _settings = settings;
         _screen = new ScreenView(host);
         Title = $"Retrocore Desktop · {host.Name}";
         Width = 1280;
         Height = 800;
-        Background = Brushes.Black;
+        this.Themed(BackgroundProperty, Palette.Editor);
 
-        _pane = Pane();
+        _machineView = MachineView();
+        _settingsView = SettingsView();
+        _paneZoom.Child = _machineView;
+        _pane.Child = _paneZoom;
+        _pane.Themed(Border.BackgroundProperty, Palette.SideBar).Themed(Border.BorderBrushProperty, Palette.Border);
+
         _body.ColumnDefinitions = [new ColumnDefinition(_paneWidth), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)];
         _splitter.Width = 4;
         Grid.SetColumn(_pane, 0);
@@ -74,14 +96,33 @@ internal sealed class MainWindow : Window
         Grid.SetColumn(_screen, 2);
         _body.Children.AddRange([_pane, _splitter, _screen]);
 
+        _machineButton = new ActivityButton(new PathIcon
+        {
+            Data = StreamGeometry.Parse(MachineIcon),
+            Width = 24,
+            Height = 24
+        }, "Machine");
+
+        _settingsButton = new ActivityButton(new TextBlock { Text = "⚙", FontSize = 22 }, "Settings");
+        _machineButton.Click += (_, _) => ShowView(settings: false);
+        _settingsButton.Click += (_, _) => ShowView(settings: true);
+        _zoomStatus = StatusButton("", () => ZoomTo(0), "Reset Zoom (Ctrl+0)");
+
         DockPanel root = new();
-        DockPanel status = StatusBar();
-        DockPanel activity = ActivityBar();
+        Border status = StatusBar();
+        Border activity = ActivityBar();
         DockPanel.SetDock(status, Dock.Bottom);
         DockPanel.SetDock(activity, Dock.Left);
         root.Children.AddRange([status, activity, _body]);
         Content = root;
 
+        // Zoom keys go first to the window, so no control takes them, unless the screen has the keyboard and they
+        // are the machine's. Ctrl with the wheel always zooms: no machine takes the wheel.
+        AddHandler(KeyDownEvent, OnZoomKey, RoutingStrategies.Tunnel);
+        AddHandler(PointerWheelChangedEvent, OnZoomWheel, RoutingStrategies.Tunnel);
+
+        ApplyZoom();
+        UpdateActivity();
         _refresh.Tick += (_, _) => Refresh();
         _refresh.Start();
         Opened += (_, _) => _screen.Focus();
@@ -93,55 +134,125 @@ internal sealed class MainWindow : Window
     internal ScreenView Screen => _screen;
 
     /// <summary>
-    ///  Opens or collapses the side pane, as clicking the active view's icon in VS Code does.
+    ///  Shows a view in the side pane, or collapses the pane when that view is already shown, as clicking an activity
+    ///  bar icon in VS Code does.
     /// </summary>
-    internal void TogglePane()
+    /// <param name="settings">True for the settings, false for the machine.</param>
+    internal void ShowView(bool settings)
     {
-        bool open = _pane.IsVisible;
-        if (open) { _paneWidth = _body.ColumnDefinitions[0].Width; }
-        _pane.IsVisible = !open;
-        _splitter.IsVisible = !open;
-        _body.ColumnDefinitions[0].Width = open ? new GridLength(0) : _paneWidth;
-        if (open) { _screen.Focus(); }
-    }
-
-    private DockPanel ActivityBar()
-    {
-        Button machine = IconButton(new PathIcon
+        if (_pane.IsVisible && _settingsShown == settings)
         {
-            Data = StreamGeometry.Parse(MachineIcon),
-            Width = 24,
-            Height = 24,
-            Foreground = Brushes.White
-        }, "Machine (opens and closes the side pane)");
-
-        machine.Click += (_, _) => TogglePane();
-        Button settings = IconButton(new TextBlock { Text = "⚙", FontSize = 20, Foreground = s_dim }, "Settings");
-        DockPanel bar = new() { Width = 48, Background = s_activityBar };
-        DockPanel.SetDock(machine, Dock.Top);
-        DockPanel.SetDock(settings, Dock.Bottom);
-        bar.Children.AddRange([machine, settings, new Panel()]);
-        return bar;
-    }
-
-    private static Button IconButton(Control icon, string tip)
-    {
-        Button button = new()
+            SetPaneOpen(open: false);
+        }
+        else
         {
-            Content = icon,
-            Width = 48,
-            Height = 48,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
+            _settingsShown = settings;
+            _paneZoom.Child = settings ? _settingsView : _machineView;
+            SetPaneOpen(open: true);
+        }
 
-        ToolTip.SetTip(button, tip);
-        return button;
+        UpdateActivity();
     }
 
-    private ScrollViewer Pane()
+    /// <summary>
+    ///  Zooms the window's chrome by steps of 20%.
+    /// </summary>
+    /// <param name="steps">The steps, in or out.</param>
+    internal void ZoomBy(int steps) => ZoomTo(_settings.Zoom + steps);
+
+    /// <summary>
+    ///  Zooms the window's chrome to a level.
+    /// </summary>
+    /// <param name="level">The level, 0 for 100%.</param>
+    internal void ZoomTo(int level)
+    {
+        level = Math.Clamp(level, DesktopSettings.MinimumZoom, DesktopSettings.MaximumZoom);
+        if (level == _settings.Zoom) { return; }
+        _settings.Zoom = level;
+        ApplyZoom();
+        _settings.Save();
+    }
+
+    private void SetPaneOpen(bool open)
+    {
+        if (!open) { _paneWidth = _body.ColumnDefinitions[0].Width; }
+        _pane.IsVisible = open;
+        _splitter.IsVisible = open;
+        _body.ColumnDefinitions[0].Width = open ? _paneWidth : new GridLength(0);
+        if (!open) { _screen.Focus(); }
+    }
+
+    private void UpdateActivity()
+    {
+        _machineButton.Active = _pane.IsVisible && !_settingsShown;
+        _settingsButton.Active = _pane.IsVisible && _settingsShown;
+    }
+
+    private void ApplyZoom()
+    {
+        double scale = _settings.Scale;
+        ScaleTransform transform = new(scale, scale);
+
+        // The pane keeps its width in its own zoomed units, as dragging it set them.
+        double change = scale / _paneScale;
+        _paneScale = scale;
+        _paneWidth = new GridLength(_paneWidth.Value * change);
+        if (_pane.IsVisible)
+        {
+            _body.ColumnDefinitions[0].Width = new GridLength(_body.ColumnDefinitions[0].Width.Value * change);
+        }
+
+        _paneZoom.LayoutTransform = transform;
+        _activityZoom.LayoutTransform = transform;
+        _statusZoom.LayoutTransform = transform;
+        string percent = $"{scale * 100:0}%";
+        _zoomSetting.Text = percent;
+        _zoomStatus.Content = "Zoom " + percent;
+        _zoomStatus.IsVisible = _settings.Zoom != 0;
+    }
+
+    private void OnZoomKey(object? sender, KeyEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0 || FocusManager?.GetFocusedElement() == _screen) { return; }
+        switch (e.Key)
+        {
+            case Key.OemPlus or Key.Add:
+                ZoomBy(1);
+                break;
+            case Key.OemMinus or Key.Subtract:
+                ZoomBy(-1);
+                break;
+            case Key.D0 or Key.NumPad0:
+                ZoomTo(0);
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnZoomWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0 || e.Delta.Y == 0) { return; }
+        ZoomBy(Math.Sign(e.Delta.Y));
+        e.Handled = true;
+    }
+
+    private Border ActivityBar()
+    {
+        DockPanel bar = new() { Width = 48 };
+        DockPanel.SetDock(_machineButton, Dock.Top);
+        DockPanel.SetDock(_settingsButton, Dock.Bottom);
+        bar.Children.AddRange([_machineButton, _settingsButton, new Panel()]);
+        _activityZoom.Child = bar;
+        _activityZoom.VerticalAlignment = VerticalAlignment.Stretch;
+        return new Border { Child = _activityZoom, BorderThickness = new Thickness(0, 0, 1, 0) }
+            .Themed(Border.BackgroundProperty, Palette.ActivityBar)
+            .Themed(Border.BorderBrushProperty, Palette.Border);
+    }
+
+    private ScrollViewer MachineView()
     {
         StackPanel sections = new();
         StackPanel machine = new();
@@ -153,8 +264,9 @@ internal sealed class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = _host.Name, Foreground = s_text, FontWeight = FontWeight.SemiBold
-                }, _machineState
+                    Text = _host.Name, FontWeight = FontWeight.SemiBold
+                }.Themed(TextBlock.ForegroundProperty, Palette.Text),
+                _machineState
             },
         });
 
@@ -167,19 +279,78 @@ internal sealed class MainWindow : Window
         sections.Children.Add(Section("Machine", machine));
         sections.Children.Add(Section("Drives", _drives));
         sections.Children.Add(Section("Display and Sound", DisplayAndSound()));
-        return new ScrollViewer { Content = sections, Background = s_sideBar };
+        return new ScrollViewer { Content = sections };
+    }
+
+    private ScrollViewer SettingsView()
+    {
+        StackPanel appearance = new() { Margin = new Thickness(0, 0, 0, 8) };
+
+        string[] themes = ["system", "light", "dark"];
+        ComboBox theme = Choice(["Follow System", "Light", "Dark"], Math.Max(0, Array.IndexOf(themes, _settings.ThemeName)));
+        theme.Width = 150;
+        theme.SelectionChanged += (_, _) =>
+        {
+            _settings.ThemeName = themes[theme.SelectedIndex];
+            if (Application.Current is { } application)
+            {
+                application.RequestedThemeVariant = Palette.Variant(_settings.ThemeName);
+            }
+
+            _settings.Save();
+        };
+
+        appearance.Children.Add(Option("Theme", theme));
+
+        StackPanel zoom = new()
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            Children =
+            {
+                SmallButton("−", () => ZoomBy(-1), "Zoom Out (Ctrl+-)"),
+                _zoomSetting,
+                SmallButton("+", () => ZoomBy(1), "Zoom In (Ctrl+=)"),
+                SmallButton("Reset", () => ZoomTo(0), "Reset Zoom (Ctrl+0)"),
+            },
+        };
+
+        appearance.Children.Add(Option("Zoom", zoom));
+        appearance.Children.Add(new TextBlock
+        {
+            Text = "Ctrl with the mouse wheel zooms too, anywhere in the window.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Margin = new Thickness(20, 4, 8, 4),
+        }.Themed(TextBlock.ForegroundProperty, Palette.Dim));
+
+        return new ScrollViewer { Content = new StackPanel { Children = { Section("Appearance", appearance) } } };
+    }
+
+    private static Button SmallButton(string text, Action press, string tip)
+    {
+        Button button = new()
+        {
+            Content = text,
+            Padding = new Thickness(8, 2),
+            MinWidth = 28,
+            HorizontalContentAlignment = HorizontalAlignment.Center
+        };
+
+        button.Click += (_, _) => press();
+        ToolTip.SetTip(button, tip);
+        return button;
     }
 
     // A section that collapses, as VS Code's views in a side bar do: a plain header with a chevron.
     private static StackPanel Section(string title, Control content)
     {
         string caption = title.ToUpperInvariant();
-        Button header = new()
+        Button header = new Button
         {
             Content = "▾  " + caption,
             FontSize = 11,
             FontWeight = FontWeight.Bold,
-            Foreground = s_text,
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(0),
@@ -187,7 +358,7 @@ internal sealed class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 6),
             Focusable = false,
-        };
+        }.Themed(ForegroundProperty, Palette.Text);
 
         header.Click += (_, _) =>
         {
@@ -198,17 +369,17 @@ internal sealed class MainWindow : Window
         return new StackPanel { Children = { header, content } };
     }
 
-    private static Grid Row(string name, string value, bool dim = false) => new Grid
+    private static Grid Row(string name, string value, bool dim = false) => new()
     {
         ColumnDefinitions = [new ColumnDefinition(new GridLength(110)), new ColumnDefinition(GridLength.Star)],
         Margin = new Thickness(20, 2, 8, 2),
         Children =
         {
-            new TextBlock { Text = name, Foreground = dim ? s_dim : s_text },
+            new TextBlock { Text = name }.Themed(TextBlock.ForegroundProperty, dim ? Palette.Dim : Palette.Text),
             Column(new TextBlock
             {
-                Text = value, Foreground = s_dim, TextTrimming = TextTrimming.CharacterEllipsis
-            }, 1),
+                Text = value, TextTrimming = TextTrimming.CharacterEllipsis
+            }.Themed(TextBlock.ForegroundProperty, Palette.Dim), 1),
         },
     };
 
@@ -270,42 +441,50 @@ internal sealed class MainWindow : Window
         FontSize = 12,
     };
 
-    private static Grid Option(string name, Control control) => new Grid
+    private static Grid Option(string name, Control control) => new()
     {
         ColumnDefinitions = [new ColumnDefinition(new GridLength(90)), new ColumnDefinition(GridLength.Star)],
         Margin = new Thickness(20, 3, 8, 3),
         Children =
         {
-            new TextBlock { Text = name, Foreground = s_text, VerticalAlignment = VerticalAlignment.Center },
+            new TextBlock
+            {
+                Text = name, VerticalAlignment = VerticalAlignment.Center
+            }.Themed(TextBlock.ForegroundProperty, Palette.Text),
             Column(control, 1),
         },
     };
 
-    private DockPanel StatusBar()
+    private Border StatusBar()
     {
-        StackPanel keys = new() { Orientation = Orientation.Horizontal };
-        keys.Children.Add(KeyButton("Ctrl-C", () => _host.Key(3)));
-        keys.Children.Add(KeyButton("Esc", () => _host.Key(27)));
-        keys.Children.Add(KeyButton("Reset", _host.Reset));
-        DockPanel.SetDock(keys, Dock.Right);
-        return new DockPanel { Height = 24, Background = s_statusBar, Children = { keys, _status } };
+        StackPanel right = new() { Orientation = Orientation.Horizontal };
+        right.Children.Add(_zoomStatus);
+        right.Children.Add(StatusButton("Ctrl-C", () => _host.Key(3), "CONTROL-C"));
+        right.Children.Add(StatusButton("Esc", () => _host.Key(27), "ESC"));
+        right.Children.Add(StatusButton("Reset", _host.Reset, "The machine's reset"));
+        DockPanel.SetDock(right, Dock.Right);
+        _statusZoom.Child = new DockPanel { Height = 24, Children = { right, _status } };
+        return new Border { Child = _statusZoom, BorderThickness = new Thickness(0, 1, 0, 0) }
+            .Themed(Border.BackgroundProperty, Palette.StatusBar)
+            .Themed(Border.BorderBrushProperty, Palette.Border);
     }
 
-    private Button KeyButton(string text, Action press)
+    private Button StatusButton(string text, Action press, string tip)
     {
-        Button button = new()
+        Button button = new Button
         {
             Content = text,
             FontSize = 12,
-            Foreground = Brushes.White,
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0),
             Padding = new Thickness(8, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
             Focusable = false,
-        };
+        }.Themed(ForegroundProperty, Palette.StatusText);
 
+        ToolTip.SetTip(button, tip);
         button.Click += (_, _) =>
         {
             press();
@@ -333,9 +512,8 @@ internal sealed class MainWindow : Window
             _drives.Children.Add(new TextBlock
             {
                 Text = "No drives",
-                Foreground = s_dim,
                 Margin = new Thickness(20, 2)
-            });
+            }.Themed(TextBlock.ForegroundProperty, Palette.Dim));
 
             return;
         }
@@ -348,12 +526,12 @@ internal sealed class MainWindow : Window
     {
         string glyph = drive.Kind switch { DeviceKind.TapeDrive => "▭", DeviceKind.BlockStorage => "⛁", _ => "▣" };
         string badge = drive.Media is null || drive.Kind == DeviceKind.TapeDrive ? "" : drive.Locked ? "🔒" : "🔓";
-        IBrush colour = drive.Media is null ? s_dim : drive.Activity switch
+        string colour = drive.Media is null ? Palette.Dim : drive.Activity switch
         {
-            DeviceActivity.Reading => s_reading,
-            DeviceActivity.Writing => s_writing,
-            DeviceActivity.Seeking => s_seeking,
-            _ => s_text,
+            DeviceActivity.Reading => Palette.Reading,
+            DeviceActivity.Writing => Palette.Writing,
+            DeviceActivity.Seeking => Palette.Seeking,
+            _ => Palette.Text,
         };
 
         return new Grid
@@ -362,12 +540,15 @@ internal sealed class MainWindow : Window
             Margin = new Thickness(20, 2, 8, 2),
             Children =
             {
-                new TextBlock { Text = glyph + badge, Foreground = colour },
-                Column(new TextBlock { Text = drive.Name, Foreground = drive.Media is null ? s_dim : s_text }, 1),
+                new TextBlock { Text = glyph + badge }.Themed(TextBlock.ForegroundProperty, colour),
                 Column(new TextBlock
                 {
-                    Text = drive.Media ?? "empty", Foreground = s_dim, TextTrimming = TextTrimming.CharacterEllipsis
-                }, 2),
+                    Text = drive.Name
+                }.Themed(TextBlock.ForegroundProperty, drive.Media is null ? Palette.Dim : Palette.Text), 1),
+                Column(new TextBlock
+                {
+                    Text = drive.Media ?? "empty", TextTrimming = TextTrimming.CharacterEllipsis
+                }.Themed(TextBlock.ForegroundProperty, Palette.Dim), 2),
             },
         };
     }

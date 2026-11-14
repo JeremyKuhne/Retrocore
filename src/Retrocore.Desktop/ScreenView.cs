@@ -39,6 +39,7 @@ internal sealed class ScreenView : Control
         Focusable = true;
         ClipToBounds = true;
         RenderOptions.SetBitmapInterpolationMode(this, BitmapInterpolationMode.None);
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
     }
 
     /// <summary>
@@ -98,7 +99,12 @@ internal sealed class ScreenView : Control
     /// <inheritdoc/>
     public override void Render(DrawingContext context)
     {
-        context.FillRectangle(Brushes.Black, new Rect(Bounds.Size));
+        // The space around the picture is the editor's background in the window's theme, as in VS Code's panel.
+        IBrush surround = this.TryFindResource(Palette.Editor, ActualThemeVariant, out object? brush) && brush is IBrush themed
+            ? themed
+            : Brushes.Black;
+
+        context.FillRectangle(surround, new Rect(Bounds.Size));
         if (_bitmap is not { } bitmap) { return; }
 
         // The picture has its monitor's shape, as the display panel gives it: the Apple II's 560 by 192 dots fill a

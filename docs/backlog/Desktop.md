@@ -88,6 +88,22 @@ status bar across the whole bottom.
   which change with the machine.
 - **The screen** takes the keyboard when clicked or when the pane is closed, and gives it back with Ctrl+Shift+E (to
   the pane, as in VS Code) or a click in the pane. Paste types text into the machine, as the panel's Paste does.
+- **Light and dark.** The window follows the system's light or dark mode by default, and changes with it while open.
+  **Settings → Appearance → Theme** picks Follow System, Light or Dark. The colours are VS Code's Light Modern and
+  Dark Modern, so the window reads as the editor beside it does; Avalonia's own controls follow the same variant.
+- **Zoom.** The window's chrome (the activity bar, the pane and the status bar) zooms as VS Code's does, in steps of
+  20%, from about 58% to 300%:
+  - Ctrl+= (or Ctrl++) zooms in, Ctrl+- zooms out and Ctrl+0 goes back to 100%, whenever the screen does not have the
+    keyboard: while it does, those keys go to the machine;
+  - Ctrl with the mouse wheel always zooms, anywhere in the window and even while the screen has the keyboard, as no
+    machine takes the wheel;
+  - **Settings → Appearance → Zoom** has the same, with the level shown, and the status bar shows the level while it
+    is not 100%, clicking it going back to 100%.
+
+  The machine's screen is not zoomed: it already fills the space left to it, sharp or fitted.
+- **Settings** are a view of their own: the gear at the bottom of the activity bar switches the side pane to them, as
+  VS Code's activity bar switches views. The theme and zoom are kept in Retrocore's roaming `settings.json`
+  ([machine files](MachineFiles.md#settings-and-locations)) under `desktop`, apart from VS Code's own theme and zoom.
 
 ## Phases
 
@@ -121,6 +137,11 @@ The spike is in [src/Retrocore.Desktop](../../src/Retrocore.Desktop), and passes
 | Pacing | Frames keep to the display's rate, with a p99 frame time within 0.7 ms of the median over three ten-second runs, and the machine keeps its clock (1.000×). The PC tested drives a 32 Hz remote display, so **60 Hz is still to be checked** on a local display. Avalonia's default composition and its low-latency DXGI swap chain pace the same here (`--composition`). |
 | Keys | `PRINT 6*7` typed through the same path as the keyboard prints `42` on the Apple IIe; the TRS-80's key map and 4 by 3 picture work too. |
 | Sound | The Apple IIe's speaker plays through SDL3 with no underruns, once each stream starts with 40 ms of silence. |
+| Theme | Light Modern and Dark Modern, from `Palette` resources that follow the application's theme variant; the Fluent controls follow it too. Settings → Appearance → Theme switches it while running. |
+| Zoom | With the screen holding the keyboard, Ctrl and one wheel notch over the screen zoom the chrome to 120%, and Ctrl+= then goes to the machine, leaving the zoom alone. The pane's width zooms with its contents. |
+
+Not yet tried: following the system's theme as it changes while the app is open, and the settings file being
+written (smoke runs neither read nor write it, so they measure the same each time).
 
 What the spike turned up:
 - One line of the debug host ([DebugSession.BasicThread.cs](../../src/Retrocore.Debug/DebugSession.BasicThread.cs))

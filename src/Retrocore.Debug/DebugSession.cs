@@ -195,9 +195,12 @@ internal sealed partial class DebugSession
                 value = new ExpressionEvaluator(FrameTarget(frameId), _debug, expression, FrameRegisters(frameId))
                     .EvaluateReference(out bank);
             }
-            catch (FormatException) when (HasBasicThread && args.String("context") is "hover" or "watch")
+            catch (FormatException) when (HasBasicThread
+                && args.String("context") is "hover" or "watch"
+                && !IsMnemonicHover(args, expression))
             {
-                // A BASIC variable under the cursor while the CPU's frame is selected.
+                // A BASIC variable under the cursor while the CPU's frame is selected. An instruction's mnemonic is
+                // not one: the editor shows the language server's hover for it.
                 return EvaluateBasic(expression);
             }
 

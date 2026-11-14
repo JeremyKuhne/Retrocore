@@ -52,6 +52,39 @@ internal static class SourceBuild
     }
 
     /// <summary>
+    ///  Tests whether a source assembles for a CPU, such as the Z80 of a program for the SoftCard: whether its first
+    ///  <c>.cpu</c> directive after preprocessing, the one the assembler starts with, names it. Included files count,
+    ///  and directives in conditionals that are off do not.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The source is preprocessed as a build for the machine's own CPU would preprocess it, since conditionals such
+    ///   as ca65's <c>.ifp02</c> test the CPU the build starts with: what that build would turn into another CPU's
+    ///   code is that CPU's.
+    ///  </para>
+    /// </remarks>
+    /// <param name="source">The source file.</param>
+    /// <param name="dialect">The dialect, or null for native unless the file's first-line pragma names one.</param>
+    /// <param name="startCpu">The machine's own CPU, which a build of the source otherwise starts with.</param>
+    /// <param name="cpu">The CPU's name.</param>
+    /// <returns>Whether it does; false when the source does not parse, which assembling it then reports.</returns>
+    internal static bool DeclaresCpu(string source, AssemblyDialect? dialect, string startCpu, string cpu)
+    {
+        string path = Path.GetFullPath(source);
+        AssemblyOptions options = new(startCpu, 0, 0x10000)
+        {
+            Dialect = dialect ?? AssemblyDialect.Native,
+            SourceResolver = new FileAssemblySourceResolver()
+        };
+
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(new AssemblySource(File.ReadAllText(path), path), options);
+        AssemblyStatement? first = parsed.Project.Statements.FirstOrDefault(
+            node => node.Kind == AssemblyStatementKind.Cpu && node.Label is null);
+
+        return first is not null && string.Equals(first.Operand.Text.Trim(), cpu, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     ///  Gets the sections that hold bytes, each with the address it loads at.
     /// </summary>
     /// <param name="result">The assembly output.</param>

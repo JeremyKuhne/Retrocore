@@ -231,6 +231,48 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A conditional section applies to a build whose symbol values make its condition hold, as the TRS-80's
+    ///  MODEL, ROMC and VERSION switches select; the IIe's model switch still goes by the launched model, and a
+    ///  condition that cannot be evaluated applies.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsApplyByTheBuildsSymbols()
+    {
+        Dictionary<string, long> model1 = new() { ["MODEL"] = 1, ["REVISION"] = 13 };
+        Dictionary<string, long> model3 = new() { ["MODEL"] = 3, ["ROMC"] = 'B' };
+        long? One(string name) => model1.TryGetValue(name, out long value) ? value : null;
+        long? Three(string name) => model3.TryGetValue(name, out long value) ? value : null;
+
+        DocumentationResolver.Applies(condition: null, "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL = 1", "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("not MODEL = 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL != 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("REVISION = 13 and not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = 'B'", "Model3", Three).Should().BeTrue();
+        long? Version2(string name) => name == "VERSION" ? 2 : null;
+        long? Version5(string name) => name == "VERSION" ? 5 : null;
+        DocumentationResolver.Applies("VERSION = 1 || VERSION = 2", "Model2", Version2).Should().BeTrue();
+        DocumentationResolver.Applies("VERSION >= 2 && VERSION <= 3", "Model2", Version5).Should().BeFalse();
+        Dictionary<string, long> model3Revision13 = new() { ["MODEL"] = 3, ["REVISION"] = 13 };
+        long? Model3Revision13(string name) => model3Revision13.TryGetValue(name, out long value) ? value : null;
+        const string Grouped = "MODEL = 1 && (REVISION = 12 || REVISION = 13)";
+        DocumentationResolver.Applies(Grouped, "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies(Grouped, "Model3", Model3Revision13).Should().BeFalse("the || is grouped under the &&");
+        DocumentationResolver.Applies("(MODEL = 3 || MODEL = 4) && ROMC = 'B'", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("((MODEL = 1)) || MODEL = 4", "Model3", Three).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = ')'", "Model3", Three).Should().BeFalse("a parenthesis literal is a value");
+        DocumentationResolver.Applies("ROMC < '='", "Model3", Three).Should().BeFalse("an operator literal is a value");
+        DocumentationResolver.Applies("(ROMC = '(' || ROMC = 'B')", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("(MODEL = 1", "Model3", Three).Should().BeTrue("an unbalanced test cannot be read");
+        DocumentationResolver.Applies("MODEL4P", "Model4", name => name == "MODEL4P" ? 0 : null).Should().BeFalse();
+        DocumentationResolver.Applies("UNKNOWN = 2", "Level2", One).Should().BeTrue("a symbol the build lacks cannot rule it out");
+        DocumentationResolver.Applies("defined NAME", "Level2", One).Should().BeTrue("a test it cannot read applies");
+        DocumentationResolver.Applies("not ENHANCED", "Enhanced", One).Should().BeFalse("the IIe's switch goes by model");
+        DocumentationResolver.Applies("MODEL = 1", "Level2").Should().BeTrue("without symbols, conditions apply as before");
+    }
+
+    /// <summary>
     ///  Links resolve through scopes, modules, addresses, models and sections, and report what they cannot.
     /// </summary>
     [TestMethod]

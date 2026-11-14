@@ -35,7 +35,7 @@ namespace Retrocore.Machines.Apple3;
 ///   The card's interrupt, when BSY drops with interrupts enabled, is not raised: Apple's driver turns it off.
 ///  </para>
 /// </remarks>
-public sealed class Apple3ProFileCard
+public sealed class Apple3ProFileCard : IApple3Card
 {
     // The latch's lines.
     private const int CommandLine = 0;
@@ -159,6 +159,33 @@ public sealed class Apple3ProFileCard
             Drive.WriteData(ram[offset]);
         }
     }
+
+    /// <inheritdoc/>
+    byte IApple3Card.ReadIo(int offset) => Read(offset);
+
+    /// <inheritdoc/>
+    void IApple3Card.WriteIo(int offset, byte value) => Write(offset, value);
+
+    /// <inheritdoc/>
+    byte IApple3Card.PeekIo(int offset) => Peek(offset);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The page has no ROM; a read sets a line, as a write does, and nothing drives the bus.
+    ///  </para>
+    /// </remarks>
+    byte IApple3Card.ReadRom(int offset)
+    {
+        Switch(offset);
+        return 0xFF;
+    }
+
+    /// <inheritdoc/>
+    void IApple3Card.WriteRom(int offset, byte value) => Switch(offset);
+
+    /// <inheritdoc/>
+    void IApple3Card.Reset() => Reset();
 
     private bool Line(int line) => (_lines & (1 << line)) != 0;
 

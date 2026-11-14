@@ -23,7 +23,7 @@ names it with `"machine": "apple3"`:
 | Option | Meaning |
 | --- | --- |
 | `ramKilobytes` | 128, 256 (the default) or 512 (third-party upgrades). |
-| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Allow Writes** in the Retro Devices view lets the machine write one, in memory, and **Save to Its Image** saves it. |
+| `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Allow Writes** in the Drives view lets the machine write one, in memory, and **Save to Its Image** saves it. |
 | `romDirectory` | MAME's `apple3` set (`apple3.rom`, `341-0028-a.rom`), or `RETROCORE_APPLE3_ROMS`. Without it the ROM comes from the SDK. |
 | `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
 | `sound` | `speaker` (the default) or `off`. |
@@ -35,7 +35,7 @@ With no disk, the boot ROM runs its diagnostics and shows RETRY. Press a key to 
 ## Apple II emulation
 
 Apple's Apple II Emulation disk turns the machine into a 48K, 1 MHz Apple II Plus. Boot it, then, at its menu, put
-an Apple II disk such as DOS 3.3 in the built-in drive (the **Retro Devices** view's drive 1) and press RETURN.
+an Apple II disk such as DOS 3.3 in the built-in drive (the **Drives** view's drive 1) and press RETURN.
 
 - The disk loads the II Plus's ROMs into write-protected RAM at `$D000-$FFFF`, then clears VIA 1 port A bit 6, the
   mode trap. That hides the VIAs, so nothing can change the environment register again: only turning the machine
@@ -71,7 +71,7 @@ an Apple II disk such as DOS 3.3 in the built-in drive (the **Retro Devices** vi
 
 Apple's ProFile is a 5 MB hard disk, cabled to a ProFile interface card in one of the four slots. SOS reaches it through
 the `.PROFILE` driver in `SOS.DRIVER`; the System Utilities disk's copy is configured for slot 4, so a card there (the
-launch's `proFiles`, or **Add Card** in the Retro Devices view) with an image in its ProFile works once SOS boots
+launch's `proFiles`, or **Add Card** in the Machine view) with an image in its ProFile works once SOS boots
 from the floppy. The boot ROM cannot boot from it. The image is a ProDOS-order (`.po` or `.hdv`) image of a SOS volume,
 up to 65535 blocks, of which `.PROFILE` as Apple shipped it uses the first 9728; the machine can write to it, and
 changes stay in memory.

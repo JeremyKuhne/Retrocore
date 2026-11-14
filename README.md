@@ -15,7 +15,7 @@ straight into the ROM or DOS source.
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
-| TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C), the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 baud |
+| TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C) and its Level I ROM, the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 and 1500 baud; boots TRSDOS, LDOS and LS-DOS |
 | TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Five boot ROM versions and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 | MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT; runs Altair BASIC from your images |
@@ -134,7 +134,7 @@ The debugger supports:
   and runtime checks of documented `;; Keeps:` contracts;
 - **Display and hardware controls:** a live display panel with paused video-beam overlay, 1x–8x and unthrottled
   (`Max`) speed, automatic fast disk and fast tape while drive motors run, speaker and stereo Mockingboard audio,
-  and the **Retro Devices** view for hot-plugging Apple II slot cards and managing disks and tapes
+  and the **Retrocore** activity bar's Machine and Drives views for hot-plugging Apple II slot cards and managing disks and tapes
   ([Devices.md](docs/Devices.md)).
 
 Your program and the SDK's ROM and DOS sources debug together in the same session. Each source module is bound to
@@ -166,7 +166,7 @@ machine.
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Apple1/Roms/CharacterGenerator.asm) | The Apple-1 terminal's Signetics 2513 (no chip dump is published; its glyphs match the original Apple II's). |
 | [`Basic/Basic.asm`](src/Retrocore.Machines.Apple1/Roms/Basic/Basic.asm) | Apple-1 BASIC, `$E000`–`$EFFF`, which loads from tape into the `$E000` bank. |
 | [`Level2.asm`](src/Retrocore.Machines.Trs80/Roms/Level2.asm) | TRS-80 Model I Level II BASIC, revisions 1.2 and 1.3. |
-| [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Model I Level I BASIC. |
+| [`Level1.asm`](src/Retrocore.Machines.Trs80/Roms/Level1.asm) | TRS-80 Level I BASIC: the Model I's, and with `MODEL = 3` the Model III's. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGenerator.asm) | The Model I's stock MCM6670P character generator. |
 | [`CharacterGeneratorKit.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm) | The Radio Shack lowercase kit's character generator, following xtrs's reconstruction (no chip dump is known). |
 | [`Model3.asm`](src/Retrocore.Machines.Trs80/Roms/Model3.asm), [`Model3Equates.asm`](src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm) | The TRS-80 Model III's 14K ROM (both revisions of ROM C) and the Model 4's, including `Level2.asm` for the BASIC they share with the Model I. |
@@ -203,7 +203,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
 | [`AppleSharp`](src/AppleSharp) | Standalone SDL3 Native AOT desktop emulator for the Apple IIe (uses caller-supplied ROM dumps). |
 | [`tools/DosDisk`](tools/DosDisk) | CLI tool that builds bootable DOS 3.3 and 3.2 disk images from the SDK's DOS sources and a folder of files ([Dos.md](docs/Dos.md#building-disks)). |
-| [`extension`](extension) | The VS Code extension: assembly and BASIC language features, debugging, live machine display, and the Retro Devices view. |
+| [`extension`](extension) | The VS Code extension: assembly and BASIC language features, debugging, live machine display, and the Retrocore activity bar's Machine and Drives views. |
 
 ## External files
 
@@ -257,6 +257,7 @@ node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps i
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
 node tools/Test-Breakpoints.mjs       # needs nothing external
 node tools/Test-Memory.mjs            # needs nothing external; also checks IIe banks when RETROCORE_IIE_ROMS is set
+node tools/Test-OffMachine.mjs        # needs nothing external
 
 .\tools\Build-IIeSample.ps1           # needs cc65 from Fetch-M1Dependencies.ps1 (or assemble with Retrocore.Debug --assemble)
 node tools/Test-IIeDap.mjs            # SDK-built ROMs, or the dumps in RETROCORE_IIE_ROMS
@@ -328,7 +329,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
-- [debugging Business BASIC](docs/backlog/BusinessBasic.md).
+- [debugging Business BASIC](docs/backlog/BusinessBasic.md);
+- [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md).
 
 ## License
 

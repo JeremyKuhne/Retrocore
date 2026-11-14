@@ -19,13 +19,14 @@ namespace Retrocore.Machines.Trs80;
 ///   7 the keyboard interrupt, 6 the display enable, 5 and 4 as written.
 ///  </para>
 ///  <para>
-///   The other ports are the PIO (<c>$E0</c>-<c>$E3</c>: port A reads the disk controller's INTRQ, a two-sided
-///   disk and disk change), the FD1791 (<c>$E4</c>-<c>$E7</c>, whose inverted data bus the board inverts back), drive select
-///   (<c>$EF</c>: bits 0-3 drives, active low, bit 6 clear side 1, bit 7 double density), the CTC
-///   (<c>$F0</c>-<c>$F3</c>, channel 3 counting keyboard interrupts), the SIO (<c>$F4</c>-<c>$F7</c>), the DMA
-///   (<c>$F8</c>, ready on the disk controller's DRQ), the ROM switch (<c>$F9</c>), the keyboard and 6845 address
-///   (<c>$FC</c>), the 6845's registers (<c>$FD</c>) and the clock acknowledge (<c>$FE</c>). Interrupts chain from
-///   the CTC through the SIO and DMA to the PIO, in mode 2; the clock interrupts as an NMI.
+///   The hard disk board's ports (<c>$C0</c>-<c>$CF</c>) read zero, as with no board fitted. The other ports are the
+///   PIO (<c>$E0</c>-<c>$E3</c>: port A reads the disk controller's INTRQ, a two-sided disk and disk change), the
+///   FD1791 (<c>$E4</c>-<c>$E7</c>, whose inverted data bus the board inverts back), drive select (<c>$EF</c>: bits 0-3
+///   drives, active low, bit 6 clear side 1, bit 7 double density), the CTC (<c>$F0</c>-<c>$F3</c>, channel 3 counting
+///   keyboard interrupts), the SIO (<c>$F4</c>-<c>$F7</c>), the DMA (<c>$F8</c>, ready on the disk controller's DRQ),
+///   the ROM switch (<c>$F9</c>), the keyboard and 6845 address (<c>$FC</c>), the 6845's registers (<c>$FD</c>) and the
+///   clock acknowledge (<c>$FE</c>). Interrupts chain from the CTC through the SIO and DMA to the PIO, in mode 2; the
+///   clock interrupts as an NMI.
 ///  </para>
 /// </remarks>
 public sealed class Trs80Model2Bus : IProcessorBus, IIoBus
@@ -176,6 +177,10 @@ public sealed class Trs80Model2Bus : IProcessorBus, IIoBus
         byte low = (byte)port;
         switch (low)
         {
+            // With no hard disk board, its ports read zero: the boot ROMs that boot from a hard disk take $C2's low
+            // bits being zero as no board, and booted machines without one that way.
+            case >= 0xC0 and <= 0xCF:
+                return 0;
             case >= 0xE0 and <= 0xE3:
                 return Pio.Read(low - 0xE0);
             case >= 0xE4 and <= 0xE7:

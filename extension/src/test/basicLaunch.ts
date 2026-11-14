@@ -86,7 +86,7 @@ export async function testBasicLaunch(root: string, stop: () => Promise<string>)
         assert.equal(first.source?.path.toLowerCase(), file.toLowerCase());
         assert.deepEqual([first.line, first.column], [2, 5]);
 
-        // A BASIC launch opens the program in memory in its editor, and Retro Devices lists it.
+        // A BASIC launch opens the program in memory in its editor, and the Machine view lists it.
         const document = await until("the program editor to open", () => programDocument(session));
         assert.match(document.getText(), /^10 CLS/);
         assert.match(await until("the BASIC program row", async () => await vscode.commands.executeCommand<string | undefined>("retrocore.device.basic")) ?? "",

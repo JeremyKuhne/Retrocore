@@ -1123,8 +1123,9 @@ BASIC:
     INC A
     RET
 
-;; Reads a byte from the tape into A, at the speed chosen, through REDLOC's reader, keeping BC, DE and HL.
+;; Reads a byte from the tape into A, at the speed chosen, through REDLOC's reader.
 ;; Out:   A = the byte
+;; Keeps: BC, DE, HL
 CASSETTE_READ:
     PUSH DE
     PUSH BC
@@ -2494,10 +2495,11 @@ RAM_VECTORS:
 
 .else
 
-;; Calls the driver of the control block DE addresses for the request in B (1 get, 2 put, 4 control), keeping
-;; DE, HL and IX. A disk device's block (type bit 7) whose type lacks the request goes to DCB_REQUEST_HOOK.
+;; Calls the driver of the control block DE addresses for the request in B (1 get, 2 put, 4 control). A disk
+;; device's block (type bit 7) whose type lacks the request goes to DCB_REQUEST_HOOK.
 ;; In:    A = the byte to put, B = the request, DE = the control block, BC on the stack
 ;; Out:   A = the byte got, or as the driver returns it
+;; Keeps: DE, HL, IX
 CIO:
     PUSH HL
     PUSH IX

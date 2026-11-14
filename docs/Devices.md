@@ -1,7 +1,7 @@
 # Devices
 
 Each machine lists the devices installed in it, such as its floppy and tape drives, with what they are and
-what they are doing. The debugger sends that list to VS Code, whose **Retro Devices** view shows it while a
+what they are doing. The debugger sends that list to VS Code, whose **Machine** and **Drives** views show it while a
 Retrocore session runs, and takes media actions from it.
 
 ## The object model
@@ -66,7 +66,7 @@ option, empty ones included. Each row names the devices on it, by id:
 
 | Machine | Rows |
 | --- | --- |
-| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card or the 3.5 disk controller) |
+| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card, the 3.5 disk controller or the Z80 SoftCard) |
 | II, II Plus | `model`, `memory`, `builtIn`, `gamePort`, `d0Socket` (the II only: Programmer's Aid #1 or empty, as the launch's `programmersAid` says), `slot0` (the language card, a firmware card with the other BASIC, or empty, as the launch's `slot0` says), `slot1` to `slot7` (as the IIe's, and slot 3 takes a card too) |
 | Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card or empty) |
 | Model I | `model`, `rom`, `memory`, `cassette`, `expansion`, `disk` (the controller and its doubler, with its drives), `lowercase` |
@@ -74,8 +74,8 @@ option, empty ones included. Each row names the devices on it, by id:
 An empty slot's `value` is `empty`, and its `description` says what installs something there. A row's `actions`
 say what `retro/hardware` can do to it: `addCard` on a free IIe slot (1, 2, 4 and 5, 6 without a Disk II, and 7
 without block storage) or II and II Plus slot (those, 3, and an empty 0) or Apple III slot (1 to 4), `removeCard` on a Disk II card, the
-Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, or the language or firmware card in slot 0. A ProFile card goes in any
-of them; the Apple III takes no other card.
+Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, or the language or firmware card in slot 0. A
+ProFile card goes in any of them; the Apple III takes no other card yet.
 
 ```json
 { "id": "slot5", "action": "addDiskII", "sectors": 16 }
@@ -83,10 +83,16 @@ of them; the Apple III takes no other card.
 { "id": "slot2", "action": "addMouse" }
 { "id": "slot5", "action": "addDisk35" }
 { "id": "slot4", "action": "addProFile" }
+{ "id": "slot5", "action": "addSoftCard" }
 { "id": "slot0", "action": "addLanguageCard" }
 { "id": "slot0", "action": "addFirmwareCard" }
 { "id": "slot5", "action": "removeCard" }
+{ "id": "slot4", "action": "setSetting", "setting": "translation", "value": false }
 ```
+
+A row may have `settings`, switches on its hardware, each with an `id`, a `label`, its `value` (on or off) and a
+`description`. `setSetting` changes one. The Z80 SoftCard has two: `translation`, its address translation (DIP switch
+S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default).
 
 `retro/hardware` changes the machine at once, running or stopped, and returns the new `retro/devices` body. A Disk
 II added to a slot answers at $C080 plus 16 times the slot and at its ROM page, $Cn00, with firmware built from the
@@ -98,10 +104,11 @@ for the session; the launch configuration is unchanged. The session sends the sa
 state changes: on each stop, and with the running frames while the machine runs.
 
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
-slot 0 of a II or II Plus, `mockingboard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
+slot 0 of a II or II Plus, `mockingboard`, `softCard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
 that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
-tape being recorded, is left out.
+tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as
+`{ "slot4": { "translation": true, "refresh": false } }`, restored after the cards.
 
 ```json
 { "cards": { "1": "empty", "2": "empty", "4": "mockingboard", "5": "diskII16", "6": "empty", "7": "empty" },
@@ -130,22 +137,93 @@ Disks the machine changes stay in memory, and `changed` shows that they differ f
 `.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
 drives don't save yet.
 
-## The Retro Devices view
+## A machine that is off
 
-The view is in the **Run and Debug** sidebar whenever no other debugger runs. Before a session starts, its
-welcome text and title-bar **Start Machine** (`▶`) button start a machine without a `launch.json`.
+The language server, which is the same `Retrocore.Debug.dll`, answers two requests about a machine with no debug
+session, built as a launch builds it and never run:
 
-While a Retrocore session runs, the view lists **BASIC program** first when the machine has a supported BASIC
-(showing the active dialect and line count, and opening **Retrocore: Open BASIC Program** when clicked), then
-the machine's installed hardware slot by slot, with each device under the card or option it sits on: Slot 6's
-Disk II drives under Slot 6, the Model I's drives under its disk controller. Hovering a row says what it does
-and which launch option installs it. Each device shows its media, its
-head or tape position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is
-green while it reads, red while it writes and yellow while it seeks. Expanding a device lists its state and
-metadata, and hovering it shows them all.
+- `retrocore/machine/describe` takes `{ "configuration": { launch arguments }, "machineState": { saved } }`, the
+  saved machine being the `configuration` above.
+- `retrocore/machine/change` takes the same, plus `"request": "hardware"` or `"device"` and `"arguments"`, which are
+  what `retro/hardware` or `retro/device` would take, such as `{ "id": "slot5", "action": "addDiskII", "sectors": 16 }`
+  or `{ "id": "slot5disk1", "action": "insert", "path": "games.dsk" }`.
 
-A device's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
+Both answer as `retro/devices` does, with the new saved machine as `configuration`, and add `problems`: what of the
+saved machine could not be restored, such as a disk image that no longer exists. Nothing is kept between requests, so
+the saved machine the editor holds is all of an off machine's state, and launching with it as `machineState` boots
+the machine as it was described. Game controllers are not opened while off; the game port's row says they are read
+while it runs. `tools/Test-OffMachine.mjs` checks that each machine lists the same hardware and devices off as
+launched.
+
+## The Machine and Drives views
+
+Retrocore has its own icon in the activity bar, a small computer, which opens two views.
+
+With no Retrocore session, the views show a machine that is off ([offMachine.ts](../extension/src/offMachine.ts)):
+the one last started, or the one **Switch Machine…** (`⇄` in the Machine view's title bar) picks from Start
+Machine's last setup, the workspace's launch configurations and the catalog's machines. The language server
+describes it ([A machine that is off](#a-machine-that-is-off)) when either view comes into sight, so a closed
+sidebar builds nothing. Its header says `off` with a dark screen, and its cards and media change as a running
+machine's do, except that a tape cannot record and there is no changed disk to save.
+
+Its **Settings**, the first rows under it, are the catalog's choices for the machine
+([machines.ts](../extension/src/machines.ts)), the ones **Start Machine → Options…** offers; a launch.json entry
+that leaves out its model is matched as the host reads it. While off, clicking one picks its value. The change goes
+where the machine came from: Start Machine's setup (which **Start Last Machine** then starts), the launch.json
+configuration (written there, its variables kept), or the configuration itself. Before it, the saved machine is cut
+down to what differs from the machine its old settings give by themselves, so the new setting takes effect while
+the cards and media someone added stay on top of it; what no longer fits is reported. While running, the settings
+show the session's own values and do not change. Each change is saved as its
+launch configuration's saved machine, which its next launch restores; its `▶` starts it as it came (Start Machine's
+setup, the launch.json configuration, or the configuration itself). When a session ends, the views show its machine
+off, with what changed while it ran. A saved disk that can no longer be restored is reported once, and a machine
+that cannot be built says why at the top of the Machine view. Before any machine has started, the Machine view's
+welcome text offers **Start Machine** and **Set Up a Machine**; its **...** menu always has **Start Machine…** and
+**Start Last Machine**.
+
+While a Retrocore session runs, the **Machine** view is headed by the machine itself, such as `Apple IIe` with
+`Enhanced, 65C02 · running`: its screen icon is lit while it runs and dark while it is stopped in the debugger.
+Under it is the installed hardware, slot by slot, empty slots dimmed and a slot with drives saying how many. Below
+the machine is **BASIC program** when the machine has a supported BASIC (showing the active dialect and line
+count, and opening **Retrocore: Open BASIC Program** when clicked). Hovering a row says what it does and which
+launch option installs it.
+
+The **Drives** view lists each card or option that has drives, with its drives under it: Slot 6's Disk II drives
+under Slot 6, the Model I's drives under its disk controller. Each drive shows its media, its head or tape
+position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is green while it
+reads, red while it writes, yellow while it seeks and dimmed while it is empty. Expanding a drive lists its state
+and metadata, and hovering it shows them all. The view's badge counts the disks changed and not yet saved to
+their images.
+
+A drive's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
 protect or unprotect a disk, and save a changed disk to its image (**Save to Its Image**, which asks first; **Save Disk
-As...** in its menu saves to another), each as the device allows. A hardware row's inline buttons add or remove cards,
-and the view's title bar refreshes the list or resets a launch configuration's saved cards and media
-(**Retrocore: Reset Saved Machine...**). The view redraws at most ten times a second.
+As...** in its menu saves to another), each as the drive allows. A slot's inline buttons in the Machine view add or
+remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
+and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
+Machine...**). The views redraw at most ten times a second.
+
+The **Favorites** view ([favorites.ts](../extension/src/favorites.ts), the favorite itself in
+[favorite.ts](../extension/src/favorite.ts)) lists the `retrocore.favorites` setting: in user settings, and the
+workspace's, grouped under **User** and **Workspace** when both have some. A favorite is a Start Machine setup (the
+catalog machine, its settings that differ from their defaults, and what it runs) with a name, a description and the
+saved machine; a launch.json machine is kept as the setup it amounts to, so launch options Start Machine cannot set
+are not. Loading one sets it up off under its own name, which names its launch configuration and saved machine, with
+its saved machine as that one's; starting one loads it and boots it through Start Machine, so **Start Last Machine**
+repeats it. A name is one favorite across user and workspace settings, as it names the favorite's launch configuration and
+saved machine; one with no saved machine loads as its launch gives it, dropping edits made to it since. Changes to an
+off machine run one at a time, each from the saved machine the one before left. In user settings a favorite's paths
+are kept as they are; in the workspace's, paths inside the workspace
+are written as `${workspaceFolder}/...`, and moving a favorite between the two converts them.
+
+The Machine view's heart, on the machine's row, says whether the machine shown is a favorite. The machine is one when
+it was loaded from one (its name is the favorite's) or was saved as one (the extension links the launch
+configuration's name to the favorite's). Its heart is empty when it is not one, and clicking it saves the machine at
+once under its machine's name, numbered if taken, and links it. Filled, the favorite matches the machine as it is
+now, and clicking it reveals the favorite in the Favorites view. Broken, it differs, in its settings, what it runs,
+its cards, or its disks and tapes (`differences` in favorite.ts, which ignores empty slots and drives), and clicking
+it updates the favorite. The machine's tooltip names the favorite and what differs.
+
+VS Code opens Run and Debug as a session starts and when it breaks (its `debug.openDebug` setting). When that
+takes the sidebar from the Retrocore views within a moment of a Retrocore session starting or stopping, the
+extension reveals the Machine view again without focusing it, so the keyboard stays with the display panel or the
+editor.

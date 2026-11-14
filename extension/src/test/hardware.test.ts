@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { cardsFor, fingerprint, group, restorable, type HardwareRow } from "../hardware";
+import { cardsFor, changesFrom, fingerprint, group, restorable, type HardwareRow } from "../hardware";
 
 const row = (id: string, devices: string[] = []): HardwareRow => ({ id, name: id, value: "", description: "", devices });
 
@@ -24,13 +24,16 @@ test("devices no row claims, or a host without hardware rows, are listed on thei
     assert.deepEqual(grouped.loose, [{ id: "cassette" }]);
 });
 
-test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile and 3.5 controller cards for any free slot", () => {
+test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile, 3.5 controller and SoftCard cards for any free slot", () => {
     assert.deepEqual(cardsFor("slot4").map(card => card.label), [
         "Disk II controller", "Disk II controller, 13-sector", "Mockingboard", "Mouse card", "ProFile interface card",
-        "3.5 disk controller"
+        "3.5 disk controller", "Z80 SoftCard"
     ]);
-    assert.deepEqual(cardsFor("slot5").map(card => card.label),
-        ["Disk II controller", "Disk II controller, 13-sector", "Mouse card", "ProFile interface card", "3.5 disk controller"]);
+    assert.deepEqual(cardsFor("slot5").map(card => card.label), [
+        "Disk II controller", "Disk II controller, 13-sector", "Mouse card", "ProFile interface card", "3.5 disk controller",
+        "Z80 SoftCard"
+    ]);
+    assert.deepEqual(cardsFor("slot5").find(card => card.label === "Z80 SoftCard")?.args, { action: "addSoftCard" });
     assert.deepEqual(cardsFor("slot0").map(card => card.label), ["Language card", "Firmware card"],
         "slot 0 takes the language and firmware cards");
 });
@@ -46,6 +49,10 @@ test("a saved machine comes back only while the launch's hardware options are th
         "options other than hardware do not matter");
     assert.equal(restorable(saved, { ...launch, diskImage: "b.dsk" }), undefined, "a new diskImage starts afresh");
     assert.equal(restorable(saved, { ...launch, mockingboard: true }), undefined, "so does a new hardware option");
+    assert.equal(restorable(saved, { ...launch, softCard: 4 }), undefined, "and a SoftCard");
+    const softCard = { ...launch, softCard: 4 };
+    const withSoftCard = { fingerprint: fingerprint(softCard), configuration: { cards: { "4": "softCard", "6": "diskII16" } } };
+    assert.deepEqual(restorable(withSoftCard, softCard), withSoftCard.configuration, "a machine with a SoftCard comes back as saved");
     assert.equal(restorable(undefined, launch), undefined);
 
     // An Altair's saved cassette belongs to the 88-ACR and the terminal board it was saved with.
@@ -54,4 +61,18 @@ test("a saved machine comes back only while the launch's hardware options are th
     assert.deepEqual(restorable(tape, altair), tape.configuration);
     assert.equal(restorable(tape, { ...altair, cassetteInterface: false }), undefined, "without the 88-ACR it starts afresh");
     assert.equal(restorable(tape, { ...altair, console: "sio" }), undefined, "so it does on the other terminal board");
+});
+
+test("a saved machine's changes are what differs from the launch's own machine", () => {
+    const base = { cards: { "0": "languageCard", "4": "empty", "6": "diskII16" }, media: { disk1: null, disk2: null } };
+    const saved = {
+        cards: { "0": "languageCard", "4": "mockingboard", "6": "diskII16" },
+        media: { disk1: { path: "games.dsk", writeProtected: true }, disk2: null }
+    };
+    assert.deepEqual(changesFrom(saved, base), {
+        cards: { "4": "mockingboard" },
+        media: { disk1: { path: "games.dsk", writeProtected: true } }
+    }, "slot 0 and the empty drive are the launch's own, so a setting can change them");
+    assert.deepEqual(changesFrom({ media: { cassette: null } }, { media: {} }), { media: { cassette: null } }, "a drive the base lacks is kept");
+    assert.deepEqual(changesFrom(undefined, base), {}, "nothing saved, nothing changed");
 });

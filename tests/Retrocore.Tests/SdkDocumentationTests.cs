@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.Z80;
 using Retrocore.Debug;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
@@ -108,6 +109,7 @@ public class SdkDocumentationTests
     {
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
+        ["softcard"] = "Retrocore.Machines.Apple2",
         ["trs80"] = "Retrocore.Machines.Trs80"
     };
 
@@ -327,6 +329,52 @@ public class SdkDocumentationTests
             new DebugRegisters(M6502Isa.Description));
 
         contracts[0xF800].Registers.Should().Contain(["X", "Y"]);
+    }
+
+    /// <summary>
+    ///  An entry inside a routine with its own <c>;;</c> block has its own contract: FLIPCURSOR overwrites A with its
+    ///  cursor-off test and keeps only Y, while FLIPCURSOR_1, past that test, keeps A and Y.
+    /// </summary>
+    [TestMethod]
+    public void InnerEntryHasItsOwnContract()
+    {
+        List<DocumentationSet> sets = Sets();
+        DocumentationSet firmware = sets.Single(set => set.Module == "Firmware" && set.Find("FLIPCURSOR") is not null);
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(firmware, sets),
+            "Enhanced",
+            new DebugRegisters(M6502Isa.Description));
+
+        contracts[0xCE1F].Registers.Should().Equal("Y");
+        contracts[0xCE26].Registers.Should().BeEquivalentTo(["A", "Y"]);
+    }
+
+    /// <summary>
+    ///  Level II's Model III routines keep their contracts in the Model III's build only: CASSETTE_READ and CIO
+    ///  have a Model I and a Model III version under one name, and the Model III's Keeps: sections, under
+    ///  <c>not MODEL = 1</c>, apply where the build's MODEL makes that hold.
+    /// </summary>
+    [TestMethod]
+    public void Trs80ModelContractsFollowTheBuild()
+    {
+        string roms = Path.Join(s_inputs, "Trs80");
+        DebugRegisters registers = new(Z80Isa.Description);
+        Dictionary<ushort, DebugContract> Contracts(AssemblyResult result, string model)
+        {
+            SourceMapModule module = new(result, area: null);
+            long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+            return DebugContracts.Build(new DocumentationResolver(module.Documentation), model, registers, Symbol);
+        }
+
+        AssemblyResult model1 = Trs80SdkModules.AssembleLevel2(Path.Join(roms, "Level2.asm"), 13);
+        AssemblyResult model3 = Trs80SdkModules.AssembleModel3(Path.Join(roms, "Model3.asm"), 3);
+        foreach (string routine in (string[])["CASSETTE_READ", "CIO"])
+        {
+            ushort one = (ushort)model1.Symbols[routine];
+            ushort three = (ushort)model3.Symbols[routine];
+            Contracts(model1, "Level2").Should().NotContainKey(one, $"the Model I's {routine} promises nothing");
+            Contracts(model3, "Model3")[three].Registers.Should().Contain(["DE", "HL"], $"the Model III's {routine} keeps them");
+        }
     }
 
     private static List<DocumentationSet> Sets()

@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { launchConfiguration, machineById, machines } from "../machines";
+import { catalogMachine, launchConfiguration, machineById, machines, settingValue, withSetting } from "../machines";
 
 interface OptionSchema { type?: string; enum?: unknown[]; default?: unknown; anyOf?: OptionSchema[] }
 
@@ -50,9 +50,9 @@ test("each choice sets a launch option to values it allows, and its default is o
 test("the machines are the ones agreed, each with its own id and name, in order", () => {
     assert.deepEqual(machines.map(machine => machine.label), [
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
-        "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model 4", "TRS-80 Model 4P", "TRS-80 Model II",
-        "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer", "TRS-80 Color Computer 2",
-        "TRS-80 Color Computer 3", "MITS Altair 8800"
+        "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
+        "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
+        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "MITS Altair 8800"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
@@ -89,6 +89,8 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     assert.deepEqual(machineById("trs80-model4p")?.tapeFormats, [], "the 4P has no cassette port");
     assert.deepEqual(machineById("trs80-model4")?.configuration, { machine: "trs80-model3", model: "4" });
     assert.deepEqual(machineById("trs80-model3")?.basicDialects, ["level2"], "Model III BASIC is Level II's");
+    assert.deepEqual(machineById("trs80-model3-level1")?.configuration,
+        { machine: "trs80-model3", model: "3", rom: "level1" });
     assert.deepEqual(machineById("trs80-model4p")?.basicDialects, [], "the 4P boots from disk");
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
@@ -101,4 +103,55 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.deepEqual(coco?.diskFormats, ["dsk"]);
         assert.deepEqual(coco?.tapeFormats, ["cas"]);
     }
+});
+
+test("a launch configuration finds its catalog machine as the host reads its model", () => {
+    for (const machine of machines) {
+        assert.equal(catalogMachine(launchConfiguration(machine))?.id, machine.id, `${machine.label} finds itself`);
+    }
+    assert.equal(catalogMachine({ machine: "apple2" })?.id, "apple2-iie-enhanced", "the IIe enhanced is the Apple II default");
+    assert.equal(catalogMachine({ machine: "apple2", model: "enhanced" })?.id, "apple2-iie-enhanced");
+    assert.equal(catalogMachine({ machine: "apple2", model: "original" })?.id, "apple2-iie");
+    assert.equal(catalogMachine({ machine: "coco" })?.id, "coco2", "the CoCo 2 is the Color Computer default");
+    assert.equal(catalogMachine({ machine: "trs80-model1" })?.id, "trs80-model1-level2");
+    assert.equal(catalogMachine({ machine: "trs80-model1", rom: "level1" })?.id, "trs80-model1-level1");
+    assert.equal(catalogMachine({ machine: "trs80-model3" })?.id, "trs80-model3", "the Model III is its machine's default");
+    assert.equal(catalogMachine({ machine: "trs80-model3", model: "III" })?.id, "trs80-model3");
+    assert.equal(catalogMachine({ machine: "trs80-model3", rom: "level1" })?.id, "trs80-model3-level1");
+    assert.equal(catalogMachine({ machine: "trs80-model3", rom: "level2" })?.id, "trs80-model3");
+    assert.equal(catalogMachine({ machine: "trs80-model4" })?.id, "trs80-model4", "the Model 4's own machine name is a 4");
+    assert.equal(catalogMachine({ machine: "trs80-model4", model: "4p" })?.id, "trs80-model4p");
+    assert.equal(catalogMachine({ machine: "trs80-model2" })?.id, "trs80-model2");
+    assert.equal(catalogMachine({ machine: "trs80-model2", model: "16b" })?.id, "trs80-model16");
+    assert.equal(catalogMachine({ machine: "altair" })?.id, "altair");
+    assert.equal(catalogMachine({ machine: "pdp10" }), undefined);
+});
+
+test("a favorite can name every catalog machine, and only those", () => {
+    const schema = JSON.parse(readFileSync(path.resolve(__dirname, "../../package.json"), "utf8"))
+        .contributes.configuration.properties["retrocore.favorites"].items.properties.machine.enum as string[];
+    assert.deepEqual([...schema].sort(), machines.map(machine => machine.id).sort());
+});
+
+test("a setting reads its default when the configuration leaves it out, and is left out when set back to it", () => {
+    const plus = machineById("apple2-iiplus");
+    const memory = plus?.choices.find(choice => choice.option === "ramKilobytes");
+    assert.ok(plus && memory);
+    const configuration = launchConfiguration(plus);
+    assert.equal(settingValue(memory, configuration), 48);
+    const smaller = withSetting(configuration, memory, 32);
+    assert.equal(settingValue(memory, smaller), 32);
+    assert.equal(configuration.ramKilobytes, undefined, "the original is unchanged");
+    assert.equal("ramKilobytes" in withSetting(smaller, memory, 48), false, "the default is left out");
+});
+
+test("a Color Computer given disks shows the disk controller they bring", () => {
+    const coco = machineById("coco2");
+    const controller = coco?.choices.find(choice => choice.option === "diskController");
+    assert.ok(coco && controller);
+    const withDisks = { ...launchConfiguration(coco), disks: ["a.dsk"] };
+    assert.equal(settingValue(controller, launchConfiguration(coco)), false, "none without disks");
+    assert.equal(settingValue(controller, withDisks), true, "the controller its disks bring");
+    assert.equal("diskController" in withSetting(withDisks, controller, true), false, "left out, as the disks imply it");
+    assert.equal(withSetting(withDisks, controller, false).diskController, false, "turned off explicitly, not by leaving it out");
 });

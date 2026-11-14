@@ -27,7 +27,7 @@ interface BasicWrite { success: boolean; diagnostics: BasicDiagnostic[]; version
 
 interface ShownProgram { version: string; mtime: number; size: number; }
 
-/** What the Retro Devices row and the panel's BASIC button show of a session's program. */
+/** What the Machine view's row and the panel's BASIC button show of a session's program. */
 export interface BasicSummary { displayName: string; lines: number; }
 
 /** Each session's BASIC program in brief, for the machines whose BASIC the debugger edits. */

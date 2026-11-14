@@ -5,7 +5,7 @@
 #   .\tools\Start-SelfHost.ps1                        # opens sample\trs80\hello.asm
 #   .\tools\Start-SelfHost.ps1 -File sample\iie\main.s
 #   .\tools\Start-SelfHost.ps1 -SkipBuild             # relaunch without building
-#   .\tools\Start-SelfHost.ps1 -RomDirectory <dir>    # also lets the IIe launch configurations find the ROMs
+#   .\tools\Start-SelfHost.ps1 -RomDirectory <dir>    # IIe launches use these ROM dumps, not the SDK-built ROMs
 param(
     [string[]] $File = @('sample\trs80\hello.asm'),
     [string] $RomDirectory = $env:RETROCORE_IIE_ROMS,
@@ -65,6 +65,6 @@ try {
     & $code.Source @arguments
     if ($LASTEXITCODE -ne 0) { throw 'VS Code did not start the development window.' }
     "Opened a VS Code window self-hosting the Retrocore extension on $($files -join ', ')."
-    if (-not $RomDirectory) { 'Highlighting and IntelliSense need nothing more; IIe debugging needs -RomDirectory or RETROCORE_IIE_ROMS.' }
+    if (-not $RomDirectory) { 'Every machine debugs with ROMs built from the SDK sources; -RomDirectory or RETROCORE_IIE_ROMS gives the IIe dumps instead.' }
 }
 finally { Pop-Location }

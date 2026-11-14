@@ -261,9 +261,11 @@ try {
     // reset filter comes off first: otherwise the new launch could stop on its power-on reset.
     await request("setExceptionBreakpoints", { filters: [] });
     writeFileSync(source, halting.join("\n"));
+    // A launch after configurationDone starts at once, so the machineReset filter set above goes first: cleared after
+    // the launch, it could still stop the new machine as it powers on.
+    await request("setExceptionBreakpoints", { filters: [] });
     events.length = 0;
     await request("launch", { machine: "altair", source, loadAddress: 0x38, entryAddress: 0x100, stopOnEntry: false, speed: "max" });
-    await request("setExceptionBreakpoints", { filters: [] });
     const after = halting.findIndex(line => line.startsWith("After:")) + 1;
     const handler = halting.findIndex(line => line.startsWith("Handler:")) + 1;
     await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: after }, { line: handler }] });

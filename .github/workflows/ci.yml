@@ -72,9 +72,11 @@ jobs:
           node tools/Test-Memory.mjs
           node tools/Test-IIeDap.mjs
           node tools/Test-Apple3Dap.mjs
+          node tools/Test-SoftCardDap.mjs
           node tools/Test-BusinessBasicDap.mjs
           node tools/Test-CocoDap.mjs
           node tools/Test-AltairDap.mjs
+          node tools/Test-OffMachine.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension

@@ -49,6 +49,17 @@ internal sealed class ScreenView : Control
     internal bool Sharp { get; set; } = true;
 
     /// <summary>
+    ///  Gets or sets the space the picture is sized for, which the window sets from its own size so the picture
+    ///  changes with the window and not with the chrome's zoom; null to size it for the control.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The picture is centred in the control, and clipped by it if the zoomed chrome leaves it a little less room.
+    ///  </para>
+    /// </remarks>
+    internal Size? SizingArea { get; set; }
+
+    /// <summary>
     ///  Gets the times between display frames, and the frames that drew a new picture.
     /// </summary>
     internal FrameStats Stats { get; } = new();
@@ -111,7 +122,8 @@ internal sealed class ScreenView : Control
         // 280 by 192 shape, so each line is drawn twice; the TRS-80's fill 4 by 3.
         double width = bitmap.PixelSize.Width;
         double height = width / Aspect(_host.KeyMapName);
-        double scale = Math.Min(Bounds.Width / width, Bounds.Height / height);
+        Size area = SizingArea ?? Bounds.Size;
+        double scale = Math.Min(area.Width / width, area.Height / height);
         if (Sharp)
         {
             // Whole device pixels per dot, as large as fits.

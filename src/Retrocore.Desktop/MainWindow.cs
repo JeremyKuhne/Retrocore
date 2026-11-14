@@ -4,6 +4,7 @@
 
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -22,6 +23,11 @@ internal sealed class MainWindow : Window
 {
     // The small computer the extension's activity bar shows.
     private const string MachineIcon = "M2,4 H22 V16 H2 Z M4,6 V14 H20 V6 Z M9,19 H15 V21 H9 Z M11,16 H13 V19 H11 Z";
+
+    // The chrome's size at 100%: the activity bar with its border, the splitter, and the status bar with its border.
+    private const double ActivityWidth = 49;
+    private const double SplitterWidth = 4;
+    private const double StatusHeight = 25;
 
     private readonly MachineHost _host;
     private readonly DesktopSettings _settings;
@@ -63,8 +69,6 @@ internal sealed class MainWindow : Window
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private GridLength _paneWidth = new(280);
 
-    // The zoom the pane's width was last set for, so zooming widens or narrows it with its contents.
-    private double _paneScale = 1;
     private string? _drivesShown;
     private bool _settingsShown;
 
@@ -123,6 +127,11 @@ internal sealed class MainWindow : Window
 
         ApplyZoom();
         UpdateActivity();
+
+        // The picture's size follows the window and the pane, never the zoom.
+        SizeChanged += (_, _) => UpdateScreenArea();
+        _splitter.DragDelta += (_, _) => UpdateScreenArea();
+        _splitter.DragCompleted += (_, _) => UpdateScreenArea();
         _refresh.Tick += (_, _) => Refresh();
         _refresh.Start();
         Opened += (_, _) => _screen.Focus();
@@ -179,6 +188,7 @@ internal sealed class MainWindow : Window
         _pane.IsVisible = open;
         _splitter.IsVisible = open;
         _body.ColumnDefinitions[0].Width = open ? _paneWidth : new GridLength(0);
+        UpdateScreenArea();
         if (!open) { _screen.Focus(); }
     }
 
@@ -188,19 +198,23 @@ internal sealed class MainWindow : Window
         _settingsButton.Active = _pane.IsVisible && _settingsShown;
     }
 
+    // The space the picture is sized for: the window less the chrome at 100%, so that zooming the chrome, which takes
+    // a little more or less of the window, leaves the picture as it was.
+    private void UpdateScreenArea()
+    {
+        double pane = _pane.IsVisible ? _body.ColumnDefinitions[0].Width.Value + SplitterWidth : 0;
+        _screen.SizingArea = new Size(
+            Math.Max(0, ClientSize.Width - ActivityWidth - pane),
+            Math.Max(0, ClientSize.Height - StatusHeight));
+
+        _screen.InvalidateVisual();
+    }
+
     private void ApplyZoom()
     {
         double scale = _settings.Scale;
         ScaleTransform transform = new(scale, scale);
 
-        // The pane keeps its width in its own zoomed units, as dragging it set them.
-        double change = scale / _paneScale;
-        _paneScale = scale;
-        _paneWidth = new GridLength(_paneWidth.Value * change);
-        if (_pane.IsVisible)
-        {
-            _body.ColumnDefinitions[0].Width = new GridLength(_body.ColumnDefinitions[0].Width.Value * change);
-        }
 
         _paneZoom.LayoutTransform = transform;
         _activityZoom.LayoutTransform = transform;
@@ -279,7 +293,7 @@ internal sealed class MainWindow : Window
         sections.Children.Add(Section("Machine", machine));
         sections.Children.Add(Section("Drives", _drives));
         sections.Children.Add(Section("Display and Sound", DisplayAndSound()));
-        return new ScrollViewer { Content = sections };
+        return new ScrollViewer { Content = sections, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
     private ScrollViewer SettingsView()
@@ -288,7 +302,6 @@ internal sealed class MainWindow : Window
 
         string[] themes = ["system", "light", "dark"];
         ComboBox theme = Choice(["Follow System", "Light", "Dark"], Math.Max(0, Array.IndexOf(themes, _settings.ThemeName)));
-        theme.Width = 150;
         theme.SelectionChanged += (_, _) =>
         {
             _settings.ThemeName = themes[theme.SelectedIndex];
@@ -324,7 +337,11 @@ internal sealed class MainWindow : Window
             Margin = new Thickness(20, 4, 8, 4),
         }.Themed(TextBlock.ForegroundProperty, Palette.Dim));
 
-        return new ScrollViewer { Content = new StackPanel { Children = { Section("Appearance", appearance) } } };
+        return new ScrollViewer
+        {
+            Content = new StackPanel { Children = { Section("Appearance", appearance) } },
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
     }
 
     private static Button SmallButton(string text, Action press, string tip)
@@ -409,7 +426,7 @@ internal sealed class MainWindow : Window
         sound.SelectionChanged += (_, _) => _host.SoundOn = sound.SelectedIndex == 1;
         options.Children.Add(Option("Sound", sound));
 
-        Slider volume = new() { Minimum = 0, Maximum = 100, Value = _host.Volume * 100, Width = 140 };
+        Slider volume = new() { Minimum = 0, Maximum = 100, Value = _host.Volume * 100, MinWidth = 80, MaxWidth = 180 };
         volume.ValueChanged += (_, _) => _host.Volume = (float)(volume.Value / 100);
         options.Children.Add(Option("Volume", volume));
 
@@ -437,7 +454,9 @@ internal sealed class MainWindow : Window
     {
         ItemsSource = items,
         SelectedIndex = selected,
-        Width = 140,
+        MinWidth = 80,
+        MaxWidth = 180,
+        HorizontalAlignment = HorizontalAlignment.Stretch,
         FontSize = 12,
     };
 

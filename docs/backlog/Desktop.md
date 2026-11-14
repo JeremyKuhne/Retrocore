@@ -100,7 +100,10 @@ status bar across the whole bottom.
   - **Settings → Appearance → Zoom** has the same, with the level shown, and the status bar shows the level while it
     is not 100%, clicking it going back to 100%.
 
-  The machine's screen is not zoomed: it already fills the space left to it, sharp or fitted.
+  **The machine's picture never changes with the zoom**, only when the window is resized or the pane is dragged or
+  collapsed. The picture is sized for the window less the chrome at 100%, so the zoomed chrome, which takes a little
+  more of the window, leaves it the same size; it stays centred in the room left, and the pane keeps its width,
+  scrolling when its zoomed contents need more.
 - **Settings** are a view of their own: the gear at the bottom of the activity bar switches the side pane to them, as
   VS Code's activity bar switches views. The theme and zoom are kept in Retrocore's roaming `settings.json`
   ([machine files](MachineFiles.md#settings-and-locations)) under `desktop`, apart from VS Code's own theme and zoom.
@@ -138,7 +141,7 @@ The spike is in [src/Retrocore.Desktop](../../src/Retrocore.Desktop), and passes
 | Keys | `PRINT 6*7` typed through the same path as the keyboard prints `42` on the Apple IIe; the TRS-80's key map and 4 by 3 picture work too. |
 | Sound | The Apple IIe's speaker plays through SDL3 with no underruns, once each stream starts with 40 ms of silence. |
 | Theme | Light Modern and Dark Modern, from `Palette` resources that follow the application's theme variant; the Fluent controls follow it too. Settings → Appearance → Theme switches it while running. |
-| Zoom | With the screen holding the keyboard, Ctrl and one wheel notch over the screen zoom the chrome to 120%, and Ctrl+= then goes to the machine, leaving the zoom alone. The pane's width zooms with its contents. |
+| Zoom | With the screen holding the keyboard, Ctrl and one wheel notch over the screen zoom the chrome to 120%, and Ctrl+= then goes to the machine, leaving the zoom alone. The picture measures 560 by 384 at 100%, at 173%, and after zooming with the wheel while running. |
 
 Not yet tried: following the system's theme as it changes while the app is open, and the settings file being
 written (smoke runs neither read nor write it, so they measure the same each time).

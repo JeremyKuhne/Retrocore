@@ -27,6 +27,12 @@ public sealed record Trs80Model3Configuration
     public bool DiskController { get; init; } = true;
 
     /// <summary>
+    ///  Gets the Model III's BASIC: Level II in its 14K ROM, or Level I in a 4K ROM of its own, with 250 baud tapes
+    ///  and the ROM space above it empty. The Model 4 and 4P have Level II only.
+    /// </summary>
+    public Trs80Rom Rom { get; init; } = Trs80Rom.Level2;
+
+    /// <summary>
     ///  Gets the default RAM for a machine.
     /// </summary>
     /// <param name="variant">The machine.</param>
@@ -41,12 +47,19 @@ public sealed record Trs80Model3Configuration
     /// <summary>
     ///  Checks the configuration.
     /// </summary>
-    /// <exception cref="ArgumentException">The RAM size is not one the machine has.</exception>
+    /// <exception cref="ArgumentException">
+    ///  The RAM size is not one the machine has, or Level I is asked of a Model 4.
+    /// </exception>
     internal void Validate()
     {
         if (!Enum.IsDefined(Variant))
         {
             throw new ArgumentException("The machine is not defined.");
+        }
+
+        if (!Enum.IsDefined(Rom) || (Rom == Trs80Rom.Level1 && IsModel4))
+        {
+            throw new ArgumentException("Only the Model III has Level I BASIC.");
         }
 
         if (IsModel4 ? RamKilobytes is not (64 or 128) : RamKilobytes is not (16 or 32 or 48))

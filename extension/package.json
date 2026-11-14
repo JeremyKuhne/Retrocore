@@ -347,6 +347,7 @@
                   "trs80-model1-level2",
                   "trs80-model1-level1",
                   "trs80-model3",
+                  "trs80-model3-level1",
                   "trs80-model4",
                   "trs80-model4p",
                   "trs80-model2",
@@ -1133,7 +1134,7 @@
                   "level1"
                 ],
                 "default": "level2",
-                "description": "Model I: Level II or Level I BASIC."
+                "description": "Model I and Model III: Level II or Level I BASIC."
               },
               "bootRom": {
                 "type": "string",

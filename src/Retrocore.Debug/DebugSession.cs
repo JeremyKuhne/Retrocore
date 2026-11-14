@@ -1512,7 +1512,8 @@ internal sealed partial class DebugSession
         foreach (IDebugModule module in _debug.Modules)
         {
             DocumentationResolver resolver = new(module.Documentation, sets);
-            modules.Add((module, DebugContracts.Build(resolver, model, Target.Registers)));
+            long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+            modules.Add((module, DebugContracts.Build(resolver, model, Target.Registers, Symbol)));
         }
 
         if (modules.All(module => module.Contracts.Count == 0)) { return null; }

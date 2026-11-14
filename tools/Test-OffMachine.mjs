@@ -63,6 +63,7 @@ const machines = [
     { name: "Apple-1", configuration: { machine: "apple1" } },
     { name: "TRS-80 Model I", configuration: { machine: "trs80-model1", expansionInterface: true, diskController: true } },
     { name: "TRS-80 Model III", configuration: { machine: "trs80-model3" } },
+    { name: "TRS-80 Model III (Level I)", configuration: { machine: "trs80-model3", rom: "level1" } },
     { name: "TRS-80 Model 4", configuration: { machine: "trs80-model4" } },
     { name: "TRS-80 Model 4P", configuration: { machine: "trs80-model3", model: "4p" } },
     { name: "TRS-80 Model II", configuration: { machine: "trs80-model2" } },

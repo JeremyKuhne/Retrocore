@@ -20,8 +20,8 @@ namespace Retrocore.Machines.Trs80;
 ///  </para>
 ///  <para>
 ///   The ports are the interrupt mask and status (<c>$E0</c>: bit 2 the 30 Hz clock), the disk NMI mask and
-///   status (<c>$E4</c>: bit 7 the controller's INTRQ, bit 6 the motor timeout, bit 5 reset), the RS-232 UART
-///   (<c>$E8</c>-<c>$EB</c>, with nothing connected), the options latch (<c>$EC</c>: bit 1 cassette motor, bit 2
+///   status (<c>$E4</c>: bit 7 the controller's INTRQ, bit 6 the motor timeout, bit 5 reset), the RS-232 board's
+///   UART (<c>$E8</c>-<c>$EB</c>, reading <c>$FF</c> as with no board fitted), the options latch (<c>$EC</c>: bit 1 cassette motor, bit 2
 ///   wide characters, bit 3 alternate characters, bit 6 the Model 4's 4 MHz; a read acknowledges the clock), the
 ///   FD1793 (<c>$F0</c>-<c>$F3</c>), drive select (<c>$F4</c>: bits 0-3 drive, bit 4 side, bit 6 wait, bit 7
 ///   double density), the printer (<c>$F8</c>) and the cassette (<c>$FF</c>); and on a Model 4 the memory map
@@ -32,6 +32,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
 {
     private const byte PrinterIdle = 0x30;
     private const byte ClockInterrupt = 0x04;
+    private const byte CassetteRiseInterrupt = 0x01;
+    private const byte CassetteFallInterrupt = 0x02;
     private const byte IntrqNmi = 0x80;
     private const byte MotorTimeoutNmi = 0x40;
     private const byte ResetNmi = 0x20;
@@ -51,7 +53,11 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     private byte _options;
     private bool _motorTimedOut;
     private bool _wasMotorOn;
-    private bool _resetLatched;
+    // The reset button's signal: device T-states left before the press ends, if the ROM has not read port $E4.
+    private int _resetLatched;
+
+    // How long a press of the reset button lasts, about 20 ms.
+    private const int ResetPressTicks = Trs80Model3Timing.ClockHertz / 50;
     private bool _waitRequested;
 
     // Model 4: port $84 and the 4P's port $9C.
@@ -75,7 +81,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         _controller = configuration.DiskController;
         Video = new(roms.CharacterGenerator, _model4);
         Keyboard = new(Trs80Model3Timing.ClockHertz);
-        Cassette = new(500, Trs80Model3Timing.ClockHertz);
+        bool level1 = configuration.Rom == Trs80Rom.Level1;
+        Cassette = new(level1 ? 250 : 500, Trs80Model3Timing.ClockHertz, highSpeed: !level1);
         Disks = new(Trs80Doubler.None, Trs80Model3Timing.ClockHertz, wd179x: true);
     }
 
@@ -150,7 +157,8 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         switch (Area(address))
         {
             case Trs80Model3MemoryArea.Rom:
-                return _rom[address];
+                // Level I's 4K ROM leaves the ROM space above it empty.
+                return address < _rom.Length ? _rom[address] : (byte)0xFF;
             case Trs80Model3MemoryArea.Printer:
                 return PrinterIdle;
             case Trs80Model3MemoryArea.Keyboard:
@@ -223,17 +231,13 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
             {
                 byte status = NmiStatus();
                 _motorTimedOut = false;
-                _resetLatched = false;
+                _resetLatched = 0;
                 return (byte)~status;
             }
 
-            case 0xE8:
-                return 0;
-            case 0xEA:
-                // The UART's transmitter is empty and nothing is received.
-                return 0x47;
-            case 0xE9 or 0xEB:
-                return 0;
+            // No RS-232 board: the UART's ports read $FF, which the ROM's set-up takes as none fitted.
+            case >= 0xE8 and <= 0xEB:
+                return 0xFF;
             case >= 0xEC and <= 0xEF:
                 _interrupts &= unchecked((byte)~ClockInterrupt);
                 return 0xFF;
@@ -242,7 +246,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
             case >= 0xF8 and <= 0xFB:
                 return PrinterIdle;
             case >= 0xFC:
-                return (byte)((Cassette.Latch ? 0x80 : 0) | (_options & 0x7E));
+                return ReadCassette();
             default:
                 return 0xFF;
         }
@@ -295,10 +299,18 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         }
     }
 
+    // Port $FF: bit 7 the 500 baud latch, bit 0 the 1500 baud level. Reading acknowledges the 1500 baud edges.
+    private byte ReadCassette()
+    {
+        _interrupts &= unchecked((byte)~(CassetteRiseInterrupt | CassetteFallInterrupt));
+        return (byte)((Cassette.Latch ? 0x80 : 0) | (_options & 0x7E) | (Cassette.Level ? 0x01 : 0));
+    }
+
     /// <summary>
-    ///  Holds the reset button's signal until the NMI handler reads port <c>$E4</c>.
+    ///  Holds the reset button's signal until the NMI handler reads port <c>$E4</c>, or the press ends for a handler
+    ///  that does not read it, as Level I's does not, so the next press raises the NMI again.
     /// </summary>
-    internal void PressReset() => _resetLatched = true;
+    internal void PressReset() => _resetLatched = ResetPressTicks;
 
     /// <summary>
     ///  Advances the devices one device T-state.
@@ -307,7 +319,17 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     {
         Video.Tick();
         Keyboard.Tick();
-        if (!_model4P) { Cassette.Tick(); }
+        if (_resetLatched > 0) { _resetLatched--; }
+        if (!_model4P)
+        {
+            Cassette.Tick();
+
+            // A 1500 baud edge latches its interrupt when the mask enables it, until port $FF is read.
+            byte edges = (byte)((Cassette.Rose ? CassetteRiseInterrupt : 0) | (Cassette.Fell ? CassetteFallInterrupt : 0));
+            _interrupts |= (byte)(edges & _interruptMask);
+            Cassette.TakeEdges();
+        }
+
         if (++_tick == Trs80Model3Timing.CyclesPerTick)
         {
             _tick = 0;
@@ -325,7 +347,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     {
         int status = _controller && Disks.InterruptRequest ? IntrqNmi : 0;
         if (_motorTimedOut) { status |= MotorTimeoutNmi; }
-        if (_resetLatched) { status |= ResetNmi; }
+        if (_resetLatched > 0) { status |= ResetNmi; }
         return (byte)status;
     }
 

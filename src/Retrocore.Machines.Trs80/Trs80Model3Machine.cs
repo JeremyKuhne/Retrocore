@@ -42,13 +42,17 @@ public sealed class Trs80Model3Machine : IMachine
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(roms);
         configuration.Validate();
-        int expected = configuration.Variant == Trs80Model3Variant.Model4P ? Trs80Model3Roms.BootSize : Trs80Model3Roms.SystemSize;
+        bool level1 = configuration.Rom == Trs80Rom.Level1;
+        int expected = configuration.Variant == Trs80Model3Variant.Model4P || level1
+            ? Trs80Model3Roms.BootSize
+            : Trs80Model3Roms.SystemSize;
+
         if (roms.System.Length != expected)
         {
             throw new ArgumentException(
                 configuration.Variant == Trs80Model3Variant.Model4P
                     ? "A Model 4P's boot ROM is 4K."
-                    : "The Model III ROM is 14K.",
+                    : level1 ? "The Model III's Level I ROM is 4K." : "The Model III ROM is 14K.",
                 nameof(roms));
         }
 

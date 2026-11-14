@@ -15,7 +15,7 @@ public sealed class Trs80Model3Roms
     public const int SystemSize = 0x3800;
 
     /// <summary>
-    ///  The Model 4P's boot ROM size: 4K at <c>$0000</c>-<c>$0FFF</c>.
+    ///  The Model 4P's boot ROM's size, and the Model III's Level I ROM's: 4K at <c>$0000</c>-<c>$0FFF</c>.
     /// </summary>
     public const int BootSize = 0x1000;
 
@@ -34,7 +34,9 @@ public sealed class Trs80Model3Roms
     {
         if (system.Length is not (SystemSize or BootSize))
         {
-            throw new ArgumentException("The ROM is 14K (Model III and 4) or 4K (the Model 4P's boot ROM).", nameof(system));
+            throw new ArgumentException(
+                "The ROM is 14K (Model III and 4) or 4K (the Model III's Level I, or the Model 4P's boot ROM).",
+                nameof(system));
         }
 
         if (characterGenerator.Length != CharacterGeneratorSize)

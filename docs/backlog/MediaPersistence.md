@@ -117,7 +117,7 @@ to its own format gives back the same bytes, and the tests check that for every 
 | **WOZ** | lossless: `Export` keeps the tracks, their lengths, quarter-track map and unknown chunks | a WOZ1 image is written as WOZ2; the plan keeps that and says so on save, as WOZ1 writers are rare |
 | **`.dsk`, `.do`, `.po` (5.25)** | lossless while every track decodes as 16 standard sectors | a track that no longer decodes (a copy-protected track, a half-finished format, a track written by a nibble copier) fails the save, naming the tracks; save as `.woz` keeps them. Sector images carry no volume number, so a DOS volume other than 254 is lost; that is reported too |
 | **`.d13`** | reads only | no 13-sector reader back from WOZ yet; save as `.woz` until there is one |
-| **2MG** | lossless once the header is kept: the creator, version, comment and creator-data chunks, and the flags | today `Disk35Disk` drops the header on load. It keeps the header and rewraps the blocks on export. The **locked** flag is the disk's write-protect tab ([below](#write-protection)): a locked image loads protected, and saving writes the drive's protection back as the flag |
+| **2MG** | lossless once the header is kept: the creator, version, comment and creator-data chunks, and the flags | today `Disk35Disk` drops the header on load. It keeps the header and rewraps the blocks on export. The **locked** flag is the disk's lock ([below](#write-protection)): a locked image loads locked, and saving writes the drive's lock back as the flag |
 | **`.po`, `.hdv`, `.img`, 3.5 `.dsk`** | lossless: raw blocks | nothing |
 | **JV1** | lossless while the disk stays single-sided, single-density, ten 256-byte sectors on every track, with `$FA` marks only on track 17 | a double-density track, another sector size, a missing sector or a deleted mark elsewhere; save as JV3 |
 | **JV3** | lossless for what `FloppyDisk` holds: IDs, density, sizes, data marks, sides, the write-protect byte, and its CRC-error flags | nothing `FloppyDisk` holds; `Jv3Format.Write` already writes its 2,901-entry tables and the protect byte |
@@ -131,23 +131,29 @@ to its own format gives back the same bytes, and the tests check that for every 
 
 Two things are kept apart:
 
-- **The tab** says whether the machine can write the disk, as a real disk's write-protect notch does. Some formats
-  store it: a WOZ's INFO write-protected flag, a 2MG's locked flag, a JV3's write-protect byte. The drive's protect
-  toggle is that tab; saving writes it back into the image in those formats, and formats without one forget it.
-- **The lock** says whether the host can write the image file: it cannot when the file is read-only, its folder
-  cannot be written, or it is under `RETROCORE_CACHE`, which holds images we fetched and never change. A locked
-  image saves only with save as.
+- **The lock** says whether the machine can write the disk, as a real disk's write-protect tab does. Every disk
+  has one, shown as a lock or an open lock on its drive ([below](#what-a-drive-shows)), and one click changes it.
+  Some formats store it: a WOZ's INFO write-protected flag, a 2MG's locked flag, a JV3's write-protect byte. Saving
+  writes it back into the image in those formats; formats without one forget it, though the saved machine keeps it.
+  Hard disks have no tab, but the ProFile and slot 7 get the lock too: a locked one answers writes with ProDOS's
+  write-protected error ($2B), as a protected block device does.
+- **A read-only image** is one the host cannot write: the file is read-only, its folder cannot be written, or it is
+  under `RETROCORE_CACHE`, which holds images we fetched and never change. It saves only with save as.
 
-One rule for the tab on every disk: **a disk loads with the tab its image stores, and otherwise writable.** This is
-safe because writing the disk changes only the copy in memory; nothing reaches the file until a save. A locked image
-loads with its tab as stored too, since the lock stops the save, not the machine. The Disk II changes from loading
-every disk protected, so a program can write its own disk without first taking the tab off. The saved machine keeps
-the user's choice per drive, as now, and it wins over the default.
+The two are independent. A read-only image can be unlocked, so the machine writes its copy in memory and the user
+saves it elsewhere; a disk the machine changed before it was locked still saves, as the lock stops the machine, not
+the save.
+
+One rule for the lock on every disk: **a disk loads with the lock its image stores, and otherwise unlocked.** This
+is safe because writing the disk changes only the copy in memory; nothing reaches the file until a save. A
+read-only image loads with its lock as stored too. The Disk II changes from loading every disk locked, so a program
+can write its own disk without first unlocking it. The saved machine keeps the user's choice per drive, as now, and
+it wins over the default.
 
 ## Safety
 
 - **Never silently.** Save writes without asking only when nothing is off: the disk fits the image's format, the
-  file has not changed since it was read, and it is not locked; a backup is kept. Anything else asks
+  file has not changed since it was read, and it is not read-only; a backup is kept. Anything else asks
   ([below](#saving-in-each-state)). Save as uses the save dialog's own replace question. A recording does not
   replace a file that existed when it started without asking.
 - **Atomic.** `MediaFiles.Write` writes beside the image as `.name.<guid>.saving`, flushes it to disk, and moves it
@@ -162,8 +168,8 @@ the user's choice per drive, as now, and it wins over the default.
 - **Backups.** Each save over an image keeps the image it replaces in the extension's storage
   (`context.globalStorageUri/backups`), never beside the image, so workspaces and repositories stay clean. The last
   five per image are kept, and **Restore Previous Version** puts one back. A setting turns this off.
-- **Locked.** An image the host cannot write (a lock above, or a write that fails with access denied) offers save as
-  only, and says why; a read-only file also offers **Make Writable**, which clears its attribute. The cache never
+- **Read-only images.** An image the host cannot write ([above](#write-protection), or a write that fails with
+  access denied) offers save as only, and says why; a read-only file also offers **Make Writable**, which clears its attribute. The cache never
   does.
 - **No open files.** The host reads an image whole and closes it, as now, so other programs can open it; only
   write-through keeps a file open, shared for reading.
@@ -202,15 +208,15 @@ as their images are.
 
 ```json
 "media": { "label": "C:\\disks\\work.woz", "format": "WOZ", "writeProtected": false, "changed": true,
-           "source": { "kind": "image", "path": "C:\\disks\\work.woz", "locked": null, "stale": false },
+           "source": { "kind": "image", "path": "C:\\disks\\work.woz", "readOnly": null, "stale": false },
            "version": 1874, "savedVersion": 1200,
            "differences": { "unit": "sector", "count": 14, "summary": "tracks 17-18" },
            "saveFormats": [ { "format": "woz", "losses": [] },
                             { "format": "dsk", "losses": ["track 3 does not read as 16 sectors"] } ] }
 ```
 
-`source.kind` is `image`, `built`, `blank` or `recovered`; `source.locked` says why the image cannot be saved over
-(`readOnly`, `folder` or `cache`), null when it can; `source.stale` says the file changed since it was read.
+`source.kind` is `image`, `built`, `blank` or `recovered`; `source.readOnly` says why the image cannot be saved over
+(`file`, `folder` or `cache`), null when it can; `source.stale` says the file changed since it was read.
 `differences` compares the medium with its loaded bytes, by the medium's own unit: sectors for TRS-80 and Disk II
 sector images (and the sectors a WOZ's tracks decode to, or tracks when they do not), blocks for block images, bytes
 for tapes. Once the media library reads the disk's filesystem it adds the files changed, added and removed.
@@ -230,12 +236,14 @@ for tapes. Once the media library reads the disk's filesystem it adds the files 
 ```
 
 - `save` fails with an error whose `id` the extension acts on: `conflict` (the image changed on disk), `losses` (the
-  format cannot hold the medium; the message lists what), `locked` (the image cannot be saved over) or `ioError`.
+  format cannot hold the medium; the message lists what), `readOnly` (the image cannot be saved over) or `ioError`.
   `overwrite` and `acceptLosses` answer the first two.
 - `revert` drops the machine's changes, back to the loaded bytes; `reload` reads the file again, for a stale image.
 - `imageChanged` (`{ "id": "disk2", "action": "imageChanged" }`) is the extension's file watcher telling the host to
   check the image's stamp.
 - `new` inserts a blank medium, which only save as can write.
+- `writeProtect`, which the lock sends, is offered for every drive with a disk, the ProFile and slot 7 included;
+  `writeProtected` in `media` is the lock.
 - `eject` of a changed medium is refused with `changed` unless it says `"discard": true` or saved first, so a
   client that does not know about changed media cannot lose it. The extension asks and resends.
 - A machine's own eject sends a `retro/mediaEjected` event naming the drive and its recovered copy.
@@ -253,33 +261,48 @@ Each medium has four independent states, and the Drives view shows each:
 
 | State | Values | Shown as |
 | --- | --- | --- |
-| **Diff** | same · **changed** (the machine wrote it) · **stale** (the file changed since it was read) · both, a conflict | a dot on the icon for changed, as an unsaved editor tab has; ⚠ for stale or a conflict |
-| **Lock** | open · read-only file or folder · under `RETROCORE_CACHE` | a lock icon |
-| **Tab** | protected · writable | today's protect icon |
+| **Lock** | locked (the machine cannot write the disk) · unlocked | the drive's icon, on every drive with a disk: a lock or an open lock, coloured by its activity as the icon is now (green reading, red writing, yellow seeking). Its first inline button, **Lock** or **Unlock**, changes it |
+| **Diff** | same · **changed** (the machine wrote it) · **stale** (the file changed since it was read) · both, a conflict | at the row's end, as Git marks a changed file: `●` for changed, `⚠` for stale or a conflict |
+| **Read-only image** | the image can be saved over · a read-only file or folder · in `RETROCORE_CACHE` | `read-only image` in the description, and **Save As...** in place of **Save** |
 | **Fit** | fits its image's format · lossy | only when saving |
 
-The description joins them, such as `work.woz · changed · image changed on disk`. The tooltip adds the differences,
+VS Code shows a row's inline buttons only while the pointer is on it or it is selected, so what must always show is
+in the icon, the description and a file decoration (a `FileDecorationProvider` over a `retrocore-drive:` URI per
+drive), which stay visible. An empty drive keeps today's dimmed drive icon. Tapes keep their tape icon and have no
+lock: a playing tape cannot be written, and a recording can.
+
+The description joins them, such as `work.woz · image changed on disk`. The tooltip adds the differences,
 such as "changed: 14 sectors on tracks 17-18", and for a conflict the file's size and date then and now. The badge
 counts changed media, recovered copies included.
 
-The mockups below draw VS Code's views in text. `●` is the changed dot, `⚠` stale or a conflict, `🔒` a lock, `◆`
-the protect icon. Buttons in brackets are a row's inline buttons, shown as their tooltips.
+The mockups below draw VS Code's views in text. `🔓` is an unlocked disk and `🔒` a locked one, `▫` an empty drive;
+`●` at a row's end is changed and `⚠` stale or a conflict. Buttons in brackets are a row's inline buttons, shown as
+their tooltips, which appear while the pointer is on the row.
 
 The Drives view while an Apple IIe runs, with one drive in each state:
 
 ```text
-DRIVES                                                                            (3)
+DRIVES                                                                                  (3)
+▾ Slot 4 · ProFile card · 1 drive
+    🔓 ProFile        hard1.po · block 7 · reading                         [Lock] [Eject]
 ▾ Slot 5 · 3.5 disk controller · 2 drives
-    ● 3.5 drive 1    prodos.2mg · changed · block 412 · writing        [Save] [Eject] [Protect]
-    🔒 3.5 drive 2    system.po · changed · locked: read-only           [Save As...] [Eject] [Protect]
+    🔓 3.5 drive 1    prodos.2mg · block 412 · writing                 ●   [Lock] [Save] [Eject]
+    🔓 3.5 drive 2    system.po · read-only image                      ●   [Lock] [Save As...] [Eject]
 ▾ Slot 6 · Disk II controller · 2 drives
-    ⚠ Drive 1        work.woz · changed · image changed on disk         [Save...] [Eject] [Protect]
-    ◆ Drive 2        dos33.dsk · protected · track 0                   [Eject] [Unprotect]
+    🔓 Drive 1        work.woz · image changed on disk                 ⚠   [Lock] [Save...] [Eject]
+    🔒 Drive 2        dos33.dsk · track 0                                  [Unlock] [Eject]
+▾ Slot 7 · block storage
+    ▫ Slot 7 disk     empty
 ```
 
+- Every disk shows its lock, so a writable disk is plain at a glance, and locking one is a click on **Lock**.
 - `(3)` is the badge: three media changed and not saved. Its tooltip names them.
-- A drive whose disk is the same as its image has no Save button, as Drive 2 shows.
-- **Save...** has an ellipsis when it will ask (stale, lossy); a locked drive's button is **Save As...**.
+- A disk the same as its image has no Save button, as the ProFile and Drive 2 show.
+- **Save...** has an ellipsis when it will ask (stale, lossy); a read-only image's button is **Save As...**.
+- Drive 2's icon is dimmed, as its motor is off; its lock is the one the saved machine kept for it.
+
+On the Model I the same rows read, for example, `🔓 Drive 0    newdos.dsk (JV1) · track 17 sector 4 · reading`,
+while the cassette keeps its tape icon: `▶ Cassette    adventure.cas · playing · 1,204 of 6,912 bytes`.
 
 A changed drive's tooltip:
 
@@ -290,7 +313,7 @@ A changed drive's tooltip:
 │ work.woz (WOZ), C:\disks\work.woz                            │
 │ Changed: 14 sectors on tracks 17-18, not saved to the image  │
 │ Image changed on disk: 10:52 today; it was 10:02 when read   │
-│ Tab: writable                                                │
+│ Unlocked: the machine can write it                           │
 │ Track 17, sector 4, writing                                  │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -310,7 +333,7 @@ A drive's menu (right-click, or **...** on the row):
 ├──────────────────────────────────┤
 │ Insert...                        │
 │ Eject                            │
-│ Write Protect                    │
+│ Lock (Unlock when locked)        │
 └──────────────────────────────────┘
 ```
 
@@ -324,7 +347,7 @@ A drive's menu (right-click, or **...** on the row):
 | changed, fits, open | writes at once, keeping a backup |
 | changed, lossy | asks, listing what would be lost: **Save as WOZ / JV3...**, **Save Anyway**, cancel |
 | stale or a conflict | asks, with the differences: **Overwrite**, **Save As...**, **Reload from File** (drops the machine's changes), cancel |
-| locked | save as only; says why, and offers **Make Writable** for a read-only file |
+| read-only image | save as only; says why, and offers **Make Writable** for a read-only file |
 
 The drive's menu has **Save As...**, **Revert to Image** (which asks, as it drops work), **Reload from File** while
 stale, and **Restore Previous Version** after a save.
@@ -367,11 +390,11 @@ A stale image or a conflict:
 
 **Reload from File** asks again only when the machine had changed the disk, since that drops its changes.
 
-A locked image:
+A read-only image:
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│ 🔒 system.po is read-only                                         │
+│ ⚠ system.po is a read-only file                                  │
 │                                                                  │
 │   Save the disk in 3.5 drive 2 under another name, or make the   │
 │   file writable and save over it.                                │
@@ -432,15 +455,15 @@ Ejecting a changed disk:
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Save** here goes through the same checks as the Save button, so a stale, lossy or locked image asks as above
+**Save** here goes through the same checks as the Save button, so a stale, lossy or read-only image asks as above
 before the disk comes out.
 
 A disk the machine ejected itself, kept under its drive:
 
 ```text
 ▾ Slot 5 · 3.5 disk controller · 2 drives
-    3.5 drive 1      empty                                              [Insert...]
-      ● ejected      prodos.2mg · changed · ejected by the machine      [Save] [Insert Again] [Discard]
+    ▫ 3.5 drive 1     empty                                                [Insert...]
+       ↳ ejected      prodos.2mg · ejected by the machine              ●   [Save] [Insert Again] [Discard]
 ```
 
 Stopping, with changed media, shows one notification in the corner:
@@ -454,7 +477,7 @@ Stopping, with changed media, shows one notification in the corner:
                          └─────────────────────────────────────────────────┘
 ```
 
-**Save All** saves each in turn, and a disk that needs a prompt (stale, lossy, locked) asks as above; **Discard**
+**Save All** saves each in turn, and a disk that needs a prompt (stale, lossy, read-only) asks as above; **Discard**
 asks once more, naming them. Dismissing the notification keeps them.
 
 The machine, now off, with what it kept:
@@ -462,13 +485,13 @@ The machine, now off, with what it kept:
 ```text
 MACHINE
 ▾ 🖥 Apple IIe        Enhanced, 65C02 · off · 2 disks not saved
-DRIVES                                                                            (2)
+DRIVES                                                                                  (2)
 ▾ Slot 5 · 3.5 disk controller · 2 drives
-    ● 3.5 drive 1    prodos.2mg · changed · kept from the last run      [Save] [Eject]
-      3.5 drive 2    empty                                              [Insert...]
+    🔓 3.5 drive 1    prodos.2mg · kept from the last run              ●   [Lock] [Save] [Eject]
+    ▫ 3.5 drive 2     empty                                                [Insert...]
 ▾ Slot 6 · Disk II controller · 2 drives
-    ● Drive 1        work.woz · changed · kept from the last run        [Save] [Eject]
-      Drive 2        empty                                              [Insert...]
+    🔓 Drive 1        work.woz · kept from the last run                ●   [Lock] [Save] [Eject]
+    🔒 Drive 2        dos33.dsk                                            [Unlock] [Eject]
 ```
 
 Starting it again boots with those disks as they were left, still changed.
@@ -476,7 +499,7 @@ Starting it again boots with those disks as they were left, still changed.
 The display panel's drive line while it runs, and its banner after:
 
 ```text
-D1: track 17.00 · bit 2311/51024 · motor on · changed | D2: track 0.00 · motor off · protected
+D1: track 17.00 · bit 2311/51024 · motor on · unlocked · changed | D2: track 0.00 · motor off · locked
 ```
 
 ```text
@@ -491,9 +514,11 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
   images are never written without them.
 - **Save asks only when something is off**: a lossy format, a stale image or a lock. Backups cover the quiet case.
 - **Backups go to the extension's storage**, never beside the image, with **Restore Previous Version**.
-- **Image flags are the disk's tab.** A WOZ's write-protected flag, a 2MG's locked flag and a JV3's protect byte are
-  what the drive's protect toggle changes and saving writes back. Only a read-only file or folder, or the cache,
-  locks an image.
+- **Every disk shows a lock.** The drive's icon is a lock or an open lock, so a writable disk is plain at a glance,
+  and its first inline button locks or unlocks it. The ProFile and slot 7 get the lock too.
+- **Image flags are the disk's lock.** A WOZ's write-protected flag, a 2MG's locked flag and a JV3's protect byte are
+  what the lock changes and saving writes back. A read-only file or folder, or the cache, makes a read-only image,
+  which is shown in words, not with the lock.
 - **Differences by sector now, by file later.** The host keeps the loaded bytes and reports changed sectors, tracks
   or blocks; file names come with the media library's filesystems.
 - **Images are watched.** The extension watches each image's file, so a stale image shows as soon as it changes, and
@@ -510,9 +535,9 @@ before (proposed).
   than one header block, JVC, CAS and WAV. Fixtures are built in code; external images under `RETROCORE_CACHE` only
   add cases and skip when absent.
 - **Losses.** A JV3 disk with a double-density track, saved as JV1, reports it; a WOZ with an unreadable track,
-  saved as DSK, names the track; a locked 2MG loads protected and saves its tab back as the flag.
+  saved as DSK, names the track; a locked 2MG loads locked and saves its lock back as the flag.
 - **`MediaFiles`.** A write that fails partway (a stream that throws) leaves the image as it was and no temporary
-  file; a changed stamp is a conflict; a read-only file and a cache path are locked; each save keeps a backup in storage,
+  file; a changed stamp is a conflict; a read-only file and a cache path are read-only images; each save keeps a backup in storage,
   and only the last five per image.
 - **Machines, by digest.** As the Disk II save test does now, a machine writes a file (DOS `SAVE`, ProDOS
   `SAVE`, TRSDOS `SAVE`, Disk BASIC on the CoCo), the disk is saved, and the image's SHA-256 is pinned; loading it
@@ -543,8 +568,9 @@ before (proposed).
 5. **Session end and recovery.** Recovered copies, autosave to them, `unsaved` in `machineState`, the stop
    notification and the off machine's save. Done when a changed disk survives stopping, restarting VS Code and
    starting the machine again, and can be saved from the off machine.
-6. **The write-protection rule.** The tab as its image stores it, otherwise writable, on every drive, and saved
-   back in the formats that store it. Done when each device follows it and the docs say so.
+6. **The write-protection rule.** The lock as its image stores it, otherwise unlocked, on every drive, and saved
+   back in the formats that store it; the ProFile's and slot 7's lock, answering writes with $2B. Done when every
+   drive with a disk shows and changes its lock, each device follows the rule, and the docs say so.
 7. **New media and write-through.** `new` for blank disks; write-through for raw block images. Done when a blank
    800K disk formatted under ProDOS saves as `.po`, and a write-through ProFile matches AppleSharp's.
 8. **Later.** DMK and IMD writers, a 13-sector reader back from WOZ, WAV to CAS for the TRS-80 and the CoCo, and

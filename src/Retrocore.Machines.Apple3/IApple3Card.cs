@@ -54,6 +54,27 @@ public interface IApple3Card
     byte ReadRom(int offset) => 0xFF;
 
     /// <summary>
+    ///  Reads the card's ROM page, <c>$Cn00-$CnFF</c>, without side effects.
+    /// </summary>
+    /// <param name="offset">The offset in the page.</param>
+    /// <returns>The value.</returns>
+    byte PeekRom(int offset) => 0xFF;
+
+    /// <summary>
+    ///  Reads the card's expansion ROM without side effects.
+    /// </summary>
+    /// <param name="offset">The offset from <c>$C800</c>.</param>
+    /// <returns>The value.</returns>
+    byte PeekExpansionRom(int offset) => 0xFF;
+
+    /// <summary>
+    ///  Answers a read the card inhibits, without side effects.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>The value.</returns>
+    byte PeekInhibited(ushort address) => 0xFF;
+
+    /// <summary>
     ///  Writes the card's ROM page, which a card may decode as switches.
     /// </summary>
     /// <param name="offset">The offset in the page.</param>

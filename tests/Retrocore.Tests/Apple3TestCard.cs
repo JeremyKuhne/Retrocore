@@ -34,5 +34,11 @@ internal sealed class Apple3TestCard(int slot) : IApple3Card
     public byte ReadRom(int offset) => (byte)offset;
 
     /// <inheritdoc/>
+    public byte PeekRom(int offset) => (byte)offset;
+
+    /// <inheritdoc/>
     public byte ReadExpansionRom(int offset) => 0xE0;
+
+    /// <inheritdoc/>
+    public byte PeekExpansionRom(int offset) => 0xE0;
 }

@@ -52,23 +52,28 @@ internal static class SourceBuild
     }
 
     /// <summary>
-    ///  Tests whether a source's first <c>.cpu</c> directive names a CPU, such as the Z80 of a program for the
-    ///  SoftCard.
+    ///  Tests whether a source assembles for a CPU, such as the Z80 of a program for the SoftCard: whether its first
+    ///  <c>.cpu</c> directive after preprocessing, the one the assembler starts with, names it. Included files count,
+    ///  and directives in conditionals that are off do not.
     /// </summary>
     /// <param name="source">The source file.</param>
+    /// <param name="dialect">The dialect, or null for native unless the file's first-line pragma names one.</param>
     /// <param name="cpu">The CPU's name.</param>
-    /// <returns>Whether it does.</returns>
-    internal static bool DeclaresCpu(string source, string cpu)
+    /// <returns>Whether it does; false when the source does not parse, which assembling it then reports.</returns>
+    internal static bool DeclaresCpu(string source, AssemblyDialect? dialect, string cpu)
     {
-        foreach (string line in File.ReadLines(source))
+        string path = Path.GetFullPath(source);
+        AssemblyOptions options = new(cpu, 0, 0x10000)
         {
-            string text = line.Trim();
-            if (!text.StartsWith(".cpu", StringComparison.OrdinalIgnoreCase)) { continue; }
-            string name = text[4..].Split(';')[0].Trim().Trim('"');
-            return string.Equals(name, cpu, StringComparison.OrdinalIgnoreCase);
-        }
+            Dialect = dialect ?? AssemblyDialect.Native,
+            SourceResolver = new FileAssemblySourceResolver()
+        };
 
-        return false;
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(new AssemblySource(File.ReadAllText(path), path), options);
+        AssemblyStatement? first = parsed.Project.Statements.FirstOrDefault(
+            node => node.Kind == AssemblyStatementKind.Cpu && node.Label is null);
+
+        return first is not null && string.Equals(first.Operand.Text.Trim(), cpu, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

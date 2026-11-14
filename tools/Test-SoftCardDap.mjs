@@ -4,7 +4,8 @@
 
 // The Z80 SoftCard through the debug adapter, from the SDK's ROMs. A .cpu Z80 source launched on a II Plus with the
 // card loads where the Z80's addresses reach and stops at its entry on the "SoftCard Z80" thread; it steps by line,
-// into and out of a call, stops at a source breakpoint, and shows both threads' registers and the Z80's disassembly.
+// into and out of a call, logs the Z80's registers from a logpoint, stops at a source breakpoint and at a data
+// breakpoint on the Z80's own addresses, and shows both threads' registers and the Z80's disassembly.
 // The card is a hardware row that comes out and goes back in. When the SoftCard CP/M disk is there
 // (RETROCORE_SOFTCARD_DISKS, or softcard-disks under the external-files folder), CP/M boots to an instruction
 // breakpoint at the Z80's first instruction and then to its prompt.
@@ -47,6 +48,7 @@ const lines = [
     "start:  ld a,$12",
     "        ld b,$34",
     "        call bump",
+    "        ld [$0200],a",
     "        ld [$E400],a",
     "spin:   jr spin",
     "bump:   inc a",
@@ -88,9 +90,13 @@ try {
     await request("next", { threadId: 4 });
     frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("call bump"));
+    // A logpoint on the Z80's code writes the Z80's registers.
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: line("inc a"), logMessage: "A={A} B={B}" }] });
     await request("stepIn", { threadId: 4 });
     frame = await stoppedOn("step", 4);
     assert.equal(frame.line, line("inc a"));
+    const logged = events.filter(message => message.event === "output" && message.body.output.startsWith("A="));
+    assert.deepEqual(logged.map(message => message.body.output.trim()), ["A=$12 B=$34"]);
 
     // A source breakpoint in the Z80's code stops the Z80's thread.
     const set = await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: line("ret") }] });
@@ -102,8 +108,17 @@ try {
     assert.equal((await request("stackTrace", { threadId: 4 })).stackFrames[1].line, line("call bump"));
     await request("stepOut", { threadId: 4 });
     frame = await stoppedOn("step", 4);
-    assert.equal(frame.line, line("ld [$E400],a"));
+    assert.equal(frame.line, line("ld [$0200],a"));
     assert.equal((await request("evaluate", { expression: "A", frameId: z80Frame })).result, "$13 (19)");
+
+    // A data breakpoint on the Z80's address space watches the Z80's own addresses: z80:$0200 is the Apple's $1200.
+    const info = await request("dataBreakpointInfo", { name: "z80:$0200", asAddress: true });
+    assert.equal(info.dataId, "bank:z80:0200:1");
+    await request("setDataBreakpoints", { breakpoints: [{ dataId: info.dataId, accessType: "write" }] });
+    await request("continue", { threadId: 4 });
+    frame = await stoppedOn("data breakpoint", 4);
+    assert.equal(frame.line, line("ld [$E400],a"));
+    await request("setDataBreakpoints", { breakpoints: [] });
 
     // Giving the bus back: the step ends on the Z80 thread, waiting at its next instruction, and the 6502 runs on
     // when continued; a pause stops it on its own thread.

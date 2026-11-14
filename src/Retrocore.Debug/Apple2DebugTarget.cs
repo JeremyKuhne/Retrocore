@@ -642,12 +642,31 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public bool StepCycle()
     {
+        Advance(halfCycle: false);
+        return _machine.Processor.FetchedOpcode;
+    }
+
+    /// <summary>
+    ///  Advances by one of the SoftCard's Z80 T-states while it runs, else by a cycle, for the Z80's view.
+    /// </summary>
+    internal void StepTState() => Advance(halfCycle: true);
+
+    // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard holds it, its last cycle is
+    // an old one, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
+    private void Advance(bool halfCycle)
+    {
         ProcessorRegisters before = _machine.Processor.Registers;
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
         ulong cycles = _machine.Processor.CycleCount;
-        _machine.StepCycle();
+        if (halfCycle)
+        {
+            _machine.StepTState();
+        }
+        else
+        {
+            _machine.StepCycle();
+        }
 
-        // While the SoftCard holds the 6502, its last cycle is an old one.
         if (_machine.Processor.CycleCount != cycles)
         {
             ProcessorCycle cycle = _machine.LastCycle;
@@ -655,20 +674,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
         }
 
-        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
-        {
-            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
-        }
-
-        return _machine.Processor.FetchedOpcode;
-    }
-
-    /// <summary>
-    ///  Advances by one of the SoftCard's Z80 T-states while it runs, else by a cycle, for the Z80's view.
-    /// </summary>
-    internal void StepTState()
-    {
-        _machine.StepTState();
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
             throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
@@ -1634,6 +1639,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                         HardwareAction(id, "addMockingboard", []);
                         break;
                     case "softCard":
+                        // The machine has one SoftCard: the saved slot wins over the launch's, as for the mouse card.
+                        if (_machine.Bus.SoftCard is { } softCard && softCard.Slot != slot)
+                        {
+                            HardwareAction($"slot{softCard.Slot}", "removeCard", []);
+                        }
+
                         HardwareAction(id, "addSoftCard", []);
                         break;
                     case "mouse":

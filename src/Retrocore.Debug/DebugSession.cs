@@ -621,7 +621,7 @@ internal sealed partial class DebugSession
             // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
             // and the Z80 takes the bus at its entry.
             SoftCardDebugTarget? z80 = null;
-            if (Target.Coprocessor is SoftCardDebugTarget softCard && SourceBuild.DeclaresCpu(sourceFile, softCard.Cpu))
+            if (Target.Coprocessor is SoftCardDebugTarget softCard && SourceBuild.DeclaresCpu(sourceFile, dialect, softCard.Cpu))
             {
                 z80 = softCard;
             }
@@ -1270,7 +1270,11 @@ internal sealed partial class DebugSession
 
             if (cpu.IsInstructionBoundary && (ResetStops() || !Observe(cpu))) { return false; }
             instruction |= cpu.StepCycle();
-            if (_watches.Count != 0) { Watch(cpu.LastCycle); }
+            if (_watches.Count != 0)
+            {
+                Watch(cpu.LastCycle, cpu is SoftCardDebugTarget z80 ? z80.Card.Processor.LastCycle : null);
+            }
+
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
             if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }

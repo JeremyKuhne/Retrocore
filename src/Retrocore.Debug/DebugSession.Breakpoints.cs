@@ -947,11 +947,20 @@ internal sealed partial class DebugSession
         return stops.Count == 0 ? null : new(stops[0].Kind, [.. stops.Select(state => state.Id)], hidden, description);
     }
 
-    // Notes the data breakpoints a bus cycle hits, for when its instruction finishes.
-    private void Watch(in ProcessorCycle cycle)
+    // Notes the data breakpoints a bus cycle hits, for when its instruction finishes. A coprocessor's cycle comes in its
+    // own addresses too: a watch on its bank, such as z80:$0100, matches those, and every other watch the machine's.
+    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle)
     {
         foreach (DataWatch watch in _watches)
         {
+            bool own = watch.Bank is { } watched && watched.Areas.Contains(SoftCardMemoryArea.Z80);
+            ProcessorCycle cycle = hostCycle;
+            if (own)
+            {
+                if (ownCycle is not { } z80) { continue; }
+                cycle = z80;
+            }
+
             if (!watch.Matches(cycle, out bool write) || _dataHits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
             {
                 continue;
@@ -959,7 +968,8 @@ internal sealed partial class DebugSession
 
             // A bank's watch sees only the accesses the memory map sends to it; the map has not changed since, as
             // only accesses to soft switches change it.
-            if (watch.Bank is { } bank
+            if (!own
+                && watch.Bank is { } bank
                 && !bank.Areas.Contains(write ? Target.WriteArea(cycle.Address) : Target.ReadArea(cycle.Address)))
             {
                 continue;
@@ -1125,7 +1135,8 @@ internal sealed partial class DebugSession
         string expression = format.Length == 0 ? placeholder : placeholder[..comma];
         try
         {
-            long value = Evaluate(expression);
+            // The CPU that reached the logpoint, as its condition uses: a Z80 logpoint's {A} is the Z80's.
+            long value = new ExpressionEvaluator(Cpu, _debug, expression).Evaluate();
             return format switch
             {
                 "d" => value.ToString(CultureInfo.InvariantCulture),

@@ -45,12 +45,22 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
             [SoftCardMemoryArea.Z80],
             [(0x0000, 0x10000)],
             address => card.Peek(address),
-            (address, value) =>
-            {
-                host.Poke(card.Translate(address), value);
-                return true;
-            },
+            (address, value) => PokeHost(host, card.Translate(address), value),
             Z80Isa.InstructionSet);
+    }
+
+    // Writes a byte the Z80 reaches, or reports that ROM or I/O is there, so a write can roll back or stop part way.
+    private static bool PokeHost(Apple2DebugTarget host, ushort address, byte value)
+    {
+        try
+        {
+            host.Poke(address, value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

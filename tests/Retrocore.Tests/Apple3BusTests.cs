@@ -348,7 +348,10 @@ public class Apple3BusTests
         bus.Read(0xC0B3).Should().Be(0xFF, "slot 3 is empty");
 
         bus.Read(0xC810).Should().Be(0xFF, "no expansion ROM is selected");
+        bus.Peek(0xC245).Should().Be(0x45);
+        bus.Peek(0xC810).Should().Be(0xFF, "a peek selects no expansion ROM");
         bus.Read(0xC245).Should().Be(0x45);
+        bus.Peek(0xC810).Should().Be(0xE0);
         bus.Read(0xC810).Should().Be(0xE0);
         bus.Read(0xCFFF);
         bus.Read(0xC810).Should().Be(0xFF);

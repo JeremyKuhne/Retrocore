@@ -87,7 +87,8 @@ public sealed class SoftCard3Tests
     }
 
     /// <summary>
-    ///  Without $10 written, a read of $FFFC reads the ROM and does not switch.
+    ///  Without $10 written, a read of $FFFC reads the ROM and does not switch. With it written, a peek there sees
+    ///  the card's $FF without switching.
     /// </summary>
     [TestMethod]
     public void FffcSwitchesOnlyWhenEnabled()
@@ -98,6 +99,10 @@ public sealed class SoftCard3Tests
         machine.Run(100);
         card.Running.Should().BeFalse();
         machine.Bus.Peek(0x0010).Should().Be(machine.Bus.Rom[0xFFC]);
+
+        machine.Bus.Write(0xC0C0, 0x10);
+        machine.Bus.Peek(0xFFFC).Should().Be(0xFF);
+        card.Running.Should().BeFalse();
     }
 
     /// <summary>

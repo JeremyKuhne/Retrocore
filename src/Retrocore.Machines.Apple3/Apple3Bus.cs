@@ -709,14 +709,27 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     /// </summary>
     /// <param name="address">The CPU address.</param>
     /// <returns>The value.</returns>
-    public byte Peek(ushort address) => ReadArea(address) switch
+    public byte Peek(ushort address)
     {
-        Apple3MemoryArea.Io => PeekIo((byte)address),
-        Apple3MemoryArea.Vias => (address < 0xFFE0 ? Via0 : Via1).Peek((byte)address),
-        Apple3MemoryArea.Rom => _rom[address - 0xF000],
-        Apple3MemoryArea.None => 0xFF,
-        _ => _ram[RamOffset(address)]
-    };
+        if (address >= 0xF000 && _inhibitors.Length != 0 && Inhibitor(address) is { } inhibitor)
+        {
+            return inhibitor.PeekInhibited(address);
+        }
+
+        return ReadArea(address) switch
+        {
+            Apple3MemoryArea.Io => PeekIo((byte)address),
+            Apple3MemoryArea.Vias => (address < 0xFFE0 ? Via0 : Via1).Peek((byte)address),
+            Apple3MemoryArea.Rom => _rom[address - 0xF000],
+            Apple3MemoryArea.None => PeekSlotRom(address),
+            _ => _ram[RamOffset(address)]
+        };
+    }
+
+    // A slot's ROM page or the expansion ROM, as a read would see it, without selecting the expansion ROM.
+    private byte PeekSlotRom(ushort address) => address < 0xC800
+        ? _slots[(address >> 8) & 7]?.PeekRom(address & 0xFF) ?? 0xFF
+        : _slots[_expansionSlot]?.PeekExpansionRom(address - 0xC800) ?? 0xFF;
 
     /// <summary>
     ///  Gets what backs a CPU address, without extended addressing.

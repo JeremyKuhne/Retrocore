@@ -146,7 +146,7 @@ RESET after) and **BRK instructions**.
 
 The display panel takes keys: **Backspace** types the back arrow (`_`), which the Monitor takes as a backspace,
 **Escape** types ESC, and **Ctrl+F12** or **Ctrl+Break** presses RESET. The key bar has **Esc**, **Reset** and
-**Clear Screen** (the debug host's `apple1/clearScreen` request). The cassette's row in Retro Devices inserts a
+**Clear Screen** (the debug host's `apple1/clearScreen` request). The cassette's row in the Drives view inserts a
 WAV tape, records one (saved when it is ejected) and ejects it, as the `retro/media` request does.
 [`Test-Apple1Dap.mjs`](../tools/Test-Apple1Dap.mjs) runs the debugger through all of this.
 

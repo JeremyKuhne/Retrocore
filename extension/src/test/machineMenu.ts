@@ -29,7 +29,7 @@ function activeRetrocore(): vscode.DebugSession {
     return session;
 }
 
-// The memory row's value in the Retro Devices list, such as 48 KB.
+// The memory row's value in the Machine view, such as 48 KB.
 async function memoryRow(session: vscode.DebugSession): Promise<string | undefined> {
     const devices = await session.customRequest("retro/devices") as { hardware?: { id: string; value: string }[] };
     return devices.hardware?.find(row => row.id === "memory")?.value;
@@ -50,7 +50,8 @@ export async function testMachineMenu(workspace: vscode.WorkspaceFolder): Promis
         "TRS-80 Model I (Level II) (Retrocore)", "TRS-80 Model I (Level I) (Retrocore)", "TRS-80 Model III (Retrocore)",
         "TRS-80 Model 4 (Retrocore)", "TRS-80 Model 4P (Retrocore)", "TRS-80 Model II (Retrocore)", "TRS-80 Model 12 (Retrocore)",
         "TRS-80 Model 16 (Z80 side) (Retrocore)", "Apple-1 (Retrocore)",
-        "TRS-80 Color Computer (Retrocore)", "TRS-80 Color Computer 2 (Retrocore)", "TRS-80 Color Computer 3 (Retrocore)"
+        "TRS-80 Color Computer (Retrocore)", "TRS-80 Color Computer 2 (Retrocore)", "TRS-80 Color Computer 3 (Retrocore)",
+        "MITS Altair 8800 (Retrocore)"
     ]);
     assert.ok(configurations.every(configuration => configuration.debugHost === undefined), "the packaged host runs them");
 

@@ -491,3 +491,59 @@ export function machineById(id: string): Machine | undefined {
 export function launchConfiguration(machine: Machine, name = `${machine.label} (Retrocore)`): Record<string, unknown> {
     return { type: "retrocore", request: "launch", name, ...machine.configuration, stopOnEntry: false };
 }
+
+// The models a launch option names, as the debug host reads them, by machine: an alias, or none for its default.
+const models: Record<string, Record<string, string>> = {
+    apple2: { "": "iie-enhanced", enhanced: "iie-enhanced", original: "iie" },
+    coco: { "": "coco2" },
+    "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
+    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
+};
+
+// The machine names the debug host takes for another: the Model 4 is the Model III's machine, a 4 unless it says.
+const machineAliases: Record<string, { machine: string; model: string }> = {
+    apple2e: { machine: "apple2", model: "" },
+    "trs80-model4": { machine: "trs80-model3", model: "4" }
+};
+
+/**
+ * The catalog machine a launch configuration starts, as the debug host reads its machine, model and rom, so a
+ * launch.json entry that leaves the model to its default is still its machine; none for a machine the catalog lacks.
+ */
+export function catalogMachine(configuration: Record<string, unknown>): Machine | undefined {
+    const alias = machineAliases[String(configuration.machine ?? "")];
+    const kind = alias?.machine ?? String(configuration.machine ?? "");
+    const named = typeof configuration.model === "string" ? configuration.model : alias?.model ?? "";
+    const model = models[kind]?.[named] ?? named;
+    const rom = kind === "trs80-model1" ? String(configuration.rom ?? "level2") : "";
+    return machines.find(machine => machine.configuration.machine === kind
+        && (machine.configuration.model ?? "") === model
+        && (kind !== "trs80-model1" || (machine.configuration.rom ?? "level2") === rom));
+}
+
+/** Whether a launch configuration starts with disks in its drives, which brings a disk controller with them. */
+export function startsWithDisks(configuration: Record<string, unknown>): boolean {
+    return Array.isArray(configuration.disks) && configuration.disks.length !== 0;
+}
+
+/**
+ * What a choice is when the configuration leaves it out, as the debug host decides: the choice's default, except that
+ * disks given bring their disk controller.
+ */
+export function impliedValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    return choice.option === "diskController" && startsWithDisks(configuration) ? true : choice.default;
+}
+
+/** The value a launch configuration gives one of its machine's choices: its own, or what it is left out. */
+export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    const value = configuration[choice.option];
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : impliedValue(choice, configuration);
+}
+
+/** A launch configuration with one choice set, leaving the option out when it is what it would be without it. */
+export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {
+    const changed = { ...configuration };
+    if (value === impliedValue(choice, configuration)) delete changed[choice.option];
+    else changed[choice.option] = value;
+    return changed;
+}

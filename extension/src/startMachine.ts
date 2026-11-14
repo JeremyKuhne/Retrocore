@@ -8,14 +8,15 @@
 
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { favoriteChoices } from "./favorites";
 import { machines, type Machine } from "./machines";
 import {
-    describeSetup, isUsable, optionValue, runChoices, setupConfiguration, withOption, type RunChoice, type Setup
+    describeSetup, isUsable, optionValue, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
 } from "./startFlow";
 
 const lastKey = "retrocore.lastSetup";
 
-type MachineItem = vscode.QuickPickItem & { machine?: Machine; last?: Setup };
+type MachineItem = vscode.QuickPickItem & { machine?: Machine; last?: Setup; favorite?: string };
 type RunItem = vscode.QuickPickItem & { choice: RunChoice; path?: string };
 type ActionItem = vscode.QuickPickItem & { action: "start" | "options" | "save" };
 
@@ -33,13 +34,16 @@ export function registerStartMachine(context: vscode.ExtensionContext): void {
 
     const start = async (setup: Setup): Promise<boolean> => {
         await state.update(lastKey, setup);
-        return vscode.debug.startDebugging(folder(), setupConfiguration(setup) as vscode.DebugConfiguration);
+        // Tagged, so the machine shown off once it ends knows Start Machine started it, whatever launch.json has.
+        return vscode.debug.startDebugging(folder(), { ...setupConfiguration(setup), [startOrigin]: "startMachine" } as unknown as vscode.DebugConfiguration);
     };
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.startMachine", async (given?: Setup) => {
         if (given !== undefined) return start(given);
         const picked = await pickSetup(last());
         if (picked === undefined) return false;
+        // A favorite starts with its own cards and media.
+        if ("favorite" in picked) return vscode.commands.executeCommand<boolean>("retrocore.favorite.start", picked.favorite);
         if (picked.action === "save") return save(picked.setup);
         return start(picked.setup);
     }));
@@ -60,9 +64,17 @@ export function registerStartMachine(context: vscode.ExtensionContext): void {
     }));
 }
 
-// The picks: the machine (or the last setup), what it runs, then Start, Options… or Save.
-async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; action: "start" | "save" } | undefined> {
+// The picks: a favorite, or the machine (or the last setup), what it runs, then Start, Options… or Save.
+async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; action: "start" | "save" } | { favorite: string } | undefined> {
     const items: MachineItem[] = [];
+    const favorites = favoriteChoices();
+    if (favorites.length !== 0) {
+        items.push({ label: "Favorites", kind: vscode.QuickPickItemKind.Separator });
+        for (const favorite of favorites) {
+            items.push({ label: favorite.label, description: favorite.description, detail: favorite.detail, favorite: favorite.target.configuration.name as string });
+        }
+        items.push({ label: previous === undefined ? "Machines" : "Recent", kind: vscode.QuickPickItemKind.Separator });
+    }
     if (previous !== undefined) {
         items.push({ label: "$(history) " + describeSetup(previous), detail: "Start what was started last", last: previous });
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });
@@ -71,6 +83,7 @@ async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; a
     for (const machine of machines) items.push({ label: machine.label, detail: machine.detail, machine });
     const chosen = await vscode.window.showQuickPick(items, { title: "Start a machine", placeHolder: "Which machine?" });
     if (chosen === undefined) return undefined;
+    if (chosen.favorite !== undefined) return { favorite: chosen.favorite };
     if (chosen.last !== undefined) return { setup: chosen.last, action: "start" };
     const machine = chosen.machine;
     if (machine === undefined) return undefined;

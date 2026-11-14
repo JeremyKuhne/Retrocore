@@ -6,7 +6,10 @@
 // launch configuration that starts it. Free of the vscode module, so the unit tests walk it. startMachine.ts shows the
 // quick picks.
 
-import { launchConfiguration, machineById, type Machine } from "./machines";
+import { catalogMachine, launchConfiguration, machineById, type Machine } from "./machines";
+
+/** The launch property Start Machine marks its launches with, so where a session came from is known; the debug host ignores it. */
+export const startOrigin = "retrocoreOrigin";
 
 /** What a machine is started with. */
 export type RunKind = "machine" | "source" | "program" | "basic" | "disk" | "tape" | "dosSource";
@@ -22,12 +25,16 @@ export interface RunChoice {
 
 /** A setup chosen in Start Machine, kept to start it again. */
 export interface Setup {
+    /** A favorite's name, which names its launch configuration and saved machine; none for Start Machine's own. */
+    name?: string;
     machineId: string;
     kind: RunKind;
     /** The file run, for every kind but the bare machine. */
     path?: string;
     /** For a basic launch, the disk the machine's BASIC boots from, when it is not in ROM. */
     basicDisk?: string;
+    /** For a source on a fresh DOS disk, DOS 3.2 (13-sector) rather than 3.3. */
+    dos?: "3.2";
     /** The machine's choices changed from their defaults, by launch option. */
     options: Record<string, string | number | boolean>;
 }
@@ -90,6 +97,7 @@ function fileName(path: string): string {
 
 /** How a setup is named: in the dropdown, the saved machine and the last-setup item. */
 export function setupName(machine: Machine, setup: Setup): string {
+    if (setup.name !== undefined) return setup.name;
     return setup.path === undefined ? `${machine.label} (Retrocore)` : `${machine.label}: ${fileName(setup.path)}`;
 }
 
@@ -117,7 +125,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             Object.assign(configuration, { cassette: path });
             break;
         case "dosSource":
-            Object.assign(configuration, { source: path, dos: "3.3", stopOnEntry: false });
+            Object.assign(configuration, { source: path, dos: setup.dos ?? "3.3", stopOnEntry: false });
             break;
         default:
             break;
@@ -145,8 +153,9 @@ export function optionValue(machine: Machine, setup: Setup, option: string): str
 export function describeSetup(setup: Setup): string {
     const machine = machineById(setup.machineId);
     if (machine === undefined) return setup.machineId;
-    const parts = [machine.label];
+    const parts = setup.name === undefined ? [machine.label] : [setup.name, machine.label];
     if (setup.path !== undefined) parts.push(fileName(setup.path));
+    if (setup.dos !== undefined) parts.push(`DOS ${setup.dos}`);
     for (const [option, value] of Object.entries(setup.options)) {
         const choice = machine.choices.find(candidate => candidate.option === option);
         const label = choice?.values.find(candidate => candidate.value === value)?.label ?? String(value);
@@ -161,4 +170,51 @@ export function isUsable(setup: Setup | undefined): setup is Setup {
     const machine = setup === undefined ? undefined : machineById(setup.machineId);
     return machine !== undefined && runChoices(machine).some(choice => choice.kind === setup?.kind)
         && (setup?.kind === "machine" || typeof setup?.path === "string");
+}
+
+/**
+ * The setup a launch configuration amounts to: its catalog machine, the choices it sets that differ from their
+ * defaults, and the source, program or BASIC file it runs. Options Start Machine cannot set, such as a debug file,
+ * are not kept; none for a machine the catalog lacks.
+ */
+export function setupFromConfiguration(configuration: Record<string, unknown>): Setup | undefined {
+    const machine = catalogMachine(configuration);
+    if (machine === undefined) return undefined;
+    const options: Setup["options"] = {};
+    for (const choice of machine.choices) {
+        const value = configuration[choice.option];
+        if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && value !== choice.default) {
+            options[choice.option] = value;
+        }
+    }
+
+    const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
+    const disks = Array.isArray(configuration.disks) ? configuration.disks.filter((disk): disk is string => typeof disk === "string") : [];
+
+    // A Color Computer, Model I or Model III family given disks has its disk controller without saying so; kept, it is
+    // the setting it amounts to, so the drives its saved media go in are there whatever it runs. The TRS-80s have no
+    // such choice in the catalog, so theirs is kept as the launch option, an explicit one too.
+    const controller = machine.choices.find(choice => choice.option === "diskController");
+    const trs80 = ["trs80-model1", "trs80-model3"].includes(machine.configuration.machine);
+    const implied = controller !== undefined ? controller.default === false : trs80;
+    if (implied && disks.length !== 0 && configuration.diskController === undefined) options.diskController = true;
+    if (controller === undefined && trs80 && configuration.diskController === true) options.diskController = true;
+
+    const source = text("source");
+    if (source !== undefined) {
+        // A DOS 3.2 disk is kept as one, as the 13-sector controller its saved machine records needs it.
+        if (text("dos") === undefined) return { machineId: machine.id, kind: "source", path: source, options };
+        return { machineId: machine.id, kind: "dosSource", path: source, options, ...text("dos") === "3.2" ? { dos: "3.2" as const } : {} };
+    }
+    const program = text("program");
+    if (program !== undefined) return { machineId: machine.id, kind: "program", path: program, options };
+    const basic = text("basic");
+    if (basic !== undefined) return { machineId: machine.id, kind: "basic", path: basic, options };
+
+    // A disk or tape it starts with is what it runs, so the launch installs what takes it.
+    const disk = text("diskImage") ?? disks[0];
+    if (disk !== undefined && machine.diskFormats.length !== 0) return { machineId: machine.id, kind: "disk", path: disk, options };
+    const tape = text("cassette");
+    if (tape !== undefined && machine.tapeFormats.length !== 0) return { machineId: machine.id, kind: "tape", path: tape, options };
+    return { machineId: machine.id, kind: "machine", options };
 }

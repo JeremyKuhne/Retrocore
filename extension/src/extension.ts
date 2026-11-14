@@ -9,6 +9,8 @@ import { shadowCopy, startLanguageClient, stopLanguageClient } from "./languageC
 import { defaultHost, isBundled } from "./host";
 import { registerLaunchBreakpoints } from "./launchBreakpoints";
 import { registerDevices } from "./devices";
+import { registerFavorites } from "./favorites";
+import { OffMachine } from "./offMachine";
 import { registerSavedMachines } from "./savedMachine";
 import { registerMachineMenu } from "./machineMenu";
 import { registerStartMachine } from "./startMachine";
@@ -23,8 +25,9 @@ export function activate(context: vscode.ExtensionContext): void {
     void startLanguageClient(context);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
-    registerDevices(context, basic);
-    registerSavedMachines(context);
+    const saved = registerSavedMachines(context);
+    const off = new OffMachine(context.workspaceState, saved);
+    registerDevices(context, basic, saved, off, registerFavorites(context, off, saved));
     registerMachineMenu(context);
     registerStartMachine(context);
     registerBreakpoints(context);

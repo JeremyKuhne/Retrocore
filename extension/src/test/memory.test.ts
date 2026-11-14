@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
+import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -382,6 +382,46 @@ test("a stop colors the bytes that changed since the stop before", async () => {
         await page.settle();
     }
     assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
+});
+
+test("the machine changing while stopped reads the bytes and labels again", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    page.posted.splice(0);
+
+    page.send({ type: "invalidated" });
+    await page.settle();
+    const asked = page.posted.map(message => message.type);
+    assert.ok(asked.includes("read"), "the bytes are read again");
+    assert.ok(asked.includes("labels"), "and the labels");
+    for (let round = 0; round < 3; round++) {
+        answer(page, offset => offset === 0x0400 ? 0xC1 : 0xA0);
+        await page.settle();
+    }
+    assert.match(page.elements.get("rows")!.innerHTML, /data-o="1024"[^>]*>C1</, "the byte the change made shows");
+});
+
+test("an address resolves in the focused frame, else in the CPU's", async () => {
+    // As the SoftCard's debugger answers: the Z80's frame is 1001, where PC is z80:$0100; the 6502's is 1.
+    const evaluate = async (expression: string, frameId?: number): Promise<string | undefined> => {
+        const z80 = frameId === 1001;
+        if (expression === "z80:PC") return z80 ? "z80:0x0100" : "z80:0x6000";
+        if (expression === "PC") return z80 ? "z80:0x0100" : "0x6000";
+        if (expression === "$0400") return z80 ? "z80:0x0400" : "0x0400";
+        if (expression === "HL") { if (z80) return "z80:0x1234"; throw new Error("HL is not a 6502 register."); }
+        return undefined;
+    };
+    assert.equal(await resolveIn(evaluate, "z80", "PC", 1001), 0x0100, "the Z80's PC in the Z80's view");
+    assert.equal(await resolveIn(evaluate, null, "PC", 1), 0x6000);
+    assert.equal(await resolveIn(evaluate, null, "$0400", 1001), 0x0400, "an address in the CPU's view is the CPU's");
+    assert.equal(await resolveIn(evaluate, null, "PC", 1001), 0x6000, "the CPU's PC in its view");
+    assert.equal(await resolveIn(evaluate, null, "z80:$0100", 1), undefined, "another bank's address is not this view's");
+    await assert.rejects(resolveIn(evaluate, null, "HL"), /not a 6502 register/);
+    await assert.rejects(resolveIn(evaluate, null, "HL", 1), /not a 6502 register/);
 });
 
 // Runs the page's test hook, answering what it asks as the debugger would.

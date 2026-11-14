@@ -1041,6 +1041,13 @@ window.addEventListener("message", event => {
         frozen = new Map(message.frozen.map(item => [item.address, item.value]));
         showFrozen();
         render();
+    } else if (message.type === "invalidated") {
+        // The machine changed while stopped, as when a card goes in: the bytes, labels, characters and frozen
+        // bytes are read again. Changes still count from the stop, as between stops they do.
+        generation++;
+        pages.fill(0);
+        render();
+        void loadExtras();
     } else if (message.type === "stopped") {
         // Changes count from here, and banks may have switched the labels and characters.
         stops++;

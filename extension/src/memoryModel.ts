@@ -63,6 +63,33 @@ export function parseReference(reference: string): ParsedReference | undefined {
 }
 
 /**
+ * Where an address, label or expression points in a view's bank, through the debugger's evaluate, which gives the
+ * memory reference an expression names in a frame. It is evaluated in the focused frame first, so a register such as
+ * the Z80's PC, or SP in a caller's frame, reads as that frame shows it; when that gives no address in the bank, as
+ * $0400 does in the CPU's view while the Z80's frame is focused, in the CPU's own frame. Undefined when neither names
+ * an address in the bank; the focused frame's error when it has one. The extension runs this, not the page.
+ */
+export async function resolveIn(
+    evaluate: (expression: string, frameId?: number) => Promise<string | undefined>,
+    bank: string | null,
+    text: string,
+    frameId?: number): Promise<number | undefined> {
+    const expression = bank === null ? text : `${bank}:${text}`;
+    let failure: unknown;
+    for (const frame of frameId === undefined ? [undefined] : [frameId, undefined]) {
+        try {
+            const reference = await evaluate(expression, frame);
+            const parsed = reference === undefined ? undefined : parseReference(reference);
+            if (parsed !== undefined && parsed.bank === bank) return parsed.address;
+        } catch (error) {
+            failure ??= error;
+        }
+    }
+    if (failure !== undefined) throw failure;
+    return undefined;
+}
+
+/**
  * Reads a find pattern: hex bytes, with ?? for any byte, such as "A9 ?? 20", or text in quotes, such as "HELLO".
  * Text matches every code the machine's character set shows as each character, given the set as one character a
  * code; without it, ASCII with bit 7 clear or set, as the Apple II keeps text with it set. Returns a message for a

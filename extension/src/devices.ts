@@ -577,9 +577,13 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             };
             return {
                 onWillReceiveMessage(message: { command?: string }) { if (message.command !== undefined && resumes.has(message.command)) set(false); },
-                onDidSendMessage(message: { event?: string }) {
+                onDidSendMessage(message: { event?: string; body?: { areas?: string[] } }) {
                     if (message.event === "stopped") {
                         set(true);
+                        if (session.id === tree.session?.id) void readBanks(session);
+                    }
+                    // A card put in or taken out while stopped, such as a SoftCard, adds or removes a bank.
+                    else if (message.event === "invalidated" && message.body?.areas?.includes("all")) {
                         if (session.id === tree.session?.id) void readBanks(session);
                     }
                     else if (message.event === "continued") set(false);

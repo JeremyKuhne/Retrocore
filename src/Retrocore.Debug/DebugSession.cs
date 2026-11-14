@@ -377,6 +377,8 @@ internal sealed partial class DebugSession
 
             if (_run is not { IsCancellationRequested: false })
             {
+                // A card's ROM or RAM now shows at its slot's addresses.
+                NotifyMemory();
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
 
                 // The panel's Sound button follows the cards, so a stopped machine sends it a frame too.
@@ -453,6 +455,8 @@ internal sealed partial class DebugSession
             Invalidate();
             if (_run is not { IsCancellationRequested: false })
             {
+                // A reset switches banks back, as the language card's ROM does.
+                NotifyMemory();
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
                 NotifyFrame(running: false);
             }

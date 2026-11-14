@@ -116,7 +116,14 @@ try {
     assert.equal(slotRow(changed, "slot4").value, "Mockingboard");
     assert.deepEqual(slotRow(changed, "slot4").actions, ["removeCard"]);
     await assert.rejects(request("retro/hardware", { id: "slot4", action: "addDiskII" }), /does not support/);
+    // The card's ROM shows at once while stopped, so the memory view on its slot is told to read again, and every view
+    // to read its labels and banks again too.
+    await request("readMemory", { memoryReference: "0xC500", count: 256 });
+    const since = events.length;
     changed = await request("retro/hardware", { id: "slot5", action: "addDiskII", sectors: 16 });
+    const told = events.slice(since);
+    assert.deepEqual(told.filter(message => message.event === "memory").map(message => message.body.memoryReference), ["0xC500"]);
+    assert.deepEqual(told.filter(message => message.event === "invalidated").map(message => message.body.areas), [["all"]]);
     assert.equal(slotRow(changed, "slot5").value, "Disk II controller, 16-sector");
     assert.deepEqual(slotRow(changed, "slot5").devices, ["slot5disk1", "slot5disk2"]);
     assert.deepEqual(slotRow(changed, "slot5").actions, ["removeCard"]);

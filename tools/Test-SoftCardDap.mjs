@@ -90,6 +90,10 @@ try {
     assert.equal(fromDisassembly.breakpoints[0].instructionReference, "z80:0x0102");
     await request("setInstructionBreakpoints", { breakpoints: [] });
     assert.equal((await request("evaluate", { expression: "PC", frameId: z80Frame })).memoryReference, "z80:0x0100");
+    // The frame decides whose registers an expression reads, so Retrocore Memory's Go to evaluates in the focused one:
+    // in the 6502's frame, z80:PC is the 6502's PC taken as a Z80 address.
+    assert.equal((await request("evaluate", { expression: "z80:PC", frameId: z80Frame, context: "retrocore" })).memoryReference, "z80:0x0100");
+    assert.notEqual((await request("evaluate", { expression: "z80:PC", context: "retrocore" })).memoryReference, "z80:0x0100");
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 

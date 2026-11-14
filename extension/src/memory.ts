@@ -9,7 +9,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, parseReference } from "./memoryModel";
+import { addressAt, hex, parseReference, resolveIn } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -67,11 +67,20 @@ function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** The memory reference an expression evaluates to in the focused frame, such as a label, an address or HL. */
-async function evaluateAddress(session: vscode.DebugSession, expression: string): Promise<string | undefined> {
+/** The session's focused stack frame, if one is. */
+function focusedFrame(session: vscode.DebugSession): number | undefined {
     const focused = vscode.debug.activeStackItem;
-    const frameId = focused instanceof vscode.DebugStackFrame && focused.session.id === session.id ? focused.frameId : undefined;
+    return focused instanceof vscode.DebugStackFrame && focused.session.id === session.id ? focused.frameId : undefined;
+}
+
+/** The memory reference an expression evaluates to in a frame, by default the CPU's, such as a label, an address or HL. */
+async function evaluateIn(session: vscode.DebugSession, expression: string, frameId?: number): Promise<string | undefined> {
     return (await session.customRequest("evaluate", { expression, frameId, context: addressContext }) as { memoryReference?: string }).memoryReference;
+}
+
+/** The memory reference an expression evaluates to in the focused frame. */
+async function evaluateAddress(session: vscode.DebugSession, expression: string): Promise<string | undefined> {
+    return await evaluateIn(session, expression, focusedFrame(session));
 }
 
 /** What VS Code passes a Variables or Watch view command: the session, the variable's container and the variable. */
@@ -101,17 +110,29 @@ const addressContext = "retrocore";
 async function resolveReference(session: vscode.DebugSession, reference: string): Promise<{ bank: string | null; address: number }> {
     const parsed = parseReference(reference);
     if (parsed !== undefined) return parsed;
-    const evaluated = await session.customRequest("evaluate", { expression: reference, context: addressContext }) as { memoryReference?: string };
-    const resolved = evaluated.memoryReference === undefined ? undefined : parseReference(evaluated.memoryReference);
+    const evaluated = await evaluateAddress(session, reference);
+    const resolved = evaluated === undefined ? undefined : parseReference(evaluated);
     if (resolved === undefined) throw new Error(`${reference} is not an address in the CPU's 64K.`);
     return resolved;
+}
+
+/**
+ * Where an address, label or expression points in a bank, as the focused frame reads it; see resolveIn. A memory
+ * reference, such as 0x0400 or 0400, needs no evaluating.
+ */
+async function addressIn(session: vscode.DebugSession, bank: string | null, text: string): Promise<number> {
+    const parsed = parseReference(bank === null ? text : `${bank}:${text}`);
+    if (parsed !== undefined && parsed.bank === bank) return parsed.address;
+    const address = await resolveIn((expression, frameId) => evaluateIn(session, expression, frameId), bank, text, focusedFrame(session));
+    if (address === undefined) throw new Error(`${text} is not an address in ${bank === null ? "the CPU's 64K" : bank}.`);
+    return address;
 }
 
 /** Where Go to's text points, in the editor's bank: an address, label or expression, or bare hex digits. */
 async function goTo(session: vscode.DebugSession, bank: string | null, text: string): Promise<number> {
     const trimmed = text.trim();
     try {
-        return (await resolveReference(session, bank === null ? trimmed : `${bank}:${trimmed}`)).address;
+        return await addressIn(session, bank, trimmed);
     } catch (error) {
         // Digits alone are hex, as in memory references, unless they name a label.
         if (/^[0-9A-Fa-f]{1,4}$/.test(trimmed)) return parseInt(trimmed, 16);
@@ -157,6 +178,18 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     if (sent.event === "stopped") {
                         for (const editor of editors) {
                             if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "stopped" });
+                        }
+                        return;
+                    }
+
+                    // While stopped, a card put in or taken out, a reset or BASIC's prompt changes what memory holds,
+                    // and may change the labels, the characters and the banks frozen bytes are in. A write, which
+                    // invalidates only the variables, tells the views through memory events.
+                    if (sent.event === "invalidated") {
+                        const areas = "body" in sent && typeof sent.body === "object" && sent.body !== null && "areas" in sent.body ? sent.body.areas : undefined;
+                        if (!Array.isArray(areas) || !areas.includes("all")) return;
+                        for (const editor of editors) {
+                            if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "invalidated" });
                         }
                         return;
                     }
@@ -306,20 +339,16 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         });
         if (address === undefined || address.trim().length === 0) return;
 
-        // The debug host resolves the expression once, so the view opens at that address.
-        const expression = picked.bank.name === null ? address : `${picked.bank.name}:${address}`;
-        let memoryReference: string | undefined;
+        // The debug host resolves the expression once, in the focused frame, so the view opens at that address.
+        const name = picked.bank.name;
+        let at: number;
         try {
-            memoryReference = (await session.customRequest("evaluate", { expression, context: addressContext }) as { memoryReference?: string }).memoryReference;
+            at = await addressIn(session, name, address.trim());
         } catch (error) {
             void vscode.window.showErrorMessage(`Retrocore: ${message(error)}`);
             return;
         }
-        if (!memoryReference) {
-            void vscode.window.showErrorMessage(`Retrocore: ${expression} is not an address in the CPU's 64K.`);
-            return;
-        }
-        await openMemory(session, memoryReference);
+        await openMemory(session, `${name === null ? "" : `${name}:`}0x${hex(at, 4)}`);
     }));
 
     // The Variables and Watch views' icon and context menus, on anything that holds an address.

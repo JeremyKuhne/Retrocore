@@ -24,8 +24,10 @@ Memory opens in **Retrocore Memory**, the extension's memory editor:
   any address, label or expression. VS Code's own binary-data icon, which opens only Microsoft's Hex Editor, does
   not appear: VS Code shows it on variables that carry a memory reference, and the debugger sends its views none.
 
-A memory view stays current: at each stop, about four times a second while the machine runs, and after a write
-through another view, the debugger tells the view to read again if the bytes it has read have changed. Bytes you
+A memory view stays current: at each stop, about four times a second while the machine runs, after a write
+through another view, and when a card goes in or out or the machine resets while stopped, the debugger tells the
+view to read again if the bytes it has read have changed. Retrocore Memory also reads its labels, characters and
+frozen bytes again at each stop and at such a change, and the Machine view its banks. Bytes you
 edit are written at once, and the Variables view updates to match.
 
 ## Retrocore Memory
@@ -54,7 +56,10 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   **Ctrl+Shift+Z** redoes, by writing the bytes back. Typing a character writes a code the machine shows it with,
   keeping the byte's style where the machine has several, such as the Apple II's normal, inverse and flashing
   text; so `A` over normal text on an Apple II writes $C1, and over inverse text $01.
-- **Go to** (**Ctrl+G**) takes an address, label or expression, in the editor's bank. Digits alone are hex.
+- **Go to** (**Ctrl+G**) takes an address, label or expression, in the editor's bank. Digits alone are hex. A
+  register reads as the focused frame shows it, so `PC` in the SoftCard's `z80` editor is the Z80's while its
+  frame is focused, and `SP` in a caller's frame is the caller's; an address that frame puts in another bank, such
+  as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's.
 - **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`, or text in quotes, such as
   `"HELLO"`, which matches each character in any of the machine's codes for it (or, without the machine's
   characters, with bit 7 clear or set). **Enter** or **F3** finds the next, with **Shift** the one before,
@@ -167,7 +172,9 @@ The debugger keeps, for each reference a view has read, the range read and a has
 every eighth running frame and each `writeMemory`, it sends a `memory` event for each view whose bytes have
 changed, naming the view's reference exactly, as VS Code requires, with offset 0 and the end of the range read as
 its count. The view that wrote is not told. A `writeMemory` also
-sends `invalidated` for the variables.
+sends `invalidated` for the variables. A `retro/hardware` change or `retro/reset` while stopped sends the same
+`memory` events and then `invalidated` for everything, which Retrocore Memory and the Machine view take as the
+sign to read their labels and banks again.
 
 Variables hold an address, which `retro/memory/variable` gives, for the 6502's PC and S (into page one), the
 Z80's 16-bit registers except AF, the memory scope's bytes and Pascal's variables.

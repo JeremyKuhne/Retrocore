@@ -53,7 +53,11 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     private byte _options;
     private bool _motorTimedOut;
     private bool _wasMotorOn;
-    private bool _resetLatched;
+    // The reset button's signal: device T-states left before the press ends, if the ROM has not read port $E4.
+    private int _resetLatched;
+
+    // How long a press of the reset button lasts, about 20 ms.
+    private const int ResetPressTicks = Trs80Model3Timing.ClockHertz / 50;
     private bool _waitRequested;
 
     // Model 4: port $84 and the 4P's port $9C.
@@ -227,7 +231,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
             {
                 byte status = NmiStatus();
                 _motorTimedOut = false;
-                _resetLatched = false;
+                _resetLatched = 0;
                 return (byte)~status;
             }
 
@@ -303,9 +307,10 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     }
 
     /// <summary>
-    ///  Holds the reset button's signal until the NMI handler reads port <c>$E4</c>.
+    ///  Holds the reset button's signal until the NMI handler reads port <c>$E4</c>, or the press ends for a handler
+    ///  that does not read it, as Level I's does not, so the next press raises the NMI again.
     /// </summary>
-    internal void PressReset() => _resetLatched = true;
+    internal void PressReset() => _resetLatched = ResetPressTicks;
 
     /// <summary>
     ///  Advances the devices one device T-state.
@@ -314,6 +319,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     {
         Video.Tick();
         Keyboard.Tick();
+        if (_resetLatched > 0) { _resetLatched--; }
         if (!_model4P)
         {
             Cassette.Tick();
@@ -341,7 +347,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     {
         int status = _controller && Disks.InterruptRequest ? IntrqNmi : 0;
         if (_motorTimedOut) { status |= MotorTimeoutNmi; }
-        if (_resetLatched) { status |= ResetNmi; }
+        if (_resetLatched > 0) { status |= ResetNmi; }
         return (byte)status;
     }
 

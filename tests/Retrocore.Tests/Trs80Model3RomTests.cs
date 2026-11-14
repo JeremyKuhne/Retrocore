@@ -156,8 +156,8 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model III with Level I BASIC boots to READY, runs a statement, and saves and loads a program on tape at
-    ///  250 baud, the leader zeros and the sync byte $A5.
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, saves and loads a program on tape at 250
+    ///  baud, the leader zeros and the sync byte $A5, and the reset button stops a running program every time.
     /// </summary>
     [TestMethod]
     public void Level1BootsAndUsesTheTape()
@@ -195,6 +195,22 @@ public class Trs80Model3RomTests
         machine.Run(Trs80Model3Timing.ClockHertz);
         Type(machine, "RUN\r");
         Screen(machine).Should().Contain("HI 42");
+
+        // The reset button stops a running program each time it is pressed, though Level I's NMI handler does not
+        // read port $E4.
+        Type(machine, "NEW\r");
+        Type(machine, "10 GOTO 10\r");
+        for (int press = 1; press <= 2; press++)
+        {
+            Type(machine, "RUN\r");
+            Screen(machine).Should().Contain("RUN");
+            machine.Reset();
+            machine.Run(Trs80Model3Timing.ClockHertz);
+
+            // The handler clears the screen and BASIC prints READY afresh.
+            Screen(machine).Should().NotContain("RUN", $"press {press} reached the NMI handler");
+            Screen(machine).Should().Contain("READY");
+        }
     }
 
     /// <summary>

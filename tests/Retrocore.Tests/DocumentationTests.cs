@@ -261,6 +261,9 @@ public class DocumentationTests
         DocumentationResolver.Applies(Grouped, "Model3", Model3Revision13).Should().BeFalse("the || is grouped under the &&");
         DocumentationResolver.Applies("(MODEL = 3 || MODEL = 4) && ROMC = 'B'", "Model3", Three).Should().BeTrue();
         DocumentationResolver.Applies("((MODEL = 1)) || MODEL = 4", "Model3", Three).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = ')'", "Model3", Three).Should().BeFalse("a parenthesis literal is a value");
+        DocumentationResolver.Applies("ROMC < '='", "Model3", Three).Should().BeFalse("an operator literal is a value");
+        DocumentationResolver.Applies("(ROMC = '(' || ROMC = 'B')", "Model3", Three).Should().BeTrue();
         DocumentationResolver.Applies("(MODEL = 1", "Model3", Three).Should().BeTrue("an unbalanced test cannot be read");
         DocumentationResolver.Applies("MODEL4P", "Model4", name => name == "MODEL4P" ? 0 : null).Should().BeFalse();
         DocumentationResolver.Applies("UNKNOWN = 2", "Level2", One).Should().BeTrue("a symbol the build lacks cannot rule it out");

@@ -144,7 +144,11 @@ public sealed partial class DocumentationResolver
         }
 
         int start = at;
-        while (at < text.Length && text[at] != ')' && !Ahead(text, at, "&&") && !Ahead(text, at, "||")) { at++; }
+        while (at < text.Length && text[at] != ')' && !Ahead(text, at, "&&") && !Ahead(text, at, "||"))
+        {
+            at += IsCharacter(text, at) ? 3 : 1;
+        }
+
         return Comparison(text[start..at], symbol);
     }
 
@@ -165,7 +169,7 @@ public sealed partial class DocumentationResolver
     {
         foreach (string op in (string[])["!=", "<=", ">=", "==", "=", "<", ">"])
         {
-            int at = text.IndexOf(op, StringComparison.Ordinal);
+            int at = OperatorAt(text, op);
             if (at <= 0) { continue; }
             if (Operand(text[..at], symbol) is not { } left || Operand(text[(at + op.Length)..], symbol) is not { } right)
             {
@@ -186,6 +190,21 @@ public sealed partial class DocumentationResolver
         // A bare symbol holds when it is nonzero.
         return Operand(text, symbol) is { } value ? value != 0 : null;
     }
+
+    // Where an operator first appears outside character literals, or -1.
+    private static int OperatorAt(string text, string op)
+    {
+        for (int at = 0; at < text.Length; at += IsCharacter(text, at) ? 3 : 1)
+        {
+            if (Ahead(text, at, op)) { return at; }
+        }
+
+        return -1;
+    }
+
+    // Whether a character literal, such as 'B', starts here.
+    private static bool IsCharacter(string text, int at) =>
+        text[at] == '\'' && at + 2 < text.Length && text[at + 2] == '\'';
 
     private static long? Operand(string text, Func<string, long?> symbol)
     {

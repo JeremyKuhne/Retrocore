@@ -175,7 +175,7 @@ CRLF:
     LD A,$0D
 
 ;; RST $10: prints the character in A on the screen, or the printer while LPRINTING is set, and to tape while
-;; the cassette motor runs. Keeps every register.
+;; the cassette motor runs. It keeps every register while the motor is off.
 OUTC:
     EX AF,AF'
     IN A,[$FF]
@@ -203,8 +203,8 @@ COMP:
 SCREEN_CRLF:
     LD A,$0D
 
-;; RST $28: prints the character in A on the screen, ending any LPRINT or LLIST.
-;; Keeps: AF, BC, DE, HL
+;; RST $28: prints the character in A on the screen, ending any LPRINT or LLIST. It keeps every register while
+;; the cassette motor is off; while it runs, the character also goes to tape, which changes the flags.
 SCREEN_OUTC:
     PUSH AF
     XOR A

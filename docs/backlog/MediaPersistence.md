@@ -3,7 +3,8 @@
 How disks, tapes and other media the machines change get back to image files, on every machine and in every format.
 
 **Status:** proposed 2026-11-14, for review; nothing here is built. The [UI workflow](#the-ui-workflow) and the
-[decisions](#decisions-agreed-2026-11-14) below it were agreed on 2026-11-14; the rest is still for review.
+[decisions](#decisions-agreed-2026-11-14) below it were agreed on 2026-11-14; the rest is still for review. Where
+machines, their unsaved disks and the history are kept is [machine files, data folders and libraries](MachineFiles.md).
 
 Today one drive saves: the Disk II's `save` ([Devices.md](../Devices.md#the-debug-protocol)), on the Apple II and
 the Apple III. Every other disk keeps its changes in memory until the session ends, and then they are gone. Tapes
@@ -134,7 +135,7 @@ Two things are kept apart:
 - **The lock** says whether the machine can write the disk, as a real disk's write-protect tab does. Every disk
   has one, shown as a lock or an open lock on its drive ([below](#what-a-drive-shows)), and one click changes it.
   Some formats store it: a WOZ's INFO write-protected flag, a 2MG's locked flag, a JV3's write-protect byte. Saving
-  writes it back into the image in those formats; formats without one forget it, though the saved machine keeps it.
+  writes it back into the image in those formats; formats without one forget it, though the machine file keeps it.
   Hard disks have no tab, but the ProFile and slot 7 get the lock too: a locked one answers writes with ProDOS's
   write-protected error ($2B), as a protected block device does.
 - **A read-only image** is one the host cannot write: the file is read-only, its folder cannot be written, or it is
@@ -147,7 +148,7 @@ the save.
 One rule for the lock on every disk: **a disk loads with the lock its image stores, and otherwise unlocked.** This
 is safe because writing the disk changes only the copy in memory; nothing reaches the file until a save. A
 read-only image loads with its lock as stored too. The Disk II changes from loading every disk locked, so a program
-can write its own disk without first unlocking it. The saved machine keeps the user's choice per drive, as now, and
+can write its own disk without first unlocking it. The machine file keeps the user's choice per drive, as now, and
 it wins over the default.
 
 ## Safety
@@ -165,16 +166,16 @@ it wins over the default.
   image's stamp again, so a change the watcher missed is still caught. Saving a stale medium stops with a
   `conflict` error; the user can overwrite, save as, or reload the file and drop the machine's changes. The same
   image may be in two drives at once, but once one saves it, the other is stale.
-- **Backups.** Each save over an image keeps the image it replaces as a version in its [history](#history), in the
-  extension's storage, never beside the image, so workspaces and repositories stay clean.
+- **Backups.** Each save over an image keeps the image it replaces as a version in its [history](#history), in
+  Retrocore's local data, never beside the image, so workspaces, libraries and repositories stay clean.
 - **Read-only images.** An image the host cannot write ([above](#write-protection), or a write that fails with
   access denied) offers save as only, and says why; a read-only file also offers **Make Writable**, which clears its attribute. The cache never
   does.
 - **No open files.** The host reads an image whole and closes it, as now, so other programs can open it; only
   write-through keeps a file open, shared for reading.
-- **Recovered copies** are versions in the history, so they are as safe as it is. Resetting a saved machine, or
-  saving or discarding a medium, stops the saved machine naming its version; the history keeps it until it is
-  thinned or cleared.
+- **Recovered copies** are real images in the machine's `Unsaved\` folder
+  ([machine files](MachineFiles.md#a-data-folder)), so they are backed up with the machine and open in any tool.
+  Saving or discarding a medium deletes its copy; the history keeps the versions.
 
 ## History
 
@@ -182,9 +183,10 @@ Every medium keeps a history of versions, as Time Machine keeps a file's: what t
 matters, and any of them can come back. It covers media only. A whole-machine snapshot (CPU, memory and devices) is
 a separate, later feature, which can name the media versions here rather than copy the disks.
 
-The history is also the plan's backups and recovered copies: a backup is the version taken before a save, and a
-medium's **recovered copy** is its newest version not saved to its image. One store, one rule for keeping versions,
-and one view do for all three.
+The history is also the plan's backups: a backup is the version taken before a save. A medium's **recovered
+copy**, its newest version not saved to its image, is written out of the history as a real image into the machine's
+`Unsaved\` folder when the session stops or the machine ejects it, so the machine's folder holds everything needed
+to start it again, and is backed up with it.
 
 ### Versions
 
@@ -204,15 +206,16 @@ has a version on insert and one when a recording is ejected.
 
 ### Whose history
 
-A history belongs to a medium: an image by its full path, or a built or blank medium by an id the host gives it,
-which the saved machine keeps. The same image in two drives shares one history. Save as moves the medium to the new
+A history belongs to a medium: an image by its library reference or full path, or a built or blank medium by an
+id the host gives it, which the machine file keeps. The same image in two drives shares one history. Save as moves the medium to the new
 path's history, which starts with a link to the old one, so the earlier versions still list.
 
 ### Storage
 
-The history is kept in the extension's global storage (`context.globalStorageUri/history`), never in the
-repository or beside the image. The host is given the folder at launch (`mediaHistoryDirectory`), and the language
-server is too, for the off machine.
+The history is kept in Retrocore's local data (`%LOCALAPPDATA%\Retrocore\History` on Windows;
+[the places](MachineFiles.md#the-places)), never in a data folder, a library or a repository: its thousands of small
+chunks would keep OneDrive or any sync tool busy. The debug host, the language server and the standalone emulator
+find it themselves, so one history serves every workspace and both hosts.
 
 Content is stored in chunks named by their SHA-256: a Disk II track, a TRS-80 track's sectors, or 4 KB of a block
 image. A version is a small JSON manifest of its chunks and the format to rebuild its image from them, so versions
@@ -224,11 +227,11 @@ disk.
 ### Thinning
 
 As Time Machine thins: every version from the last hour, the newest of each hour for the last day, of each day for
-the last month, and of each week before that. Never thinned: pinned versions, each medium's newest version, the
-version that matches each image as last saved, and any version a saved machine names. A size cap
-(`retrocore.media.historySize`, 1 GB) then drops the oldest versions that may be thinned, across all media.
-Thinning runs when a version is taken and when the extension starts, not on a timer. **Clear History** empties one
-medium's history or all of them, asking first, and keeps the versions saved machines name.
+the last month, and of each week before that. Never thinned: pinned versions, each medium's newest version, and
+the version that matches each image as last saved. A size cap (`media.history.size`, 1 GB) then drops the oldest
+versions that may be thinned, across all media. Thinning runs when a version is taken and when a host starts, not
+on a timer. **Clear History** empties one medium's history or all of them, asking first. No machine depends on the
+history to start: its unsaved disks are in its own folder.
 
 ### Using a version
 
@@ -243,15 +246,15 @@ medium's history or all of them, asking first, and keeps the versions saved mach
 ### On, off and settings
 
 History is on by default, for all media, and can be turned off for all of it or for one disk; both are a click
-away ([below](#turning-history-on-and-off)). A disk's own choice wins over the global one and is kept in the saved
-machine.
+away ([below](#turning-history-on-and-off)). A disk's own choice wins over the global one and is kept in its machine file.
 
 With history off, a disk keeps no checkpoints and no old versions, but still keeps **one** version, its newest,
 when the session stops or the machine ejects it, so stopping never loses work. As nothing else is kept, Revert,
 Reload and Discard ask first again, and a save keeps no backup. Turning history off asks whether to keep or clear the
 versions already there.
 
-The settings, all under `retrocore.media`:
+The settings, under `media` in Retrocore's roaming `settings.json` ([settings](MachineFiles.md#settings-and-locations)),
+and `retrocore.media` in VS Code:
 
 | Setting | Default | What |
 | --- | --- | --- |
@@ -261,33 +264,33 @@ The settings, all under `retrocore.media`:
 | `onSessionEnd` | `keep` | `keep` changed media and ask, or `discard` it. |
 | `watchImages` | `true` | Watch each image's file, so a stale image shows at once. |
 
-They are ordinary VS Code settings, so they can be set per user or per workspace; the host is given them at launch,
-and a change applies to a running machine at once.
+Both hosts read them from `settings.json`; VS Code shows them as its own settings and keeps the two in step, and a
+workspace value applies in that workspace only. A change applies to a running machine at once.
 
 ## Saved machines
 
-`machineState`'s media entries grow from `{ path, writeProtected }` to say which of three states the medium is in:
+A machine is a `.machine.retrocore` file in its own folder ([machine files](MachineFiles.md#the-machine-file)), which
+replaces VS Code's saved machines and favorites. Its `media` entries say which of three states each medium is in:
 
 ```json
-{ "media": {
-    "disk1": { "path": "C:\\disks\\games.dsk", "writeProtected": false },
-    "disk2": { "path": "C:\\disks\\work.woz", "writeProtected": false,
-               "unsaved": { "version": "9b1e…", "stamp": { "length": 232960, "written": "2026-11-14T10:02:11Z", "sha256": "…" } } },
-    "disk35d1": { "medium": "m-a71e…", "format": "800K", "writeProtected": false, "unsaved": { "version": "c04d…" } }
-} }
+"media": {
+  "disk1":    { "library": "Images", "path": "Apple II/Games/games.dsk", "sha256": "…", "locked": false },
+  "disk2":    { "library": "Images", "path": "Apple II/Work/work.woz", "sha256": "…", "locked": false,
+                "unsaved": { "path": "Unsaved/work.woz", "stamp": { "length": 232960, "written": "2026-11-14T10:02:11Z", "sha256": "…" } } },
+  "disk35d1": { "medium": "m-a71e…", "format": "800K", "locked": false, "unsaved": { "path": "Unsaved/New 800K disk.po" } }
+}
 ```
 
-- **Saved**: a `path`, as now. Any drive may add `"history": false` or `true`, its own choice; without it, the disk
-  follows the global setting.
-- **Unsaved changes**: a `path` and `unsaved`, the version the session left it at and the stamp the image had when
-  it was read. Restoring inserts that version, changed against that image. If the image changed since, the version still goes in, with
-  a conflict the Machine view reports.
-- **New**: no `path`, only the medium's id and `unsaved`; a built or blank disk that was changed, so a `dos` disk with a program saved
-  on it survives the session. An unchanged built disk is still left out, as the launch builds it again.
+- **Saved**: a reference to the image, as now. A drive may add its own `history` choice.
+- **Unsaved changes**: the reference and `unsaved`, the copy in the machine's `Unsaved\` folder and the stamp the image
+  had when it was read. Starting the machine inserts the copy, changed against that image. If the image changed
+  since, the copy still goes in, with a conflict the Machine view reports.
+- **New**: no reference, only the medium's id and `unsaved`; a built or blank disk that was changed, so a `dos` disk
+  with a program saved on it survives the session. An unchanged built disk is left out, as the launch builds it
+  again. Saving a new disk offers the machine's `Disks\` folder first.
 
-A version the history no longer has (its storage was deleted by hand) is reported in `problems` and skipped, as a missing image is now. Favorites store
-saved media only: making a favorite from a machine with unsaved media asks to save it first or leaves those drives
-as their images are.
+A copy missing from `Unsaved\` is reported in `problems` and the image is inserted as it is, as a missing image is
+reported now. Copying a machine's folder copies its unsaved disks with it.
 
 ## The debug protocol
 
@@ -362,8 +365,8 @@ changes them in a running session. `media` in `retro/devices` adds `history`: `{
 - `eject` of a changed medium is refused with `changed` unless it says `"discard": true` or saved first, so a
   client that does not know about changed media cannot lose it. The extension asks and resends.
 - A machine's own eject sends a `retro/mediaEjected` event naming the drive and the version it took.
-- On `disconnect`, before it answers, the host takes the stop versions and sends a last `retro/devices` event
-  whose `configuration` names them, so the extension keeps them in the saved machine.
+- On `disconnect`, before it answers, the host takes the stop versions, writes the recovered copies to the
+  machine's `Unsaved\` folder and the machine file, and sends a last `retro/devices` event.
 
 `retrocore/machine/change` takes the same actions for an off machine, where `save` and `revert` act on the
 recovered copies, and `retrocore/machine/history` answers as `retro/mediaHistory` does.
@@ -414,7 +417,7 @@ DRIVES                                                                          
 - `(3)` is the badge: three media changed and not saved. Its tooltip names them.
 - A disk the same as its image has no Save button, as the ProFile and Drive 2 show.
 - **Save...** has an ellipsis when it will ask (stale, lossy); a read-only image's button is **Save As...**.
-- Drive 2's icon is dimmed, as its motor is off; its lock is the one the saved machine kept for it.
+- Drive 2's icon is dimmed, as its motor is off; its lock is the one its machine file kept for it.
 
 On the Model I the same rows read, for example, `🔓 Drive 0    newdos.dsk (JV1) · track 17 sector 4 · reading`,
 while the cassette keeps its tape icon: `▶ Cassette    adventure.cas · playing · 1,204 of 6,912 bytes`.
@@ -749,7 +752,8 @@ Apple IIe ended. 2 disks were kept with unsaved changes; Review them in Drives. 
   while it changes, on stop, on the machine's eject, and before anything drops changes. They are thinned as Time
   Machine thins, kept within a 1 GB cap, and listed in a History row under each drive. Backups and recovered copies
   are versions in it. Whole-machine snapshots are not part of it.
-- **The history is in the extension's storage**, never beside the image.
+- **The history is in Retrocore's local data**, never beside the image or in a data folder, and recovered copies
+  are real images in the machine's `Unsaved\` folder ([machine files](MachineFiles.md)).
 - **History is easy to turn on and off.** A clock, lit or grayed, toggles it for all media in the Drives view's
   title bar and for one disk on its History row, and a gear beside each opens its settings. The state also shows in
   the view's description and the row's own icon, which are always visible. With history off, a disk still keeps its
@@ -792,7 +796,8 @@ phase 6, not before.
   back the loaded bytes.
 - **The protocol.** `save`, `revert`, `reload`, `imageChanged`, `new`, refused eject and the error ids, through the
   debug host's tests.
-- **Saved machines.** Capture and restore with unsaved and new media, a missing copy, and a conflicting image;
+- **Machine files.** Writing and starting a machine with unsaved and new media, a missing copy in `Unsaved\`, and
+  a conflicting image;
   `tools/Test-OffMachine.mjs` covers the off machine.
 - **The extension.** The stop notification, the eject prompt, the prompts for each state, a watched image going
   stale, the History rows and their actions, Compare, and the badge, in `extension/src/test`.
@@ -813,7 +818,7 @@ phase 6, not before.
    watcher, the Drives view's states and the prompts of the [UI workflow](#the-ui-workflow), and the History rows with
    restore and Compare. Done when every row of [saving in each state](#saving-in-each-state) works in the self-hosted extension.
 5. **Session end and the full history.** Versions every 30 seconds, on stop and on the machine's eject; thinning
-   and the size cap; `unsaved` in `machineState`; the stop notification, and the off machine's save and history;
+   and the size cap; `unsaved` and `Unsaved\` in machine files; the stop notification, and the off machine's save and history;
    the clocks and gears, the settings and the history's commands. Done when a changed disk survives stopping, restarting VS Code and
    starting the machine again, and can be saved, or restored to an earlier version, from the off machine.
 6. **The write-protection rule.** The lock as its image stores it, otherwise unlocked, on every drive, and saved
@@ -824,4 +829,6 @@ phase 6, not before.
 8. **Later.** DMK and IMD writers, a 13-sector reader back from WOZ, WAV to CAS for the TRS-80 and the CoCo, and
    the Altair's disks, which follow this model from the start.
 
-Each phase updates [Devices.md](../Devices.md) and the machines' docs as it lands.
+Phases 1 to 4 need nothing from [machine files](MachineFiles.md); phase 5 lands with its fourth phase, as the
+recovered copies go in a machine's folder. Each phase updates [Devices.md](../Devices.md) and the machines' docs as it
+lands.

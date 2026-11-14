@@ -214,6 +214,38 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  Each DOS boots from its disk image in drive 0, takes the date and lists its directory. The images are in
+    ///  <c>trs80-disks</c> under <see cref="ExternalTestData.Root"/>; the test is inconclusive without one.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    /// <param name="listed">A file its directory lists.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3, "TRSDOS13.dmk", "TRSDOS Ready", "MEMTEST/CMD")]
+    [DataRow(Trs80Model3Variant.Model3, "LDOS513.dsk", "LDOS Ready", "ALEDIT/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready", "REPAIR/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready", "REPAIR/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready", "REPAIR/CMD")]
+    [DataRow(Trs80Model3Variant.Model4P, "LSDOS63J.dsk", "LS-DOS Ready", "REPAIR/CMD")]
+    public void BootsItsDos(Trs80Model3Variant variant, string image, string ready, string listed)
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        Trs80Model3Machine machine = Model3(variant, diskController: true);
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path));
+        machine.Drives[0].Insert(disk, image, format);
+
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
+        Type(machine, "DIR\r");
+        ShowsWithin(machine, listed, seconds: 20);
+    }
+
+    /// <summary>
     ///  The 4P's boot ROM, with no disk in the drive, says so in English, German and French.
     /// </summary>
     [TestMethod]
@@ -247,7 +279,7 @@ public class Trs80Model3RomTests
         screen.Should().Contain("INSERT DISKETTE", $"version {version} boots from the floppy");
     }
 
-    private static Trs80Model3Machine Model3(Trs80Model3Variant variant)
+    private static Trs80Model3Machine Model3(Trs80Model3Variant variant, bool? diskController = null)
     {
         string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
         bool model4P = variant == Trs80Model3Variant.Model4P;
@@ -266,7 +298,7 @@ public class Trs80Model3RomTests
         {
             Variant = variant,
             RamKilobytes = Trs80Model3Configuration.DefaultRam(variant),
-            DiskController = model4P
+            DiskController = diskController ?? model4P
         };
 
         return new(configuration, new Trs80Model3Roms(system, characters));
@@ -290,6 +322,26 @@ public class Trs80Model3RomTests
         machine.Run(Trs80Model3Timing.CyclesPerTick * 3);
         for (int ticks = 0; !done() && ticks < seconds * 30; ticks++) { machine.Run(Trs80Model3Timing.CyclesPerTick); }
         done().Should().BeTrue($"it finished within {seconds} seconds");
+    }
+
+    // Runs a second at a time until the screen shows the text, for at most some seconds of the machine's time.
+    private static void ShowsWithin(Trs80Model3Machine machine, string text, int seconds)
+    {
+        for (int second = 0; second < seconds && !Text(machine).Contains(text, StringComparison.Ordinal); second++)
+        {
+            machine.Run(Trs80Model3Timing.ClockHertz);
+        }
+
+        Text(machine).Should().Contain(text, $"it shows within {seconds} seconds");
+    }
+
+    // The screen as shown, 64x16 or 80x24, a line to a row.
+    private static string Text(Trs80Model3Machine machine)
+    {
+        Trs80Model3Video video = machine.Bus.Video;
+        int columns = video.Eighty ? 80 : 64;
+        return string.Join('\n', Enumerable.Range(0, video.Rows)
+            .Select(row => new string([.. Enumerable.Range(0, columns).Select(column => (char)(video.Displayed(row, column) & 0x7F))])));
     }
 
     private static string Screen(Trs80Model3Machine machine) =>

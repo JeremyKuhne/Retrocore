@@ -269,7 +269,8 @@ public class Trs80Model3Tests
 
     /// <summary>
     ///  The FD1793 reads a double-density sector; its INTRQ raises an NMI where port <c>$E4</c> enables it, and a
-    ///  drive select with wait holds the Z80 until the controller asks for data.
+    ///  drive select with wait holds the Z80 until the controller asks for data. INTRQ ends the wait, so the NMI
+    ///  handler's read of the status, which clears INTRQ, is not held, as the ROM's boot needs.
     /// </summary>
     [TestMethod]
     public void ReadsSectorsThroughTheFd1793()
@@ -309,6 +310,9 @@ public class Trs80Model3Tests
         bus.In(0xE4).Should().Be(0x7F, "bit 7, active low, is INTRQ");
         bus.In(0xF0).Should().Be(0x00, "success, and reading status clears INTRQ");
         bus.NmiRequested.Should().BeFalse();
+        bus.WaitRequested.Should().BeFalse("INTRQ ended the wait, until drive select sets it again");
+        bus.Out(0xF4, 0xC1);
+        bus.WaitRequested.Should().BeTrue();
     }
 
     /// <summary>

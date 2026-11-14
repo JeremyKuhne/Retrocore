@@ -40,6 +40,18 @@ export function hex(value: number, digits: number): string {
 }
 
 /**
+ * The label or address under the cursor in an assembly file, such as TEXT_PAGE, $0400, 0400h or aux:$0400; a
+ * label's own colon is left off.
+ */
+export function addressAt(line: string, character: number): string | undefined {
+    const pattern = /[A-Za-z0-9_.@?$]+(?::[A-Za-z0-9_.@?$]+)?/g;
+    for (let match = pattern.exec(line); match !== null; match = pattern.exec(line)) {
+        if (character >= match.index && character <= match.index + match[0].length) return match[0];
+    }
+    return undefined;
+}
+
+/**
  * Splits a memory reference the debugger handed out, such as "0x0400", "aux:0x0400" or "0400", into its bank and
  * address; undefined when it is an expression the debugger must evaluate.
  */
@@ -223,5 +235,51 @@ export function copyText(bytes: Uint8Array, readable: Uint8Array, start: number,
     return parts.join(asText ? "" : " ");
 }
 
+/** How a RAM search narrows its candidates: by how each byte compares with what it was, or with a value. */
+export type SearchTest = "changed" | "unchanged" | "increased" | "decreased" | "equal" | "notEqual";
+
+/**
+ * Reads a byte value as a RAM search or freeze takes it: hex with $ or 0x, binary with %, or decimal, from -128 to
+ * 255. Returns a message for one it cannot read.
+ */
+export function parseByte(text: string): number | string {
+    const trimmed = text.trim();
+    let value: number;
+    if (/^(\$|0[xX])[0-9A-Fa-f]{1,2}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
+    else if (/^%[01]{1,8}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
+    else if (/^-?[0-9]{1,3}$/.test(trimmed)) value = parseInt(trimmed, 10);
+    else return "Type a byte, such as $1F, %00011111 or 31.";
+    if (value < -128 || value > 255) return `${trimmed} does not fit in a byte.`;
+    return value & 0xFF;
+}
+
+/** The offsets a RAM search starts from: every byte that can be read and written. */
+export function searchStart(readable: Uint8Array, readOnly: Uint8Array): number[] {
+    const offsets: number[] = [];
+    for (let offset = 0; offset < readable.length; offset++) {
+        if (readable[offset] === 1 && readOnly[offset] !== 1) offsets.push(offset);
+    }
+    return offsets;
+}
+
+/**
+ * Narrows a RAM search: keeps the candidates whose byte now passes the test against what it was before, or against
+ * a value. A byte that can no longer be read drops out.
+ */
+export function narrowSearch(candidates: number[], before: Uint8Array, now: Uint8Array, readable: Uint8Array, test: SearchTest, value = 0): number[] {
+    return candidates.filter(offset => {
+        if (readable[offset] !== 1) return false;
+        const was = before[offset], is = now[offset];
+        switch (test) {
+            case "changed": return is !== was;
+            case "unchanged": return is === was;
+            case "increased": return is > was;
+            case "decreased": return is < was;
+            case "equal": return is === value;
+            case "notEqual": return is !== value;
+        }
+    });
+}
+
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText, parseByte, searchStart, narrowSearch];

@@ -268,6 +268,12 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public void Poke(ushort address, byte value) => _host.Poke(Card.Translate(address), value);
 
     /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _host.CanPoke(Card.Translate(address));
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _host.CharacterSet;
+
+    /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)
     {
         if (address < 0 || bytes.Length > 0x10000 - address)

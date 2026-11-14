@@ -3,7 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 // The Retrocore activity bar's views. Machine: the launched machine, whether it runs, its installed hardware slot by
-// slot, and its BASIC program. Drives: its floppy drives, tape drives and block storage under the controllers they sit
+// slot, its memory and banks, and its BASIC program. Drives: its floppy drives, tape drives and block storage under the controllers they sit
 // on, with their media and state. Both from the debug host's retro/devices request and event, with actions through
 // retro/device and retro/hardware.
 
@@ -15,6 +15,7 @@ import { catalogMachine, settingValue, type MachineChoice } from "./machines";
 import { favoriteChoices, type Favorites } from "./favorites";
 import type { OffMachine, OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
+import { bankDetail, type MemoryBank } from "./memory";
 
 /** A device as the debug host's retro/devices describes it. */
 export interface Device {
@@ -45,7 +46,7 @@ interface Devices { devices: Device[]; hardware?: HardwareRow[] }
 type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settings: MachineChoice[] } | { setting: MachineChoice }
     | { hardware: HardwareRow; devices: Device[] } | { switch: HardwareSetting; row: HardwareRow }
     | { controller: HardwareRow; devices: Device[] } | { device: Device } | { detail: string; value: string; parent: string }
-    | { basic: BasicSummary };
+    | { basic: BasicSummary } | { memory: MemoryBank[] } | { bank: MemoryBank };
 
 /** The machines whose screens the media folder draws, by the launch's machine option. */
 // As the display panel picks them: the Model III, 4 and the Altair's terminal glow white like the Model I, and the
@@ -129,6 +130,8 @@ class MachineState {
     devices: Device[] = [];
     hardware: HardwareRow[] = [];
     basic: BasicSummary | undefined;
+    /** The running machine's memory as the CPU maps it and its banks, from retro/memoryBanks; empty while off. */
+    banks: MemoryBank[] = [];
     /** The active session, when it is a Retrocore one. */
     session: vscode.DebugSession | undefined;
     /** With no session, the off machine's launch configuration, while it has a description to show. */
@@ -169,6 +172,8 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
             if (this.state.session === undefined && this.state.off === undefined) return [];
             return [
                 { machine: this.state.hardware.find(row => row.id === "model") },
+                // While it runs, its memory opens in Retrocore Memory from here.
+                ...this.state.session === undefined || this.state.banks.length === 0 ? [] : [{ memory: this.state.banks }],
                 ...this.state.basic === undefined ? [] : [{ basic: this.state.basic }],
                 // While off, another machine is a click away rather than a title-bar icon shown only on hover.
                 ...this.state.session === undefined ? [{ switcher: true as const }] : []
@@ -185,6 +190,7 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         }
         if ("settings" in node) return node.settings.map(setting => ({ setting }));
         if ("hardware" in node) return (node.hardware.settings ?? []).map(setting => ({ switch: setting, row: node.hardware }));
+        if ("memory" in node && node.memory.length > 1) return node.memory.map(bank => ({ bank }));
         return [];
     }
 
@@ -197,12 +203,15 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
     getParent(node: Node): Node | undefined {
         if ("setting" in node) return { settings: catalogMachine(this.configuration())?.choices ?? [] };
         if ("switch" in node) return { hardware: node.row, devices: [] };
+        if ("bank" in node) return { memory: this.state.banks };
         return "hardware" in node || "settings" in node ? { machine: this.state.hardware.find(row => row.id === "model") } : undefined;
     }
 
     getTreeItem(node: Node): vscode.TreeItem {
         if ("machine" in node) return this.machineItem(node.machine);
         if ("basic" in node) return basicItem(node.basic);
+        if ("memory" in node) return memoryItem(node.memory);
+        if ("bank" in node) return bankItem(node.bank);
         if ("settings" in node) return this.settingsItem();
         if ("setting" in node) return this.settingItem(node.setting);
         if ("switcher" in node) {
@@ -311,6 +320,38 @@ function switchItem(setting: HardwareSetting, row: HardwareRow): vscode.TreeItem
     item.tooltip = new vscode.MarkdownString(`**${escape(setting.label)}**: ${escape(setting.description)}`);
     item.checkboxState = setting.value ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
     item.contextValue = "hardwareSetting";
+    return item;
+}
+
+/**
+ * The Memory row: with banks, they are listed under it, each opened with a click; without, a click on it opens the
+ * CPU's 64K.
+ */
+function memoryItem(banks: MemoryBank[]): vscode.TreeItem {
+    const single = banks.length === 1;
+    const item = new vscode.TreeItem("Memory", single ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
+    item.id = "memory";
+    item.iconPath = new vscode.ThemeIcon("file-binary");
+    item.description = single ? "$0000-$FFFF" : `the CPU's 64K and ${banks.length - 1} bank${banks.length === 2 ? "" : "s"}`;
+    item.tooltip = new vscode.MarkdownString(single
+        ? "**Memory**: the CPU's 64K. Open it in Retrocore Memory to read, edit, search and freeze bytes."
+        : "**Memory**: the CPU's 64K as it maps it now, and each bank of RAM and ROM, mapped or not. Open one in "
+            + "Retrocore Memory to read, edit, search and freeze bytes.");
+    item.contextValue = "memory";
+    if (single) item.command = { command: "retrocore.memory.openReference", title: "Open in Retrocore Memory", arguments: [banks[0].memoryReference] };
+    return item;
+}
+
+/** A bank under the Memory row, or the CPU's 64K: where the memory map reads and writes it now. */
+function bankItem(bank: MemoryBank): vscode.TreeItem {
+    const item = new vscode.TreeItem(bank.name === null ? "CPU" : bank.label, vscode.TreeItemCollapsibleState.None);
+    item.id = `memory/${bank.name ?? "cpu"}`;
+    item.iconPath = new vscode.ThemeIcon(bank.name === null ? "chip" : bank.readOnly ? "lock" : "server");
+    item.description = bankDetail(bank);
+    const prefix = bank.name === null ? "" : `\n\nAddresses in it take the prefix \`${bank.name}:\`, as in \`${bank.name}:$0400\`.`;
+    item.tooltip = new vscode.MarkdownString(`**${escape(bank.label)}**: ${escape(bankDetail(bank))}${prefix}`);
+    item.contextValue = "memoryBank";
+    item.command = { command: "retrocore.memory.openReference", title: "Open in Retrocore Memory", arguments: [bank.memoryReference] };
     return item;
 }
 
@@ -435,12 +476,25 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             void vscode.commands.executeCommand("setContext", "retrocore.machineOff", false);
             machineView.message = undefined;
             try { show(await session.customRequest("retro/devices")); } catch { /* Not launched yet. */ }
+            await readBanks(session);
             return;
         }
         tree.session = undefined;
+        tree.banks = [];
         stale = true;
         showOff();
         if (showing()) await describeOff();
+    };
+    // The Memory rows say where the memory map has each bank, which the soft switches change as the machine runs:
+    // they are read again at each stop.
+    const readBanks = async (session: vscode.DebugSession): Promise<void> => {
+        try {
+            tree.banks = (await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] }).banks;
+        } catch {
+            // Not launched yet; the first stop reads them.
+            tree.banks = [];
+        }
+        if (session.id === tree.session?.id) tree.redraw();
     };
     const showOff = (): void => {
         if (tree.session !== undefined) return;
@@ -524,7 +578,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             return {
                 onWillReceiveMessage(message: { command?: string }) { if (message.command !== undefined && resumes.has(message.command)) set(false); },
                 onDidSendMessage(message: { event?: string }) {
-                    if (message.event === "stopped") set(true);
+                    if (message.event === "stopped") {
+                        set(true);
+                        if (session.id === tree.session?.id) void readBanks(session);
+                    }
                     else if (message.event === "continued") set(false);
                 },
                 onExit() { tree.paused.delete(session.id); }
@@ -665,6 +722,16 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.off", () => tree.off?.name));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.list", () => tree.devices));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.hardware", () => tree.hardware));
+    // The Memory rows' labels, descriptions and the references they open, for the tests.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.memoryRows", () => {
+        const provider = new MachineTree(tree, context.extensionUri, favorites);
+        const memory = provider.getChildren().find(node => "memory" in node);
+        if (memory === undefined) return [];
+        return [memory, ...provider.getChildren(memory)].map(node => {
+            const item = provider.getTreeItem(node);
+            return { label: item.label, description: item.description, opens: item.command?.arguments?.[0] };
+        });
+    }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.basic", () =>
         tree.basic === undefined ? undefined : basicDescription(tree.basic)));
     void refresh(vscode.debug.activeDebugSession);

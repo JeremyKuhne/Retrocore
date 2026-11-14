@@ -3,8 +3,9 @@
 // See LICENSE file in the project root for full license information
 
 // Retrocore Memory's page: a hex and text grid over a whole 64K space, with labels, the machine's own characters,
-// read-only shading, changes since the last stop, go to, find, copy, editing with undo and an inspector. The page
-// asks the extension for bytes, labels, characters and writes; the extension asks the debugger.
+// read-only shading, changes since the last stop or a snapshot, go to, find, copy, editing with undo, an inspector,
+// RAM search, watching in VS Code's Watch view and frozen bytes. The page asks the extension for bytes, labels,
+// characters, writes, freezes and watches; the extension asks the debugger, or VS Code for watches.
 
 import { pageFunctions } from "./memoryModel";
 
@@ -23,6 +24,10 @@ body{margin:0;display:flex;flex-direction:column;background:var(--vscode-editor-
 input{font-family:var(--vscode-editor-font-family);font-size:12px;padding:2px 4px;border-radius:2px;width:150px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent)}
 input[type=checkbox]{width:auto;margin:0}
 input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
+button{font-family:var(--vscode-font-family);font-size:12px;padding:2px 8px;border-radius:2px;cursor:pointer;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground);border:1px solid var(--vscode-button-border,transparent)}
+button:hover{background:var(--vscode-button-secondaryHoverBackground)}
+button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
+button:disabled{opacity:.5;cursor:default}
 .main{flex:1;display:flex;min-height:0}
 #grid{flex:none;overflow:auto;position:relative;outline:none;font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre;user-select:none;cursor:text}
 #spacer{position:absolute;top:0;left:0;width:1px}
@@ -34,6 +39,7 @@ input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 .hex span.lb{background-image:linear-gradient(135deg,var(--vscode-symbolIcon-functionForeground,var(--vscode-focusBorder)) 5px,transparent 5px)}
 .ro{background-color:color-mix(in srgb,var(--vscode-editor-foreground) 8%,transparent)}
 .chg{background-color:var(--vscode-debugView-valueChangedHighlight,rgba(86,156,214,.35))}
+.frz{color:var(--vscode-charts-blue,#3794ff);font-weight:600}
 .txt.g span{height:16px;vertical-align:middle;background-size:100% 100%;background-repeat:no-repeat;image-rendering:pixelated}
 .hex span{display:inline-block;width:3ch;text-align:left}
 .hex span.mid{margin-left:1ch}
@@ -45,14 +51,32 @@ input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 .cur{outline:1px solid var(--vscode-editorCursor-foreground,var(--vscode-focusBorder));outline-offset:-1px}
 #grid:focus .cur.on{background:var(--vscode-editor-selectionBackground)}
 .pending{color:var(--vscode-editorWarning-foreground)}
-#inspector{flex:1;min-width:0;overflow-y:auto;padding:8px 12px;border-left:1px solid var(--vscode-panel-border);font-size:12px}
+#side{flex:1;min-width:0;display:flex;flex-direction:column;border-left:1px solid var(--vscode-panel-border);font-size:12px}
+.tabs{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--vscode-panel-border)}
+.tabs button{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:var(--vscode-descriptionForeground);padding:4px 8px}
+.tabs button.on{color:var(--vscode-foreground);border-bottom-color:var(--vscode-focusBorder)}
+.panel{flex:1;min-height:0;overflow-y:auto;padding:8px 12px}
+.acts{display:flex;gap:6px;margin-bottom:8px}
+.panel p{margin:0 0 8px;color:var(--vscode-descriptionForeground)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.filters input{width:70px}
+.count{font-weight:600}
+.hits{font-family:var(--vscode-editor-font-family);margin-top:8px}
+.hit{display:flex;gap:12px;align-items:center;padding:1px 4px;cursor:pointer;border-radius:2px}
+.hit:hover{background:var(--vscode-list-hoverBackground)}
+.hit .a{min-width:16ch}
+.hit .v{min-width:9ch}
+.hit button,.hit label{margin-left:auto}
+.hit label{display:flex;gap:4px;align-items:center;font-family:var(--vscode-font-family)}
 #inspector .where{font-family:var(--vscode-editor-font-family);margin-bottom:8px}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
 body.narrow .main{flex-direction:column}
 body.narrow #grid{flex:1}
-body.narrow #inspector{flex:none;display:flex;flex-wrap:wrap;gap:2px 24px;align-items:baseline;max-height:35%;border-left:none;border-top:1px solid var(--vscode-panel-border)}
+body.narrow #side{flex:none;max-height:40%;border-left:none;border-top:1px solid var(--vscode-panel-border)}
+body.narrow #inspector{display:flex;flex-wrap:wrap;gap:2px 24px;align-items:baseline}
+body.narrow #inspector .acts{margin:0}
 body.narrow #inspector .where{margin:0;padding:2px 0}
 body.narrow .item .k{width:auto}
 #status{padding:3px 10px;border-top:1px solid var(--vscode-panel-border);font-size:12px;color:var(--vscode-descriptionForeground);min-height:16px}
@@ -62,11 +86,14 @@ body.narrow .item .k{width:auto}
 <body>
 <div class="bar"><span class="title" id="title">Memory</span>
 <label id="machineLabel" title="Draw the text column in the machine's own characters, or as ASCII" hidden><input type="checkbox" id="machineText" checked> Machine text</label>
+<button id="snapshot" title="Keep a copy of every byte now, to compare with">Snapshot</button>
+<label id="compareLabel" title="Highlight the bytes that differ from the snapshot, rather than the bytes that changed since the stop before" hidden><input type="checkbox" id="compare"> Compare</label>
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
 <label title="Hex bytes with ?? for any byte, such as A9 ?? 20, or text in quotes; Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20 or &quot;TEXT&quot;"></label>
 </div>
 <div class="main"><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div>
-<div id="inspector" aria-live="polite"></div></div>
+<div id="side"><div class="tabs" role="tablist"><button role="tab" data-tab="inspector" class="on">Inspector</button><button role="tab" data-tab="search">RAM search</button><button role="tab" data-tab="frozen" id="frozenTab">Frozen</button></div>
+<div id="inspector" class="panel" aria-live="polite"></div><div id="search" class="panel" hidden></div><div id="frozen" class="panel" hidden></div></div></div>
 <div id="status" role="status"></div>
 <div class="ended" id="ended" hidden>The debug session ended.</div>
 <script nonce="${nonce}">
@@ -90,8 +117,7 @@ const changed = new Uint8Array(SIZE), was = new Uint8Array(SIZE);
 let stops = 0;
 // The labels in address order and by address, and how wide the gutter shows them.
 let labels = [], labelAt = new Map(), labelWidth = 0;
-// The machine's character set: the character each code shows, and whether any flash; null to show ASCII.
-// The set as the debugger gave it, whether the text column uses it (the page remembers), and the set in effect.
+// The machine's character set as the debugger gave it, whether the text column uses it (the page remembers), and the set in effect.
 let machineSet = null, machineText = true, charset = null, glyphStyle = null, flashTimer = null;
 try {
     const saved = vscode.getState();
@@ -107,6 +133,15 @@ function applyText() {
     machineLabel.hidden = machineSet === null;
     machineBox.checked = machineText;
 }
+// A snapshot of every byte to compare with, and whether the grid highlights the bytes that differ from it.
+let snapshot = null, comparing = false;
+// A RAM search: the offsets still in it, every byte as the last step saw it, and the steps before, to go back.
+let search = null;
+// The frozen bytes as the debugger keeps them, by the value each is held at, and the last watch expressions added.
+let frozen = new Map(), lastWatch = [];
+const side = document.getElementById("side"), searchPanel = document.getElementById("search"), frozenPanel = document.getElementById("frozen");
+const compareBox = document.getElementById("compare"), compareLabel = document.getElementById("compareLabel");
+let tab = "inspector";
 let info = { bank: null, label: "", readOnly: false };
 let cursor = 0, anchor = 0, pane = "hex", nibble = null, ended = false, dragging = false, generation = 0;
 const undoStack = [], redoStack = [];
@@ -209,6 +244,11 @@ async function loadExtras() {
         useCharacters(await request({ type: "characters" }));
     } catch {
         // As are the machine's characters.
+    }
+    try {
+        await freeze([], []);
+    } catch {
+        // And the frozen bytes.
     }
 }
 
@@ -314,7 +354,8 @@ function rowHtml(row) {
         const offset = base + index;
         let classes = index === 8 ? "mid" : "";
         if (low !== high && offset >= low && offset <= high) classes += " sel";
-        if (readable[offset] === 1 && changed[offset]) classes += " chg";
+        if (readable[offset] === 1 && differs(offset)) classes += " chg";
+        if (frozen.has(offset)) classes += " frz";
         else if (readable[offset] === 1 && readOnly[offset]) classes += " ro";
         let shown = "  ", character = " ", textClasses = classes.replace("mid", ""), title = "";
         if (labelAt.has(offset)) {
@@ -373,21 +414,42 @@ function render() {
     if (layout()) { render(); return; }
     ensure(top - count, top + 2 * count);
     showInspector();
+    if (tab === "frozen") showFrozen();
+}
+
+// Whether the grid highlights a byte: it differs from the snapshot when comparing, or else changed at the last stop.
+function differs(offset) {
+    if (comparing && snapshot !== null) return snapshot.readable[offset] === 1 && readable[offset] === 1 && snapshot.bytes[offset] !== bytes[offset];
+    return changed[offset] === 1;
 }
 
 function where(offset) {
     return (info.bank === null ? "" : info.bank + ":") + "$" + hex(offset, 4);
 }
 
+// What freezing and thawing do, for their buttons' hover text.
+const freezeTitle = {
+    freeze: "Hold these bytes at their values now while the machine runs: the debugger writes them back every few "
+        + "milliseconds, so the program cannot change them. Typing here changes the value they are held at.",
+    thaw: "Stop holding these bytes, so the program can change them again."
+};
+
 function showInspector() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
-    let html = '<div class="where">' + where(cursor);
+    const allFrozen = range(low, high).every(offset => frozen.has(offset));
+    const count = high > low ? " " + (high - low + 1) + " bytes" : "";
+    const watchTitle = "Add to VS Code's Watch view as " + watchExpressions(low, high).join(", ");
+    let html = '<div class="acts"><button data-act="watch" title="' + escapeText(watchTitle) + '">' + (high === low + 1 ? "Watch word" : "Watch" + count) + "</button>"
+        + '<button data-act="freeze" title="' + (allFrozen ? freezeTitle.thaw : freezeTitle.freeze) + '">' + (allFrozen ? "Thaw" : "Freeze") + count + "</button></div>";
+    html += '<div class="where">' + where(cursor);
     const name = labelOf(labels, cursor);
     if (name !== undefined) html += " · " + escapeText(name);
     if (high > low) html += " · " + (high - low + 1) + " bytes, " + where(low) + "-$" + hex(high, 4);
     html += "</div>";
     const rows = inspect(bytes, readable, cursor, charset === null ? undefined : charset.text);
-    if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
+    if (comparing && snapshot !== null && differs(cursor)) rows.push({ label: "In the snapshot", value: "$" + hex(snapshot.bytes[cursor], 2) });
+    else if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
+    if (frozen.has(cursor)) rows.push({ label: "Frozen at", value: "$" + hex(frozen.get(cursor), 2) });
     if (readable[cursor] === 1 && readOnly[cursor]) rows.push({ label: "Writes", value: "refused: not RAM now" });
     for (const row of rows) {
         html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
@@ -471,6 +533,8 @@ async function write(offset, values, record) {
         undoStack.push({ offset, before, after: values });
         redoStack.length = 0;
     }
+    const refrozen = values.map((value, index) => ({ offset: offset + index, value })).filter(item => frozen.has(item.offset));
+    if (refrozen.length > 0) await freeze(refrozen, []);
     status("");
     return true;
 }
@@ -531,6 +595,210 @@ let typing = Promise.resolve();
 function queue(action) {
     typing = typing.then(action, action);
 }
+
+// The offsets from one to another.
+function range(low, high) {
+    const offsets = [];
+    for (let offset = low; offset <= high; offset++) offsets.push(offset);
+    return offsets;
+}
+
+// Freezes bytes at values and thaws others, keeping the debugger's list.
+async function freeze(items, thaw) {
+    const result = await request({ type: "freeze", freeze: items, thaw });
+    frozen = new Map(result.frozen.map(item => [item.address, item.value]));
+    showFrozen();
+    render();
+}
+
+// The most bytes the selection watches, each as its own expression.
+const WATCHES = 16;
+
+// The watch expressions for bytes: a byte as [$4100], two as the word [$4100].w, more as each byte.
+function watchExpressions(low, high) {
+    if (high === low + 1) return ["[" + where(low) + "].w"];
+    return range(low, Math.min(high, low + WATCHES - 1)).map(offset => "[" + where(offset) + "]");
+}
+
+// Adds watch expressions to VS Code's Watch view.
+async function watch(expressions) {
+    try {
+        await request({ type: "watch", expressions });
+        lastWatch = expressions;
+        status("Added " + expressions.join(", ") + " to the Watch view.");
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+// Watches the selection.
+async function watchSelection() {
+    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
+    await watch(watchExpressions(low, high));
+}
+
+// Freezes the selection at its values, or thaws it when all of it is frozen.
+async function toggleFreeze() {
+    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor), offsets = range(low, high);
+    try {
+        if (offsets.every(offset => frozen.has(offset))) {
+            await freeze([], offsets);
+        } else {
+            await loaded(low, high - low + 1);
+            await freeze(offsets.filter(offset => !frozen.has(offset)).map(offset => ({ offset, value: bytes[offset] })), []);
+        }
+        status("");
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+// Reads every byte again, so a snapshot or search sees memory as it is now.
+async function refreshAll() {
+    generation++;
+    pages.fill(0);
+    await load(0, SIZE);
+}
+
+async function takeSnapshot() {
+    await refreshAll();
+    snapshot = { bytes: bytes.slice(), readable: readable.slice() };
+    compareLabel.hidden = false;
+    comparing = compareBox.checked = true;
+    render();
+    status("Took a snapshot; the bytes that differ from it are highlighted.");
+}
+
+function showTab(name) {
+    tab = name;
+    for (const button of side.querySelectorAll("[data-tab]")) button.classList.toggle("on", button.dataset.tab === name);
+    inspector.hidden = name !== "inspector";
+    searchPanel.hidden = name !== "search";
+    frozenPanel.hidden = name !== "frozen";
+    if (name === "search") showSearch();
+    if (name === "frozen") showFrozen();
+}
+
+// The most hits a search lists; past that, it says to narrow further.
+const HITS = 200;
+
+function showSearch() {
+    if (search === null) {
+        searchPanel.innerHTML = "<p>Find the byte that holds a value, such as a game's lives: start with all of RAM, "
+            + "then let the value change and keep the bytes that changed the same way, until few are left.</p>"
+            + '<button data-act="start">Start with all RAM</button>';
+        return;
+    }
+    const value = document.getElementById("searchValue");
+    const typed = value === null ? "" : value.value;
+    let html = '<div><span class="count">' + search.candidates.length + "</span> " + (search.candidates.length === 1 ? "byte" : "bytes")
+        + " left after " + search.steps.length + (search.steps.length === 1 ? " step" : " steps") + "</div>"
+        + '<div class="filters">Keep the bytes that '
+        + '<button data-act="narrow" data-test="changed">changed</button><button data-act="narrow" data-test="unchanged">did not change</button>'
+        + '<button data-act="narrow" data-test="increased">rose</button><button data-act="narrow" data-test="decreased">fell</button></div>'
+        + '<div class="filters">or <button data-act="narrow" data-test="equal">equal</button><button data-act="narrow" data-test="notEqual">do not equal</button>'
+        + '<input id="searchValue" aria-label="Value" placeholder="$03 or 3" value="' + escapeText(typed).replace(/"/g, "&quot;") + '"></div>'
+        + '<div class="filters"><button data-act="back"' + (search.steps.length === 0 ? " disabled" : "") + ">Back a step</button>"
+        + '<button data-act="start">Start over</button></div>';
+    if (search.candidates.length <= HITS) {
+        html += '<div class="hits">';
+        for (const offset of search.candidates) {
+            const name = labelOf(labels, offset);
+            const before = search.steps.length === 0 ? null : search.steps[search.steps.length - 1].before[offset];
+            html += '<div class="hit" data-go="' + offset + '"><span class="a">' + where(offset) + (name === undefined ? "" : " " + escapeText(name)) + "</span>"
+                + '<span class="v">' + (before === null ? "" : "$" + hex(before, 2) + " → ") + "$" + hex(search.before[offset], 2) + "</span>"
+                + '<button data-act="watchHit" data-o="' + offset + '" title="Add [' + where(offset) + '] to the Watch view">Watch</button></div>';
+        }
+        html += "</div>";
+    } else {
+        html += "<p>Narrow to " + HITS + " or fewer to list them.</p>";
+    }
+    searchPanel.innerHTML = html;
+}
+
+async function startSearch() {
+    await refreshAll();
+    search = { candidates: searchStart(readable, readOnly), before: bytes.slice(), steps: [] };
+    showSearch();
+    status("Searching " + search.candidates.length + " bytes of RAM.");
+}
+
+async function narrowBy(test, text) {
+    if (search === null) return;
+    let value = 0;
+    if (test === "equal" || test === "notEqual") {
+        const parsed = parseByte(text);
+        if (typeof parsed === "string") { status(parsed, true); return; }
+        value = parsed;
+    }
+    await refreshAll();
+    search.steps.push({ candidates: search.candidates, before: search.before });
+    search.candidates = narrowSearch(search.candidates, search.before, bytes, readable, test, value);
+    search.before = bytes.slice();
+    showSearch();
+    status(search.candidates.length + (search.candidates.length === 1 ? " byte" : " bytes") + " left.");
+}
+
+function backSearch() {
+    if (search === null || search.steps.length === 0) return;
+    const step = search.steps.pop();
+    search.candidates = step.candidates;
+    search.before = step.before;
+    showSearch();
+}
+
+function showFrozen() {
+    document.getElementById("frozenTab").textContent = frozen.size === 0 ? "Frozen" : "Frozen (" + frozen.size + ")";
+    if (tab !== "frozen") return;
+    if (frozen.size === 0) {
+        frozenPanel.innerHTML = "<p>Freeze bytes from the inspector to hold them at a value while the machine runs.</p>";
+        return;
+    }
+    let html = "";
+    for (const [offset, value] of Array.from(frozen).sort((first, second) => first[0] - second[0])) {
+        const name = labelOf(labels, offset);
+        html += '<div class="hit" data-go="' + offset + '"><span class="a">' + where(offset) + (name === undefined ? "" : " " + escapeText(name)) + "</span>"
+            + '<span class="v">$' + hex(value, 2) + " " + value + "</span>"
+            + '<button data-act="watchHit" data-o="' + offset + '">Watch</button>'
+            + '<button data-act="thaw" data-o="' + offset + '" title="' + freezeTitle.thaw + '">Thaw</button></div>';
+    }
+    frozenPanel.innerHTML = html;
+}
+
+side.addEventListener("click", event => {
+    const target = event.target;
+    const tabButton = target.closest ? target.closest("[data-tab]") : null;
+    if (tabButton !== null) { showTab(tabButton.dataset.tab); return; }
+    const action = target.closest ? target.closest("[data-act]") : null;
+    if (action !== null) {
+        const offset = Number(action.dataset.o);
+        switch (action.dataset.act) {
+            case "watch": queue(watchSelection); break;
+            case "freeze": queue(toggleFreeze); break;
+            case "start": void startSearch(); break;
+            case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
+            case "back": backSearch(); break;
+            case "watchHit": void watch(["[" + where(offset) + "]"]); break;
+            case "thaw": void freeze([], [offset]).catch(error => status(String(error.message || error), true)); break;
+        }
+        return;
+    }
+    const hit = target.closest ? target.closest("[data-go]") : null;
+    if (hit !== null) moveTo(Number(hit.dataset.go), false, true);
+});
+side.addEventListener("keydown", event => {
+    if (event.target.id === "searchValue" && event.key === "Enter") {
+        void narrowBy("equal", event.target.value);
+        event.preventDefault();
+        event.stopPropagation();
+    }
+});
+document.getElementById("snapshot").addEventListener("click", () => void takeSnapshot());
+compareBox.addEventListener("change", () => {
+    comparing = compareBox.checked;
+    render();
+    grid.focus();
+});
 
 async function goTo(text) {
     if (text.trim().length === 0) return;
@@ -680,6 +948,12 @@ async function test(actions) {
         if (action.undo) await undo();
         if (action.redo) await redo();
         if (action.extras) await loadExtras();
+        if (action.snapshot) await takeSnapshot();
+        if (action.compare !== undefined) { comparing = action.compare; render(); }
+        if (action.search === "start") await startSearch();
+        else if (action.search !== undefined) await narrowBy(action.search, action.value ?? "");
+        if (action.watch) await watchSelection();
+        if (action.freeze) await toggleFreeze();
         if (action.machineText !== undefined) {
             machineText = action.machineText;
             applyText();
@@ -695,6 +969,10 @@ async function test(actions) {
         glyphs: charset !== null,
         readOnly: readOnly[cursor] === 1,
         changed: changed[cursor] === 1,
+        differs: differs(cursor),
+        candidates: search === null ? null : search.candidates.length,
+        lastWatch,
+        frozen: frozen.has(cursor) ? frozen.get(cursor) : null,
         inspector: inspect(bytes, readable, cursor, charset === null ? undefined : charset.text),
         hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64)
     };

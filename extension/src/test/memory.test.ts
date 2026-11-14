@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { copyText, findPattern, inspect, labelOf, parsePattern, parseReference, textOf, typedText, type PatternByte } from "../memoryModel";
+import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -111,6 +111,28 @@ test("an address is named by the closest label before it", () => {
     assert.equal(labelOf(labels, 0x0320), "MSG+16");
     assert.equal(labelOf(labels, 0x02FF), undefined);
     assert.equal(labelOf(labels, 0x0411), undefined, "too far past any label");
+});
+
+test("a RAM search reads values and narrows by how bytes changed", () => {
+    assert.equal(parseByte("$1F"), 0x1F);
+    assert.equal(parseByte("0x1f"), 0x1F);
+    assert.equal(parseByte("%101"), 5);
+    assert.equal(parseByte("31"), 31);
+    assert.equal(parseByte("-1"), 0xFF);
+    assert.equal(typeof parseByte("256"), "string");
+    assert.equal(typeof parseByte("lives"), "string");
+
+    const readable = Uint8Array.from([1, 1, 1, 1, 2]);
+    const start = searchStart(readable, Uint8Array.from([0, 0, 1, 0, 0]));
+    assert.deepEqual(start, [0, 1, 3], "readable RAM only");
+    const before = Uint8Array.from([3, 5, 9, 7, 0]), now = Uint8Array.from([2, 5, 9, 8, 0]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "changed"), [0, 3]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "unchanged"), [1]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "increased"), [3]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "decreased"), [0]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "equal", 5), [1]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "notEqual", 5), [0, 3]);
+    assert.deepEqual(narrowSearch(start, before, now, Uint8Array.from([2, 1, 1, 1, 2]), "decreased"), [], "a byte that cannot be read drops out");
 });
 
 test("copying gives hex or text, with unreadable bytes marked", () => {
@@ -299,6 +321,78 @@ test("a stop colors the bytes that changed since the stop before", async () => {
     assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
 });
 
+// Runs the page's test hook, answering what it asks as the debugger would.
+async function drive(page: ReturnType<typeof runPage>, actions: unknown[], fill: (offset: number) => number, lists: { frozen: Map<number, number>; watched: Set<string> }): Promise<Record<string, unknown>> {
+    page.send({ type: "test", id: 7, actions });
+    for (let round = 0; round < 20; round++) {
+        await page.settle();
+        for (const sent of page.posted.splice(0)) {
+            if (sent.type === "testDone") return sent.state as Record<string, unknown>;
+            if (sent.type === "freeze") {
+                for (const offset of sent.thaw as number[]) lists.frozen.delete(offset);
+                for (const item of sent.freeze as { offset: number; value: number }[]) lists.frozen.set(item.offset, item.value);
+                page.send({ type: "reply", id: sent.id, result: { frozen: Array.from(lists.frozen, ([address, value]) => ({ address, value })) } });
+            } else if (sent.type === "watch") {
+                for (const expression of sent.expressions as string[]) lists.watched.add(expression);
+                page.send({ type: "reply", id: sent.id, result: null });
+            } else if (sent.type === "write") {
+                page.send({ type: "reply", id: sent.id, result: { bytesWritten: 1 } });
+            } else {
+                page.posted.push(sent);
+                answer(page, fill);
+            }
+        }
+    }
+    throw new Error("The page's test did not finish.");
+}
+
+test("the inspector watches bytes in VS Code's Watch view, freezes them, and typing moves a frozen value", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0400, info: { bank: "aux", label: "Auxiliary RAM", readOnly: false } });
+    let state = await drive(page, [{ watch: true }, { freeze: true }], () => 0xA0, lists);
+    assert.deepEqual(state.lastWatch, ["[aux:$0400]"]);
+    assert.equal(state.frozen, 0xA0);
+    assert.deepEqual(Array.from(lists.frozen), [[0x0400, 0xA0]]);
+    assert.match(page.elements.get("rows")!.innerHTML, /class="[^"]*frz[^"]*" data-o="1024"/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /Watch<\/button><button data-act="freeze" title="Stop holding these bytes[^"]*">Thaw</);
+    assert.equal(page.elements.get("frozenTab")!.textContent, "Frozen (1)");
+
+    state = await drive(page, [{ type: "41" }], () => 0xA0, lists);
+    assert.deepEqual(Array.from(lists.frozen), [[0x0400, 0x41]], "the frozen value follows what was typed");
+    state = await drive(page, [{ goto: 0x0400 }, { freeze: true }], () => 0xA0, lists);
+    assert.equal(state.frozen, null);
+    assert.equal(page.elements.get("frozenTab")!.textContent, "Frozen");
+    assert.deepEqual(Array.from(lists.watched), ["[aux:$0400]"]);
+});
+
+test("a RAM search narrows all of RAM to the byte that holds a value", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    let lives = 3;
+    const fill = (offset: number) => offset === 0x0480 ? lives : offset === 0x0500 ? 3 : 0;
+    let state = await drive(page, [{ search: "start" }], fill, lists);
+    assert.equal(state.candidates, 0x10000);
+    lives = 2;
+    state = await drive(page, [{ search: "decreased" }], fill, lists);
+    assert.equal(state.candidates, 1);
+    assert.match(page.elements.get("search")!.innerHTML, /\$0480 TEXT_PAGE\+128<\/span><span class="v">\$03 → \$02/);
+    state = await drive(page, [{ search: "start" }, { search: "equal", value: "3" }], fill, lists);
+    assert.equal(state.candidates, 1, "only $0500 still holds 3");
+
+    // A snapshot highlights what differs from it.
+    state = await drive(page, [{ snapshot: true }, { goto: 0x0480 }], fill, lists);
+    assert.equal(state.differs, false);
+    lives = 1;
+    page.send({ type: "changed" });
+    state = await drive(page, [{ goto: 0x0480 }], fill, lists);
+    assert.equal(state.differs, true);
+    assert.match(page.elements.get("inspector")!.innerHTML, /In the snapshot.*\$02/);
+    state = await drive(page, [{ compare: false }], fill, lists);
+    assert.equal(state.differs, false, "without comparing, changes count from the last stop");
+});
+
 test("a read-only bank refuses typing before writing", async () => {
     const page = runPage();
     page.send({ type: "init", address: 0xD000, info: { bank: "rom", label: "System ROM", readOnly: true } });
@@ -311,4 +405,13 @@ test("a read-only bank refuses typing before writing", async () => {
     await page.settle();
     assert.equal(page.posted.length, 0);
     assert.equal(page.elements.get("status")!.textContent, "System ROM is read-only.");
+});
+
+test("the label or address under the cursor is what the editor's menu opens", () => {
+    const line = "LOOP:   LDA TEXT_PAGE+1,X ; aux:$0400 and 0400h";
+    assert.equal(addressAt(line, 2), "LOOP", "a label's colon is left off");
+    assert.equal(addressAt(line, 14), "TEXT_PAGE");
+    assert.equal(addressAt(line, line.indexOf("aux") + 5), "aux:$0400", "a bank prefix comes along");
+    assert.equal(addressAt(line, line.length - 2), "0400h");
+    assert.equal(addressAt(line, 6), undefined, "between words there is nothing");
 });

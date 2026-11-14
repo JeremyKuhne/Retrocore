@@ -489,7 +489,7 @@
         "displayName": "Retrocore Memory",
         "selector": [
           {
-            "filenamePattern": "*.bin"
+            "filenamePattern": "retrocore-memory:/**"
           }
         ],
         "priority": "option"
@@ -499,14 +499,26 @@
       "debug/variables/context": [
         {
           "command": "retrocore.memory.openVariable",
-          "when": "debugType == retrocore && canViewMemory",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
           "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/",
+          "group": "navigation@10"
         }
       ],
       "debug/watch/context": [
         {
           "command": "retrocore.memory.openVariable",
-          "when": "debugType == retrocore && canViewMemory",
+          "when": "debugType == retrocore && watchItemType == expression",
           "group": "navigation@1"
         }
       ],
@@ -740,6 +752,10 @@
           "when": "false"
         },
         {
+          "command": "retrocore.machine.memoryRows",
+          "when": "false"
+        },
+        {
           "command": "retrocore.machine.change",
           "when": "false"
         },
@@ -770,6 +786,14 @@
         {
           "command": "retrocore.memory.openVariable",
           "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openReference",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/"
         },
         {
           "command": "retrocore.memory.test",
@@ -862,6 +886,13 @@
           "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
           "group": "navigation@9"
         }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "retrocore.memory.open",
+          "when": "debugType == retrocore",
+          "group": "navigation@100"
+        }
       ]
     },
     "commands": [
@@ -894,7 +925,18 @@
       },
       {
         "command": "retrocore.memory.openVariable",
-        "title": "Open in Retrocore Memory"
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openReference",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openAtCursor",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
       },
       {
         "command": "retrocore.memory.test",
@@ -966,6 +1008,10 @@
       {
         "command": "retrocore.machine.off",
         "title": "Retrocore: Off Machine"
+      },
+      {
+        "command": "retrocore.machine.memoryRows",
+        "title": "Retrocore: Memory Rows"
       },
       {
         "command": "retrocore.machine.change",

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Memory views: Retrocore Memory, a custom editor for the vscode-debug-memory URIs VS Code gives memory references,
-// which reads through the debug host's retro/memory/read and writes through writeMemory. The Open Memory command
+// Memory views: Retrocore Memory, a custom editor for retrocore-memory URIs, which name a session and a memory
+// reference, and which reads through the debug host's retro/memory/read and writes through writeMemory. The Open Memory command
 // picks memory as the CPU maps it or one of the machine's banks, such as the IIe's auxiliary RAM, and an address
 // in it, and the Variables and Watch views open an address from their context menus.
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { parseReference } from "./memoryModel";
+import { addressAt, parseReference } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -28,29 +28,57 @@ export interface MemoryBank {
 /** Retrocore Memory's view type. */
 export const memoryViewType = "retrocore.memory";
 
-/** The URI VS Code's debug memory file system gives a memory reference, as its own View Binary Data opens it. */
-export function memoryUri(session: vscode.DebugSession, memoryReference: string, name = "memory", range?: { from: number; to: number }): vscode.Uri {
+/**
+ * The scheme of Retrocore Memory's URIs. Nothing reads them as files: the editor takes the session and memory
+ * reference from them, and the bytes come from the debugger. Its own scheme keeps the editor off real files.
+ */
+export const memoryScheme = "retrocore-memory";
+
+/** The tab title of a memory reference, such as Memory $3C00 or Memory aux:$0400. */
+export function memoryTitle(memoryReference: string): string {
+    return `Memory ${memoryReference.replace(/0x([0-9a-f]+)$/i, (_, digits: string) => `$${digits.toUpperCase().padStart(4, "0")}`)}`;
+}
+
+/** The URI Retrocore Memory opens a memory reference of a session at: the reference, then the tab's title. */
+export function memoryUri(session: vscode.DebugSession, memoryReference: string): vscode.Uri {
     return vscode.Uri.from({
-        scheme: "vscode-debug-memory",
+        scheme: memoryScheme,
         authority: session.id,
-        path: `/${encodeURIComponent(memoryReference)}/${encodeURIComponent(name)}.bin`,
-        query: range ? `?range=${range.from}:${range.to}` : undefined
+        path: `/${memoryReference}/${memoryTitle(memoryReference)}`
     });
 }
 
 /** Opens a memory reference of a session in Retrocore Memory. */
 export async function openMemory(session: vscode.DebugSession, memoryReference: string): Promise<void> {
-    await vscode.commands.executeCommand("vscode.openWith", memoryUri(session, memoryReference, memoryReference.replace(":", "-")), memoryViewType);
+    await vscode.commands.executeCommand("vscode.openWith", memoryUri(session, memoryReference), memoryViewType);
 }
 
-function bankDetail(bank: MemoryBank): string {
-    if (bank.name === null) return "$0000-$FFFF as the soft switches map it now";
-    if (bank.readOnly) return `read-only · read at ${bank.reads}`;
-    return `read at ${bank.reads} · written at ${bank.writes}`;
+export function bankDetail(bank: MemoryBank): string {
+    if (bank.name === null) return "$0000-$FFFF as the CPU maps it now";
+    const reads = bank.reads === "nowhere" ? undefined : bank.reads;
+    const writes = bank.writes === null || bank.writes === "nowhere" ? undefined : bank.writes;
+    if (bank.readOnly) return reads === undefined ? "read-only · not mapped now" : `read-only · at ${reads}`;
+    if (reads === undefined && writes === undefined) return "not mapped now";
+    if (reads === writes) return `at ${reads}`;
+    return `${reads === undefined ? "not read" : `read at ${reads}`} · ${writes === undefined ? "not written" : `written at ${writes}`}`;
 }
 
 function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/** The memory reference an expression evaluates to in the focused frame, such as a label, an address or HL. */
+async function evaluateAddress(session: vscode.DebugSession, expression: string): Promise<string | undefined> {
+    const focused = vscode.debug.activeStackItem;
+    const frameId = focused instanceof vscode.DebugStackFrame && focused.session.id === session.id ? focused.frameId : undefined;
+    return (await session.customRequest("evaluate", { expression, frameId, context: addressContext }) as { memoryReference?: string }).memoryReference;
+}
+
+/** What VS Code passes a Variables or Watch view command: the session, the variable's container and the variable. */
+interface OpenVariableItem {
+    sessionId?: string;
+    container?: { variablesReference?: number };
+    variable?: { name?: string; evaluateName?: string; memoryReference?: string };
 }
 
 /** An open Retrocore Memory editor: the session, the reference its reads and writes go through, and its page. */
@@ -63,11 +91,17 @@ interface MemoryEditor {
     tests: Map<number, (reply: { state?: unknown; error?: string }) => void>;
 }
 
+/**
+ * The evaluate context Retrocore Memory resolves addresses with. The debugger leaves memory references out of watch
+ * and hover results, where VS Code would show its Hex Editor icon, but gives them for this one.
+ */
+const addressContext = "retrocore";
+
 /** Where an address that memory reference names is, resolving an expression through the debugger. */
 async function resolveReference(session: vscode.DebugSession, reference: string): Promise<{ bank: string | null; address: number }> {
     const parsed = parseReference(reference);
     if (parsed !== undefined) return parsed;
-    const evaluated = await session.customRequest("evaluate", { expression: reference, context: "watch" }) as { memoryReference?: string };
+    const evaluated = await session.customRequest("evaluate", { expression: reference, context: addressContext }) as { memoryReference?: string };
     const resolved = evaluated.memoryReference === undefined ? undefined : parseReference(evaluated.memoryReference);
     if (resolved === undefined) throw new Error(`${reference} is not an address in the CPU's 64K.`);
     return resolved;
@@ -136,11 +170,9 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         openCustomDocument: uri => ({ uri, dispose: () => undefined }),
         async resolveCustomEditor(document, panel) {
             const uri = document.uri;
-            const session = uri.scheme === "vscode-debug-memory" ? sessions.get(uri.authority) ?? (vscode.debug.activeDebugSession?.id === uri.authority ? vscode.debug.activeDebugSession : undefined) : undefined;
+            const session = uri.scheme === memoryScheme ? sessions.get(uri.authority) ?? (vscode.debug.activeDebugSession?.id === uri.authority ? vscode.debug.activeDebugSession : undefined) : undefined;
             if (session?.type !== "retrocore") {
-                panel.webview.html = blankPage(uri.scheme === "vscode-debug-memory"
-                    ? "Retrocore Memory shows memory while its Retrocore debug session runs; this one has ended."
-                    : "Retrocore Memory shows the memory of a Retrocore debug session. Open this file in another editor.");
+                panel.webview.html = blankPage("Retrocore Memory shows memory while its Retrocore debug session runs; this one has ended.");
                 return;
             }
 
@@ -198,6 +230,16 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "characters":
                             await reply(await session.customRequest("retro/memory/characters"));
                             break;
+                        case "freeze":
+                            await reply(await session.customRequest("retro/memory/freeze", { memoryReference: base, freeze: received.freeze, thaw: received.thaw }));
+                            break;
+                        case "watch":
+                            // VS Code's own Add to Watch, which takes a variable's evaluate name; there is no API for it.
+                            for (const expression of received.expressions as string[]) {
+                                await vscode.commands.executeCommand("debug.addToWatchExpressions", { variable: { evaluateName: expression } });
+                            }
+                            await reply(null);
+                            break;
                         case "write":
                             await reply(await session.customRequest("writeMemory", {
                                 memoryReference: base,
@@ -253,7 +295,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         const expression = picked.bank.name === null ? address : `${picked.bank.name}:${address}`;
         let memoryReference: string | undefined;
         try {
-            memoryReference = (await session.customRequest("evaluate", { expression, context: "watch" }) as { memoryReference?: string }).memoryReference;
+            memoryReference = (await session.customRequest("evaluate", { expression, context: addressContext }) as { memoryReference?: string }).memoryReference;
         } catch (error) {
             void vscode.window.showErrorMessage(`Retrocore: ${message(error)}`);
             return;
@@ -265,11 +307,68 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         await openMemory(session, memoryReference);
     }));
 
-    // The Variables and Watch views' context menus, on anything that holds an address.
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.memory.openVariable", async (item?: { sessionId?: string; variable?: { memoryReference?: string } }) => {
+    // The Variables and Watch views' icon and context menus, on anything that holds an address.
+    // The Variables view offers it on variables the debugger marks as holding an address; the Watch view, which has
+    // no such mark, on every expression, so one that holds no address says so. The debugger sends neither with its
+    // memory reference, which would bring VS Code's Hex Editor icon, so it is asked for here: a variable's by its
+    // container and name, an expression's by evaluating it in the focused frame.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.memory.openVariable", async (item?: OpenVariableItem) => {
         const session = (item?.sessionId === undefined ? undefined : sessions.get(item.sessionId)) ?? vscode.debug.activeDebugSession;
-        const memoryReference = item?.variable?.memoryReference;
+        if (session?.type !== "retrocore") return;
+        const variable = item?.variable;
+        let memoryReference = variable?.memoryReference;
+        try {
+            if (memoryReference === undefined && variable?.name !== undefined && item?.container?.variablesReference) {
+                memoryReference = (await session.customRequest("retro/memory/variable", {
+                    variablesReference: item.container.variablesReference,
+                    name: variable.name
+                }) as { memoryReference: string }).memoryReference;
+            } else if (memoryReference === undefined && variable?.evaluateName !== undefined) {
+                memoryReference = await evaluateAddress(session, variable.evaluateName);
+            }
+        } catch {
+            memoryReference = undefined;
+        }
+
+        if (memoryReference === undefined) {
+            const name = variable?.evaluateName ?? variable?.name ?? "This";
+            void vscode.window.showInformationMessage(`${name} does not hold an address to open in Retrocore Memory.`);
+            return;
+        }
+        await openMemory(session, memoryReference);
+    }));
+
+    // The Machine view's Memory rows: memory as the CPU maps it, or a bank, from its start.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.memory.openReference", async (memoryReference?: string) => {
+        const session = vscode.debug.activeDebugSession;
         if (session?.type !== "retrocore" || memoryReference === undefined) return;
+        await openMemory(session, memoryReference);
+    }));
+
+    // An assembly editor's context menu while debugging: the selection, or the label or address under the cursor.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.memory.openAtCursor", async () => {
+        const session = vscode.debug.activeDebugSession;
+        const editor = vscode.window.activeTextEditor;
+        if (session?.type !== "retrocore" || editor === undefined) return;
+        const selection = editor.selection;
+        const expression = selection.isEmpty
+            ? addressAt(editor.document.lineAt(selection.active.line).text, selection.active.character)
+            : editor.document.getText(selection).trim();
+        if (expression === undefined || expression.length === 0) {
+            void vscode.window.showInformationMessage("Retrocore: put the cursor on a label or address to open in Retrocore Memory.");
+            return;
+        }
+
+        let memoryReference: string | undefined;
+        try {
+            memoryReference = await evaluateAddress(session, expression);
+        } catch {
+            memoryReference = undefined;
+        }
+        if (memoryReference === undefined) {
+            void vscode.window.showInformationMessage(`Retrocore: ${expression} is not a label or address in the CPU's 64K.`);
+            return;
+        }
         await openMemory(session, memoryReference);
     }));
 

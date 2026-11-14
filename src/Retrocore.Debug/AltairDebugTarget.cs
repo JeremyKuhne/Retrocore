@@ -241,13 +241,16 @@ internal sealed class AltairDebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) != AltairMemoryArea.Ram)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) == AltairMemoryArea.Ram;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

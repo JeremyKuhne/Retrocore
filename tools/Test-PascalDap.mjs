@@ -157,7 +157,7 @@ async function sourceBreakpoints(machine) {
         // The listing names the program's variable, I, in its locals and for evaluating.
         const locals = (await request("scopes", { frameId: frames[0].id })).scopes.find(scope => scope.name === "Locals");
         const named = (await request("variables", { variablesReference: locals.variablesReference })).variables;
-        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0, memoryReference: named.find(variable => variable.name === "I").memoryReference });
+        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0, __vscodeVariableMenuContext: "memory" });
         assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "hover" })).result, "1");
 
         // Step Over goes by line: the call, which the listing counts in line 10, where the compiler read END.
@@ -260,9 +260,14 @@ try {
         // which have no reference.
         if (machine.name !== "Apple III") {
             const locals = scopes.find(scope => scope.name === "Locals");
-            const word = (await request("variables", { variablesReference: locals.variablesReference })).variables
-                .find(variable => variable.memoryReference);
-            assert.ok(word, "a local has a memory reference");
+            // VS Code is sent the locals without their references; Open in Retrocore Memory asks for them.
+            const marked = (await request("variables", { variablesReference: locals.variablesReference })).variables
+                .find(variable => variable.__vscodeVariableMenuContext === "memory");
+            assert.ok(marked, "a local has a memory reference");
+            const word = {
+                ...marked,
+                memoryReference: (await request("retro/memory/variable", { variablesReference: locals.variablesReference, name: marked.name })).memoryReference
+            };
             assert.match(word.memoryReference, /^main:0x/);
             const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
             const original = await bytes();

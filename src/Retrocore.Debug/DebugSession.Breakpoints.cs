@@ -702,12 +702,6 @@ internal sealed partial class DebugSession
     private (bool, DebugMemoryBank?, int, int)? Variable(int reference, string name, out string? reason)
     {
         reason = null;
-        if (reference == BanksScope)
-        {
-            reason = "Watch a byte of a bank instead, such as [aux:$0400].";
-            return null;
-        }
-
         if (reference > DocumentationScope || (reference & 1) != 0)
         {
             reason = "Only memory can be watched; registers and documentation cannot.";

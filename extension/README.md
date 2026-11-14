@@ -1075,12 +1075,12 @@ kind watches and the protocol.
 ## Memory
 
 Memory opens in **Retrocore Memory** from **Open in Retrocore Memory** on the context
-menu of any variable or watch that holds an address, or from **Retrocore: Open
-Memory...** in the Variables view's title bar. It shows the whole 64K in hex and as
+menu or binary-data icon of any variable that holds an address, from **Memory** in the
+Machine view, from an assembly editor's context menu on a label or address, or from **Retrocore: Open Memory...**
+on the debug toolbar. It shows the whole 64K in hex and as
 text, with go to, find, an inspector of the byte at the cursor, and editing with
 undo, and refreshes at each stop and while the machine runs
-([Memory.md](../docs/Memory.md#retrocore-memory)). Microsoft's Hex Editor and Eclipse
-CDT Cloud's Memory Inspector work too.
+([Memory.md](../docs/Memory.md#retrocore-memory)).
 
 The IIe's soft switches map one address to several stores, so a memory reference
 can name a bank: `main`, `aux`, `bank1`, `auxbank1` (the language cards' bank 1),
@@ -1089,7 +1089,7 @@ RAM's text page whatever the switches map, and `[aux:$0400]` reads it in
 expressions, conditions and data breakpoints. A function breakpoint such as
 `bank1:$D000` stops only while the CPU runs that bank's code. With a SoftCard in, `z80:` names memory as the Z80 sees it, so
 `z80:$0100` is where CP/M runs programs. The
-Variables view's **Memory** scope lists each bank with where the switches map it
+Machine view's **Memory** section lists each bank with where the switches map it
 now. [Memory.md](../docs/Memory.md) describes memory references, banks and the
 protocol.
 

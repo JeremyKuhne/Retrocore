@@ -1,11 +1,16 @@
 # Backlog: a memory viewer and editor
 
-Status: **steps 1 and 2 built** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
-`retro/memory/read`, `retro/memory/labels` and `retro/memory/characters`. Step 2 left for later: **Align rows to
-labels**; the Apple-1's, Apple III's and CoCo 3's character sets, which show as ASCII until their video classes draw
-them; and constants such as zero page equates, which are not labels, so `CH` does not yet name $24 (step 5's
-regions and doc comments cover those). Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file
-system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
+Status: **steps 1 to 3 built** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
+`retro/memory/read`, `retro/memory/labels`, `retro/memory/characters` and `retro/memory/freeze`. The watch list is
+VS Code's own Watch view, which the editor adds expressions such as `[$4100]` to, so data breakpoints come from
+there.
+
+Left for later from step 2: **Align rows to labels**; the Apple-1's, Apple III's and CoCo 3's character sets, which
+show as ASCII until their video classes draw them; and constants such as zero page equates, which are not labels,
+so `CH` does not yet name $24 (step 5's regions and doc comments cover those). From step 3: comparing two banks,
+and RAM search over 16-bit values.
+
+Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor
 as its baseline, that shows assembly at any address and says what the bytes under the cursor are.
 
@@ -131,10 +136,14 @@ Debugger shows it. Clicking goes there.
 ## Opening it
 
 - **Retrocore: Open Memory...** opens Retrocore Memory. It no longer opens the Hex Editor or offers to install it.
-- **Open in Retrocore Memory** on the Variables and Watch views' context menu, beside VS Code's binary-data icon,
-  which keeps opening the Hex Editor; VS Code decides that one.
-- **Reopen Editor With...** switches an open Hex Editor tab to Retrocore Memory and back, since both open the same
-  `vscode-debug-memory` URI.
+- **Memory** in the Machine view lists the CPU's 64K and each bank, with where each is mapped now, and opens them.
+- **Open in Retrocore Memory** on an assembly editor's context menu opens the label or address under the cursor.
+- **Open in Retrocore Memory** as the binary-data icon beside variables that hold an address, and on the Variables
+  and Watch views' context menus. VS Code's own icon always opens the Hex Editor and shows on whatever has a
+  memory reference, so the debugger sends VS Code's views none, and gives them through `retro/memory/variable`.
+- Tabs open `retrocore-memory://<session>/<reference>/<title>` URIs, titled like **Memory $3C00** or
+  **Memory aux:$0400**. Nothing reads them as files, and the editor is offered for nothing else, so real `.bin`
+  files keep their own editors.
 - From the listing of the Disassembly view's address, and from the debug toolbar while stopped.
 
 ## Searching and comparing
@@ -175,8 +184,8 @@ Whether that is a separate bus path or a hook in the existing one is decided wit
 
 ## The debug protocol
 
-Bytes keep coming through `readMemory` and `writeMemory`, so every client and the Hex Editor keep working. The
-editor's extras are custom requests, so other clients can use them too:
+Bytes keep coming through `readMemory` and `writeMemory`, so other memory tools keep working. Variables and watch
+results carry no `memoryReference`, so VS Code shows no Hex Editor icon. The editor's extras are custom requests, so other clients can use them too:
 
 | Request | Returns |
 | --- | --- |
@@ -187,6 +196,7 @@ editor's extras are custom requests, so other clients can use them too:
 | `retro/memory/mark` | Sets a range's code/data kind, or an address's name or comment, in the hints file. |
 | `retro/memory/track` | Turns access tracking on or off for a space. |
 | `retro/memory/freeze` | Freezes or thaws bytes. |
+| `retro/memory/variable` | The memory reference of a variable VS Code was sent without one, by its container and name. |
 
 The listing uses `disassemble`, which already takes banks. The editor watches the session's `memory` events
 through a debug adapter tracker, as the file system does, and adds a `retro/memory/changed` event with the
@@ -196,8 +206,9 @@ changed ranges so it can color them without reading everything again.
 
 1. **Our own editor replaces the Hex Editor.** The Hex Editor has no extension points for gutters, panes or
    decoders, and its data inspector cannot learn MBF floats or Apple text. Everything Retrocore opens memory in
-   is Retrocore Memory, and the Hex Editor is no longer suggested. It keeps working through the standard
-   protocol, for VS Code's binary-data icon and **Reopen Editor With...**, but nothing is added for it.
+   is Retrocore Memory, and the Hex Editor is no longer suggested. VS Code's binary-data icon, which opens only
+   the Hex Editor, is gone: VS Code's views get no memory references, while the capabilities still list
+   `readMemory` for other tools.
 2. **One webview per view, with no framework.** The display panel already renders in a webview; the grid is
    virtualized by hand, since a 64K space is 4096 rows of 16.
 3. **The debugger knows, the editor shows.** Labels, regions, interpretation and analysis come from the debug

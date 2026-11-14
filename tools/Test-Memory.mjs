@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Memory view DAP integration: readMemory and writeMemory as VS Code's memory views use them, retro/memory/read as
-// Retrocore Memory uses it with retro/memory/labels and retro/memory/characters, memory references on variables and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's
-// memory banks with breakpoints and disassembly in them. It also checks the breakpoints a data breakpoint's stop
+// Memory view DAP integration: readMemory and writeMemory for other clients, retro/memory/read as Retrocore Memory
+// uses it with retro/memory/labels, retro/memory/characters and retro/memory/freeze, memory references on variables
+// and evaluate results, the memory events that refresh open views when their bytes change, and the IIe's memory banks
+// with breakpoints and disassembly in them. It also checks the breakpoints a data breakpoint's stop
 // leaves for resuming, a step that lands on a breakpoint, and the logpoint limit. The Model I part needs nothing
 // external; the IIe part runs when RETROCORE_IIE_ROMS names the IIe ROMs.
 
@@ -46,15 +47,29 @@ async function rejects(promise, pattern) {
     await assert.rejects(promise, error => pattern.test(error.message));
 }
 
-async function variables(frameId, name) {
+async function scopeReference(frameId, name) {
     const scopes = (await request("scopes", { frameId })).scopes;
     const scope = scopes.find(item => item.name === name);
     assert.ok(scope, `the ${name} scope is listed`);
-    return (await request("variables", { variablesReference: scope.variablesReference })).variables;
+    return scope.variablesReference;
+}
+
+async function variables(frameId, name) {
+    return (await request("variables", { variablesReference: await scopeReference(frameId, name) })).variables;
+}
+
+// A variable's memory reference, which Open in Retrocore Memory asks for, as VS Code is sent none.
+async function addressOf(frameId, scope, name) {
+    try {
+        return (await request("retro/memory/variable", { variablesReference: await scopeReference(frameId, scope), name })).memoryReference;
+    } catch {
+        return null;
+    }
 }
 
 try {
     const capabilities = await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true, supportsMemoryEvent: true });
+    // VS Code's own memory icon opens only the Hex Editor, so VS Code is not told of readMemory; it still answers.
     assert.equal(capabilities.supportsReadMemoryRequest, true);
     assert.equal(capabilities.supportsWriteMemoryRequest, true);
 
@@ -113,13 +128,25 @@ try {
 
     at = "memory references on variables";
     const registers = await variables(1, "Registers");
-    assert.match(registers.find(variable => variable.name === "HL").memoryReference, /^0x[0-9A-F]{4}$/);
-    assert.equal(registers.find(variable => variable.name === "PC").memoryReference, "0x7000");
-    assert.equal(registers.find(variable => variable.name === "AF").memoryReference ?? null, null);
-    assert.equal(registers.find(variable => variable.name === "A").memoryReference ?? null, null);
-    assert.equal((await variables(1, "Communication region"))[0].memoryReference, "0x4000");
-    const memory = await variables(1, "Memory");
-    assert.deepEqual(memory.map(variable => [variable.name, variable.memoryReference]), [["CPU", "0x0000"]]);
+    assert.match(await addressOf(1, "Registers", "HL"), /^0x[0-9A-F]{4}$/);
+    assert.equal(await addressOf(1, "Registers", "PC"), "0x7000");
+    assert.equal(await addressOf(1, "Registers", "AF"), null);
+    assert.equal(await addressOf(1, "Registers", "A"), null);
+    const region = await variables(1, "Communication region");
+    assert.equal(await addressOf(1, "Communication region", region[0].name), "0x4000");
+    // VS Code shows its Hex Editor icon on anything with a memory reference, so its views are sent none.
+    assert.ok(registers.every(variable => !("memoryReference" in variable)), "no register has a memory reference");
+    assert.ok(region.every(variable => !("memoryReference" in variable)), "no byte has a memory reference");
+    assert.equal("memoryReference" in await request("evaluate", { expression: "$4000", context: "watch" }), false);
+    assert.equal("memoryReference" in await request("evaluate", { expression: "$4000", context: "hover" }), false);
+    assert.equal((await request("evaluate", { expression: "$4000", context: "retrocore" })).memoryReference, "0x4000");
+    assert.equal((await request("evaluate", { expression: "$4000" })).memoryReference, "0x4000");
+    // A variable that holds an address is marked for Open in Retrocore Memory.
+    assert.equal(registers.find(variable => variable.name === "PC").__vscodeVariableMenuContext, "memory");
+    assert.equal(registers.find(variable => variable.name === "A").__vscodeVariableMenuContext ?? null, null);
+    assert.equal((await variables(1, "Communication region"))[0].__vscodeVariableMenuContext, "memory");
+    const scopeNames = (await request("scopes", { frameId: 1 })).scopes.map(scope => scope.name);
+    assert.equal(scopeNames.includes("Memory"), false, "the banks are in Open Memory, not a scope");
     const modelBanks = (await request("retro/memoryBanks")).banks;
     assert.deepEqual(modelBanks.map(bank => bank.name), [null]);
 
@@ -201,6 +228,32 @@ try {
     const notice = output.find(body => body.category === "important");
     assert.match(notice?.output ?? "", /^Retrocore dropped 18 logpoint lines: logpoints write at most 2 a second/);
     await request("setBreakpoints", { source: { path: hello }, breakpoints: [] });
+
+    // A frozen byte is written at once and held while the machine runs; ROM cannot be frozen.
+    at = "freezing a byte";
+    const frozen = await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0x5000, value: 0x55 }] });
+    assert.deepEqual(frozen.frozen, [{ address: 0x5000, value: 0x55 }]);
+    assert.equal((await read("0x5000", 1)).bytes[0], 0x55);
+    await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0, value: 0 }] }), /not RAM now/);
+    await write("0x5000", [0x11]);
+
+    // Retrocore Memory watches a byte as the expression [$5000], which says when it is frozen and which a data
+    // breakpoint can watch.
+    at = "watching a frozen byte";
+    assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result, "$11 (17) (frozen)");
+    assert.equal((await request("evaluate", { expression: "[$4FFF].w", context: "watch" })).result.endsWith("(frozen)"), true);
+    assert.equal((await request("evaluate", { expression: "[$5001]", context: "watch" })).result.endsWith("(frozen)"), false);
+    assert.equal((await request("dataBreakpointInfo", { name: "[$5000]" })).dataId, "mem:5000:1");
+
+    at = "running with a frozen byte";
+    drop("stopped");
+    await request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    assert.equal((await read("0x5000", 1)).bytes[0], 0x55, "the run wrote the frozen value back");
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000", thaw: [0x5000] })).frozen, []);
+    assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result.endsWith("(frozen)"), false);
     console.log("Memory DAP integration passed on the Model I.");
 
     if (!roms) {
@@ -227,12 +280,8 @@ try {
         assert.equal(bank("rom").readOnly, true);
         assert.equal(bank("rom").writes, null);
         assert.ok(bank("rom").reads.endsWith("$D000-$FFFF"));
-        const listed = await variables(1, "Memory");
-        assert.deepEqual(listed.map(variable => variable.name), ["CPU", "main", "aux", "bank1", "auxbank1", "rom"]);
-        assert.match(listed.find(variable => variable.name === "aux").value, /^Auxiliary RAM: read at nowhere; written at nowhere$/);
-        assert.deepEqual(listed.find(variable => variable.name === "rom").presentationHint.attributes, ["readOnly"]);
-        const stack = (await variables(1, "Registers")).find(variable => variable.name === "S");
-        assert.match(stack.memoryReference, /^0x01[0-9A-F]{2}$/);
+        assert.equal(bank("aux").writes, "nowhere");
+        assert.match(await addressOf(1, "Registers", "S"), /^0x01[0-9A-F]{2}$/);
 
         at = "reading and writing a bank the CPU does not map";
         const main = (await read("0x0400", 1)).bytes[0];

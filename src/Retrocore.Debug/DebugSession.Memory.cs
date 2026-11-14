@@ -12,8 +12,67 @@ namespace Retrocore.Debug;
 // open views current.
 internal sealed partial class DebugSession
 {
-    // The variables reference of the Memory scope, which lists the CPU's memory and the machine's banks.
-    private const int BanksScope = 99999;
+    // The menu context of a variable that holds an address, which Open in Retrocore Memory shows on. VS Code's own
+    // memory icon, which opens only the Hex Editor, shows on anything with a memory reference, so the variables and
+    // the watch and hover values VS Code is sent have none: retro/memory/variable and other evaluates give it.
+    private const string MemoryMenu = "memory";
+
+    /// <summary>
+    ///  Takes the memory references out of variables bound for VS Code's views, marking those that had one for
+    ///  Open in Retrocore Memory instead.
+    /// </summary>
+    /// <param name="variables">A variables response.</param>
+    /// <returns>The same response.</returns>
+    private static JsonObject WithoutMemoryReferences(JsonObject variables)
+    {
+        foreach (JsonObject variable in (variables["variables"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            JsonNode? reference = variable["memoryReference"];
+            variable.Remove("memoryReference");
+            if (reference is not null)
+            {
+                variable["__vscodeVariableMenuContext"] = MemoryMenu;
+            }
+        }
+
+        return variables;
+    }
+
+    /// <summary>
+    ///  An evaluate result, without its memory reference for the Watch view and hovers, which would show VS Code's
+    ///  Hex Editor icon on it; Open in Retrocore Memory evaluates with its own context.
+    /// </summary>
+    /// <param name="args">The evaluate request's arguments.</param>
+    /// <param name="result">The result.</param>
+    /// <returns>The result.</returns>
+    private static JsonObject Evaluated(JsonObject args, JsonObject result)
+    {
+        if (args.String("context") is "watch" or "hover" or "variables")
+        {
+            result.Remove("memoryReference");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/variable: the memory reference of a variable VS Code was sent without one, by the
+    ///  variables reference of its container and its name, for Open in Retrocore Memory.
+    /// </summary>
+    /// <param name="args">The request's arguments.</param>
+    /// <returns>The variable's memory reference.</returns>
+    private JsonObject MemoryVariable(JsonObject args)
+    {
+        string name = Required(args, "name");
+        JsonArray variables = Variables(args.Int("variablesReference") ?? 0)["variables"] as JsonArray ?? [];
+        string? reference = variables.OfType<JsonObject>()
+            .FirstOrDefault(variable => variable["name"]?.GetValue<string>() == name)?["memoryReference"]?.GetValue<string>();
+
+        return new JsonObject
+        {
+            ["memoryReference"] = reference ?? throw new InvalidOperationException($"{name} does not hold an address.")
+        };
+    }
 
     // The most memory references to keep sending memory events for.
     private const int MemoryViewLimit = 32;
@@ -407,32 +466,6 @@ internal sealed partial class DebugSession
         }
 
         return runs.Count == 0 ? "nowhere" : string.Join(", ", runs);
-    }
-
-    // The Memory scope: the CPU's memory and each bank, with the memory reference that opens it in a memory view.
-    private JsonObject BankVariables()
-    {
-        List<JsonNode?> variables = [];
-        foreach ((string? name, string label, string reference, bool readOnly, string reads, string writes) in MemoryBanks())
-        {
-            string value = name is null
-                ? $"{label}: $0000-$FFFF"
-                : readOnly ? $"{label}: read at {reads}" : $"{label}: read at {reads}; written at {writes}";
-
-            variables.Add(new JsonObject
-            {
-                ["name"] = name ?? "CPU",
-                ["value"] = value,
-                ["variablesReference"] = 0,
-                ["memoryReference"] = reference,
-                ["presentationHint"] = readOnly ? new JsonObject
-                {
-                    ["attributes"] = new JsonArray("readOnly")
-                } : null
-            });
-        }
-
-        return new JsonObject { ["variables"] = variables.ToJsonArray() };
     }
 
     // Answers retro/memoryBanks, for the extension's Open Memory command.

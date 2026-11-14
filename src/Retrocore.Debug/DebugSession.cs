@@ -648,11 +648,13 @@ internal sealed partial class DebugSession
                 z80 = softCard;
             }
 
+            // The build preprocesses as the check did, starting on the machine's CPU; the first .cpu that remains, which
+            // made the source the Z80's, selects the Z80's instructions.
             IDebugTarget loader = z80 ?? Target;
             AssemblyResult result = SourceBuild.Assemble(
                 sourceFile,
                 dialect,
-                loader.Cpu,
+                Target.Cpu,
                 args.Int("loadAddress") ?? loader.DefaultLoadAddress,
                 args.String("linkerConfiguration"));
 

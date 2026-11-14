@@ -238,14 +238,17 @@ try {
     assert.equal(frame.instructionPointerReference, resume);
     await request("setInstructionBreakpoints", { breakpoints: [] });
 
-    // A source is the Z80's when a build for the 6502 would make it Z80 code, as .ifp02 around its .cpu does.
-    writeFileSync(second, ["        .ifp02", "        .cpu Z80", "        .endif", "start:  ld a,$12", "spin:   jr spin"]
+    // A source is the Z80's when a build for the 6502 would make it Z80 code, as .ifp02 around its .cpu does, and it
+    // builds as that build would: code under the same .ifp02 is there.
+    writeFileSync(second, ["        .ifp02", "        .cpu Z80", "start:  ld a,$12", "spin:   jr spin", "        .endif"]
         .join("\n") + "\n");
     events.length = 0;
     await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, source: second, stopOnEntry: true, speed: "max" });
     await request("configurationDone");
     frame = await stoppedOn("entry", 4);
     assert.equal(frame.instructionPointerReference, "z80:0x0100");
+    assert.equal(frame.line, 3);
+    assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 
     if (!existsSync(cpm)) {
         console.log("SoftCard CP/M boot skipped: set RETROCORE_SOFTCARD_DISKS to the SoftCard CP/M disks.");

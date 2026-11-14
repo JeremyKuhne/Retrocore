@@ -85,7 +85,7 @@ version that was exported, so a write the machine makes while the file is being 
 
 | When | What happens | Default |
 | --- | --- | --- |
-| **Save** | The medium is written to its source image, in the source's format. | asks first |
+| **Save** | The medium is written to its source image, in the source's format, keeping a backup. | asks only when something is off |
 | **Save as** | Written to a path and format the user picks; the medium then comes from it. | the dialog asks about replacing a file |
 | **Eject**, by the user | A changed disk: the user picks save, save as, discard or cancel. | asks |
 | **Eject**, by the machine (a 3.5 drive's CONTROL eject) | Nothing can ask in time: the ejected disk is kept as a recovered medium, and the drive offers it until the session ends. | keeps |

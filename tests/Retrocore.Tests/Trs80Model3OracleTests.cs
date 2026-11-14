@@ -130,7 +130,7 @@ public class Trs80Model3OracleTests
         string expected = Screen(dump[0x10000..(0x10000 + Cells)], 80);
         Console.WriteLine(expected);
         expected.Should().Contain("INSERT DISKETTE", "MAME's boot ROM asks for a diskette");
-        Screen([.. Enumerable.Range(0, Cells).Select(machine.Bus.Video.Read)], 80).Should().Be(expected);
+        Match(dump[0x10000..(0x10000 + Cells)], [.. Enumerable.Range(0, Cells).Select(machine.Bus.Video.Read)], 80);
     }
 
     private static string Root => ExternalTestData.Root;
@@ -172,9 +172,17 @@ public class Trs80Model3OracleTests
             ours[differing[0]] = oracle[differing[0]];
         }
 
-        string actual = Screen(ours, columns);
-        if (actual != expected) { Console.WriteLine($"Ours:\n{actual}"); }
-        actual.Should().Be(expected);
+        Match(oracle, ours, columns);
+    }
+
+    // Compares video RAM byte for byte, showing this side's screen and the first differing cell when they differ.
+    private static void Match(byte[] oracle, byte[] ours, int columns)
+    {
+        int first = Enumerable.Range(0, oracle.Length).FirstOrDefault(index => oracle[index] != ours[index], -1);
+        if (first < 0) { return; }
+        Console.WriteLine($"Ours:\n{Screen(ours, columns)}");
+        Assert.Fail($"Video RAM differs at row {first / columns}, column {first % columns}: "
+            + $"${ours[first]:X2} here, ${oracle[first]:X2} in MAME.");
     }
 
     private static Trs80Model3Machine Create(Trs80Model3Variant variant, string? disk)
@@ -284,9 +292,17 @@ public class Trs80Model3OracleTests
             start.Environment["RETRO_SHARE"] = share;
             start.Environment["RETRO_CPU"] = cpu;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
+            // Both streams drain as MAME runs, so the timeout holds even if MAME stops with them open.
             Task<string> errors = process.StandardError.ReadToEndAsync();
-            process.StandardOutput.ReadToEnd();
-            process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
+            Task<string> standard = process.StandardOutput.ReadToEndAsync();
+            if (!process.WaitForExit(120_000))
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+                Assert.Fail("MAME did not finish within 120 seconds.");
+            }
+
+            Task.WaitAll(errors, standard);
             File.Exists(output).Should().BeTrue($"the Lua script dumps memory: {errors.Result}");
             return File.ReadAllBytes(output);
         }

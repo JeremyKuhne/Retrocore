@@ -172,8 +172,8 @@ internal sealed partial class DebugSession
         try
         {
             ExpressionEvaluator evaluator = new(FrameTarget(frameId), _debug, read.Groups[1].Value, FrameRegisters(frameId));
-            long address = evaluator.EvaluateReference(out DebugMemoryBank? bank);
-            bank ??= ThreadBank(FrameIndex(frameId).Thread);
+            long address = evaluator.EvaluateReference(out DebugMemoryBank? bank, out bool cpu);
+            if (!cpu) { bank ??= ThreadBank(FrameIndex(frameId).Thread); }
             if (address is < 0 or > 0xFFFF) { return false; }
             int length = read.Groups[2].Success ? 2 : 1;
             for (int index = 0; index < length; index++)

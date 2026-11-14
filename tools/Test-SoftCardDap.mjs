@@ -94,6 +94,16 @@ try {
     // in the 6502's frame, z80:PC is the 6502's PC taken as a Z80 address.
     assert.equal((await request("evaluate", { expression: "z80:PC", frameId: z80Frame, context: "retrocore" })).memoryReference, "z80:0x0100");
     assert.notEqual((await request("evaluate", { expression: "z80:PC", context: "retrocore" })).memoryReference, "z80:0x0100");
+    // cpu: names the 6502's memory from the Z80's frame, as Retrocore Memory's CPU view watches it: the Z80's $0100 is
+    // the Apple's $1100, so the 6502's own $0100 differs.
+    const apple0100 = (await request("evaluate", { expression: "[$0100]" })).result;
+    assert.notEqual((await request("evaluate", { expression: "[$0100]", frameId: z80Frame })).result, apple0100);
+    assert.equal((await request("evaluate", { expression: "[cpu:$0100]", frameId: z80Frame })).result, apple0100);
+    assert.equal((await request("evaluate", { expression: "[$1100]" })).result, (await request("evaluate", { expression: "[$0100]", frameId: z80Frame })).result);
+    assert.equal((await request("evaluate", { expression: "cpu:$0400", frameId: z80Frame, context: "retrocore" })).memoryReference, "0x0400");
+    assert.equal((await request("dataBreakpointInfo", { name: "[cpu:$0400]" })).dataId, "mem:0400:1");
+    const coprocessors = (await request("retro/memoryBanks")).banks.filter(bank => bank.coprocessor).map(bank => bank.name);
+    assert.deepEqual(coprocessors, ["z80"]);
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 

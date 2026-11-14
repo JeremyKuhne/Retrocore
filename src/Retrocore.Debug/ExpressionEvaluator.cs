@@ -58,14 +58,30 @@ internal sealed partial class ExpressionEvaluator
     }
 
     /// <summary>
+    ///  The prefix that names memory as the machine's own CPU maps it now, as no prefix does except in a
+    ///  coprocessor's frame, where no prefix is the coprocessor's memory.
+    /// </summary>
+    internal const string CpuPrefix = "cpu";
+
+    /// <summary>
     ///  Evaluates an address that may name a memory bank first, such as <c>aux:$0400</c>.
     /// </summary>
     /// <param name="bank">The bank it names, or null for memory as the CPU maps it now.</param>
     /// <returns>The address.</returns>
     /// <exception cref="FormatException">The expression or the bank is not valid.</exception>
-    internal long EvaluateReference(out DebugMemoryBank? bank)
+    internal long EvaluateReference(out DebugMemoryBank? bank) => EvaluateReference(out bank, out _);
+
+    /// <summary>
+    ///  Evaluates an address that may name a memory bank first, such as <c>aux:$0400</c>, or the machine's CPU, as
+    ///  <c>cpu:$0400</c> does.
+    /// </summary>
+    /// <param name="bank">The bank it names, or null for memory as a CPU maps it now.</param>
+    /// <param name="cpu">Whether it names the machine's own CPU with <c>cpu:</c>.</param>
+    /// <returns>The address.</returns>
+    /// <exception cref="FormatException">The expression or the bank is not valid.</exception>
+    internal long EvaluateReference(out DebugMemoryBank? bank, out bool cpu)
     {
-        bank = BankPrefix();
+        bank = BankPrefix(out cpu);
         return Evaluate();
     }
 
@@ -82,14 +98,27 @@ internal sealed partial class ExpressionEvaluator
         bank = null;
         Match match = BankReference().Match(reference);
         if (!match.Success) { return reference; }
+
+        // A memory reference with no bank is already the machine's CPU's.
+        if (IsCpu(match.Groups[1].Value)) { return match.Groups[2].Value; }
         bank = FindBank(target, match.Groups[1].Value);
         return match.Groups[2].Value;
     }
 
-    private DebugMemoryBank? BankPrefix()
+    private static bool IsCpu(string name) => string.Equals(name, CpuPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private DebugMemoryBank? BankPrefix(out bool cpu)
     {
+        cpu = false;
         if (_position == _tokens.Length || !_tokens[_position].EndsWith(':')) { return null; }
-        return FindBank(_target, _tokens[_position++][..^1]);
+        string name = _tokens[_position++][..^1];
+        if (IsCpu(name))
+        {
+            cpu = true;
+            return null;
+        }
+
+        return FindBank(_target, name);
     }
 
     private static DebugMemoryBank FindBank(IDebugTarget target, string name) =>
@@ -98,8 +127,8 @@ internal sealed partial class ExpressionEvaluator
                 ? $"This machine has no memory banks; '{name}:' names none."
                 : $"Unknown memory bank '{name}'; this machine has {string.Join(", ", target.Banks.Select(bank => bank.Name))}.");
 
-    private byte Peek(DebugMemoryBank? bank, ushort address) => bank is null
-        ? _target.Peek(address)
+    private byte Peek(DebugMemoryBank? bank, bool cpu, ushort address) => bank is null
+        ? (cpu ? _target.Machine : _target).Peek(address)
         : bank.Peek(address) ?? throw new FormatException($"{bank.Label} has no byte at ${address:X4}.");
 
     private long Parse(int minimum)
@@ -143,14 +172,14 @@ internal sealed partial class ExpressionEvaluator
 
         if (token == "[")
         {
-            DebugMemoryBank? bank = BankPrefix();
+            DebugMemoryBank? bank = BankPrefix(out bool cpu);
             ushort address = checked((ushort)Parse(minimum: 0));
             Expect("]");
-            long value = Peek(bank, address);
+            long value = Peek(bank, cpu, address);
             if (_position < _tokens.Length && _tokens[_position] == ".w")
             {
                 _position++;
-                value += (long)Peek(bank, (ushort)(address + 1)) << 8;
+                value += (long)Peek(bank, cpu, (ushort)(address + 1)) << 8;
             }
 
             return value;

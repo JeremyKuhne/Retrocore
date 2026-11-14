@@ -666,9 +666,10 @@ function watchExpressions(low, high) {
 // Adds watch expressions to VS Code's Watch view.
 async function watch(expressions) {
     try {
-        await request({ type: "watch", expressions });
-        lastWatch = expressions;
-        status("Added " + expressions.join(", ") + " to the Watch view.");
+        // The extension says what it added, which names the machine's CPU where the machine has a coprocessor.
+        const added = await request({ type: "watch", expressions });
+        lastWatch = added?.expressions ?? expressions;
+        status("Added " + lastWatch.join(", ") + " to the Watch view.");
     } catch (error) {
         status(String(error.message || error), true);
     }

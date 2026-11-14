@@ -426,9 +426,9 @@ internal sealed partial class DebugSession
     ///  Lists the CPU's memory and the machine's banks: each one's memory reference, and where the memory map
     ///  reads and writes it now.
     /// </summary>
-    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes)> MemoryBanks()
+    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes, bool Coprocessor)> MemoryBanks()
     {
-        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF");
+        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF", false);
         foreach (DebugMemoryBank bank in Target.Banks)
         {
             yield return (
@@ -437,7 +437,8 @@ internal sealed partial class DebugSession
                 Reference(bank, bank.Ranges[0].Start),
                 bank.Poke is null,
                 Mapped(bank, write: false),
-                bank.Poke is null ? "" : Mapped(bank, write: true));
+                bank.Poke is null ? "" : Mapped(bank, write: true),
+                bank.InstructionSet is not null);
         }
     }
 
@@ -478,7 +479,8 @@ internal sealed partial class DebugSession
             ["memoryReference"] = bank.Reference,
             ["readOnly"] = bank.ReadOnly,
             ["reads"] = bank.Reads,
-            ["writes"] = bank.ReadOnly ? null : bank.Writes
+            ["writes"] = bank.ReadOnly ? null : bank.Writes,
+            ["coprocessor"] = bank.Coprocessor
 }).ToJsonArray()
     };
 

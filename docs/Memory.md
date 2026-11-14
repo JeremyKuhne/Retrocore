@@ -69,7 +69,9 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
   Its **Watch** and **Freeze** buttons act on the selection.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
-  as the word `[$4100].w`, and more as each byte, up to 16. There **Break on Value Change** sets a data breakpoint
+  as the word `[$4100].w`, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
+  a machine with a SoftCard the CPU's editor watches `[cpu:$4100]`, which stays the 6502's while the Z80's frame is
+  focused. There **Break on Value Change** sets a data breakpoint
   on it, and a frozen byte's value says `(frozen)`. The editor adds watches through VS Code's own **Add to Watch**
   command, as extensions have no API for it; remove them in the Watch view.
 - **RAM search**, a tab beside the inspector, finds the byte that holds a value, such as a game's lives. **Start
@@ -95,6 +97,7 @@ A memory reference is an address, optionally naming a bank first:
 | `0x0400`, `0400` | The CPU's address $0400 as the memory map maps it now. Digits alone are hex. |
 | `$0400`, `TEXT_PAGE`, `HL+2` | An expression, in the debugger's expression syntax, evaluated when the view opens. |
 | `aux:0x0400`, `aux:TEXT_PAGE` | The byte auxiliary RAM holds for $0400, whatever the soft switches map. |
+| `cpu:0x0400`, `[cpu:$0400]` | The machine's own CPU's $0400, as a reference with no bank is, even in an expression evaluated in a coprocessor's frame, such as the SoftCard Z80's, where `[$0400]` is the Z80's. |
 
 Bytes a reference cannot reach read as unreadable, such as past $FFFF or in a gap in a bank. Writes that cannot
 finish, such as one that reaches ROM, are refused without changing anything, unless the client allows a partial
@@ -129,7 +132,8 @@ behind it, and the bytes come from the debugger.
 
 The Machine view's **Memory** rows and **Open Memory** list the CPU's memory and each bank with where the memory
 map reads and writes it now, such as `Auxiliary RAM: at $0000-$01FF` with ALTZP on, and read again at each stop.
-`retro/memoryBanks` returns the same list. The Model I maps each address to one place, so it has no banks.
+`retro/memoryBanks` returns the same list, with `coprocessor` true for a coprocessor's address space, such as
+`z80`. The Model I maps each address to one place, so it has no banks.
 
 Banks work anywhere an address does:
 

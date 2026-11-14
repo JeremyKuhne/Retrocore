@@ -35,6 +35,12 @@ internal interface IDebugTarget : IDebugMemory
     IDebugTarget? Coprocessor => null;
 
     /// <summary>
+    ///  Gets the machine's own CPU's view, which <c>cpu:</c> names in expressions: this one, except for a
+    ///  coprocessor's, such as the SoftCard's Z80, whose is the machine it sits in.
+    /// </summary>
+    IDebugTarget Machine => this;
+
+    /// <summary>
     ///  Gets whether <see cref="Coprocessor"/> has the bus now, so its instructions are the ones running.
     /// </summary>
     bool CoprocessorActive => false;

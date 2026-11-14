@@ -195,10 +195,11 @@ internal sealed partial class DebugSession
 
             long value;
             DebugMemoryBank? bank;
+            bool cpu;
             try
             {
                 value = new ExpressionEvaluator(FrameTarget(frameId), _debug, expression, FrameRegisters(frameId))
-                    .EvaluateReference(out bank);
+                    .EvaluateReference(out bank, out cpu);
             }
             catch (FormatException) when (HasBasicThread && args.String("context") is "hover" or "watch")
             {
@@ -221,9 +222,10 @@ internal sealed partial class DebugSession
             {
                 ["result"] = result,
                 ["variablesReference"] = 0,
-                // A value in a coprocessor's frame, such as the Z80's PC, opens memory in that CPU's address space.
+                // A value in a coprocessor's frame, such as the Z80's PC, opens memory in that CPU's address space,
+                // unless cpu: names the machine's own.
                 ["memoryReference"] = value is >= 0 and <= 0xFFFF
-                    ? Reference(bank ?? ThreadBank(FrameIndex(frameId).Thread), (int)value)
+                    ? Reference(bank ?? (cpu ? null : ThreadBank(FrameIndex(frameId).Thread)), (int)value)
                     : null
             });
         }));

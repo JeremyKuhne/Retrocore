@@ -208,6 +208,9 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public IReadOnlyList<DebugMemoryBank> Banks => _host.Banks;
 
     /// <inheritdoc/>
+    public IDebugTarget Machine => _host;
+
+    /// <inheritdoc/>
     public IReadOnlyList<string> Screens => _host.Screens;
 
     /// <inheritdoc/>

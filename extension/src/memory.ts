@@ -9,7 +9,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
+import { addressAt, cpuWatches, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -23,6 +23,8 @@ export interface MemoryBank {
     reads: string;
     /** Where it writes the bank now; null for a read-only bank. */
     writes: string | null;
+    /** Whether it is a coprocessor's address space, such as the SoftCard's Z80's. */
+    coprocessor?: boolean;
 }
 
 /** Retrocore Memory's view type. */
@@ -280,13 +282,21 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             others(editor, { type: "frozen", frozen: result.frozen });
                             break;
                         }
-                        case "watch":
+                        case "watch": {
+                            // The CPU's view watches cpu:$0400 on a machine with a coprocessor; see cpuWatches. The
+                            // banks are read now, as a SoftCard can go in after the editor opens.
+                            let expressions = received.expressions as string[];
+                            if (start.bank === null) {
+                                const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
+                                expressions = cpuWatches(expressions, banks.some(item => item.coprocessor === true));
+                            }
                             // VS Code's own Add to Watch, which takes a variable's evaluate name; there is no API for it.
-                            for (const expression of received.expressions as string[]) {
+                            for (const expression of expressions) {
                                 await vscode.commands.executeCommand("debug.addToWatchExpressions", { variable: { evaluateName: expression } });
                             }
-                            await reply(null);
+                            await reply({ expressions });
                             break;
+                        }
                         case "write":
                             await reply(await session.customRequest("writeMemory", {
                                 memoryReference: base,

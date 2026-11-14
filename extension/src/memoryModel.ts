@@ -79,6 +79,16 @@ export async function resolveIn(
 }
 
 /**
+ * The watch expressions the CPU's view adds: VS Code evaluates a watch in the focused frame, where [$0400] is the
+ * coprocessor's memory while a coprocessor's frame is, such as the SoftCard's Z80's, so on a machine with one each
+ * names the machine's CPU, as [cpu:$0400]. An expression that names a bank already is left as it is. The extension
+ * runs this, not the page.
+ */
+export function cpuWatches(expressions: string[], coprocessor: boolean): string[] {
+    return coprocessor ? expressions.map(expression => expression.replace(/^\[\$/, "[cpu:$")) : expressions;
+}
+
+/**
  * The memory reference an expression names, evaluated in the focused frame first and, when that gives none it
  * accepts, in the CPU's own frame: a BASIC frame evaluates BASIC, which names no memory, so a label or address opened
  * while one is focused is the CPU's. Undefined when neither does; the focused frame's error when it has one. The

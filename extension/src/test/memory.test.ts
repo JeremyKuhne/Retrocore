@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, copyText, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
+import { addressAt, copyText, cpuWatches, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -568,6 +568,35 @@ test("the inspector watches bytes in VS Code's Watch view, freezes them, and typ
     assert.equal(state.frozen, null);
     assert.equal(page.elements.get("frozenTab")!.textContent, "Frozen");
     assert.deepEqual(Array.from(lists.watched), ["[aux:$0400]"]);
+});
+
+test("the CPU's view watches name the machine's CPU where it has a coprocessor", () => {
+    assert.deepEqual(cpuWatches(["[$0400]", "[$0400].w"], true), ["[cpu:$0400]", "[cpu:$0400].w"]);
+    assert.deepEqual(cpuWatches(["[$0400]"], false), ["[$0400]"], "no prefix where no coprocessor can take the frame");
+    assert.deepEqual(cpuWatches(["[aux:$0400]"], true), ["[aux:$0400]"], "a bank's watch names its bank already");
+});
+
+test("watching says what the extension added, which can name the machine's CPU", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0);
+        await page.settle();
+    }
+    page.posted.splice(0);
+    page.send({ type: "test", id: 5, actions: [{ watch: true }] });
+    await page.settle();
+    const watch = page.take("watch");
+    assert.deepEqual(watch.expressions, ["[$0400]"]);
+    page.send({ type: "reply", id: watch.id, result: { expressions: ["[cpu:$0400]"] } });
+    let done: Record<string, unknown> | undefined;
+    for (let round = 0; round < 5 && done === undefined; round++) {
+        await page.settle();
+        done = page.posted.find(message => message.type === "testDone");
+        answer(page, () => 0);
+    }
+    assert.deepEqual((done?.state as Record<string, unknown>).lastWatch, ["[cpu:$0400]"]);
+    assert.equal(page.elements.get("status")!.textContent, "Added [cpu:$0400] to the Watch view.");
 });
 
 test("a RAM search reads again when a stop comes during its read", async () => {

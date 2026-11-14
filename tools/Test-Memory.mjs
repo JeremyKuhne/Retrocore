@@ -149,6 +149,10 @@ try {
     assert.equal(scopeNames.includes("Memory"), false, "the banks are in Open Memory, not a scope");
     const modelBanks = (await request("retro/memoryBanks")).banks;
     assert.deepEqual(modelBanks.map(bank => bank.name), [null]);
+    // cpu: names memory as the CPU maps it, on a machine with no banks too.
+    assert.equal((await request("evaluate", { expression: "[cpu:$3C00]" })).result, (await request("evaluate", { expression: "[$3C00]" })).result);
+    assert.equal((await request("evaluate", { expression: "cpu:$3C00", context: "retrocore" })).memoryReference, "0x3C00");
+    assert.equal(modelBanks[0].coprocessor, false);
 
     at = "writing memory tells the other views";
     drop("memory");

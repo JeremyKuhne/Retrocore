@@ -52,6 +52,7 @@ public sealed partial class PascalDecompiler
         Line("BEGIN");
         Statements(Program, Program.Body);
         Line("END.");
+        Alignment();
 
         // The constants the statements named, which come before the types.
         if (_constants.Count > 0)
@@ -63,6 +64,40 @@ public sealed partial class PascalDecompiler
 
         return _source.ToString();
     }
+
+    // The byte the Compiler skips to put an LDC's or XJP's words on a word boundary holds whatever its buffer had there,
+    // which no source says; those that are not 0 are written after END., where the Compiler reads nothing, for
+    // --pascal compile to put back.
+    private void Alignment()
+    {
+        IEnumerable<IGrouping<Media.PascalSegment, Procedure>> segments = _procedures
+            .Where(procedure => !procedure.Code.IsNative && !procedure.Failed)
+            .GroupBy(procedure => procedure.Segment);
+
+        foreach (IGrouping<Media.PascalSegment, Procedure> segment in segments)
+        {
+            byte[] code = segment.Key.Code;
+            List<string> pads = [];
+            foreach (PcodeInstruction instruction in segment.SelectMany(procedure => procedure.Instructions).OrderBy(instruction => instruction.Offset))
+            {
+                int at = Pad(instruction);
+                if (at > 0 && (at & 1) != 0 && at < code.Length && code[at] != 0)
+                {
+                    pads.Add($"${at:X4}=${code[at]:X2}");
+                }
+            }
+
+            if (pads.Count > 0) { Line($"(* Alignment bytes {segment.Key.Name.Trim()} {string.Join(" ", pads)} *)"); }
+        }
+    }
+
+    // Where an LDC's or XJP's alignment byte would be: after LDC's count, and after XJP; -1 for others.
+    private static int Pad(PcodeInstruction instruction) => instruction.Opcode.Code switch
+    {
+        Pcode.Ldc => instruction.Offset + 2,
+        Pcode.Xjp => instruction.Offset + 1,
+        _ => -1
+    };
 
     private void Line(string text)
     {

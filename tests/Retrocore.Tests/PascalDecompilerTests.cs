@@ -296,6 +296,7 @@ public class PascalDecompilerTests
         PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
         result.Source.Should().Contain("FUNCTION FUNC2(A4: INTEGER; A3: INTEGER): BOOLEAN;\n  EXTERNAL;");
         result.Source.Should().Contain("G3 := FUNC2(G8, G7);");
+        result.Source.Should().EndWith("END.\n(* Alignment bytes FORMATTE $009F=$54 $00C9=$02 $03E1=$10 $046F=$30 *)\n");
 
         (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
         if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }
@@ -382,6 +383,104 @@ public class PascalDecompilerTests
         if (recompiled is null) { Assert.Fail($"The Compiler stopped:\n{stopped}\n{result.Source}"); }
         PascalCodeComparison.Compare(PascalCodeFile.Read(code), PascalCodeFile.Read(recompiled)).Should().BeEmpty(result.Source);
     }
+
+    /// <summary>
+    ///  A program that calls a 6502 function, compiled, assembled and linked with Apple's own Compiler, Assembler and
+    ///  Linker, decompiles to a source that, with the function's name from a hint, compiles and links back to the same
+    ///  bytes, file and all.
+    /// </summary>
+    [TestMethod]
+    public void LinkedProgramsRebuildByteForByte()
+    {
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string tools = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        if (!File.Exists(boot) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+        }
+
+        (byte[]? function, string assembled) = EmulatedPascalTools.Assemble(Add1Source, boot, tools, s_inputs);
+        if (function is null) { Assert.Fail($"The Assembler stopped:\n{assembled}"); }
+
+        byte[] linked = Build(LinkedSource);
+        PascalCodeFile file = PascalCodeFile.Read(linked);
+        file.Segments.Single(segment => segment.Code.Length > 0).Procedure(2).Should().Match<PascalProcedure>(procedure => procedure.IsNative);
+
+        PascalDecompilation result = PascalDecompiler.Decompile(file, new PascalDecompilerOptions
+        {
+            Names = new Dictionary<string, string> { ["LINKED.2"] = "ADD1" }
+        });
+
+        result.Source.Should().Contain("FUNCTION ADD1(A3: INTEGER): INTEGER;\n  EXTERNAL;").And.Contain("G3 := ADD1(41)");
+        Build(result.Source).Should().Equal(linked);
+
+        byte[] Build(string source)
+        {
+            (byte[]? host, string screen) = EmulatedPascalCompiler.Compile(source, boot, tools, s_inputs);
+            if (host is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{source}"); }
+
+            (byte[]? code, string linking) = EmulatedPascalTools.Link(host, [function], boot, tools, s_inputs);
+            if (code is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
+            return code;
+        }
+    }
+
+    /// <summary>
+    ///  The alignment bytes a decompiled source records after its <c>END.</c> are put back in the segment it names,
+    ///  where the Compiler left 0.
+    /// </summary>
+    [TestMethod]
+    public void AlignmentBytesArePutBack()
+    {
+        byte[] code = new byte[1024];
+        code[0] = 1;
+        code[2] = 0x10;
+        "TEST    "u8.CopyTo(code.AsSpan(0x40));
+        code[512 + 0x0B] = 0x77;
+
+        EmulatedPascalCompiler.RestoreAlignment(code, "END.\n(* Alignment bytes TEST $0009=$54 $000B=$02 *)\n").Should().Be(1);
+        code[512 + 0x09].Should().Be(0x54);
+        code[512 + 0x0B].Should().Be(0x77, "a byte the Compiler wrote is its own");
+    }
+
+    // A function, of a word, that adds 1 to its parameter, for the Assembler.
+    private const string Add1Source = """
+                .FUNC   ADD1,1
+                PLA
+                STA     RETURN
+                PLA
+                STA     RETURN+1
+                PLA
+                PLA
+                PLA
+                PLA
+                PLA
+                CLC
+                ADC     #1
+                TAX
+                PLA
+                ADC     #0
+                PHA
+                TXA
+                PHA
+                LDA     RETURN+1
+                PHA
+                LDA     RETURN
+                PHA
+                RTS
+        RETURN  .WORD   0
+                .END
+        """;
+
+    // A program that calls it.
+    private const string LinkedSource = """
+        PROGRAM LINKED;
+        VAR I: INTEGER;
+        FUNCTION ADD1(N: INTEGER): INTEGER; EXTERNAL;
+        BEGIN
+          I := ADD1(41)
+        END.
+        """;
 
     /// <summary>
     ///  A unit's interface text gives its procedures in the order calls number them, from 2, and its enumerated types.

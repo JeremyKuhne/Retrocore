@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Apple2;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Retrocore.Media;
 
 namespace Retrocore.Debug;
@@ -18,10 +19,8 @@ namespace Retrocore.Debug;
 ///   <c>SYSTEM.LIBRARY</c>, as on the machine.
 ///  </para>
 /// </remarks>
-internal static class EmulatedPascalCompiler
+internal static partial class EmulatedPascalCompiler
 {
-    private const long CyclesPerTenth = 102_048;
-
     /// <summary>
     ///  Compiles a source.
     /// </summary>
@@ -67,65 +66,69 @@ internal static class EmulatedPascalCompiler
         if (listing is not null) { PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.EDITOR"); }
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
 
-        Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, roms, autostart: true));
-        machine.Bus.InstallDiskII(slot: 6, SdkModules.BuildDiskII(16, roms));
-        machine.Bus.InstallLanguageCard();
-        WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
-        machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(compilerDisk), proDosOrder: false), "APPLE2", "DSK");
-        machine.Bus.ResetSwitches();
-        machine.Processor.Reset();
-
-        // 1.0 says only that it is UCSD Pascal; 1.1 and 1.2 welcome APPLE1.
-        if (RunUntil(machine, ["COMMAND: E(DIT"], seconds: 60) is null)
-        {
-            throw new TimeoutException($"Pascal never booted:\n{Screen(machine)}");
-        }
-
-        machine.Run(cycles: CyclesPerTenth * 10);
-        machine.Bus.QueueKey((byte)'C');
+        EmulatedPascalSystem system = new(boot, compilerDisk, roms);
+        system.Type("C");
 
         // The Compiler ends with the space it had left, or stops at an error with a prompt to go on, stop or edit.
-        string ended = RunUntil(machine, ["SMALLEST AVAILABLE", "(CONTINUE)"], seconds: 1_800)
-            ?? throw new TimeoutException($"The Compiler never finished:\n{Screen(machine)}");
+        string ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds: 1_800)
+            ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
 
-        string screen = Screen(machine);
+        string screen = system.Screen;
         if (ended != "SMALLEST AVAILABLE") { return (null, screen, null); }
 
         // The code file and listing are closed as the system comes back to its command line; its line is still on the
         // screen from before, so the wait is long enough for both.
-        machine.Run(cycles: (ulong)(CyclesPerTenth * (listing is null ? 50 : 300)));
-        WozDisk disk = machine.Drives[0].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
-        PascalVolume volume = PascalVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
+        system.Run(tenths: listing is null ? 50 : 300);
+        PascalVolume volume = system.Eject();
         string? text = listing is not null && volume.Files.Any(file => string.Equals(file.Name, listing, StringComparison.OrdinalIgnoreCase))
             ? PascalTextFile.Read(volume.ReadFile(listing))
             : null;
 
-        return volume.Files.Any(file => file.Name == "SYSTEM.WRK.CODE")
-            ? (volume.ReadFile("SYSTEM.WRK.CODE"), screen, text)
-            : (null, screen, text);
+        if (!volume.Files.Any(file => file.Name == "SYSTEM.WRK.CODE")) { return (null, screen, text); }
+
+        byte[] code = volume.ReadFile("SYSTEM.WRK.CODE");
+        RestoreAlignment(code, source);
+        return (code, screen, text);
     }
 
-    // Runs until the screen shows one of the texts, and says which.
-    private static string? RunUntil(Apple2Machine machine, string[] texts, int seconds)
+    /// <summary>
+    ///  Puts back the bytes a decompiled source records after its <c>END.</c>, as
+    ///  <c>(* Alignment bytes SEGMENT $OFFSET=$VALUE ... *)</c>: the byte the Compiler skips to put an LDC's or XJP's
+    ///  words on a word boundary holds whatever its buffer had there, which no source says.
+    /// </summary>
+    /// <param name="code">The code file the Compiler wrote.</param>
+    /// <param name="source">The source it compiled.</param>
+    /// <returns>How many bytes were put back.</returns>
+    internal static int RestoreAlignment(byte[] code, string source)
     {
-        for (int tenth = 0; tenth < seconds * 10; tenth++)
+        int restored = 0;
+        foreach (Match recorded in AlignmentBytes().Matches(source))
         {
-            string screen = Screen(machine);
-            foreach (string text in texts)
+            string name = recorded.Groups["segment"].Value;
+            for (int slot = 0; slot < 16; slot++)
             {
-                if (screen.Contains(text, StringComparison.OrdinalIgnoreCase)) { return text; }
-            }
+                string slotName = System.Text.Encoding.ASCII.GetString(code, 0x40 + (slot * 8), 8).TrimEnd();
+                if (!string.Equals(slotName, name, StringComparison.OrdinalIgnoreCase)) { continue; }
 
-            machine.Run(cycles: CyclesPerTenth);
+                int start = (code[slot * 4] | (code[(slot * 4) + 1] << 8)) * 512;
+                foreach (Match pad in Pad().Matches(recorded.Groups["pads"].Value))
+                {
+                    int at = start + int.Parse(pad.Groups["at"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    if (at < code.Length && code[at] == 0)
+                    {
+                        code[at] = byte.Parse(pad.Groups["value"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                        restored++;
+                    }
+                }
+            }
         }
 
-        return null;
+        return restored;
     }
 
-    private static string Screen(Apple2Machine machine) => string.Join(
-        "\n",
-        Enumerable.Range(0, 24).Select(row => new string([.. Enumerable.Range(0, 40)
-            .Select(column => (char)(machine.Bus.TextByte(row, column) & 0x7F))
-            .Select(character => character < 32 ? (char)(character + 64) : character)]).TrimEnd()));
+    [GeneratedRegex(@"\(\* Alignment bytes (?<segment>\S+) (?<pads>[^*]*)\*\)")]
+    private static partial Regex AlignmentBytes();
+
+    [GeneratedRegex(@"\$(?<at>[0-9A-F]{4})=\$(?<value>[0-9A-F]{2})")]
+    private static partial Regex Pad();
 }

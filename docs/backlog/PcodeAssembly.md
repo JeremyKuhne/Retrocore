@@ -132,3 +132,9 @@ What the decompiler does not decompile yet, found by decompiling every code file
   Apple III, so code files they wrote can be checked as 1.1's are.
 - ~~**Names from a listing:**~~ done, with hints too: `--pascal decompile --listing --hints`
   ([Pascal.md](../Pascal.md#decompiling)).
+- ~~**Linking:**~~ done with Apple's own Assembler and Linker on the emulated Apple II (`--pascal assemble-native`,
+  `--pascal link`): FORMATTER rebuilds byte for byte ([Pascal.md](../Pascal.md#rebuilding-a-linked-program)).
+  **Found:** the 1.1 Compiler on APPLE2 leaves 0 in an alignment byte where the Compilers Apple built the samples with
+  left their buffer's bytes (in FORMATTER, the previous procedure's at the same offset), so a decompiled source
+  records them. **Not done:** writing an assembled procedure as source in the Assembler's syntax; FormatDisk's was
+  written by hand, and is not in the repository, as it is Apple's.

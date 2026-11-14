@@ -135,6 +135,9 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]` compiles a source with Apple
   Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`;
+- `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
+  Assembler, and `--pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code` links a host with
+  libraries with Apple's own Linker, both on an emulated Apple II, as `compile` runs the Compiler (below);
 - `--pascal compare code code` compares two code files' segments, and says where their code first differs.
 
 A code file is a file's path, or a disk and the file's name: `--pascal disassemble APPLE3.dsk HILBERT.CODE HILBERT.2`.
@@ -196,8 +199,30 @@ LINEFEED) and the BINDER utility decompile to sources that compile to the same c
 skips to align a constant or case table, which holds whatever its buffer had and which `compare` ignores. Not
 decompiled: programs compiled as part of the system (`(*$U-*)`), such as SOROCGOTO, and the system's own programs;
 units of a program's own (they need the Linker); a unit's variables; and `SCAN`, `IDSEARCH` and `TREESEARCH`.
-FORMATTER's source compiles to the same p-code, but its assembled procedure needs the Assembler and the Linker to
-make the same code file. A code file from another version's Compiler decompiles, but
+### Rebuilding a linked program
+
+The byte the Compiler skips to put an `LDC`'s or `XJP`'s words on a word boundary holds whatever its buffer had,
+which no source says: Apple's Compilers left bytes there that the 1.1 Compiler on APPLE2 leaves as 0. A decompiled
+source records those that are not 0 after its `END.`, where the Compiler reads nothing, as
+`(* Alignment bytes FORMATTE $009F=$54 $00C9=$02 *)`, and `--pascal compile` puts them back.
+
+A program with assembled procedures is rebuilt as Apple built it: the source compiled, the procedures assembled
+with Apple's Assembler, and the two linked with Apple's Linker. A linked file keeps no name for an assembled
+procedure, and the Linker matches an `EXTERNAL` to its code by name, so a hint names it as its `.PROC` or `.FUNC`
+does. FORMATTER rebuilds byte for byte from its decompiled source, with its hints, and a source for FormatDisk in
+the Assembler's syntax:
+
+```text
+Retrocore.Debug --pascal decompile APPLE3.dsk FORMATTER.CODE --hints formatter.json formatter.text
+Retrocore.Debug --pascal compile formatter.text APPLE1.dsk APPLE2.dsk FORMATTER.HOST.CODE
+Retrocore.Debug --pascal assemble-native fdisk.text APPLE1.dsk APPLE2.dsk FDISK.CODE
+Retrocore.Debug --pascal link FORMATTER.HOST.CODE FDISK.CODE APPLE1.dsk APPLE2.dsk FORMATTER.CODE
+```
+
+The Assembler's prompt for a listing is answered with none, and the Linker's for a host, libraries, map and output
+with the workfile, the libraries in order, none, and the output; the Editor comes off APPLE1's copy to make room.
+`PascalDecompilerTests.LinkedProgramsRebuildByteForByte` does all of it with a program and a 6502 function of its
+own. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

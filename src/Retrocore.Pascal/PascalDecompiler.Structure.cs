@@ -8,6 +8,11 @@ public sealed partial class PascalDecompiler
 {
     // Finds the WITH statements: a WITH on anything but a whole variable keeps the record's address in a word of its
     // own, after the declared variables, and reaches the fields through it.
+    // Whether a value stored may be a WITH's pointer: an address, or a word loaded or a function returns. An assembled
+    // function's result is of no type the code says, so it is a value.
+    private static bool MayPoint(Expr value) => value is Address
+        || (value is Load or Call && value.Words == 1 && value is not Call { Callee.Procedure.Code.IsNative: true });
+
     private void Withs()
     {
         foreach (Procedure procedure in _procedures)
@@ -23,8 +28,9 @@ public sealed partial class PascalDecompiler
                     && target.Offset > frame.ParameterWords
                     && target.Kind is VariableKind.Variable or VariableKind.Temporary)
                 {
-                    bool address = assignment.Value is Address || (assignment.Value is Load or Call && assignment.Value.Words == 1);
-                    candidates[target] = (!candidates.TryGetValue(target, out bool before) || before) && address && !assignment.Block;
+                    bool address = MayPoint(assignment.Value);
+                    bool still = !candidates.TryGetValue(target, out bool before) || before;
+                    candidates[target] = still && address && !assignment.Block;
                 }
             }, _ => { });
 

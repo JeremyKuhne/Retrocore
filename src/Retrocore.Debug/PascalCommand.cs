@@ -47,6 +47,8 @@ internal static partial class PascalCommand
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text]
+               --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
+               --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
                --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
 
@@ -71,6 +73,8 @@ internal static partial class PascalCommand
                 ["decompile", .. string[] rest] => Decompile(rest),
                 ["compile", string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null),
                 ["compile", string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing),
+                ["assemble-native", string source, string boot, string tools, string output] => AssembleNative(source, boot, tools, output),
+                ["link", string host, .. string[] rest] when rest.Length >= 3 => Link(host, rest[..^3], rest[^3], rest[^2], rest[^1]),
                 ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
                 _ => Fail(Usage, code: 2)
             };
@@ -356,6 +360,41 @@ internal static partial class PascalCommand
     }
 
     // Compiles a source with Apple Pascal's Compiler on an emulated Apple II.
+    // Assembles a 6502 source with Apple's Assembler, on an emulated Apple II.
+    private static int AssembleNative(string source, string boot, string tools, string output)
+    {
+        (byte[]? code, string screen) = EmulatedPascalTools.Assemble(File.ReadAllText(source), boot, tools);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Assembler flagged errors.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        return 0;
+    }
+
+    // Links a host code file with library code files with Apple's Linker, on an emulated Apple II.
+    private static int Link(string host, string[] libraries, string boot, string tools, string output)
+    {
+        (byte[]? code, string screen) = EmulatedPascalTools.Link(
+            File.ReadAllBytes(host),
+            [.. libraries.Select(File.ReadAllBytes)],
+            boot,
+            tools);
+
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Linker wrote no code file.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        return 0;
+    }
+
     private static int Compile(string source, string boot, string compiler, string output, string? listing)
     {
         // A listing the source asks for, (*$L APPLE1:NAME.TEXT*), is read back from APPLE1 to the host.

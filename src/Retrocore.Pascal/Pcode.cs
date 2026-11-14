@@ -31,6 +31,11 @@ public static class Pcode
     public const byte Xjp = 172;
 
     /// <summary>
+    ///  The opcode of <c>LDC</c>: load a multiword constant, from the next word boundary.
+    /// </summary>
+    public const byte Ldc = 179;
+
+    /// <summary>
     ///  The opcode of <c>RNP</c>: return from a procedure, leaving a function's result.
     /// </summary>
     public const byte Rnp = 173;

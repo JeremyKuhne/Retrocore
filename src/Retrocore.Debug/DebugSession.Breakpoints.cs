@@ -983,24 +983,39 @@ internal sealed partial class DebugSession
     }
 
     // Stops for the data breakpoints the instruction that just finished hit, if their conditions and hit counts say
-    // to. Returns false when it stops.
-    private bool DataStop()
+    // to. Returns false when it stops. The CPU that ran the instruction evaluates their conditions and messages and
+    // owns the stop, though the instruction may have handed the bus to the other CPU.
+    private bool DataStop(IDebugTarget cpu)
     {
         List<BreakpointState> stops = [];
         string? description = null;
-        foreach ((BreakpointState state, string seen) in _dataHits)
+        _triggering = cpu;
+        try
         {
-            if (!Triggers(state, seen, out string? error)) { continue; }
-            stops.Add(state);
-            description ??= error ?? seen;
+            foreach ((BreakpointState state, string seen) in _dataHits)
+            {
+                if (!Triggers(state, seen, out string? error)) { continue; }
+                stops.Add(state);
+                description ??= error ?? seen;
+            }
+        }
+        finally
+        {
+            _triggering = null;
         }
 
         _dataHits.Clear();
         if (stops.Count == 0) { return true; }
-        Stopped("data breakpoint", [.. stops.Select(state => state.Id)], description);
+        Stopped("data breakpoint", [.. stops.Select(state => state.Id)], description, threadId: ThreadOf(cpu));
         _unchecked = true;
         return false;
     }
+
+    // The CPU a breakpoint's condition and message are evaluated on: the one data breakpoints are being applied for,
+    // else the one with the bus.
+    private IDebugTarget? _triggering;
+
+    private IDebugTarget TriggeringCpu => _triggering ?? Cpu;
 
     /// <summary>
     ///  Applies a breakpoint's condition, hit count and log message where it is reached.
@@ -1016,7 +1031,7 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (new ExpressionEvaluator(Cpu, _debug, condition).Evaluate() == 0) { return false; }
+                if (new ExpressionEvaluator(TriggeringCpu, _debug, condition).Evaluate() == 0) { return false; }
             }
             catch (Exception exception) when (IsEvaluationError(exception))
             {
@@ -1136,7 +1151,7 @@ internal sealed partial class DebugSession
         try
         {
             // The CPU that reached the logpoint, as its condition uses: a Z80 logpoint's {A} is the Z80's.
-            long value = new ExpressionEvaluator(Cpu, _debug, expression).Evaluate();
+            long value = new ExpressionEvaluator(TriggeringCpu, _debug, expression).Evaluate();
             return format switch
             {
                 "d" => value.ToString(CultureInfo.InvariantCulture),

@@ -64,6 +64,13 @@ public sealed class SoftCard : Z80Card
         StepTState(heldAddress);
     }
 
+    /// <inheritdoc/>
+    public override void TakeBus()
+    {
+        _resetPending = false;
+        base.TakeBus();
+    }
+
     /// <summary>
     ///  Hands the bus over, for a write to <c>$Cn00-$CnFF</c> from either processor.
     /// </summary>

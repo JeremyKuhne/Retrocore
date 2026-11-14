@@ -83,6 +83,40 @@ public sealed class Apple2SoftCardTests
     }
 
     /// <summary>
+    ///  A debugger's <see cref="Z80Card.TakeBus"/> starts the Z80 where it is pointed and spends the reset the card
+    ///  had waiting, so the next switch resumes the program rather than starting the Z80 from zero.
+    /// </summary>
+    [TestMethod]
+    public void TakeBusSpendsTheWaitingReset()
+    {
+        Apple2Machine machine = Machine(Apple2Model.IIPlus);
+        SoftCard card = machine.Bus.InstallSoftCard(slot: 4);
+        byte[] program =
+        [
+            0x3E, 0x42,             // ld a,$42
+            0x32, 0x80, 0xF0,       // ld [$F080],a
+            0x32, 0x00, 0xE4,       // ld [$E400],a
+            0x3E, 0x43,             // ld a,$43
+            0x32, 0x82, 0xF0,       // ld [$F082],a
+            0x32, 0x00, 0xE4,       // ld [$E400],a
+            0x76                    // halt
+        ];
+
+        Load(machine, 0x1100, program);
+        int resets = card.Resets;
+        card.TakeBus();
+        card.Processor.Registers = card.Processor.Registers with { PC = 0x0100 };
+        machine.Run(200);
+        card.OwnsBus.Should().BeFalse("the Z80 gave the bus back");
+        machine.Bus.Peek(0x80).Should().Be(0x42);
+
+        machine.Bus.Write(0xC400, 0);
+        machine.Run(50);
+        machine.Bus.Peek(0x82).Should().Be(0x43, "the Z80 resumed its program");
+        card.Resets.Should().Be(resets, "nothing reset the Z80");
+    }
+
+    /// <summary>
     ///  The Z80 runs two T-states to each Apple cycle while the 6502 waits.
     /// </summary>
     [TestMethod]

@@ -649,6 +649,7 @@ internal sealed partial class DebugSession
 
                 z80?.Card.TakeBus();
                 loader.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
+                z80?.Begin();
             }
 
             // MACRO-10 sources define instructions as macros, so a single-statement expansion debugs as its call.
@@ -1277,15 +1278,15 @@ internal sealed partial class DebugSession
 
             if (_cycleSource is not null) { _pendingLineCycles++; }
 
-            if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(); }
+            if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
-            if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(); }
+            if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }
 
             // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
             // made its writes, so the watchpoints they hit stop now.
-            if (cpu.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(); }
+            if (cpu.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(cpu); }
 
             // A held CPU may stay so for any time too. Its instruction has not finished, so the watchpoints it hit
             // wait for the instruction's end.

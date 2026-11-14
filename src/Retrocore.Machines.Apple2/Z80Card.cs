@@ -88,10 +88,15 @@ public abstract class Z80Card
     public abstract byte Peek(ushort address);
 
     /// <summary>
-    ///  Gives the Z80 the bus, as the 6502's switch does, unless it has it; a debugger starting a Z80 program uses
-    ///  it.
+    ///  Gets how many times the Z80 has been reset or stopped by a reset, so a debugger knows to forget its calls.
     /// </summary>
-    public void TakeBus() => Start(reset: false);
+    public int Resets { get; private set; }
+
+    /// <summary>
+    ///  Gives the Z80 the bus, as the 6502's switch does, unless it has it; a debugger starting a Z80 program uses
+    ///  it. The Z80 goes on from where it is, and a reset the card has waiting for its next switch is spent.
+    /// </summary>
+    public virtual void TakeBus() => Start(reset: false);
 
     /// <summary>
     ///  Runs the Z80 for one T-state, if it is running.
@@ -157,6 +162,7 @@ public abstract class Z80Card
         if (reset)
         {
             Processor.Reset();
+            Resets++;
             InstructionBoundary?.Invoke(this);
         }
     }
@@ -178,6 +184,7 @@ public abstract class Z80Card
     /// </summary>
     protected void Halt()
     {
+        Resets++;
         OwnsBus = false;
         Running = false;
         _drained = false;

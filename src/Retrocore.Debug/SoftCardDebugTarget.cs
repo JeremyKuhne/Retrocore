@@ -27,6 +27,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     private readonly Apple2DebugTarget _host;
     private readonly Z80CallStack _calls;
     private DebugFrame? _before;
+    private int _resets;
 
     /// <summary>
     ///  Creates the view of a card.
@@ -73,12 +74,34 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     /// </summary>
     internal DebugMemoryBank Bank { get; }
 
-    // Each Z80 instruction boundary, whichever CPU's view is running: the instruction that ended, for the calls.
+    // Each Z80 instruction boundary, whichever CPU's view is running: the instruction that ended, for the calls. After
+    // a reset there is no instruction that ended, only a new start.
     private void Boundary(Z80Card card)
     {
+        Forget();
         DebugFrame after = Frame;
         if (_before is { } before) { _calls.Complete(before, after); }
         _before = after;
+    }
+
+    // Forgets the Z80's calls once the card has reset it, or a reset has stopped it.
+    private void Forget()
+    {
+        if (Card.Resets == _resets) { return; }
+        _resets = Card.Resets;
+        _calls.Reset();
+        _before = null;
+    }
+
+    /// <summary>
+    ///  Starts tracking the Z80's calls afresh from where it is, as a launched program's entry, so a call its first
+    ///  instruction makes is on the stack.
+    /// </summary>
+    internal void Begin()
+    {
+        Forget();
+        _calls.Reset();
+        _before = Frame;
     }
 
     /// <inheritdoc/>
@@ -143,7 +166,14 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public bool Accelerated => _host.Accelerated;
 
     /// <inheritdoc/>
-    public IDebugCallStack CallStack => _calls;
+    public IDebugCallStack CallStack
+    {
+        get
+        {
+            Forget();
+            return _calls;
+        }
+    }
 
     /// <inheritdoc/>
     /// <remarks>

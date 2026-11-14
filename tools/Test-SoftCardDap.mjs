@@ -55,6 +55,7 @@ const lines = [
     "        ret"
 ];
 const line = text => lines.findIndex(entry => entry.includes(text)) + 1;
+const second = join(root, "artifacts", `softcard-calls-${process.pid}.asm`);
 writeFileSync(source, lines.join("\n") + "\n");
 
 try {
@@ -170,6 +171,35 @@ try {
     assert.equal(slot4.value, "Z80 SoftCard");
     assert.deepEqual(slot4.settings.map(setting => [setting.id, setting.value]), [["translation", true], ["refresh", false]]);
 
+    // A program whose first instruction is a call has that call on the Z80's stack. A data breakpoint on the Z80's
+    // write to the switch stops the Z80's thread and evaluates its condition on the Z80, though the 6502 has the bus
+    // once the write ends.
+    const calls = [
+        "        .cpu Z80",
+        "start:  call work",
+        "        ld [$E400],a",
+        "spin:   jr spin",
+        "work:   ld a,$13",
+        "        ret"
+    ];
+    writeFileSync(second, calls.join("\n") + "\n");
+    const callLine = text => calls.findIndex(entry => entry.includes(text)) + 1;
+    events.length = 0;
+    await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, source: second, stopOnEntry: true, speed: "max" });
+    await request("configurationDone");
+    await stoppedOn("entry", 4);
+    await request("stepIn", { threadId: 4 });
+    frame = await stoppedOn("step", 4);
+    assert.equal(frame.line, callLine("ld a,$13"));
+    const callers = (await request("stackTrace", { threadId: 4 })).stackFrames;
+    assert.equal(callers[1].line, callLine("call work"), JSON.stringify(callers));
+    const switchInfo = await request("dataBreakpointInfo", { name: "z80:$E400", asAddress: true });
+    await request("setDataBreakpoints", { breakpoints: [{ dataId: switchInfo.dataId, accessType: "write", condition: "A == $13" }] });
+    await request("continue", { threadId: 4 });
+    frame = await stoppedOn("data breakpoint", 4);
+    assert.equal(frame.line, callLine("spin:"));
+    await request("setDataBreakpoints", { breakpoints: [] });
+
     if (!existsSync(cpm)) {
         console.log("SoftCard CP/M boot skipped: set RETROCORE_SOFTCARD_DISKS to the SoftCard CP/M disks.");
     } else {
@@ -196,6 +226,7 @@ try {
     clearTimeout(timeout);
     close();
     if (existsSync(source)) unlinkSync(source);
+    if (existsSync(second)) unlinkSync(second);
     if (failed()) {
         console.error(failed());
         process.exitCode = 1;

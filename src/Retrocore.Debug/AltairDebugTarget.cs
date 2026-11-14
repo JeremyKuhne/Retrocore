@@ -38,6 +38,7 @@ internal sealed class AltairDebugTarget : IDebugTarget
     private bool _interrupt;
     private bool _fetched;
     private bool _resetPending;
+    private string? _recordingPath;
 
     /// <summary>
     ///  Wraps a machine.
@@ -51,6 +52,7 @@ internal sealed class AltairDebugTarget : IDebugTarget
         Requests = new Dictionary<string, Func<JsonObject, JsonObject>>
         {
             ["retro/video"] = _ => VideoFrame(),
+            ["retro/media"] = Media,
             ["altair/clearScreen"] = _ =>
             {
                 _machine.Terminal.ClearScreen();
@@ -70,11 +72,39 @@ internal sealed class AltairDebugTarget : IDebugTarget
         {
             RamKilobytes = args.Int("ramKilobytes") ?? 64,
             Switches = checked((ushort)(args.Int("switches") ?? 0)),
-            BaudRate = args.Int("baudRate") ?? 9600
+            BaudRate = args.Int("baudRate") ?? 9600,
+            Console = (args.String("console") ?? "2sio") switch
+            {
+                "2sio" => AltairConsole.Serial2Sio,
+                "sio" => AltairConsole.Sio,
+                _ => throw new ArgumentException("console must be 2sio or sio.")
+            },
+            CassetteInterface = args.Bool("cassetteInterface") ?? true,
+            UpperCase = args.Bool("upperCase") ?? false
         };
 
-        return new(new AltairMachine(configuration));
+        AltairDebugTarget target = new(new AltairMachine(configuration))
+        {
+            FastCassette = args.Bool("fastCassette") ?? true
+        };
+
+        if (args.String("cassette") is { } tape)
+        {
+            if (target._machine.Bus.Cassette is null)
+            {
+                throw new ArgumentException("A cassette needs the 88-ACR cassette interface.");
+            }
+
+            target.Insert(tape);
+        }
+
+        return target;
     }
+
+    /// <summary>
+    ///  Gets or sets whether the machine runs as fast as it can while the cassette plays or records.
+    /// </summary>
+    internal bool FastCassette { get; set; } = true;
 
     /// <summary>
     ///  Gets the machine.
@@ -131,7 +161,8 @@ internal sealed class AltairDebugTarget : IDebugTarget
     public int ClockHertz => AltairTiming.ClockHertz;
 
     /// <inheritdoc/>
-    public bool Accelerated => false;
+    public bool Accelerated =>
+        FastCassette && _machine.Bus.Cassette?.Activity is DeviceActivity.Reading or DeviceActivity.Writing;
 
     /// <inheritdoc/>
     public IDebugCallStack CallStack => _calls;
@@ -301,7 +332,10 @@ internal sealed class AltairDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public IEnumerable<(string Event, JsonObject Body)> StatusEvents() => [];
+    public IEnumerable<(string Event, JsonObject Body)> StatusEvents()
+    {
+        yield return ("retro/media", MediaState());
+    }
 
     /// <inheritdoc/>
     public JsonObject DisplayState(bool running)
@@ -317,6 +351,7 @@ internal sealed class AltairDebugTarget : IDebugTarget
             ["cursor"] = new JsonObject { ["row"] = terminal.CursorRow, ["column"] = terminal.CursorColumn },
             ["cycles"] = CycleCount,
             ["video"] = VideoState(),
+            ["media"] = MediaState(),
             ["screen"] = _screen,
             ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
@@ -343,11 +378,20 @@ internal sealed class AltairDebugTarget : IDebugTarget
                 "serial",
                 "88-2SIO",
                 $"Two MC6850 ACIAs at ports $10 and $12, {configuration.BaudRate} baud",
-                "The terminal is on the first port; the second has nothing connected. The launch's baudRate option sets both."),
+                configuration.Console == AltairConsole.Sio
+                    ? "Nothing is connected; the terminal is on the 88-SIO. The launch's baudRate option sets both ports."
+                    : "The terminal is on the first port; the second has nothing connected. The launch's baudRate option sets both."),
+            .. Sio(configuration),
+            new(
+                "cassette",
+                "88-ACR",
+                configuration.CassetteInterface ? "Cassette interface at ports $06 and $07, 300 baud" : "none",
+                "The launch's cassetteInterface option: an 88-SIO with a modem for a cassette recorder; cassette loads a tape.",
+                _machine.Bus.Cassette is { } drive ? [drive.Id] : null),
             new(
                 "terminal",
                 "Terminal",
-                "80x24, ADM-3A controls",
+                configuration.UpperCase ? "80x24, ADM-3A controls, caps lock" : "80x24, ADM-3A controls",
                 "A glass teletype: ^H ^J ^K ^L move the cursor, ^Z clears, ESC = row column places it."),
             new(
                 "panel",
@@ -358,8 +402,91 @@ internal sealed class AltairDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public void DeviceAction(IDevice device, string action, JsonObject args) =>
-        throw new ArgumentException($"{device.Info.Name} does not support {action}.");
+    public void DeviceAction(IDevice device, string action, JsonObject args)
+    {
+        string? path = args.String("path");
+        switch (device, action)
+        {
+            case (AltairCassette, "insert"):
+                Insert(path ?? throw new ArgumentException("path is required."));
+                break;
+            case (AltairCassette cassette, "record"):
+                EjectCassette();
+                string full = Path.GetFullPath(
+                    path ?? throw new ArgumentException("path is required, for saving the recording."));
+
+                cassette.Record(full);
+                _recordingPath = full;
+                break;
+            case (AltairCassette, "eject"):
+                EjectCassette();
+                break;
+            default:
+                throw new ArgumentException($"{device.Info.Name} does not support {action}.");
+        }
+    }
+
+    // The 88-SIO's row, when the terminal is on it.
+    private static HardwareRow[] Sio(AltairConfiguration configuration) => configuration.Console == AltairConsole.Sio
+        ?
+        [
+            new(
+                "sio",
+                "88-SIO",
+                $"Ports $00 and $01, {configuration.BaudRate} baud",
+                "The launch's console option: the terminal is on the 88-SIO.")
+        ]
+        : [];
+
+    // retro/media: inserts, records and ejects cassettes.
+    private JsonObject Media(JsonObject args)
+    {
+        string action = args.String("action") ?? throw new ArgumentException("action is required.");
+        if ((args.String("device") ?? "cassette") != "cassette" || _machine.Bus.Cassette is not { } drive)
+        {
+            throw new ArgumentException("The Altair's only media is the 88-ACR's cassette.");
+        }
+
+        DeviceAction(drive, action, args);
+        return MediaState();
+    }
+
+    private void Insert(string path)
+    {
+        EjectCassette();
+        string full = Path.GetFullPath(path);
+        AltairCassette drive = _machine.Bus.Cassette
+            ?? throw new InvalidOperationException("This Altair has no 88-ACR.");
+
+        drive.Play(File.ReadAllBytes(full), full);
+    }
+
+    // A recording is saved to its path when it is ejected.
+    private void EjectCassette()
+    {
+        // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
+        if (_recordingPath is { } path && _machine.Bus.Cassette is { Media: not null } cassette)
+        {
+            File.WriteAllBytes(path, cassette.Tape);
+        }
+
+        _machine.Bus.Cassette?.Eject();
+        _recordingPath = null;
+    }
+
+    private JsonObject MediaState()
+    {
+        if (_machine.Bus.Cassette is not { } drive) { return new JsonObject { ["cassette"] = null }; }
+        JsonObject cassette = new()
+        {
+            ["path"] = drive.Media?.Label,
+            ["recording"] = _recordingPath is not null,
+            ["motor"] = drive.Transport.Motor,
+            ["atEnd"] = drive.AtEnd
+        };
+
+        return new JsonObject { ["cassette"] = cassette };
+    }
 
     private JsonObject VideoState() => new JsonObject
     {

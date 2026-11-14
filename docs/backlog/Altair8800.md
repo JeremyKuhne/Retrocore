@@ -1,7 +1,7 @@
 # Backlog: the MITS Altair 8800
 
-Status: **phases 1 and 2 built (2026-11-13)**; [the guide](../Altair8800.md) covers them. Phases 3-5 are next. The first machine for the 8080
-([CPU backlog](I8080.md)), and the one that started personal computing: an S-100 bus, a front panel of switches
+Status: **phases 1-3 built (2026-11-14)**; [the guide](../Altair8800.md) covers them. Phases 4 and 5 are next.
+The first machine for the 8080 ([CPU backlog](I8080.md)), and the one that started personal computing: an S-100 bus, a front panel of switches
 and lights, and boards for serial terminals, cassette and 8-inch disks.
 
 ## Why the Altair
@@ -58,7 +58,8 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
 2. **The debug target.** Launching `altair`, the terminal, the call tracker and register view, `source` and
    `program` launches, and a DAP test script like the other machines'.
 3. **BASIC.** Altair BASIC 4K and 8K from user-supplied images, over the 2SIO; the 88-SIO and 88-ACR for the
-   versions that need them, with tape images.
+   versions that need them, with tape images. *Built:* the 88-SIO and the 88-ACR with a cassette recorder for
+   byte-stream `.tap` tapes, caps lock, and tests that run 4K BASIC 3.2 and 4.0 and 8K BASIC 4.0 against SIMH.
 4. **Disks.** The 88-DCDD and its drives, SIMH disk images, the boot loaders as SDK sources, and CP/M 2.2.
 5. **The front panel view** in the extension.
 
@@ -80,3 +81,27 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
   stay in the backlog.
 - **Oracle.** SIMH's `altairz80`, built locally outside the repository.
 - **Software** is supplied by the user; the boot PROMs become SDK sources once dumps are available.
+
+## Decisions for phase 3 (agreed 2026-11-13)
+
+- **Images and tapes.** BASIC loads from memory images; the 88-SIO and the 88-ACR's cassette come with it, for the
+  versions and tapes that need them.
+- **Where the images came from.** The user pointed at
+  [option8/Altair-BASIC](https://github.com/option8/Altair-BASIC) (4K BASIC 3.2's annotated listing and image) and
+  asked for binary images; [avwohl/mbasic2025](https://github.com/avwohl/mbasic2025) has 4K BASIC 3.2 and 4.0 and 8K
+  BASIC 4.0, the same three SIMH's `altsw.zip` has. They are kept in the external test data's `altair-basic`
+  folder, never in the repository, and the tests pin them by digest.
+- **The terminal's board.** The terminal is on the 88-2SIO or the 88-SIO (the `console` option); the BASICs pick
+  their terminal by the sense switches, as MITS documented.
+- **The cassette.** The 88-ACR has no motor control, so a tape plays from the moment it goes in, a byte each
+  300-baud character time; recordings save on eject, as the Apple-1's do.
+
+## Still open
+
+- **MITS's own tapes.** The tapes MITS sold, which an operator loaded with a bootstrap keyed in at the front panel,
+  are untried: altairclone.com, which has them, is not allowed by this environment's network. The 88-ACR and
+  `.tap` tapes are tested with 8K BASIC's CSAVE and CLOAD, whose bytes match SIMH's.
+- **Extended BASIC.** No image was found; SIMH's `altsw.zip` (at schorn.ch) has one.
+- **The 1975 source listing** on gatesnotes.com, which the user named, could not be fetched: its host is not
+  allowed either.
+- **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.

@@ -7,8 +7,8 @@ using Retrocore.Machines.Chips;
 namespace Retrocore.Machines.Altair;
 
 /// <summary>
-///  The terminal on the 88-2SIO's first port: an 80-by-24 glass teletype that understands the Lear Siegler ADM-3A's
-///  controls, the most common terminal on Altairs running BASIC and CP/M.
+///  The terminal on the 88-2SIO's first port, or on the 88-SIO: an 80-by-24 glass teletype that understands the Lear
+///  Siegler ADM-3A's controls, the most common terminal on Altairs running BASIC and CP/M.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -49,7 +49,7 @@ public sealed class AltairTerminal : IVideoSource
 
     private readonly byte[] _screen = new byte[Columns * Rows];
     private readonly Queue<byte> _keys = new();
-    private readonly Acia6850 _acia;
+    private readonly ISerialLine _line;
     private int _lineCycles;
 
     // The ESC = sequence in progress: 0 none, 1 after ESC, 2 after '=', 3 after the row.
@@ -57,13 +57,13 @@ public sealed class AltairTerminal : IVideoSource
     private int _escapeRow;
 
     /// <summary>
-    ///  Connects a terminal to an ACIA: what it transmits appears, and keys are its received characters.
+    ///  Connects a terminal to a serial port: what it sends appears, and keys are its received characters.
     /// </summary>
-    /// <param name="acia">The ACIA.</param>
-    internal AltairTerminal(Acia6850 acia)
+    /// <param name="line">The serial port.</param>
+    internal AltairTerminal(ISerialLine line)
     {
-        _acia = acia;
-        _acia.Transmitted = Print;
+        _line = line;
+        _line.Transmitted = Print;
         ClearScreen();
     }
 
@@ -116,10 +116,20 @@ public sealed class AltairTerminal : IVideoSource
     }
 
     /// <summary>
+    ///  Gets or sets whether typed lowercase letters go out as capitals, as a terminal's caps lock does, for software
+    ///  such as Altair BASIC that takes only capitals.
+    /// </summary>
+    public bool UpperCase { get; set; }
+
+    /// <summary>
     ///  Types a key: an ASCII character for the line.
     /// </summary>
     /// <param name="code">The character.</param>
-    public void Type(byte code) => _keys.Enqueue(code);
+    public void Type(byte code)
+    {
+        bool letter = code is >= (byte)'a' and <= (byte)'z';
+        _keys.Enqueue(UpperCase && letter ? (byte)(code - 0x20) : code);
+    }
 
     /// <summary>
     ///  Clears the screen and homes the cursor, as ^Z does.
@@ -141,10 +151,10 @@ public sealed class AltairTerminal : IVideoSource
         {
             _lineCycles--;
         }
-        else if (_keys.Count != 0 && _acia.CanReceive)
+        else if (_keys.Count != 0 && _line.CanReceive)
         {
-            _acia.Receive(_keys.Dequeue());
-            _lineCycles = _acia.CyclesPerCharacter;
+            _line.Receive(_keys.Dequeue());
+            _lineCycles = _line.CyclesPerCharacter;
         }
 
         if (++CycleInFrame >= AltairTiming.CyclesPerFrame)

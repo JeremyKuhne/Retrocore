@@ -29,7 +29,7 @@ namespace Retrocore.Machines.Chips;
 ///   other end of the line delivers characters with <see cref="Receive"/>.
 ///  </para>
 /// </remarks>
-public sealed class Acia6850
+public sealed class Acia6850 : ISerialLine
 {
     /// <summary>
     ///  RDRF: the receive data register holds a character.

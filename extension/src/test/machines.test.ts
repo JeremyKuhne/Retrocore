@@ -56,6 +56,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
+    assert.deepEqual(machineById("altair")?.tapeFormats, ["tap"], "the 88-ACR's tapes");
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.deepEqual(machineById("apple3")?.basicDialects, ["business"]);
     assert.equal(machineById("apple3")?.basicDisk, "The Business BASIC disk");

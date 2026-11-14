@@ -456,10 +456,10 @@ export const machines: readonly Machine[] = [
     {
         id: "altair",
         label: "MITS Altair 8800",
-        detail: "8080, the 88-2SIO's terminal and 64 KB",
+        detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
         configuration: { machine: "altair" },
         diskFormats: [],
-        tapeFormats: [],
+        tapeFormats: ["tap"],
         basicDialects: [],
         dos: false,
         choices: [
@@ -474,6 +474,24 @@ export const machines: readonly Machine[] = [
                     { label: "4 KB", detail: "As the first Altairs shipped", value: 4 }
                 ],
                 default: 64
+            },
+            {
+                option: "console",
+                label: "Terminal",
+                values: [
+                    { label: "On the 88-2SIO", detail: "Ports $10 and $11; 4.0 BASICs with the switches down", value: "2sio" },
+                    { label: "On the 88-SIO", detail: "Ports $00 and $01; 4K BASIC 3.2 with the switches down", value: "sio" }
+                ],
+                default: "2sio"
+            },
+            {
+                option: "upperCase",
+                label: "Caps lock",
+                values: [
+                    { label: "Off", value: false },
+                    { label: "On", detail: "Letters type as capitals, as Altair BASIC needs", value: true }
+                ],
+                default: false
             }
         ]
     }

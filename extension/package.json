@@ -775,7 +775,7 @@
               "cassetteInterface": {
                 "type": "boolean",
                 "default": true,
-                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
+                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R. Altair 8800: the 88-ACR cassette interface at ports $06 and $07."
               },
               "loadBasic": {
                 "type": "boolean",
@@ -817,7 +817,22 @@
                 "type": "number",
                 "enum": [110, 150, 300, 600, 1200, 2400, 4800, 9600],
                 "default": 9600,
-                "description": "Altair 8800: the 88-2SIO's baud rate, which sets how fast characters reach the terminal and keys reach the program."
+                "description": "Altair 8800: the terminal's baud rate, on the 88-2SIO and the 88-SIO, which sets how fast characters reach the terminal and keys reach the program."
+              },
+              "console": {
+                "type": "string",
+                "enum": ["2sio", "sio"],
+                "default": "2sio",
+                "enumDescriptions": [
+                  "Altair 8800: the terminal is on the 88-2SIO's first port, at ports $10 and $11.",
+                  "Altair 8800: the terminal is on the 88-SIO, at ports $00 and $01."
+                ],
+                "description": "Altair 8800: the serial board the terminal is on. Altair BASIC picks its terminal by the sense switches: 4K BASIC 3.2 uses the 88-SIO with them down and the 88-2SIO with A11 up; the 4.0 BASICs use the 88-2SIO with them down and the 88-SIO with A13 up."
+              },
+              "upperCase": {
+                "type": "boolean",
+                "default": false,
+                "description": "Altair 8800: caps lock, so typed letters go out as capitals, as Altair BASIC needs."
               },
               "expansionInterface": {
                 "type": "boolean",
@@ -871,12 +886,12 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session."
               },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",

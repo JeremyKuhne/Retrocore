@@ -592,7 +592,12 @@ internal sealed partial class DebugSession
         }
 
         bool loads = sourceFile is not null || program is not null;
+
+        // The old machine's recordings are saved and it is disposed before the new one is built, as machines can
+        // share host resources, such as the game controllers SDL reads. A launch that then fails leaves no machine,
+        // rather than the disposed one.
         ReleaseTarget();
+        _target = null;
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),

@@ -402,6 +402,10 @@ try {
         console.log(`MITS's 4K BASIC 3.2 tape (${mitsTape}) is missing, so no tape was loaded.`);
     }
 
+    // A launch that fails leaves no machine, rather than the one it replaced, which it has disposed.
+    await assert.rejects(request("launch", { machine: "altair", ramKilobytes: 99 }), /RAM must be 1 to 64 KB/);
+    await assert.rejects(request("evaluate", { expression: "PC" }), /No machine has been launched/);
+
     await request("disconnect", {});
 
     // A recording whose save fails is kept, so the save can be tried again: here the disconnect fails while the

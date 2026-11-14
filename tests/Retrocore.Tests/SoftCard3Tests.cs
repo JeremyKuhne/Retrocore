@@ -118,9 +118,11 @@ public sealed class SoftCard3Tests
         machine.Bus.DmaWrite(0x2001, 0xFE);
         machine.Run(1_000);
         card.OwnsBus.Should().BeTrue();
+        machine.LastCycle.IsStalled.Should().BeTrue("the 6502 is held");
+        machine.StepInstruction(maximumCycles: 8).Cycles.Should().Be(8, "the machine's cycles go on");
         machine.Run(TimeSpan.FromMilliseconds(250));
         card.OwnsBus.Should().BeFalse();
-        machine.Processor.Registers.ProgramCounter.Should().Be(0xA008);
+        machine.Processor.Registers.ProgramCounter.Should().BeInRange(0xA008, 0xA00A, "the 6502 loops on its JMP");
     }
 
     /// <summary>

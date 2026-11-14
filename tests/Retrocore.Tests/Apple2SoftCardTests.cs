@@ -117,6 +117,26 @@ public sealed class Apple2SoftCardTests
     }
 
     /// <summary>
+    ///  While the Z80 has the bus, the machine's cycles go on: its last cycle shows the 6502 stalled, and an
+    ///  instruction step that runs out of budget counts the machine's cycles, though the 6502 ran none.
+    /// </summary>
+    [TestMethod]
+    public void HeldCyclesAreStalledAndCounted()
+    {
+        Apple2Machine machine = Machine(Apple2Model.IIPlus);
+        SoftCard card = machine.Bus.InstallSoftCard(slot: 4);
+        Load(machine, 0x1000, [0x18, 0xFE]);  // jr *
+        Start(machine);
+        machine.Run(20);
+        card.OwnsBus.Should().BeTrue();
+        machine.LastCycle.IsStalled.Should().BeTrue();
+
+        ProcessorExecutionResult result = machine.StepInstruction(maximumCycles: 8);
+        result.Status.Should().Be(ProcessorExecutionStatus.CycleBudgetExhausted);
+        result.Cycles.Should().Be(8);
+    }
+
+    /// <summary>
     ///  The Z80 runs two T-states to each Apple cycle while the 6502 waits.
     /// </summary>
     [TestMethod]

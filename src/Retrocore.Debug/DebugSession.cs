@@ -215,7 +215,10 @@ internal sealed partial class DebugSession
             {
                 ["result"] = result,
                 ["variablesReference"] = 0,
-                ["memoryReference"] = value is >= 0 and <= 0xFFFF ? Reference(bank, (int)value) : null
+                // A value in a coprocessor's frame, such as the Z80's PC, opens memory in that CPU's address space.
+                ["memoryReference"] = value is >= 0 and <= 0xFFFF
+                    ? Reference(bank ?? ThreadBank(FrameIndex(frameId).Thread), (int)value)
+                    : null
             };
         }));
 
@@ -1270,6 +1273,18 @@ internal sealed partial class DebugSession
             }
 
             if (cpu.IsInstructionBoundary && (ResetStops() || !Observe(cpu))) { return false; }
+
+            // The Z80 finishes its instruction after giving the bus back, and the 6502 runs beside it: a step that
+            // starts an Apple cycle may fetch the 6502's next opcode, so a breakpoint there stops first.
+            if (cpu is SoftCardDebugTarget { StartsHostCycle: true }
+                && !ReferenceEquals(Cpu, cpu)
+                && Cpu.IsInstructionBoundary
+                && Hit(Cpu.ProgramCounter) is { } resumed)
+            {
+                Stopped(resumed);
+                return false;
+            }
+
             instruction |= cpu.StepCycle();
             if (_watches.Count != 0)
             {

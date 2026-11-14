@@ -372,7 +372,7 @@ internal sealed partial class DebugSession
             {
                 ["id"] = state.Id,
                 ["verified"] = state.Problem is null,
-                ["instructionReference"] = address is { } bound ? $"0x{bound:X4}" : null
+                ["instructionReference"] = address is { } bound ? $"{SpaceOf(bank)}0x{bound:X4}" : null
             };
 
             responses.Add(Describe(state, changed: false));
@@ -531,7 +531,7 @@ internal sealed partial class DebugSession
             {
                 ["id"] = state.Id,
                 ["verified"] = state.Problem is null,
-                ["instructionReference"] = $"0x{address:X4}"
+                ["instructionReference"] = $"{SpaceOf(bank)}0x{address:X4}"
             };
 
             responses.Add(Describe(state, changed: false));

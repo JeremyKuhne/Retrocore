@@ -51,6 +51,9 @@ public sealed class Apple3Machine : IMachine
     // Time owed to the SoftCard ///'s Z80, less than a T-state.
     private int _z80Time;
 
+    // Whether the SoftCard /// held the 6502 in the last cycle.
+    private bool _held;
+
     /// <summary>
     ///  Constructs a machine at power-on.
     /// </summary>
@@ -137,7 +140,12 @@ public sealed class Apple3Machine : IMachine
     }
 
     /// <inheritdoc/>
-    public ProcessorCycle LastCycle => Processor.LastCycle;
+    /// <remarks>
+    ///  <para>
+    ///   While the SoftCard /// holds the 6502, its last access is marked stalled: the cycle went by without it.
+    ///  </para>
+    /// </remarks>
+    public ProcessorCycle LastCycle => _held ? Processor.LastCycle with { IsStalled = true } : Processor.LastCycle;
 
     /// <summary>
     ///  Presses RESET, alone or with CONTROL. With the environment register's NMI enable set, RESET alone interrupts
@@ -236,27 +244,26 @@ public sealed class Apple3Machine : IMachine
     public ProcessorExecutionResult StepInstruction(int maximumCycles = 32)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCycles);
-        ulong start = Processor.CycleCount;
+        // The machine's cycles, which go on while a SoftCard holds the 6502.
+        ulong cycles = 0;
         bool instruction = Processor.CurrentOpCode is not null;
         for (int i = 0; i < maximumCycles; i++)
         {
             StepCycle();
+            cycles++;
             instruction |= Processor.FetchedOpcode;
             if (Processor.Status != ProcessorExecutionStatus.Running)
             {
-                return new() { Status = Processor.Status, Cycles = Processor.CycleCount - start };
+                return new() { Status = Processor.Status, Cycles = cycles };
             }
 
             if (instruction && Processor.IsInstructionBoundary)
             {
-                return new()
-                {
-                    Status = ProcessorExecutionStatus.InstructionComplete, Cycles = Processor.CycleCount - start
-                };
+                return new() { Status = ProcessorExecutionStatus.InstructionComplete, Cycles = cycles };
             }
         }
 
-        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = Processor.CycleCount - start };
+        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = cycles };
     }
 
     /// <summary>
@@ -330,6 +337,7 @@ public sealed class Apple3Machine : IMachine
     private bool StepProcessor()
     {
         Processor.StepCycle();
+        _held = false;
         return true;
     }
 
@@ -342,6 +350,7 @@ public sealed class Apple3Machine : IMachine
         card.Advance(units);
         bool held = card.OwnsBus && Processor.IsInstructionBoundary;
         if (!held) { Processor.StepCycle(); }
+        _held = held;
         if (!card.Running || (card.OwnsBus && !held))
         {
             _z80Time = 0;

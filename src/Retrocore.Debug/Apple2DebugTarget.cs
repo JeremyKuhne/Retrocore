@@ -651,6 +651,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// </summary>
     internal void StepTState() => Advance(halfCycle: true);
 
+    /// <summary>
+    ///  Gets whether the next <see cref="StepTState"/> starts an Apple cycle, the half in which the 6502 runs.
+    /// </summary>
+    internal bool StartsCycle => !_machine.MidCycle;
+
     // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard holds it, its last cycle is
     // an old one, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
     private void Advance(bool halfCycle)

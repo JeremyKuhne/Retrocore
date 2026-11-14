@@ -79,7 +79,13 @@ try {
 
     // The Z80's code disassembles as Z80 instructions, and its memory reads through the card's translation.
     const disassembly = await request("disassemble", { memoryReference: "z80:0x0100", instructionCount: 2 });
-    assert.deepEqual(disassembly.instructions.map(instruction => instruction.address), ["0x0100", "0x0102"]);
+    assert.deepEqual(disassembly.instructions.map(instruction => instruction.address), ["z80:0x0100", "z80:0x0102"]);
+    // An instruction breakpoint from the disassembly keeps its address space, and a Z80 value opens Z80 memory.
+    const fromDisassembly = await request("setInstructionBreakpoints",
+        { breakpoints: [{ instructionReference: disassembly.instructions[1].address }] });
+    assert.equal(fromDisassembly.breakpoints[0].instructionReference, "z80:0x0102");
+    await request("setInstructionBreakpoints", { breakpoints: [] });
+    assert.equal((await request("evaluate", { expression: "PC", frameId: z80Frame })).memoryReference, "z80:0x0100");
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
 
@@ -199,6 +205,20 @@ try {
     frame = await stoppedOn("data breakpoint", 4);
     assert.equal(frame.line, callLine("spin:"));
     await request("setDataBreakpoints", { breakpoints: [] });
+
+    // The 6502 resumes beside the Z80 finishing its write to the switch: a breakpoint where it resumes stops it there.
+    const handBack = ["        .cpu Z80", "start:  ld [$E400],a", "spin:   jr spin"];
+    writeFileSync(second, handBack.join("\n") + "\n");
+    events.length = 0;
+    await request("launch", { machine: "apple2", model: "iiplus", softCard: 4, source: second, stopOnEntry: true, speed: "max" });
+    await request("configurationDone");
+    await stoppedOn("entry", 4);
+    const resume = (await top(1)).instructionPointerReference;
+    await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: resume }] });
+    await request("continue", { threadId: 4 });
+    frame = await stoppedOn("instruction breakpoint", 1);
+    assert.equal(frame.instructionPointerReference, resume);
+    await request("setInstructionBreakpoints", { breakpoints: [] });
 
     if (!existsSync(cpm)) {
         console.log("SoftCard CP/M boot skipped: set RETROCORE_SOFTCARD_DISKS to the SoftCard CP/M disks.");

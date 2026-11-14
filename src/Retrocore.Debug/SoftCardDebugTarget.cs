@@ -235,6 +235,12 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
         return Card.Processor.FetchedOpcode;
     }
 
+    /// <summary>
+    ///  Gets whether the next <see cref="StepCycle"/> starts an Apple cycle, in which the 6502 runs if the Z80 has given
+    ///  the bus back.
+    /// </summary>
+    internal bool StartsHostCycle => _host.StartsCycle;
+
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address)
     {

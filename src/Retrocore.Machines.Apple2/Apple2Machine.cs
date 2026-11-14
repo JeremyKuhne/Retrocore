@@ -23,6 +23,9 @@ public sealed class Apple2Machine : IMachine
     private bool _halfway;
     private bool _softCardSteps;
 
+    // Whether the SoftCard held the 6502 in the last cycle.
+    private bool _held;
+
     // Each Disk II card's drives, made the first time the card is listed, kept while it stays in.
     private readonly Dictionary<DiskIIController, Apple2FloppyDrive[]> _slotDrives = [];
     private IDevice[]? _devices;
@@ -204,6 +207,7 @@ public sealed class Apple2Machine : IMachine
         }
 
         _deviceIrq = irq;
+        _held = false;
         Bus.Video.ScanCycle();
     }
 
@@ -215,6 +219,7 @@ public sealed class Apple2Machine : IMachine
     {
         bool held = card.OwnsBus && Processor.IsInstructionBoundary;
         if (!held) { Processor.StepCycle(); }
+        _held = held;
         _softCardSteps = held || !card.OwnsBus;
         if (_softCardSteps) { card.StepTState(Processor.Registers.ProgramCounter); }
     }
@@ -227,7 +232,12 @@ public sealed class Apple2Machine : IMachine
     }
 
     /// <inheritdoc/>
-    public ProcessorCycle LastCycle => Processor.LastCycle;
+    /// <remarks>
+    ///  <para>
+    ///   While a SoftCard holds the 6502, its last access is marked stalled: the cycle went by without it.
+    ///  </para>
+    /// </remarks>
+    public ProcessorCycle LastCycle => _held ? Processor.LastCycle with { IsStalled = true } : Processor.LastCycle;
 
     /// <summary>
     ///  Executes an exact cycle budget.
@@ -246,27 +256,26 @@ public sealed class Apple2Machine : IMachine
     public ProcessorExecutionResult StepInstruction(int maximumCycles = 32)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCycles);
-        ulong start = Processor.CycleCount;
+        // The machine's cycles, which go on while a SoftCard holds the 6502.
+        ulong cycles = 0;
         bool instruction = Processor.CurrentOpCode is not null;
         for (int i = 0; i < maximumCycles; i++)
         {
             StepCycle();
+            cycles++;
             instruction |= Processor.FetchedOpcode;
             if (Processor.Status != ProcessorExecutionStatus.Running)
             {
-                return new() { Status = Processor.Status, Cycles = Processor.CycleCount - start };
+                return new() { Status = Processor.Status, Cycles = cycles };
             }
 
             if (instruction && Processor.IsInstructionBoundary)
             {
-                return new()
-                {
-                    Status = ProcessorExecutionStatus.InstructionComplete, Cycles = Processor.CycleCount - start
-                };
+                return new() { Status = ProcessorExecutionStatus.InstructionComplete, Cycles = cycles };
             }
         }
 
-        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = Processor.CycleCount - start };
+        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = cycles };
     }
 
     /// <inheritdoc/>

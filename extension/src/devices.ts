@@ -471,6 +471,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const refresh = async (session: vscode.DebugSession | undefined): Promise<void> => {
         tree.basic = basic.summary(session);
         if (session?.type === "retrocore") {
+            // Another session's banks are not this one's.
+            if (tree.session?.id !== session.id) tree.banks = [];
             tree.session = session;
             tree.off = undefined;
             void vscode.commands.executeCommand("setContext", "retrocore.machineOff", false);
@@ -487,14 +489,18 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     };
     // The Memory rows say where the memory map has each bank, which the soft switches change as the machine runs:
     // they are read again at each stop.
+    // A reply for a session no longer shown, as when another becomes active while it is read, is dropped.
     const readBanks = async (session: vscode.DebugSession): Promise<void> => {
+        let banks: MemoryBank[];
         try {
-            tree.banks = (await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] }).banks;
+            banks = (await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] }).banks;
         } catch {
             // Not launched yet; the first stop reads them.
-            tree.banks = [];
+            banks = [];
         }
-        if (session.id === tree.session?.id) tree.redraw();
+        if (session.id !== tree.session?.id) return;
+        tree.banks = banks;
+        tree.redraw();
     };
     const showOff = (): void => {
         if (tree.session !== undefined) return;

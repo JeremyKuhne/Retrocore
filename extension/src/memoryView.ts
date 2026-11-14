@@ -179,14 +179,19 @@ function load(offset, count) {
     return loading;
 }
 
-// Waits until the bytes from an offset have been read at least once, reading them now if no one has.
+// Waits until the bytes from an offset are as memory holds them now, reading the pages not read since the last stop
+// or change, as one scrolled out of view is not; copying, freezing and typing take the bytes they act on from here.
 async function loaded(offset, count) {
     await Promise.all(Array.from(loads));
-    for (let index = 0; index < count; index++) {
-        if (readable[offset + index] === 0) {
-            const page = Math.floor((offset + index) / PAGE);
-            await load(page * PAGE, PAGE);
-        }
+    if (count <= 0) return;
+    const first = Math.floor(offset / PAGE), last = Math.floor((offset + count - 1) / PAGE);
+    // Each run of such pages is one read.
+    for (let page = first; page <= last; page++) {
+        if (pages[page] === 1) continue;
+        let end = page;
+        while (end < last && pages[end + 1] !== 1) end++;
+        await load(page * PAGE, (end - page + 1) * PAGE);
+        page = end;
     }
 }
 
@@ -693,10 +698,16 @@ async function toggleFreeze() {
 
 // Reads every byte again, so a snapshot or search sees memory as it is now.
 // Reads the whole space again, reporting whether it could; on a failure the status line says why.
+// A stop or change during the read leaves its pages unread, so it reads again, a few times, until it is whole.
 async function refreshAll() {
     generation++;
     pages.fill(0);
-    return await load(0, SIZE);
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (!await load(0, SIZE)) return false;
+        if (pages.every(page => page === 1)) return true;
+    }
+    status("Memory kept changing while it was read; try again.", true);
+    return false;
 }
 
 async function takeSnapshot() {
@@ -867,9 +878,11 @@ async function find(backward) {
     status("Found at " + where(at) + ".");
 }
 
-function copy() {
+// Copies the selection as memory holds it now, reading the bytes out of view first.
+async function copy() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
-    void request({ type: "copy", text: copyText(bytes, readable, low, high, pane === "text", charset === null ? undefined : charset.text) });
+    await loaded(low, high - low + 1);
+    await request({ type: "copy", text: copyText(bytes, readable, low, high, pane === "text", charset === null ? undefined : charset.text) });
 }
 
 grid.addEventListener("scroll", render);
@@ -906,7 +919,7 @@ grid.addEventListener("keydown", event => {
     } else if (control && (key === "y" || key === "Y")) {
         queue(redo);
     } else if (control && (key === "c" || key === "C")) {
-        copy();
+        void copy();
     } else if (control && (key === "g" || key === "G")) {
         gotoBox.focus();
         gotoBox.select();

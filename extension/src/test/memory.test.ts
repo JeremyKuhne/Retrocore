@@ -440,6 +440,36 @@ test("a stop colors the bytes that changed since the stop before", async () => {
     assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
 });
 
+test("copying after a stop copies what memory holds now, out of view too", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    // The selection runs from $0400 to the end, so its start is far out of view.
+    page.key("End", { ctrlKey: true, shiftKey: true });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+
+    page.send({ type: "stopped" });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xC1);
+        await page.settle();
+    }
+    page.key("c", { ctrlKey: true });
+    let copied: Record<string, unknown> | undefined;
+    for (let round = 0; round < 5 && copied === undefined; round++) {
+        await page.settle();
+        copied = page.posted.find(message => message.type === "copy");
+        answer(page, () => 0xC1);
+    }
+    assert.ok(copied !== undefined, "the page copies");
+    assert.equal(copied.text, Array(0x10000 - 0x0400).fill("C1").join(" "));
+});
+
 test("the machine changing while stopped reads the bytes and labels again", async () => {
     const page = runPage();
     page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
@@ -538,6 +568,40 @@ test("the inspector watches bytes in VS Code's Watch view, freezes them, and typ
     assert.equal(state.frozen, null);
     assert.equal(page.elements.get("frozenTab")!.textContent, "Frozen");
     assert.deepEqual(Array.from(lists.watched), ["[aux:$0400]"]);
+});
+
+test("a RAM search reads again when a stop comes during its read", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0);
+        await page.settle();
+    }
+    page.posted.splice(0);
+
+    page.send({ type: "test", id: 3, actions: [{ search: "start" }] });
+    await page.settle();
+    const whole = page.posted.splice(page.posted.findIndex(message => message.type === "read" && message.count === 0x10000), 1)[0];
+    // The machine stops before the reply: what it holds is from before, and a RAM search must not start from it.
+    page.send({ type: "stopped" });
+    await page.settle();
+    page.send({ type: "reply", id: whole.id, result: { data: Buffer.alloc(0x10000, 7).toString("base64"), unreadable: [] } });
+    let done: Record<string, unknown> | undefined;
+    for (let round = 0; round < 10 && done === undefined; round++) {
+        await page.settle();
+        done = page.posted.find(message => message.type === "testDone");
+        answer(page, () => 9);
+    }
+    assert.ok(done !== undefined, "the search starts");
+    assert.match(page.elements.get("search")!.innerHTML, /65536/);
+    page.send({ type: "test", id: 4, actions: [{ search: "unchanged" }] });
+    done = undefined;
+    for (let round = 0; round < 10 && done === undefined; round++) {
+        await page.settle();
+        done = page.posted.find(message => message.type === "testDone");
+        answer(page, () => 9);
+    }
+    assert.equal((done?.state as Record<string, unknown>).candidates, 0x10000, "the search started from the bytes read after the stop");
 });
 
 test("a RAM search narrows all of RAM to the byte that holds a value", async () => {

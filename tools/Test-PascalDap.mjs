@@ -157,8 +157,11 @@ async function sourceBreakpoints(machine) {
         // The listing names the program's variable, I, in its locals and for evaluating.
         const locals = (await request("scopes", { frameId: frames[0].id })).scopes.find(scope => scope.name === "Locals");
         const named = (await request("variables", { variablesReference: locals.variablesReference })).variables;
-        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0, __vscodeVariableMenuContext: "memory" });
+        // The Apple III's locals are through X-bytes, which have no memory reference, so Open in Retrocore Memory is not
+        // offered on I, and evaluating it for the memory view gives no address rather than one in the CPU's memory.
+        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0 });
         assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "hover" })).result, "1");
+        assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "retrocore" })).memoryReference ?? null, null);
 
         // Step Over goes by line: the call, which the listing counts in line 10, where the compiler read END.
         await request("next", { threadId: 3 });
@@ -269,9 +272,6 @@ try {
                 memoryReference: (await request("retro/memory/variable", { variablesReference: locals.variablesReference, name: marked.name })).memoryReference
             };
             assert.match(word.memoryReference, /^main:0x/);
-            // Open in Retrocore Memory on a watch of the local finds the same bank, not memory as the CPU maps it.
-            const frame = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
-            assert.equal((await request("evaluate", { expression: word.name, frameId: frame.id, context: "retrocore" })).memoryReference, word.memoryReference);
             const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
             const original = await bytes();
             const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");

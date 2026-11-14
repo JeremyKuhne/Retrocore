@@ -10,7 +10,7 @@
 // external; the IIe part runs when RETROCORE_IIE_ROMS names the IIe ROMs.
 
 import { resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -272,6 +272,50 @@ try {
     assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000", thaw: [0x5000] })).frozen, []);
     assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result.endsWith("(frozen)"), false);
     console.log("Memory DAP integration passed on the Model I.");
+
+    // A byte frozen in the CPU's memory stays in the RAM it was frozen in: frozen at $D000 with the language card's
+    // bank 2 mapped, it is not written into bank 1 when the program maps that instead. The IIe runs ROMs built from
+    // the SDK's sources, and a short program switches the card.
+    at = "a frozen byte stays in its language-card bank";
+    const switching = join(root, "artifacts", "memory-tests", "language-card.asm");
+    mkdirSync(join(root, "artifacts", "memory-tests"), { recursive: true });
+    const program = [
+        ".cpu Mos6502",
+        "BANK2:",
+        "    LDA $C083",
+        "    LDA $C083",
+        "    LDA #$11",
+        "    STA $D000",
+        "FROZEN:",
+        "    NOP",
+        "    LDA $C08B",
+        "    LDA $C08B",
+        "    LDA #$22",
+        "    STA $D000",
+        "SWITCHED:",
+        "    JMP SWITCHED",
+    ];
+    writeFileSync(switching, program.join("\n") + "\n");
+    await request("launch", { machine: "apple2", model: "iie-enhanced", source: switching, loadAddress: 0x0300, stopOnEntry: true, speed: "max" });
+    await request("setBreakpoints", { source: { path: switching }, breakpoints: [{ line: program.indexOf("FROZEN:") + 2 }] });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    assert.equal((await read("main:0xD000", 1)).bytes[0], 0x11, "bank 2 holds what the program wrote");
+    await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
+    assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
+    const bank1 = (await read("bank1:0xD000", 1)).bytes[0];
+    await request("setBreakpoints", { source: { path: switching }, breakpoints: [] });
+    drop("stopped");
+    await request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    assert.equal((await read("bank1:0xD000", 1)).bytes[0], 0x22, `bank 1 holds what the program wrote, not the frozen value (it held $${bank1.toString(16)})`);
+    assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "bank 2 keeps the frozen value");
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000" })).frozen, [{ address: 0xD000, value: 0x55 }], "the byte stays frozen, waiting");
+    console.log("Memory DAP integration passed on a language-card freeze.");
 
     if (!roms) {
         console.log("Skipped the IIe's memory banks: RETROCORE_IIE_ROMS is not set.");

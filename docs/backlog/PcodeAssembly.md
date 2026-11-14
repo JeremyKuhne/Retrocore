@@ -141,5 +141,8 @@ What the decompiler does not decompile yet, found by decompiling every code file
   base-relative words are written as `.INTERP`, `.DEF`/`.REF` and `.PUBLIC` (the same day), found by assembling and
   linking probes with Apple's own tools: BASE-relative words are 10 + 2 bytes a word; `.INTERP` is relocated only by
   1.2's tools; `JMP (X)` is `JMP @X` to the Assembler; `A` cannot be a `.PUBLIC`. `--pascal assembly` writes any code
-  file's assembled procedures so; all of 1.2's SYSTEM.LIBRARY assembles back. **Not done:** linking Apple III Pascal's
-  code with its own Linker; naming a system program's globals for `.PUBLIC`.
+  file's assembled procedures so; all of 1.2's SYSTEM.LIBRARY assembles back. Apple III Pascal's Compiler,
+  Assembler and Linker run on an emulated Apple III (`EmulatedApple3PascalTools`), for the same commands given its
+  SOS disks: a program and its 6502 function rebuild byte for byte with 1.1's. **Not done:** naming a system
+  program's globals for `.PUBLIC`; decompiling AIIFORMAT (`CSP 12`, and a segment the decompiler leaves out), to
+  rebuild it whole.

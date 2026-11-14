@@ -25,6 +25,12 @@ internal static partial class EmulatedPascalTools
     /// <exception cref="TimeoutException">The system never booted, or the Assembler never finished.</exception>
     internal static (byte[]? Code, string Screen) Assemble(string source, string bootDisk, string toolsDisk, string? roms = null)
     {
+        // An Apple III Pascal system disk is SOS: its Assembler runs on an emulated Apple III.
+        if (EmulatedApple3PascalTools.IsSos(bootDisk))
+        {
+            return EmulatedApple3PascalTools.Assemble(source, bootDisk, toolsDisk, roms);
+        }
+
         byte[] boot = Apple1(bootDisk);
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
 
@@ -58,6 +64,11 @@ internal static partial class EmulatedPascalTools
     /// <exception cref="TimeoutException">The system never booted, or the Linker never finished.</exception>
     internal static (byte[]? Code, string Screen) Link(byte[] host, IReadOnlyList<byte[]> libraries, string bootDisk, string toolsDisk, string? roms = null)
     {
+        if (EmulatedApple3PascalTools.IsSos(bootDisk))
+        {
+            return EmulatedApple3PascalTools.Link(host, libraries, bootDisk, toolsDisk, roms);
+        }
+
         byte[] boot = Apple1(bootDisk);
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.CODE", PascalFileKind.Code, host);
         for (int index = 0; index < libraries.Count; index++)

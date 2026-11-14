@@ -531,6 +531,31 @@ public class PascalDecompilerTests
         """;
 
     /// <summary>
+    ///  The same program and 6502 function, built with Apple III Pascal 1.1's own Compiler, Assembler and Linker on an
+    ///  emulated Apple III, decompile to Pascal and Assembler source that build back to the same bytes there.
+    /// </summary>
+    [TestMethod]
+    public void Apple3LinkedProgramsRebuildByteForByte()
+    {
+        string system = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk1.dsk");
+        string tools = Path.Join(SosVolumeTests.Disks, "Apple3Pascal1.1Disk2.dsk");
+        if (!File.Exists(system) || !File.Exists(tools))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE3_DISKS to a folder with Apple III Pascal 1.1's disks.");
+        }
+
+        byte[] linked = Build(LinkedSource, Add1Source, system, tools);
+        PascalCodeFile file = PascalCodeFile.Read(linked);
+        PascalSegment segment = file.Segments.Single(own => own.Code.Length > 0);
+        segment.Version.Should().Be(4, "Apple III Pascal 1.1's");
+        segment.Procedure(2).Should().Match<PascalProcedure>(procedure => procedure.IsNative);
+
+        PascalDecompilation result = PascalDecompiler.Decompile(file);
+        result.Assembly.Should().StartWith("         .FUNC   FUNC2,1\n");
+        Build(result.Source, result.Assembly ?? "", system, tools).Should().Equal(linked);
+    }
+
+    /// <summary>
     ///  The alignment bytes a decompiled source records after its <c>END.</c> are put back in the segment it names,
     ///  where the Compiler left 0.
     /// </summary>

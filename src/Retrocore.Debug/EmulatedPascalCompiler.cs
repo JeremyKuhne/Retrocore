@@ -60,6 +60,14 @@ internal static partial class EmulatedPascalCompiler
         string? listing,
         string? roms = null)
     {
+        // An Apple III Pascal system disk is SOS: its Compiler runs on an emulated Apple III.
+        if (EmulatedApple3PascalTools.IsSos(bootDisk))
+        {
+            (byte[]? compiled, string shown, string? listed) = EmulatedApple3PascalTools.Compile(source, bootDisk, compilerDisk, listing, roms);
+            if (compiled is not null) { RestoreAlignment(compiled, source); }
+            return (compiled, shown, listed);
+        }
+
         byte[] boot = File.ReadAllBytes(bootDisk);
         // A listing takes a free area of its own besides the code file's: APPLE1 has one, so the Editor, which a
         // compile does not need, makes room.

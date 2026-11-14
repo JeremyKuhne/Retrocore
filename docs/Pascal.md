@@ -248,9 +248,25 @@ all but the one with a word of the Editor's globals in 1.2's, assemble back to t
 
 The Assembler's prompt for a listing is answered with none, and the Linker's for a host, libraries, map and output
 with the workfile, the libraries in order, none, and the output; the Editor comes off APPLE1's copy to make room.
+
+Apple III Pascal's code is rebuilt with its own tools the same way: given Apple III Pascal's disks, which are SOS
+volumes, `compile`, `assemble-native` and `link` run its Compiler, Assembler and Linker on an emulated Apple III,
+with /PASCAL1 in the built-in drive, /PASCAL2 in .D2 and the files on a work volume, /WORK, in .D3. Apple III
+Pascal 1.1's two disks hold all three tools; the boot ROM and the disk sequencer are built from the SDK's sources,
+so no ROM dump is needed. For 1.2, build its disks from 1.1's and the update with `--pascal sos`, as its update
+disks say.
+
+```text
+Retrocore.Debug --pascal compile program.text Apple3Pascal1.1Disk1.dsk Apple3Pascal1.1Disk2.dsk HOST.CODE
+Retrocore.Debug --pascal assemble-native program.asm.text Apple3Pascal1.1Disk1.dsk Apple3Pascal1.1Disk2.dsk ASM.CODE
+Retrocore.Debug --pascal link HOST.CODE ASM.CODE Apple3Pascal1.1Disk1.dsk Apple3Pascal1.1Disk2.dsk PROGRAM.CODE
+```
 `PascalDecompilerTests.FormatterRebuildsByteForByte` rebuilds FORMATTER so, `LinkedProgramsRebuildByteForByte` a
 program and a 6502 function of its own, `SharedNamesRebuildByteForByte` two procedures sharing a label and a global
-with 1.1's tools, and `InterpreterWordsRebuildByteForByte` one using `.INTERP` with 1.2's. A code file from another version's Compiler decompiles, but
+with 1.1's tools, `InterpreterWordsRebuildByteForByte` one using `.INTERP` with 1.2's, and
+`Apple3LinkedProgramsRebuildByteForByte` a program and its 6502 function with Apple III Pascal 1.1's on the Apple
+III. AIIFORMAT's assembled procedure, and every one in Apple III Pascal 1.1's Editor, assemble to the same bytes
+with Apple III Pascal's Assembler; AIIFORMAT itself does not decompile yet (its `CSP 12`). A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
 ## P-code source

@@ -190,7 +190,13 @@ function runPage() {
         key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false,
         preventDefault: () => undefined, stopPropagation: () => undefined, ...extra
     });
-    return { elements, posted, send, settle, key };
+    // The first message of a kind the page posted, taken from the list.
+    const take = (type: string) => {
+        const index = posted.findIndex(message => message.type === type);
+        assert.ok(index >= 0, `the page posts a ${type}`);
+        return posted.splice(index, 1)[0];
+    };
+    return { elements, posted, send, settle, key, take, context };
 }
 
 test("the page's script parses", () => {
@@ -220,28 +226,65 @@ test("the page reads what it shows, writes a byte at its second hex digit, and u
     assert.equal(page.posted.length, 0, "one digit writes nothing");
     page.key("1");
     await page.settle();
-    const write = page.posted.shift()!;
+    const write = page.take("write");
     assert.deepEqual({ type: write.type, offset: write.offset, data: write.data }, { type: "write", offset: 0x0400, data: [0x41] });
     page.send({ type: "reply", id: write.id, result: { bytesWritten: 1 } });
     await page.settle();
     assert.match(page.elements.get("inspector")!.innerHTML, /aux:\$0401/, "the cursor moves on");
 
+    // The page reads back what it wrote, and shows what memory holds, which can differ.
+    const readBack = page.take("read");
+    assert.equal(readBack.offset, 0x0400);
+    const held = Buffer.alloc(readBack.count as number, 0xA0);
+    held[0] = 0x40;
+    page.send({ type: "reply", id: readBack.id, result: { data: held.toString("base64"), unreadable: [] } });
+    await page.settle();
+    page.key("ArrowLeft");
+    await page.settle();
+    assert.match(page.elements.get("inspector")!.innerHTML, /\$40/, "the byte read back shows");
+
     page.key("z", { ctrlKey: true });
     await page.settle();
-    const undo = page.posted.shift()!;
+    const undo = page.take("write");
     assert.deepEqual({ offset: undo.offset, data: undo.data }, { offset: 0x0400, data: [0xA0] });
     page.send({ type: "reply", id: undo.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    const undoneBack = page.take("read");
+    page.send({ type: "reply", id: undoneBack.id, result: { data: Buffer.alloc(undoneBack.count as number, 0xA0).toString("base64"), unreadable: [] } });
     await page.settle();
 
     // A refused write puts the byte back and says why.
     page.key("F");
     page.key("F");
     await page.settle();
-    const refused = page.posted.shift()!;
+    const refused = page.take("write");
     page.send({ type: "reply", id: refused.id, error: "$0400 reads the system ROM now, not RAM." });
     await page.settle();
     assert.equal(page.elements.get("status")!.textContent, "$0400 reads the system ROM now, not RAM.");
     assert.match(page.elements.get("inspector")!.innerHTML, /\$A0/);
+});
+
+test("moving while a write waits keeps the cursor where it went, and drops a first digit typed before the move", async () => {
+    const page = runPage();
+    page.posted.splice(0);
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    for (const read of page.posted.splice(0).filter(message => message.type === "read")) {
+        page.send({ type: "reply", id: read.id, result: { data: Buffer.alloc(read.count as number, 0x20).toString("base64"), unreadable: [] } });
+    }
+    await page.settle();
+    page.posted.splice(0);
+
+    page.key("4");
+    page.key("1");
+    await page.settle();
+    const write = page.take("write");
+    page.key("ArrowDown");
+    page.send({ type: "reply", id: write.id, result: { bytesWritten: 1 } });
+    await page.settle();
+    assert.match(page.elements.get("inspector")!.innerHTML, /\$0410/, "the write does not pull the cursor back to $0401");
+
+    // HTML from labels is escaped inside attributes, quotes too.
+    assert.equal((page.context as { escapeText(text: string): string }).escapeText('START" data-go="4096'), "START&quot; data-go=&quot;4096");
 });
 
 // Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.

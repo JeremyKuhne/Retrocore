@@ -235,6 +235,11 @@ try {
     assert.deepEqual(frozen.frozen, [{ address: 0x5000, value: 0x55 }]);
     assert.equal((await read("0x5000", 1)).bytes[0], 0x55);
     await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0, value: 0 }] }), /not RAM now/);
+    // A request with any byte that cannot be frozen freezes none of them, and writes nothing.
+    const before = (await read("0x5001", 1)).bytes[0];
+    await rejects(request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0x5001, value: before ^ 0xFF }, { offset: 0, value: 0 }] }), /not RAM now/);
+    assert.equal((await read("0x5001", 1)).bytes[0], before, "the RAM byte is not written");
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000" })).frozen, [{ address: 0x5000, value: 0x55 }], "nor frozen");
     await write("0x5000", [0x11]);
 
     // Retrocore Memory watches a byte as the expression [$5000], which says when it is frozen and which a data

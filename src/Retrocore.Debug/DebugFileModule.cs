@@ -40,7 +40,7 @@ internal sealed class DebugFileModule(SymbolTable symbols, Enum? area = null) : 
 
     /// <inheritdoc/>
     public IEnumerable<(string Name, long Value)> Labels =>
-        symbols.Labels.Select(pair => (pair.Key, pair.Value));
+        symbols.AddressLabels.Select(pair => (pair.Key, pair.Value));
 
     /// <inheritdoc/>
     /// <remarks>

@@ -144,6 +144,8 @@ const compareBox = document.getElementById("compare"), compareLabel = document.g
 let tab = "inspector";
 let info = { bank: null, label: "", readOnly: false };
 let cursor = 0, anchor = 0, pane = "hex", nibble = null, ended = false, dragging = false, generation = 0;
+// Counts the cursor's moves and pane switches, so an edit still waiting on the debugger knows the user went elsewhere.
+let moves = 0;
 const undoStack = [], redoStack = [];
 let nextId = 1;
 const pending = new Map();
@@ -342,8 +344,11 @@ function visibleRows() {
     return Math.max(1, Math.floor(grid.clientHeight / LINE));
 }
 
+// Escapes a character for the page's HTML, inside text or a quoted attribute, as labels from debug files can hold
+// any character.
+const ESCAPES = { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" };
 function escape(character) {
-    return character === "<" ? "&lt;" : character === ">" ? "&gt;" : character === "&" ? "&amp;" : character;
+    return ESCAPES[character] ?? character;
 }
 
 function rowHtml(row) {
@@ -493,6 +498,7 @@ function reveal(offset, center) {
 }
 
 function moveTo(offset, extend, center) {
+    moves++;
     cursor = Math.min(SIZE - 1, Math.max(0, offset));
     if (!extend) anchor = cursor;
     nibble = null;
@@ -536,7 +542,22 @@ async function write(offset, values, record) {
     const refrozen = values.map((value, index) => ({ offset: offset + index, value })).filter(item => frozen.has(item.offset));
     if (refrozen.length > 0) await freeze(refrozen, []);
     status("");
+    // Memory may hold other than what was written, such as the Model I's video RAM without its lowercase
+    // modification, and the debugger tells no view of the writer's reference: the pages written are read again.
+    void readBack(offset, values.length);
     return true;
+}
+
+// Reads again the pages that hold a range, so they show what memory holds.
+async function readBack(offset, count) {
+    for (let page = Math.floor(offset / PAGE); page <= Math.floor((offset + count - 1) / PAGE); page++) {
+        try {
+            await load(page * PAGE, PAGE);
+        } catch {
+            // The bytes written show until the next read.
+        }
+    }
+    render();
 }
 
 async function undo() {
@@ -564,17 +585,22 @@ async function redo() {
 // Typing a character: a hex digit in the hex column, which writes the byte at its second digit, or a character in
 // the text column, which writes it at once.
 async function typeKey(key) {
+    // An edit goes to the byte the cursor was on when its key was pressed; should the user move while it waits on
+    // the debugger, the cursor stays where they went.
+    const started = moves;
     if (pane === "text") {
         const value = charset === null ? typedText(key, bytes[cursor]) : typedText(key, bytes[cursor], charset.text, charset.looksSame);
         if (value === undefined) return;
         const at = cursor;
-        if (await write(at, [value], true)) moveTo(at + 1, false, false);
+        if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false);
         return;
     }
     const digit = parseInt(key, 16);
     if (isNaN(digit) || key.length !== 1) return;
     if (nibble === null) {
         await loaded(cursor, 1);
+        // A first digit does not carry over to a byte the user moved to meanwhile.
+        if (moves !== started || pane !== "hex") return;
         const problem = writeProblem(cursor, 1);
         if (problem !== null) {
             status(problem, true);
@@ -586,7 +612,7 @@ async function typeKey(key) {
     }
     const value = nibble * 16 + digit, at = cursor;
     nibble = null;
-    if (await write(at, [value], true)) moveTo(at + 1, false, false);
+    if (await write(at, [value], true) && moves === started) moveTo(at + 1, false, false);
     else render();
 }
 
@@ -697,7 +723,7 @@ function showSearch() {
         + '<button data-act="narrow" data-test="changed">changed</button><button data-act="narrow" data-test="unchanged">did not change</button>'
         + '<button data-act="narrow" data-test="increased">rose</button><button data-act="narrow" data-test="decreased">fell</button></div>'
         + '<div class="filters">or <button data-act="narrow" data-test="equal">equal</button><button data-act="narrow" data-test="notEqual">do not equal</button>'
-        + '<input id="searchValue" aria-label="Value" placeholder="$03 or 3" value="' + escapeText(typed).replace(/"/g, "&quot;") + '"></div>'
+        + '<input id="searchValue" aria-label="Value" placeholder="$03 or 3" value="' + escapeText(typed) + '"></div>'
         + '<div class="filters"><button data-act="back"' + (search.steps.length === 0 ? " disabled" : "") + ">Back a step</button>"
         + '<button data-act="start">Start over</button></div>';
     if (search.candidates.length <= HITS) {
@@ -894,6 +920,7 @@ grid.addEventListener("keydown", event => {
         moveTo(control ? SIZE - 1 : cursor - cursor % ROW + ROW - 1, event.shiftKey, false);
     } else if (key === "Tab" && (event.shiftKey ? pane === "text" : pane === "hex")) {
         // Tab goes from the hex column to the text column and Shift+Tab back; past them, focus moves on as usual.
+        moves++;
         pane = event.shiftKey ? "hex" : "text";
         nibble = null;
         render();

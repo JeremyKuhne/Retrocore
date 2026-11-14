@@ -215,6 +215,26 @@ public sealed class AssemblyDebugFileTests
         }
     }
 
+    /// <summary>
+    ///  A debug file's constants resolve in expressions but are not memory labels, so COUNT = 3 does not name $0003.
+    /// </summary>
+    [TestMethod]
+    public void DebugFileConstantsAreNotLabels()
+    {
+        SymbolTable symbols = new();
+        symbols.LoadDebugInfo(
+            [
+                "sym\tid=0,name=\"COUNT\",addrsize=zeropage,scope=0,def=1,val=0x3,type=equ",
+                "sym\tid=1,name=\"START\",addrsize=absolute,scope=0,def=2,val=0x7000,type=lab"
+            ],
+            Path.GetTempPath());
+
+        DebugFileModule module = new(symbols);
+        module.TryResolve("COUNT", out long count).Should().BeTrue();
+        count.Should().Be(3);
+        module.Labels.Should().ContainSingle().Which.Should().Be(("START", 0x7000L));
+    }
+
     private static SymbolTable Load(AssemblyResult result, string directory)
     {
         using StringWriter writer = new();

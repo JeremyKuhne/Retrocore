@@ -23,32 +23,41 @@ internal sealed partial class DebugSession
     ///   written at once, and again at the start of each slice the machine runs, every few milliseconds, so the
     ///   program cannot keep another value there. Only bytes a write can reach now can be frozen.
     ///  </para>
+    ///  <para>
+    ///   A request is all or nothing: every byte is checked before any changes, and should a write still fail, the
+    ///   bytes written and the freezes made are put back.
+    ///  </para>
     /// </remarks>
     private JsonObject FreezeMemory(JsonObject args)
     {
         long start = MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
-        if (args["thaw"] is JsonArray thaw)
+        List<ushort> thaws = [];
+        foreach (JsonNode? offset in args["thaw"] as JsonArray ?? [])
         {
-            foreach (JsonNode? offset in thaw)
-            {
-                _frozen.Remove((bank?.Name, ByteAddress(start + (offset?.GetValue<long>() ?? 0))));
-            }
+            thaws.Add(ByteAddress(start + (offset?.GetValue<long>() ?? 0)));
         }
 
-        if (args["freeze"] is JsonArray freeze)
+        List<(ushort Address, byte Value)> freezes = [];
+        foreach (JsonNode? item in args["freeze"] as JsonArray ?? [])
         {
-            foreach (JsonNode? item in freeze)
+            ushort address = ByteAddress(start + (item.Long("offset") ?? 0));
+            byte value = (byte)(item.Int("value") ?? throw new ArgumentException("A frozen byte needs a value."));
+            if (!Writable(bank, address))
             {
-                ushort address = ByteAddress(start + (item.Long("offset") ?? 0));
-                byte value = (byte)(item.Int("value") ?? throw new ArgumentException("A frozen byte needs a value."));
-                if (!Writable(bank, address) || !Write(bank, address, value))
-                {
-                    throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
-                }
-
-                _frozen[(bank?.Name, address)] = value;
+                throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
             }
 
+            freezes.Add((address, value));
+        }
+
+        foreach (ushort address in thaws)
+        {
+            _frozen.Remove((bank?.Name, address));
+        }
+
+        if (freezes.Count != 0)
+        {
+            Freeze(bank, freezes);
             ApplyFreezes();
             Invalidate();
             NotifyMemory();
@@ -64,6 +73,32 @@ internal sealed partial class DebugSession
                 .Select(pair => (JsonNode?)new JsonObject { ["address"] = pair.Key.Address, ["value"] = pair.Value })
                 .ToJsonArray()
         };
+    }
+
+    // Freezes bytes, writing each at once; should a write fail, the bytes written and the freezes made go back as
+    // they were.
+    private void Freeze(DebugMemoryBank? bank, List<(ushort Address, byte Value)> freezes)
+    {
+        List<(ushort Address, byte Old, byte? Frozen)> done = [];
+        foreach ((ushort address, byte value) in freezes)
+        {
+            byte old = MemoryByte(bank, address) ?? 0;
+            byte? before = _frozen.TryGetValue((bank?.Name, address), out byte held) ? held : null;
+            if (!Write(bank, address, value))
+            {
+                foreach ((ushort written, byte restore, byte? frozen) in Enumerable.Reverse(done))
+                {
+                    Write(bank, written, restore);
+                    if (frozen is { } kept) { _frozen[(bank?.Name, written)] = kept; }
+                    else { _frozen.Remove((bank?.Name, written)); }
+                }
+
+                throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
+            }
+
+            _frozen[(bank?.Name, address)] = value;
+            done.Add((address, old, before));
+        }
     }
 
     // An address within the CPU's 64K.

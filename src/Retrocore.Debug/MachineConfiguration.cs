@@ -18,6 +18,10 @@ namespace Retrocore.Debug;
 ///   host cannot insert again, such as a disk a DOS launch built or a tape being recorded, is left out, so the
 ///   launch's own stays.
 ///  </para>
+///  <para>
+///   Hardware with switches adds <c>"settings": { "slot4": { "translation": true, "refresh": false } }</c>, by
+///   row, restored after the cards.
+///  </para>
 /// </remarks>
 internal static class MachineConfiguration
 {
@@ -45,6 +49,16 @@ internal static class MachineConfiguration
         JsonObject configuration = [];
         if (target.Cards() is { } cards) { configuration["cards"] = cards; }
         configuration["media"] = media;
+        JsonObject settings = [];
+        foreach (HardwareRow row in target.Hardware())
+        {
+            if (row.Settings is not { Length: > 0 } switches) { continue; }
+            JsonObject values = [];
+            foreach (HardwareSetting setting in switches) { values[setting.Id] = setting.Value; }
+            settings[row.Id] = values;
+        }
+
+        if (settings.Count != 0) { configuration["settings"] = settings; }
         return configuration;
     }
 
@@ -58,6 +72,7 @@ internal static class MachineConfiguration
     {
         List<string> problems = [];
         if (saved["cards"] is JsonObject cards) { problems.AddRange(target.RestoreCards(cards)); }
+        if (saved["settings"] is JsonObject settings) { RestoreSettings(target, settings, problems); }
         if (saved["media"] is not JsonObject media) { return problems; }
         foreach ((string id, JsonNode? node) in media)
         {
@@ -78,6 +93,38 @@ internal static class MachineConfiguration
         }
 
         return problems;
+    }
+
+    // Each row's switches, as saved, through setSetting.
+    private static void RestoreSettings(IDebugTarget target, JsonObject settings, List<string> problems)
+    {
+        foreach ((string id, JsonNode? node) in settings)
+        {
+            if (node is not JsonObject values) { continue; }
+            foreach ((string setting, JsonNode? value) in values)
+            {
+                if (value?.GetValueKind() is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                {
+                    problems.Add($"The saved {id} setting '{setting}' is not on or off.");
+                    continue;
+                }
+
+                try
+                {
+                    JsonObject args = new()
+                    {
+                        ["setting"] = setting,
+                        ["value"] = value.GetValue<bool>()
+                    };
+
+                    target.HardwareAction(id, "setSetting", args);
+                }
+                catch (ArgumentException error)
+                {
+                    problems.Add(error.Message);
+                }
+            }
+        }
     }
 
     private static void Restore(IDebugTarget target, IDevice device, JsonObject? saved)

@@ -97,6 +97,11 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
     public bool IsHalted => _state.Halted;
 
     /// <summary>
+    ///  Gets whether WAIT held the last T-state's access.
+    /// </summary>
+    public bool IsWaiting => _state.Activity == StalledActivity;
+
+    /// <summary>
     ///  Gets the elapsed T-states.
     /// </summary>
     public ulong CycleCount => _state.CycleCount;
@@ -166,6 +171,12 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
             || (_state.Activity == BusOperation.Read && _state.Cycle is Z80MachineCycle.Fetch
                 or Z80MachineCycle.HaltFetch
                 or Z80MachineCycle.NonMaskableFetch);
+
+    /// <summary>
+    ///  Gets whether the last T-state put a refresh address on the bus, once in each opcode fetch and interrupt
+    ///  acknowledge. Cheaper than <see cref="LastCycle"/>.
+    /// </summary>
+    public bool IsRefreshing => _state.Activity == BusOperation.Refresh;
 
     /// <summary>
     ///  Advances one T-state; <see cref="LastCycle"/> then describes its bus activity.

@@ -19,6 +19,13 @@ public sealed class Apple2Machine : IMachine
     private static readonly string[] s_memoryAreas = Enum.GetNames<Apple2MemoryArea>();
     private bool _deviceIrq;
 
+    // The SoftCard's cycle in two halves: whether the first has run, and whether its Z80 runs in this cycle.
+    private bool _halfway;
+    private bool _softCardSteps;
+
+    // Whether the SoftCard held the 6502 in the last cycle.
+    private bool _held;
+
     // Each Disk II card's drives, made the first time the card is listed, kept while it stays in.
     private readonly Dictionary<DiskIIController, Apple2FloppyDrive[]> _slotDrives = [];
     private IDevice[]? _devices;
@@ -138,9 +145,59 @@ public sealed class Apple2Machine : IMachine
     public bool ExternalIrq { get; set; }
 
     /// <summary>
-    ///  Advances the CPU and machine devices by one cycle.
+    ///  Advances the CPU and machine devices by one cycle, or finishes the cycle <see cref="StepTState"/> started.
     /// </summary>
     public void StepCycle()
+    {
+        if (_halfway)
+        {
+            FinishSoftCardCycle();
+            return;
+        }
+
+        BeginCycle();
+        if (Bus.SoftCard is { Running: true } card)
+        {
+            StartSoftCardCycle(card);
+            FinishSoftCardCycle();
+            return;
+        }
+
+        Processor.StepCycle();
+        Bus.Tick();
+    }
+
+    /// <summary>
+    ///  Advances by one of the SoftCard's Z80 T-states while it runs, half a cycle, so a debugger can stop at a Z80
+    ///  instruction that starts mid-cycle; otherwise by a whole cycle, as <see cref="StepCycle"/> does.
+    /// </summary>
+    public void StepTState()
+    {
+        if (_halfway)
+        {
+            FinishSoftCardCycle();
+            return;
+        }
+
+        BeginCycle();
+        if (Bus.SoftCard is { Running: true } card)
+        {
+            StartSoftCardCycle(card);
+            _halfway = true;
+            return;
+        }
+
+        Processor.StepCycle();
+        Bus.Tick();
+    }
+
+    /// <summary>
+    ///  Gets whether <see cref="StepTState"/> has run the first half of a cycle.
+    /// </summary>
+    public bool MidCycle => _halfway;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void BeginCycle()
     {
         bool irq = ExternalIrq || Bus.Mockingboard.InterruptRequested || Bus.Mouse.InterruptRequested;
         if (irq || _deviceIrq)
@@ -150,13 +207,37 @@ public sealed class Apple2Machine : IMachine
         }
 
         _deviceIrq = irq;
+        _held = false;
         Bus.Video.ScanCycle();
-        Processor.StepCycle();
+    }
+
+    // The SoftCard's Z80 has the bus, or is finishing its last instruction after giving it back. The card holds the
+    // 6502 at its next read, which is its next opcode fetch; until the 6502 gets there, the Z80 waits. After the
+    // Z80 gives the bus back, both run until the Z80's next access, which WAIT holds. The Z80 runs a T-state in each
+    // half of the cycle.
+    private void StartSoftCardCycle(SoftCard card)
+    {
+        bool held = card.OwnsBus && Processor.IsInstructionBoundary;
+        if (!held) { Processor.StepCycle(); }
+        _held = held;
+        _softCardSteps = held || !card.OwnsBus;
+        if (_softCardSteps) { card.StepTState(Processor.Registers.ProgramCounter); }
+    }
+
+    private void FinishSoftCardCycle()
+    {
+        _halfway = false;
+        if (_softCardSteps && Bus.SoftCard is { } card) { card.StepTState(Processor.Registers.ProgramCounter); }
         Bus.Tick();
     }
 
     /// <inheritdoc/>
-    public ProcessorCycle LastCycle => Processor.LastCycle;
+    /// <remarks>
+    ///  <para>
+    ///   While a SoftCard holds the 6502, its last access is marked stalled: the cycle went by without it.
+    ///  </para>
+    /// </remarks>
+    public ProcessorCycle LastCycle => _held ? Processor.LastCycle with { IsStalled = true } : Processor.LastCycle;
 
     /// <summary>
     ///  Executes an exact cycle budget.
@@ -175,27 +256,26 @@ public sealed class Apple2Machine : IMachine
     public ProcessorExecutionResult StepInstruction(int maximumCycles = 32)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCycles);
-        ulong start = Processor.CycleCount;
+        // The machine's cycles, which go on while a SoftCard holds the 6502.
+        ulong cycles = 0;
         bool instruction = Processor.CurrentOpCode is not null;
         for (int i = 0; i < maximumCycles; i++)
         {
             StepCycle();
+            cycles++;
             instruction |= Processor.FetchedOpcode;
             if (Processor.Status != ProcessorExecutionStatus.Running)
             {
-                return new() { Status = Processor.Status, Cycles = Processor.CycleCount - start };
+                return new() { Status = Processor.Status, Cycles = cycles };
             }
 
             if (instruction && Processor.IsInstructionBoundary)
             {
-                return new()
-                {
-                    Status = ProcessorExecutionStatus.InstructionComplete, Cycles = Processor.CycleCount - start
-                };
+                return new() { Status = ProcessorExecutionStatus.InstructionComplete, Cycles = cycles };
             }
         }
 
-        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = Processor.CycleCount - start };
+        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = cycles };
     }
 
     /// <inheritdoc/>

@@ -4,6 +4,7 @@
 
 using System.Text.Json.Nodes;
 using Retrocore.Assembler;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -20,6 +21,10 @@ internal sealed partial class DebugSession
 
         // A bank disassembles as if it were mapped, with the lines and labels of the modules whose code is there.
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+
+        // A coprocessor's addresses keep its bank's name, such as z80:0x0100, so an instruction breakpoint set from one
+        // is its CPU's; the machine CPU's banks are views of its own addresses, so theirs stay plain.
+        string prefix = SpaceOf(bank);
 
         int skip = args.Int("instructionOffset") ?? 0;
         int count = (args.Int("instructionCount") ?? 0);
@@ -72,7 +77,7 @@ internal sealed partial class DebugSession
             SourceLine? line = _debug.Position(memory, (ushort)address)?.Chain[^1];
             instructions.Add(new JsonObject
             {
-                ["address"] = $"0x{address:X4}",
+                ["address"] = $"{prefix}0x{address:X4}",
                 ["instructionBytes"] = bytes,
                 ["instruction"] = text,
                 ["symbol"] = symbols ? Symbol(memory, (ushort)address) : null,
@@ -126,7 +131,8 @@ internal sealed partial class DebugSession
         Span<byte> bytes = stackalloc byte[LongestInstruction];
         int available = Math.Min(LongestInstruction, 0x10000 - address);
         for (int index = 0; index < available; index++) { bytes[index] = memory.Peek((ushort)(address + index)); }
-        return Disassembler.TryDecode(bytes[..available], (ushort)address, Target.InstructionSet, out DisassembledInstruction instruction)
+        InstructionSet set = memory is BankMemory { Bank.InstructionSet: { } own } ? own : Target.InstructionSet;
+        return Disassembler.TryDecode(bytes[..available], (ushort)address, set, out DisassembledInstruction instruction)
             ? (instruction.Size, instruction.ToString())
             : (1, $".byte ${bytes[0]:X2}");
     }

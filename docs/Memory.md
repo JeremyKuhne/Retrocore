@@ -50,6 +50,7 @@ switched out.
 | `auxbank1` | IIe | Auxiliary RAM's language-card bank 1 | $D000-$DFFF |
 | `rom` | all | The system ROM (read-only): the IIe's internal firmware, AppleSoft and Monitor; on the II and II Plus, the board's ROM (or the slot-0 firmware card's while active) | $C100-$FFFF (IIe); $D000-$FFFF (II, II Plus) |
 | `slot1`-`slot7` | all | A slot's ROM, while its card has one: a Disk II's boot ROM, the mouse or ProFile card's firmware, or slot 7's block storage (read-only) | $Cn00-$CnFF |
+| `z80` | all, with the SoftCard | Memory as the Z80 SoftCard's Z80 sees it, through the card's address translation; it disassembles as Z80 code | $0000-$FFFF |
 
 A bank's addresses are the CPU addresses its bytes answer at when it is mapped, so `aux:$0400` is auxiliary
 RAM's text page one and `bank1:$D000` is the first byte of bank 1. On the IIe, `rom:$C600` is the internal

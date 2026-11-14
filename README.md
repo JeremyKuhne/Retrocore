@@ -329,7 +329,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its BASIC, disks and front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
-- [debugging Business BASIC](docs/backlog/BusinessBasic.md).
+- [debugging Business BASIC](docs/backlog/BusinessBasic.md);
+- [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md).
 
 ## License
 

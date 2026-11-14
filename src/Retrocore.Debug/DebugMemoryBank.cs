@@ -22,13 +22,18 @@ namespace Retrocore.Debug;
 /// <param name="Ranges">The CPU address ranges it holds bytes for.</param>
 /// <param name="Peek">Reads a byte without side effects, or returns null where the bank has none.</param>
 /// <param name="Poke">Writes a byte, returning false where the bank has none; null when it is read-only.</param>
+/// <param name="InstructionSet">
+///  The instruction set of the CPU the bank's addresses are for, when it is not the machine's own, such as the
+///  SoftCard's Z80; null for the machine's CPU.
+/// </param>
 internal sealed record DebugMemoryBank(
     string Name,
     string Label,
     IReadOnlyList<Enum> Areas,
     IReadOnlyList<(ushort Start, int Length)> Ranges,
     Func<ushort, byte?> Peek,
-    Func<ushort, byte, bool>? Poke)
+    Func<ushort, byte, bool>? Poke,
+    Retrocore.Isa.InstructionSet? InstructionSet = null)
 {
     /// <summary>
     ///  Gets the memory area that holds an address.

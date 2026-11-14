@@ -699,6 +699,12 @@ goes into memory and runs on the BASIC thread, as AppleSoft does. The thread fol
 whichever BASIC is in memory, so Integer BASIC that DOS 3.3's INT loads into a language
 card debugs the same way.
 
+`softCard` puts Microsoft's Z80 SoftCard in a slot, 1 to 7, on any model; the manual
+uses slot 4. The card has no ROM: a CP/M `diskImage` boots from the Disk II in slot 6,
+and the 6502 hands the bus to the Z80. The Z80 shows as its own thread, **SoftCard
+Z80**, beside the 6502's. A IIe's slot 3 belongs to the 80-column firmware, and slot 4
+to the Mockingboard when it is in.
+
 With `"dos": "3.3"` or `"3.2"`, a launch runs its program under DOS instead of loading it
 into memory: the program goes on a fresh DOS disk, built from the SDK's DOS sources, as a
 binary file named after the source, with a HELLO that BRUNs it. The IIe boots the disk
@@ -1078,7 +1084,8 @@ can name a bank: `main`, `aux`, `bank1`, `auxbank1` (the language cards' bank 1)
 `rom`, and `slot1` to `slot7` while those slots' cards have ROMs. `aux:$0400` is auxiliary
 RAM's text page whatever the switches map, and `[aux:$0400]` reads it in
 expressions, conditions and data breakpoints. A function breakpoint such as
-`bank1:$D000` stops only while the CPU runs that bank's code. The
+`bank1:$D000` stops only while the CPU runs that bank's code. With a SoftCard in, `z80:` names memory as the Z80 sees it, so
+`z80:$0100` is where CP/M runs programs. The
 Variables view's **Memory** scope lists each bank with where the switches map it
 now. [Memory.md](../docs/Memory.md) describes memory references, banks and the
 protocol.
@@ -1254,8 +1261,8 @@ While a Retrocore session runs, the Machine view is headed by the machine, such 
 **Apple IIe** `Enhanced, 65C02 · running`, its screen lit while it runs and dark while
 it is stopped in the debugger. Under it is the machine's installed hardware. On the
 IIe that's memory, the extended 80-column card every launch has, and slots 1 to 7,
-empty ones included (and dimmed): the Mockingboard in slot 4, the Disk II in slot 6,
-and block storage in slot 7 when the launch installs them. On the Model I it's the
+empty ones included (and dimmed): the Mockingboard in slot 4, the Z80 SoftCard, the
+Disk II in slot 6, and block storage in slot 7 when the launch installs them. On the Model I it's the
 ROM, memory, cassette, Expansion Interface, disk controller, and the lowercase
 modification. A part with drives says how many, and hovering a row says which launch
 option installs or changes it. Its title bar opens memory and refreshes the views.
@@ -1300,12 +1307,16 @@ Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.
 MFM disks (`.po`, `.2mg`, `.hdv`, `.img` or `.dsk`). `disk35Images` names the disks
 in its drives; drive 1 boots, so `"disk35": 5` with an 800K ProDOS disk starts ProDOS
 from it.
+Any free Apple II slot also takes the Z80 SoftCard, one at a time, as the `softCard`
+launch option does. Its row opens to its switches, as checkboxes: **Address
+translation** and **6502 refresh read**, both on as the card ships; ticking one
+changes the card at once, and the machine remembers it.
 
 Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you
 launch the same configuration, by its `name`. launch.json stays as written: it sets
 up the first launch, and changing one of its hardware or media options (such as
-`diskImage`, `dos`, `model` or `mockingboard`) starts that configuration afresh.
+`diskImage`, `dos`, `model`, `mockingboard` or `softCard`) starts that configuration afresh.
 **Retrocore: Reset Saved Machine** (also on the Machine view's **...** menu) does the same by
 hand. A disk a `dos` launch builds, and a tape being recorded, are not remembered;
 the launch makes them again. Each drive shows its media, its

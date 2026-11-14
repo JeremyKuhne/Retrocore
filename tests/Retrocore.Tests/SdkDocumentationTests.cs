@@ -109,6 +109,7 @@ public class SdkDocumentationTests
     {
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
+        ["softcard"] = "Retrocore.Machines.Apple2",
         ["trs80"] = "Retrocore.Machines.Trs80"
     };
 
@@ -328,6 +329,24 @@ public class SdkDocumentationTests
             new DebugRegisters(M6502Isa.Description));
 
         contracts[0xF800].Registers.Should().Contain(["X", "Y"]);
+    }
+
+    /// <summary>
+    ///  An entry inside a routine with its own <c>;;</c> block has its own contract: FLIPCURSOR overwrites A with its
+    ///  cursor-off test and keeps only Y, while FLIPCURSOR_1, past that test, keeps A and Y.
+    /// </summary>
+    [TestMethod]
+    public void InnerEntryHasItsOwnContract()
+    {
+        List<DocumentationSet> sets = Sets();
+        DocumentationSet firmware = sets.Single(set => set.Module == "Firmware" && set.Find("FLIPCURSOR") is not null);
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(firmware, sets),
+            "Enhanced",
+            new DebugRegisters(M6502Isa.Description));
+
+        contracts[0xCE1F].Registers.Should().Equal("Y");
+        contracts[0xCE26].Registers.Should().BeEquivalentTo(["A", "Y"]);
     }
 
     /// <summary>

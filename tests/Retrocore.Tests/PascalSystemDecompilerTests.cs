@@ -289,6 +289,27 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A word used both ways that points to bytes in one place and to bits in another, as 1.3's Compiler reads the
+    // system's version and its options.
+    private const string ViewsSource = """
+        PROGRAM PB;
+        TYPE BA = PACKED ARRAY[0..15] OF CHAR; BB = PACKED ARRAY[0..127] OF BOOLEAN;
+          W = RECORD CASE INTEGER OF 0: (I: INTEGER); 1: (P: ^BA); 2: (Q: ^BB) END;
+        VAR H: BOOLEAN; W1: W;
+        BEGIN W1.I := -16607; IF W1.P^[0] <> CHR(4) THEN H := FALSE; W1.I := -16606; H := W1.Q^[6] END.
+        """;
+
+    /// <summary>
+    ///  What a word used both ways points to, read as bytes in one place and bits in another, is two variants'
+    ///  pointers, as the two cannot be one array.
+    /// </summary>
+    [TestMethod]
+    public void WordsPointingToBytesAndBitsHaveAVariantForEach()
+    {
+        string source = RoundTrip(ViewsSource);
+        source.Should().Contain("1: (P: ^T2); 2: (P2: ^T3) END;").And.Contain(".P2^[6]");
+    }
+
     // Bytes written with a width of their own, a constant and a variable.
     private const string WidthSource = """
         PROGRAM WB;

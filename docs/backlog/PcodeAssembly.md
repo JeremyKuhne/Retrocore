@@ -133,8 +133,14 @@ What the decompiler does not decompile yet, found by decompiling every code file
   nested segment procedures; words used as pointers and integers passed by value or VAR as pointers; NEW of a
   variant's words; moves of a record's first words as an array view; records' first fields moved to whole; field
   names by type under nested WITHs; FORWARD headings where nested procedures take numbers; the R option; GOTOs to
-  the ends of bodies; and FWRITEBYTES's width before its count. **Next:** Apple Pascal 1.0, 1.2 and Apple III
-  Compilers.
+  the ends of bodies; and FWRITEBYTES's width before its count. **Done (2026-11-15): Apple Pascal 1.3's Compiler
+  too** (`PascalCompilerRoundTripTests`, about three minutes): decompiled, compiled with itself on a 128K IIe booted
+  with APPLE3's 128K system (64K runs out in COMPINIT), its two assembled procedures in PASCALCO assembled with the
+  1.3 Assembler and linked with the 1.3 Linker, it has the same segments. What it took: a word used both ways that
+  points to bytes and to bits has a variant for each; an assembled procedure's VAR parameter that calls pass both a
+  record and its first field is the field's type (its tree search's name); characters assigned to a string's
+  element; and, in the tools, WOZ images, 1.3's prompts, a source split with an include file where it passes a
+  volume, and the Linker's files on a volume of their own. **Next:** Apple Pascal 1.0, 1.2 and Apple III Compilers.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

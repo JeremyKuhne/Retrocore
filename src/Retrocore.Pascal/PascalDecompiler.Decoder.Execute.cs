@@ -110,6 +110,14 @@ public sealed partial class PascalDecompiler
                         Expr index = Pop(stack);
                         Designator array = Designate(Pop(stack));
                         (Expr value, int? low, int? high) = Bounds(index);
+
+                        // Bits of what a word points to, where elsewhere it is bytes, are another view's.
+                        if (array is Dereference bits && bits.Type.Find() is { Kind: TypeKind.Array, Bytes: true })
+                        {
+                            int perWord = operands[0];
+                            bits.Split(view => view.Find().PerWord == perWord);
+                        }
+
                         TypeNode element = array.Type.PackedElement(operands[0], operands[1], low, high);
                         stack.Add(new PackedAddress(new IndexDesignator(array, value, low, high, element)));
                         break;
@@ -391,6 +399,12 @@ public sealed partial class PascalDecompiler
             if (array.Type.Find().Kind == TypeKind.String && value is Constant { Value: 0 } && high is null)
             {
                 return new LengthDesignator(array);
+            }
+
+            // Bytes of what a word points to, where elsewhere it is bits, are another view's.
+            if (array is Dereference bytes && bytes.Type.Find() is { Kind: TypeKind.Array, PerWord: > 0, Bytes: false })
+            {
+                bytes.Split(view => view.Find().Bytes);
             }
 
             return new IndexDesignator(array, value, low, high, array.Type.ByteElement(low, high));

@@ -181,6 +181,12 @@ public sealed partial class PascalDecompiler
         public bool Moved { get; set; }
 
         /// <summary>
+        ///  Gets or sets the other types a word used both ways points to, besides <see cref="Element"/>, where the code
+        ///  reads what it points to as types that cannot be one: each is another variant's pointer.
+        /// </summary>
+        public List<TypeNode>? Views { get; set; }
+
+        /// <summary>
         ///  Gets or sets a value indicating whether it is a scalar word also read by bytes, as through a variant record.
         /// </summary>
         public bool ByteView { get; set; }
@@ -551,6 +557,12 @@ public sealed partial class PascalDecompiler
             a.Enumeration ??= b.Enumeration;
             a.Punned |= b.Punned;
             a.Moved |= b.Moved;
+            if (b.Views is { } views)
+            {
+                a.Views ??= [];
+                a.Views.AddRange(views.Where(view => !a.Views.Contains(view)));
+            }
+
             a.ByteView |= b.ByteView;
             if (b.Low is { } low) { a.Low = a.Low is { } oldLow ? Math.Min(oldLow, low) : low; }
             if (b.High is { } high) { a.High = a.High is { } oldHigh ? Math.Max(oldHigh, high) : high; }
@@ -656,6 +668,14 @@ public sealed partial class PascalDecompiler
             first.Find().Element = record;
             second.Find().Element = record;
         }
+
+        /// <summary>
+        ///  Gets whether two types cannot be one, as two variants' fields at an offset cannot.
+        /// </summary>
+        /// <param name="first">One type.</param>
+        /// <param name="second">The other.</param>
+        /// <returns>Whether they differ.</returns>
+        public static bool CannotBeOne(TypeNode first, TypeNode second) => Differ(first, second, depth: 3);
 
         /// <summary>
         ///  Puts a type at a record's word offset: into its field there, or a variant's, that it can be one with; or as

@@ -432,7 +432,8 @@ public sealed partial class PascalDecompiler
         }
 
         if (parameter.Copy is { } copy) { return TypeName(copy.Type, parameter: true); }
-        return TypeName(parameter.IsReference ? parameter.Type.Target() : parameter.Type, parameter: true);
+        TypeNode formal = Narrowed(parameter) ?? (parameter.IsReference ? parameter.Type.Target() : parameter.Type);
+        return TypeName(formal, parameter: true);
     }
 
     // Gives a name to each type a declaration cannot write in place: records, pointers, arrays, sets and files, and
@@ -571,6 +572,58 @@ public sealed partial class PascalDecompiler
         };
     }
 
+    // The VAR parameters of assembled procedures that calls pass both a record and its first field, as the Compiler's
+    // tree search is passed an identifier or its name: each is its first field's type, which a record passes by its
+    // first field. An assembled procedure has no body that needs the record.
+    private readonly Dictionary<Variable, TypeNode> _narrowed = [];
+
+    private TypeNode? Narrowed(Variable parameter) => _narrowed.GetValueOrDefault(parameter);
+
+    // The type a parameter is declared with: its copy's, its narrowed one, a VAR one's target, or its own.
+    private TypeNode Formal(Variable parameter) =>
+        parameter.Copy?.Type ?? Narrowed(parameter) ?? (parameter.IsReference ? parameter.Type.Target() : parameter.Type);
+
+    private void NarrowParameters()
+    {
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(
+                procedure.Body,
+                statement =>
+                {
+                    if (statement is CallStatement { Callee.Procedure: { } callee } call)
+                    {
+                        Narrow(callee, [.. call.Arguments.Select(argument => argument.Value)]);
+                    }
+                },
+                expression =>
+                {
+                    if (expression is Call { Callee.Procedure: { } callee } call) { Narrow(callee, call.Arguments); }
+                });
+        }
+
+        void Narrow(Procedure callee, IReadOnlyList<Expr> arguments)
+        {
+            if (!callee.Code.IsNative || !_parameters.ContainsKey(callee)) { return; }
+
+            List<Variable> slots = Slots(callee, arguments);
+            for (int index = 0; index < arguments.Count && index < slots.Count; index++)
+            {
+                Variable parameter = slots[index];
+                if (!parameter.IsReference || parameter.Type.Target().Find() is not { Kind: TypeKind.Record } record)
+                {
+                    continue;
+                }
+
+                TypeNode passed = Designate(arguments[index]).Type.Find();
+                if (passed != record && record.Fields?.GetValueOrDefault(0)?.Find() == passed)
+                {
+                    _narrowed[parameter] = passed;
+                }
+            }
+        }
+    }
+
     // A parameter's type, or a VAR one's target's.
     private static TypeNode Punned(Variable parameter) =>
         (parameter.IsReference ? parameter.Type.Target() : parameter.Type).Find();
@@ -589,6 +642,7 @@ public sealed partial class PascalDecompiler
     private void NameTypes()
     {
         PlainParameters();
+        NarrowParameters();
         foreach (TypeNode pointer in _plainPointers.Values) { Visit(pointer, parameter: false); }
 
         if (_declared.TryGetValue(_system, out List<Variable>? globals))
@@ -601,7 +655,7 @@ public sealed partial class PascalDecompiler
             foreach (Variable variable in _declared[procedure.Frame]) { Visit(variable.Type, parameter: false); }
             foreach (Variable parameter in _parameters[procedure])
             {
-                Visit(parameter.Copy?.Type ?? (parameter.IsReference ? parameter.Type.Target() : parameter.Type), parameter: true);
+                Visit(Formal(parameter), parameter: true);
             }
 
             if (procedure.IsFunction) { Visit(procedure.ResultType, parameter: true); }
@@ -670,6 +724,8 @@ public sealed partial class PascalDecompiler
                         Visit(element, parameter: root.Kind == TypeKind.Pointer, pointed: root.Kind == TypeKind.Pointer);
                     }
 
+                    foreach (TypeNode view in root.Views ?? []) { Visit(view, parameter: true, pointed: true); }
+
                     break;
                 case TypeKind.Record:
                     foreach (TypeNode field in root.AllFields)
@@ -705,7 +761,7 @@ public sealed partial class PascalDecompiler
         {
             TypeKind.Pointer when root.Element is { } target && Names(target, root, []) => [],
             TypeKind.Record => [.. root.AllFields, .. root.PackedFields?.Values.Select(field => field.Type) ?? []],
-            _ => root.Element is { } element ? [element] : []
+            _ => root.Element is { } element ? [element, .. root.Views ?? []] : []
         };
 
         foreach (TypeNode part in parts) { Order(part, ordered, done); }
@@ -769,6 +825,13 @@ public sealed partial class PascalDecompiler
                 return $"{Value(low, root)}..{Value(high, root)}";
             case TypeKind.String:
                 return root.MaxLength is 80 or 0 ? "STRING" : $"STRING[{root.MaxLength}]";
+            case TypeKind.Pointer when root.Punned && root.Views is { Count: > 0 } views:
+                {
+                    // A word that points to things that cannot be one has a variant for each.
+                    IEnumerable<string> pointers = views.Select((view, index) => $"{index + 2}: (P{index + 2}: ^{TypeName(view, parameter: true)})");
+                    return $"RECORD CASE INTEGER OF 0: (I: INTEGER); 1: (P: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}); {string.Join("; ", pointers)} END";
+                }
+
             case TypeKind.Pointer when root.Punned:
                 return $"RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (P: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}) END";
             case TypeKind.Pointer:
@@ -1426,8 +1489,14 @@ public sealed partial class PascalDecompiler
                         break;
                     }
 
-                    // A character assigned to a string is the string of it.
+                    // A character assigned to a string is the string of it; a string's element is a character.
                     TypeNode expected = target.Type.Find().Kind == TypeKind.String && assignment.Value is Constant ? TypeNode.Scalar(ScalarKind.Char) : target.Type;
+                    if (target is IndexDesignator { Array: var characters }
+                        && characters.Type.Find().Kind == TypeKind.String)
+                    {
+                        expected = TypeNode.Scalar(ScalarKind.Char);
+                    }
+
                     lines.Add(Indented($"{text} := {Expression(assignment.Value, expected, 0)}"));
                     break;
                 }
@@ -1663,7 +1732,7 @@ public sealed partial class PascalDecompiler
             }
             else if (parameter.IsReference || parameter.Copy is not null)
             {
-                TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
+                TypeNode formal = parameter.Copy?.Type ?? Narrowed(parameter) ?? parameter.Type.Target();
                 parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));
             }
             else if (_plainParameters.Contains(parameter))
@@ -1782,6 +1851,16 @@ public sealed partial class PascalDecompiler
                     {
                         if (pointer.IsReference) { return pointer.Name; }
                         if (pointer.Type.Find().Kind is TypeKind.Text or TypeKind.File) { return $"{pointer.Name}^"; }
+                    }
+
+                    // What a word used both ways points to as another variant's pointer is read through it.
+                    if (dereference.View is { } view
+                        && dereference.Pointer is Load { Designator: var word }
+                        && IsPunned(word.Type)
+                        && word.Type.Find().Views is { } views
+                        && views.FindIndex(other => other.Find() == view.Find()) is var index and >= 0)
+                    {
+                        return $"{DesignatorText(word)}.P{index + 2}^";
                     }
 
                     return $"{Expression(dereference.Pointer, expected: null, 4)}^";

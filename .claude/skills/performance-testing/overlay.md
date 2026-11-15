@@ -91,6 +91,11 @@ and lower clocks), so an unpinned run varies by about 10% depending on where Win
 - For fast throughput loops, a small console harness referencing the project is fine for
   screening. Confirm the chosen change with the BenchmarkDotNet benchmark before recording it.
 
+The measurement and profile-refresh scripts pin to `0x50` only when both logical processors are in the
+inherited affinity; otherwise they retain the inherited mask. Desktop benchmark output and numeric command
+arguments use invariant culture. Run `.\tools\Test-IIePerformance.ps1` to check measurement parsing,
+odd/even medians, and the affinity fallback without running benchmarks.
+
 ## Test-suite time
 
 `dotnet test` without `-c` is Debug, which is unoptimized: CPU-heavy tests run about 5 times slower

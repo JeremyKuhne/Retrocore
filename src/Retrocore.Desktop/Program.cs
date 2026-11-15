@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Avalonia;
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Desktop;
@@ -40,7 +41,7 @@ internal static class Program
                     configuration = machine;
                     index++;
                     break;
-                case "--smoke-seconds" when value is not null && double.TryParse(value, out double seconds) && double.IsFinite(seconds) && seconds > 0:
+                case "--smoke-seconds" when value is not null && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds) && double.IsFinite(seconds) && seconds > 0:
                     smokeSeconds = seconds;
                     index++;
                     break;
@@ -52,7 +53,7 @@ internal static class Program
                     theme = value;
                     index++;
                     break;
-                case "--benchmark" when value is not null && double.TryParse(value, out double length) && double.IsFinite(length) && length is > 0 and <= 3600:
+                case "--benchmark" when value is not null && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double length) && double.IsFinite(length) && length is > 0 and <= 3600:
                     benchmarkSeconds = length;
                     index++;
                     break;

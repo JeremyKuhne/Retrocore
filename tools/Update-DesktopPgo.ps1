@@ -51,7 +51,12 @@ try {
         [Environment]::SetEnvironmentVariable($name, $variables[$name], 'Process')
     }
 
-    $process.ProcessorAffinity = [IntPtr]0x50
+    if (($affinity.ToInt64() -band 0x50) -eq 0x50) {
+        $process.ProcessorAffinity = [IntPtr]0x50
+    }
+    else {
+        Write-Verbose 'Keeping inherited processor affinity; cores selected by 0x50 are unavailable.'
+    }
     $configuration = @{machine='apple2'; diskImage=$disk; sound=$Sound} | ConvertTo-Json -Compress
     $escaped = '"' + $configuration.Replace('"','\"') + '"'
     $trace = Join-Path $output 'training.nettrace'

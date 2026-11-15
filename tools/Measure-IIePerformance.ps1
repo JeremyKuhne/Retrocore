@@ -14,6 +14,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$invariant = [Globalization.CultureInfo]::InvariantCulture
 $BuildRoot = (Resolve-Path -LiteralPath $BuildRoot).Path
 $DiskImage = (Resolve-Path -LiteralPath $DiskImage).Path
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Use a new output directory to preserve previous results.' }
@@ -27,7 +28,12 @@ function Invoke-Measurement([string]$Executable, [string]$Arguments, [string]$La
     $process = Start-Process -FilePath $Executable -ArgumentList $Arguments `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     try {
-        $process.ProcessorAffinity = [IntPtr]0x50
+        if (($process.ProcessorAffinity.ToInt64() -band 0x50) -eq 0x50) {
+            $process.ProcessorAffinity = [IntPtr]0x50
+        }
+        else {
+            Write-Verbose "Keeping inherited processor affinity for $Label; cores selected by 0x50 are unavailable."
+        }
         $process.WaitForExit()
         if ($process.ExitCode -ne 0) { throw "$Label exited $($process.ExitCode): $(Get-Content $stderr -Raw)" }
         if ((Get-Item -LiteralPath $stderr).Length -ne 0) { throw "$Label wrote stderr: $(Get-Content $stderr -Raw)" }
@@ -42,7 +48,7 @@ function Invoke-Measurement([string]$Executable, [string]$Arguments, [string]$La
 }
 
 $configuration = @{machine='apple2'; diskImage=$DiskImage; sound=$Sound} | ConvertTo-Json -Compress
-$windowArguments = "--smoke-seconds $Seconds --speed 0 --fast-drives off --machine `"" +
+$windowArguments = '--smoke-seconds ' + $Seconds.ToString($invariant) + ' --speed 0 --fast-drives off --machine "' +
     $configuration.Replace('"', '\"') + '"'
 
 foreach ($run in 1..$Repetitions) {
@@ -53,7 +59,7 @@ foreach ($run in 1..$Repetitions) {
             if ($text -notmatch 'RunCycles ends where stepping does: yes') { throw 'Headless parity failed.' }
             $match = [regex]::Match($text, 'host at max speed: ([\d.]+) MHz')
             if (-not $match.Success) { throw 'Missing headless throughput.' }
-            $results.Add([pscustomobject]@{Mode=$mode; Scenario='headless-idle'; Run=$run; MHz=[double]$match.Groups[1].Value})
+            $results.Add([pscustomobject]@{Mode=$mode; Scenario='headless-idle'; Run=$run; MHz=[double]::Parse($match.Groups[1].Value, $invariant)})
         }
 
         $text = Invoke-Measurement $exe $windowArguments "$mode-applesoft-$run"
@@ -65,8 +71,9 @@ foreach ($run in 1..$Repetitions) {
         $duration = [regex]::Match($text, '(?m)^seconds: ([\d.]+)')
         if (-not $match.Success -or -not $duration.Success) { throw 'Missing complete-interval measurement.' }
         $results.Add([pscustomobject]@{
-            Mode=$mode; Scenario='visible-applesoft'; Run=$run; MHz=[double]$match.Groups[1].Value
-            Cycles=[ulong]$match.Groups[2].Value.Replace(',', ''); Seconds=[double]$duration.Groups[1].Value
+            Mode=$mode; Scenario='visible-applesoft'; Run=$run; MHz=[double]::Parse($match.Groups[1].Value, $invariant)
+            Cycles=[ulong]::Parse($match.Groups[2].Value, [Globalization.NumberStyles]::AllowThousands, $invariant)
+            Seconds=[double]::Parse($duration.Groups[1].Value, $invariant)
         })
     }
 }
@@ -81,8 +88,10 @@ if (-not $SkipCpu) {
 $results | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $OutputDirectory 'results.json')
 $results | Group-Object Mode,Scenario | ForEach-Object {
     $values = @($_.Group.MHz | Sort-Object)
+    $middle = [int][Math]::Floor($values.Count / 2)
+    $median = if ($values.Count % 2) { $values[$middle] } else { ($values[$middle - 1] + $values[$middle]) / 2 }
     [pscustomobject]@{
-        Scenario=$_.Name; MedianMHz=$values[[int][Math]::Floor($values.Count / 2)]
+        Scenario=$_.Name; MedianMHz=$median
         MinMHz=$values[0]; MaxMHz=$values[-1]
     }
 } | Format-Table -AutoSize

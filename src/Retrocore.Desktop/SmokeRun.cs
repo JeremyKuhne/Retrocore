@@ -80,17 +80,17 @@ internal static class SmokeRun
         double hertz = cycles / seconds;
         double speed = hertz / host.ClockHertz;
         Console.Out.WriteLine($"machine: {host.Name}");
-        Console.Out.WriteLine($"seconds: {seconds:0.000}");
+        Console.Out.WriteLine(FormattableString.Invariant($"seconds: {seconds:0.000}"));
         if (stats.FirstFrame is { } first)
         {
-            Console.Out.WriteLine($"first frame after start: {(first - Process.GetCurrentProcess().StartTime).TotalMilliseconds:0} ms");
+            Console.Out.WriteLine(FormattableString.Invariant($"first frame after start: {(first - Process.GetCurrentProcess().StartTime).TotalMilliseconds:0} ms"));
         }
 
-        Console.Out.WriteLine($"display frames: {stats.Frames} ({stats.Frames / seconds:0.0} a second), pictures drawn: {stats.Drawn}");
-        Console.Out.WriteLine($"frame time ms: median {stats.Percentile(50):0.00}, p99 {stats.Percentile(99):0.00}, max {stats.Percentile(100):0.00}");
-        Console.Out.WriteLine($"emulated speed: {speed:0.000}x of {host.ClockHertz} Hz");
-        Console.Out.WriteLine($"emulated throughput: {hertz / 1e6:0.000} MHz, {cycles:N0} cycles");
-        Console.Out.WriteLine($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start");
+        Console.Out.WriteLine(FormattableString.Invariant($"display frames: {stats.Frames} ({stats.Frames / seconds:0.0} a second), pictures drawn: {stats.Drawn}"));
+        Console.Out.WriteLine(FormattableString.Invariant($"frame time ms: median {stats.Percentile(50):0.00}, p99 {stats.Percentile(99):0.00}, max {stats.Percentile(100):0.00}"));
+        Console.Out.WriteLine(FormattableString.Invariant($"emulated speed: {speed:0.000}x of {host.ClockHertz} Hz"));
+        Console.Out.WriteLine(FormattableString.Invariant($"emulated throughput: {hertz / 1e6:0.000} MHz, {cycles:N0} cycles"));
+        Console.Out.WriteLine(FormattableString.Invariant($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start"));
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");
         if (!reached)

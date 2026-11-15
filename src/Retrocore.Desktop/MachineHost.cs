@@ -433,19 +433,32 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
-    ///  Moves the mouse card's mouse, and sets its button when given.
+    ///  Puts the mouse card's mouse at a place within the bounds the program set, and sets its button when given.
     /// </summary>
-    /// <param name="dx">How far across, in the picture's 280 dots.</param>
-    /// <param name="dy">How far down, in its 192 lines.</param>
+    /// <param name="across">
+    ///  How far across the bounds, 0 to 1, or null with <paramref name="down"/> to leave it.
+    /// </param>
+    /// <param name="down">How far down them, 0 to 1, or null with <paramref name="across"/> to leave it.</param>
     /// <param name="pressed">The button, or null to leave it.</param>
-    internal void Mouse(int dx, int dy, bool? pressed = null)
+    /// <returns>Whether the program has the mouse on.</returns>
+    internal bool PlaceMouse(double? across, double? down, bool? pressed = null)
     {
         using (Gate())
         {
-            if (!_target.Requests.TryGetValue("apple2/mouse", out Func<JsonObject, JsonObject>? mouse)) { return; }
-            JsonObject args = new() { ["dx"] = dx, ["dy"] = dy };
-            if (pressed is { } down) { args["pressed"] = down; }
-            mouse(args);
+            if (!_target.Requests.TryGetValue("apple2/mouse", out Func<JsonObject, JsonObject>? mouse))
+            {
+                return false;
+            }
+
+            JsonObject args = [];
+            if (across is { } x && down is { } y)
+            {
+                args["x"] = x;
+                args["y"] = y;
+            }
+
+            if (pressed is { } button) { args["pressed"] = button; }
+            return mouse(args)["on"] is JsonValue on && on.TryGetValue(out bool isOn) && isOn;
         }
     }
 

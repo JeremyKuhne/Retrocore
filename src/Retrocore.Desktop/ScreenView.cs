@@ -9,9 +9,6 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using Avalonia.Threading;
-using System.Diagnostics;
-using System.Runtime.Versioning;
 
 namespace Retrocore.Desktop;
 
@@ -40,21 +37,11 @@ internal sealed class ScreenView : Control
     private readonly bool[] _held = new bool[2];
     private readonly bool[] _latched = new bool[2];
 
-    // The mouse card's mouse, while it has the pointer: where the pointer is, the part of a dot not yet sent, and
-    // the pointer itself, captured while a button is down.
-    private Point? _mouseAt;
-    private IPointer? _mousePointer;
-
-    // On Windows, where the pointer last was in screen pixels, read from Windows rather than from the move events,
-    // which can be older than the last time the pointer was put back.
-    private int _cursorX;
-    private int _cursorY;
-    private bool _releasing;
-
-    // When the mouse card took the pointer, for the note that says how to let it go.
-    private long _capturedAt;
-    private double _mouseX;
-    private double _mouseY;
+    // The mouse card's mouse: whether its button is down, and whether the pointer is hidden over the picture while
+    // the program has the mouse on and draws its own.
+    private bool _mouseDown;
+    private bool _pointerHidden;
+    private static readonly Cursor s_hidden = new(StandardCursorType.None);
 
     /// <summary>
     ///  Creates the screen for a machine.
@@ -77,7 +64,8 @@ internal sealed class ScreenView : Control
             _frameSeen = 0;
             Array.Clear(_held);
             Array.Clear(_latched);
-            ReleaseMouse();
+            _mouseDown = false;
+            HidePointer(hide: false);
             KeysChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         };
@@ -87,11 +75,6 @@ internal sealed class ScreenView : Control
     ///  Raised when a latched key changes: Ctrl after the letter it applied to, or an Apple key.
     /// </summary>
     internal event EventHandler? KeysChanged;
-
-    /// <summary>
-    ///  Raised when the mouse card takes the pointer or gives it back.
-    /// </summary>
-    internal event EventHandler? MouseChanged;
 
     /// <summary>
     ///  Raised when the screen asks for the clipboard's text to be typed, as Shift+Insert or Paste does.
@@ -137,11 +120,6 @@ internal sealed class ScreenView : Control
             KeysChanged?.Invoke(this, EventArgs.Empty);
         }
     }
-
-    /// <summary>
-    ///  Gets whether the mouse card has the pointer.
-    /// </summary>
-    internal bool MouseCaptured => _mouseAt is not null;
 
     /// <summary>
     ///  Gets whether an Apple key or game-port button is down, held or latched.
@@ -238,33 +216,6 @@ internal sealed class ScreenView : Control
             context.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height), destination);
         }
 
-        // While the mouse card has the pointer, the screen's border lights, as the panel's bezel does.
-        if (MouseCaptured && this.TryFindResource(Palette.Focus, ActualThemeVariant, out object? focus) && focus is IBrush outline)
-        {
-            context.DrawRectangle(new Pen(outline, 2), destination.Inflate(1));
-            if (Stopwatch.GetElapsedTime(_capturedAt) < s_noteTime) { DrawNote(context, destination); }
-        }
-    }
-
-    // How long the note shows after the mouse card takes the pointer.
-    private static readonly TimeSpan s_noteTime = TimeSpan.FromSeconds(3);
-
-    // A note at the top of the picture, as a game says it has the mouse: in VS Code's widget colours.
-    private void DrawNote(DrawingContext context, Rect picture)
-    {
-        IBrush background = this.TryFindResource(Palette.Widget, ActualThemeVariant, out object? widget) && widget is IBrush fill ? fill : Brushes.Black;
-        IBrush text = this.TryFindResource(Palette.Text, ActualThemeVariant, out object? foreground) && foreground is IBrush ink ? ink : Brushes.White;
-        FormattedText note = new(
-            $"The mouse card in slot {_host.MouseSlot} has the mouse · press Esc to let it go",
-            System.Globalization.CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            Typeface.Default,
-            13,
-            text);
-
-        Rect box = new(picture.X + ((picture.Width - note.Width) / 2) - 12, picture.Y + 12, note.Width + 24, note.Height + 12);
-        context.DrawRectangle(background, pen: null, box, 4, 4);
-        context.DrawText(note, new Point(box.X + 12, box.Y + 6));
     }
 
     // Where the picture goes: its monitor's shape, as the display panel gives it, the Apple II's 560 by 192 dots
@@ -318,113 +269,70 @@ internal sealed class ScreenView : Control
     {
         base.OnPointerPressed(e);
         Focus();
-        PointerPointProperties point = e.GetCurrentPoint(this).Properties;
-        if (!point.IsLeftButtonPressed || !_host.Running || _host.MouseSlot == 0) { return; }
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !OverPicture(e)) { return; }
 
-        // The mouse card: a click gives it the pointer, which it keeps until Escape or the window loses the keyboard,
-        // and then the left button is the card's. The pointer is hidden and held at the screen's centre, so it never
-        // stops at the window's edge.
-        if (!MouseCaptured)
+        // The left button over the picture is the card's. Avalonia captures the pointer while it is down, so its
+        // release comes here wherever the pointer is.
+        if (PlaceMouse(e, pressed: true))
         {
-            _mouseX = _mouseY = 0;
-            _capturedAt = Stopwatch.GetTimestamp();
-            Cursor = new Cursor(StandardCursorType.None);
-            Hold(e.Pointer);
-            Recentre(e.GetPosition(this));
-            MouseChanged?.Invoke(this, EventArgs.Empty);
-            InvalidateVisual();
-            DispatcherTimer.RunOnce(InvalidateVisual, s_noteTime);
+            _mouseDown = true;
+            e.Handled = true;
         }
-        else
-        {
-            Hold(e.Pointer);
-            _host.Mouse(0, 0, pressed: true);
-        }
-
-        e.Handled = true;
     }
 
     /// <inheritdoc/>
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        if (!MouseCaptured) { return; }
-        if (e.InitialPressMouseButton == MouseButton.Left) { _host.Mouse(0, 0, pressed: false); }
-
-        // Avalonia ends a capture when the buttons come up; the card keeps the pointer until Escape.
-        IPointer pointer = e.Pointer;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (MouseCaptured) { Hold(pointer); }
-        });
-    }
-
-    /// <inheritdoc/>
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        base.OnPointerCaptureLost(e);
-
-        // Anything else that takes the capture while the card has the pointer gives it back to the card, unless the
-        // card is letting go.
-        if (!MouseCaptured || _releasing) { return; }
-        IPointer pointer = e.Pointer;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (MouseCaptured && pointer.Captured is null) { Hold(pointer); }
-        });
-    }
-
-    // Captures the pointer, so every move comes here whatever is under it, the side pane among them.
-    private void Hold(IPointer pointer)
-    {
-        _mousePointer = pointer;
-        if (pointer.Captured != this) { pointer.Capture(this); }
+        if (!_mouseDown || e.InitialPressMouseButton != MouseButton.Left) { return; }
+        _mouseDown = false;
+        PlaceMouse(e, pressed: false);
     }
 
     /// <inheritdoc/>
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (_mouseAt is not { } last || _bitmap is not { } bitmap) { return; }
+        PlaceMouse(e);
+    }
 
-        // Movement in the picture's 280 by 192 dots, as the panel sends it. On Windows it is read from where Windows
-        // has the pointer, since a move event can come from before the pointer was last put back, and the hidden
-        // pointer goes back to the picture's centre as it nears an edge, so it never stops there.
+    /// <inheritdoc/>
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        HidePointer(hide: false);
+    }
+
+    // The mouse card: the pointer stands for the card's mouse, its place in the picture the mouse's place within the
+    // bounds the program set, so the mouse is wherever the pointer is and never drifts from it. Off the picture, as
+    // over the space around it or in a drag that leaves the window, the mouse stays at the picture's nearest edge.
+    private bool PlaceMouse(PointerEventArgs e, bool? pressed = null)
+    {
+        if (_host.MouseSlot == 0 || !_host.Running || _bitmap is not { } bitmap)
+        {
+            HidePointer(hide: false);
+            return false;
+        }
+
         Rect picture = PictureRect(bitmap);
-        double across;
-        double down;
-        if (OperatingSystem.IsWindows())
-        {
-            if (!ReadCursor(out int x, out int y) || (x == _cursorX && y == _cursorY)) { return; }
-            double scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-            across = (x - _cursorX) / scale;
-            down = (y - _cursorY) / scale;
-            _cursorX = x;
-            _cursorY = y;
+        Point at = e.GetPosition(this);
+        bool on = _host.PlaceMouse(
+            (at.X - picture.X) / Math.Max(1, picture.Width),
+            (at.Y - picture.Y) / Math.Max(1, picture.Height),
+            pressed);
 
-            // Put back at the centre only once it nears the picture's edge, so few moves are lost to the putting back.
-            PixelPoint centre = this.PointToScreen(picture.Center);
-            if (Math.Abs(x - centre.X) > picture.Width * scale / 4 || Math.Abs(y - centre.Y) > picture.Height * scale / 4)
-            {
-                Recentre(picture.Center);
-            }
-        }
-        else
-        {
-            Point at = e.GetPosition(this);
-            if (at == last) { return; }
-            across = at.X - last.X;
-            down = at.Y - last.Y;
-            _mouseAt = at;
-        }
+        // The program draws its own pointer once it turns the mouse on, so the window's is hidden over the picture.
+        HidePointer(on && picture.Contains(at));
+        return true;
+    }
 
-        _mouseX += across * 280 / Math.Max(1, picture.Width);
-        _mouseY += down * 192 / Math.Max(1, picture.Height);
-        int dx = (int)Math.Truncate(_mouseX);
-        int dy = (int)Math.Truncate(_mouseY);
-        _mouseX -= dx;
-        _mouseY -= dy;
-        if (dx != 0 || dy != 0) { _host.Mouse(dx, dy); }
+    private bool OverPicture(PointerEventArgs e) => _bitmap is { } bitmap && PictureRect(bitmap).Contains(e.GetPosition(this));
+
+    private void HidePointer(bool hide)
+    {
+        if (hide == _pointerHidden) { return; }
+        _pointerHidden = hide;
+        Cursor = hide ? s_hidden : Cursor.Default;
     }
 
     /// <inheritdoc/>
@@ -432,8 +340,12 @@ internal sealed class ScreenView : Control
     {
         base.OnLostFocus(e);
 
-        // Another window or control taking the keyboard takes the pointer back from the mouse card.
-        ReleaseMouse();
+        // A button let go while another window has the pointer never says so, so the card's button lets go here.
+        if (_mouseDown)
+        {
+            _mouseDown = false;
+            _host.PlaceMouse(across: null, down: null, pressed: false);
+        }
 
         // A key let go while the screen lacks the keyboard never says so, so a held Apple key lets go here.
         for (int button = 0; button < 2; button++)
@@ -442,56 +354,6 @@ internal sealed class ScreenView : Control
             _held[button] = false;
             SendButton(button);
         }
-    }
-
-    // On Windows, keeps the hidden pointer inside the picture and puts it back at the picture's centre after each
-    // move, so it never reaches an edge; elsewhere the capture alone keeps its moves coming here.
-    private unsafe void Recentre(Point at)
-    {
-        _mouseAt = at;
-        if (!OperatingSystem.IsWindows() || _bitmap is not { } bitmap) { return; }
-        Rect picture = PictureRect(bitmap);
-        PixelPoint topLeft = this.PointToScreen(picture.TopLeft);
-        PixelPoint bottomRight = this.PointToScreen(picture.BottomRight);
-
-        // Windows lets go of a clip when another window is activated, so it is set again with each move.
-        int* clip = stackalloc int[] { topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y };
-        NativeMethods.ClipCursor(clip);
-        PixelPoint centre = this.PointToScreen(picture.Center);
-        if (NativeMethods.SetCursorPos(centre.X, centre.Y)) { _mouseAt = picture.Center; }
-        if (!ReadCursor(out _cursorX, out _cursorY))
-        {
-            _cursorX = centre.X;
-            _cursorY = centre.Y;
-        }
-    }
-
-    // Where the pointer is now, in screen pixels.
-    [SupportedOSPlatform("windows")]
-    private static unsafe bool ReadCursor(out int x, out int y)
-    {
-        int* point = stackalloc int[2];
-        bool read = NativeMethods.GetCursorPos(point);
-        x = point[0];
-        y = point[1];
-        return read;
-    }
-
-    // The mouse card gives the pointer back, its button up.
-    private unsafe void ReleaseMouse()
-    {
-        if (!MouseCaptured) { return; }
-        _mouseAt = null;
-        IPointer? pointer = _mousePointer;
-        _mousePointer = null;
-        _releasing = true;
-        if (pointer?.Captured == this) { pointer.Capture(control: null); }
-        _releasing = false;
-        if (OperatingSystem.IsWindows()) { NativeMethods.ClipCursor(rectangle: null); }
-        Cursor = Cursor.Default;
-        _host.Mouse(0, 0, pressed: false);
-        MouseChanged?.Invoke(this, EventArgs.Empty);
-        InvalidateVisual();
     }
 
     private void SendButton(int button)
@@ -503,14 +365,6 @@ internal sealed class ScreenView : Control
     /// <inheritdoc/>
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        // Escape gives the pointer back from the mouse card, rather than going to the machine.
-        if (e.Key == Key.Escape && MouseCaptured)
-        {
-            ReleaseMouse();
-            e.Handled = true;
-            return;
-        }
-
         // The Alt keys hold the Apple keys, or the II's game-port buttons, while they are down.
         if (e.Key is Key.LeftAlt or Key.RightAlt && _host.HasButtons)
         {

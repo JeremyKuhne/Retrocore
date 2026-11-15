@@ -172,7 +172,6 @@ internal sealed class MainWindow : Window
         _screen.ContextMenu = ViewTree.Menu([[new TreeAction(Icon: null, "Paste", () => _ = _screen.PasteAsync())]]);
         _screen.PasteRequested += (_, _) => _ = _screen.PasteAsync();
         _screen.KeysChanged += (_, _) => PaintKeys();
-        _screen.MouseChanged += (_, _) => Refresh();
 
         // A click in the screen collapses the side pane, so the whole picture is the machine's.
         _screen.AddHandler(
@@ -731,9 +730,7 @@ internal sealed class MainWindow : Window
 
             if (host.MouseSlot is > 0 and var slot)
             {
-                parts.Add(_screen.MouseCaptured
-                    ? $"mouse captured by the mouse card in slot {slot} · press Esc to release it"
-                    : $"mouse card in slot {slot} · click the screen to capture the mouse");
+                parts.Add($"mouse card in slot {slot} · the pointer over the screen is its mouse");
             }
         }
 

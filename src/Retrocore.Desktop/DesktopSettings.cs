@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 namespace Retrocore.Desktop;
 
 /// <summary>
-///  The desktop app's own settings, its theme, zoom and pane opacity, kept under <c>desktop</c> in Retrocore's roaming
+///  The desktop app's own settings, its theme, zoom, pane opacity and fast drives, kept under <c>desktop</c> in Retrocore's roaming
 ///  <c>settings.json</c>, beside the settings the hosts share.
 /// </summary>
 internal sealed class DesktopSettings
@@ -35,8 +35,9 @@ internal sealed class DesktopSettings
 
     private readonly string? _path;
 
-    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity)
+    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity, bool fastDrives)
     {
+        FastDrives = fastDrives;
         _path = path;
         ThemeName = theme;
         Zoom = zoom;
@@ -65,6 +66,11 @@ internal sealed class DesktopSettings
     internal int PaneOpacity { get; set; }
 
     /// <summary>
+    ///  Gets or sets whether machines run as fast as they can while a disk or tape is busy, true unless set.
+    /// </summary>
+    internal bool FastDrives { get; set; }
+
+    /// <summary>
     ///  Gets the roaming settings file: <c>%APPDATA%\Retrocore\settings.json</c> on Windows.
     /// </summary>
     internal static string DefaultPath =>
@@ -80,6 +86,7 @@ internal sealed class DesktopSettings
         string theme = "system";
         int zoom = 0;
         int paneOpacity = DefaultPaneOpacity;
+        bool fastDrives = true;
         if (path is not null && Read(path)?["desktop"] is JsonObject desktop)
         {
             if (desktop["theme"] is JsonValue themeValue && themeValue.GetValueKind() == JsonValueKind.String)
@@ -96,13 +103,20 @@ internal sealed class DesktopSettings
             {
                 paneOpacity = opacityValue.GetValue<int>();
             }
+
+            if (desktop["fastDrives"] is JsonValue fastValue
+                && fastValue.GetValueKind() is JsonValueKind.True or JsonValueKind.False)
+            {
+                fastDrives = fastValue.GetValue<bool>();
+            }
         }
 
         return new(
             path,
             theme is "light" or "dark" ? theme : "system",
             Math.Clamp(zoom, MinimumZoom, MaximumZoom),
-            Math.Clamp(paneOpacity, MinimumPaneOpacity, 100));
+            Math.Clamp(paneOpacity, MinimumPaneOpacity, 100),
+            fastDrives);
     }
 
     /// <summary>
@@ -112,7 +126,13 @@ internal sealed class DesktopSettings
     {
         if (_path is null) { return; }
         JsonObject root = Read(_path) ?? [];
-        root["desktop"] = new JsonObject { ["theme"] = ThemeName, ["zoom"] = Zoom, ["paneOpacity"] = PaneOpacity };
+        root["desktop"] = new JsonObject
+        {
+            ["theme"] = ThemeName,
+            ["zoom"] = Zoom,
+            ["paneOpacity"] = PaneOpacity,
+            ["fastDrives"] = FastDrives
+        };
 
         // Written beside the file and moved over it, so a failed write leaves the settings as they were.
         if (Path.GetDirectoryName(_path) is { Length: > 0 } directory) { Directory.CreateDirectory(directory); }

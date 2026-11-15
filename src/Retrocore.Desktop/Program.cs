@@ -30,6 +30,7 @@ internal static class Program
         int? zoom = null;
         double? benchmarkSeconds = null;
         double? speed = null;
+        bool? fastDrives = null;
         for (int index = 0; index < args.Length; index++)
         {
             string? value = index + 1 < args.Length ? args[index + 1] : null;
@@ -59,12 +60,16 @@ internal static class Program
                     speed = double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
                     index++;
                     break;
+                case "--fast-drives" when value is "on" or "off":
+                    fastDrives = value == "on";
+                    index++;
+                    break;
                 case "--zoom" when value is not null && int.TryParse(value, out int level):
                     zoom = level;
                     index++;
                     break;
                 default:
-                    Console.Error.WriteLine($"Unknown or incomplete option {args[index]}. Usage: retrocore-desktop [--machine json] [--smoke-seconds n] [--composition lowLatency|default] [--theme system|light|dark] [--zoom n] [--speed 0|1|2|4|8] [--benchmark n]");
+                    Console.Error.WriteLine($"Unknown or incomplete option {args[index]}. Usage: retrocore-desktop [--machine json] [--smoke-seconds n] [--composition lowLatency|default] [--theme system|light|dark] [--zoom n] [--speed 0|1|2|4|8] [--fast-drives on|off] [--benchmark n]");
                     return 1;
             }
         }
@@ -78,6 +83,7 @@ internal static class Program
         // A smoke run neither reads nor writes the user's settings, so it measures the same every time.
         DesktopSettings settings = DesktopSettings.Load(smokeSeconds is null ? DesktopSettings.DefaultPath : null);
         if (theme is not null) { settings.ThemeName = theme; }
+        if (fastDrives is { } fast) { settings.FastDrives = fast; }
         if (zoom is { } steps)
         {
             settings.Zoom = Math.Clamp(steps, DesktopSettings.MinimumZoom, DesktopSettings.MaximumZoom);

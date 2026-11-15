@@ -40,6 +40,7 @@ internal sealed class MachineHost : DisposableBase
     // released and taken straight back can keep them waiting for many slices.
     private int _waiting;
     private volatile bool _frameWanted = true;
+    private volatile bool _accelerated;
     private double _speed = 1;
     private bool _paceAgain = true;
 
@@ -108,6 +109,76 @@ internal sealed class MachineHost : DisposableBase
             }
         }
     }
+
+    /// <summary>
+    ///  Gets what the machine's fast drive setting speeds up, <c>disk</c> or <c>tape</c>, or null when it has none.
+    /// </summary>
+    internal string? FastDriveKind => _target switch
+    {
+        Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget => "disk",
+        Apple1DebugTarget or CocoDebugTarget or Trs80DebugTarget or Trs80Model3DebugTarget => "tape",
+        _ => null
+    };
+
+    /// <summary>
+    ///  Gets or sets whether the machine runs as fast as it can while a disk drive's motor turns or a tape plays,
+    ///  as the display panel's Fast disk does, then goes back to its speed.
+    /// </summary>
+    internal bool FastDrives
+    {
+        get
+        {
+            using (Gate())
+            {
+                return _target switch
+                {
+                    Apple2DebugTarget apple2 => apple2.FastDisk,
+                    Apple3DebugTarget apple3 => apple3.FastDisk,
+                    Trs80Model2DebugTarget model2 => model2.FastDisk,
+                    Apple1DebugTarget apple1 => apple1.FastCassette,
+                    CocoDebugTarget coco => coco.FastCassette,
+                    Trs80DebugTarget model1 => model1.FastCassette,
+                    Trs80Model3DebugTarget model3 => model3.FastCassette,
+                    _ => false
+                };
+            }
+        }
+        set
+        {
+            using (Gate())
+            {
+                switch (_target)
+                {
+                    case Apple2DebugTarget apple2:
+                        apple2.FastDisk = value;
+                        break;
+                    case Apple3DebugTarget apple3:
+                        apple3.FastDisk = value;
+                        break;
+                    case Trs80Model2DebugTarget model2:
+                        model2.FastDisk = value;
+                        break;
+                    case Apple1DebugTarget apple1:
+                        apple1.FastCassette = value;
+                        break;
+                    case CocoDebugTarget coco:
+                        coco.FastCassette = value;
+                        break;
+                    case Trs80DebugTarget model1:
+                        model1.FastCassette = value;
+                        break;
+                    case Trs80Model3DebugTarget model3:
+                        model3.FastCassette = value;
+                        break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether the machine is running as fast as it can for a busy drive just now.
+    /// </summary>
+    internal bool Accelerated => _accelerated;
 
     /// <summary>
     ///  Gets or sets whether the machine's sound plays.
@@ -276,14 +347,29 @@ internal sealed class MachineHost : DisposableBase
 
                 long slice = Stopwatch.GetTimestamp();
                 double speed = _speed;
+
+                // While a drive is busy with fast drives on, the machine runs as fast as it can, and its pacing
+                // starts over from wherever it is once the drive is done, rather than waiting for the clock.
+                bool accelerated = speed != 0 && _target.Accelerated;
+                if (accelerated)
+                {
+                    paceTime = slice;
+                    paceCycles = _target.CycleCount;
+                }
+                else if (_accelerated)
+                {
+                    _audio.Clear();
+                }
+
+                _accelerated = accelerated;
                 // As fast as it can, the machine runs whole slices and never sleeps: a sleep of a millisecond lasts
                 // as long as 15.6 at Windows' default timer resolution, which held it to a fraction of its speed.
-                ulong due = speed == 0
+                ulong due = speed == 0 || accelerated
                     ? ulong.MaxValue
                     : paceCycles + (ulong)(Stopwatch.GetElapsedTime(paceTime).TotalSeconds * _target.ClockHertz * speed);
 
                 // Too far behind, as after the window was dragged: keep time from here rather than racing to catch up.
-                if (speed != 0 && due > _target.CycleCount + (ulong)(_target.ClockHertz * speed * MaximumLagSeconds))
+                if (speed != 0 && !accelerated && due > _target.CycleCount + (ulong)(_target.ClockHertz * speed * MaximumLagSeconds))
                 {
                     paceTime = slice;
                     paceCycles = _target.CycleCount;
@@ -310,7 +396,7 @@ internal sealed class MachineHost : DisposableBase
             }
 
             while (Volatile.Read(ref _waiting) != 0) { Thread.Yield(); }
-            if (audio is not null && SoundOn && _speed == 1) { _audio.Queue(audio); }
+            if (audio is not null && SoundOn && _speed == 1 && !_accelerated) { _audio.Queue(audio); }
             if (ahead) { Thread.Sleep(1); }
         }
     }

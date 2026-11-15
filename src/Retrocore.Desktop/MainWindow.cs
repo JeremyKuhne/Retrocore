@@ -487,6 +487,31 @@ internal sealed class MainWindow : Window
 
         options.Children.Add(Option("Speed", speed));
 
+        // As the display panel's Fast disk: a disk or tape loads as fast as the machine can run, whatever the speed.
+        if (_host.FastDriveKind is { } kind)
+        {
+            _host.FastDrives = _settings.FastDrives;
+            CheckBox fast = new()
+            {
+                Content = kind == "disk" ? "Fast disk" : "Fast tape",
+                IsChecked = _settings.FastDrives,
+                FontSize = 12,
+            };
+
+            ToolTip.SetTip(fast, kind == "disk"
+                ? "Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"
+                : "Runs as fast as it can while the tape plays, then back at the chosen speed");
+
+            fast.IsCheckedChanged += (_, _) =>
+            {
+                _settings.FastDrives = fast.IsChecked == true;
+                _host.FastDrives = _settings.FastDrives;
+                _settings.Save();
+            };
+
+            options.Children.Add(Option("Drives", fast));
+        }
+
         ComboBox sound = Choice(["Off", "Speaker"], 1);
         sound.SelectionChanged += (_, _) => _host.SoundOn = sound.SelectedIndex == 1;
         options.Children.Add(Option("Sound", sound));
@@ -592,7 +617,8 @@ internal sealed class MainWindow : Window
         List<DriveRow> drives = _host.Devices();
         DriveRow? busy = drives.FirstOrDefault(drive => drive.Activity != DeviceActivity.Idle);
         _machineState.Text = "running";
-        _status.Text = $"● {_host.Name} · running · {megahertz:0.00} MHz · {_screen.Stats.FramesPerSecond} fps"
+        string fast = _host.Accelerated ? (_host.FastDriveKind == "tape" ? " · fast tape" : " · fast disk") : "";
+        _status.Text = $"● {_host.Name} · running · {megahertz:0.00} MHz{fast} · {_screen.Stats.FramesPerSecond} fps"
             + (busy is null ? "" : $" · {busy.Name}: {busy.Activity.ToString().ToLowerInvariant()}");
 
         string shown = string.Join('|', drives.Select(drive => $"{drive.Name}{drive.Media}{drive.Locked}{drive.Activity}"));

@@ -4,13 +4,14 @@
 
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using Retrocore.Machines.Devices;
 using System.Diagnostics;
 
 namespace Retrocore.Desktop;
 
 /// <summary>
 ///  Runs the window for a while, types a line at the machine, and reports what the spike measures: frames, frame
-///  times, emulated speed, sound and whether the typing reached the screen.
+///  times, emulated speed, how long fast drives ran fast, sound and whether the typing reached the screen.
 /// </summary>
 internal static class SmokeRun
 {
@@ -29,10 +30,20 @@ internal static class SmokeRun
         long started = Stopwatch.GetTimestamp();
         bool settled = false;
         bool typed = false;
+        int ticks = 0;
+        int fast = 0;
+        double busyUntil = 0;
         DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
         timer.Tick += (_, _) =>
         {
             TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+            ticks++;
+            if (host.Accelerated) { fast++; }
+            if (host.Devices().Any(drive => drive.Activity != DeviceActivity.Idle))
+            {
+                busyUntil = elapsed.TotalSeconds;
+            }
+
             if (!settled && elapsed >= s_settle)
             {
                 settled = true;
@@ -49,14 +60,14 @@ internal static class SmokeRun
 
             if (elapsed.TotalSeconds < seconds + s_settle.TotalSeconds) { return; }
             timer.Stop();
-            Report(window, host, seconds);
+            Report(window, host, seconds, fast * 100 / Math.Max(1, ticks), busyUntil);
             desktop.Shutdown();
         };
 
         timer.Start();
     }
 
-    private static void Report(MainWindow window, MachineHost host, double seconds)
+    private static void Report(MainWindow window, MachineHost host, double seconds, int fastPercent, double busyUntil)
     {
         FrameStats stats = window.Screen.Stats;
         bool reached = host.ScreenText().Contains("42", StringComparison.Ordinal);
@@ -71,6 +82,7 @@ internal static class SmokeRun
         Console.Out.WriteLine($"display frames: {stats.Frames} ({stats.Frames / seconds:0.0} a second), pictures drawn: {stats.Drawn}");
         Console.Out.WriteLine($"frame time ms: median {stats.Percentile(50):0.00}, p99 {stats.Percentile(99):0.00}, max {stats.Percentile(100):0.00}");
         Console.Out.WriteLine($"emulated speed: {speed:0.000}x of {host.ClockHertz} Hz");
+        Console.Out.WriteLine($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start");
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");
         Console.Out.Flush();

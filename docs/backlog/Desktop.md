@@ -81,7 +81,10 @@ closing or dragging it never moves or resizes the machine's picture.
   - **Drives**: each card with drives, and its drives with their media, lock, head and activity, as the extension's
     Drives view shows them, with the same insert, eject, lock and save actions;
   - **Display and Sound**: what the display panel offers: speed, sound, volume, scale, screen, fast disk and the beam
-    overlay.
+    overlay. **Fast disk** (Fast tape on the machines that load from tape: the Apple-1, the CoCo and the TRS-80
+    Models I and III) runs the machine as fast as it can while a drive's motor turns or the tape plays, then goes
+    back to the chosen speed with its sound, as the panel's does. It is on unless turned off, and kept as
+    `fastDrives` in `settings.json`; the status bar shows "fast disk" while it is running fast.
 
   The pane opens over the screen, partly transparent (95% opaque unless changed, so the machine shows faintly
   through it), with a shadow along its edge. It is as wide as its contents need, within the window, so nothing is cut off; dragging its edge
@@ -146,6 +149,7 @@ The spike is in [src/Retrocore.Desktop](../../src/Retrocore.Desktop), and passes
 | Sound | The Apple IIe's speaker plays through SDL3 with no underruns, once each stream starts with 40 ms of silence. |
 | Theme | Light Modern and Dark Modern, from `Palette` resources that follow the application's theme variant; the Fluent controls follow it too. Settings → Appearance → Theme switches it while running. |
 | Speed | `--benchmark 3` measures without the window. With no debugger attached the host runs the machine through the debug target's `RunCycles`, which skips the per-cycle tracking only a debugger shows (the call stack, BASIC and fetch tracking) and clears the call stack after; the benchmark checks that it ends where stepping does, in cycle count, program counter, memory and picture, for all eight machines. At Max the host runs whole 4 ms slices and never sleeps, and keeps 99% of `RunCycles`' speed: the Apple IIe 36× (24× when stepped as a debugger steps), the Apple-1 64×, the Apple III 27×, the TRS-80 Models I, II and III 41×, 4.7× and 27×, the CoCo 25× and the Altair 49×. In the window the Apple IIe runs 35.6× at Max with frames still at the display's rate. Before, Max ran 4 ms of the machine's time and then slept for a millisecond, which lasts as long as 15.6 ms at Windows' default timer resolution: 0.25× without the window and about 2× with it. The window's calls into the machine step in between slices, so they wait no more than one. |
+| Fast disk | A DOS 3.3 disk built by `tools/DosDisk` boots on the Apple IIe with its drive done 0.3 s after start with Fast disk on, against 5.2 s with it off (`--fast-drives on\|off`), and the machine is back at 1.000× after, with no sound underruns. |
 | Zoom | With the screen holding the keyboard, Ctrl and one wheel notch over the screen zoom the chrome to 120%, and Ctrl+= then goes to the machine, leaving the zoom alone. The picture measures 560 by 384 at 100%, at 173%, and after zooming with the wheel while running. |
 
 Not yet tried: following the system's theme as it changes while the app is open, and the settings file being

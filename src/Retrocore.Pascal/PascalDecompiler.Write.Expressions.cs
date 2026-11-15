@@ -25,6 +25,15 @@ public sealed partial class PascalDecompiler
             if (field != whole) { expression = new Load(field, load.Words); }
         }
 
+        // A WITH's temporary holds its record's address: for a record a pointer points to, the pointer's value.
+        if (expression is Load { Designator: VariableDesignator { Variable: var held } }
+            && _with.Contains(held)
+            && _withRecords.TryGetValue(held, out Designator? record)
+            && record is Dereference pointed)
+        {
+            return Expression(pointed.Pointer, expected, precedence);
+        }
+
         // A word also read by bytes is a variant record's.
         if (expression is Load { Designator: var viewed }
             && Viewed(viewed)

@@ -64,10 +64,15 @@ public sealed partial class PascalDecompiler
                 }, _ => { });
 
                 List<int> variables = [.. procedure.Generations
-                    .Where(pair => pair.Value.Values.Any(assigned.Contains))
+                    .Where(pair => pair.Value.Values.Any(generation => assigned.Contains(generation) || generation.Kind == VariableKind.Variable))
                     .Select(pair => pair.Key)];
 
-                foreach (int offset in variables) { procedure.Generations.Remove(offset); }
+                foreach (int offset in variables)
+                {
+                    procedure.Generations.Remove(offset);
+                    _variables.Add((procedure, offset));
+                }
+
                 again = variables.Count > 0;
                 if (again && procedure.Generations.Count == 0) { Redecode(procedure); }
             }
@@ -100,6 +105,72 @@ public sealed partial class PascalDecompiler
         return Withs(procedure);
     }
 
+    // The temporaries assigned or read in statements outside their own WITH statements, those inside being active.
+    private static void Outside(List<Statement> statements, HashSet<Variable> active, HashSet<Variable> temporaries, HashSet<Variable> found)
+    {
+        void Read(Expr expression) => Walk(expression, inner =>
+        {
+            if (inner is Load { Designator: VariableDesignator { Variable: var loaded } }
+                && temporaries.Contains(loaded)
+                && !active.Contains(loaded))
+            {
+                found.Add(loaded);
+            }
+        });
+
+        foreach (Statement statement in statements)
+        {
+            switch (statement)
+            {
+                case WithStatement with:
+                    Walk(with.Record, Read);
+                    bool added = active.Add(with.Temporary);
+                    Outside(with.Body, active, temporaries, found);
+                    if (added) { active.Remove(with.Temporary); }
+                    break;
+                case IfStatement branch:
+                    Read(branch.Condition);
+                    Outside(branch.Then, active, temporaries, found);
+                    if (branch.Else is not null) { Outside(branch.Else, active, temporaries, found); }
+                    break;
+                case WhileStatement loop:
+                    Read(loop.Condition);
+                    Outside(loop.Body, active, temporaries, found);
+                    break;
+                case RepeatStatement loop:
+                    Outside(loop.Body, active, temporaries, found);
+                    Read(loop.Condition);
+                    break;
+                case ForStatement loop:
+                    Read(loop.From);
+                    Read(loop.To);
+                    Outside(loop.Body, active, temporaries, found);
+                    break;
+                case CaseStatement choice:
+                    Read(choice.Selector);
+                    foreach ((List<int> _, List<Statement> body) in choice.Arms)
+                    {
+                        Outside(body, active, temporaries, found);
+                    }
+
+                    break;
+                default:
+                    Walk([statement], simple => Assigned(simple, temporaries, found), Read);
+                    break;
+            }
+        }
+    }
+
+    // A temporary a statement assigns.
+    private static void Assigned(Statement statement, HashSet<Variable> temporaries, HashSet<Variable> found)
+    {
+        if (statement is not Assignment { Target: VariableDesignator { Variable: var target } }) { return; }
+        if (temporaries.Contains(target)) { found.Add(target); }
+    }
+
+    // The words found to be variables, though a WITH's temporary shares them, by procedure.
+    private readonly HashSet<(Procedure Procedure, int Offset)> _variables = [];
+
     // The words found to keep WITH statements' records' addresses.
     private readonly HashSet<Variable> _withTemporaries = [];
 
@@ -115,6 +186,7 @@ public sealed partial class PascalDecompiler
                 if (statement is Assignment { Target: VariableDesignator { Variable: var target } } assignment
                     && target.Frame == frame
                     && target.Offset > frame.ParameterWords
+                    && !_variables.Contains((procedure, target.Offset))
                     && target.Kind is VariableKind.Variable or VariableKind.Temporary)
                 {
                     bool address = MayPoint(assignment.Value);
@@ -192,6 +264,13 @@ public sealed partial class PascalDecompiler
             }
 
             if (accepted.Count > 0) { With(procedure.Body, accepted); }
+
+            // A word still assigned, or read, outside the WITH statements it keeps the records of is a variable,
+            // which a WITH's temporary shares.
+            HashSet<Variable> variables = [];
+            Outside(procedure.Body, [], accepted, variables);
+            foreach (Variable variable in variables.Where(accepted.Remove)) { variable.Kind = VariableKind.Variable; }
+
             return accepted;
         }
     }

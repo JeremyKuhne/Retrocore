@@ -569,6 +569,10 @@ public sealed partial class PascalDecompiler
             } call:
                 Real(call.Arguments[0]);
                 break;
+            case Call { Callee.Builtin: "PWROFTEN" or "UNITBUSY" } numbered when numbered.Arguments.Count > 0:
+                // Their arguments are integers.
+                numbered.Arguments[0].Type.Vote(ScalarKind.Integer, 2);
+                break;
             case Call { Callee.Builtin: "SCAN" } scan when scan.Arguments is [{ } limit, ScanTest test, _]:
                 limit.Type.Vote(ScalarKind.Integer, 2);
                 test.Character.Type.Vote(ScalarKind.Char, 2);

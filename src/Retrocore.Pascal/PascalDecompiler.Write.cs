@@ -592,7 +592,10 @@ public sealed partial class PascalDecompiler
 
                 if (known.TryGetValue(offset, out TypeNode? field))
                 {
-                    int size = Math.Min(SizeOf(field) ?? (next - offset), next - offset);
+                    // A field the code shows nothing of the size of is a word, the words after it padding.
+                    TypeNode shown = field.Find();
+                    int unknown = shown.Kind == TypeKind.Unknown && shown.Words <= 1 ? 1 : next - offset;
+                    int size = Math.Min(SizeOf(field) ?? unknown, next - offset);
                     Fit(field, size);
                     parts.Add($"F{offset}: {TypeName(field, parameter: false)}");
                     offset += Math.Max(1, size);
@@ -974,7 +977,9 @@ public sealed partial class PascalDecompiler
                 }
 
             case CaseStatement choice:
-                lines.Add(Indented($"CASE {Expression(choice.Selector, expected: null, 0)} OF"));
+                // A selector is a scalar: a word used both ways by its integer view, a pointer by ORD.
+                TypeNode? selector = choice.Selector.Type.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : null;
+                lines.Add(Indented($"CASE {Expression(choice.Selector, selector, 0)} OF"));
                 _indent++;
                 for (int arm = 0; arm < choice.Arms.Count; arm++)
                 {
@@ -1157,7 +1162,12 @@ public sealed partial class PascalDecompiler
         switch (designator)
         {
             case VariableDesignator { Variable: { Container: { } container } field }:
-                return DesignatorText(new FieldDesignator(new VariableDesignator(container), field.FieldOffset));
+                {
+                    // A word of a record variable is the field at its offset whose type is its own.
+                    int alternative = container.Type.Find().Alternatives(field.FieldOffset).IndexOf(field.Type.Find());
+                    return $"{DesignatorText(new VariableDesignator(container))}.{FieldName(field.FieldOffset, alternative)}";
+                }
+
             case VariableDesignator { Variable: var variable }:
                 return variable.Kind == VariableKind.Copy
                     ? variable.Frame.Variables.Values.FirstOrDefault(parameter => parameter.Copy == variable)?.Name ?? variable.Name

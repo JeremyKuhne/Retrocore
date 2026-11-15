@@ -194,6 +194,53 @@ public sealed class DiskIIImageTests
     }
 
     /// <summary>
+    ///  A track read from any starting bit gives all its sectors: the reader comes into step before the revolution it
+    ///  reads, so a sector the first bits cut into is read whole.
+    /// </summary>
+    /// <param name="rotation">How many bits the track starts later.</param>
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(154)]
+    [DataRow(3000)]
+    [DataRow(51023)]
+    public void RotatedTrackReadsWhole(int rotation)
+    {
+        byte[] image = new byte[35 * TrackSize];
+        new Random(rotation).NextBytes(image);
+        WozDisk disk = SectorDiskConverter.Convert(image, proDosOrder: false).Writable();
+        DiskTrack track = disk.Track(12 * 4) ?? throw new InvalidOperationException();
+        byte[] rotated = new byte[track.Bits.Length];
+        for (int bit = 0; bit < track.BitCount; bit++)
+        {
+            if (track.ReadBit((bit + rotation) % track.BitCount)) { rotated[bit / 8] |= (byte)(0x80 >> (bit % 8)); }
+        }
+
+        disk.SetTrack(quarterTrack: 12 * 4, rotated, track.BitCount);
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Losses.Should().BeEmpty();
+        read.Bytes.Should().Equal(image);
+    }
+
+    /// <summary>
+    ///  A whole address field that names another track is a loss, with its volume, though the track's own sixteen
+    ///  sectors all read.
+    /// </summary>
+    [TestMethod]
+    public void SectorOfAnotherTrackIsALoss()
+    {
+        WozDisk disk = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false).Writable();
+        WozDisk other = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false, volume: 9);
+        byte[] own = (disk.Track(9 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        byte[] theirs = (other.Track(10 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        disk.SetTrack(quarterTrack: 9 * 4, [.. own, .. theirs], bitCount: 2 * 51024);
+
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Unreadable.Should().BeEmpty();
+        read.Losses.Should().Contain(loss => loss.Contains("calls itself track 10", StringComparison.Ordinal));
+        read.Losses.Should().Contain(loss => loss.Contains("volume is 9", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  Data on a half track, which the whole tracks beside it do not cover, is a loss; the quarter tracks a sector
     ///  image's disk maps to its whole tracks are not.
     /// </summary>

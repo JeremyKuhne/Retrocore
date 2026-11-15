@@ -107,31 +107,40 @@ public static class SectorDiskReader
         return new(image, tracks, losses, unreadable);
     }
 
-    // The track's nibbles, twice around, and how many of them start in the first time around.
-    private static List<byte> Nibbles(DiskTrack track, out int firstRevolution)
+    // The track's nibbles three times around, and the ones that start in the second time around: the first only
+    // brings the reader into step with the nibbles, as the sequencer does, and the third finishes a sector across the
+    // index.
+    private static List<byte> Nibbles(DiskTrack track, out int windowStart, out int windowEnd)
     {
-        List<byte> nibbles = [with(track.BitCount / 4)];
-        firstRevolution = 0;
+        List<byte> nibbles = [with(track.BitCount * 3 / 8)];
+        windowStart = -1;
+        windowEnd = 0;
         int shift = 0;
         int start = 0;
-        for (int bit = 0; bit < track.BitCount * 2; bit++)
+        for (int bit = 0; bit < track.BitCount * 3; bit++)
         {
             if (shift == 0) { start = bit; }
             shift = (shift << 1) | (track.ReadBit(bit % track.BitCount) ? 1 : 0);
             if ((shift & 0x80) != 0)
             {
+                if (start >= track.BitCount && start < track.BitCount * 2)
+                {
+                    if (windowStart < 0) { windowStart = nibbles.Count; }
+                    windowEnd = nibbles.Count + 1;
+                }
+
                 nibbles.Add((byte)shift);
-                if (start < track.BitCount) { firstRevolution = nibbles.Count; }
                 shift = 0;
             }
         }
 
+        if (windowStart < 0) { windowStart = 0; }
         return nibbles;
     }
 
-    // Reads a track's 16 sectors into the image. Every address field that starts in one revolution is read, the second
-    // revolution only finishing a sector across the index, so a sector found twice with other data, or a volume on any
-    // sector, is not missed. Notes each sector's volume, the sectors that did not read, and the duplicates.
+    // Reads a track's 16 sectors into the image. Every address field that starts in one revolution, once the reader is
+    // in step, is read, so a sector found twice with other data, a sector with an ID no sector image holds, or a volume
+    // on any sector, is not missed. Notes each sector's volume, the sectors that did not read, and the duplicates.
     private static void ReadTrack(
         DiskTrack bits,
         int track,
@@ -142,12 +151,12 @@ public static class SectorDiskReader
         List<string> unreadable,
         List<string> losses)
     {
-        List<byte> nibbles = Nibbles(bits, out int firstRevolution);
+        List<byte> nibbles = Nibbles(bits, out int windowStart, out int windowEnd);
         int found = 0;
         int bad = 0;
         int duplicated = 0;
         Span<byte> sector = stackalloc byte[256];
-        for (int index = 0; index < firstRevolution && index + 14 < nibbles.Count; index++)
+        for (int index = windowStart; index < windowEnd && index + 14 < nibbles.Count; index++)
         {
             if (nibbles[index] != 0xD5 || nibbles[index + 1] != 0xAA || nibbles[index + 2] != 0x96) { continue; }
 
@@ -155,7 +164,17 @@ public static class SectorDiskReader
             int number = FourAndFour(nibbles, index + 5);
             int physical = FourAndFour(nibbles, index + 7);
             int check = FourAndFour(nibbles, index + 9);
-            if ((volume ^ number ^ physical ^ check) != 0 || number != track || physical > 15) { continue; }
+            if ((volume ^ number ^ physical ^ check) != 0) { continue; }
+
+            // A sector whose address field is whole but names another track, or a sector past 15, has no place in a
+            // sector image.
+            if (number != track || physical > 15)
+            {
+                volumes.Add(volume);
+                losses.Add($"Track {track} has a sector that calls itself track {number}, sector {physical}, which a sector image cannot hold.");
+                index += 10;
+                continue;
+            }
 
             int data = index + 11;
             while (data + 3 < nibbles.Count

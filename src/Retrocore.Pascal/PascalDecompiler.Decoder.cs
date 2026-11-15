@@ -459,7 +459,8 @@ public sealed partial class PascalDecompiler
             return end;
         }
 
-        // Value parameters that are strings, records or arrays are copied into the procedure's own variables first.
+        // Value parameters that are strings, records or arrays are copied into the procedure's own variables first. A
+        // procedure decoded again for its WITH statements finds the copies it found the first time.
         private void Prologue(List<Statement> body)
         {
             Frame frame = _procedure.Frame;
@@ -472,8 +473,7 @@ public sealed partial class PascalDecompiler
                 && copy.Frame == frame
                 && parameter.Frame == frame
                 && parameter.Kind == VariableKind.Parameter
-                && copy.Kind == VariableKind.Variable
-                && parameter.Copy is null)
+                && ((copy.Kind == VariableKind.Variable && parameter.Copy is null) || parameter.Copy == copy))
             {
                 parameter.Copy = copy;
                 copy.Kind = VariableKind.Copy;

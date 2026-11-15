@@ -354,11 +354,12 @@ public sealed partial class PascalDecompiler
             right = right?.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : right;
         }
 
-        // Words of two kinds compare as the integers the p-code compares: ORD of each.
+        // Words of two kinds compare as the integers the p-code compares: ORD of each. So do booleans compared as
+        // words, by EQUI and the others, which compared as booleans would be EQUBOOL's.
         if (comparison.Comparand == Comparand.Word
-            && Natural(comparison.Left) is { } one
-            && Natural(comparison.Right) is { } other
-            && one != other)
+            && ((Natural(comparison.Left) is { } one && Natural(comparison.Right) is { } other && one != other)
+                || Kind(left) == ScalarKind.Boolean
+                || Kind(right) == ScalarKind.Boolean))
         {
             left = TypeNode.Scalar(ScalarKind.Integer);
             right = left;
@@ -511,11 +512,20 @@ public sealed partial class PascalDecompiler
             [
                 Expression(call.Arguments[0], TypeNode.Scalar(ScalarKind.Integer), 0),
                 Expression(call.Arguments[1], expected: null, 0),
-                Expression(call.Arguments[2], expected: null, 0)
+                Scanned(call.Arguments[2])
             ],
             _ => [.. call.Arguments.Select(argument => Expression(argument, expected: null, 0))]
         };
 
         return Invocation(name, parts);
     }
+
+    // The array SCAN scans, which is untyped: inside a WITH on a record, the record's first field, which the WITH
+    // reaches, as the record's own designator would reach it again.
+    private string Scanned(Expr array) => array switch
+    {
+        Address address => Untyped(address.Designator),
+        ByteAddress address => Untyped(address.Designator),
+        _ => Expression(array, expected: null, 0)
+    };
 }

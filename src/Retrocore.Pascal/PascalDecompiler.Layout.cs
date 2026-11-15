@@ -116,6 +116,7 @@ public sealed partial class PascalDecompiler
     private void SystemGlobals()
     {
         HashSet<Variable> files = _systemFiles;
+        HashSet<TypeNode> arrays = [];
         foreach (Procedure procedure in _procedures)
         {
             Walk(procedure.Body, statement =>
@@ -124,7 +125,7 @@ public sealed partial class PascalDecompiler
                     && s_fileFirst.Contains(name)
                     && call.Arguments.Count > 0)
                 {
-                    SystemFile(call.Arguments[0].Value, files);
+                    SystemFile(call.Arguments[0].Value, files, arrays);
                 }
             }, expression =>
             {
@@ -132,7 +133,7 @@ public sealed partial class PascalDecompiler
                     && s_fileFirst.Contains(name)
                     && call.Arguments.Count > 0)
                 {
-                    SystemFile(call.Arguments[0], files);
+                    SystemFile(call.Arguments[0], files, arrays);
                 }
             });
         }
@@ -141,6 +142,7 @@ public sealed partial class PascalDecompiler
         TypeNode pointer = TypeNode.Of(TypeKind.Pointer);
         pointer.Element = TypeNode.Of(TypeKind.File);
         foreach (Variable file in files) { file.Type = pointer; }
+        foreach (TypeNode array in arrays) { array.Find().Element = pointer; }
 
         Dictionary<int, Variable> predeclared = [];
         for (int word = 2; word <= 4; word++)
@@ -157,13 +159,21 @@ public sealed partial class PascalDecompiler
         foreach ((int word, Variable file) in predeclared) { _system.Variables[word] = file; }
     }
 
-    // A system global the code passes as a file.
-    private static void SystemFile(Expr argument, HashSet<Variable> files)
+    // A system global the code passes as a file, or an element of one that is an array of them, as Apple Pascal 1.0's
+    // Compiler indexes the system's files from word 1.
+    private static void SystemFile(Expr argument, HashSet<Variable> files, HashSet<TypeNode> arrays)
     {
         if (argument is Load { Designator: VariableDesignator { Variable: { Kind: VariableKind.System } system } }
             && system.Offset is < 2 or > 4)
         {
             files.Add(system);
+        }
+        else if (argument is Load
+        {
+            Designator: IndexDesignator { Array: VariableDesignator { Variable.Kind: VariableKind.System } array }
+        })
+        {
+            arrays.Add(array.Type);
         }
     }
 

@@ -342,6 +342,82 @@ public class PascalSystemDecompilerTests
         warnings.Should().Contain(warning => warning.Contains("SysCom for T1 would clash with another name the source has", StringComparison.Ordinal));
     }
 
+    // A program compiled as part of the system that indexes the system's files from its first word, as Apple Pascal
+    // 1.0's Compiler reads its source.
+    private const string SystemFilesSource = """
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        TYPE UF = FILE; FP = ^UF;
+        VAR GFILES: ARRAY[0..8] OF FP; ERRNUM: INTEGER;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
+        VAR B: PACKED ARRAY[0..511] OF CHAR;
+        BEGIN
+          IF BLOCKREAD(GFILES[Q]^, B, 1, 0) <> 1 THEN ERRNUM := 3
+        END;
+        BEGIN END.
+        """;
+
+    /// <summary>
+    ///  A system global indexed for a file to pass is an array of pointers to files.
+    /// </summary>
+    [TestMethod]
+    public void SystemFilesIndexedAreArraysOfPointersToFiles()
+    {
+        string source = RoundTrip(SystemFilesSource);
+        source.Should().Contain("  T2 = ^T3;\n  T1 = ARRAY[0..8] OF T2;\n").And.Contain("BLOCKREAD(SYS1[G2]^, ");
+    }
+
+    // A program compiled as part of the system by Apple Pascal 1.0's Compiler, which has no NS: segment procedures
+    // declared FORWARD and never given a body take segments 2 and 3, so that its segment procedure is 4.
+    private const string SkippedSegmentsSource = """
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        VAR SYSCOM: INTEGER;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
+        VAR N: INTEGER;
+        SEGMENT PROCEDURE SEG2; FORWARD;
+        SEGMENT PROCEDURE SEG3; FORWARD;
+        SEGMENT PROCEDURE INIT;
+        BEGIN N := 1 END;
+        BEGIN INIT END;
+        BEGIN END.
+        """;
+
+    /// <summary>
+    ///  Apple Pascal 1.0's Compiler, which has no NS option, numbers a segment past those before it by segment
+    ///  procedures declared FORWARD, whose slots stay empty.
+    /// </summary>
+    [TestMethod]
+    public void SegmentsSkippedWithoutNsAreForwardSegments()
+    {
+        string source = RoundTrip(SkippedSegmentsSource, version: "1.0");
+        source.Should().Contain("  SEGMENT PROCEDURE SEG2; FORWARD;").And.Contain("  SEGMENT PROCEDURE SEG3; FORWARD;").And.NotContain("$NS");
+    }
+
+    // A word read as a boolean in one variant and compared as an integer, by EQUI, in another.
+    private const string BooleanWordSource = """
+        PROGRAM BW;
+        TYPE R = RECORD A: INTEGER; CASE INTEGER OF 0: (B: BOOLEAN); 1: (K: INTEGER) END;
+        VAR X: ^R; F: BOOLEAN;
+        BEGIN
+          NEW(X); X^.A := 0; X^.K := 1; F := X^.B AND F;
+          IF X^.B THEN X^.A := 2;
+          IF X^.K = 1 THEN F := FALSE;
+          IF X^.K <> 21 THEN F := TRUE
+        END.
+        """;
+
+    /// <summary>
+    ///  A boolean compared as a word, by EQUI or NEQI, is compared as an integer, ORD of it, not as a boolean, which
+    ///  EQUBOOL compares.
+    /// </summary>
+    [TestMethod]
+    public void BooleansComparedAsWordsAreOrd()
+    {
+        string source = RoundTrip(BooleanWordSource, version: "1.0");
+        source.Should().Contain("IF ORD(G3^.F1) = 1 THEN").And.Contain("IF ORD(G3^.F1) <> 21 THEN");
+    }
+
     // A word used both ways that points to bytes in one place and to bits in another, as 1.3's Compiler reads the
     // system's version and its options.
     private const string ViewsSource = """
@@ -450,6 +526,85 @@ public class PascalSystemDecompilerTests
     {
         string source = RoundTrip(InnerGotoSource);
         source.Should().Contain("GOTO 1");
+    }
+
+    // A value parameter copied in, in a procedure with two WITH statements that keep their records' addresses in one
+    // word, which is decoded again for them.
+    private const string CopiedWithSource = """
+        PROGRAM CW;
+        TYPE ALFA = PACKED ARRAY[1..8] OF CHAR; R = RECORD A, B: INTEGER END;
+        VAR P, Q: ^R; N: ALFA;
+        PROCEDURE SHOW(S: ALFA);
+        BEGIN
+          WITH P^ DO A := ORD(S[1]);
+          WITH Q^ DO B := ORD(S[2])
+        END;
+        BEGIN NEW(P); NEW(Q); N := 'ABCDEFGH'; SHOW(N) END.
+        """;
+
+    /// <summary>
+    ///  A value parameter's copy is still its copy in a procedure decoded again for its WITH statements, not an
+    ///  assignment at the start of its body.
+    /// </summary>
+    [TestMethod]
+    public void ValueParametersStayCopiedWhereWithsShareAWord()
+    {
+        string source = RoundTrip(CopiedWithSource);
+        source.Should().Contain("PROCEDURE PROC2(A1: T5);\nBEGIN\n  WITH");
+    }
+
+    // Characters stored at an index from a WITH's record, which are its first field's, a packed array's.
+    private const string FirstIndexedSource = """
+        PROGRAM FI;
+        TYPE N = RECORD S: PACKED ARRAY[0..23] OF CHAR; L: ^N END;
+        VAR P: ^N; T: PACKED ARRAY[0..9] OF CHAR; I: INTEGER;
+        BEGIN
+          T := 'ABCDEFGHIJ'; NEW(P);
+          WITH P^ DO
+          BEGIN
+            MOVELEFT(T[1], S, 3);
+            I := 3;
+            IF I < 24 THEN S[I] := ' ';
+            L := NIL
+          END
+        END.
+        """;
+
+    /// <summary>
+    ///  A byte stored at an index from a record's address is its first field's element, a packed array's, not the
+    ///  record's.
+    /// </summary>
+    [TestMethod]
+    public void RecordsIndexedByBytesIndexTheirFirstFields()
+    {
+        string source = RoundTrip(FirstIndexedSource);
+        source.Should().Contain("F0[G9] := ' '");
+    }
+
+    // SCAN of a WITH's record, from its address: its first field, which the WITH's temporary reaches.
+    private const string ScannedWithSource = """
+        PROGRAM SW;
+        TYPE N = RECORD S: PACKED ARRAY[0..23] OF CHAR; L: ^N END;
+        VAR P: ^N; I: INTEGER;
+        BEGIN
+          NEW(P);
+          WITH P^ DO
+          BEGIN
+            I := SCAN(24, = ' ', S);
+            L := NIL
+          END
+        END.
+        """;
+
+    /// <summary>
+    ///  The array SCAN scans, inside a WITH on its record, is the record's first field, which the WITH reaches,
+    ///  rather than the record through its pointer again.
+    /// </summary>
+    [TestMethod]
+    public void ScansInsideWithsScanTheFirstField()
+    {
+        string source = RoundTrip(ScannedWithSource);
+        source.Should().Contain("SCAN(24, = ' ', F0)");
     }
 
     // A GOTO out of a WHILE to the end of the THEN around it.
@@ -761,16 +916,19 @@ public class PascalSystemDecompilerTests
         source.Should().Contain("IDSEARCH(G3, G4^);").And.Contain(" := TREESEARCH(G6, G5, G7)");
     }
 
-    // Compiles a probe, decompiles it, and checks the decompiled source compiles to the same segments.
-    private static string RoundTrip(string probe) => RoundTrip(probe, new PascalDecompilerOptions(), out _);
+    // Compiles a probe, decompiles it, and checks the decompiled source compiles to the same segments: with Apple
+    // Pascal 1.1's Compiler, or 1.0's, whose disks are named in capitals.
+    private static string RoundTrip(string probe, string version = "1.1") =>
+        RoundTrip(probe, new PascalDecompilerOptions(), out _, version);
 
-    private static string RoundTrip(string probe, PascalDecompilerOptions options, out IReadOnlyList<string> warnings)
+    private static string RoundTrip(string probe, PascalDecompilerOptions options, out IReadOnlyList<string> warnings, string version = "1.1")
     {
-        string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
-        string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
+        string extension = version == "1.0" ? "DSK" : "dsk";
+        string boot = Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_1.{extension}");
+        string compiler = Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_2.{extension}");
         if (!File.Exists(boot) || !File.Exists(compiler))
         {
-            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.1's disks.");
+            Assert.Inconclusive($"Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal {version}'s disks.");
         }
 
         (byte[]? original, string compiled) = EmulatedPascalCompiler.Compile(probe, boot, compiler, s_inputs);

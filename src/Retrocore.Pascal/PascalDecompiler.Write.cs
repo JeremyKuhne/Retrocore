@@ -273,8 +273,17 @@ public sealed partial class PascalDecompiler
 
         foreach (Procedure segment in segments)
         {
-            // A segment the Compiler would number otherwise is numbered with NS, the next segment's number.
-            if (_nextSegment is { } next && segment.Segment.Number != next)
+            // A segment the Compiler would number otherwise is numbered with NS, the next segment's number. Apple
+            // Pascal 1.0's Compiler, whose code is version 1, has no NS: segment procedures declared FORWARD, and
+            // never given a body, take the numbers before it, and their slots stay empty.
+            if (_nextSegment is { } next && segment.Segment.Number > next && segment.Segment.Version == 1)
+            {
+                for (int skipped = next; skipped < segment.Segment.Number; skipped++)
+                {
+                    Line($"SEGMENT PROCEDURE SEG{skipped}; FORWARD;  (* Takes segment {skipped}, which has no code. *)");
+                }
+            }
+            else if (_nextSegment is { } following && segment.Segment.Number != following)
             {
                 Line($"(*$NS {segment.Segment.Number}*)  (* The next segment is numbered {segment.Segment.Number}. *)");
             }
@@ -1856,13 +1865,15 @@ public sealed partial class PascalDecompiler
                 return $"{DesignatorText(first)}.B[{Expression(recordBytes.Index, expected: null, 0)}]";
             case IndexDesignator index:
                 {
-                    // Arrays are declared with integer subranges for indexes.
-                    string array = DesignatorText(index.Array);
+                    // Arrays are declared with integer subranges for indexes. A record's bytes indexed from its
+                    // address are its first field's, an array's.
+                    Designator indexed = index.Array.Type.Find().Kind == TypeKind.Record ? Descend(index.Array, use: null) : index.Array;
+                    string array = DesignatorText(indexed);
                     string value = Expression(index.Index, TypeNode.Scalar(ScalarKind.Integer), 0);
 
                     // Without range checks, the bound an index lost may not be the one the array has.
                     if (index.Low is { } lost
-                        && index.Array.Type.Find().IndexLow is { } declared
+                        && indexed.Type.Find().IndexLow is { } declared
                         && lost != declared
                         && !index.Neutral)
                     {
@@ -1870,7 +1881,7 @@ public sealed partial class PascalDecompiler
                         value = $"{Expression(index.Index, TypeNode.Scalar(ScalarKind.Integer), Adding)} {(difference > 0 ? "-" : "+")} {Math.Abs(difference)}";
                     }
 
-                    return array.EndsWith(']') && index.Array is IndexDesignator ? $"{array[..^1]}, {value}]" : $"{array}[{value}]";
+                    return array.EndsWith(']') && indexed is IndexDesignator ? $"{array[..^1]}, {value}]" : $"{array}[{value}]";
                 }
 
             case LengthDesignator length:

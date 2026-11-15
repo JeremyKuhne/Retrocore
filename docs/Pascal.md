@@ -245,6 +245,12 @@ its own from 7, so it is decompiled as
     BEGIN
     END.
 
+Apple Pascal 1.0's Compiler, whose code is version 1, has no `NS`: segment procedures declared `FORWARD` and never
+given a body take the numbers before Apple's, `SEGMENT PROCEDURE SEG2; FORWARD;` to `SEG6`, and their slots, named
+but empty, are left out of a comparison. It indexes the system's files from word 1 (`SYS1[5 + 1]^`), an array of
+pointers to files, and leaves its buffer's byte, not 0, after a procedure's last p-code where its attributes start
+on a word, which `compare` ignores as it does an operand's alignment byte.
+
 A global the code passes as a file holds the file's address (`LOD`), so it is a pointer to an untyped file, written
 `BLOCKREAD(SYS8^, ...)`: the Compiler takes that for `BLOCKREAD`, but not `WRITE(P^, ...)`. Apple's file then had
 its own segments copied out by the Librarian, into other slots and without segment 0; `--pascal compare` pairs

@@ -931,6 +931,24 @@ public class PascalDecompilerTests
         changed[512 + 1] = 2;
         PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(changed))
             .Should().Contain(line => line.Contains("differs from $0001 in P1.2", StringComparison.Ordinal));
+
+        // The byte after a procedure's last p-code that puts its attributes on a word is not compared either.
+        PascalSegment segment = PascalCodeFile.Read(original).Segments.Single(own => own.Code.Length > 0);
+        List<int> ends = [];
+        foreach (PascalProcedure procedure in segment.Procedures)
+        {
+            int end = PcodeDisassembler.Disassemble(segment, procedure).Max(instruction => instruction.Next);
+            if ((end & 1) != 0) { ends.Add(end); }
+        }
+
+        ends.Should().NotBeEmpty();
+        byte[] padded = (byte[])original.Clone();
+        foreach (int end in ends)
+        {
+            padded[(segment.Block * 512) + end] ^= 0x5A;
+        }
+
+        PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(padded)).Should().BeEmpty();
     }
 
     /// <summary>

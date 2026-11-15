@@ -140,7 +140,15 @@ What the decompiler does not decompile yet, found by decompiling every code file
   points to bytes and to bits has a variant for each; an assembled procedure's VAR parameter that calls pass both a
   record and its first field is the field's type (its tree search's name); characters assigned to a string's
   element; and, in the tools, WOZ images, 1.3's prompts, a source split with an include file where it passes a
-  volume, and the Linker's files on a volume of their own. **Next:** Apple Pascal 1.0, 1.2 and Apple III Compilers.
+  volume, and the Linker's files on a volume of their own. **Done (2026-11-15): Apple Pascal 1.0's Compiler**
+  (`ApplePascal10CompilerRebuildsItself`, about two minutes): decompiled, compiled with itself, `(*$S++*)`, on
+  Apple III Pascal 1.1, its segments marked version 4 on a /PASCAL2 of its own (on the 64K Apple II the stack runs
+  into the screen in COMPINIT, and 1.0 has no 128K system), it has the same segments. What it took: 1.0 has no NS,
+  so segment procedures declared FORWARD take segments 2 to 6; the system's files indexed from word 1 are an array
+  of pointers to files; booleans compared by EQUI are ORD of them; a record's bytes indexed, and SCAN's array inside
+  a WITH, are its first field's; a value parameter's copy found again when a procedure is decoded again for its
+  WITHs; the byte before a procedure's attributes, 1.0's buffer's, not compared; and, in the tools, 1.0's APPLE1
+  workfile deleted so that C(ompile) asks for the source. **Next:** Apple Pascal 1.2 and Apple III Compilers.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

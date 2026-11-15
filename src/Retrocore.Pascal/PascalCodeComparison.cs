@@ -14,7 +14,8 @@ namespace Retrocore.Pascal;
 ///   Where segments sit in the file, and the blocks of a unit's interface text, are left out: they follow from the
 ///   code's lengths. A difference in code is reported at its first byte, with the procedure it is in and the p-code
 ///   there in each file. The byte the Compiler skips to put an <c>LDC</c>'s or an <c>XJP</c>'s words on a word
-///   boundary holds whatever its buffer last had, so no source decides it, and it is not compared.
+///   boundary holds whatever its buffer last had, so no source decides it, and it is not compared; nor is the byte
+///   that puts a procedure's attributes on a word after its code, which Apple Pascal 1.0's Compiler leaves the same.
 ///  </para>
 ///  <para>
 ///   Segments are paired in the order of their numbers, leaving out those with no code and the system's outer block
@@ -123,6 +124,11 @@ public static class PascalCodeComparison
 
                 if (aligned >= 0 && (aligned & 1) != 0) { padding.Add(aligned); }
             }
+
+            // So does the byte after a procedure's last p-code that puts its attributes, which follow, on a word:
+            // Apple Pascal 1.0's Compiler leaves its buffer's byte there.
+            int end = instructions.Select(instruction => instruction.Next).DefaultIfEmpty(0).Max();
+            if ((end & 1) != 0) { padding.Add(end); }
         }
 
         return padding;

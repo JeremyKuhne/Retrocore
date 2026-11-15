@@ -85,6 +85,15 @@ internal static class SmokeRun
         Console.Out.WriteLine($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start");
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");
+        if (!reached)
+        {
+            // What the screen shows instead, such as a prompt the line answered.
+            foreach (string row in host.ScreenText().Split('\n').Where(row => row.Trim().Length != 0).TakeLast(4))
+            {
+                Console.Out.WriteLine($"  screen: {row.TrimEnd()}");
+            }
+        }
+
         Console.Out.Flush();
     }
 }

@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Retrocore.Debug;
 using Retrocore.Machines.Devices;
 
@@ -249,6 +250,23 @@ internal sealed class MainWindow : Window
 
     private void OnZoomKey(object? sender, KeyEventArgs e)
     {
+        // Ctrl+Shift+E moves the keyboard from the screen to the pane and back, as it does between VS Code's editor
+        // and its side bar, so the keyboard alone can reach the pane while the machine has it.
+        if (e.Key == Key.E && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            if (FocusManager?.GetFocusedElement() == _screen)
+            {
+                FocusPane();
+            }
+            else
+            {
+                _screen.Focus();
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if ((e.KeyModifiers & KeyModifiers.Control) == 0 || FocusManager?.GetFocusedElement() == _screen) { return; }
         switch (e.Key)
         {
@@ -266,6 +284,18 @@ internal sealed class MainWindow : Window
         }
 
         e.Handled = true;
+    }
+
+    // Opens the pane if it is closed and gives the keyboard to its first control, or to the view's icon when it has
+    // none.
+    private void FocusPane()
+    {
+        if (!_pane.IsVisible) { ShowView(_settingsShown); }
+        InputElement? first = _paneZoom.GetVisualDescendants()
+            .OfType<InputElement>()
+            .FirstOrDefault(element => element.Focusable && element.IsEffectivelyVisible && element.IsEffectivelyEnabled);
+
+        (first ?? (_settingsShown ? _settingsButton : _machineButton)).Focus(NavigationMethod.Tab);
     }
 
     private void OnZoomWheel(object? sender, PointerWheelEventArgs e)
@@ -430,7 +460,6 @@ internal sealed class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 6),
-            Focusable = false,
         }.Themed(ForegroundProperty, Palette.Text);
 
         header.Click += (_, _) =>
@@ -506,8 +535,13 @@ internal sealed class MainWindow : Window
             options.Children.Add(Option(kind == "disk" ? "Fast disk" : "Fast tape", fast));
         }
 
-        ComboBox sound = Choice(["Off", "Speaker"], 1);
-        sound.SelectionChanged += (_, _) => _host.SoundOn = sound.SelectedIndex == 1;
+        // The machine's own modes, starting from the one it launched with.
+        IReadOnlyList<string> modes = _host.SoundModes;
+        ComboBox sound = Choice(
+            [.. modes.Select(mode => mode switch { "off" => "Off", "mockingboard" => "Mockingboard", _ => "Speaker" })],
+            Math.Max(0, modes.ToList().IndexOf(_host.SoundMode)));
+
+        sound.SelectionChanged += (_, _) => _host.SoundMode = modes[Math.Max(0, sound.SelectedIndex)];
         options.Children.Add(Option("Sound", sound));
 
         Slider volume = new()
@@ -579,7 +613,7 @@ internal sealed class MainWindow : Window
         StackPanel right = new() { Orientation = Orientation.Horizontal };
         right.Children.Add(_zoomStatus);
         right.Children.Add(StatusButton("Ctrl-C", () => _host.Key(3), "CONTROL-C"));
-        right.Children.Add(StatusButton("Esc", () => _host.Key(27), "ESC"));
+        right.Children.Add(StatusButton("Esc", () => _host.Key(KeyMap.Code(_host.KeyMapName, Key.Escape, KeyModifiers.None) ?? 27), "ESC"));
         right.Children.Add(StatusButton("Reset", _host.Reset, "The machine's reset"));
         DockPanel.SetDock(right, Dock.Right);
         _statusZoom.Child = new DockPanel { Height = 24, Children = { right, _status } };
@@ -600,7 +634,6 @@ internal sealed class MainWindow : Window
             Padding = new Thickness(8, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
-            Focusable = false,
         }.Themed(ForegroundProperty, Palette.StatusText);
 
         ToolTip.SetTip(button, tip);
@@ -618,9 +651,10 @@ internal sealed class MainWindow : Window
         double megahertz = _host.MeasuredHertz / 1_000_000;
         List<DriveRow> drives = _host.Devices();
         DriveRow? busy = drives.FirstOrDefault(drive => drive.Activity != DeviceActivity.Idle);
-        _machineState.Text = "running";
+        string state = _host.Stopped is null ? "running" : "stopped: press Reset";
+        _machineState.Text = state;
         string fast = _host.Accelerated ? (_host.FastDriveKind == "tape" ? " · fast tape" : " · fast disk") : "";
-        _status.Text = $"● {_host.Name} · running · {megahertz:0.00} MHz{fast} · {_screen.Stats.FramesPerSecond} fps"
+        _status.Text = $"● {_host.Name} · {state} · {megahertz:0.00} MHz{fast} · {_screen.Stats.FramesPerSecond} fps"
             + (busy is null ? "" : $" · {busy.Name}: {busy.Activity.ToString().ToLowerInvariant()}");
 
         string shown = string.Join('|', drives.Select(drive => $"{drive.Name}{drive.Media}{drive.Locked}{drive.Activity}"));

@@ -270,8 +270,10 @@ On the first start of a version with machine files, the extension, asking once:
   so the user can pick one; a machine file that changed on disk while open is reloaded, or reported when the open
   machine also changed.
 - A data folder that is missing (a NAS offline) is shown dimmed with its machines unavailable, not removed.
-- Nothing is written into a library but `library.retrocore`, and nothing at all into a read-only one; its index is in
-  local data.
+- A writable library gets no state of the hosts' own but `library.retrocore`: no journals, history, thumbnails or
+  temporary files beyond a save's own. Its images are saved when the user saves them, as the
+  [media persistence plan](MediaPersistence.md#saving) lets any writable source be, and the save updates the image's
+  hash in `library.retrocore`. Nothing at all is written into a read-only library; its index is in local data.
 
 ## Tests
 

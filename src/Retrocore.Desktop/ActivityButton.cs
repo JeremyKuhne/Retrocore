@@ -39,7 +39,6 @@ internal sealed class ActivityButton : Button
         Background = Brushes.Transparent;
         BorderThickness = new Thickness(0);
         CornerRadius = new CornerRadius(0);
-        Focusable = false;
         ToolTip.SetTip(this, name);
         Active = false;
     }

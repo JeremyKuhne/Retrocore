@@ -41,6 +41,9 @@ internal sealed class MachineHost : DisposableBase
     private int _waiting;
     private volatile bool _frameWanted = true;
     private volatile bool _accelerated;
+
+    // Why the CPU stopped, such as a 6502 jammed by an illegal opcode, or null while it runs; Reset clears it.
+    private volatile string? _stopped;
     private double _speed = 1;
     private bool _paceAgain = true;
 
@@ -185,6 +188,55 @@ internal sealed class MachineHost : DisposableBase
     internal bool Accelerated => _accelerated;
 
     /// <summary>
+    ///  Gets the sound modes the machine offers: <c>off</c> and <c>speaker</c>, and <c>mockingboard</c> on an Apple II
+    ///  with one in slot 4.
+    /// </summary>
+    internal IReadOnlyList<string> SoundModes
+    {
+        get
+        {
+            using (Gate())
+            {
+                return SoundRequest() is not null
+                    && _target.DisplayState(running: true)["mockingboard"] is JsonValue board
+                    && board.TryGetValue(out bool installed)
+                    && installed
+                        ? ["off", "speaker", "mockingboard"]
+                        : ["off", "speaker"];
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Gets or sets the sound mode. A machine with a sound request of its own, as the Apple II, Apple III and CoCo
+    ///  have, changes what it makes, so a machine launched with its sound off can be heard again; on the others the
+    ///  host plays or drops the sound.
+    /// </summary>
+    internal string SoundMode
+    {
+        get
+        {
+            using (Gate())
+            {
+                return SoundRequest() is not null
+                    && _target.DisplayState(running: true)["sound"] is JsonValue mode
+                    && mode.TryGetValue(out string? text)
+                        ? text
+                        : SoundOn ? "speaker" : "off";
+            }
+        }
+        set
+        {
+            using (Gate())
+            {
+                if (SoundRequest() is { } request) { _target.Requests[request](new JsonObject { ["mode"] = value }); }
+                SoundOn = value != "off";
+                _audio.Clear();
+            }
+        }
+    }
+
+    /// <summary>
     ///  Gets or sets whether the machine's sound plays.
     /// </summary>
     internal bool SoundOn { get; set; } = true;
@@ -263,8 +315,19 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal void Reset()
     {
-        using (Gate()) { _target.Reset(); }
+        using (Gate())
+        {
+            _target.Reset();
+            _stopped = null;
+            _paceAgain = true;
+        }
     }
+
+    /// <summary>
+    ///  Gets why the machine's CPU stopped, such as on an opcode that jams it, or null while it runs. The machine
+    ///  waits, with its picture as it was, until <see cref="Reset"/>.
+    /// </summary>
+    internal string? Stopped => _stopped;
 
     /// <summary>
     ///  Gets the machine's installed hardware, in its documented order.
@@ -323,6 +386,9 @@ internal sealed class MachineHost : DisposableBase
         }
     }
 
+    // The machine's own request that changes its sound, such as apple2/sound, or null.
+    private string? SoundRequest() => _target.Requests.Keys.FirstOrDefault(key => key.EndsWith("/sound", StringComparison.Ordinal));
+
     // Takes the gate for the window, telling the run thread to let it in.
     private Lock.Scope Gate()
     {
@@ -339,7 +405,6 @@ internal sealed class MachineHost : DisposableBase
         while (!_stopping)
         {
             bool ahead;
-            System.Text.Json.Nodes.JsonObject? audio;
             lock (_gate)
             {
                 if (_paceAgain)
@@ -362,6 +427,9 @@ internal sealed class MachineHost : DisposableBase
                 }
                 else if (_accelerated)
                 {
+                    // Pacing starts from here: the last fast slice ran the machine well ahead of its start.
+                    paceTime = slice;
+                    paceCycles = _target.CycleCount;
                     _audio.Clear();
                 }
 
@@ -382,25 +450,41 @@ internal sealed class MachineHost : DisposableBase
 
                 // With no debugger attached, the machine runs without the debugger's tracking, in batches between
                 // looks at the clock.
-                while (_target.CycleCount < due && Stopwatch.GetElapsedTime(slice).TotalMilliseconds < SliceMilliseconds)
+                try
                 {
-                    _target.RunCycles((int)Math.Min(BatchCycles, due - _target.CycleCount));
+                    while (_stopped is null
+                        && _target.CycleCount < due
+                        && Stopwatch.GetElapsedTime(slice).TotalMilliseconds < SliceMilliseconds)
+                    {
+                        _target.RunCycles((int)Math.Min(BatchCycles, due - _target.CycleCount));
+                    }
+                }
+                catch (InvalidOperationException exception)
+                {
+                    // The CPU stopped, as a jammed 6502 does: the machine waits for a reset rather than ending the app.
+                    _stopped = exception.Message;
                 }
 
-                ahead = _target.CycleCount >= due;
+                ahead = _stopped is not null || _target.CycleCount >= due;
                 if (_frameWanted)
                 {
                     _frameWanted = false;
                     Publish();
                 }
 
-                audio = _target.TakeAudio();
+                // Queued under the gate, so that a change of speed, which clears the sound under it, never finds a
+                // batch from the old speed queued after its clear.
+                JsonObject? audio = _target.TakeAudio();
+                if (audio is not null && SoundOn && speed == 1 && !accelerated && _stopped is null)
+                {
+                    _audio.Queue(audio);
+                }
+
                 Volatile.Write(ref _publishedCycles, _target.CycleCount);
                 Measure();
             }
 
             while (Volatile.Read(ref _waiting) != 0) { Thread.Yield(); }
-            if (audio is not null && SoundOn && _speed == 1 && !_accelerated) { _audio.Queue(audio); }
             if (ahead) { Thread.Sleep(1); }
         }
     }

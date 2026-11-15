@@ -31,7 +31,8 @@ dirty tracking and save on eject; then the Model I's disk write-back"), and foll
 | CoCo | Floppy drives (`Trs80FloppyDrive` on `CocoDiskController`) | JVC only (`.dsk`, `.jvc`) | `FloppyDisk` | no; `JvcFormat.Write` writes only 18 sectors of 256 bytes |
 | CoCo | ROM pack (`cartridge`) | ROM image | ROM; not a device | never: read-only |
 | Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact |
-| Altair | none yet | SIMH 8-inch `.dsk` when the 88-DCDD comes ([Altair8800.md](Altair8800.md)) | | |
+| Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` |
+| Altair | 8-inch floppy drives | SIMH `.dsk` when the 88-DCDD comes ([Altair8800.md](Altair8800.md)) | | |
 | AppleSharp | Disk II (`FloppyMount`) | `.woz` writable when asked; sector images read only | `WozDisk` | writes a changed WOZ back whenever the drive's motor stops, atomically, refusing when the file's hash changed |
 | AppleSharp | Slot 7 `FileBlockDevice` | `.po` | none: writes go straight to the file when opened writable | write-through |
 
@@ -54,7 +55,7 @@ What the hosts and views already do:
 ### A medium
 
 The media layer, `Retrocore.Media`, gets one interface for a mutable medium, which `WozDisk`, `Disk35Disk`,
-`FloppyDisk`, `MemoryBlockDevice`, `CassetteImage` and `Apple1Tape` implement:
+`FloppyDisk`, `MemoryBlockDevice`, `CassetteImage`, `Apple1Tape` and the Altair's tape implement:
 
 ```csharp
 public interface IMedium
@@ -138,6 +139,7 @@ as a format that holds it, save anyway, or cancel.
 | **DMK** | physical, with gaps and CRCs | a writer is needed; it is also the TRS-80 and CoCo floppies' recovery format ([below](#the-recovery-journal)), and the CoCo learns to load it |
 | **IMD** | reads, dropping some details | a writer comes later; a changed IMD disk saves as DMK or JV3 until then |
 | **CAS** | the decoded bytes the machine wrote | timing and the analog signal. Generating a waveform from a CAS needs the machine and baud rate: the supported ones are the Model I's 500, the Model III's 500 and 1500, Level I's 250, and the CoCo's 1500 |
+| **TAP** | exact: the Altair's tape is the bytes in order, as the 88-ACR sends and receives them | none; its writer is today's eject |
 | **WAV** | the Apple-1's tape format | written at 44.1 kHz, a recording is guest-equivalent, not cycle-exact; the recovery journal keeps the half-cycles themselves |
 
 ## Write protection
@@ -217,7 +219,7 @@ defaults, including the Disk II's loading every disk locked, once the recovery j
 | ProFile, slot 7 | `.po`, `.hdv` | the same, and `.2mg` |
 | TRS-80 floppies | JV1 and JVC when the disk fits, JV3, DMK | JV3 and DMK always; the others when the disk fits |
 | CoCo floppies | JVC when the disk fits, DMK | DMK always |
-| Cassettes | the recording | `.cas` (TRS-80, CoCo) or `.wav` (Apple-1, and generated for the CAS machines' supported baud rates) |
+| Cassettes | the recording | `.cas` (TRS-80, CoCo), `.tap` (Altair) or `.wav` (Apple-1, and generated for the CAS machines' supported baud rates) |
 | CoCo ROM pack | never | never |
 
 ## The recovery journal
@@ -243,6 +245,7 @@ the source's format:
 | TRS-80 and CoCo floppies | DMK |
 | TRS-80 and CoCo tapes | CAS, with a small record of the recorder's state: its buffered bits, copied without flushing the recorder |
 | Apple-1 tapes | its half-cycle lengths, the one format of Retrocore's own, as no standard one is exact |
+| Altair tapes | TAP, the bytes the 88-ACR wrote, which is all its tape holds |
 
 ### When it is written
 
@@ -759,7 +762,7 @@ The first round:
 
 After the reviews:
 - **Snapshots are lossless real images per kind of medium**: WOZ2, 2MG, DMK, CAS with the recorder's state, and the
-  Apple-1's half-cycles. A save to the source's format checks what it can hold.
+  Apple-1's half-cycles, and the Altair's TAP. A save to the source's format checks what it can hold.
 - **Unsaved state is a recovery journal in local data**, mirrored into the machine's `Unsaved\` after a clean stop for
   backup, except inside a git repository. The machine file stays a description of the machine.
 - **Built disks are rebuilt every launch**; a changed one from the last run stays in the history, with a notice.

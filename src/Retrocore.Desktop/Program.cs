@@ -36,7 +36,7 @@ internal static class Program
             string? value = index + 1 < args.Length ? args[index + 1] : null;
             switch (args[index])
             {
-                case "--machine" when value is not null && JsonNode.Parse(value) is JsonObject machine:
+                case "--machine" when value is not null && ParseObject(value) is JsonObject machine:
                     configuration = machine;
                     index++;
                     break;
@@ -107,5 +107,18 @@ internal static class Program
         builder.StartWithClassicDesktopLifetime(args: []);
 
         return 0;
+    }
+
+    // A JSON object, or null for anything else, malformed JSON among it.
+    private static JsonObject? ParseObject(string json)
+    {
+        try
+        {
+            return JsonNode.Parse(json) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 }

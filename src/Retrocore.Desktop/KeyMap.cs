@@ -105,7 +105,13 @@ internal static class KeyMap
     /// <returns>The ASCII code, or null when the key types a character or nothing.</returns>
     internal static int? Code(string machine, Key key, KeyModifiers modifiers)
     {
-        if ((modifiers & KeyModifiers.Control) != 0 && key is >= Key.A and <= Key.Z) { return key - Key.A + 1; }
+        // Ctrl with Alt is AltGr on Windows layouts, which types a character, such as @ on a German keyboard, that
+        // comes as text; only Ctrl alone makes a control letter, as the display panel has it.
+        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == KeyModifiers.Control && key is >= Key.A and <= Key.Z)
+        {
+            return key - Key.A + 1;
+        }
+
         return s_maps.TryGetValue(machine, out Dictionary<Key, int>? map) && map.TryGetValue(key, out int code) ? code : null;
     }
 }

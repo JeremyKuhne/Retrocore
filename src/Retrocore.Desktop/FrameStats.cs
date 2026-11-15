@@ -9,7 +9,12 @@ namespace Retrocore.Desktop;
 /// </summary>
 internal sealed class FrameStats
 {
-    private readonly List<double> _intervals = new(capacity: 4096);
+    // The latest intervals, a fixed number of them, so a long session keeps no more than a smoke run needs: over
+    // a minute of frames at 60 Hz.
+    private const int Kept = 4096;
+    private readonly double[] _intervals = new double[Kept];
+    private int _count;
+    private int _next;
     private TimeSpan? _last;
     private int _secondFrames;
     private TimeSpan _secondStart;
@@ -27,7 +32,7 @@ internal sealed class FrameStats
     /// <summary>
     ///  Gets the display frames counted.
     /// </summary>
-    internal int Frames => _intervals.Count;
+    internal int Frames { get; private set; }
 
     /// <summary>
     ///  Gets the display frames that drew a new picture.
@@ -42,7 +47,14 @@ internal sealed class FrameStats
     internal void Frame(TimeSpan time, bool drew)
     {
         FirstFrame ??= DateTime.Now;
-        if (_last is { } last) { _intervals.Add((time - last).TotalMilliseconds); }
+        if (_last is { } last)
+        {
+            _intervals[_next] = (time - last).TotalMilliseconds;
+            _next = (_next + 1) % Kept;
+            _count = Math.Min(_count + 1, Kept);
+            Frames++;
+        }
+
         _last = time;
         if (drew) { Drawn++; }
 
@@ -60,20 +72,22 @@ internal sealed class FrameStats
     /// </summary>
     internal void Restart()
     {
-        _intervals.Clear();
+        _count = 0;
+        _next = 0;
+        Frames = 0;
         Drawn = 0;
         _last = null;
     }
 
     /// <summary>
-    ///  Gets a percentile of the times between frames.
+    ///  Gets a percentile of the latest times between frames.
     /// </summary>
     /// <param name="percent">The percentile, 0 to 100.</param>
     /// <returns>The time in milliseconds, or 0 with too few frames.</returns>
     internal double Percentile(double percent)
     {
-        if (_intervals.Count == 0) { return 0; }
-        double[] sorted = [.. _intervals];
+        if (_count == 0) { return 0; }
+        double[] sorted = _intervals[.._count];
         Array.Sort(sorted);
         return sorted[Math.Clamp((int)Math.Ceiling(percent / 100 * sorted.Length) - 1, 0, sorted.Length - 1)];
     }

@@ -316,6 +316,7 @@ try {
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x11, "bank 2 holds what the program wrote");
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
+    assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");
     const bank1 = (await read("bank1:0xD000", 1)).bytes[0];
     await request("setBreakpoints", { source: { path: switching }, breakpoints: [] });
     drop("stopped");
@@ -326,6 +327,9 @@ try {
     assert.equal((await read("bank1:0xD000", 1)).bytes[0], 0x22, `bank 1 holds what the program wrote, not the frozen value (it held $${bank1.toString(16)})`);
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "bank 2 keeps the frozen value");
     assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000" })).frozen, [{ address: 0xD000, value: 0x55 }], "the byte stays frozen, waiting");
+    // With bank 1 mapped, a watch on $D000 reads bank 1's byte, which is not the frozen one.
+    const watched = (await request("evaluate", { expression: "[$D000]", context: "watch" })).result;
+    assert.equal(watched.endsWith("(frozen)"), false, `a watch on bank 1 is not frozen: ${watched}`);
     console.log("Memory DAP integration passed on a language-card freeze.");
 
     if (!roms) {

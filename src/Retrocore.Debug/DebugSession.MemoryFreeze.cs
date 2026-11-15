@@ -141,6 +141,9 @@ internal sealed partial class DebugSession
         return bank;
     }
 
+    // Whether a freeze holds now: a byte of the CPU's memory waits while another area is mapped where it was frozen.
+    private bool Holds(Enum? area, ushort address) => area is null || Equals(Target.WriteArea(address), area);
+
     // Writes the frozen bytes back where the program changed them; one whose memory is mapped away waits, and one
     // whose bank is gone is thawed.
     private void ApplyFreezes()
@@ -155,8 +158,7 @@ internal sealed partial class DebugSession
                 continue;
             }
 
-            // A byte of the CPU's memory waits while another area is mapped where it was frozen.
-            if (area is not null && !Equals(Target.WriteArea(address), area)) { continue; }
+            if (!Holds(area, address)) { continue; }
             if (MemoryByte(bank, address) == value || !Writable(bank, address)) { continue; }
             Write(bank, address, value);
         }
@@ -186,7 +188,8 @@ internal sealed partial class DebugSession
             int length = read.Groups[2].Success ? 2 : 1;
             for (int index = 0; index < length; index++)
             {
-                if (_frozen.ContainsKey((bank?.Name, (ushort)(address + index))))
+                ushort at = (ushort)(address + index);
+                if (_frozen.TryGetValue((bank?.Name, at), out (byte Value, Enum? Area) frozen) && Holds(frozen.Area, at))
                 {
                     return true;
                 }

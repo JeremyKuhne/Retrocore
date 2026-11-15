@@ -39,7 +39,7 @@ internal sealed class EmulatedPascalSystem
         if (!model.IsIIe()) { _machine.Bus.InstallLanguageCard(); }
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
         _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
-        _machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(toolsDisk), proDosOrder: false), "APPLE2", "DSK");
+        _machine.Drives[1].Insert(SectorDiskConverter.Convert(DiskImageFile.Sectors(toolsDisk), proDosOrder: false), "APPLE2", "DSK");
         IReadOnlyList<byte[]> extras = more ?? [];
         for (int drive = 0; drive < Math.Min(2, extras.Count); drive++)
         {
@@ -51,7 +51,7 @@ internal sealed class EmulatedPascalSystem
         _machine.Processor.Reset();
 
         // 1.0 says only that it is UCSD Pascal; 1.1 and 1.2 welcome APPLE1.
-        if (WaitFor(["COMMAND: E(DIT"], seconds: 60) is null)
+        if (WaitFor(Prompts, seconds: 60) is null)
         {
             throw new TimeoutException($"Pascal never booted:\n{Screen}");
         }
@@ -76,6 +76,12 @@ internal sealed class EmulatedPascalSystem
     {
         foreach (char key in keys) { _machine.Bus.QueueKey(key == '\n' ? (byte)13 : (byte)key); }
     }
+
+    /// <summary>
+    ///  Gets the starts of the command line the system shows when it is waiting for one: 1.0-1.2's, whose first
+    ///  command is E(DIT, and 1.3's, whose first is F(ILE.
+    /// </summary>
+    public static string[] Prompts { get; } = ["COMMAND: E(DIT", "COMMAND: F(ILE"];
 
     /// <summary>
     ///  Runs until the screen shows one of the texts.

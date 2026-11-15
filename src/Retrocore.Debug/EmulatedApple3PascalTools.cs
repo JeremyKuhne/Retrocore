@@ -31,7 +31,7 @@ internal static partial class EmulatedApple3PascalTools
     {
         try
         {
-            _ = SosVolume.Read(File.ReadAllBytes(path), proDosOrder: false);
+            _ = SosVolume.Read(DiskImageFile.Sectors(path), proDosOrder: false);
             return true;
         }
         catch (InvalidDataException)

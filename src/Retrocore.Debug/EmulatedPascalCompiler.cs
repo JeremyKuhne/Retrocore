@@ -83,7 +83,7 @@ internal static partial class EmulatedPascalCompiler
             return (compiled, shown, listed);
         }
 
-        byte[] boot = File.ReadAllBytes(bootDisk);
+        byte[] boot = DiskImageFile.Sectors(bootDisk);
         if (listing is null && files is null or { Count: 0 } && !Fits(boot, source))
         {
             return (CompileLarge(source, boot, compilerDisk, roms, model, out string large), large, null);
@@ -103,8 +103,7 @@ internal static partial class EmulatedPascalCompiler
         system.Type("C");
 
         // The Compiler ends with the space it had left, or stops at an error with a prompt to go on, stop or edit.
-        string ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds: 1_800)
-            ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
+        string ended = Ended(system, seconds: 1_800);
 
         string screen = system.Screen;
         if (ended != "SMALLEST AVAILABLE") { return (null, screen, null); }
@@ -122,6 +121,20 @@ internal static partial class EmulatedPascalCompiler
         byte[] code = volume.ReadFile("SYSTEM.WRK.CODE");
         RestoreAlignment(code, source);
         return (code, screen, text);
+    }
+
+    // Waits for the Compiler to end with the space it had left, or stop at an error. 1.3 asks first for a listing
+    // file, even of a workfile, which RETURN answers with none: a listing the source names is its own.
+    private static string Ended(EmulatedPascalSystem system, int seconds)
+    {
+        string? ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)", "LISTING FILE"], seconds);
+        if (ended == "LISTING FILE")
+        {
+            system.Type("\n");
+            ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds);
+        }
+
+        return ended ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
     }
 
     // Whether a source fits on APPLE1 as the workfile, beside the code file the Compiler writes, about as long.
@@ -163,8 +176,7 @@ internal static partial class EmulatedPascalCompiler
         }
 
         system.Type("CODE:PROGRAM\n");
-        string ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds: 7_200)
-            ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
+        string ended = Ended(system, seconds: 7_200);
 
         screen = system.Screen;
         if (ended != "SMALLEST AVAILABLE") { return null; }

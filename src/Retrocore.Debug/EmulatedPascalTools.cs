@@ -96,7 +96,11 @@ internal static partial class EmulatedPascalTools
         if (asked is null) { return (null, screen); }
 
         system.Type("LINKED.CODE\n");
-        Expect(system, "COMMAND: E(DIT", "The Linker never finished");
+        if (system.WaitFor(EmulatedPascalSystem.Prompts, seconds: 300) is null)
+        {
+            throw new TimeoutException($"The Linker never finished:\n{system.Screen}");
+        }
+
         screen = system.Screen;
         system.Run(tenths: 50);
         PascalVolume volume = system.Eject();
@@ -106,7 +110,7 @@ internal static partial class EmulatedPascalTools
     // APPLE1 with room for the files: the Editor, which none of this needs, is taken off.
     private static byte[] Apple1(string bootDisk)
     {
-        byte[] boot = File.ReadAllBytes(bootDisk);
+        byte[] boot = DiskImageFile.Sectors(bootDisk);
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.EDITOR");
         return boot;
     }

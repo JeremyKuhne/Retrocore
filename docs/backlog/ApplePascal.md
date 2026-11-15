@@ -1,8 +1,8 @@
 # Backlog: Apple Pascal
 
 Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Built
-for both machines, every version at hand: see Built. Apple Pascal 1.3, which no allowed host had, and writing Pascal
-(Apple II) volumes are what remain. [Pascal.md](../Pascal.md) is the user guide.
+for both machines, every version at hand: see Built. Writing Pascal (Apple II) volumes is what remains; Apple Pascal
+1.3 boots, edits, compiles and runs from its WOZ images (2026-11-15). [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -31,6 +31,7 @@ file system.
 | `Apple3Pascal1.2UpdateDisk1.dsk`, `…Disk2.dsk` | `05319655…daaf`, `334710c2…2ab9` | 1.2's interpreter, system and tools |
 | `UCSD Pascal 1.1_0.dsk` … `1.1_3.dsk` | `4e6b4792…cf4b`, `d6e7509a…4229`, `88b67683…1adf`, `86141693…3058` | Apple Pascal 1.1: APPLE0-APPLE3, with sample programs as source and code |
 | `UCSD Pascal 1.2_0.DSK` … `1.2_3.DSK` | `6f8fd3bd…16ab`, `25daeefe…1da0`, `6576fccb…9f21`, `488bc4bd…d275` | Apple Pascal 1.2 |
+| `UCSD Pascal 1.3_APPLE0.woz` … `APPLE3.woz` | `f3deb6b3…2be8`, `dd52f6ab…ae93`, `bc96cd93…011c`, `c0458c2c…9044` | Apple Pascal 1.3, WOZ images from archive.org's woz-a-day collection (`wozaday_Apple_Pascal_v13`); its code files are version 6 |
 
 **Already in Retrocore:** `SosVolume` reads SOS volumes, and `SosDriverCodeFile` reads a Pascal code file with one
 native segment (Titan's RAM disk driver). Apple III Pascal 1.1 boots on the emulator, edits, compiles with a
@@ -110,8 +111,10 @@ Built 2026-11-13, the third round:
 - **Paced pasting:** on the Apple II and III, `retro/type` keys go in a typist's pace apart (30,000 cycles a key and
   300,000 a line on the II, twice that on the III), so the Editor takes a pasted program whole.
 - **`.text` sources** open as Apple Pascal.
-- **Not done:** Apple Pascal 1.3 (no image on an allowed host), writing Pascal volumes for the Apple II, and SOS
-  trees (files over 128K, which a 140K disk barely needs).
+- **Apple Pascal 1.3** (2026-11-15) boots from its WOZ images, its Filer lists APPLE1, and HELLO is edited,
+  compiled (code version 6) and run, with its frames read (`Apple2PascalTests`); `--pascal compile` takes WOZ images
+  and answers 1.3's question for a listing file. SOS trees are written (2026-11-15).
+- **Not done:** writing Pascal volumes for the Apple II.
 
 Built 2026-11-13, the fourth round (asked for: "a disassembler for Apple II/III compiled Pascal", then "Decompile to
 Pascal, ideally to something that can be recompiled into the exact same p-code"):

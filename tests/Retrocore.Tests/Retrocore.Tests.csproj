@@ -72,6 +72,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\Apple2PascalMemory.cs" Link="Apple2PascalMemory.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalCompiler.cs" Link="EmulatedPascalCompiler.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalSystem.cs" Link="EmulatedPascalSystem.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DiskImageFile.cs" Link="DiskImageFile.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\EmulatedPascalTools.cs" Link="EmulatedPascalTools.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalSystem.cs" Link="EmulatedApple3PascalSystem.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\EmulatedApple3PascalTools.cs" Link="EmulatedApple3PascalTools.cs" />

@@ -32,6 +32,7 @@ public sealed partial class PascalDecompiler
     {
         NamedFields();
         NameTypes();
+        Prefixes();
 
         Options([.. _procedures.Where(procedure => !InUnit(procedure))]);
 
@@ -808,7 +809,7 @@ public sealed partial class PascalDecompiler
                     variants[variant].Add($"X{ends[variant]}V{variant}: {Declare(Padding(offset - ends[variant]), inline: true)}");
                 }
 
-                variants[variant].Add($"{FieldName(offset, index)}: {TypeName(field, parameter: false)}");
+                variants[variant].Add($"{FieldName(root, offset, index)}: {TypeName(field, parameter: false)}");
                 ends[variant] = offset + size;
             }
         }
@@ -844,7 +845,7 @@ public sealed partial class PascalDecompiler
                 {
                     int named = known.Keys.Where(key => key > offset && _namedFields.Contains((root, key))).DefaultIfEmpty(to).Min();
                     named = Math.Min(named, to);
-                    parts.Add($"F{offset}: {Declare(Padding(named - offset), inline: true)}");
+                    parts.Add($"{FieldName(root, offset, 0)}: {Declare(Padding(named - offset), inline: true)}");
                     offset = named;
                     continue;
                 }
@@ -856,12 +857,12 @@ public sealed partial class PascalDecompiler
                     int unknown = shown.Kind == TypeKind.Unknown && shown.Words <= 1 ? 1 : next - offset;
                     int size = Math.Min(SizeOf(field) ?? unknown, next - offset);
                     Fit(field, size);
-                    parts.Add($"F{offset}: {TypeName(field, parameter: false)}");
+                    parts.Add($"{FieldName(root, offset, 0)}: {TypeName(field, parameter: false)}");
                     offset += Math.Max(1, size);
                 }
                 else
                 {
-                    parts.Add($"F{offset}: {Declare(Padding(next - offset), inline: true)}");
+                    parts.Add($"{FieldName(root, offset, 0)}: {Declare(Padding(next - offset), inline: true)}");
                     offset = next;
                 }
             }
@@ -1048,11 +1049,50 @@ public sealed partial class PascalDecompiler
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
-    private static string FieldName(int offset, int alternative) => alternative <= 0 ? $"F{offset}" : $"F{offset}V{alternative}";
+    private string FieldName(TypeNode record, int offset, int alternative)
+    {
+        string prefix = _prefixed.Contains(record.Find()) ? $"{record.Find().Name}F" : "F";
+        return alternative <= 0 ? $"{prefix}{offset}" : $"{prefix}{offset}V{alternative}";
+    }
 
     // The name of the field a designator reaches: the one at its offset whose type is the designator's.
-    private static string FieldName(FieldDesignator field) =>
-        FieldName(field.Offset, field.Record.Type.Find().Alternatives(field.Offset).IndexOf(field.Type.Find()));
+    private string FieldName(FieldDesignator field)
+    {
+        TypeNode record = field.Record.Type.Find();
+        return FieldName(record, field.Offset, record.Alternatives(field.Offset).IndexOf(field.Type.Find()));
+    }
+
+    // The records of WITH statements with others inside on records of other types, whose fields are named with their
+    // types' names: an inner record's would otherwise name them, and the outer's were reached by the record's own
+    // designator, not by its WITH.
+    private readonly HashSet<TypeNode> _prefixed = [];
+
+    private void Prefixes()
+    {
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, Outer, _ => { });
+        }
+
+        void Outer(Statement statement)
+        {
+            if (statement is not WithStatement outer || Within(outer) is not { PackedFields: null } record) { return; }
+
+            Walk(
+                outer.Body,
+                inside =>
+                {
+                    if (inside is WithStatement inner && Within(inner) is { } other && other != record)
+                    {
+                        _prefixed.Add(record);
+                    }
+                },
+                _ => { });
+        }
+
+        static TypeNode? Within(WithStatement with) =>
+            with.Temporary.Type.Find().Element?.Find() is { Kind: TypeKind.Record } record ? record : null;
+    }
 
     private void Statements(Procedure procedure, List<Statement> statements)
     {
@@ -1584,7 +1624,7 @@ public sealed partial class PascalDecompiler
                 {
                     // A word of a record variable is the field at its offset whose type is its own.
                     int alternative = container.Type.Find().Alternatives(field.FieldOffset).IndexOf(field.Type.Find());
-                    return $"{DesignatorText(new VariableDesignator(container))}.{FieldName(field.FieldOffset, alternative)}";
+                    return $"{DesignatorText(new VariableDesignator(container))}.{FieldName(container.Type, field.FieldOffset, alternative)}";
                 }
 
             case VariableDesignator { Variable: var variable }:
@@ -1677,10 +1717,12 @@ public sealed partial class PascalDecompiler
 
     // Whether an inner WITH's record, of another type, has words at an offset, whose field there an outer one's shares
     // a name with.
-    private static bool Hides(Variable inner, Variable outer, int offset)
+    private bool Hides(Variable inner, Variable outer, int offset)
     {
         TypeNode? record = inner.Type.Find().Element?.Find();
         if (record is null || record.Kind != TypeKind.Record) { return false; }
+        if (outer.Type.Find().Element?.Find() is { } own && _prefixed.Contains(own)) { return false; }
+
         return record != outer.Type.Find().Element?.Find() && (SizeOf(record) ?? 0) > offset;
     }
 

@@ -256,6 +256,29 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A WITH inside another, on a record of another type, whose fields the outer's are at the offsets of.
+    private const string NestedWithSource = """
+        PROGRAM NW;
+        TYPE A = RECORD X, Y, Z: INTEGER END;
+          B = RECORD U: CHAR; V: BOOLEAN END;
+        VAR P: ^A; Q: ^B;
+        BEGIN
+          NEW(P); NEW(Q); Q^.U := 'A'; Q^.V := TRUE;
+          WITH P^ DO BEGIN WITH Q^ DO BEGIN X := ORD(U); Y := ORD(V) END; Z := X + 1 END
+        END.
+        """;
+
+    /// <summary>
+    ///  The fields of an outer WITH's record are named with its type's name, so that an inner WITH's record of
+    ///  another type does not hide them and they are reached through the outer WITH.
+    /// </summary>
+    [TestMethod]
+    public void OuterWithRecordsNameTheirFieldsWithTheirTypes()
+    {
+        string source = RoundTrip(NestedWithSource);
+        source.Should().Contain("WITH ").And.Contain("F2 := ");
+    }
+
     // A word used both ways assigned whole, which the Compiler moves as the one-word record it is.
     private const string WholeWordSource = """
         PROGRAM WW;

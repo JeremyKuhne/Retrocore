@@ -459,6 +459,8 @@ public sealed partial class PascalDecompiler
                 when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
                 // A record or array moved whole is the same type at both ends; fewer words than a record has are its
                 // first field's, as an identifier's name is moved from its record's address.
+                assignment.Target.Type.Find().Moved = true;
+                whole.Type.Find().Moved = true;
                 Whole(assignment.Target, whole.Type, whole.Words);
                 Whole(whole.Designator, assignment.Target.Type, whole.Words);
                 TypeNode.Unify(First(assignment.Target.Type, whole.Words), First(whole.Type, whole.Words));

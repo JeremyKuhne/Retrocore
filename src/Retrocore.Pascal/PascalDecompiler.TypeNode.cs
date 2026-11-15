@@ -170,6 +170,11 @@ public sealed partial class PascalDecompiler
         public bool Punned { get; set; }
 
         /// <summary>
+        ///  Gets or sets a value indicating whether code moves it whole, as the Compiler moves only records and arrays.
+        /// </summary>
+        public bool Moved { get; set; }
+
+        /// <summary>
         ///  Gets or sets a value indicating whether it is a scalar word also read by bytes, as through a variant record.
         /// </summary>
         public bool ByteView { get; set; }
@@ -539,6 +544,7 @@ public sealed partial class PascalDecompiler
             a.Forced ??= b.Forced;
             a.Enumeration ??= b.Enumeration;
             a.Punned |= b.Punned;
+            a.Moved |= b.Moved;
             a.ByteView |= b.ByteView;
             if (b.Low is { } low) { a.Low = a.Low is { } oldLow ? Math.Min(oldLow, low) : low; }
             if (b.High is { } high) { a.High = a.High is { } oldHigh ? Math.Max(oldHigh, high) : high; }
@@ -717,6 +723,9 @@ public sealed partial class PascalDecompiler
             {
                 return true;
             }
+
+            // So are what code moves whole and a scalar, which the Compiler never moves.
+            if ((a.Moved && b.Kind == TypeKind.Scalar) || (b.Moved && a.Kind == TypeKind.Scalar)) { return true; }
 
             // So are an array of bytes and one of words, or arrays whose elements cannot be one.
             if (a.Kind == TypeKind.Array && b.Kind == TypeKind.Array)

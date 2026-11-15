@@ -190,11 +190,22 @@ internal static class MachineCatalog
         ["coco"] = new() { [""] = "coco2" },
         ["trs80-model3"] = new()
         {
-            [""] = "3", ["III"] = "3", ["model3"] = "3", ["model4"] = "4", ["4P"] = "4p", ["model4p"] = "4p"
+            [""] = "3",
+            ["III"] = "3",
+            ["model3"] = "3",
+            ["model4"] = "4",
+            ["4P"] = "4p",
+            ["model4p"] = "4p"
         },
         ["trs80-model2"] = new()
         {
-            [""] = "2", ["II"] = "2", ["model2"] = "2", ["model12"] = "12", ["16b"] = "16", ["6000"] = "16", ["model16"] = "16"
+            [""] = "2",
+            ["II"] = "2",
+            ["model2"] = "2",
+            ["model12"] = "12",
+            ["16b"] = "16",
+            ["6000"] = "16",
+            ["model16"] = "16"
         },
     };
 
@@ -204,6 +215,14 @@ internal static class MachineCatalog
         ["apple2e"] = ("apple2", ""),
         ["trs80-model4"] = ("trs80-model3", "4"),
     };
+
+    /// <summary>
+    ///  Gets the machine a launch configuration's machine name is, as the debug host reads it: <c>apple2e</c> is an
+    ///  Apple II, and <c>trs80-model4</c> a Model III.
+    /// </summary>
+    /// <param name="machine">The name.</param>
+    /// <returns>The machine it names.</returns>
+    internal static string Kind(string machine) => s_aliases.TryGetValue(machine, out (string Machine, string Model) alias) ? alias.Machine : machine;
 
     /// <summary>
     ///  Finds a machine by its id.

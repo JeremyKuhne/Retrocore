@@ -56,7 +56,9 @@ internal static class QuickPick
         StackPanel list = new();
         ScrollViewer scroller = new()
         {
-            MaxHeight = ListHeight, Content = list, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+            MaxHeight = ListHeight,
+            Content = list,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
         };
 
         StackPanel box = new();
@@ -141,6 +143,8 @@ internal static class QuickPick
 
         void Move(int step)
         {
+            // A filter that matches nothing leaves nothing to move to.
+            if (shown.Count == 0) { return; }
             int index = focused;
             for (int moved = 0; moved < shown.Count; moved++)
             {
@@ -269,7 +273,9 @@ internal static class QuickPick
 
         line.Children.Add(new TextBlock
         {
-            Text = item.Label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center
+            Text = item.Label,
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center
         });
 
         if (item.DescriptionIcon is { } marker)

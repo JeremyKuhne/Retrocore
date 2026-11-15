@@ -104,7 +104,7 @@ internal sealed class MachineHost : DisposableBase
     /// <summary>
     ///  Gets the catalog's key map name for the machine, as the display panel keys its maps.
     /// </summary>
-    internal string KeyMapName => Configuration["machine"]?.GetValue<string>() ?? "apple2";
+    internal string KeyMapName => MachineCatalog.Kind(Configuration["machine"]?.GetValue<string>() ?? "apple2");
 
     /// <summary>
     ///  Gets the speed the machine keeps to: 1, 2, 4 or 8 times its clock, or 0 for as fast as it can.
@@ -338,14 +338,15 @@ internal sealed class MachineHost : DisposableBase
 
     /// <summary>
     ///  Types a key on the machine's keyboard. A key pressed while a paste is still typing waits its turn behind it,
-    ///  but CONTROL-C, which interrupts, goes now and drops the rest of the paste, as the debug host has it.
+    ///  but a key that interrupts goes now and drops the rest of the paste, as the debug host has it: CONTROL-C, the
+    ///  Model II's BREAK, and the BREAK of the Model I and Model III.
     /// </summary>
     /// <param name="code">The ASCII code, 0-127.</param>
     internal void Key(int code)
     {
         using (Gate())
         {
-            if (code == 3)
+            if (code == 3 || (code == 1 && KeyMapName is "trs80-model1" or "trs80-model3"))
             {
                 _typing.Clear();
             }
@@ -361,7 +362,9 @@ internal sealed class MachineHost : DisposableBase
 
     /// <summary>
     ///  Types text, as pasted, through the keyboard: line endings are RETURN, and characters with no key are left out.
-    ///  A machine with a typing pace takes the keys as it reaches each one's time, as the debug host's paste does.
+    ///  The keys wait here and go as the machine reaches each one's time, as the debug host's paste does, so a key
+    ///  that interrupts can drop the rest. A machine with no typing pace of its own, whose keyboard keeps its own
+    ///  queue, takes them at a steady typist's pace.
     /// </summary>
     /// <param name="text">The text.</param>
     /// <returns>The keys typed and the characters left out.</returns>
@@ -370,14 +373,7 @@ internal sealed class MachineHost : DisposableBase
         List<int> codes = TypedText.Codes(text, out int skipped);
         using (Gate())
         {
-            if (_target.TypingPace is null)
-            {
-                foreach (int code in codes) { _target.Key(code); }
-            }
-            else
-            {
-                foreach (int code in codes) { _typing.Enqueue(code); }
-            }
+            foreach (int code in codes) { _typing.Enqueue(code); }
         }
 
         return (codes.Count, skipped);
@@ -665,16 +661,15 @@ internal sealed class MachineHost : DisposableBase
     // Types the next pasted key once its time has come, and sets the time of the one after: longer after a RETURN.
     private void TypeNext()
     {
-        if (_target.TypingPace is not { } pace)
-        {
-            while (_typing.TryDequeue(out int code)) { _target.Key(code); }
-            return;
-        }
-
         if (_target.CycleCount < _typingDue) { return; }
         int next = _typing.Dequeue();
         _target.Key(next);
-        _typingDue = _target.CycleCount + (next == '\r' ? pace.Line : pace.Key);
+
+        // Without a pace of its own, 30 keys a second and a quarter second for each line, which any of their
+        // keyboard queues keeps up with.
+        ulong clock = (ulong)Math.Max(1, _target.ClockHertz);
+        (ulong key, ulong line) = _target.TypingPace is { } pace ? (pace.Key, pace.Line) : (clock / 30, clock / 4);
+        _typingDue = _target.CycleCount + (next == '\r' ? line : key);
     }
 
     // Takes the gate for the window, telling the run thread to let it in.

@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Platform.Storage;
 using Retrocore.Debug;
 using Retrocore.Machines.Devices;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Desktop;
@@ -41,7 +42,8 @@ internal sealed class MachinePane : ScrollViewer
     private readonly ViewSection _machine;
     private readonly ViewSection _drives;
     private readonly StackPanel _display = new() { Margin = new Thickness(0, 2, 0, 8) };
-    private MachineHost? _displayFor;
+    // The machine the Display and Sound section was built for, with the sound modes and screens it offered then.
+    private string? _displayFor;
 
     /// <summary>
     ///  Creates the pane.
@@ -103,9 +105,11 @@ internal sealed class MachinePane : ScrollViewer
         int changed = devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
         _drives.SetBadge(changed, $"{changed} disk{(changed == 1 ? "" : "s")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
 
-        if (_displayFor != host)
+        // Built again for another machine, or when a card changes what this one offers, as adding a Mockingboard does.
+        string displayFor = $"{RuntimeHelpers.GetHashCode(host)}|{string.Join(',', host.SoundModes)}|{string.Join(',', host.Screens)}";
+        if (_displayFor != displayFor)
         {
-            _displayFor = host;
+            _displayFor = displayFor;
             BuildDisplay(host);
         }
     }
@@ -353,7 +357,9 @@ internal sealed class MachinePane : ScrollViewer
             Description = device.Summary,
             Icon = device.Kind switch
             {
-                DeviceKind.TapeDrive => "record-keys", DeviceKind.BlockStorage => "database", _ => "save"
+                DeviceKind.TapeDrive => "record-keys",
+                DeviceKind.BlockStorage => "database",
+                _ => "save"
             },
             IconColour = device.Activity switch
             {
@@ -579,7 +585,10 @@ internal sealed class MachinePane : ScrollViewer
             host.FastDrives = _settings.FastDrives;
             CheckBox fast = new()
             {
-                IsChecked = _settings.FastDrives, MinWidth = 0, MinHeight = 0, Padding = new Thickness(0)
+                IsChecked = _settings.FastDrives,
+                MinWidth = 0,
+                MinHeight = 0,
+                Padding = new Thickness(0)
             };
 
             fast.IsCheckedChanged += (_, _) =>
@@ -610,7 +619,11 @@ internal sealed class MachinePane : ScrollViewer
 
         Slider volume = new()
         {
-            Minimum = 0, Maximum = 100, Value = host.Volume * 100, Width = Options.Width, MinHeight = 0
+            Minimum = 0,
+            Maximum = 100,
+            Value = host.Volume * 100,
+            Width = Options.Width,
+            MinHeight = 0
         };
 
         volume.ValueChanged += (_, _) => _session.Host.Volume = (float)(volume.Value / 100);

@@ -40,7 +40,8 @@ internal sealed class ViewSection : StackPanel
 
     private readonly StackPanel _actions = new()
     {
-        Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0)
+        Orientation = Orientation.Horizontal,
+        Margin = new Thickness(0, 0, 8, 0)
     };
     private readonly TextBlock _message = new()
     {
@@ -202,7 +203,9 @@ internal sealed class ViewSection : StackPanel
 
     private static FlatButton HeaderButton(string icon, string title, Action<FlatButton> press)
     {
+        // Tab reaches the header's actions from the header, which shows them while it has the keyboard.
         FlatButton button = FlatButton.Icon(icon, title);
+        button.Focusable = true;
         button.Click += (_, _) => press(button);
         return button;
     }

@@ -139,7 +139,7 @@ internal sealed class MachineSession : DisposableBase
             changes = ChangesFrom(saved, plain.Capture());
         }
 
-        Replace(next, changes);
+        Replace(next, changes, choice.Option);
     }
 
     /// <summary>
@@ -188,8 +188,8 @@ internal sealed class MachineSession : DisposableBase
     }
 
     /// <summary>
-    ///  Gets what of a saved machine differs from the machine its configuration gives by itself: the cards and media
-    ///  someone changed, as the extension's <c>changesFrom</c> finds them.
+    ///  Gets what of a saved machine differs from the machine its configuration gives by itself: the cards, their
+    ///  switches and the media someone changed, as the extension's <c>changesFrom</c> finds them.
     /// </summary>
     /// <param name="saved">The saved machine.</param>
     /// <param name="plain">The machine as its configuration gives it.</param>
@@ -197,7 +197,7 @@ internal sealed class MachineSession : DisposableBase
     internal static JsonObject ChangesFrom(JsonObject saved, JsonObject plain)
     {
         JsonObject changes = [];
-        foreach (string section in (string[])["cards", "media"])
+        foreach (string section in (string[])["cards", "settings", "media"])
         {
             if (saved[section] is not JsonObject ours) { continue; }
             JsonObject theirs = plain[section] as JsonObject ?? [];
@@ -220,16 +220,22 @@ internal sealed class MachineSession : DisposableBase
         return host;
     }
 
-    private void Replace(JsonObject configuration, JsonObject? saved)
+    // Builds the machine again. It keeps the old one's display and sound, as the panel keeps them across sessions:
+    // its monitor and sound mode where it offers them, unless the setting just changed is that one.
+    private void Replace(JsonObject configuration, JsonObject? saved, string? changed = null)
     {
         MachineHost before = Host;
         MachineHost after = Build(configuration, saved);
-
-        // The new machine keeps the old one's display and sound settings, as the panel keeps them across sessions.
         after.Speed = before.Speed;
         after.Volume = before.Volume;
-        after.SoundOn = before.SoundOn;
         after.FastDrives = _settings.FastDrives;
+        if (changed != "monitor" && after.Screens.Contains(before.Screen)) { after.Screen = before.Screen; }
+        if (changed != "sound")
+        {
+            string mode = before.SoundMode;
+            after.SoundMode = after.SoundModes.Contains(mode) ? mode : "speaker";
+        }
+
         Host = after;
         before.Dispose();
         Keep();

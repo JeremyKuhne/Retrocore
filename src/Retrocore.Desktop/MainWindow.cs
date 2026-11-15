@@ -570,8 +570,6 @@ internal sealed class MainWindow : Window
         {
             Height = 22,
             Padding = new Thickness(5, 0),
-            BorderThickness = new Thickness(0),
-            Focusable = false,
         };
 
         item.Click += (_, _) =>

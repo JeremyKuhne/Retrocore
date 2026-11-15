@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -41,7 +42,7 @@ internal sealed class ViewTree : Border
         Focusable = true;
         Background = Brushes.Transparent;
         Child = _rows;
-        GotFocus += (_, _) => Paint();
+        GotFocus += OnGotFocus;
         LostFocus += (_, _) => Paint();
         KeyDown += OnKey;
     }
@@ -126,8 +127,25 @@ internal sealed class ViewTree : Border
         return builder.ToString();
     }
 
+    // The tree's keyboard goes to its selected row, or its first, so a screen reader hears the row.
+    private void OnGotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        if (e.Source == this && (_visible.FirstOrDefault(row => row.Node.Id == _selected) ?? _visible.FirstOrDefault()) is { } row)
+        {
+            _selected = row.Node.Id;
+            row.Focus(e.NavigationMethod);
+        }
+
+        Paint();
+    }
+
+    /// <inheritdoc/>
+    protected override AutomationPeer OnCreateAutomationPeer() => new ViewTreePeer(this);
+
     private void Build()
     {
+        // Rows built again take the keyboard back where the old ones had it.
+        bool focused = IsKeyboardFocusWithin;
         _rows.Children.Clear();
         _visible.Clear();
         void Add(IReadOnlyList<TreeNode> level, int depth, TreeRow? parent)
@@ -143,6 +161,12 @@ internal sealed class ViewTree : Border
 
         Add(_roots, 0, parent: null);
         if (_selected is not null && _visible.All(row => row.Node.Id != _selected)) { _selected = null; }
+        if (focused)
+        {
+            (_visible.FirstOrDefault(row => row.Node.Id == _selected) ?? _visible.FirstOrDefault())?.Focus();
+        }
+
+        if (focused && !IsKeyboardFocusWithin) { Focus(); }
         Paint();
     }
 
@@ -175,6 +199,7 @@ internal sealed class ViewTree : Border
     internal void Select(TreeRow row)
     {
         _selected = row.Node.Id;
+        if (IsKeyboardFocusWithin) { row.Focus(NavigationMethod.Directional); }
         Paint();
         row.BringIntoView();
     }

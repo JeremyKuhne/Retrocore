@@ -4,6 +4,7 @@
 
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -22,7 +23,8 @@ internal sealed class TreeRow : Border
     private readonly Control? _chevron;
     private readonly StackPanel _actions = new()
     {
-        Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 4, 0)
+        Orientation = Orientation.Horizontal,
+        Margin = new Thickness(0, 0, 4, 0)
     };
     private bool _selected;
     private bool _focused;
@@ -42,6 +44,12 @@ internal sealed class TreeRow : Border
         ParentRow = parent;
         Height = ViewTree.RowHeight;
         Background = Brushes.Transparent;
+
+        // The selected row has the keyboard while its tree does, so a screen reader follows the selection; Tab goes
+        // to the tree, not to each row.
+        Focusable = true;
+        KeyboardNavigation.SetIsTabStop(this, value: false);
+        FocusAdorner = null;
         BorderThickness = new Thickness(1);
         BorderBrush = Brushes.Transparent;
 
@@ -50,7 +58,9 @@ internal sealed class TreeRow : Border
         // The indent, then the chevron or the room for one.
         Panel twistie = new()
         {
-            Width = 16, Height = 16, Margin = new Thickness(ViewTree.Indent + (depth * ViewTree.Indent), 0, 4, 0)
+            Width = 16,
+            Height = 16,
+            Margin = new Thickness(ViewTree.Indent + (depth * ViewTree.Indent), 0, 4, 0)
         };
 
         if (node.State != TreeState.None)
@@ -112,9 +122,12 @@ internal sealed class TreeRow : Border
         AutomationProperties.SetName(this, string.IsNullOrEmpty(node.Description) ? node.Label : $"{node.Label}, {node.Description}");
         Tip.Set(this, node.Tooltip);
 
-        if (node.Menu.Count != 0)
+        // The context menu has the row's inline actions first, so the keyboard reaches every one through it with
+        // Shift+F10 or the menu key, as the pointer reaches them on the row.
+        List<TreeAction> inline = [.. node.Inline.Where(action => !node.Menu.Any(group => group.Any(item => item.Title == action.Title)))];
+        if (inline.Count != 0 || node.Menu.Count != 0)
         {
-            ContextMenu = ViewTree.Menu(node.Menu);
+            ContextMenu = ViewTree.Menu([inline, .. node.Menu]);
         }
 
         PointerEntered += (_, _) => PaintHover();
@@ -126,6 +139,16 @@ internal sealed class TreeRow : Border
     ///  Gets what the row shows.
     /// </summary>
     internal TreeNode Node { get; }
+
+    /// <summary>
+    ///  Gets the tree it is in.
+    /// </summary>
+    internal ViewTree Tree => _tree;
+
+    /// <summary>
+    ///  Gets whether it is selected.
+    /// </summary>
+    internal bool IsSelected => _selected;
 
     /// <summary>
     ///  Gets how deep it is, 0 at the top.
@@ -193,6 +216,9 @@ internal sealed class TreeRow : Border
         _actions.Opacity = show ? 1 : 0;
         _actions.IsHitTestVisible = show;
     }
+
+    /// <inheritdoc/>
+    protected override AutomationPeer OnCreateAutomationPeer() => new TreeRowPeer(this);
 
     private void OnPressed(object? sender, PointerPressedEventArgs e)
     {

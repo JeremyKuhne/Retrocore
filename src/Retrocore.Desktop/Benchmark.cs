@@ -37,7 +37,8 @@ internal static class Benchmark
         IDebugTarget probe = OffMachine.Build(configuration);
         int clock = probe.ClockHertz;
         (probe as IDisposable)?.Dispose();
-        ulong work = (ulong)(clock * seconds * 20);
+        // A whole number of the raw paths' 256-cycle batches, at least one, so all three run the same cycles.
+        ulong work = Math.Max(1, (ulong)(clock * seconds * 20 / 256)) * 256;
         Console.Out.WriteLine($"clock {clock} Hz; each timing runs {work:N0} cycles after {SettleCycles:N0}");
 
         Report("debug target StepCycle", Time(configuration, work, target =>

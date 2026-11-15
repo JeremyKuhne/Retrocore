@@ -405,8 +405,13 @@ internal sealed class MachineHost : DisposableBase
     /// <param name="cycle">The cycle to stop at, or <see cref="ulong.MaxValue"/> to run on.</param>
     internal void HoldAt(ulong cycle)
     {
-        _held.Reset();
-        Volatile.Write(ref _holdAt, cycle);
+        // Under the gate, which the run thread holds while it reads the limit and sets the event, so a slice under
+        // the old limit cannot set the event after this reset.
+        using (Gate())
+        {
+            _held.Reset();
+            _holdAt = cycle;
+        }
     }
 
     /// <summary>
@@ -476,7 +481,7 @@ internal sealed class MachineHost : DisposableBase
                     due = paceCycles;
                 }
 
-                ulong holdAt = Volatile.Read(ref _holdAt);
+                ulong holdAt = _holdAt;
                 due = Math.Min(due, holdAt);
 
                 // With no debugger attached, the machine runs without the debugger's tracking, in batches between

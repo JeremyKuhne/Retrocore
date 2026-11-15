@@ -256,6 +256,30 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // An IF whose THEN is only a GOTO into the next IF's THEN.
+    private const string GotoIntoSource = """
+        (*$G+*)
+        PROGRAM GI;
+        LABEL 1;
+        VAR I, J: INTEGER;
+        BEGIN
+          I := 0; J := 0;
+          IF I = 0 THEN GOTO 1;
+          IF I > 3 THEN BEGIN J := 2; 1: J := J + 1 END ELSE J := 5
+        END.
+        """;
+
+    /// <summary>
+    ///  An IF whose THEN is a GOTO forward has no ELSE where the code after it has an FJP that leaves it, as the
+    ///  Compiler's FJPs stay in their statements.
+    /// </summary>
+    [TestMethod]
+    public void GotosForwardAreNotElsesWhereAnFjpLeaves()
+    {
+        string source = RoundTrip(GotoIntoSource);
+        source.Should().Contain("GOTO 1");
+    }
+
     // An IF inside an IF, whose THEN is a GOTO: the UJP before the outer IF's end is the inner one's.
     private const string InnerGotoSource = """
         (*$G+*)

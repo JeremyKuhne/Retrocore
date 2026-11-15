@@ -349,9 +349,10 @@ public sealed partial class PascalDecompiler
             bool inner = Enumerable.Range(at + 1, Math.Max(0, target - at - 2)).Any(JumpsThere);
             if (target - 1 > at && last.Opcode.Code == Pcode.Ujp && last.Targets[0] >= 0 && !inner)
             {
+                // An ELSE with nothing in it jumps to where it starts. One with an FJP that leaves it is no ELSE, but
+                // what follows a GOTO, as the Compiler's FJPs stay in their statements.
                 int end = Index(last.Targets[0]);
-                // An ELSE with nothing in it jumps to where it starts.
-                if (end >= target && end <= to && !IsCaseJump(last))
+                if (end >= target && end <= to && !IsCaseJump(last) && Closed(target, end))
                 {
                     List<Statement> then = Block(at + 1, target - 1, []);
 
@@ -369,6 +370,20 @@ public sealed partial class PascalDecompiler
 
             bool JumpsThere(int index) =>
                 _code[index] is { Opcode.Code: Pcode.Fjp } other && other.Targets[0] == fjp.Targets[0];
+        }
+
+        // Whether the FJPs from one p-code up to another all stay in between.
+        private bool Closed(int from, int to)
+        {
+            for (int index = from; index < to; index++)
+            {
+                if (_code[index] is not { Opcode.Code: Pcode.Fjp } fjp || fjp.Targets[0] < 0) { continue; }
+
+                int target = Index(fjp.Targets[0]);
+                if (target < from || target > to) { return false; }
+            }
+
+            return true;
         }
 
         private bool IsCaseJump(PcodeInstruction ujp) =>

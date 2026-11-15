@@ -364,6 +364,7 @@ try {
     const compiler = join(apple2Disks, "UCSD Pascal 1.3_2.DSK");
     const compiled = passed.includes(machines[2].name) && existsSync(compiler);
     if (compiled) { await compiledOnIIe(machines[2], compiler); }
+    else if (!passed.includes(machines[2].name)) { console.log(`Skipped compiling on Apple Pascal 1.3: the ${machines[2].name} was skipped.`); }
     else { console.log(`Skipped compiling on Apple Pascal 1.3: ${compiler} is missing.`); }
 
     await request("disconnect");

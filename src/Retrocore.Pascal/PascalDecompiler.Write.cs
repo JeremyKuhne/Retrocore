@@ -46,7 +46,7 @@ public sealed partial class PascalDecompiler
         }
         else
         {
-            if (Comment(Program) is { } about) { Line(about); }
+            if (Comment(Program) is { } about) { CommentLines(about); }
             Line($"PROGRAM {Program.Name};");
         }
 
@@ -146,7 +146,7 @@ public sealed partial class PascalDecompiler
             Warn($"The program's segment is {Main.Number}, not 1, as the system's user program is.");
         }
 
-        if (Comment(Program) is { } about) { Line(about); }
+        if (Comment(Program) is { } about) { CommentLines(about); }
         Line($"SEGMENT PROCEDURE {Program.Name}{ParameterList(Program)};");
         _nextSegment = 2;
 
@@ -215,6 +215,11 @@ public sealed partial class PascalDecompiler
         List<Variable> variables = _declared[frame];
         if (variables.Count == 0) { return; }
 
+        // The key its variables' comments go by: SEGMENT.N, as the hints name its procedure.
+        string? owner = _procedures.FirstOrDefault(procedure => procedure.Frame == frame) is { } procedure
+            ? $"{procedure.Segment.Name}.{procedure.Number}"
+            : frame == _system ? "SYSTEM" : null;
+
         Line("VAR");
         _indent++;
         for (int index = 0; index < variables.Count; index++)
@@ -234,7 +239,11 @@ public sealed partial class PascalDecompiler
                 list.Add(next);
             }
 
-            Line($"{string.Join(", ", Enumerable.Reverse(list).Select(item => item.Name))}: {type};");
+            string declaration = $"{string.Join(", ", Enumerable.Reverse(list).Select(item => item.Name))}: {type};";
+            string? about = owner is null ? null : Comment(_options.Comments, $"{owner}@{variable.Offset}");
+            // A comment of a line goes beside the declaration, a longer one above it.
+            if (about is not null && about.Contains('\n', StringComparison.Ordinal)) { CommentLines(about); }
+            Line(about is null || about.Contains('\n', StringComparison.Ordinal) ? declaration : $"{declaration}  {CommentText(about)}");
             index += list.Count - 1;
         }
 
@@ -322,7 +331,7 @@ public sealed partial class PascalDecompiler
 
     private void WriteProcedure(Procedure procedure, bool forwarded)
     {
-        if (Comment(procedure) is { } about) { Line(about); }
+        if (Comment(procedure) is { } about) { CommentLines(about); }
         Line(Header(procedure, full: !forwarded));
         if (procedure.Code.IsNative)
         {
@@ -363,7 +372,8 @@ public sealed partial class PascalDecompiler
                 list = $"({string.Join("; ", arguments.Select(SystemParameter))})";
             }
 
-            Line($"PROCEDURE {SystemProcedure(number)}{list}; FORWARD;");
+            string heading = $"PROCEDURE {SystemProcedure(number)}{list}; FORWARD;";
+            Line(Comment(_options.Comments, $"SYSTEM.{number}") is { } about ? $"{heading}  {CommentText(about)}" : heading);
         }
     }
 
@@ -668,6 +678,7 @@ public sealed partial class PascalDecompiler
         }
 
         foreach (TypeNode type in _types) { Overlapped(type); }
+        NameTypesFromHints();
     }
 
     // A record's field that starts inside the one before it, which is longer than a word and cannot be shorter, as a
@@ -918,7 +929,14 @@ public sealed partial class PascalDecompiler
         if (views.Count > 0) { start = 0; }
 
         List<string> fixedPart = Run(0, Math.Min(start, words));
-        if (start >= words) { return $"RECORD {string.Join("; ", fixedPart)} END"; }
+        string pad = new(' ', _indent * 2);
+        bool spread = Spread(root);
+        if (start >= words)
+        {
+            return spread
+                ? $"RECORD\n{pad}    {Fields(root, fixedPart, $"{pad}    ")}\n{pad}  END"
+                : $"RECORD {Fields(root, fixedPart, "")} END";
+        }
 
         // The other fields, each in the first variant it does not overlap a field of.
         List<List<string>> variants = [Run(start, words)];
@@ -941,28 +959,35 @@ public sealed partial class PascalDecompiler
 
                 if (ends[variant] < offset)
                 {
-                    variants[variant].Add($"X{ends[variant]}V{variant}: {Declare(Padding(offset - ends[variant]), inline: true)}");
+                    variants[variant].Add(Field(root, $"X{ends[variant]}V{variant}", Declare(Padding(offset - ends[variant]), inline: true)));
                 }
 
-                variants[variant].Add($"{FieldName(root, offset, index)}: {TypeName(field, parameter: false)}");
+                variants[variant].Add(Field(root, OwnFieldName(root, offset, index), TypeName(field, parameter: false)));
                 ends[variant] = offset + size;
             }
         }
 
-        List<string> labelled = [.. variants.Select((fields, index) => $"{index}: ({string.Join("; ", fields)})")];
+        List<string> labelled = [.. variants.Select((fields, index) => $"{index}: ({Fields(root, fields, $"{pad}         ")})")];
         foreach (int size in shorter)
         {
-            string padding = size > start ? $"X{size}N: {Declare(Padding(size - start), inline: true)}" : "";
+            string padding = size > start ? Fields(root, [Field(root, $"X{size}N", Declare(Padding(size - start), inline: true))], "") : "";
             labelled.Add($"{Shorter + size}: ({padding})");
         }
 
         foreach (int size in views)
         {
-            labelled.Add($"{Viewing + size}: (B{size}N: {Declare(Padding(size), inline: true)})");
+            labelled.Add($"{Viewing + size}: ({Fields(root, [Field(root, $"B{size}N", Declare(Padding(size), inline: true))], "")})");
+        }
+
+        if (spread)
+        {
+            // The fixed part's fields, the last ended by a semicolon before the variant part, which takes its place.
+            string fixedLines = Fields(root, [.. fixedPart, "CASE"], $"{pad}    ")[..^4];
+            return $"RECORD\n{pad}    {fixedLines}CASE INTEGER OF\n{pad}      {string.Join($";\n{pad}      ", labelled)}\n{pad}  END";
         }
 
         string cases = string.Join("; ", labelled);
-        string head = fixedPart.Count == 0 ? "" : $"{string.Join("; ", fixedPart)}; ";
+        string head = fixedPart.Count == 0 ? "" : $"{Fields(root, fixedPart, "")}; ";
         return $"RECORD {head}CASE INTEGER OF {cases} END";
 
         List<string> Run(int from, int to)
@@ -980,7 +1005,7 @@ public sealed partial class PascalDecompiler
                 {
                     int named = known.Keys.Where(key => key > offset && _namedFields.Contains((root, key))).DefaultIfEmpty(to).Min();
                     named = Math.Min(named, to);
-                    parts.Add($"{FieldName(root, offset, 0)}: {Declare(Padding(named - offset), inline: true)}");
+                    parts.Add(Field(root, OwnFieldName(root, offset, 0), Declare(Padding(named - offset), inline: true)));
                     offset = named;
                     continue;
                 }
@@ -992,12 +1017,12 @@ public sealed partial class PascalDecompiler
                     int unknown = shown.Kind == TypeKind.Unknown && shown.Words <= 1 ? 1 : next - offset;
                     int size = Math.Min(SizeOf(field) ?? unknown, next - offset);
                     Fit(field, size);
-                    parts.Add($"{FieldName(root, offset, 0)}: {TypeName(field, parameter: false)}");
+                    parts.Add(Field(root, OwnFieldName(root, offset, 0), TypeName(field, parameter: false)));
                     offset += Math.Max(1, size);
                 }
                 else
                 {
-                    parts.Add($"{FieldName(root, offset, 0)}: {Declare(Padding(next - offset), inline: true)}");
+                    parts.Add(Field(root, OwnFieldName(root, offset, 0), Declare(Padding(next - offset), inline: true)));
                     offset = next;
                 }
             }
@@ -1072,19 +1097,19 @@ public sealed partial class PascalDecompiler
             if (both)
             {
                 wholes.Add(known.TryGetValue(word, out TypeNode? used) && SizeOf(used) is 1
-                    ? $"F{word}: {TypeName(used, parameter: false)}"
-                    : $"X{word}: INTEGER");
+                    ? $"{HintedField(root, $"F{word}")}: {TypeName(used, parameter: false)}"
+                    : $"{HintedField(root, $"X{word}")}: INTEGER");
             }
 
             if (fields.Count == 0)
             {
                 if (known.TryGetValue(word, out TypeNode? whole) && SizeOf(whole) is 1)
                 {
-                    parts.Add(both ? $"X{word}V1: INTEGER" : $"F{word}: {TypeName(whole, parameter: false)}");
+                    parts.Add(both ? $"{HintedField(root, $"X{word}V1")}: INTEGER" : $"{HintedField(root, $"F{word}")}: {TypeName(whole, parameter: false)}");
                 }
                 else
                 {
-                    parts.Add(both ? $"X{word}V1: INTEGER" : $"F{word}: INTEGER");
+                    parts.Add(both ? $"{HintedField(root, $"X{word}V1")}: INTEGER" : $"{HintedField(root, $"F{word}")}: INTEGER");
                 }
 
                 continue;
@@ -1093,14 +1118,17 @@ public sealed partial class PascalDecompiler
             int bit = 0;
             foreach (((int _, int at), (int width, TypeNode type)) in fields)
             {
-                if (at > bit) { parts.Add($"X{word}B{bit}: 0..{(1 << (at - bit)) - 1}"); }
+                if (at > bit) { parts.Add($"{HintedField(root, $"X{word}B{bit}")}: 0..{(1 << (at - bit)) - 1}"); }
                 TypeNode field = type.Find();
                 string name = width == 1 && field.Kind == TypeKind.Scalar && field.ScalarKind == ScalarKind.Boolean ? "BOOLEAN" : $"0..{(1 << width) - 1}";
-                parts.Add($"F{word}B{at}: {name}");
+                parts.Add($"{HintedField(root, $"F{word}B{at}")}: {name}");
                 bit = Math.Max(bit, at + width);
             }
 
-            if (bit is > 0 and < 16) { parts.Add($"X{word}B{bit}: 0..{(1 << (16 - bit)) - 1}"); }
+            if (bit is > 0 and < 16)
+            {
+                parts.Add($"{HintedField(root, $"X{word}B{bit}")}: 0..{(1 << (16 - bit)) - 1}");
+            }
         }
 
         return both
@@ -1184,9 +1212,13 @@ public sealed partial class PascalDecompiler
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
-    private string FieldName(TypeNode record, int offset, int alternative)
+    private string FieldName(TypeNode record, int offset, int alternative) => HintedField(record, OwnFieldName(record, offset, alternative));
+
+    // A field's name as the decompiler gives it, by its type's name as the decompiler gives that.
+    private string OwnFieldName(TypeNode record, int offset, int alternative)
     {
-        string prefix = _prefixed.Contains(record.Find()) ? $"{record.Find().Name}F" : "F";
+        TypeNode root = record.Find();
+        string prefix = _prefixed.Contains(root) ? $"{_typeKeys.GetValueOrDefault(root) ?? root.Name}F" : "F";
         return alternative <= 0 ? $"{prefix}{offset}" : $"{prefix}{offset}V{alternative}";
     }
 
@@ -1803,7 +1835,7 @@ public sealed partial class PascalDecompiler
             case FieldDesignator field:
                 return $"{Record(field.Record, field.Offset)}{FieldName(field)}";
             case PackedFieldDesignator field:
-                return $"{Record(field.Record)}F{field.Word}B{field.Bit}";
+                return $"{Record(field.Record)}{HintedField(field.Record.Type, $"F{field.Word}B{field.Bit}")}";
             case IndexDesignator
             {
                 Array: Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var file } } },

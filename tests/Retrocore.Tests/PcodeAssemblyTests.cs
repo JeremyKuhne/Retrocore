@@ -290,6 +290,29 @@ public class PcodeAssemblyTests
     }
 
     /// <summary>
+    ///  A comment is written a line of the source for each of its own, each wrapped at its words to fit the 80
+    ///  characters of a line the Assembler reads whole; a longer one runs into the next.
+    /// </summary>
+    [TestMethod]
+    public void LongCommentsAreWrappedForTheAssembler()
+    {
+        byte[] code = Assemble(MixedSource);
+        PascalSegment segment = PascalCodeFile.Read(code).Segments.Single(own => own.Code.Length > 0);
+        string about = string.Concat(Enumerable.Repeat("Loads the value that the procedure keeps, ", 3)) + "and returns.\nA second line.";
+        PascalAssemblySource source = PascalAssemblyWriter.Write(
+            segment,
+            [new PascalAssembledProcedure("LOAD", 2, IsFunction: false, ParameterWords: 0) { Comment = about }]);
+
+        source.Text.Should().StartWith("""
+            ; Loads the value that the procedure keeps, Loads the value that the
+            ; procedure keeps, Loads the value that the procedure keeps, and returns.
+            ; A second line.
+                     .PROC   LOAD
+
+            """);
+    }
+
+    /// <summary>
     ///  Relocated words other than procedure-relative ones are written as what they are relative to: another
     ///  procedure's entry by its name and a place in it by a label it defines (<c>.REF</c>, <c>.DEF</c>), the host's
     ///  global by its name (<c>.PUBLIC</c>), and the interpreter's base and an offset (<c>.INTERP</c>).

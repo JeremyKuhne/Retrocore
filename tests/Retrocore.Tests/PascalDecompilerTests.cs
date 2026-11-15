@@ -637,6 +637,37 @@ public class PascalDecompilerTests
         code[512 + 0x0B].Should().Be(0x77, "a byte the Compiler wrote is its own");
     }
 
+    /// <summary>
+    ///  A source too long for two volumes' halves is cut before outer procedures into pieces: the main file on SOURCE:
+    ///  includes the others where they were, each on SOURCE: while it fits, then on CODE:, and together they are the
+    ///  source again.
+    /// </summary>
+    [TestMethod]
+    public void ALongSourceIsIncludedInPieces()
+    {
+        string body = string.Concat(Enumerable.Repeat("    X := X + 1; (* a comment that makes the procedure long enough *)\n", 50));
+        string source = "PROGRAM LONG;\nSEGMENT PROCEDURE S;\n  VAR X: INTEGER;\n"
+            + string.Concat(Enumerable.Range(1, 45).Select(number => $"  PROCEDURE P{number};\n  BEGIN\n{body}  END;\n"))
+            + "BEGIN\nEND;\nBEGIN\nEND.\n";
+
+        (byte[] sources, byte[] codes) = EmulatedPascalCompiler.Volumes(source);
+        PascalVolume first = PascalVolume.Read(sources, proDosOrder: false);
+        PascalVolume second = PascalVolume.Read(codes, proDosOrder: false);
+        string main = PascalTextFile.Read(first.ReadFile("PROGRAM.TEXT"));
+        List<string> included = [.. main.Split('\n').Where(line => line.StartsWith("(*$I ", StringComparison.Ordinal)).Select(line => $"{line}\n")];
+
+        included.Should().HaveCountGreaterThan(1).And.Contain(directive => directive.Contains("CODE:", StringComparison.Ordinal));
+        string whole = main;
+        foreach (string directive in included)
+        {
+            string name = directive[(directive.IndexOf(':', StringComparison.Ordinal) + 1)..directive.IndexOf(".TEXT", StringComparison.Ordinal)] + ".TEXT";
+            PascalVolume volume = directive.Contains("SOURCE:", StringComparison.Ordinal) ? first : second;
+            whole = whole.Replace(directive, PascalTextFile.Read(volume.ReadFile(name)), StringComparison.Ordinal);
+        }
+
+        whole.TrimEnd().Should().Be(source.TrimEnd());
+    }
+
     // A function, of a word, that adds 1 to its parameter, for the Assembler.
     private const string Add1Source = """
                 .FUNC   ADD1,1

@@ -90,7 +90,12 @@ public sealed partial class PascalDecompiler
 
         Line("TYPE");
         _indent++;
-        foreach (TypeNode type in ordered) { Line($"{type.Name} = {Declare(type, inline: false)};"); }
+        foreach (TypeNode type in ordered)
+        {
+            if (TypeComment(type) is { } about) { CommentLines(about); }
+            Line($"{type.Name} = {Declare(type, inline: false)};");
+        }
+
         _indent--;
     }
 

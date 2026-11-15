@@ -355,7 +355,7 @@ public static partial class PascalAssemblyWriter
 
         string Reference(int target) => inside.TryGetValue(target, out string? within) ? within : Local(target);
 
-        if (written.Comment is { } about) { lines.Add($"; {about}"); }
+        if (written.Comment is { } about) { lines.AddRange(CommentLines(about)); }
         string directive = written.IsFunction ? ".FUNC" : ".PROC";
         string parameters = written.ParameterWords > 0 ? $",{written.ParameterWords}" : "";
         lines.Add(Line(label: null, $"{directive,-8}{procedure.Name}{parameters}"));
@@ -367,7 +367,11 @@ public static partial class PascalAssemblyWriter
         int position = entry;
         while (position < procedure.Bottom)
         {
-            if (written.Comments.TryGetValue(position - entry, out string? text)) { lines.Add($"; {text}"); }
+            if (written.Comments.TryGetValue(position - entry, out string? text))
+            {
+                lines.AddRange(CommentLines(text));
+            }
+
             if (procedure.Starts.TryGetValue(position, out DisassembledInstruction instruction))
             {
                 lines.Add(Line(labels.GetValueOrDefault(position), Instruction(position, instruction)));
@@ -449,6 +453,28 @@ public static partial class PascalAssemblyWriter
 
     // A line: its label in the first eight columns, which are all the Assembler reads of one, then its text.
     private static string Line(string? label, string text) => $"{label ?? "",-8} {text}";
+
+    // The longest comment line written: the Assembler reads lines of 80 characters whole, and a longer one runs into
+    // the next.
+    private const int LineLength = 76;
+
+    // A comment as lines of the source, each of its own lines wrapped at its words to fit.
+    private static IEnumerable<string> CommentLines(string text)
+    {
+        foreach (string line in text.Split('\n'))
+        {
+            string rest = line.Trim();
+            while (rest.Length > LineLength - 2)
+            {
+                int cut = rest.LastIndexOf(' ', LineLength - 2);
+                if (cut <= 0) { cut = LineLength - 2; }
+                yield return $"; {rest[..cut].TrimEnd()}";
+                rest = rest[cut..].TrimStart();
+            }
+
+            yield return $"; {rest}";
+        }
+    }
 
     // A number as the Assembler reads one: hexadecimal, from a digit.
     private static string Hex(byte value) => Hex((int)value);

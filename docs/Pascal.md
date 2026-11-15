@@ -199,6 +199,17 @@ leave the code as it is, so one is refused, with a warning, where it is a reserv
 the Compiler reads, as another the procedure reaches or is reached from; and the program's and a segment
 procedure's names must be their segments'.
 
+Hints also name what the decompiler's own names stand for, keyed by them: `T2` for a type, `T2.F0` for its field (by
+the field's name as the decompiler writes it, `T2.T2F6V1` for a prefixed one), and, in a program compiled as part of
+the system, `SYSTEM@8` for the system's global at word 8. A field goes by its name alone inside a `WITH`, where it
+hides any other name, and a type's name reaches every procedure, so a type's or a field's name must be unlike every
+other name the source has in its first eight letters, the decompiler's own names among them, or it is refused with a
+warning. Comments go with the same keys: a type's above its declaration, a field's beside it, where its record is
+written a field to a line, a variable's (`SEGMENT.N@WORD`, `SYSTEM@8`) beside its declaration, and a system
+procedure's (`SYSTEM.43`) beside its heading. A comment of several lines (`\n`) is written as several, in the Pascal
+and in the Assembler's source, where each line is also wrapped to fit the 80 characters the Assembler reads of one.
+Apple Pascal 1.3's Compiler, named and commented so, is kept outside this repository.
+
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
 `--library disk NAME`); the source `USES` them as the program did. Where some code cannot be decompiled, the
 procedure says so in a comment, the command lists it as a warning, and exits with 1.
@@ -239,7 +250,12 @@ A global the code passes as a file holds the file's address (`LOD`), so it is a 
 its own segments copied out by the Librarian, into other slots and without segment 0; `--pascal compare` pairs
 segments by number and leaves out those with no code and the outer block. A source too long for APPLE1 beside its
 code file, such as a Compiler's, is compiled from a volume of its own, SOURCE:, in a second Disk II in slot 5 (units
-11 and 12), to CODE: beside it; Apple Pascal 1.1 sees both.
+11 and 12), to CODE: beside it; Apple Pascal 1.1 sees both. One too long for a volume, such as Apple Pascal 1.3's
+Compiler's, is cut before procedures of the outer block into pieces of about 40K characters: the main file keeps
+every other piece and includes each of the others where it was (`(*$I SOURCE:INC1.TEXT*)`; the Compiler includes no
+file from an included one), each on SOURCE: while it fits, then on CODE:, where the code file needs the rest. The
+code file is read back without the empty blocks after its code, which it keeps of the room CODE: had and the Linker
+cannot copy.
 ### Rebuilding a linked program
 
 The byte the Compiler skips to put an `LDC`'s or `XJP`'s words on a word boundary holds whatever its buffer had,

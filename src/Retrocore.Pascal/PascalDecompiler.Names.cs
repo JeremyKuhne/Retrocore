@@ -73,6 +73,13 @@ public sealed partial class PascalDecompiler
                 }
             }
         }
+
+        // The system's globals a (*$U-*) program declares, by their words: SYSTEM@8. Every procedure reaches them.
+        foreach (Variable global in _declared.GetValueOrDefault(_system) ?? [])
+        {
+            string key = $"SYSTEM@{global.Offset}";
+            if (Given(key) is { } given && Safe(given, key, Program, global, out string? name)) { global.Name = name; }
+        }
     }
 
     // A name the hints give, by key, its word in hexadecimal too: SEGMENT.N@1038, or @$40E.
@@ -135,6 +142,11 @@ public sealed partial class PascalDecompiler
             foreach (Procedure child in next.Children) { if (reach.Add(child)) { inner.Push(child); } }
         }
 
+        foreach (Variable global in _declared.GetValueOrDefault(_system) ?? [])
+        {
+            if (global != self && Key(global.Name) == name) { return global.Name; }
+        }
+
         foreach (Procedure procedure in reach.Append(Program))
         {
             if (procedure != self && Key(procedure.Name) == name) { return procedure.Name; }
@@ -158,14 +170,19 @@ public sealed partial class PascalDecompiler
     // Whether a name is a segment's, whose first eight letters the segment dictionary holds.
     private static bool Keeps(string name, string segment) => Key(name) == Key(segment.Trim());
 
-    // A comment given for a procedure, as Pascal writes one.
-    private string? Comment(Procedure procedure)
-    {
-        string? text = _options.Comments
-            .FirstOrDefault(pair => string.Equals(pair.Key, $"{procedure.Segment.Name}.{procedure.Number}", StringComparison.OrdinalIgnoreCase))
-            .Value;
+    // The comment given for a procedure.
+    private string? Comment(Procedure procedure) => Comment(_options.Comments, $"{procedure.Segment.Name}.{procedure.Number}");
 
-        return text is null ? null : $"(* {text.Replace("*)", "* )", StringComparison.Ordinal)} *)";
+    // A comment written above what it is about, a line of the source for each of its own.
+    private void CommentLines(string text)
+    {
+        string[] lines = text.Replace("*)", "* )", StringComparison.Ordinal).Split('\n');
+        for (int index = 0; index < lines.Length; index++)
+        {
+            string start = index == 0 ? "(* " : "   ";
+            string end = index == lines.Length - 1 ? " *)" : "";
+            Line($"{start}{lines[index]}{end}".TrimEnd());
+        }
     }
 
     // The program's assembled procedures as source for the Assembler, by the names the source declares them EXTERNAL

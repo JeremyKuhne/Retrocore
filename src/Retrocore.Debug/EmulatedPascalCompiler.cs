@@ -159,15 +159,7 @@ internal static partial class EmulatedPascalCompiler
     // drive, SOURCE:, and the code file onto another in its second, CODE:; the Compiler asks for both by name.
     private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
     {
-        byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
-        byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
-        (string first, string? rest) = Split(source);
-        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(first));
-        if (rest is not null)
-        {
-            PascalVolume.WriteFile(codes, proDosOrder: false, "REST.TEXT", PascalFileKind.Text, PascalTextFile.Write(rest));
-        }
-
+        (byte[] sources, byte[] codes) = Volumes(source);
         EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
         system.Type("C");
         if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
@@ -191,38 +183,101 @@ internal static partial class EmulatedPascalCompiler
         PascalVolume volume = system.EjectSlot5(drive: 2);
         if (!volume.Files.Any(file => file.Name == "PROGRAM.CODE")) { return null; }
 
-        byte[] code = volume.ReadFile("PROGRAM.CODE");
+        byte[] code = Trimmed(volume.ReadFile("PROGRAM.CODE"));
         RestoreAlignment(code, source);
         return code;
     }
 
-    // A source too long for a volume of its own, such as Apple Pascal 1.3's Compiler's, is split before a procedure of
-    // the outer block's, about halfway: the first part includes the rest, which goes on CODE: beside the code file.
-    private static (string First, string? Included) Split(string source)
+    // A code file without the blocks of zeros after what the Compiler wrote: the file keeps as many blocks as the
+    // volume had free after it, which the Linker then cannot copy onto its own.
+    private static byte[] Trimmed(byte[] code)
     {
-        byte[] whole = PascalTextFile.Write(source);
-        if (whole.Length <= 128 * 1024) { return (source, null); }
+        const int Block = 512;
+        int end = code.Length - (code.Length % Block);
+        while (end > Block && !code.AsSpan(end - Block, Block).ContainsAnyExcept((byte)0)) { end -= Block; }
+        return code[..end];
+    }
+
+    // The characters of source in each piece of one too long for a volume of its own.
+    private const int PieceLength = 40 * 1024;
+
+    /// <summary>
+    ///  Makes the volumes SOURCE: and CODE: for a source too long for APPLE1.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A source too long for a volume of its own, such as Apple Pascal 1.3's Compiler's, is cut before procedures of
+    ///   the outer block into pieces of about 40K characters: the main file, <c>PROGRAM.TEXT</c>, keeps every other
+    ///   piece and includes each of the others where it was, as <c>INCn.TEXT</c>, as the Compiler includes no file
+    ///   from an included one. The main file goes on SOURCE:, and each included file beside it while it fits, then on
+    ///   CODE:, which the code file needs room on.
+    ///  </para>
+    /// </remarks>
+    /// <param name="source">The source.</param>
+    /// <returns>SOURCE:'s and CODE:'s images.</returns>
+    internal static (byte[] Sources, byte[] Codes) Volumes(string source)
+    {
+        byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
+        byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
+        List<string> pieces = Pieces(source);
+        List<string> included = [.. pieces.Where((_, index) => index % 2 == 1)];
+
+        // Each directive is as long on either volume, so the main file is as long whichever each piece goes on.
+        string Directive(int number, bool onSource) =>
+            onSource ? $"(*$I SOURCE:INC{number}.TEXT*)\n" : $"(*$I CODE:INC{number}.TEXT  *)\n";
+
+        string Main(IReadOnlyList<bool> onSource) => string.Concat(pieces.Select((piece, index) =>
+            index % 2 == 0 ? piece : Directive((index / 2) + 1, onSource[index / 2])));
+
+        bool[] placed = [.. included.Select(_ => true)];
+        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
+        for (int number = 1; number <= included.Count; number++)
+        {
+            byte[] text = PascalTextFile.Write(included[number - 1]);
+            try
+            {
+                PascalVolume.WriteFile(sources, proDosOrder: false, $"INC{number}.TEXT", PascalFileKind.Text, text);
+            }
+            catch (IOException)
+            {
+                placed[number - 1] = false;
+                PascalVolume.WriteFile(codes, proDosOrder: false, $"INC{number}.TEXT", PascalFileKind.Text, text);
+            }
+        }
+
+        _ = PascalVolume.DeleteFile(sources, proDosOrder: false, "PROGRAM.TEXT");
+        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
+        return (sources, codes);
+    }
+
+    // A source too long for a volume of its own in pieces, cut before procedures of the outer block, each but the
+    // last at least PieceLength characters; one that fits is one piece.
+    private static List<string> Pieces(string source)
+    {
+        if (PascalTextFile.Write(source).Length <= 128 * 1024) { return [source]; }
 
         string[] lines = source.Split('\n');
-        int half = source.Length / 2;
+        List<string> pieces = [];
+        int start = 0;
         int length = 0;
-        int split = -1;
-        for (int index = 0; index < lines.Length && length < half; index++)
+        for (int index = 0; index < lines.Length; index++)
         {
-            if (lines[index].StartsWith("  PROCEDURE ", StringComparison.Ordinal)
+            bool outer = lines[index].StartsWith("  PROCEDURE ", StringComparison.Ordinal)
                 || lines[index].StartsWith("  FUNCTION ", StringComparison.Ordinal)
-                || lines[index].StartsWith("  SEGMENT ", StringComparison.Ordinal))
+                || lines[index].StartsWith("  SEGMENT ", StringComparison.Ordinal);
+
+            if (outer && length >= PieceLength && index > start)
             {
-                split = index;
+                pieces.Add(string.Join('\n', lines[start..index]) + "\n");
+                start = index;
+                length = 0;
             }
 
             length += lines[index].Length + 1;
         }
 
-        if (split <= 0) { return (source, null); }
-
-        string first = string.Join('\n', lines[..split]) + "\n(*$I CODE:REST.TEXT*)\n";
-        return (first, string.Join('\n', lines[split..]));
+        pieces.Add(string.Join('\n', lines[start..]));
+        return pieces;
     }
 
     /// <summary>

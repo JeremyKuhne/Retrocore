@@ -289,6 +289,59 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // The record HintsNameTheSystemsGlobalsTypesAndFields names, a field to a line with its comment.
+    private const string HintedRecord = """
+          (* The system's record:
+             its two words *)
+          SysRec = RECORD
+              Second: INTEGER;
+              First: INTEGER  (* Its A *)
+            END;
+          T1 = ^SysRec;
+
+        """;
+
+    /// <summary>
+    ///  Hints name the system's globals, by their words, and types and their fields, by the decompiler's names for
+    ///  them, and comment them; a record with a field named is written a field to a line, each with its comment. A
+    ///  name another in the source has is refused, with a warning, and the source still compiles to the same code.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameTheSystemsGlobalsTypesAndFields()
+    {
+        PascalDecompilerOptions options = new()
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["SYSTEM@1"] = "SysCom",
+                ["SYSTEM@8"] = "SymFile",
+                ["SYSTEM@9"] = "Buffer",
+                ["COMPILER.1@3"] = "Buffer",
+                ["T2"] = "SysRec",
+                ["T2.F1"] = "First",
+                ["T2.F0"] = "Second",
+                ["T1"] = "SysCom",
+                ["T5"] = "AFile"
+            },
+            Comments = new Dictionary<string, string>
+            {
+                ["SYSTEM@8"] = "The source",
+                ["COMPILER.1@3"] = "A block",
+                ["T2"] = "The system's record:\nits two words",
+                ["T2.F1"] = "Its A"
+            }
+        };
+
+        string source = RoundTrip(SystemSource, options, out IReadOnlyList<string> warnings);
+        source.Should().Contain(HintedRecord);
+        source.Should().Contain("  SysCom: T1;\n").And.Contain("  SymFile: T4;  (* The source *)\n");
+        source.Should().Contain("    Buffer: T6;  (* A block *)\n");
+        source.Should().Contain("IF BLOCKREAD(SymFile^, Buffer, 1, 0) <> 1 THEN").And.Contain("IF SysCom^.First = 0 THEN");
+        source.Should().Contain("  AFile = FILE;");
+        warnings.Should().Contain(warning => warning.Contains("Buffer for SYSTEM@9 would clash with Buffer", StringComparison.Ordinal));
+        warnings.Should().Contain(warning => warning.Contains("SysCom for T1 would clash with another name the source has", StringComparison.Ordinal));
+    }
+
     // A word used both ways that points to bytes in one place and to bits in another, as 1.3's Compiler reads the
     // system's version and its options.
     private const string ViewsSource = """
@@ -709,7 +762,9 @@ public class PascalSystemDecompilerTests
     }
 
     // Compiles a probe, decompiles it, and checks the decompiled source compiles to the same segments.
-    private static string RoundTrip(string probe)
+    private static string RoundTrip(string probe) => RoundTrip(probe, new PascalDecompilerOptions(), out _);
+
+    private static string RoundTrip(string probe, PascalDecompilerOptions options, out IReadOnlyList<string> warnings)
     {
         string boot = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
         string compiler = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_2.dsk");
@@ -721,8 +776,9 @@ public class PascalSystemDecompilerTests
         (byte[]? original, string compiled) = EmulatedPascalCompiler.Compile(probe, boot, compiler, s_inputs);
         if (original is null) { Assert.Fail($"The Compiler stopped:\n{compiled}"); }
 
-        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
-        result.Warnings.Should().BeEmpty(result.Source);
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(original), options);
+        warnings = result.Warnings;
+        if (options.Names.Count == 0) { result.Warnings.Should().BeEmpty(result.Source); }
 
         (byte[]? code, string screen) = EmulatedPascalCompiler.Compile(result.Source, boot, compiler, s_inputs);
         if (code is null) { Assert.Fail($"The Compiler stopped:\n{screen}\n{result.Source}"); }

@@ -347,7 +347,8 @@ public sealed partial class PascalDecompiler
             if (target - 1 > at && last.Opcode.Code == Pcode.Ujp && last.Targets[0] >= 0)
             {
                 int end = Index(last.Targets[0]);
-                if (end > target && end <= to && !IsCaseJump(last))
+                // An ELSE with nothing in it jumps to where it starts.
+                if (end >= target && end <= to && !IsCaseJump(last))
                 {
                     List<Statement> then = Block(at + 1, target - 1, []);
                     List<Statement> otherwise = Block(target, end, []);

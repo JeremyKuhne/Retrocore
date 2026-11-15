@@ -256,6 +256,23 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // An IF with an empty ELSE, which jumps to where the ELSE starts.
+    private const string EmptyElseSource = """
+        PROGRAM EE;
+        VAR I, J: INTEGER;
+        BEGIN I := 3; IF I = 3 THEN J := 1 ELSE ; I := J END.
+        """;
+
+    /// <summary>
+    ///  An IF's jump over an ELSE with nothing in it is the ELSE's, not a GOTO.
+    /// </summary>
+    [TestMethod]
+    public void EmptyElsesDecompile()
+    {
+        string source = RoundTrip(EmptyElseSource);
+        source.Should().Contain("ELSE").And.NotContain("GOTO");
+    }
+
     // A GOTO out of an inner WHILE to the end of the outer one's body.
     private const string LoopEndSource = """
         (*$G+*)

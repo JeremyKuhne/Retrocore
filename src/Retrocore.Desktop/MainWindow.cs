@@ -24,16 +24,20 @@ internal sealed class MainWindow : Window
     // The small computer the extension's activity bar shows.
     private const string MachineIcon = "M2,4 H22 V16 H2 Z M4,6 V14 H20 V6 Z M9,19 H15 V21 H9 Z M11,16 H13 V19 H11 Z";
 
-    // The chrome's size at 100%: the activity bar with its border, the splitter, and the status bar with its border.
+    // The chrome's size at 100%: the activity bar with its border, and the status bar with its border. The pane
+    // opens over the screen, so it takes none of the picture's space.
     private const double ActivityWidth = 49;
-    private const double SplitterWidth = 4;
     private const double StatusHeight = 25;
 
     private readonly MachineHost _host;
     private readonly DesktopSettings _settings;
     private readonly ScreenView _screen;
     private readonly Grid _body = new();
-    private readonly Border _pane = new() { BorderThickness = new Thickness(0, 0, 1, 0) };
+    private readonly Border _pane = new()
+    {
+        BorderThickness = new Thickness(0, 0, 1, 0),
+        BoxShadow = BoxShadows.Parse("4 0 12 0 #40000000")
+    };
     private readonly LayoutTransformControl _paneZoom = new();
     private readonly LayoutTransformControl _activityZoom = new();
     private readonly LayoutTransformControl _statusZoom = new();
@@ -95,10 +99,12 @@ internal sealed class MainWindow : Window
 
         _body.ColumnDefinitions = [new ColumnDefinition(_paneWidth), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)];
         _splitter.Width = 4;
+        // The screen fills the body, and the pane and its splitter open over it, so opening, closing or resizing the
+        // pane never moves or resizes the picture.
+        Grid.SetColumnSpan(_screen, 3);
         Grid.SetColumn(_pane, 0);
         Grid.SetColumn(_splitter, 1);
-        Grid.SetColumn(_screen, 2);
-        _body.Children.AddRange([_pane, _splitter, _screen]);
+        _body.Children.AddRange([_screen, _pane, _splitter]);
 
         _machineButton = new ActivityButton(new PathIcon
         {
@@ -128,10 +134,8 @@ internal sealed class MainWindow : Window
         ApplyZoom();
         UpdateActivity();
 
-        // The picture's size follows the window and the pane, never the zoom.
+        // The picture's size follows the window, never the pane or the zoom.
         SizeChanged += (_, _) => UpdateScreenArea();
-        _splitter.DragDelta += (_, _) => UpdateScreenArea();
-        _splitter.DragCompleted += (_, _) => UpdateScreenArea();
         _refresh.Tick += (_, _) => Refresh();
         _refresh.Start();
         Opened += (_, _) => _screen.Focus();
@@ -188,7 +192,6 @@ internal sealed class MainWindow : Window
         _pane.IsVisible = open;
         _splitter.IsVisible = open;
         _body.ColumnDefinitions[0].Width = open ? _paneWidth : new GridLength(0);
-        UpdateScreenArea();
         if (!open) { _screen.Focus(); }
     }
 
@@ -202,9 +205,8 @@ internal sealed class MainWindow : Window
     // a little more or less of the window, leaves the picture as it was.
     private void UpdateScreenArea()
     {
-        double pane = _pane.IsVisible ? _body.ColumnDefinitions[0].Width.Value + SplitterWidth : 0;
         _screen.SizingArea = new Size(
-            Math.Max(0, ClientSize.Width - ActivityWidth - pane),
+            Math.Max(0, ClientSize.Width - ActivityWidth),
             Math.Max(0, ClientSize.Height - StatusHeight));
 
         _screen.InvalidateVisual();

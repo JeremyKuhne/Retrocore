@@ -47,7 +47,8 @@ the other's internals.
 ## The window
 
 Like VS Code: an activity bar on the left, a side pane that collapses, the machine's screen filling the rest, and a
-status bar across the whole bottom.
+status bar across the whole bottom. Unlike VS Code, the pane opens over the screen rather than beside it, so opening,
+closing or dragging it never moves or resizes the machine's picture.
 
 ```text
 ┌───┬───────────────────────────────┬───────────────────────────────────────────────────────┐
@@ -82,7 +83,7 @@ status bar across the whole bottom.
   - **Display and Sound**: what the display panel offers: speed, sound, volume, scale, screen, fast disk and the beam
     overlay.
 
-  The pane's width is dragged, and it remembers it.
+  The pane opens over the screen, with a shadow along its edge. Its width is dragged, and it remembers it.
 - **The status bar** runs the whole width: the machine and its state, its speed and frame rate, the busy drive, and
   on the right the machine's own keys from the panel (Ctrl, Ctrl-Reset, Esc, Open and Closed Apple, Break, Clear),
   which change with the machine.
@@ -100,10 +101,10 @@ status bar across the whole bottom.
   - **Settings → Appearance → Zoom** has the same, with the level shown, and the status bar shows the level while it
     is not 100%, clicking it going back to 100%.
 
-  **The machine's picture never changes with the zoom**, only when the window is resized or the pane is dragged or
-  collapsed. The picture is sized for the window less the chrome at 100%, so the zoomed chrome, which takes a little
-  more of the window, leaves it the same size; it stays centred in the room left, and the pane keeps its width,
-  scrolling when its zoomed contents need more.
+  **The machine's picture never changes with the zoom or the pane**, only when the window is resized. The picture is
+  sized for the window less the activity bar and status bar at 100%, so the zoomed chrome, which takes a little more
+  of the window, leaves it the same size; it stays centred in the room left, and the pane keeps its width, scrolling
+  when its zoomed contents need more.
 - **Settings** are a view of their own: the gear at the bottom of the activity bar switches the side pane to them, as
   VS Code's activity bar switches views. The theme and zoom are kept in Retrocore's roaming `settings.json`
   ([machine files](MachineFiles.md#settings-and-locations)) under `desktop`, apart from VS Code's own theme and zoom.

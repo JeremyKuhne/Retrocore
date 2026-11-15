@@ -144,7 +144,7 @@ function remember() {
 // The rows: with rows aligned to labels, a row starts at each multiple of ROW and at each label between.
 function layoutRows() {
     // What shows stays: the cursor's row where it is when it shows, else the top row's address at the top.
-    const top = Math.floor(grid.scrollTop / LINE), shownAt = rowOf(cursor) - top, topAddress = rowStart(Math.min(top, rowCount() - 1));
+    const top = Math.floor(grid.scrollTop / LINE), within = grid.scrollTop - top * LINE, shownAt = rowOf(cursor) - top, topAddress = rowStart(Math.min(top, rowCount() - 1));
     const showing = shownAt >= 0 && shownAt < visibleRows();
     rowStarts = null;
     if (aligned && labels.length > 0) {
@@ -160,7 +160,8 @@ function layoutRows() {
         rowStarts = Int32Array.from(starts);
     }
     document.getElementById("spacer").style.height = (rowCount() * LINE) + "px";
-    grid.scrollTop = (showing ? Math.max(0, rowOf(cursor) - shownAt) : rowOf(topAddress)) * LINE;
+    // Partway into a row, the view stays as far into it.
+    grid.scrollTop = (showing ? Math.max(0, rowOf(cursor) - shownAt) : rowOf(topAddress)) * LINE + within;
 }
 
 function rowCount() {

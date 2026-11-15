@@ -481,13 +481,14 @@ test("a stop leaves the view where it was scrolled to, away from the cursor", as
         await page.settle();
     }
     const grid = page.elements.get("grid")!;
-    grid.scrollTop = 0x200 * 20;
+    // Partway into a row, too.
+    grid.scrollTop = 0x200 * 20 + 3;
     page.send({ type: "stopped" });
     for (let round = 0; round < 3; round++) {
         answer(page, () => 0xA0);
         await page.settle();
     }
-    assert.equal(grid.scrollTop, 0x200 * 20);
+    assert.equal(grid.scrollTop, 0x200 * 20 + 3);
 });
 
 test("bytes that are not RAM are shaded and refuse typing", async () => {

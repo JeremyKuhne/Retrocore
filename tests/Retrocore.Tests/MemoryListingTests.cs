@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.I8080;
 using Retrocore.Cpu.M6809;
 using Retrocore.Cpu.Z80;
 using Retrocore.Debug;
@@ -46,5 +47,20 @@ public sealed class MemoryListingTests
         target.Should().Be(0x0008);
         SortedDictionary<int, string> names = new() { [0x0008] = "SYNTAX" };
         ListingOperands.Named(restart.ToString(), target, shown, names).Should().Contain("SYNTAX");
+    }
+
+    /// <summary>
+    ///  An 8080 restart's text gives its number, as <c>RST 1</c> does for $0008, which the label names in its place.
+    /// </summary>
+    [TestMethod]
+    public void IntelRestartsNameTheirTarget()
+    {
+        bool decoded = Disassembler.TryDecode([0xCF], address: 0x1000, I8080Isa.InstructionSet, out DisassembledInstruction restart);
+        decoded.Should().BeTrue();
+        (int? target, int? shown) = ListingOperands.OperandAddress(restart, directPage: null);
+        target.Should().Be(0x0008);
+        SortedDictionary<int, string> names = new() { [0x0008] = "SYNTAX" };
+        string text = ListingOperands.Named(restart.ToString(), target, shown, names);
+        text.Should().Be(restart.ToString().Replace(" 1", " SYNTAX", StringComparison.Ordinal), restart.ToString());
     }
 }

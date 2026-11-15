@@ -121,20 +121,18 @@ internal sealed class ScreenView : Control
         // The picture has its monitor's shape, as the display panel gives it: the Apple II's 560 by 192 dots fill a
         // 280 by 192 shape, so each line is drawn twice; the TRS-80's fill 4 by 3.
         double width = bitmap.PixelSize.Width;
-        double rows = bitmap.PixelSize.Height;
         double aspect = Aspect(_host.KeyMapName);
         double height = width / aspect;
         Size area = SizingArea ?? Bounds.Size;
         Size size;
-        if (Sharp && SharpBase(width, rows, aspect) is (int across, int down))
+        double device = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+        (double across, double down) = SharpBase(_host.KeyMapName, width);
+        double times = Math.Floor(Math.Min(area.Width * device / across, area.Height * device / down));
+        if (Sharp && times >= 1)
         {
-            // Whole device pixels for every dot and every line, as many as fit: the smallest whole numbers of device
-            // pixels a dot and a line take in the monitor's shape (one and two on the Apple II, two and three on the
-            // TRS-80's 384 by 192), times the largest whole number that fits.
-            double device = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-            double fits = Math.Min(area.Width * device / (width * across), area.Height * device / (rows * down));
-            double times = Math.Max(1, Math.Floor(fits));
-            size = new(width * across * times / device, rows * down * times / device);
+            // Whole device pixels for every dot and every line: the machine's sharp size at 1x, times the largest whole
+            // number that fits. Too small a window for even 1x fits the picture instead, as the display panel does.
+            size = new(across * times / device, down * times / device);
         }
         else
         {
@@ -146,22 +144,17 @@ internal sealed class ScreenView : Control
         context.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height), destination);
     }
 
-    // The smallest whole numbers of device pixels a dot and a line can take so the picture keeps its shape, or null
-    // when none up to eight do.
-    private static (int Across, int Down)? SharpBase(double width, double rows, double aspect)
+    // Each machine's picture at 1x in Sharp, in device pixels, as the display panel's sharpBase has them: each dot a
+    // whole number of pixels across and down in the screen's shape. The IIe's rows are twice as tall as its dots are
+    // wide; the Model I's dots are 2 wide by 3 tall; the CoCo 3's 704 dots by 249 lines show each line twice.
+    private static (double Across, double Down) SharpBase(string machine, double width) => machine switch
     {
-        double ratio = width / (rows * aspect);
-        for (int across = 1; across <= 8; across++)
-        {
-            double down = across * ratio;
-            if (Math.Abs(down - Math.Round(down)) < 1e-9 && Math.Round(down) >= 1)
-            {
-                return (across, (int)Math.Round(down));
-            }
-        }
-
-        return null;
-    }
+        "trs80-model1" => (768, 576),
+        "trs80-model3" or "altair" => (640, 480),
+        "trs80-model2" => (640, 576),
+        "coco" => width == 704 ? (704, 498) : (640, 480),
+        _ => (560, 384),
+    };
 
     // The width to height of each machine's picture, as the display panel's aspect map has them.
     private static double Aspect(string machine) => machine switch

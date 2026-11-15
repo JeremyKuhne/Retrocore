@@ -50,12 +50,16 @@ internal static class Benchmark
 
         Report("debug target RunCycles", Time(configuration, work, target => target.RunCycles(256)), clock);
 
+        // The host's run thread stops at the settled cycle and again at the end of the work, so its timing covers
+        // the same cycles as the others, from the same state.
         using MachineHost host = new(configuration) { Speed = 0, SoundOn = false };
+        host.HoldAt(SettleCycles);
         host.Start();
-        while (host.CycleCount < SettleCycles) { Thread.Sleep(1); }
+        host.WaitHeld();
         ulong from = host.CycleCount;
         long started = Stopwatch.GetTimestamp();
-        while (host.CycleCount < from + work) { Thread.Sleep(1); }
+        host.HoldAt(from + work);
+        host.WaitHeld();
         Report("host at max speed", (host.CycleCount - from) / Stopwatch.GetElapsedTime(started).TotalSeconds, clock);
         return 0;
     }
@@ -66,7 +70,12 @@ internal static class Benchmark
         IDebugTarget target = OffMachine.Build(configuration);
         try
         {
-            while (target.CycleCount < SettleCycles) { target.RunCycles(256); }
+            // To the settled cycle exactly, as the host's hold stops at it.
+            while (target.CycleCount < SettleCycles)
+            {
+                target.RunCycles((int)Math.Min(256, SettleCycles - target.CycleCount));
+            }
+
             ulong from = target.CycleCount;
             long started = Stopwatch.GetTimestamp();
             while (target.CycleCount < from + work) { run(target); }

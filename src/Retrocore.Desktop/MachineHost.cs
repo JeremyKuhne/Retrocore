@@ -42,6 +42,10 @@ internal sealed class MachineHost : DisposableBase
     private volatile bool _frameWanted = true;
     private volatile bool _accelerated;
 
+    // The cycle the run thread stops at and waits, for a measurement to start or end there; MaxValue for none.
+    private ulong _holdAt = ulong.MaxValue;
+    private readonly ManualResetEventSlim _held = new(initialState: false);
+
     // Why the CPU stopped, such as a 6502 jammed by an illegal opcode, or null while it runs; Reset clears it.
     private volatile string? _stopped;
     private double _speed = 1;
@@ -394,6 +398,22 @@ internal sealed class MachineHost : DisposableBase
         }
     }
 
+    /// <summary>
+    ///  Has the run thread stop at a cycle, exactly, and wait there until held elsewhere, so a measurement starts and
+    ///  ends at whole cycles of the machine's own rather than at the run thread's slices.
+    /// </summary>
+    /// <param name="cycle">The cycle to stop at, or <see cref="ulong.MaxValue"/> to run on.</param>
+    internal void HoldAt(ulong cycle)
+    {
+        _held.Reset();
+        Volatile.Write(ref _holdAt, cycle);
+    }
+
+    /// <summary>
+    ///  Waits for the run thread to reach the cycle <see cref="HoldAt"/> set.
+    /// </summary>
+    internal void WaitHeld() => _held.Wait();
+
     // The machine's own request that changes its sound, such as apple2/sound, or null.
     private string? SoundRequest() => _target.Requests.Keys.FirstOrDefault(key => key.EndsWith("/sound", StringComparison.Ordinal));
 
@@ -456,6 +476,9 @@ internal sealed class MachineHost : DisposableBase
                     due = paceCycles;
                 }
 
+                ulong holdAt = Volatile.Read(ref _holdAt);
+                due = Math.Min(due, holdAt);
+
                 // With no debugger attached, the machine runs without the debugger's tracking, in batches between
                 // looks at the clock.
                 try
@@ -489,6 +512,9 @@ internal sealed class MachineHost : DisposableBase
                 }
 
                 Volatile.Write(ref _publishedCycles, _target.CycleCount);
+
+                // Held once the count it stops at is published, so the waiter reads it.
+                if (_target.CycleCount >= holdAt) { _held.Set(); }
                 Measure();
             }
 
@@ -532,6 +558,7 @@ internal sealed class MachineHost : DisposableBase
         _stopping = true;
         if (_thread.IsAlive) { _thread.Join(); }
         _audio.Dispose();
+        _held.Dispose();
         (_target as IDisposable)?.Dispose();
     }
 }

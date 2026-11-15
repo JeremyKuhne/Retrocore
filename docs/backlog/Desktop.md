@@ -210,7 +210,7 @@ What the extension's views and panel do, the desktop app does, with the extensio
 | The saved machine, restored when it starts again | Kept in `settings.json` under `desktop.machine` and `desktop.machineState` until machine files replace it; a machine's tape recordings are written when it stops or the app closes, as a debug session's are when it ends |
 | The panel's keys: Ctrl (latched), Ctrl-C, Ctrl-Reset, Esc, Open and Closed (or Solid) Apple, the II's game-port buttons, Break, Clear, Hold, F1, F2, Reset, Clear Screen | The status bar's keys, by machine, with the panel's tooltips, and its keyboard hint on the keyboard icon |
 | Ctrl+F12 or Ctrl+Break to reset, the Alt keys for the Apple keys, Shift+Insert and right-click to paste (at the machine's typing pace) | The same on the screen |
-| The mouse card: a click captures the pointer, Esc lets it go | The same, the screen's border lit while it is captured |
+| The mouse card: a click captures the pointer, Esc lets it go | The pointer over the picture is the mouse, mapped onto the bounds the program set: no capture, no Esc, and no platform calls |
 | A session that ended: its last picture dimmed, with Restart and Start Machine | An off machine's last picture dimmed over black, with Start This Machine and Switch Machine |
 
 `--tour folder` walks the window through these (running, a row selected, off, Switch Machine, a setting, a card

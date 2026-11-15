@@ -20,7 +20,7 @@ internal static class Program
     ///  <c>--machine</c>, a launch configuration as JSON (the Apple IIe by default), and <c>--smoke-seconds</c>, to run
     ///  for that long, report and exit.
     /// </param>
-    /// <returns>0, or 1 for bad arguments.</returns>
+    /// <returns>The application exit code, or 1 for bad arguments or a failed tour check.</returns>
     [STAThread]
     internal static int Main(string[] args)
     {
@@ -124,9 +124,7 @@ internal static class Program
             });
         }
 
-        builder.StartWithClassicDesktopLifetime(args: []);
-
-        return 0;
+        return builder.StartWithClassicDesktopLifetime(args: []);
     }
 
     // A JSON object, or null for anything else, malformed JSON among it.

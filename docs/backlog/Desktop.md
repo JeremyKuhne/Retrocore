@@ -107,10 +107,10 @@ closing or dragging it never moves or resizes the machine's picture.
   - **Settings → Appearance → Zoom** has the same, with the level shown, and the status bar shows the level while it
     is not 100%, clicking it going back to 100%.
 
-  **The machine's picture never changes with the zoom or the pane**, only when the window is resized. The picture is
-  sized for the window less the activity bar and status bar at 100%, so the zoomed chrome, which takes a little more
-  of the window, leaves it the same size; it stays centred in the room left, and the pane keeps its width, scrolling
-  when its zoomed contents need more.
+  **Sharp keeps the picture's whole-pixel size independent of UI zoom. Fit always shows the complete picture**
+  inside the actual space left by the activity bar and status bar, preserving its aspect ratio as the window or
+  UI zoom changes. The side pane overlays the picture, so opening or resizing it does not change either mode's
+  sizing. The pane keeps its width, scrolling when its zoomed contents need more.
 - **Settings** are a view of their own: the gear at the bottom of the activity bar switches the side pane to them, as
   VS Code's activity bar switches views. Appearance has the theme, the zoom and a **Pane opacity** slider (50% to
   100%) for how much of the machine shows through the pane. They are kept in Retrocore's roaming `settings.json`

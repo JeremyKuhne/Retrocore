@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using System.Globalization;
 
 namespace Retrocore.Desktop;
@@ -19,6 +20,7 @@ namespace Retrocore.Desktop;
 /// <param name="Head">A disk drive's head, or null.</param>
 /// <param name="Transport">A tape drive's transport, or null.</param>
 /// <param name="Blocks">Block storage's size and last block, or null.</param>
+/// <param name="Generation">The mount generation of a drive whose medium the host saves, or null.</param>
 internal sealed record DeviceState(
     string Id,
     DeviceKind Kind,
@@ -27,7 +29,8 @@ internal sealed record DeviceState(
     DeviceActivity Activity,
     DiskHead? Head,
     TapeTransport? Transport,
-    (long Count, long? Last)? Blocks)
+    (long Count, long? Last)? Blocks,
+    int? Generation = null)
 {
     /// <summary>
     ///  Reads a device.
@@ -42,7 +45,8 @@ internal sealed record DeviceState(
         device.Activity,
         device is IDiskDrive drive ? drive.Head : null,
         device is ITapeDrive tape ? tape.Transport : null,
-        device is IBlockStorage storage ? (storage.BlockCount, storage.LastBlock) : null);
+        device is IBlockStorage storage ? (storage.BlockCount, storage.LastBlock) : null,
+        device is IMediumSlot slot ? slot.MountGeneration : null);
 
     /// <summary>
     ///  Gets whether the device can do an operation.

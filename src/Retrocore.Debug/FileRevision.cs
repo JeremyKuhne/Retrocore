@@ -26,16 +26,23 @@ internal sealed record FileRevision(long Length, DateTime Written, string Sha256
         new(bytes.Length, File.GetLastWriteTimeUtc(path), Convert.ToHexStringLower(SHA256.HashData(bytes)));
 
     /// <summary>
-    ///  Reads a file's revision as it is now.
+    ///  Reads a file's revision as it is now, past a brief lock, as a save's own reads of the image are.
     /// </summary>
     /// <param name="path">The file.</param>
     /// <returns>The revision, or null when there is no such file.</returns>
-    internal static FileRevision? Read(string path)
+    /// <exception cref="IOException">The file could not be read, or was held for longer than a moment.</exception>
+    internal static FileRevision? Read(string path) => ImageWriter.Retry(() =>
     {
-        if (!File.Exists(path)) { return null; }
-        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        return new(stream.Length, File.GetLastWriteTimeUtc(path), Convert.ToHexStringLower(SHA256.HashData(stream)));
-    }
+        try
+        {
+            using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return new FileRevision(stream.Length, File.GetLastWriteTimeUtc(path), Convert.ToHexStringLower(SHA256.HashData(stream)));
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    });
 
     /// <summary>
     ///  Gets whether another revision is the same file: the same length and hash.

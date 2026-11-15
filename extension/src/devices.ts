@@ -9,6 +9,8 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
 import { catalogMachine, settingValue, type MachineChoice } from "./machines";
@@ -29,6 +31,8 @@ interface MediaAnswer {
     losses?: string[];
     notes?: string[];
     reason?: "noImage" | "format" | "file" | "access";
+    path?: string;
+    baseline?: { length: number; written: string; sha256: string } | null;
     current?: { length: number; written: string; sha256: string } | null;
 }
 
@@ -42,7 +46,7 @@ export interface Device {
     operations: ("insert" | "eject" | "record" | "writeProtect" | "save")[];
     tracks: number;
     sides: number;
-    media: { label: string; format: string; writeProtected: boolean; changed: boolean } | null;
+    media: { label: string; format: string; writeProtected: boolean; changed: boolean; generation?: number } | null;
     activity: "idle" | "seeking" | "reading" | "writing";
     head?: { motor: boolean; selected: boolean; track: number; side: number; sector: number | null };
     transport?: { motor: boolean; mode: "stopped" | "playing" | "recording"; position: number; length: number };
@@ -626,8 +630,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // machine its next launch restores.
     const send = async (request: "hardware" | "device", args: Record<string, unknown>): Promise<boolean> => {
         const session = vscode.debug.activeDebugSession;
+        if (session?.type === "retrocore") return sendTo(session, request, args);
         try {
-            if (session?.type === "retrocore") return await answer(session, request, args);
             if (tree.off !== undefined) await off.change(request, args);
             return true;
         } catch (error) {
@@ -635,16 +639,33 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             return false;
         }
     };
+    // A change to one running machine, with its answers; an error is shown. Says whether it went through.
+    const sendTo = async (session: vscode.DebugSession, request: "hardware" | "device", args: Record<string, unknown>): Promise<boolean> => {
+        try {
+            return await answer(session, request, args);
+        } catch (error) {
+            void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    };
+    // Whether a question about a session's machine still stands: the views follow the active session, so one that
+    // stopped being active while a question was open has its answer dropped rather than sent to another machine.
+    const still = (session: vscode.DebugSession): boolean => vscode.debug.activeDebugSession?.id === session.id;
     // Sends a change to the running machine and answers what media says back, as the media persistence plan has it:
     // a changed disk that would leave its drive is saved or let go, a changed image is replaced or the disk saved as a
     // new one, a lossy save is accepted or saved as a new image, and a read-only image is saved as a new one. Says
-    // whether the change went through. (The fuller prompts, badges and Undo come with the plan's third phase.)
+    // whether the change went through. Each answer goes back for the disk it was about (its mount's generation, or the
+    // mount in discards), so a disk that went in while a question was open is never saved or let go by it. (The
+    // fuller prompts, badges and Undo come with the plan's third phase.)
     const answer = async (session: vscode.DebugSession, request: "hardware" | "device", args: Record<string, unknown>): Promise<boolean> => {
         let current: Record<string, unknown> = { ...args, supportsRetrocoreMedia: 1 };
         for (;;) {
+            if (!still(session)) return false;
             const body = await session.customRequest(`retro/${request}`, current) as Devices & MediaAnswer;
+            if (!still(session)) return body.outcome === undefined || body.outcome === "saved";
             show(body);
             const id = body.device ?? "";
+            const generation = body.generation;
             const name = tree.devices.find(device => device.id === id)?.name ?? id;
             const label = body.label ? path.basename(body.label) : "its image";
             switch (body.outcome) {
@@ -658,29 +679,33 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                 case "changed": {
                     const choice = await vscode.window.showWarningMessage(
                         `The disk in ${name} has changes not saved to ${label}.`, { modal: true }, "Save", "Discard");
-                    if (choice === "Discard") current = { ...current, discard: true };
-                    else if (choice !== "Save" || !await answer(session, "device", { id, action: "save" })) return false;
+                    if (choice === "Discard") {
+                        const discards = Array.isArray(current.discards) ? current.discards : [];
+                        current = { ...current, discards: [...discards, { device: id, generation }] };
+                    } else if (choice !== "Save" || !await answer(session, "device", { id, action: "save", generation })) return false;
                     continue;
                 }
                 case "conflict": {
-                    const choice = await vscode.window.showWarningMessage(
-                        `The image changed since the disk in ${name} was read from it. Replace it with the disk?`,
-                        { modal: true }, "Replace", "Save As...");
+                    const image = body.path ? path.basename(body.path) : "The image";
+                    const question = !body.current ? `${image} was deleted since the disk in ${name} was read from it. Save the disk there again?`
+                        : !body.baseline ? `${image} changed since you chose it. Replace it with the disk in ${name}?`
+                        : `${image} changed since the disk in ${name} was read from it. Replace it with the disk?`;
+                    const choice = await vscode.window.showWarningMessage(question, { modal: true }, "Replace", "Save As...");
                     if (choice === "Replace") {
-                        current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null } };
+                        current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null }, generation };
                         continue;
                     }
-                    return choice === "Save As..." && await saveAsNew(id);
+                    return choice === "Save As..." && await saveAsNew(session, id);
                 }
                 case "losses": {
                     const choice = await vscode.window.showWarningMessage(
                         `${body.format} cannot hold all of the disk in ${name}: ${(body.losses ?? []).join(" ")}`,
                         { modal: true }, "Save Anyway", "Save As...");
                     if (choice === "Save Anyway") {
-                        current = { ...current, acceptLosses: true };
+                        current = { ...current, acceptLosses: true, generation };
                         continue;
                     }
-                    return choice === "Save As..." && await saveAsNew(id);
+                    return choice === "Save As..." && await saveAsNew(session, id);
                 }
                 case "readOnly": {
                     const why = body.reason === "noImage" ? `The disk in ${name} has no image of its own.`
@@ -688,7 +713,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         : body.reason === "file" ? `The image of the disk in ${name} is read-only.`
                         : `The image of the disk in ${name} cannot be written.`;
                     const choice = await vscode.window.showWarningMessage(`${why} Save the disk as a new image?`, { modal: true }, "Save As...");
-                    return choice === "Save As..." && await saveAsNew(id);
+                    return choice === "Save As..." && await saveAsNew(session, id);
                 }
                 default:
                     return true;
@@ -723,22 +748,28 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             `Replace ${node.device.media.label} with the disk in ${node.device.name}?`, { modal: true }, save);
         if (answer === save) await act(node, "save");
     }));
-    // Save As asks where, and saves the disk there; says whether it was saved.
-    const saveAs = async (device: Device): Promise<boolean> => {
+    // Save As asks where, and saves the disk there, in the machine of the session it was asked for; says whether it
+    // was saved. The person chose the file as it was then, so the save may replace that revision and no later one.
+    const saveAs = async (session: vscode.DebugSession | undefined, device: Device): Promise<boolean> => {
         if (!device.media) return false;
         const file = await vscode.window.showSaveDialog({
             title: `Save the disk in ${device.name} as`,
             defaultUri: vscode.Uri.file(device.media.label),
             filters: { "Disk images": device.formats.filter(format => ["woz", "dsk", "do", "po"].includes(format)) }
         });
-        return file !== undefined && await send("device", { id: device.id, action: "save", path: file.fsPath });
+        if (file === undefined || (session !== undefined && !still(session))) return false;
+        const chosen = await readFile(file.fsPath).then(bytes => createHash("sha256").update(bytes).digest("hex"), () => undefined);
+        const args: Record<string, unknown> = { id: device.id, action: "save", path: file.fsPath, generation: device.media.generation };
+        const saving = chosen === undefined ? args : { ...args, overwrite: { sha256: chosen } };
+        return session === undefined ? send("device", saving) : sendTo(session, "device", saving);
     };
-    const saveAsNew = async (id: string): Promise<boolean> => {
-        const device = tree.devices.find(candidate => candidate.id === id);
-        return device !== undefined && await saveAs(device);
+    const saveAsNew = async (session: vscode.DebugSession, id: string): Promise<boolean> => {
+        const device = still(session) ? tree.devices.find(candidate => candidate.id === id) : undefined;
+        return device !== undefined && await saveAs(session, device);
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveAs", async (node?: Node) => {
-        if (node !== undefined && "device" in node) await saveAs(node.device);
+        const session = vscode.debug.activeDebugSession;
+        if (node !== undefined && "device" in node) await saveAs(session?.type === "retrocore" ? session : undefined, node.device);
     }));
     // Cards go in and come out while the machine runs, as nothing on the bus minds here, and while it is off.
     const change = async (node: Node | undefined, args: Record<string, unknown>): Promise<void> => {

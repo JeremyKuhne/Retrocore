@@ -130,7 +130,8 @@ exists is reported in the Debug Console and skipped.
 { "id": "disk2", "action": "save" }
 { "id": "disk2", "action": "save", "path": "copy.woz" }
 { "id": "disk2", "action": "save", "path": "copy.dsk", "acceptLosses": true }
-{ "id": "disk2", "action": "save", "overwrite": { "sha256": "…" } }
+{ "id": "disk2", "action": "save", "overwrite": { "sha256": "…" }, "generation": 3 }
+{ "id": "disk2", "action": "eject", "discards": [{ "device": "disk2", "generation": 3 }] }
 { "id": "disk2", "action": "eject", "discard": true }
 ```
 
@@ -146,8 +147,11 @@ another track's sector, or a volume other than 254. The disk then comes from tha
 A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
 the image and replaces the image with it, follows a link to its target, retries a file another program holds for a
 moment, and keeps the revision it replaced as the image's one backup in local data (`%LOCALAPPDATA%\Retrocore\Backups`,
-or `RETROCORE_LOCAL_DATA`). It writes only over the revision of the image the disk was read from, and an unchanged
-disk saved to its own image writes nothing.
+or `RETROCORE_LOCAL_DATA`). It writes only over the revision of the image the disk was read from, or, for a save to
+another `path`, only where there is no file, unless `overwrite.sha256` names the revision there the person agreed to
+replace (a client sends the hash of the file the person chose in its save dialog; `null` agrees to write where there
+is no file, as over an image deleted since). A file reads past a brief lock, as writes do. An unchanged disk saved to
+its own image writes nothing.
 
 What a person decides on comes back as an answer beside the devices, not as an error, to a client that sends
 `supportsRetrocoreMedia: 1` (the host says it speaks them with `supportsRetrocoreMedia` in its `initialize` answer):
@@ -155,13 +159,16 @@ What a person decides on comes back as an answer beside the devices, not as an e
 | `outcome` | When | What the client does |
 | --- | --- | --- |
 | `saved` | The disk was saved; `notes` and `losses` say what the save should, such as a WOZ1 image written as WOZ2 or a sector read from its second copy | Nothing, or shows the notes |
-| `changed` | An `eject`, an `insert` over a disk, or **Remove Card** would take out a disk with changes not saved (`device`, `label`, `medium`, `generation`) | Saves it, or sends the action again with `discard: true` |
-| `conflict` | The image changed since the disk was read from it (`baseline` and `current` revisions: `length`, `written`, `sha256`) | Sends the save again with `overwrite.sha256` set to `current`'s, or saves as a new image |
-| `losses` | The image's `format` cannot hold all of the disk (`losses`) | Sends the save again with `acceptLosses: true`, and the disk stays changed, or saves as a new image |
+| `changed` | An `eject`, an `insert` over a disk, or **Remove Card** would take out a disk with changes not saved (`device`, `label`, `medium`, `generation`) | Saves it (with that `generation`), or sends the action again with the disk's `{ device, generation }` added to `discards`; a card's next changed disk is asked about in turn |
+| `conflict` | The file at `path` is not the revision expected: it changed or went since the disk was read from it, or one is there that the person did not agree to replace (`baseline`, null for a save to another path, and `current`, null for no file: `length`, `written`, `sha256`) | Sends the save again with `overwrite.sha256` set to `current`'s and the `generation`, or saves as a new image |
+| `losses` | The image's `format` cannot hold all of the disk (`losses`) | Sends the save again with `acceptLosses: true` and the `generation`, and the disk stays changed, or saves as a new image |
 | `readOnly` | The image cannot be written: `reason` is `file` (a read-only file), `access`, `noImage` (a disk a launch built) or `format` (an image that can only be read, as `.d13`) | Saves as a new image |
 
-A client that does not send `supportsRetrocoreMedia` has a changed disk's eject, insert or card removal refused with
-a message, as the safe default. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and
+Every answer gives the mount `generation` it is about, and an answer holds only for that mount: a request whose
+`generation` is not the drive's mount now is refused, and `discards` lets go only of the mounts it lists, so a
+question left open while another disk went in never saves or lets go of the new one. A client that does not send
+`supportsRetrocoreMedia` has a changed disk's eject, insert or card removal refused with a message, as the safe
+default; `discard: true` lets every changed disk the action takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and
 `source` (`kind` `image` with its `path`, or `built`, and whether it `saves`).
 
 ## A machine that is off

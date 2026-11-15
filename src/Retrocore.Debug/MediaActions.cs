@@ -23,6 +23,11 @@ namespace Retrocore.Debug;
 ///   request; for one that does not, a changed disk that would leave its drive is refused with a message instead,
 ///   as the safe default.
 ///  </para>
+///  <para>
+///   An answer holds only for the disk it was about: a request that answers one gives that mount's
+///   <c>generation</c>, or lists it in <c>discards</c>, so a question left open while another disk went in never
+///   saves or lets go of the new one.
+///  </para>
 /// </remarks>
 internal static class MediaActions
 {
@@ -60,13 +65,23 @@ internal static class MediaActions
     /// </summary>
     /// <param name="device">The device.</param>
     /// <param name="action">The action, such as <c>save</c> or <c>eject</c>.</param>
-    /// <param name="args">Its arguments: <c>discard</c> lets a changed disk go.</param>
+    /// <param name="args">
+    ///  Its arguments: <c>generation</c>, the mount an answer was about, and <c>discards</c> or <c>discard</c>, which
+    ///  let changed disks go.
+    /// </param>
     /// <returns>The answer when the host acted or the machine must not, or null for the machine to act.</returns>
     /// <exception cref="InvalidOperationException">
-    ///  A changed disk would leave its drive and the client does not speak the answers.
+    ///  A changed disk would leave its drive and the client does not speak the answers, or the drive holds another
+    ///  disk than the <c>generation</c> answered about.
     /// </exception>
     internal static JsonObject? Device(IDevice device, string action, JsonObject args)
     {
+        if (args.Int("generation") is { } generation && device is IMediumSlot slot && slot.MountGeneration != generation)
+        {
+            throw new InvalidOperationException(
+                $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
+        }
+
         if (action == "save" && device is Apple2FloppyDrive drive) { return Save(drive, args); }
         return action == "eject" || (action == "insert" && device.Media is not null)
             ? Detach([device], args, action == "eject" ? "eject it" : "insert another disk")
@@ -79,7 +94,7 @@ internal static class MediaActions
     /// <param name="ids">The ids of the devices on the card's row, or null for a row with none.</param>
     /// <param name="devices">The machine's devices.</param>
     /// <param name="action">The action, such as <c>removeCard</c>.</param>
-    /// <param name="args">Its arguments: <c>discard</c> lets the changed disks go.</param>
+    /// <param name="args">Its arguments: <c>discards</c> or <c>discard</c> lets the changed disks go.</param>
     /// <returns>The answer when the card must not come out yet, or null for the machine to act.</returns>
     /// <exception cref="InvalidOperationException">
     ///  A changed disk would leave its drive and the client does not speak the answers.
@@ -91,18 +106,34 @@ internal static class MediaActions
 
     /// <summary>
     ///  Prepares devices' media to leave their drives: an unchanged disk goes, and a changed one answers
-    ///  <c>changed</c> until it is saved or <c>discard</c> is given.
+    ///  <c>changed</c> until it is saved or let go.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A changed disk is let go when <c>discards</c> lists its drive and mount, <c>{ device, generation }</c>, as a
+    ///   client does for each disk the person chose to discard, so each is asked about in turn and a disk that went in
+    ///   since is asked about again. <c>discard: true</c> lets every changed disk go, as a client that does not speak
+    ///   the answers is told to send.
+    ///  </para>
+    /// </remarks>
     /// <param name="devices">The devices whose media would leave.</param>
-    /// <param name="args">The request's arguments: <c>discard</c>, and <c>supportsRetrocoreMedia</c>.</param>
+    /// <param name="args">
+    ///  The request's arguments: <c>discards</c> or <c>discard</c>, and <c>supportsRetrocoreMedia</c>.
+    /// </param>
     /// <param name="what">What would take the media out, for a refusal's message, such as <c>eject it</c>.</param>
-    /// <returns>The answer for the first changed disk, or null when every disk can go.</returns>
+    /// <returns>The answer for the first changed disk not let go, or null when every disk can go.</returns>
     /// <exception cref="InvalidOperationException">
     ///  A changed disk would leave its drive and the client does not speak the answers.
     /// </exception>
     internal static JsonObject? Detach(IEnumerable<IDevice> devices, JsonObject args, string what)
     {
-        if (args.Bool("discard") == true || devices.FirstOrDefault(HasUnsaved) is not { } device) { return null; }
+        if (args.Bool("discard") == true) { return null; }
+        JsonArray discards = args.Array("discards") ?? [];
+        bool Discarded(IDevice candidate) => candidate is IMediumSlot slot
+            && discards.Any(entry => entry.String("device") == candidate.Id && entry.Int("generation") == slot.MountGeneration);
+
+        IDevice? device = devices.FirstOrDefault(candidate => HasUnsaved(candidate) && !Discarded(candidate));
+        if (device is null) { return null; }
         if (args["supportsRetrocoreMedia"] is null)
         {
             throw new InvalidOperationException(
@@ -134,7 +165,8 @@ internal static class MediaActions
     /// <param name="drive">The drive.</param>
     /// <param name="args">
     ///  <c>path</c>, <c>acceptLosses</c> to save though the format cannot hold all of the disk, and <c>overwrite</c>'s
-    ///  <c>sha256</c>, the revision of a changed image the user agreed to replace.
+    ///  <c>sha256</c>, the revision of the file there the user agreed to replace (null for none). Save As to a file
+    ///  that is there needs it, as the file the person chose; without it, Save As writes only where there is no file.
     /// </param>
     /// <returns>The answer: <c>saved</c>, <c>losses</c>, <c>conflict</c> or <c>readOnly</c>.</returns>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
@@ -172,15 +204,16 @@ internal static class MediaActions
             return losses;
         }
 
-        // 3. The commit, over the revision the disk matches or the one the user agreed to replace.
-        string? authorized = args["overwrite"] is JsonObject overwrite ? overwrite.String("sha256") : null;
+        // 3. The commit, over the revision the disk matches (for a new image, no file at all) or the one the user agreed
+        // to replace.
+        Overwrite? authorized = args.Object("overwrite") is { } overwrite ? new(overwrite.String("sha256")) : null;
         ImageWrite written = ImageWriter.Write(path, encoded.Bytes, mine?.Baseline, authorized);
         switch (written.Outcome)
         {
             case "conflict":
                 JsonObject conflict = Answer(drive, "conflict", source);
-                conflict["generation"] = generation;
-                conflict["baseline"] = source?.Baseline.ToJson();
+                conflict["path"] = path;
+                conflict["baseline"] = mine?.Baseline.ToJson();
                 conflict["current"] = written.Revision?.ToJson();
                 return conflict;
             case "readOnly":
@@ -203,12 +236,13 @@ internal static class MediaActions
         return answer;
     }
 
-    // An answer about a drive's disk.
+    // An answer about a drive's disk, and the mount it is about.
     private static JsonObject Answer(Apple2FloppyDrive drive, string outcome, DiskSource? source) => new()
     {
         ["outcome"] = outcome,
         ["device"] = drive.Id,
         ["medium"] = source?.MediumId,
+        ["generation"] = drive.MountGeneration,
     };
 
     // The disk cannot be saved where it is asked to be: noImage (a disk no image gave), format (an image that can only

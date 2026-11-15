@@ -231,6 +231,96 @@ public sealed class MediaSaveTests
         File.ReadAllBytes(image).Should().Equal(original);
     }
 
+    /// <summary>
+    ///  Save As writes only where there is no file, or over the revision of the file the person chose: one that
+    ///  appeared or changed since is a conflict.
+    /// </summary>
+    [TestMethod]
+    public void SaveAsReplacesOnlyTheFileChosen()
+    {
+        (string image, _) = Image("source.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        (string there, byte[] before) = Image("there.dsk");
+
+        JsonObject unasked = Speaking();
+        unasked["path"] = there;
+        JsonObject conflict = MediaActions.Save(drive, unasked);
+        conflict.String("outcome").Should().Be("conflict", "a file is there that no one agreed to replace");
+        conflict.String("path").Should().Be(there);
+        conflict["baseline"].Should().BeNull();
+        File.ReadAllBytes(there).Should().Equal(before);
+
+        string chosen = FileRevision.Read(there)?.Sha256 ?? "";
+        File.WriteAllBytes(there, new byte[35 * 4096]);
+        JsonObject stale = Speaking();
+        stale["path"] = there;
+        stale["overwrite"] = new JsonObject { ["sha256"] = chosen };
+        MediaActions.Save(drive, stale).String("outcome").Should().Be("conflict", "the file changed since it was chosen");
+
+        stale["overwrite"] = new JsonObject { ["sha256"] = FileRevision.Read(there)?.Sha256 };
+        MediaActions.Save(drive, stale).String("outcome").Should().Be("saved");
+    }
+
+    /// <summary>
+    ///  An image deleted since its disk was read is a conflict with no current revision, and agreeing to write where
+    ///  there is no file saves it there again.
+    /// </summary>
+    [TestMethod]
+    public void DeletedImageIsSavedAgainOnceAgreed()
+    {
+        (string image, _) = Image("deleted.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        Change(drive);
+        File.Delete(image);
+
+        JsonObject conflict = MediaActions.Save(drive, Speaking());
+        conflict.String("outcome").Should().Be("conflict");
+        conflict["current"].Should().BeNull();
+
+        JsonObject again = Speaking();
+        again["overwrite"] = new JsonObject { ["sha256"] = null };
+        MediaActions.Save(drive, again).String("outcome").Should().Be("saved");
+        File.Exists(image).Should().BeTrue();
+        drive.Media?.Changed.Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  Letting a disk go holds only for the mount it was asked about: a card's other changed disk is asked about in
+    ///  turn, a disk that went in since is asked about again, and an answer for an old mount does nothing.
+    /// </summary>
+    [TestMethod]
+    public void AnswersHoldOnlyForTheMountAskedAbout()
+    {
+        (string first, _) = Image("one.dsk");
+        (string second, _) = Image("two.dsk");
+        Apple2FloppyDrive one = Drive(first);
+        Apple2FloppyDrive two = Drive(second, "disk2");
+        Change(one);
+        Change(two);
+        Apple2FloppyDrive[] card = [one, two];
+        string[] ids = ["disk1", "disk2"];
+
+        JsonObject args = Speaking();
+        args["action"] = "removeCard";
+        JsonObject? asked = MediaActions.Hardware(ids, card, "removeCard", args);
+        asked?.String("device").Should().Be("disk1");
+        JsonArray discards = [new JsonObject { ["device"] = "disk1", ["generation"] = one.MountGeneration }];
+        args["discards"] = discards;
+        MediaActions.Hardware(ids, card, "removeCard", args)?.String("device").Should().Be("disk2", "the other disk was not asked about");
+
+        int old = one.MountGeneration;
+        byte[] bytes = File.ReadAllBytes(first);
+        one.Insert(DiskIIImage.Load(bytes, ".dsk").Disk, first, "DSK");
+        Change(one);
+        discards.Add(new JsonObject { ["device"] = "disk2", ["generation"] = two.MountGeneration });
+        MediaActions.Hardware(ids, card, "removeCard", args)?.String("device").Should().Be("disk1", "a new disk went in since");
+
+        JsonObject late = Speaking();
+        late["generation"] = old;
+        Action save = () => MediaActions.Device(one, "save", late);
+        save.Should().Throw<InvalidOperationException>().WithMessage("*since you were asked*");
+    }
+
     // A 35-track DOS-order sector image of random bytes, in the tests' folder.
     private static (string Path, byte[] Bytes) Image(string name)
     {
@@ -242,11 +332,11 @@ public sealed class MediaSaveTests
     }
 
     // A Disk II drive with an image inserted as the debug host inserts one.
-    private static Apple2FloppyDrive Drive(string? path)
+    private static Apple2FloppyDrive Drive(string? path, string id = "disk1")
     {
         DiskIIController controller = new();
         controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
-        Apple2FloppyDrive drive = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
+        Apple2FloppyDrive drive = new(controller, drive: 1, id, "Drive 1", "drive", "controller");
         if (path is null) { return drive; }
 
         // As the debug host's Apple2Loader.Insert does.

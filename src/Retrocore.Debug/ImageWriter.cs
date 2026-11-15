@@ -29,22 +29,24 @@ internal static class ImageWriter
     /// <param name="path">The image's full path; a link is followed to its target.</param>
     /// <param name="bytes">The image.</param>
     /// <param name="expected">
-    ///  The revision the image must still be, or null to write whatever is there, as a save to a new file the user
-    ///  chose does.
+    ///  The revision the image must still be, or null for no file there, as a save to a new file does.
     /// </param>
     /// <param name="authorized">
-    ///  The SHA-256 of a revision the user saw and agreed to replace, though it is not <paramref name="expected"/>, or
-    ///  null.
+    ///  A revision the user saw and agreed to replace, though it is not <paramref name="expected"/>, or null. Its
+    ///  null SHA-256 agrees to write where there is no file, as over an image deleted since.
     /// </param>
     /// <returns>What came of it.</returns>
     /// <exception cref="IOException">The file could not be written for a reason no one can act on here.</exception>
-    internal static ImageWrite Write(string path, byte[] bytes, FileRevision? expected, string? authorized = null)
+    internal static ImageWrite Write(string path, byte[] bytes, FileRevision? expected, Overwrite? authorized = null)
     {
         string target = Resolve(path);
         using FileStream held = Lock(target);
 
+        // Only over the revision expected, or the one the user agreed to replace: a file that appeared or changed
+        // since either was seen is a conflict.
         FileRevision? current = FileRevision.Read(target);
-        if (expected is not null && !expected.SameAs(current) && (authorized is null || current?.Sha256 != authorized))
+        bool expectedNow = expected is null ? current is null : expected.SameAs(current);
+        if (!expectedNow && (authorized is null || authorized.Sha256 != current?.Sha256))
         {
             return new("conflict", current);
         }
@@ -124,15 +126,28 @@ internal static class ImageWriter
 
     // Retries a file operation through sharing and lock violations for a moment, as files new to OneDrive or an
     // antivirus program are held briefly; any other failure, and one that outlasts the moment, is thrown.
-    private static void Retry(Action operation)
+    private static void Retry(Action operation) => Retry(() =>
+    {
+        operation();
+        return true;
+    });
+
+    /// <summary>
+    ///  Retries a file operation through sharing and lock violations for a moment, as files new to OneDrive or an
+    ///  antivirus program are held briefly.
+    /// </summary>
+    /// <typeparam name="T">What the operation gives.</typeparam>
+    /// <param name="operation">The operation.</param>
+    /// <returns>What it gave.</returns>
+    /// <exception cref="IOException">It failed otherwise, or its file was held for longer than the moment.</exception>
+    internal static T Retry<T>(Func<T> operation)
     {
         DateTime until = DateTime.UtcNow + s_retryFor;
         while (true)
         {
             try
             {
-                operation();
-                return;
+                return operation();
             }
             catch (IOException exception) when (IsTransient(exception) && DateTime.UtcNow < until)
             {

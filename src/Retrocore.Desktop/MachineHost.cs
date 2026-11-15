@@ -332,6 +332,17 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
+    ///  Holds the machine still where it is, as it is while the person is asked about its changed disks before
+    ///  something sets it up again, so it cannot change a disk after its question.
+    /// </summary>
+    internal void Pause() => HoldAt(CycleCount);
+
+    /// <summary>
+    ///  Lets the machine run on after <see cref="Pause"/>.
+    /// </summary>
+    internal void Resume() => HoldAt(ulong.MaxValue);
+
+    /// <summary>
     ///  Gets whether the machine has been started; until then it is built and off, as the extension's off machine is.
     /// </summary>
     internal bool Running => !_thread.ThreadState.HasFlag(System.Threading.ThreadState.Unstarted);

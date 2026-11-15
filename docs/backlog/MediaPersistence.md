@@ -820,9 +820,14 @@ After the reviews:
      replaces the image (`File.Replace` on Windows, a rename elsewhere), follows links, retries sharing violations
      for two seconds, takes each image's lock in local data, and keeps one backup there. The answers are `saved`,
      `changed`, `conflict`, `losses` and `readOnly`, to a client that sends `supportsRetrocoreMedia`; an older one
-     is refused with a message. The extension's Drives view and Retrocore Desktop answer them with modal prompts,
-     and the desktop also asks before Stop, Restart, switching machines, resetting and closing would lose a
-     changed disk. A sector read from its second copy, after the first had a bad checksum, is a note. Tests:
+     is refused with a message. Each answer holds only for the mount it is about: a follow-up carries its
+     `generation` or lists the mount in `discards`, so each of a card's changed disks is asked about, and a disk
+     that went in while a question was open is never saved or let go by it. Save As replaces only the revision of
+     the file the person chose, and an image deleted since is written again only once agreed. The extension's
+     Drives view and Retrocore Desktop answer with modal prompts, and drop an answer for a session no longer
+     active. The desktop also asks before Stop, Restart, switching machines, resetting and closing would lose a
+     changed disk, holding the machine still from the first question, and asks again about a disk a lossy save
+     left changed. A sector read from its second copy, after the first had a bad checksum, is a note. Tests:
      `MediaSaveTests`, and the Pascal debug adapter test's eject of its changed disk.
    - **Left for later phases.** Changing the lock alone does not yet count as a change to save: with every Disk II
      disk loading locked, unlocking one would mark it changed, so the lock joins `changed` with phase 4's default

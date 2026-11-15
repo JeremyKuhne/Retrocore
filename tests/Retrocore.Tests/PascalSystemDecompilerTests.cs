@@ -256,6 +256,24 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // MOVELEFT from a WITH's record's first field, at the record's address.
+    private const string WithMoveSource = """
+        PROGRAM WM;
+        TYPE R = RECORD N: PACKED ARRAY[0..7] OF CHAR; K: INTEGER END;
+        VAR P: ^R; B: PACKED ARRAY[0..15] OF CHAR;
+        BEGIN NEW(P); WITH P^ DO BEGIN K := 1; MOVELEFT(N, B, 8); K := K + 1 END END.
+        """;
+
+    /// <summary>
+    ///  An untyped argument at a WITH's record's address is its first field, which the WITH reaches.
+    /// </summary>
+    [TestMethod]
+    public void UntypedArgumentsInsideAWithAreItsRecordsFirstField()
+    {
+        string source = RoundTrip(WithMoveSource);
+        source.Should().Contain("MOVELEFT(F0, ");
+    }
+
     // A WITH inside another, on a record of another type, whose fields the outer's are at the offsets of.
     private const string NestedWithSource = """
         PROGRAM NW;

@@ -1522,8 +1522,8 @@ public sealed partial class PascalDecompiler
                 // NEW and MARK set a pointer, a record's first field where it is a record's address: a word used
                 // both ways by its pointer view.
                 Address address when name is "NEW" or "MARK" or "RELEASE" => Pointer(Descend(address.Designator, use: null)),
-                Address address => DesignatorText(address.Designator),
-                ByteAddress address => DesignatorText(address.Designator),
+                Address address => Untyped(address.Designator),
+                ByteAddress address => Untyped(address.Designator),
                 Load
                 {
                     Designator: VariableDesignator { Variable.Kind: VariableKind.System }
@@ -1535,6 +1535,21 @@ public sealed partial class PascalDecompiler
         return name is "RESET" or "REWRITE" or "CLOSE" or "GET" or "PUT" or "SEEK" && call.Arguments.Count > 0
             ? Invocation(name, [FileName(call.Arguments[0]), .. parts.Skip(1)])
             : Invocation(name, parts);
+    }
+
+    // An untyped argument's designator: inside a WITH on a record, its first field for the record, which the WITH
+    // reaches, as the record's own designator would reach it again. A record has a field at its address, if only of
+    // padding.
+    private string Untyped(Designator designator)
+    {
+        if (designator is Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var temporary } } }
+            && _with.Contains(temporary)
+            && temporary.Type.Find().Element?.Find() is { Kind: TypeKind.Record, PackedFields: null } record)
+        {
+            return $"{Record(designator, 0)}{FieldName(record, 0, 0)}";
+        }
+
+        return DesignatorText(designator);
     }
 
     private string Pointer(Designator pointer) =>

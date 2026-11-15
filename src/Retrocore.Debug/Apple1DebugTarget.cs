@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple1;
 using Retrocore.Machines.Devices;
+using Touki;
 
 namespace Retrocore.Debug;
 
@@ -13,7 +14,7 @@ namespace Retrocore.Debug;
 ///  The Apple-1 as the debugger sees it: a 6502, the Apple-1's memory areas, its 40x24 terminal, keyboard and
 ///  cassette interface.
 /// </summary>
-internal sealed partial class Apple1DebugTarget : IDebugTarget
+internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -442,8 +443,21 @@ internal sealed partial class Apple1DebugTarget : IDebugTarget
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (Apple1CassetteDrive cassette, "record"):
+                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
+                string full = Path.GetFullPath(
+                    path ?? throw new ArgumentException("path is required, for saving the recording."));
+
+                if (!Directory.Exists(Path.GetDirectoryName(full)))
+                {
+                    throw new ArgumentException($"The folder for {full} does not exist.");
+                }
+
+                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
+                {
+                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
+                }
+
                 EjectCassette();
-                string full = Path.GetFullPath(path ?? throw new ArgumentException("path is required, for saving the recording."));
                 cassette.Record(new Apple1Tape(), full);
                 _recordingPath = full;
                 break;
@@ -477,25 +491,48 @@ internal sealed partial class Apple1DebugTarget : IDebugTarget
         return MediaState();
     }
 
+    /// <summary>
+    ///  Saves a recording still in the recorder, as ejecting it would, when the session ends or relaunches.
+    /// </summary>
+    /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
+    /// <exception cref="IOException">The recording could not be written.</exception>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) { EjectCassette(); }
+    }
+
+    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
+    // recording is saved first, where it stays in, so a tape reinserted from the recording's own path is the one
+    // just recorded, whatever the file system's case rules.
     private void Insert(string path)
     {
-        EjectCassette();
         string full = Path.GetFullPath(path);
         Apple1CassetteDrive drive = _machine.CassetteDrive
             ?? throw new InvalidOperationException("This Apple-1 has no cassette interface.");
 
-        drive.Play(Apple1Tape.FromWave(File.ReadAllBytes(full)), full);
+        SaveRecording();
+        Apple1Tape tape = Apple1Tape.FromWave(File.ReadAllBytes(full));
+        EjectCassette();
+        drive.Play(tape, full);
+    }
+
+    /// <inheritdoc/>
+    public void SaveRecordings() => SaveRecording();
+
+    // Writes a recording to its path, leaving it in the recorder.
+    private void SaveRecording()
+    {
+        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
+        {
+            File.WriteAllBytes(path, tape.ToWave());
+        }
     }
 
     // A recording is saved to its path when it is ejected.
     private void EjectCassette()
     {
         // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
-        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
-        {
-            File.WriteAllBytes(path, tape.ToWave());
-        }
-
+        SaveRecording();
         _machine.CassetteDrive?.Eject();
         _recordingPath = null;
     }

@@ -8,12 +8,12 @@
 // frames, scopes and the p-machine's registers, steps over a p-code, and steps out to the system once Q quits the
 // Filer. On the Apple III it then compiles a program with a listing, and stops at a source breakpoint in a copy of
 // its source on the host, reads the program's variable by name, steps by line, and stops there again on the loop's
-// next pass. On the IIe, with 1.3's Compiler disk, it compiles the same program, and stops in it to check that the
-// memory view finds the program's variable in the bank Apple Pascal 1.3 keeps it in, as the Locals view does.
+// next pass. On the IIe, with 1.3's Compiler disk, it compiles the same program with its source in another folder, and
+// stops at the same line there, though the Apple III's copy, gone now, had a listing of the same name; there it checks
+// that the memory view finds the program's variable in the bank Apple Pascal 1.3 keeps it in, as the Locals view does.
 // The disks are Apple3Pascal1.1Disk1.dsk and Disk2.dsk in RETROCORE_APPLE3_DISKS (by default <cache>\apple3-disks)
 // and UCSD Pascal 1.1_1.dsk, 1.3_1.DSK and 1.3_2.DSK (the Compiler) in RETROCORE_APPLE2_PASCAL_DISKS (by default
-// <cache>\apple2-pascal-disks); a machine whose disks are missing is skipped. The ROMs are assembled from the SDK's
-// sources.
+// <cache>\apple2-pascal-disks); a machine whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
 
 import { resolve, join } from "node:path";
 import { existsSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
@@ -218,9 +218,10 @@ async function typeAny(text, until) {
 }
 
 // Compiles HELLO with a listing on a 128K IIe's Apple Pascal 1.3, with the Compiler's APPLE2 in drive 2, then stops at
-// SHOW(I): the listing names I, and the memory view finds it in the bank Apple Pascal 1.3 keeps it in, as the Locals
-// view does, rather than in memory as the CPU maps it.
-async function namedVariables(machine, compiler) {
+// line 9 of the host's copy, SHOW(I), and the frame is there in the source, as on the Apple III. The listing names I,
+// and the memory view finds it in the bank Apple Pascal 1.3 keeps it in, as the Locals view does, rather than in
+// memory as the CPU maps it.
+async function compiledOnIIe(machine, compiler) {
     const folder = mkdtempSync(join(tmpdir(), "retrocore-pascal-"));
     const source = join(folder, "hello.pas");
     writeFileSync(source, hello.join("\n") + "\n");
@@ -261,8 +262,9 @@ async function namedVariables(machine, compiler) {
         const stopped = await stop();
         assert.equal(stopped.reason, "breakpoint");
         const frame = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
-        // The frame names line 9; on the IIe it has no source of its own, unlike the Apple III's.
-        assert.equal(frame.name, "HELLO (HELLO.1+$000D): SLDO3 (line 9)");
+        assert.equal(frame.name, "HELLO (HELLO.1+$000D): SLDO3", JSON.stringify(frame));
+        assert.equal(frame.source?.path, source, JSON.stringify(frame));
+        assert.equal(frame.line, 9);
 
         // The Locals view's I and the memory view's evaluation of I name the same banked word, which holds 1.
         const locals = (await request("scopes", { frameId: frame.id })).scopes.find(scope => scope.name === "Locals");
@@ -383,15 +385,16 @@ try {
     const sources = passed.includes("Apple III");
     if (sources) { await sourceBreakpoints(machines[0]); }
     const compiler = join(apple2Disks, "UCSD Pascal 1.3_2.DSK");
-    const named = passed.includes(machines[2].name) && existsSync(compiler);
-    if (named) { await namedVariables(machines[2], compiler); }
-    else { console.log(`Skipped Apple Pascal 1.3's named variables: ${compiler} is missing.`); }
+    const compiled = passed.includes(machines[2].name) && existsSync(compiler);
+    if (compiled) { await compiledOnIIe(machines[2], compiler); }
+    else if (!passed.includes(machines[2].name)) { console.log(`Skipped compiling on Apple Pascal 1.3: the ${machines[2].name} was skipped.`); }
+    else { console.log(`Skipped compiling on Apple Pascal 1.3: ${compiler} is missing.`); }
 
     await request("disconnect");
     console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.length < 3 ? passed.join(" and ") : `${passed.slice(0, -1).join(", ")} and ${passed[passed.length - 1]}`}: the Pascal thread, `
         + "a pascal function breakpoint in the Filer, its frames, scopes and registers, Step Over and Step Out"
         + (sources ? "; and on the Apple III a source breakpoint through a listing the Compiler wrote, with line steps" : "")
-        + (named ? "; and on the IIe a compiled program's variable in the bank Apple Pascal 1.3 keeps it in." : "."));
+        + (compiled ? "; and on the IIe a source breakpoint in a program Apple Pascal 1.3 compiled, and its variable in the bank 1.3 keeps it in." : "."));
 } finally {
     clearTimeout(timeout);
     close();

@@ -5,12 +5,15 @@
 // Altair 8800 DAP integration: launches an 8080 source that greets and echoes on the 88-2SIO's terminal, stops at a
 // breakpoint in its Print routine with the 8080 call stack and registers, steps out to the caller, shows the terminal's
 // frames and hardware, clears the screen while stopped, echoes typed keys, stops on a write to the serial data port and
-// where the machine resets, and holds a breakpoint after HLT until a key's interrupt wakes the 8080.
-// The Altair has no ROM, so nothing is needed but the repository.
+// where the machine resets, and holds a breakpoint after HLT until a key's interrupt wakes the 8080. Then the 88-ACR's
+// cassette records a tape through retro/media, which saves it on eject, and plays it back from the launch's cassette
+// option. The Altair has no ROM, so nothing is needed but the repository; with 8K BASIC's image in the external test
+// data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs BASIC on the terminal, and with
+// MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
 
 import { resolve, join } from "node:path";
-import { writeFileSync, existsSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -77,6 +80,68 @@ const halting = [
     ""
 ];
 
+// Sends "TAPE" to the 88-ACR, waiting for its active-low transmitter ready in bit 7.
+const recording = [
+    ".cpu I8080",
+    "Start:  lxi h,Bytes",
+    "Write:  in 6",
+    "        ani $80",
+    "        jnz Write",
+    "        mov a,m",
+    "        ora a",
+    "        jz Done",
+    "        out 7",
+    "        inx h",
+    "        jmp Write",
+    "Done:   hlt",
+    "Bytes:  .byte \"TAPE\", 0",
+    ""
+];
+
+// Reads four bytes from the 88-ACR into B, C, D and E, waiting for its active-low receiver ready in bit 0.
+const playing = [
+    ".cpu I8080",
+    "Start:  call Read",
+    "        mov b,a",
+    "        call Read",
+    "        mov c,a",
+    "        call Read",
+    "        mov d,a",
+    "        call Read",
+    "        mov e,a",
+    "Done:   hlt",
+    "Read:   in 6",
+    "        rrc",
+    "        jc Read",
+    "        in 7",
+    "        ret",
+    ""
+];
+
+const cache = process.env.RETROCORE_CACHE || join(homedir(), "Retrocore");
+const basic = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "8kbas.bin");
+const mitsTape = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "tapes", "4KBAS32.TAP");
+
+// MITS's bootstrap for the 88-ACR, as the guide gives it, for 4K BASIC 3.2's tape.
+const bootstrap = [
+    ".cpu I8080",
+    "        .org 0",
+    "Boot:   lxi h,$0FAE",
+    "Loop:   lxi sp,Stack",
+    "        in $06",
+    "        rrc",
+    "        rc",
+    "        in $07",
+    "        cmp l",
+    "        rz",
+    "        dcr l",
+    "        mov m,a",
+    "        rnz",
+    "        pchl",
+    "Stack:  .word Loop",
+    ""
+];
+
 // Forgets queued events of a kind, so a wait sees only what happens next.
 function drop(name) {
     for (let index = events.length - 1; index >= 0; index--) {
@@ -111,6 +176,7 @@ async function type(line) {
 }
 
 const source = join(tmpdir(), `retrocore-altair-${process.pid}.asm`);
+const tape = join(tmpdir(), `retrocore-altair-${process.pid}.tap`);
 try {
     writeFileSync(source, program.join("\n"));
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
@@ -127,7 +193,8 @@ try {
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$100 (256)");
     assert.equal((await request("threads")).threads[0].name, "Altair 8080");
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
-    assert.deepEqual(Object.keys(hardware), ["model", "memory", "serial", "terminal", "panel"]);
+    assert.deepEqual(Object.keys(hardware), ["model", "memory", "serial", "cassette", "terminal", "panel"]);
+    assert.equal(hardware.cassette.value, "Cassette interface at ports $06 and $07, 300 baud");
     assert.equal(hardware.memory.value, "64 KB at $0000");
     assert.equal(hardware.serial.value, "Two MC6850 ACIAs at ports $10 and $12, 9600 baud");
 
@@ -190,6 +257,9 @@ try {
 
     // HLT waits for an interrupt: a breakpoint after it holds until a key's receive interrupt runs RST 7, whose
     // handler shows on the call stack above the halted instruction it interrupted.
+    // A launch in the same adapter starts as soon as it is answered, since configuration is already done, so the
+    // reset filter comes off first: otherwise the new launch could stop on its power-on reset.
+    await request("setExceptionBreakpoints", { filters: [] });
     writeFileSync(source, halting.join("\n"));
     // A launch after configurationDone starts at once, so the machineReset filter set above goes first: cleared after
     // the launch, it could still stop the new machine as it powers on.
@@ -212,12 +282,184 @@ try {
     assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].line, after);
     assert.equal((await request("evaluate", { expression: "B" })).result, "$4B (75)", "the handler read the key");
 
+    // The 88-ACR records onto a blank tape, which eject saves.
+    phase("recording a tape");
+    writeFileSync(source, recording.join("\n"));
+    events.length = 0;
+    await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    const done = recording.findIndex(line => line.startsWith("Done:")) + 1;
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: done }] });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    drop("retro/devices");
+    let media = await request("retro/media", { device: "cassette", action: "record", path: tape });
+    assert.equal(media.cassette.recording, true);
+    // Retro Devices hears of the new tape while the machine is stopped.
+    const devices = await event("retro/devices");
+    assert.equal(devices.devices.find(device => device.id === "cassette").media?.label, resolve(tape));
+    assert.equal(media.cassette.motor, true);
+    // A tape that cannot be read, or a recording with nowhere to go, is refused before the recording comes out.
+    const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.tap");
+    await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
+    await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: tmpdir() }), "a folder is no file");
+    const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(recorder.media?.label, resolve(tape), "the recording is still in");
+    assert.equal(recorder.activity, "writing");
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
+    // The last byte is still on its way out; a third of a second lets it reach the tape.
+    await request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    media = await request("retro/media", { device: "cassette", action: "eject" });
+    assert.equal(media.cassette.path, null);
+    assert.equal(readFileSync(tape, "latin1"), "TAPE", "eject saved the recording");
+
+    // The launch's cassette option plays the tape from the start; the program reads it into BC and DE.
+    phase("playing the tape");
+    writeFileSync(source, playing.join("\n"));
+    events.length = 0;
+    // It stops on entry, as a relaunch runs as soon as it is answered: otherwise the program could read the four bytes
+    // and halt before the breakpoint is set.
+    await request("launch", { machine: "altair", source, cassette: tape, stopOnEntry: true, speed: "max" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    const end = playing.findIndex(line => line.startsWith("Done:")) + 1;
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: end }] });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    await request("continue", { threadId: 1 });
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    assert.equal((await request("evaluate", { expression: "BC" })).result, "$5441 (21569)", "T and A");
+    assert.equal((await request("evaluate", { expression: "DE" })).result, "$5045 (20549)", "P and E");
+    // The breakpoint stays with the source's path, which the tape step below reuses.
+    await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
+
+    // A recording still in the recorder is saved when the session relaunches, as ejecting it would.
+    phase("relaunching while recording");
+    const second = join(tmpdir(), `retrocore-altair-${process.pid}-2.tap`);
+    writeFileSync(source, recording.join("\n"));
+    events.length = 0;
+    await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+    await request("configurationDone");
+    assert.equal((await event("stopped")).reason, "entry");
+    await request("retro/media", { device: "cassette", action: "record", path: second });
+    await request("continue", { threadId: 1 });
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await request("pause", { threadId: 1 });
+    await event("stopped");
+    assert.ok(!existsSync(second), "nothing is written until the recording comes out");
+    writeFileSync(source, playing.join("\n"));
+    await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+    assert.equal(readFileSync(second, "latin1"), "TAPE", "the relaunch saved the recording");
+    unlinkSync(second);
+
+    // 8K BASIC, when its image is in the cache, on the 88-2SIO with caps lock.
+    if (existsSync(basic)) {
+        phase("running 8K BASIC");
+        events.length = 0;
+        await request("launch", {
+            machine: "altair", program: basic, loadAddress: 0, entryAddress: 0, upperCase: true, stopOnEntry: false,
+            speed: "max"
+        });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await screen(screen => screen.includes("MEMORY SIZE?"), "8K BASIC's first question");
+        for (const answer of ["a", "", "", "y"]) {
+            await type(`${answer}\r`);
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        await screen(screen => screen.includes("[EIGHT-K VERSION]") && screen.trimEnd().endsWith("OK"), "8K BASIC's banner");
+        await type("print 6*7\r");
+        await screen(screen => screen.includes(" 42"), "8K BASIC's answer");
+    } else {
+        console.log(`8K BASIC (${basic}) is missing, so BASIC was not run.`);
+    }
+
+    // 4K BASIC 3.2 from MITS's tape, when it is in the cache: the bootstrap launched as a source, the tape in the
+    // 88-ACR, the terminal on the 88-SIO and A15 up for the checksum loader. 32 KB, since 3.2's memory test runs past
+    // the top of 64 KB.
+    if (existsSync(mitsTape)) {
+        phase("loading 4K BASIC 3.2 from tape");
+        writeFileSync(source, bootstrap.join("\n"));
+        events.length = 0;
+        await request("launch", {
+            machine: "altair", source, loadAddress: 0, entryAddress: 0, cassette: mitsTape, console: "sio",
+            switches: 0x8000, ramKilobytes: 32, upperCase: true, stopOnEntry: false, speed: "max"
+        });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await screen(screen => screen.includes("MEMORY SIZE?"), "4K BASIC 3.2's first question, after the tape");
+        for (const answer of ["", "", "y"]) {
+            await type(`${answer}\r`);
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        await screen(screen => screen.includes("[4K VERSION]") && screen.trimEnd().endsWith("OK"), "4K BASIC 3.2's banner");
+    } else {
+        console.log(`MITS's 4K BASIC 3.2 tape (${mitsTape}) is missing, so no tape was loaded.`);
+    }
+
+    // A launch that fails leaves no machine, rather than the one it replaced, which it has disposed. The running
+    // machine's worker, cancelled by the launch, must not touch the missing machine or report its absence as a
+    // failure, however the two interleave, so it is tried many times with the machine running at full speed.
+    phase("failing relaunches while running");
+    writeFileSync(source, [".cpu I8080", "Spin:   jmp Spin", ""].join("\n"));
+    for (let attempt = 0; attempt < 20; attempt++) {
+        events.length = 0;
+        await request("launch", { machine: "altair", source, stopOnEntry: false, speed: "max" });
+        await request("configurationDone");
+        await new Promise(resolve => setTimeout(resolve, 20 + attempt * 5));
+        await assert.rejects(request("launch", { machine: "altair", ramKilobytes: 99 }), /RAM must be 1 to 64 KB/);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await assert.rejects(request("evaluate", { expression: "PC" }), /No machine has been launched/);
+        const failures = events.filter(message => message.event === "stopped" && message.body.reason === "exception");
+        assert.deepEqual(failures.map(message => message.body.description), [], "the cancelled worker reported nothing");
+    }
+
     await request("disconnect", {});
+
+    // A recording whose save fails is kept, so the save can be tried again: here the disconnect fails while the
+    // recording's folder is gone, and closing the adapter's input without another disconnect saves it once the folder
+    // is back. This adapter has its own timeout, which kills it, since the script's covers only the first.
+    phase("a failed save, then closing the input while recording");
+    const folder = join(tmpdir(), `retrocore-altair-${process.pid}-folder`);
+    const third = join(folder, "third.tap");
+    mkdirSync(folder, { recursive: true });
+    const other = startDap(root);
+    const guard = setTimeout(() => other.fail(new Error("The second adapter timed out.")), 60000);
+    try {
+        writeFileSync(source, recording.join("\n"));
+        await other.request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+        await other.request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
+        await other.request("configurationDone");
+        assert.equal((await other.event("stopped")).reason, "entry");
+        await other.request("retro/media", { device: "cassette", action: "record", path: third });
+        await other.request("continue", { threadId: 1 });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await other.request("pause", { threadId: 1 });
+        await other.event("stopped");
+        rmSync(folder, { recursive: true });
+        await assert.rejects(other.request("disconnect", {}), "the save fails while the folder is gone");
+        mkdirSync(folder);
+        await other.endInput();
+        assert.equal(readFileSync(third, "latin1"), "TAPE", "closing the input saved the recording on the second try");
+    } finally {
+        clearTimeout(guard);
+        other.close();
+        rmSync(folder, { recursive: true, force: true });
+    }
+
     console.log("Altair DAP integration passed.");
 } finally {
     clearTimeout(timeout);
     close();
     if (existsSync(source)) unlinkSync(source);
+    if (existsSync(tape)) unlinkSync(tape);
 }
 
 if (failure()) throw failure();

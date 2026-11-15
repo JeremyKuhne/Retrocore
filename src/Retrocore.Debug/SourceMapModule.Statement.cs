@@ -13,5 +13,6 @@ internal sealed partial class SourceMapModule
     /// <param name="Bytes">The bytes it assembled to, which memory must hold for its source to apply.</param>
     /// <param name="Chain">Its source levels, innermost first.</param>
     /// <param name="EntryDepth">How many innermost levels' invocations begin with it.</param>
-    private sealed record Statement(ushort Address, byte[] Bytes, SourceLine[] Chain, int EntryDepth);
+    /// <param name="Data">Whether it is data, such as <c>.byte</c>, rather than an instruction.</param>
+    private sealed record Statement(ushort Address, byte[] Bytes, SourceLine[] Chain, int EntryDepth, bool Data);
 }

@@ -122,6 +122,13 @@ try {
     assert.equal(labels.get("DISPLAY_CHAR"), 0x0033, "the ROM's label, which the program's constant names too");
     assert.equal(labels.has("ERR_SN"), false, "a constant is not a label");
 
+    // A restart's target is the address its opcode implies, which the listing names and goes to.
+    at = "listing a restart";
+    const restart = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x0000, count: 0x1000 })).lines
+        .find(line => line.text.startsWith("RST") && line.target !== null && line.target > 0);
+    assert.ok(restart, "Level II calls its restarts");
+    assert.equal(restart.text.includes("$"), false, "the restart's label names it: " + restart.text);
+
     // The character set is the Model I's: 6x12, with block graphics from $80.
     at = "reading the character set";
     const characters = await request("retro/memory/characters");
@@ -305,6 +312,8 @@ try {
         "    STA $D000",
         "SWITCHED:",
         "    JMP SWITCHED",
+        "TABLE:",
+        "    .byte $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $0B",
     ];
     writeFileSync(switching, program.join("\n") + "\n");
     await request("launch", { machine: "apple2", model: "iie-enhanced", source: switching, loadAddress: 0x0300, stopOnEntry: true, speed: "max" });
@@ -324,6 +333,52 @@ try {
     assert.equal(named.get(0xC000), "KBD");
     // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
     assert.notEqual(named.get(0x0D), "CR");
+
+    // The listing starts at the statement around the address asked for, lists the program's lines with their
+    // labels and source, names an operand's label, lists data as .byte, and names the Monitor's code by its labels.
+    at = "listing the program";
+    const listing = async (address, count, starts) => (await request("retro/memory/listing", { memoryReference: "0x0000", address, count, starts })).lines;
+    let lines = await listing(0x0301, 40);
+    assert.equal(lines[0].address, 0x0300, "the statement around $0301 starts at $0300");
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LCBANK2", "code", "BANK2", program.indexOf("BANK2:") + 2]);
+    assert.equal(lines[0].path, switching);
+    assert.equal(lines[0].target, 0xC083, "the CPU's view goes to the soft switch");
+    // A view of main RAM has no soft switches, so the operand goes nowhere from it.
+    const mainLines = (await request("retro/memory/listing", { memoryReference: "main:0x0000", address: 0x0300, count: 3 })).lines;
+    assert.deepEqual([mainLines[0].text, mainLines[0].target], ["LDA $C083", null], JSON.stringify(mainLines[0]));
+    const loop = lines.find(line => line.text.startsWith("JMP"));
+    assert.equal(loop.text, "JMP SWITCHED", "an operand's label names it");
+    assert.equal(loop.target, loop.address, "and the line says where it goes");
+    // A statement of data lists eight bytes a line, all of it data.
+    const table = lines.find(line => line.label === "TABLE");
+    assert.deepEqual([table.text, table.kind, table.size], [".byte $01, $02, $03, $04, $05, $06, $07, $08", "data", 8]);
+    const rest = lines.find(line => line.address === table.address + 8);
+    assert.deepEqual([rest.text, rest.kind, rest.size], [".byte $09, $0A, $0B", "data", 3]);
+    // Decode from here in data starts an instruction there, the data before it ending early.
+    lines = await listing(table.address, 11, [table.address + 2]);
+    assert.deepEqual(lines.slice(0, 2).map(line => [line.address, line.kind, line.size]),
+        [[table.address, "data", 2], [table.address + 2, "code", 1]], "the 65C02 runs $03 as a one-byte NOP");
+    // The language card's RAM is mapped over the Monitor now, so its code lists from the ROM's bank.
+    lines = (await request("retro/memory/listing", { memoryReference: "rom:0x0000", address: 0xFDED, count: 3 })).lines;
+    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "COUT", "code"]);
+    assert.equal((await listing(0xFDED, 3))[0].kind, "unknown", "RAM is mapped there, which no source describes");
+    // Decode from here starts where it is told, inside the instruction at $0300.
+    lines = await listing(0x0301, 2, [0x0301]);
+    assert.deepEqual([lines[0].address, lines[0].kind], [0x0301, "code"]);
+    // A start from Decode from here holds farther back than the listing looks for a statement: in a run of
+    // three-byte LDA $ADAD, a start at $6001 puts an instruction at $602E, which covers $6030.
+    await write("0x6000", Array(96).fill(0xAD));
+    assert.equal((await listing(0x6030, 6))[0].address, 0x6030, "nothing known starts an instruction near $6030");
+    lines = await listing(0x6030, 6, [0x6001]);
+    assert.deepEqual([lines[0].address, lines[0].size], [0x602E, 3], JSON.stringify(lines));
+    // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
+    const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
+    await write("bank1:0xDFFF", [0xAD]);
+    lines = (await request("retro/memory/listing", { memoryReference: "bank1:0xD000", address: 0xDFFD, count: 6, starts: [0xDFFF] })).lines;
+    await write("bank1:0xDFFF", [lastByte]);
+    assert.deepEqual(lines.at(-1), { ...lines.at(-1), address: 0xDFFF, size: 1, text: ".byte $AD" }, JSON.stringify(lines));
+    assert.equal((await request("retro/memory/listing", { memoryReference: "bank1:0xD000", address: 0xE000, count: 16 })).lines.length, 0,
+        "nothing lists where the bank has no bytes");
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
     assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");

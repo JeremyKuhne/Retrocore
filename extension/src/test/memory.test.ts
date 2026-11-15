@@ -393,6 +393,9 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
 });
 
 // Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.
+// The starts each listing request the page sent asked for.
+const listingStarts: number[][] = [];
+
 function answer(
     page: ReturnType<typeof runPage>,
     fill: (offset: number) => number,
@@ -413,6 +416,20 @@ function answer(
             page.send({ type: "reply", id: sent.id, result: { labels } });
         } else if (sent.type === "characters") {
             page.send({ type: "reply", id: sent.id, result: {} });
+        } else if (sent.type === "listing") {
+            // An instruction, a jump to a label, and data, from the address asked for, or nothing from $E000, as
+            // past a bank's end; the starts asked for are kept.
+            listingStarts.push(sent.starts as number[]);
+            const at = sent.address as number;
+            page.send({
+                type: "reply", id: sent.id, result: {
+                    lines: at >= 0xE000 ? [] : [
+                        { address: at, size: 2, text: "LDA #$C1", kind: "code", label: "START", target: null, path: "C:/src/hello.s", line: 3 },
+                        { address: at + 2, size: 3, text: "JMP START", kind: "code", label: null, target: at, path: "C:/src/hello.s", line: 4 },
+                        { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null }
+                    ]
+                }
+            });
         } else if (sent.type === "banks") {
             page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
         } else if (sent.type === "readOther") {
@@ -840,6 +857,54 @@ test("starting a RAM search over while a step reads memory leaves the new search
     await page.settle();
     assert.match(page.elements.get("search")!.innerHTML, /Start with all RAM/, "the search stays started over");
     assert.doesNotMatch(page.elements.get("status")!.textContent, /left/);
+});
+
+test("the listing shows the bytes in view as instructions, selects a line's bytes, and decodes from the cursor", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
+    let state = await drive(page, [{ goto: 0x0300 }], () => 0, lists);
+    const html = page.elements.get("listing")!.innerHTML;
+    const top = (state.listing as string[])[0].substring(0, 4);
+    assert.deepEqual((state.listing as string[]).map(line => line.substring(5)), ["LDA #$C1", "JMP START", ".byte $01, $02"]);
+    assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
+    assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
+    assert.match(html, /class="ln data"/);
+    // The listing scrolls both ways, as a long .byte line is wider than it, and takes one tab stop.
+    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*overflow:auto/);
+    // One grid column, as wide as the widest line or the pane: each line's source stays in reach and lines out.
+    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*display:grid;align-content:start/);
+    assert.match(memoryEditorHtml("NONCE"), /#listing \.src\{flex:none/);
+    assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
+    assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");
+
+    // A line selects its bytes, the cursor on the first.
+    state = await drive(page, [{ listingLine: 1 }], () => 0, lists);
+    assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16) + 2, parseInt(top, 16) + 4]);
+    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" tabindex="0" data-a="[0-9]+" data-s="3"/);
+
+    // Enter on a line does what a click does.
+    const lineElement = { dataset: { a: String(parseInt(top, 16)), s: "2" }, querySelectorAll: () => [] };
+    const focusedLine = { ...lineElement, closest: (selector: string) => selector === "[data-a]" ? lineElement : null };
+    page.elements.get("listing")!.dispatch("keydown", { key: "Enter", target: focusedLine, preventDefault: () => undefined, stopPropagation: () => undefined });
+    state = await drive(page, [], () => 0, lists);
+    assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16), parseInt(top, 16) + 1]);
+
+    // A write asks for the listing again, as the bytes it decodes changed.
+    listingStarts.length = 0;
+    state = await drive(page, [{ goto: 0x0300 }, { pane: "hex" }, { type: "EA" }], () => 0, lists);
+    assert.ok(listingStarts.length > 0, "the listing is asked for after the write");
+
+    // Decode from here asks for the listing again, starting an instruction at the cursor.
+    listingStarts.length = 0;
+    state = await drive(page, [{ goto: 0x0301 }, { decode: true }], () => 0, lists);
+    assert.ok(listingStarts.some(starts => starts.includes(0x0301)), JSON.stringify(listingStarts));
+    assert.equal(state.status, "The listing decodes an instruction from $0301.");
+    assert.match(page.elements.get("inspector")!.innerHTML, /data-act="decode"/);
+
+    // Where nothing lists, the old lines go.
+    await drive(page, [{ goto: 0xE100 }], () => 0, lists);
+    assert.equal(page.elements.get("listing")!.innerHTML, "");
 });
 
 test("a read-only bank refuses typing before writing", async () => {

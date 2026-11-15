@@ -235,6 +235,36 @@ public sealed class AssemblyDebugFileTests
         module.Labels.Should().ContainSingle().Which.Should().Be(("START", 0x7000L));
     }
 
+    /// <summary>
+    ///  A debug file's position gives the statement's bytes, the smallest span covering the address, so Retrocore
+    ///  Memory's listing starts instructions where the program's do, not at a macro invocation's first byte.
+    /// </summary>
+    [TestMethod]
+    public void DebugFilePositionsGiveTheStatementsBytes()
+    {
+        SymbolTable symbols = new();
+        symbols.LoadDebugInfo(
+            [
+                "file\tid=0,name=\"main.s\",size=1,mtime=0x0,mod=0",
+                "seg\tid=0,name=\"CODE\",start=0x7000,size=0x6,addrsize=absolute,type=ro",
+                "span\tid=0,seg=0,start=0,size=6",
+                "span\tid=1,seg=0,start=0,size=2",
+                "span\tid=2,seg=0,start=2,size=4",
+                "line\tid=0,file=0,line=3,span=0",
+                "line\tid=1,file=0,line=10,type=2,span=1",
+                "line\tid=2,file=0,line=11,type=2,span=2"
+            ],
+            Path.GetTempPath());
+
+        DebugFileModule module = new(symbols);
+        DebugTestMemory memory = new();
+        DebugPosition? position = module.Position(memory, address: 0x7003);
+        position.Should().NotBeNull();
+        (position?.Start, position?.Size, position?.Chain[^1].Line).Should().Be(((ushort)0x7002, 4, 3));
+        module.Position(memory, address: 0x7001)?.Start.Should().Be(0x7000);
+        module.Position(memory, address: 0x7006).Should().BeNull();
+    }
+
     private static SymbolTable Load(AssemblyResult result, string directory)
     {
         using StringWriter writer = new();

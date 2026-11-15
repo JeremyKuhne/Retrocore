@@ -220,7 +220,50 @@ internal sealed partial class DebugSession
     private JsonObject MemoryLabels(JsonObject args)
     {
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        SortedDictionary<int, string> labels = LabelsIn(bank, constants: true);
+        return new JsonObject
+        {
+            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
+            {
+                ["address"] = pair.Key,
+                ["name"] = pair.Value
+            }).ToJsonArray()
+        };
+    }
+
+    // Whether a module's code is installed: in the bank that holds its area, such as the system ROM while the language
+    // card's RAM is mapped over it, or in memory as the CPU maps it for code in no area; a card's firmware with no
+    // card in its slot has no bank and is not.
+    private bool Installed(IDebugModule module)
+    {
+        if (module.Area is not { } area) { return module.InMemory(Target); }
+        foreach (DebugMemoryBank bank in Target.Banks)
+        {
+            foreach ((ushort start, int _) in bank.Ranges)
+            {
+                if (Equals(bank.AreaOf(start), area)) { return module.InMemory(new BankMemory(bank)); }
+            }
+        }
+
+        return module.InMemory(Target);
+    }
+
+    // The labels in a space, by address, from the debug modules that apply at each address now, and with constants
+    // the equates its CPU's instructions address memory through.
+    private SortedDictionary<int, string> LabelsIn(DebugMemoryBank? bank, bool constants)
+    {
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) found = LabelsAndNames(bank, memory, constants);
+        return constants ? found.Names : found.Labels;
+    }
+
+    // The labels in a space, and with constants also the labels and equates together, found in one pass through
+    // the modules, reading memory as given, such as a listing's, which keeps what the modules find.
+    private (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) LabelsAndNames(
+        DebugMemoryBank? bank,
+        IDebugMemory memory,
+        bool constants = true)
+    {
         SortedDictionary<int, string> labels = [];
         foreach (IDebugModule module in _debug.Modules)
         {
@@ -237,30 +280,28 @@ internal sealed partial class DebugSession
         }
 
         // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
-        // rather than code, so they apply whatever is mapped; a label at the same address comes first.
+        // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
+        // label at the same address comes first.
+        if (!constants) { return (labels, labels); }
+        SortedDictionary<int, string> names = [];
+        foreach ((int address, string name) in labels) { names.Add(address, name); }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
         foreach (IDebugModule module in _debug.Modules)
         {
+            if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
             foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || labels.ContainsKey((int)value))
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || names.ContainsKey((int)value))
                 {
                     continue;
                 }
 
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                labels[(int)value] = name;
+                names[(int)value] = name;
             }
         }
 
-        return new JsonObject
-        {
-            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
-            {
-                ["address"] = pair.Key,
-                ["name"] = pair.Value
-            }).ToJsonArray()
-        };
+        return (labels, names);
     }
 
     /// <summary>

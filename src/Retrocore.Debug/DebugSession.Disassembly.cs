@@ -11,8 +11,9 @@ namespace Retrocore.Debug;
 // The disassemble request, which VS Code's Disassembly view reads, and where instruction breakpoints are set.
 internal sealed partial class DebugSession
 {
-    // The longest instruction of any CPU the debugger runs: a Z80 indexed instruction.
-    private const int LongestInstruction = 4;
+    // The longest instruction of any CPU the debugger runs: a 6809 page 2 or 3 instruction with an extended indirect
+    // postbyte, such as CMPD [$1234].
+    private const int LongestInstruction = 5;
 
     private JsonObject Disassemble(JsonObject args)
     {

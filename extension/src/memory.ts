@@ -300,6 +300,24 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "labels":
                             await reply(await session.customRequest("retro/memory/labels", { memoryReference: base }));
                             break;
+                        case "listing":
+                            await reply(await session.customRequest("retro/memory/listing", {
+                                memoryReference: base,
+                                address: received.address,
+                                count: received.count,
+                                starts: received.starts
+                            }));
+                            break;
+                        case "open": {
+                            // A listing line's source, beside the editor, at its line.
+                            const line = Math.max(0, Number(received.line) - 1);
+                            await vscode.window.showTextDocument(vscode.Uri.file(String(received.path)), {
+                                viewColumn: vscode.ViewColumn.Beside,
+                                selection: new vscode.Range(line, 0, line, 0)
+                            });
+                            await reply(null);
+                            break;
+                        }
                         case "characters":
                             await reply(await session.customRequest("retro/memory/characters"));
                             break;

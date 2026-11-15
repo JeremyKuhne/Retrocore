@@ -44,6 +44,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\DapTransport.cs" Link="DapTransport.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DisplayFrameWriter.cs" Link="DisplayFrameWriter.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\JsonArgs.cs" Link="JsonArgs.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\ListingOperands.cs" Link="ListingOperands.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\JsonNodes.cs" Link="JsonNodes.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MessageFraming.cs" Link="MessageFraming.cs" />

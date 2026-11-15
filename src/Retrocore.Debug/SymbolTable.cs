@@ -13,6 +13,9 @@ namespace Retrocore.Debug;
 internal sealed partial class SymbolTable
 {
     private readonly Dictionary<ushort, (string Path, int Line)> _locations = [];
+
+    // The smallest span covering each address: a statement's bytes, rather than a macro invocation's.
+    private readonly Dictionary<ushort, (ushort Start, int Size)> _spans = [];
     private readonly Dictionary<(string Path, int Line), List<ushort>> _addresses = [with(LineComparer.Instance)];
     private readonly Dictionary<string, long> _labels = [with(StringComparer.OrdinalIgnoreCase)];
 
@@ -137,6 +140,10 @@ internal sealed partial class SymbolTable
 
                     // A macro body line never replaces the invocation line an address already has.
                     if (!macro || !_locations.ContainsKey(address)) { _locations[address] = location; }
+                    if (!_spans.TryGetValue(address, out (ushort Start, int Size) known) || size < known.Size)
+                    {
+                        _spans[address] = (checked((ushort)(segments[segment] + offset)), size);
+                    }
                 }
             }
         }
@@ -184,6 +191,13 @@ internal sealed partial class SymbolTable
     internal (string Path, int Line)? Location(ushort address) => _locations.TryGetValue(address, out var location) ? location : null;
 
     /// <summary>
+    ///  Gets the bytes of the statement covering an address: the smallest debug span that does.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>The span's start and size, or null when no debug span covers it.</returns>
+    internal (ushort Start, int Size)? Span(ushort address) => _spans.TryGetValue(address, out var span) ? span : null;
+
+    /// <summary>
     ///  Gets addresses corresponding to a source breakpoint.
     /// </summary>
     /// <param name="path">The source path.</param>
@@ -220,6 +234,7 @@ internal sealed partial class SymbolTable
     private void Clear()
     {
         _locations.Clear();
+        _spans.Clear();
         _addresses.Clear();
         _labels.Clear();
         _constants.Clear();

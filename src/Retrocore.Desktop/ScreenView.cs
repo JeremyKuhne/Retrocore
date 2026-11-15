@@ -5,6 +5,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -13,34 +14,76 @@ namespace Retrocore.Desktop;
 
 /// <summary>
 ///  The machine's screen: draws its latest frame on each of the display's frames, scaled sharp or to fit, and types
-///  the keys pressed while it has the focus.
+///  the keys pressed while it has the focus, with the display panel's special keys: Ctrl+F12 or Ctrl+Break for reset,
+///  the Alt keys for the Apple keys, Shift+Insert to paste, and a click to give the mouse to a mouse card.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   The frame goes into a bitmap the control owns, which Avalonia's compositor draws with Skia on the GPU. Each
 ///   display frame asks for the next with <see cref="TopLevel.RequestAnimationFrame"/>, so drawing keeps to the
-///   display's rate rather than a timer's.
+///   display's rate rather than a timer's. A machine switched for another keeps the last picture until the new one
+///   draws, and an off machine's is dimmed, as the panel dims a session that ended.
 ///  </para>
 /// </remarks>
 internal sealed class ScreenView : Control
 {
-    private readonly MachineHost _host;
+    private readonly MachineSession _session;
+    private MachineHost _host;
     private WriteableBitmap? _bitmap;
     private long _frameSeen;
     private bool _animating;
 
+    // The Apple keys or game-port buttons: held by an Alt key, or latched by the status bar's buttons.
+    private readonly bool[] _held = new bool[2];
+    private readonly bool[] _latched = new bool[2];
+
+    // The mouse card's mouse, while the screen has the pointer: where it last was, and the part of a dot not yet sent.
+    private Point? _mouseAt;
+    private IPointer? _mousePointer;
+    private double _mouseX;
+    private double _mouseY;
+
     /// <summary>
     ///  Creates the screen for a machine.
     /// </summary>
-    /// <param name="host">The running machine.</param>
-    internal ScreenView(MachineHost host)
+    /// <param name="session">The machine.</param>
+    internal ScreenView(MachineSession session)
     {
-        _host = host;
+        _session = session;
+        _host = session.Host;
         Focusable = true;
         ClipToBounds = true;
         RenderOptions.SetBitmapInterpolationMode(this, BitmapInterpolationMode.None);
         ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+        session.Changed += (_, _) =>
+        {
+            if (_session.Host == _host) { return; }
+
+            // Another machine, or the same one built again: the last picture stays until its first frame.
+            _host = _session.Host;
+            _frameSeen = 0;
+            Array.Clear(_held);
+            Array.Clear(_latched);
+            ReleaseMouse();
+            KeysChanged?.Invoke(this, EventArgs.Empty);
+            InvalidateVisual();
+        };
     }
+
+    /// <summary>
+    ///  Raised when a latched key changes: Ctrl after the letter it applied to, or an Apple key.
+    /// </summary>
+    internal event EventHandler? KeysChanged;
+
+    /// <summary>
+    ///  Raised when the mouse card takes the pointer or gives it back.
+    /// </summary>
+    internal event EventHandler? MouseChanged;
+
+    /// <summary>
+    ///  Raised when the screen asks for the clipboard's text to be typed, as Shift+Insert or Paste does.
+    /// </summary>
+    internal event EventHandler? PasteRequested;
 
     /// <summary>
     ///  Gets or sets whether each dot is drawn as a whole number of screen pixels (sharp) or the picture fills the
@@ -63,6 +106,62 @@ internal sealed class ScreenView : Control
     ///  Gets the times between display frames, and the frames that drew a new picture.
     /// </summary>
     internal FrameStats Stats { get; } = new();
+
+    /// <summary>
+    ///  Gets whether there is a picture, as there is once a machine has drawn one.
+    /// </summary>
+    internal bool HasPicture => _bitmap is not null;
+
+    /// <summary>
+    ///  Gets or sets whether the next letter typed is a control character, as the panel's Ctrl button makes it.
+    /// </summary>
+    internal bool StickyControl
+    {
+        get;
+        set
+        {
+            field = value;
+            KeysChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether the mouse card has the pointer.
+    /// </summary>
+    internal bool MouseCaptured => _mouseAt is not null;
+
+    /// <summary>
+    ///  Gets whether an Apple key or game-port button is down, held or latched.
+    /// </summary>
+    /// <param name="button">0 or 1.</param>
+    /// <returns>True while it is down.</returns>
+    internal bool IsDown(int button) => _held[button] || _latched[button];
+
+    /// <summary>
+    ///  Latches an Apple key or game-port button down, or lets it go, as the panel's buttons do.
+    /// </summary>
+    /// <param name="button">0 or 1.</param>
+    internal void ToggleLatch(int button)
+    {
+        _latched[button] = !_latched[button];
+        SendButton(button);
+    }
+
+    /// <summary>
+    ///  Types a key, applying a latched Ctrl to a letter, as the panel's keys do.
+    /// </summary>
+    /// <param name="code">The ASCII code.</param>
+    internal void Type(int code)
+    {
+        if (StickyControl)
+        {
+            if (code is >= 97 and <= 122) { code -= 32; }
+            if (code is >= 64 and <= 95) { code &= 31; }
+            StickyControl = false;
+        }
+
+        _host.Key(code);
+    }
 
     /// <inheritdoc/>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -118,8 +217,25 @@ internal sealed class ScreenView : Control
         context.FillRectangle(surround, new Rect(Bounds.Size));
         if (_bitmap is not { } bitmap) { return; }
 
-        // The picture has its monitor's shape, as the display panel gives it: the Apple II's 560 by 192 dots fill a
-        // 280 by 192 shape, so each line is drawn twice; the TRS-80's fill 4 by 3.
+        // An off machine's last picture is dimmed over black, as a monitor's fading glass is, in either theme.
+        Rect destination = PictureRect(bitmap);
+        if (!_host.Running) { context.FillRectangle(Brushes.Black, destination); }
+        using (context.PushOpacity(_host.Running ? 1 : 0.35))
+        {
+            context.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height), destination);
+        }
+
+        // While the mouse card has the pointer, the screen's border lights, as the panel's bezel does.
+        if (MouseCaptured && this.TryFindResource(Palette.Focus, ActualThemeVariant, out object? focus) && focus is IBrush outline)
+        {
+            context.DrawRectangle(new Pen(outline, 2), destination.Inflate(1));
+        }
+    }
+
+    // Where the picture goes: its monitor's shape, as the display panel gives it, the Apple II's 560 by 192 dots
+    // filling a 280 by 192 shape, so each line is drawn twice, and the TRS-80's filling 4 by 3.
+    private Rect PictureRect(WriteableBitmap bitmap)
+    {
         double width = bitmap.PixelSize.Width;
         double aspect = Aspect(_host.KeyMapName);
         double height = width / aspect;
@@ -140,8 +256,7 @@ internal sealed class ScreenView : Control
             size = new(width * scale, height * scale);
         }
 
-        Rect destination = new(new Point((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2), size);
-        context.DrawImage(bitmap, new Rect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height), destination);
+        return new Rect(new Point((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2), size);
     }
 
     // Each machine's picture at 1x in Sharp, in device pixels, as the display panel's sharpBase has them: each dot a
@@ -168,19 +283,160 @@ internal sealed class ScreenView : Control
     {
         base.OnPointerPressed(e);
         Focus();
+        PointerPointProperties point = e.GetCurrentPoint(this).Properties;
+        if (!point.IsLeftButtonPressed || !_host.Running || _host.MouseSlot == 0) { return; }
+
+        // The mouse card: a click gives it the pointer, and then its left button is the card's.
+        if (!MouseCaptured)
+        {
+            _mouseAt = e.GetPosition(this);
+            _mouseX = _mouseY = 0;
+            e.Pointer.Capture(this);
+            _mousePointer = e.Pointer;
+            Cursor = new Cursor(StandardCursorType.None);
+            MouseChanged?.Invoke(this, EventArgs.Empty);
+            InvalidateVisual();
+        }
+        else
+        {
+            _host.Mouse(0, 0, pressed: true);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <inheritdoc/>
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (MouseCaptured && e.InitialPressMouseButton == MouseButton.Left) { _host.Mouse(0, 0, pressed: false); }
+    }
+
+    /// <inheritdoc/>
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_mouseAt is not { } last || _bitmap is not { } bitmap) { return; }
+
+        // Movement in the picture's 280 by 192 dots, as the panel sends it; the pointer, hidden, goes back to where
+        // it was taken, so it never stops at the window's edge.
+        Point at = e.GetPosition(this);
+        Rect picture = PictureRect(bitmap);
+        _mouseX += (at.X - last.X) * 280 / Math.Max(1, picture.Width);
+        _mouseY += (at.Y - last.Y) * 192 / Math.Max(1, picture.Height);
+        _mouseAt = at;
+        int dx = (int)Math.Truncate(_mouseX);
+        int dy = (int)Math.Truncate(_mouseY);
+        _mouseX -= dx;
+        _mouseY -= dy;
+        if (dx != 0 || dy != 0) { _host.Mouse(dx, dy); }
+    }
+
+    /// <inheritdoc/>
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        ReleaseMouse();
+    }
+
+    /// <inheritdoc/>
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+
+        // A key let go while the screen lacks the keyboard never says so, so a held Apple key lets go here.
+        for (int button = 0; button < 2; button++)
+        {
+            if (!_held[button]) { continue; }
+            _held[button] = false;
+            SendButton(button);
+        }
+    }
+
+    // The mouse card gives the pointer back, its button up.
+    private void ReleaseMouse()
+    {
+        if (!MouseCaptured) { return; }
+        _mouseAt = null;
+        IPointer? pointer = _mousePointer;
+        _mousePointer = null;
+        if (pointer?.Captured == this) { pointer.Capture(control: null); }
+        Cursor = Cursor.Default;
+        _host.Mouse(0, 0, pressed: false);
+        MouseChanged?.Invoke(this, EventArgs.Empty);
+        InvalidateVisual();
+    }
+
+    private void SendButton(int button)
+    {
+        _host.Button(button, IsDown(button));
+        KeysChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc/>
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        // Escape gives the pointer back from the mouse card, rather than going to the machine.
+        if (e.Key == Key.Escape && MouseCaptured)
+        {
+            ReleaseMouse();
+            e.Handled = true;
+            return;
+        }
+
+        // The Alt keys hold the Apple keys, or the II's game-port buttons, while they are down.
+        if (e.Key is Key.LeftAlt or Key.RightAlt && _host.HasButtons)
+        {
+            int button = e.Key == Key.LeftAlt ? 0 : 1;
+            if (!_held[button])
+            {
+                _held[button] = true;
+                SendButton(button);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        // Ctrl+F12 for keyboards without Break, which some laptops lack or hide behind Fn.
+        if (e.Key == Key.Cancel || (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.Pause or Key.F12))
+        {
+            _host.Reset();
+            e.Handled = true;
+            return;
+        }
+
+        // Shift+Insert pastes, as the screen's Paste does. Ctrl+V is CONTROL-V, like any other Ctrl letter.
+        if (e.Key == Key.Insert && e.KeyModifiers == KeyModifiers.Shift)
+        {
+            PasteRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+
         if (KeyMap.Code(_host.KeyMapName, e.Key, e.KeyModifiers) is { } code)
         {
-            _host.Key(code);
+            Type(code);
             e.Handled = true;
             return;
         }
 
         base.OnKeyDown(e);
+    }
+
+    /// <inheritdoc/>
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (e.Key is Key.LeftAlt or Key.RightAlt && _host.HasButtons)
+        {
+            int button = e.Key == Key.LeftAlt ? 0 : 1;
+            _held[button] = false;
+            SendButton(button);
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyUp(e);
     }
 
     /// <inheritdoc/>
@@ -190,10 +446,21 @@ internal sealed class ScreenView : Control
         {
             if (character is > (char)0 and < (char)127 and not '\r' and not '\n' and not '\b' and not '\t')
             {
-                _host.Key(character);
+                Type(character);
             }
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    ///  Types the clipboard's text, as the panel's Paste does.
+    /// </summary>
+    /// <returns>A task that completes once it is queued.</returns>
+    internal async Task PasteAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) { return; }
+        string? text = await clipboard.TryGetTextAsync();
+        if (!string.IsNullOrEmpty(text)) { _host.Type(text); }
     }
 }

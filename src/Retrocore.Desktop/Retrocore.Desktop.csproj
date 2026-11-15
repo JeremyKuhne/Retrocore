@@ -17,6 +17,11 @@
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
   <ItemGroup>
+    <!-- VS Code's icon font, for the views' icons as the extension shows them (Assets/codicon-LICENSE.txt). -->
+    <AvaloniaResource Include="Assets\codicon.ttf" />
+    <None Include="Assets\codicon-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.6" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />

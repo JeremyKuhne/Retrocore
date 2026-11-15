@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Debug;
+using Retrocore.Machines.Devices;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Touki;
@@ -45,6 +47,10 @@ internal sealed class MachineHost : DisposableBase
     // The cycle the run thread stops at and waits, for a measurement to start or end there; MaxValue for none.
     private ulong _holdAt = ulong.MaxValue;
     private readonly ManualResetEventSlim _held = new(initialState: false);
+
+    // Pasted keys waiting their turn, and the cycle the next one goes in at.
+    private readonly Queue<int> _typing = new();
+    private ulong _typingDue;
 
     // Why the CPU stopped, such as a 6502 jammed by an illegal opcode, or null while it runs; Reset clears it.
     private volatile string? _stopped;
@@ -320,15 +326,237 @@ internal sealed class MachineHost : DisposableBase
     /// <summary>
     ///  Starts the machine running.
     /// </summary>
-    internal void Start() => _thread.Start();
+    internal void Start()
+    {
+        if (_thread.ThreadState.HasFlag(System.Threading.ThreadState.Unstarted)) { _thread.Start(); }
+    }
 
     /// <summary>
-    ///  Types a key on the machine's keyboard.
+    ///  Gets whether the machine has been started; until then it is built and off, as the extension's off machine is.
+    /// </summary>
+    internal bool Running => !_thread.ThreadState.HasFlag(System.Threading.ThreadState.Unstarted);
+
+    /// <summary>
+    ///  Types a key on the machine's keyboard. A key pressed while a paste is still typing waits its turn behind it,
+    ///  but CONTROL-C, which interrupts, goes now and drops the rest of the paste, as the debug host has it.
     /// </summary>
     /// <param name="code">The ASCII code, 0-127.</param>
     internal void Key(int code)
     {
-        using (Gate()) { _target.Key(code); }
+        using (Gate())
+        {
+            if (code == 3)
+            {
+                _typing.Clear();
+            }
+            else if (_typing.Count != 0)
+            {
+                _typing.Enqueue(code);
+                return;
+            }
+
+            _target.Key(code);
+        }
+    }
+
+    /// <summary>
+    ///  Types text, as pasted, through the keyboard: line endings are RETURN, and characters with no key are left out.
+    ///  A machine with a typing pace takes the keys as it reaches each one's time, as the debug host's paste does.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <returns>The keys typed and the characters left out.</returns>
+    internal (int Typed, int Skipped) Type(string text)
+    {
+        List<int> codes = TypedText.Codes(text, out int skipped);
+        using (Gate())
+        {
+            if (_target.TypingPace is null)
+            {
+                foreach (int code in codes) { _target.Key(code); }
+            }
+            else
+            {
+                foreach (int code in codes) { _typing.Enqueue(code); }
+            }
+        }
+
+        return (codes.Count, skipped);
+    }
+
+    /// <summary>
+    ///  Gets the model the machine's display names, such as <c>Apple II Plus</c>, or null.
+    /// </summary>
+    internal string? Model
+    {
+        get
+        {
+            using (Gate())
+            {
+                return _target.DisplayState(running: Running)["model"] is JsonValue model && model.TryGetValue(out string? text) ? text : null;
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Gets the slot of the Apple II's mouse card, or 0 without one.
+    /// </summary>
+    internal int MouseSlot
+    {
+        get
+        {
+            using (Gate())
+            {
+                return _target.DisplayState(running: Running)["mouse"] is JsonValue slot && slot.TryGetValue(out int number) ? number : 0;
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether the machine has the Apple keys or game-port buttons the display panel latches.
+    /// </summary>
+    internal bool HasButtons => ButtonRequest() is not null;
+
+    /// <summary>
+    ///  Holds or lets go of an Apple key or game-port button.
+    /// </summary>
+    /// <param name="button">0 for Open Apple or button 0, 1 for Closed (or Solid) Apple or button 1.</param>
+    /// <param name="pressed">Whether it is down.</param>
+    internal void Button(int button, bool pressed)
+    {
+        using (Gate())
+        {
+            if (ButtonRequest() is { } request)
+            {
+                _target.Requests[request](new JsonObject { ["button"] = button, ["pressed"] = pressed });
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Moves the mouse card's mouse, and sets its button when given.
+    /// </summary>
+    /// <param name="dx">How far across, in the picture's 280 dots.</param>
+    /// <param name="dy">How far down, in its 192 lines.</param>
+    /// <param name="pressed">The button, or null to leave it.</param>
+    internal void Mouse(int dx, int dy, bool? pressed = null)
+    {
+        using (Gate())
+        {
+            if (!_target.Requests.TryGetValue("apple2/mouse", out Func<JsonObject, JsonObject>? mouse)) { return; }
+            JsonObject args = new() { ["dx"] = dx, ["dy"] = dy };
+            if (pressed is { } down) { args["pressed"] = down; }
+            mouse(args);
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether the machine's terminal has a clear screen key, as the Apple-1's and the Altair's do.
+    /// </summary>
+    internal bool CanClearScreen => ClearRequest() is not null;
+
+    /// <summary>
+    ///  Clears the screen, as the Apple-1's CLEAR SCREEN or the Altair terminal's CLEAR does.
+    /// </summary>
+    internal void ClearScreen()
+    {
+        using (Gate())
+        {
+            if (ClearRequest() is { } request) { _target.Requests[request]([]); }
+        }
+
+        _frameWanted = true;
+    }
+
+    /// <summary>
+    ///  Gets each device as the Drives section shows it.
+    /// </summary>
+    /// <returns>The devices, in the machine's order.</returns>
+    internal IReadOnlyList<DeviceState> DeviceStates()
+    {
+        using (Gate()) { return [.. _target.Devices.Select(DeviceState.Of)]; }
+    }
+
+    /// <summary>
+    ///  Changes a device's media, as <c>retro/device</c> does: inserts, records, ejects, protects or saves.
+    /// </summary>
+    /// <param name="id">The device's id.</param>
+    /// <param name="action">The action, such as <c>insert</c>.</param>
+    /// <param name="args">Its arguments, such as the image's <c>path</c>.</param>
+    /// <exception cref="ArgumentException">
+    ///  There is no such device, or the action or its arguments are wrong.
+    /// </exception>
+    internal void DeviceAction(string id, string action, JsonObject args)
+    {
+        using (Gate())
+        {
+            IDevice device = _target.Devices.FirstOrDefault(device => device.Id == id)
+                ?? throw new ArgumentException($"There is no device '{id}'.");
+
+            _target.DeviceAction(device, action, args);
+        }
+    }
+
+    /// <summary>
+    ///  Changes the installed hardware, as <c>retro/hardware</c> does: adds or removes a card, or sets a switch.
+    /// </summary>
+    /// <param name="id">The hardware row's id, such as <c>slot5</c>.</param>
+    /// <param name="action">The action, such as <c>addDiskII</c>.</param>
+    /// <param name="args">Its arguments.</param>
+    /// <exception cref="ArgumentException">The action or its arguments are wrong.</exception>
+    internal void HardwareAction(string id, string action, JsonObject args)
+    {
+        using (Gate()) { _target.HardwareAction(id, action, args); }
+        _frameWanted = true;
+    }
+
+    /// <summary>
+    ///  Captures the machine's cards and media, as a saved machine keeps them.
+    /// </summary>
+    /// <returns>The saved machine.</returns>
+    internal JsonObject Capture()
+    {
+        using (Gate()) { return MachineConfiguration.Capture(_target); }
+    }
+
+    /// <summary>
+    ///  Restores cards and media a saved machine kept.
+    /// </summary>
+    /// <param name="saved">The saved machine.</param>
+    /// <returns>What could not be restored.</returns>
+    internal List<string> Restore(JsonObject saved)
+    {
+        using (Gate()) { return MachineConfiguration.Restore(_target, saved); }
+    }
+
+    /// <summary>
+    ///  Writes the machine's tape recordings, as a debug session does when it ends.
+    /// </summary>
+    /// <exception cref="IOException">A recording could not be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written.</exception>
+    internal void SaveRecordings()
+    {
+        using (Gate()) { (_target as IRecordingTarget)?.SaveRecordings(); }
+    }
+
+    /// <summary>
+    ///  Gets the BASIC program in the machine's memory, as the Machine section's BASIC program row summarises it.
+    /// </summary>
+    /// <returns>The dialect's name and the program's lines, or null for a machine with no BASIC.</returns>
+    internal (string DisplayName, int Lines)? Basic()
+    {
+        using (Gate())
+        {
+            if (_target.Basic is not { } dialect) { return null; }
+            try
+            {
+                string text = BasicProgram.Read(dialect, new TargetBasicMemory(_target)).ToText();
+                return (dialect.DisplayName, text.Split('\n').Count(line => line.Trim().Length != 0));
+            }
+            catch (InvalidDataException)
+            {
+                return (dialect.DisplayName, 0);
+            }
+        }
     }
 
     /// <summary>
@@ -339,6 +567,7 @@ internal sealed class MachineHost : DisposableBase
         using (Gate())
         {
             _target.Reset();
+            _typing.Clear();
             _stopped = null;
             _paceAgain = true;
         }
@@ -357,23 +586,6 @@ internal sealed class MachineHost : DisposableBase
     internal IReadOnlyList<HardwareRow> Hardware()
     {
         using (Gate()) { return _target.Hardware(); }
-    }
-
-    /// <summary>
-    ///  Gets each device with media and what it is doing.
-    /// </summary>
-    /// <returns>The devices' names, media, kind, lock and activity.</returns>
-    internal List<DriveRow> Devices()
-    {
-        using (Gate())
-        {
-            return [.. _target.Devices.Select(device => new DriveRow(
-                device.Info.Name,
-                device.Kind,
-                device.Media is { } media ? Path.GetFileName(media.Label) + (media.Changed ? " · changed" : "") : null,
-                device.Media?.WriteProtected ?? false,
-                device.Activity))];
-        }
     }
 
     /// <summary>
@@ -430,6 +642,27 @@ internal sealed class MachineHost : DisposableBase
 
     // The machine's own request that changes its sound, such as apple2/sound, or null.
     private string? SoundRequest() => _target.Requests.Keys.FirstOrDefault(key => key.EndsWith("/sound", StringComparison.Ordinal));
+
+    // The machine's request for its Apple keys or game-port buttons, such as apple2/button, or null.
+    private string? ButtonRequest() => _target.Requests.Keys.FirstOrDefault(key => key.EndsWith("/button", StringComparison.Ordinal));
+
+    // The machine's request that clears its terminal's screen, such as apple1/clearScreen, or null.
+    private string? ClearRequest() => _target.Requests.Keys.FirstOrDefault(key => key.EndsWith("/clearScreen", StringComparison.Ordinal));
+
+    // Types the next pasted key once its time has come, and sets the time of the one after: longer after a RETURN.
+    private void TypeNext()
+    {
+        if (_target.TypingPace is not { } pace)
+        {
+            while (_typing.TryDequeue(out int code)) { _target.Key(code); }
+            return;
+        }
+
+        if (_target.CycleCount < _typingDue) { return; }
+        int next = _typing.Dequeue();
+        _target.Key(next);
+        _typingDue = _target.CycleCount + (next == '\r' ? pace.Line : pace.Key);
+    }
 
     // Takes the gate for the window, telling the run thread to let it in.
     private Lock.Scope Gate()
@@ -514,6 +747,8 @@ internal sealed class MachineHost : DisposableBase
                         && _target.CycleCount < due
                         && Stopwatch.GetElapsedTime(slice).TotalMilliseconds < SliceMilliseconds)
                     {
+                        // Pasted keys go in as the machine reaches each one's time.
+                        if (_typing.Count != 0) { TypeNext(); }
                         _target.RunCycles((int)Math.Min(BatchCycles, due - _target.CycleCount));
                     }
                 }

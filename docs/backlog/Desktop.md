@@ -5,7 +5,8 @@ options, so the shared model in [machine files](MachineFiles.md) and [saving med
 by a second host before it is built into both.
 
 **Status:** proposed 2026-11-14; the [spike](#phase-0-the-spike) is built and passes on Windows, with 60 Hz pacing
-still to check on a local display. "Retrocore Desktop" is a working name. The [decisions](#decisions-agreed-2026-11-14) were agreed on 2026-11-14.
+still to check on a local display, and [phase 2](#phase-2-the-views-as-the-extension-has-them)'s views are built, ahead of
+phase 1's library. "Retrocore Desktop" is a working name. The [decisions](#decisions-agreed-2026-11-14) were agreed on 2026-11-14.
 
 ## Why
 
@@ -168,6 +169,8 @@ What the spike turned up:
 
 ### Phase 1: the shared host library
 
+Phase 2 came first (decided 2026-11-14), so progress on the views shows sooner; the library follows it.
+
 `Retrocore.Hosting`, holding what both hosts need: building and running a machine, its frames, audio and keys, its
 devices and hardware actions, and the machine configuration. `Retrocore.Debug` and Retrocore Desktop both use it.
 Done when the debug host's tests pass on it unchanged and the desktop app no longer sees `Retrocore.Debug`'s
@@ -178,6 +181,58 @@ internals.
 The Machine, Drives and Display and Sound sections with their actions: switching machines, cards, inserting and
 ejecting, locks, speed, sound, screen, and the status bar's keys. Done when everything the extension's views and
 panel do while a machine runs can be done here.
+
+#### Results, 2026-11-14, on Windows
+
+The side pane draws as VS Code draws its views, in Light Modern and Dark Modern's own colours (each the theme's, or
+VS Code's default where the theme leaves one out), with VS Code's Codicon font (0.0.45, CC BY 4.0, in
+`src/Retrocore.Desktop/Assets` with its license):
+
+- **The tree**: rows 22 pixels tall, chevrons, icons, the description at 70% after the label, the active and inactive
+  selection and the focus outline, the row's actions while it is under the pointer or selected, check boxes for a
+  card's switches, context menus, Markdown tooltips as VS Code's hovers draw them, and the arrow keys, Enter, Space and
+  Shift+F10 as VS Code's lists take them.
+- **The sections**: headers in capitals with their actions on hover, an ellipsis menu, a count badge (the Drives
+  section counts disks changed and not saved, as the extension's badge does) and a message line (what of the saved
+  cards and media could not be put back). The pane has VS Code's 35 pixel title, RETROCORE or SETTINGS.
+- **VS Code's own widgets**: the quick pick (Switch Machine, a setting's values, Add Card), the modal dialog (Save over
+  an image, Remove Card with disks in it, Reset Saved Machine), and error and information notifications at the bottom
+  right.
+
+What the extension's views and panel do, the desktop app does, with the extension's words, icons and tooltips:
+
+| Extension | Retrocore Desktop |
+| --- | --- |
+| The Machine view: the machine with its model and state, its settings, its hardware slot by slot, the BASIC program's summary, and Switch to Another Machine while off | The same rows, from the same `HardwareRow`s and catalog; the machine's icon is the extension's, lit while it runs |
+| Switch Machine, the off machine's settings (changed while off, keeping the cards and media added, as `changesFrom` does), Start This Machine, Start Machine, Reset Saved Machine | The same, with the catalog ported from `machines.ts`; the machine starts and stops in the window, Restart and Stop being the machine row's actions while it runs (the debug toolbar's in VS Code) |
+| Add Card and Remove Card, a card's switches as check boxes | The same, through `HardwareAction`, with the cards `hardware.ts` offers |
+| The Drives view: controllers, drives with their summary, details and activity colours, Insert Media, Record to, Eject, Write Protect, Allow Writes, Save to Its Image, Save Disk As | The same, through `DeviceAction`, with the system's file pickers |
+| The saved machine, restored when it starts again | Kept in `settings.json` under `desktop.machine` and `desktop.machineState` until machine files replace it; a machine's tape recordings are written when it stops or the app closes, as a debug session's are when it ends |
+| The panel's keys: Ctrl (latched), Ctrl-C, Ctrl-Reset, Esc, Open and Closed (or Solid) Apple, the II's game-port buttons, Break, Clear, Hold, F1, F2, Reset, Clear Screen | The status bar's keys, by machine, with the panel's tooltips, and its keyboard hint on the keyboard icon |
+| Ctrl+F12 or Ctrl+Break to reset, the Alt keys for the Apple keys, Shift+Insert and right-click to paste (at the machine's typing pace) | The same on the screen |
+| The mouse card: a click captures the pointer, Esc lets it go | The same, the screen's border lit while it is captured |
+| A session that ended: its last picture dimmed, with Restart and Start Machine | An off machine's last picture dimmed over black, with Start This Machine and Switch Machine |
+
+`--tour folder` walks the window through these (running, a row selected, off, Switch Machine, a setting, a card
+added, a dialog, a notification, the light theme, the settings and a TRS-80) and saves a picture of the window at
+each, so the look can be checked without a person at the keyboard; `--tour-disk image` adds a disk inserted, booted
+from and stopped. The smoke run also lists the Machine and Drives sections' rows.
+
+Not yet here, each needing more than these views:
+
+- **The Memory row** and its banks, which open Retrocore Memory, an editor of its own.
+- **Opening the BASIC program**, which edits it in an editor; the row shows its summary.
+- **The favorites heart** on the machine's row, which belongs with the Favorites view.
+- **Game controllers**: the game port reads none yet, so it says "Controllers off".
+- **The beam overlay**, which marks the beam while a debugger has the machine stopped, and so has nothing to show
+  here.
+
+What the views turned up:
+
+- VS Code has no `eject` Codicon, so the extension's Eject action (`$(eject)`) has no icon there; the desktop app
+  draws one in the Codicons' style.
+- Avalonia reads a colour with alpha as `#AARRGGBB` where VS Code's themes write `#RRGGBBAA`; the palette converts
+  them.
 
 ### Phase 3: machine files and media
 

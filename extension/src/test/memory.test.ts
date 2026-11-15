@@ -823,6 +823,24 @@ test("a RAM search for words finds a score in the CPU's byte order", async () =>
     assert.equal(page.elements.get("status")!.textContent, "1 word left.");
 });
 
+test("starting a RAM search over while a step reads memory leaves the new search alone", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    await drive(page, [{ search: "start" }], () => 0, lists);
+    page.elements.get("search")!.innerHTML = "";
+    page.posted.splice(0);
+    // A step begins reading all of memory; Start over comes before the read does.
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "narrow", test: "changed" } } : null } });
+    await page.settle();
+    const pending = page.take("read");
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "reset" } } : null } });
+    page.send({ type: "reply", id: pending.id, result: { data: Buffer.alloc(pending.count as number).toString("base64"), unreadable: [] } });
+    await page.settle();
+    assert.match(page.elements.get("search")!.innerHTML, /Start with all RAM/, "the search stays started over");
+    assert.doesNotMatch(page.elements.get("status")!.textContent, /left/);
+});
+
 test("a read-only bank refuses typing before writing", async () => {
     const page = runPage();
     page.send({ type: "init", address: 0xD000, info: { bank: "rom", label: "System ROM", readOnly: true } });

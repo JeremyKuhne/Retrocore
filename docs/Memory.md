@@ -39,9 +39,10 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Labels** from the program and the SDK's ROM sources name the bytes: the first label in each row shows in a
   gutter beside the address (dimmed when it starts partway along the row), and a mark on the byte where each
   starts. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
-  Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: the
-  Monitor's `STA CH` names $24 `CH`, but `CMP #CR` does not name $0D, nor does an index's offset or a term added to
-  another address. A label at the same address comes first.
+  Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: an
+  equate counts where an instruction's bytes access its value, so the Monitor's `STA CH` names $24 `CH`, and the
+  6809's `LDA [Vector]` names `Vector`, but `CMP #CR` does not make `CR` a name for $0D, nor does an index's offset
+  or a term added to another address. A label at the same address comes first.
 - **Align to labels** in the toolbar, shown once there are labels, starts a row where each label starts, so a
   label's bytes begin a row of their own; each byte stays in its column, and **Up** and **Down** keep the column,
   or go to the nearest byte the row has. Each editor remembers the choice.

@@ -956,7 +956,9 @@ async function narrowBy(test, text) {
         if (typeof parsed === "string") { status(parsed, true); return; }
         value = parsed;
     }
-    if (!await refreshAll()) return;
+    // Memory is read first; a search started over or stepped back meanwhile is not narrowed by it.
+    const current = search, depth = search.steps.length;
+    if (!await refreshAll() || search !== current || current.steps.length !== depth) return;
     search.steps.push({ candidates: search.candidates, before: search.before });
     search.candidates = narrowSearch(search.candidates, search.before, bytes, readable, test, value, search.size, search.bigEndian);
     search.before = bytes.slice();

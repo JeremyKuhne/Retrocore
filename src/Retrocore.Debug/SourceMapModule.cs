@@ -153,82 +153,122 @@ internal sealed partial class SourceMapModule : IDebugModule
         }
 
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];
-        _addressConstants = AddressConstantsOf(result, sourceNames);
+        _addressConstants = AddressConstantsOf(result, sourceNames, relocation);
     }
 
     /// <inheritdoc/>
     public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
 
-    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: those that begin a memory or
-    // pointer operand, not an index's offset, an immediate value or a term added to another address.
+    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: a constant the operand
+    // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
+    // an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
+    // offset and a term added to another address, and picks the right one of names that differ only in case or scope.
     private static (string Name, long Value, IsaDescription Cpu)[] AddressConstantsOf(
         AssemblyResult result,
-        Dictionary<string, string> sourceNames)
+        Dictionary<string, string> sourceNames,
+        int relocation)
     {
-        Dictionary<string, AssemblySymbol> constants = [with(StringComparer.OrdinalIgnoreCase)];
+        // Each constant by the names an operand can spell it with: its own, the source's alias, and the last part of
+        // a scoped name.
+        Dictionary<string, List<AssemblySymbol>> byName = [with(StringComparer.OrdinalIgnoreCase)];
+        void Add(string name, AssemblySymbol symbol)
+        {
+            if (!byName.TryGetValue(name, out List<AssemblySymbol>? list)) { byName[name] = list = []; }
+            if (!list.Contains(symbol)) { list.Add(symbol); }
+        }
+
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (!symbol.IsConstant || symbol.Value is < 0 or > 0xFFFF) { continue; }
-            string name = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
-            if (s_internalMarkers.Any(marker => name.Contains(marker, StringComparison.Ordinal))) { continue; }
-            constants.TryAdd(name, symbol);
+            string display = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
+            if (s_internalMarkers.Any(marker => display.Contains(marker, StringComparison.Ordinal))) { continue; }
+            foreach (string name in (string[])[symbol.Name, display])
+            {
+                Add(name, symbol);
+                int separator = name.LastIndexOf("::", StringComparison.Ordinal);
+                if (separator >= 0) { Add(name[(separator + 2)..], symbol); }
+            }
         }
 
-        Dictionary<string, (string Name, long Value, IsaDescription Cpu)> found = [with(StringComparer.OrdinalIgnoreCase)];
-        if (constants.Count == 0) { return []; }
+        if (byName.Count == 0) { return []; }
+        HashSet<(AssemblySymbol Symbol, IsaDescription Cpu)> found = [];
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
             if (entry.Size == 0 || entry.InstructionSet is not { } isa) { continue; }
-            OperandForm? form = isa.Forms.FirstOrDefault(item => item.Name == entry.AddressMode);
-            if (form is null || form.Role == OperandRole.None || form.IsIndexed || form.Patterns.Count == 0)
+            ReadOnlySpan<byte> bytes = result.Sections[entry.Section].Bytes.Span.Slice(entry.Offset, entry.Size);
+            if (EncodedAddress(bytes, (ushort)(entry.Address + relocation), isa) is not { } address) { continue; }
+            foreach (AssemblySymbol symbol in OperandConstants(entry.Operand, byName))
             {
-                continue;
+                if (symbol.Value == address) { found.Add((symbol, isa.Description)); }
             }
-
-            if (AddressName(entry.Operand, form.Patterns[0]) is not { } name
-                || !constants.TryGetValue(name, out AssemblySymbol? symbol)
-                || found.ContainsKey(name))
-            {
-                continue;
-            }
-
-            found[name] = (sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name, symbol.Value, isa.Description);
         }
 
-        return [.. found.Values.OrderBy(item => item.Value).ThenBy(item => item.Name, StringComparer.Ordinal)];
+        return [.. found.Select(item => (
+                sourceNames.TryGetValue(item.Symbol.Name, out string? source) ? source : item.Symbol.Name,
+                item.Symbol.Value,
+                item.Cpu))
+            .OrderBy(item => item.Item2)
+            .ThenBy(item => item.Item1, StringComparer.Ordinal)];
     }
 
-    // The name an operand's address expression begins with, such as CH in CH+1, (BASL),Y or A,(CURSOR): past the
-    // operands the form's pattern puts before the address, and its brackets and size marks, a name followed by the
-    // end of the expression or by an operator; null when the expression begins with anything else.
-    private static string? AddressName(string operand, string pattern)
+    // The address an instruction's bytes give it to access: a memory or pointer operand, or a postbyte's pointer or
+    // PC-relative target; null for immediate values, registers, offsets from a register and branches.
+    private static ushort? EncodedAddress(ReadOnlySpan<byte> bytes, ushort address, InstructionSet isa)
     {
-        int hole = pattern.IndexOf("{}", StringComparison.Ordinal);
-        if (hole < 0) { return null; }
-        int commas = pattern.AsSpan(0, hole).Count(',');
-        int start = 0;
-        for (int comma = 0; comma < commas; comma++)
+        if (!Disassembler.TryDecode(bytes, address, isa, out DisassembledInstruction instruction)) { return null; }
+        OperandForm form = instruction.Form;
+        if (form.FieldCount == 0) { return null; }
+        if (form.HasPostbyte)
         {
-            int next = operand.IndexOf(',', start);
-            if (next < 0) { return null; }
-            start = next + 1;
+            return instruction.PostbyteReference == PostbyteReference.None ? null : instruction.Field(0);
         }
 
-        while (start < operand.Length && operand[start] is ' ' or '\t' or '(' or '[' or '<' or '>' or '!' or '|')
-        {
-            start++;
-        }
+        return form.Role == OperandRole.None ? null : instruction.Operand;
+    }
 
-        int end = start;
-        while (end < operand.Length && (char.IsAsciiLetterOrDigit(operand[end]) || operand[end] is '_' or '.' or '@' or '?' or ':'))
+    // The constants an operand's names can mean.
+    private static IEnumerable<AssemblySymbol> OperandConstants(
+        string operand,
+        Dictionary<string, List<AssemblySymbol>> byName)
+    {
+        int index = 0;
+        while (index < operand.Length)
         {
-            end++;
-        }
+            char character = operand[index];
+            if (character == ';') { yield break; }
+            if (character is '\'' or '"')
+            {
+                int close = operand.IndexOf(character, index + 1);
+                index = close < 0 ? operand.Length : close + 1;
+                continue;
+            }
 
-        if (end == start || char.IsAsciiDigit(operand[start])) { return null; }
-        return end == operand.Length || operand[end] is ' ' or '\t' or '+' or '-' or ')' or ']' or ',' or ';'
-            ? operand[start..end]
-            : null;
+            if (!(char.IsAsciiLetter(character) || character is '_' or '.' or '@' or '?'))
+            {
+                // A number's digits, as in $C0E8, are not a name.
+                if (character is '$' or '%' || char.IsAsciiDigit(character))
+                {
+                    index++;
+                    while (index < operand.Length && char.IsAsciiLetterOrDigit(operand[index])) { index++; }
+                }
+                else
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            int start = index;
+            while (index < operand.Length && (char.IsAsciiLetterOrDigit(operand[index]) || operand[index] is '_' or '.' or '@' or '?' or ':'))
+            {
+                index++;
+            }
+
+            string token = operand[start..index];
+            if (!byName.TryGetValue(token, out List<AssemblySymbol>? symbols)) { continue; }
+            foreach (AssemblySymbol symbol in symbols) { yield return symbol; }
+        }
     }
 
     /// <inheritdoc/>

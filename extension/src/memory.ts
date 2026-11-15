@@ -13,6 +13,11 @@ import { addressAt, cpuWatches, hex, parseReference, referenceIn, resolveIn } fr
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
+/** A bank's reference from $0000, which a memory view reads its bytes by: 0x0000 for the CPU's memory. */
+function bankBase(name: string | null): string {
+    return name === null ? "0x0000" : `${name}:0x0000`;
+}
+
 export interface MemoryBank {
     /** The bank's prefix in memory references, such as "aux"; null for memory as the CPU maps it. */
     name: string | null;
@@ -236,7 +241,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            const base = start.bank === null ? "0x0000" : `${start.bank}:0x0000`;
+            const base = bankBase(start.bank);
             let ready!: () => void;
             const editor: MemoryEditor = {
                 session, reference: base, panel, tests: new Map(),
@@ -273,10 +278,12 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             break;
                         case "banks": {
                             // The other banks this editor's bytes can be compared with, read now, as a card can go in.
+                            // Each is read from $0000, as this editor's own is, so its bytes line up by address; the
+                            // machine's references, such as bank1:0xD000, start where the bank does.
                             const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
                             await reply({
                                 banks: banks.filter(item => item.name !== start.bank).map(item => ({
-                                    memoryReference: item.memoryReference,
+                                    memoryReference: bankBase(item.name),
                                     label: item.name === null ? item.label : `${item.label} (${item.name})`
                                 }))
                             });
@@ -286,7 +293,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             // Only a bank the machine has, as the page lists them.
                             const reference = String(received.reference);
                             const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
-                            if (!banks.some(item => item.memoryReference === reference)) throw new Error(`The machine has no memory bank at ${reference} now.`);
+                            if (!banks.some(item => bankBase(item.name) === reference)) throw new Error(`The machine has no memory bank at ${reference} now.`);
                             await reply(await session.customRequest("retro/memory/read", { memoryReference: reference, offset: received.offset, count: received.count }));
                             break;
                         }

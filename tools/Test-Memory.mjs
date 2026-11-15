@@ -322,7 +322,8 @@ try {
     assert.equal(named.get(0x24), "CH");
     assert.equal(named.get(0x28), "BASL");
     assert.equal(named.get(0xC000), "KBD");
-    assert.equal(named.has(0x0D), false, `$0D is not named: ${named.get(0x0D)}`);
+    // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
+    assert.notEqual(named.get(0x0D), "CR");
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
     assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");

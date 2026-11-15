@@ -38,6 +38,13 @@ public sealed partial class PascalDecompiler
     private readonly List<string> _warnings = [];
     private readonly List<Procedure> _procedures = [];
 
+    // How many times a decompile is run again to sign the assembled procedures by all their calls.
+    private const int MaximumSigningPasses = 3;
+
+    // The assembled procedures' signatures from a previous decompile's calls, and what this one's calls show.
+    private readonly IReadOnlyDictionary<PascalProcedure, NativeSignature> _signatures;
+    private readonly Dictionary<PascalProcedure, (int Words, bool Zeros)> _observed = [];
+
     // The segments that are units of the program's own, linked in.
     private readonly HashSet<PascalSegment> _unitSegments = [];
 
@@ -55,8 +62,9 @@ public sealed partial class PascalDecompiler
     private PascalSegment? _shell;
     private Procedure? _program;
 
-    private PascalDecompiler(PascalCodeFile file, PascalDecompilerOptions options)
+    private PascalDecompiler(PascalCodeFile file, PascalDecompilerOptions options, IReadOnlyDictionary<PascalProcedure, NativeSignature> signatures)
     {
+        _signatures = signatures;
         _file = file;
         _library = options.Library;
         _options = options;
@@ -83,12 +91,29 @@ public sealed partial class PascalDecompiler
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(options);
-        PascalDecompiler decompiler = new(file, options);
-        decompiler.LoadProcedures();
-        decompiler.DecodeAll();
+
+        // An assembled procedure is signed by its first call, then by what all its calls have in common, until the two
+        // agree.
+        IReadOnlyDictionary<PascalProcedure, NativeSignature> signatures = new Dictionary<PascalProcedure, NativeSignature>();
+        PascalDecompiler decompiler;
+        for (int pass = 0; ; pass++)
+        {
+            decompiler = new(file, options, signatures);
+            decompiler.LoadProcedures();
+            decompiler.DecodeAll();
+            Dictionary<PascalProcedure, NativeSignature> observed = decompiler.ObservedSignatures();
+            if (pass == MaximumSigningPasses || observed.All(pair => decompiler.Signed(pair.Key) == pair.Value))
+            {
+                break;
+            }
+
+            signatures = observed;
+        }
+
         decompiler.Withs();
         decompiler.Absorb();
         decompiler.Infer();
+        decompiler.Contain();
         decompiler.Layout();
         decompiler.Rename();
         string source = decompiler.Write();
@@ -101,6 +126,37 @@ public sealed partial class PascalDecompiler
     }
 
     private void Warn(string warning) => _warnings.Add(warning);
+
+    // What an assembled procedure's calls have in common: the fewest words below the call, and whether every call leaves
+    // two zero words on top, a function's room for its result.
+    private void Observe(Procedure callee, List<Expr> stack)
+    {
+        int words = stack.Sum(argument => argument.Words);
+        bool zeros = stack.Count >= 2 && stack[^1] is Constant { Value: 0 } && stack[^2] is Constant { Value: 0 };
+        _observed[callee.Code] = _observed.TryGetValue(callee.Code, out (int Words, bool Zeros) seen)
+            ? (Math.Min(seen.Words, words), seen.Zeros && zeros)
+            : (words, zeros);
+    }
+
+    // The signature a previous decompile's calls give an assembled procedure; null in the first.
+    private NativeSignature? SignatureOf(Procedure callee) =>
+        _signatures.TryGetValue(callee.Code, out NativeSignature? known) ? known : null;
+
+    // The signatures this decompile's calls give the assembled procedures.
+    private Dictionary<PascalProcedure, NativeSignature> ObservedSignatures() => _observed.ToDictionary(
+        pair => pair.Key,
+        pair =>
+        {
+            Procedure procedure = _procedures.First(procedure => procedure.Code == pair.Key);
+            int words = pair.Value.Zeros ? pair.Value.Words - 2 : pair.Value.Words;
+            return new NativeSignature(Math.Min(words, NativeParameterWords(procedure, pair.Value.Zeros) ?? words), pair.Value.Zeros);
+        });
+
+    // The signature an assembled procedure was given in this decompile; null if nothing called it.
+    private NativeSignature? Signed(PascalProcedure code) =>
+        _procedures.FirstOrDefault(procedure => procedure.Code == code) is { Signed: true } procedure
+            ? new NativeSignature(procedure.Frame.ParameterWords - (procedure.IsFunction ? 2 : 0), procedure.IsFunction)
+            : null;
 
     // Finds the program's segment and its segment procedures, and each procedure's parent and frame.
     private void LoadProcedures()
@@ -140,7 +196,8 @@ public sealed partial class PascalDecompiler
             {
                 if (procedure.Code.IsNative)
                 {
-                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL, with the parameters and result its first call passes, and written as source for the Assembler.");
+                    procedure.NativeBytes = NativeStackBytes(segment, procedure.Code);
+                    Warn($"{procedure} is assembled code, which a Pascal source cannot hold; it is declared EXTERNAL, with the parameters and result its code and calls show, and written as source for the Assembler.");
                 }
 
                 // A procedure's code ends before its parent's, which is the next of the level above it.

@@ -13,9 +13,13 @@ public sealed partial class PascalDecompiler
         private int _concatLength;
 
         // A call of a procedure in the code file: its arguments fill its parameters' words.
-        private static void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
+        private void CallProcedure(Procedure callee, List<Expr> stack, List<Statement> statements)
         {
-            if (callee.Code.IsNative && !callee.Signed) { Sign(callee, stack); }
+            if (callee.Code.IsNative)
+            {
+                _owner.Observe(callee, stack);
+                if (!callee.Signed) { Sign(callee, stack, _owner.SignatureOf(callee)); }
+            }
 
             int words = callee.Frame.ParameterWords;
             if (callee.IsFunction)
@@ -30,6 +34,14 @@ public sealed partial class PascalDecompiler
             {
                 Expr argument = Pop(stack);
                 taken += argument.Words;
+
+                // A CONCAT's or COPY's temporary passes the string it builds, to a value string.
+                if (argument is Address { Designator: VariableDesignator { Variable: Variable temporary } }
+                    && _strings.ContainsKey(temporary))
+                {
+                    argument = StringValue(argument);
+                }
+
                 arguments.Insert(0, argument);
             }
 
@@ -49,13 +61,16 @@ public sealed partial class PascalDecompiler
             }
         }
 
-        // An assembled procedure's code says nothing of its parameters or result, so its first call does: two zero words
-        // on top are a function's room for its result, of a word, and the words below them, which the statement pushed,
-        // its parameters.
-        private static void Sign(Procedure callee, List<Expr> stack)
+        // An assembled procedure's code says nothing of its parameters or result, so its calls do: two zero words on top
+        // are a function's room for its result, of a word, and the words below them, which the statement pushed, its
+        // parameters. A first decompile signs it by its first call, and by the words its code takes off the stack where
+        // that shows (NativeStackBytes); the next by what all its calls have in common, as a call in an expression has
+        // the expression's own words below it (Observe).
+        private static void Sign(Procedure callee, List<Expr> stack, NativeSignature? known)
         {
-            bool function = stack.Count >= 2 && IsZero(stack[^1]) && IsZero(stack[^2]);
-            int parameters = stack.Take(stack.Count - (function ? 2 : 0)).Sum(argument => argument.Words);
+            bool function = known?.IsFunction ?? (stack.Count >= 2 && IsZero(stack[^1]) && IsZero(stack[^2]));
+            int below = stack.Take(stack.Count - (function ? 2 : 0)).Sum(argument => argument.Words);
+            int parameters = known?.ParameterWords ?? Math.Min(below, NativeParameterWords(callee, function) ?? below);
             callee.Frame = new Frame(callee, callee.Level, parameters + (function ? 2 : 0), dataWords: 0);
             if (function)
             {

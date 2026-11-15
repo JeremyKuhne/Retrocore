@@ -162,6 +162,23 @@ What the decompiler does not decompile yet, found by decompiling every code file
   the tools, a source too long for /WORK split past halfway with the rest on /OUT, no Filer prefix without units
   (1.0's Filer is damaged), 1.2's listing prompt after its banner, and the 64 bits of intrinsic units Apple III
   code files keep. **Next:** Apple Pascal 1.2's Compiler.
+- **A user program: Wizardry.** **Done (2026-11-15): Wizardry I v2.1 (Sir-Tech, Apple Pascal 1.1) decompiles to the
+  same segments**, both code files on its boot disk (`PascalWizardryTests`): SYSTEM.STARTUP (USES CHAINSTUFF from the
+  disk's library) compiles with the 1.1 Compiler on a 64K Apple II with `(*$S+*)`; WIZARDRY.CODE, whose declarations
+  the 1.1 Compiler cannot hold in 64K, compiles with `(*$S++*)` under Apple Pascal 1.2's 128K system on a 128K IIe
+  (the 1.1 Compiler marked version 5), its source split with an include file so that CODE: has room for its 85K code
+  file; each code file's assembled procedures are assembled with the 1.1 Assembler, in the order of their code, and
+  linked with the 1.1 Linker, onto OUT: where LINK: has no room. Apple III Pascal, which built the 1.1 Compiler's own
+  source, does not serve here: the Apple II Compiler there reads only an included file's first page, and its code
+  file goes wrong after an include. What it took: assembled procedures signed by the bytes their code takes off the
+  stack, and by what all their calls have in common, as a function called inside an expression has the expression's
+  words below it; a packed record's string field; a word only compared as equal or not is a word; what WRITE writes as
+  a string is one; arrays fitted to their room keep whole elements, the rest padding, and elements IXA shows the words
+  of have them; an array of records and a scalar at an element's address are one array; a CONCAT passed to a value
+  string, a character passed as one, and a string passed to a value string keeps its length; a VAR scalar passed a
+  record's address takes its first word, decided once the statements have shown what it is, and a scalar's block words
+  are its record's; a variable whose address a call passes for a record is that record, the variables in its words its
+  fields, and the record where the code reaches it whole (its address, a move, a comparison of words, written whole).
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

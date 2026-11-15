@@ -70,9 +70,12 @@ internal static partial class EmulatedPascalTools
         }
 
         // The host is the workfile, each library by name; or, where they and the output do not fit on APPLE1, as 1.3's
-        // Compiler's do not, all are on a volume of their own, LINK:, in a second card's first drive.
+        // Compiler's do not, all are on a volume of their own, LINK:, in a second card's first drive; and where they do
+        // not fit there either, as Wizardry's do not, the output goes on OUT:, in its second.
         byte[] boot = Apple1(bootDisk);
         byte[]? link = Fits(boot, host, libraries) ? null : PascalVolume.Format("LINK", proDosOrder: false);
+        bool alone = link is null || Fits(PascalVolume.Format("LINK", proDosOrder: false), host, libraries);
+        byte[]? output = alone ? null : PascalVolume.Format("OUT", proDosOrder: false);
         byte[] files = link ?? boot;
         string volume = link is null ? "" : "LINK:";
         PascalVolume.WriteFile(files, proDosOrder: false, link is null ? "SYSTEM.WRK.CODE" : "HOST.CODE", PascalFileKind.Code, host);
@@ -82,7 +85,8 @@ internal static partial class EmulatedPascalTools
         }
 
         // Each library by name, then an empty line; no map; and the output.
-        EmulatedPascalSystem system = link is null ? new(boot, toolsDisk, roms) : new(boot, toolsDisk, roms, [link]);
+        IReadOnlyList<byte[]>? more = link is null ? null : output is null ? [link] : [link, output];
+        EmulatedPascalSystem system = new(boot, toolsDisk, roms, more);
         system.Type("L");
         Expect(system, "HOST FILE", "The Linker never asked for a host", or: "HOST CODEFILE");
         system.Type(link is null ? "\n" : "LINK:HOST\n");
@@ -100,7 +104,7 @@ internal static partial class EmulatedPascalTools
         string screen = system.Screen;
         if (asked is null) { return (null, screen); }
 
-        system.Type($"{volume}LINKED.CODE\n");
+        system.Type($"{(output is null ? volume : "OUT:")}LINKED.CODE\n");
         if (system.WaitFor(EmulatedPascalSystem.Prompts, seconds: 300) is null)
         {
             throw new TimeoutException($"The Linker never finished:\n{system.Screen}");
@@ -108,7 +112,7 @@ internal static partial class EmulatedPascalTools
 
         screen = system.Screen;
         system.Run(tenths: 50);
-        PascalVolume written = link is null ? system.Eject() : system.EjectSlot5(drive: 1);
+        PascalVolume written = link is null ? system.Eject() : system.EjectSlot5(drive: output is null ? 1 : 2);
         return (written.Files.Any(file => file.Name == "LINKED.CODE") ? written.ReadFile("LINKED.CODE") : null, screen);
     }
 

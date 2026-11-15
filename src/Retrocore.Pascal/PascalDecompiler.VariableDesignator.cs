@@ -13,9 +13,10 @@ public sealed partial class PascalDecompiler
     private sealed class VariableDesignator(Variable variable) : Designator
     {
         /// <summary>
-        ///  Gets the variable.
+        ///  Gets or sets the variable: a record made of the variables in its words takes their first's place where the
+        ///  code reaches it whole.
         /// </summary>
-        public Variable Variable { get; } = variable;
+        public Variable Variable { get; set; } = variable;
 
         /// <inheritdoc/>
         public override TypeNode Type => Variable.Type;

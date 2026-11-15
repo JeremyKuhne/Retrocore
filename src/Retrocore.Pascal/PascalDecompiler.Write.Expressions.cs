@@ -366,6 +366,16 @@ public sealed partial class PascalDecompiler
             right = left;
         }
 
+        // Words compared are the whole records or arrays at the operands' addresses.
+        if (comparison.Comparand == Comparand.Words
+            && comparison.Left is Load { Designator: var leftWhole }
+            && comparison.Right is Load { Designator: var rightWhole }
+            && leftWhole.Type.Find() is { Kind: TypeKind.Record } record
+            && rightWhole.Type.Find() == record)
+        {
+            return ($"{DesignatorText(leftWhole)} {symbol} {DesignatorText(rightWhole)}", Relational);
+        }
+
         return ($"{Expression(comparison.Left, left, Adding)} {symbol} {Expression(comparison.Right, right, Adding)}", Relational);
     }
 

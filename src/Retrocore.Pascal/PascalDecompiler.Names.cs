@@ -196,7 +196,8 @@ public sealed partial class PascalDecompiler
         foreach (IGrouping<Media.PascalSegment, Procedure> segment in assembled.GroupBy(procedure => procedure.Segment))
         {
             List<PascalAssembledProcedure> written = [];
-            foreach (Procedure procedure in segment)
+            // In the order of their code, which the Linker keeps: the Assembler's order.
+            foreach (Procedure procedure in segment.OrderBy(procedure => procedure.Code.Attributes))
             {
                 if (!procedure.Signed)
                 {

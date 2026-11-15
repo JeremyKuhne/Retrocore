@@ -209,6 +209,11 @@ public sealed partial class PascalDecompiler
             Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { });
         }
 
+        foreach ((TypeNode formal, TypeNode actual) in _wordsPassed)
+        {
+            TypeNode.Unify(formal, formal.Find().Kind == TypeKind.Scalar ? FirstWord(actual) : actual);
+        }
+
         foreach ((TypeNode formal, TypeNode actual) in _bytesPassed)
         {
             if (formal.Find().Kind == TypeKind.String || actual.Find().Kind == TypeKind.String)
@@ -594,6 +599,9 @@ public sealed partial class PascalDecompiler
                 {
                     case 13: written.Value.Type.Vote(ScalarKind.Integer, 2); break;
                     case 17: written.Value.Type.Vote(ScalarKind.Char, 2); break;
+                    case 19 when written.Value is not (StringConstant or StringFunction or PackedConstant or Constant):
+                        written.Value.Type.String(0);
+                        break;
                     case 0: Real(written.Value); break;
                     default: break;
                 }
@@ -971,6 +979,22 @@ public sealed partial class PascalDecompiler
     // strings.
     private readonly List<(TypeNode Formal, TypeNode Actual)> _bytesPassed = [];
 
+    // The VAR parameters not yet known to be more than a word that were passed what may be a record, with their
+    // arguments' types, to meet once the statements have shown which they are: a scalar takes a record's first word.
+    private readonly List<(TypeNode Formal, TypeNode Actual)> _wordsPassed = [];
+
+    // The type of a record's or an array's first word: its first field's, or its first element's, all the way down.
+    private static TypeNode FirstWord(TypeNode type)
+    {
+        TypeNode root = type.Find();
+        return root.Kind switch
+        {
+            TypeKind.Record => FirstWord(root.Field(0)),
+            TypeKind.Array when root.Element is { } element && !root.Bytes && root.PerWord == 0 => FirstWord(element),
+            _ => type
+        };
+    }
+
     // A call of a procedure in the code file: VAR parameters share their arguments' types.
     private void Pass(Procedure callee, IReadOnlyList<Expr> arguments)
     {
@@ -981,7 +1005,15 @@ public sealed partial class PascalDecompiler
             Expr argument = arguments[index];
             if (parameter.Copy is { } copy)
             {
-                TypeNode.Unify(copy.Type, Designate(argument).Type);
+                // A string of any length passes to a value string, which its copy holds at its own length.
+                if (copy.Type.Find().Kind != TypeKind.String)
+                {
+                    TypeNode.Unify(copy.Type, Designate(argument).Type);
+                }
+                else if (argument is not (StringConstant or StringFunction or Constant))
+                {
+                    Designate(argument).Type.String(0);
+                }
             }
             else if (parameter.IsReference)
             {
@@ -998,6 +1030,12 @@ public sealed partial class PascalDecompiler
                 {
                     // Bytes may be a string's, which the statements after may show: they meet once all have.
                     _bytesPassed.Add((formal, actual));
+                }
+                else if (formal.Find().Kind is TypeKind.Unknown or TypeKind.Scalar
+                    && actual.Find().Kind is TypeKind.Unknown or TypeKind.Record or TypeKind.Array)
+                {
+                    // A record's address is its first field's: which a VAR scalar takes, the statements after show.
+                    _wordsPassed.Add((formal, actual));
                 }
                 else
                 {

@@ -518,6 +518,7 @@ public sealed partial class PascalDecompiler
             // A record and a thing of another kind at its address: the thing is its first field.
             if (a.Kind == TypeKind.Record && b.Kind is not (TypeKind.Record or TypeKind.Unknown))
             {
+                Lend(a, b);
                 a.Field(0);
                 Merge(a, 0, b);
                 return;
@@ -525,6 +526,7 @@ public sealed partial class PascalDecompiler
 
             if (b.Kind == TypeKind.Record && a.Kind is not (TypeKind.Record or TypeKind.Unknown))
             {
+                Lend(b, a);
                 b.Field(0);
                 Merge(b, 0, a);
                 return;
@@ -763,9 +765,21 @@ public sealed partial class PascalDecompiler
             // So are an array of bytes and one of words, or arrays whose elements cannot be one.
             if (a.Kind == TypeKind.Array && b.Kind == TypeKind.Array)
             {
-                if (a.Bytes != b.Bytes) { return true; }
-                bool elements = depth > 0 && a.Element is { } mine && b.Element is { } theirs && Differ(mine, theirs, depth - 1);
-                if (elements) { return true; }
+                if (a.Bytes != b.Bytes)
+                {
+                    return true;
+                }
+
+                // An element that is a record and one that is a scalar at its address are one: the scalar is its first
+                // field, as an array of records is reached at an element's own address for its first field.
+                TypeNode? mine = a.Element?.Find();
+                TypeNode? theirs = b.Element?.Find();
+                bool firstFields = mine is not null && theirs is not null && (FirstField(mine, theirs) || FirstField(theirs, mine));
+                bool one = firstFields && a.ElementWords == b.ElementWords;
+                if (depth > 0 && mine is not null && theirs is not null && !one && Differ(mine, theirs, depth - 1))
+                {
+                    return true;
+                }
             }
 
             if (depth == 0) { return false; }
@@ -802,6 +816,9 @@ public sealed partial class PascalDecompiler
                 return false;
             }
 
+            static bool FirstField(TypeNode record, TypeNode word) =>
+                record.Kind == TypeKind.Record && word.Kind is TypeKind.Scalar or TypeKind.Pointer;
+
             static bool Longer(TypeNode array, TypeNode word)
             {
                 bool bytes = array.Kind == TypeKind.Array && array.Bytes;
@@ -830,6 +847,15 @@ public sealed partial class PascalDecompiler
             bool strings = (a, b) is (TypeKind.Array, TypeKind.String) or (TypeKind.String, TypeKind.Array);
             bool bytes = (a == TypeKind.Array && one.Bytes && b == TypeKind.Scalar) || (b == TypeKind.Array && other.Bytes && a == TypeKind.Scalar);
             return !strings && !bytes;
+        }
+
+        // The words a scalar at a record's address was shown to have are the record's.
+        private static void Lend(TypeNode record, TypeNode first)
+        {
+            if (first.Kind is not (TypeKind.Scalar or TypeKind.Pointer) || first.Words <= 1) { return; }
+
+            record.Words = Math.Max(record.Words, first.Words);
+            first.Words = 0;
         }
 
         /// <summary>
@@ -870,7 +896,11 @@ public sealed partial class PascalDecompiler
             Element = null;
             ElementWords = PerWord = Bits = MaxLength = RecordWords = 0;
             Bytes = Punned = false;
-            Words = 0;
+
+            // The words a scalar was shown to have at its address are the record's, which starts with it.
+            bool scalar = first.Kind is TypeKind.Scalar or TypeKind.Pointer;
+            Words = scalar ? first.Words : 0;
+            if (scalar) { first.Words = 0; }
             Fields = new SortedDictionary<int, TypeNode> { [0] = first };
         }
 

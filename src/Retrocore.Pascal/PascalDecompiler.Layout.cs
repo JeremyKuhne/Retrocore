@@ -232,8 +232,18 @@ public sealed partial class PascalDecompiler
                 continue;
             }
 
-            int words = SizeOf(variable.Type) is { } size ? Math.Min(Math.Max(size, variable.BlockWords), gap) : gap;
+            // A word only loaded and stored whole, of a type the code shows nothing more of, such as one only compared
+            // as equal or not, is a word, the words after it padding.
+            bool word = variable.Type.Find().Kind == TypeKind.Unknown && variable.LoadedAsWord && !variable.AddressTaken && variable.BlockWords <= 1;
+            int words = SizeOf(variable.Type) is { } size ? Math.Min(Math.Max(size, variable.BlockWords), gap) : word ? 1 : gap;
             Fit(variable.Type, words);
+
+            // An array fitted to its room has whole elements, the words past them padding.
+            if (SizeOf(variable.Type) is int fitted && fitted < words && fitted >= variable.BlockWords)
+            {
+                words = fitted;
+            }
+
             variable.Words = words;
             variable.Name = $"{prefix}{offset}";
             declared.Add(variable);
@@ -280,13 +290,33 @@ public sealed partial class PascalDecompiler
             case TypeKind.String when root.MaxLength == 0:
                 root.MaxLength = Math.Max(1, (words * 2) - 2);
                 break;
-            case TypeKind.Array when root.IndexHigh is null:
+            case TypeKind.Array:
                 {
-                    int low = root.IndexLow ?? 0;
-                    int fits = root.Bytes ? words * 2 : root.PerWord > 0 ? words * root.PerWord : words / Math.Max(1, root.ElementWords);
-                    int count = root.Count ?? fits;
-                    root.IndexLow = low;
-                    root.IndexHigh = low + count - 1;
+                    if (root.IndexHigh is null)
+                    {
+                        int low = root.IndexLow ?? 0;
+                        int fits = root.Bytes ? words * 2 : root.PerWord > 0 ? words * root.PerWord : words / Math.Max(1, root.ElementWords);
+                        int count = root.Count ?? Math.Max(1, fits);
+                        root.IndexLow = low;
+                        root.IndexHigh = low + count - 1;
+                    }
+
+                    // Elements the code shows nothing of but their words, which IXA shows, as strings whose length it
+                    // does not show, have those words; a scalar element of more words starts a record of them.
+                    TypeNode? element = root.Element?.Find();
+                    if (element is not null && root.ElementWords > 1)
+                    {
+                        if (element.Kind == TypeKind.Unknown || (element.Kind == TypeKind.String && SizeOf(element) is null))
+                        {
+                            Fit(element, root.ElementWords);
+                        }
+                        else if (element.Kind is TypeKind.Scalar or TypeKind.Pointer)
+                        {
+                            element.Field(0);
+                            element.Find().Words = root.ElementWords;
+                        }
+                    }
+
                     break;
                 }
 

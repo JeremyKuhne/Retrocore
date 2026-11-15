@@ -994,6 +994,9 @@ public sealed partial class PascalDecompiler
                 TypeNode field = alternatives[index];
                 int size = Math.Max(1, SizeOf(field) ?? 1);
                 Fit(field, size);
+
+                // An array of more than a word an element has at least one.
+                size = Math.Max(size, SizeOf(field) ?? size);
                 int variant = Enumerable.Range(1, ends.Count - 1).FirstOrDefault(other => ends[other] <= offset);
                 if (variant == 0)
                 {
@@ -1139,6 +1142,27 @@ public sealed partial class PascalDecompiler
         for (int word = 0; word < words; word++)
         {
             List<KeyValuePair<(int Word, int Bit), (int Width, TypeNode Type)>> fields = [.. packed.Where(pair => pair.Key.Word == word)];
+
+            // A field of more than a word, such as a string, starts a word of its own and takes its words whole, up to the
+            // next field where the code shows nothing of its size.
+            int next = known.Keys.Concat(packed.Keys.Select(key => key.Word)).Where(key => key > word).DefaultIfEmpty(words).Min();
+            int size = 0;
+            TypeNode? large = null;
+            if (fields.Count == 0 && known.TryGetValue(word, out large) && large.Find().Kind is not (TypeKind.Unknown or TypeKind.Scalar or TypeKind.Pointer))
+            {
+                size = Math.Min(SizeOf(large) ?? (next - word), next - word);
+                Fit(large, size);
+            }
+
+            if (large is not null && size > 1)
+            {
+                string field = $"F{word}: {TypeName(large, parameter: false)}";
+                if (both) { wholes.Add(field); }
+                parts.Add(both ? $"X{word}V1: ARRAY[1..{size}] OF INTEGER" : field);
+                word += size - 1;
+                continue;
+            }
+
             if (both)
             {
                 wholes.Add(known.TryGetValue(word, out TypeNode? used) && SizeOf(used) is 1
@@ -1814,6 +1838,13 @@ public sealed partial class PascalDecompiler
             {
                 // A VAR parameter written as its pointer takes the pointer of a word used both ways.
                 parts.Add(Pointer(Designate(argument)));
+            }
+            else if (parameter.Copy is { } copy
+                && copy.Type.Find().Kind == TypeKind.String
+                && argument is Constant { Value: >= 0 and < 256 } character)
+            {
+                // A character passes to a value string as itself, which the string's copy takes as a string of one.
+                parts.Add(Character(character.Value));
             }
             else if (parameter.IsReference || parameter.Copy is not null)
             {

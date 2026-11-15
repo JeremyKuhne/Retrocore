@@ -39,9 +39,15 @@ public sealed partial class PascalDecompiler
         public int Level => Code.IsNative ? 1 : Code.LexicalLevel;
 
         /// <summary>
-        ///  Gets or sets whether an assembled procedure's parameters and result are known, from its first call.
+        ///  Gets or sets whether an assembled procedure's parameters and result are known, from its code and calls.
         /// </summary>
         public bool Signed { get; set; }
+
+        /// <summary>
+        ///  Gets or sets the bytes an assembled procedure's code takes off the stack before it returns, past those it
+        ///  puts back; null where its code does not show.
+        /// </summary>
+        public int? NativeBytes { get; set; }
 
         /// <summary>
         ///  Gets or sets the procedure it is declared in, or null for the program.

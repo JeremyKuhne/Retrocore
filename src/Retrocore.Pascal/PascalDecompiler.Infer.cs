@@ -200,6 +200,8 @@ public sealed partial class PascalDecompiler
             if (!changed) { break; }
         }
 
+        SignUnits();
+
         // What expressions show of their own types goes first, then what statements show of how they meet.
         foreach (Procedure procedure in _procedures) { Walk(procedure.Body, _ => { }, Constrain); }
         foreach (Procedure procedure in _procedures)
@@ -1011,6 +1013,9 @@ public sealed partial class PascalDecompiler
 
     private void PassUnit(PascalUnitProcedure declared, IReadOnlyList<Expr> arguments)
     {
+        // A procedure declared from its calls says nothing more of them.
+        if (_inferredProcedures.Contains(declared)) { return; }
+
         for (int index = 0; index < arguments.Count && index < declared.Parameters.Count; index++)
         {
             PascalUnitParameter parameter = declared.Parameters[index];

@@ -170,6 +170,12 @@ public sealed partial class PascalDecompiler
         public int RecordWords { get; set; }
 
         /// <summary>
+        ///  Gets or sets the words of a file's variable before its window, as its FINIT shows them: Apple Pascal's are
+        ///  300, Apple III Pascal's 550; 0 where no FINIT shows them.
+        /// </summary>
+        public int WindowWords { get; set; }
+
+        /// <summary>
         ///  Gets or sets a value indicating whether it is a word used both as a pointer and as an integer, as through a
         ///  variant record.
         /// </summary>

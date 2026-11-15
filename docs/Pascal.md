@@ -355,6 +355,16 @@ at word 630 (`SYS630`), the running code file's, as only a program compiled as p
 segment 15 is the Apple II boot code it writes onto the disks it formats, data no source makes. Each is a warning. A code file from another version's Compiler decompiles, but
 compiles the same only with that Compiler.
 
+An intrinsic unit the code file names but no library at hand declares, such as the system's own that Apple III
+Pascal 1.1's and 1.2's Compilers call in `SYSTEM.PASCAL`, whose code keeps no interface, is declared from its calls:
+`UNITn`, `INTRINSIC CODE n DATA n+1`, its procedures `UnPm` (functions `UnFm`, of an integer) from 2 to the last
+called, each `EXTERNAL`, with the parameters its calls pass: a string constant's a value string, an address's an
+untyped VAR, a set's a set of its words, and a word an integer; and the variables of its data segment the code reaches
+(`UnVm`), with padding between. It is written beside the program as `NAME.UNITn.text`, is compiled first for its
+interface, which the program's `USES (*$U UNITn.CODE*) UNITn` reads, and is not linked, as the system has its code.
+Each Apple III Pascal Compiler so rebuilds from its decompiled source to the same segments
+(`Apple3PascalCompilerRoundTripTests`).
+
 ## P-code source
 
 `--pascal disassemble code output.asm` writes a code file as source for the native assembler, and assembles it to

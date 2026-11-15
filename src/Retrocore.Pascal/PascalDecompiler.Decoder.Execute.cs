@@ -82,8 +82,15 @@ public sealed partial class PascalDecompiler
                 case 184: // STR
                     Store(Intermediate(operands[0], operands[1]), Pop(stack), statements);
                     break;
-                case 157 or 167 or 209: // LDE, LAE, STE
-                    throw new InvalidDataException($"{instruction} reaches a unit's variables, which are not decompiled.");
+                case 157: // LDE
+                    stack.Add(LoadWord(UnitVariable(instruction)));
+                    break;
+                case 167: // LAE
+                    stack.Add(AddressOf(UnitVariable(instruction)));
+                    break;
+                case 209: // STE
+                    Store(UnitVariable(instruction), Pop(stack), statements);
+                    break;
                 case 163: // IND
                     stack.Add(Indirect(Pop(stack), operands[0]));
                     break;

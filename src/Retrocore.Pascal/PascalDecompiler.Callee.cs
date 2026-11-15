@@ -19,12 +19,12 @@ public sealed partial class PascalDecompiler
         /// <summary>
         ///  Gets the unit a unit's procedure is in.
         /// </summary>
-        public PascalUnit? Unit { get; init; }
+        public PascalUnit? Unit { get; set; }
 
         /// <summary>
         ///  Gets a unit's procedure, as its interface declares it.
         /// </summary>
-        public PascalUnitProcedure? UnitProcedure { get; init; }
+        public PascalUnitProcedure? UnitProcedure { get; set; }
 
         /// <summary>
         ///  Gets a built-in procedure or function, such as WRITE or LENGTH.

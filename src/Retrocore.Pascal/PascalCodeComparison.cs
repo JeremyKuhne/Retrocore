@@ -58,7 +58,7 @@ public static class PascalCodeComparison
 
         if (expected.IntrinsicUnits != actual.IntrinsicUnits)
         {
-            differences.Add($"The intrinsic units are ${expected.IntrinsicUnits:X8}, not ${actual.IntrinsicUnits:X8}.");
+            differences.Add($"The intrinsic units are ${expected.IntrinsicUnits:X16}, not ${actual.IntrinsicUnits:X16}.");
         }
 
         return differences;

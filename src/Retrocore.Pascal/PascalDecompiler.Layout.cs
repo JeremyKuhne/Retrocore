@@ -12,10 +12,10 @@ public sealed partial class PascalDecompiler
     // The system globals a (*$U-*) program passes as files, each a pointer to its file.
     private readonly HashSet<Variable> _systemFiles = [];
 
-    // The built-in procedures and functions whose first argument is a file.
+    // The built-in procedures and functions whose first argument is a file; and FOPEN, the system's procedure 5.
     private static readonly HashSet<string> s_fileFirst =
     [
-        "BLOCKREAD", "BLOCKWRITE", "EOF", "EOLN", "RESET", "REWRITE", "CLOSE", "GET", "PUT", "SEEK"
+        "BLOCKREAD", "BLOCKWRITE", "EOF", "EOLN", "RESET", "REWRITE", "CLOSE", "GET", "PUT", "SEEK", "SYSTEM5"
     ];
 
     // Lays out each frame: its parameters, and the variables to declare in offset order, with padding where the code
@@ -160,7 +160,8 @@ public sealed partial class PascalDecompiler
     }
 
     // A system global the code passes as a file, or an element of one that is an array of them, as Apple Pascal 1.0's
-    // Compiler indexes the system's files from word 1.
+    // Compiler indexes the system's files from word 1; or a word of the program's own it passes so, which holds a copy
+    // of one, as Apple III Pascal 1.2's Compiler keeps its code file's.
     private static void SystemFile(Expr argument, HashSet<Variable> files, HashSet<TypeNode> arrays)
     {
         if (argument is Load { Designator: VariableDesignator { Variable: { Kind: VariableKind.System } system } }
@@ -174,6 +175,12 @@ public sealed partial class PascalDecompiler
         })
         {
             arrays.Add(array.Type);
+        }
+        else if (argument is Load { Designator: VariableDesignator { Variable: { IsReference: false } word } }
+            && word.Kind is VariableKind.Variable
+            && word.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar)
+        {
+            files.Add(word);
         }
     }
 
@@ -291,6 +298,9 @@ public sealed partial class PascalDecompiler
         }
     }
 
+    // A file's words before its window.
+    private static int Before(TypeNode file) => file.WindowWords > 0 ? file.WindowWords : 300;
+
     // A type's words, or null where the code does not show them.
     private static int? SizeOf(TypeNode type)
     {
@@ -305,10 +315,14 @@ public sealed partial class PascalDecompiler
                 return root.MaxLength == 0 ? null : (root.MaxLength + 2) / 2;
             case TypeKind.Set:
                 return root.Words == 0 ? null : root.Words;
+            // A file is its words before its window and its window; an untyped file has none, and Apple Pascal's
+            // has only the first 40 words, where Apple III Pascal's has them all.
             case TypeKind.Text:
-                return 301;
+                return Before(root) + 1;
+            case TypeKind.File when root.RecordWords > 0:
+                return Before(root) + root.RecordWords;
             case TypeKind.File:
-                return root.RecordWords > 0 ? 300 + root.RecordWords : 40;
+                return root.WindowWords is > 0 and not 300 ? root.WindowWords : 40;
             case TypeKind.Record:
                 {
                     int words = root.Words;

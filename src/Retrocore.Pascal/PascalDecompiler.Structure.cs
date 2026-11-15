@@ -15,6 +15,23 @@ public sealed partial class PascalDecompiler
         if (expression is Load { Designator: VariableDesignator { Variable: var loaded } }) { read.Add(loaded); }
     }
 
+    // The pointers a designator reaches a record through.
+    private static void Reached(Designator designator, HashSet<Variable> reached)
+    {
+        switch (designator)
+        {
+            case Dereference { Pointer: Load { Designator: VariableDesignator { Variable: var pointer } } }:
+                reached.Add(pointer);
+                break;
+            case FieldDesignator field: Reached(field.Record, reached); break;
+            case PackedFieldDesignator field: Reached(field.Record, reached); break;
+            case IndexDesignator index: Reached(index.Array, reached); break;
+            case StringIndexDesignator index: Reached(index.Text, reached); break;
+            case LengthDesignator length: Reached(length.Text, reached); break;
+            default: break;
+        }
+    }
+
     private static bool MayPoint(Expr value) => value is Address
         || (value is Load or Call && value.Words == 1 && value is not Call { Callee.Procedure.Code.IsNative: true });
 
@@ -246,6 +263,29 @@ public sealed partial class PascalDecompiler
                 candidates[unread] = false;
             }
 
+            // A WITH's pointer reaches its record somewhere; a word only passed on, as a function's result kept to
+            // pass by value, is a variable.
+            HashSet<Variable> reached = [];
+            Walk(procedure.Body, statement =>
+            {
+                if (statement is Assignment { Target: var target }) { Reached(target, reached); }
+            }, expression =>
+            {
+                switch (expression)
+                {
+                    case Load load: Reached(load.Designator, reached); break;
+                    case Address address: Reached(address.Designator, reached); break;
+                    case ByteAddress address: Reached(address.Designator, reached); break;
+                    case PackedAddress address: Reached(address.Designator, reached); break;
+                    default: break;
+                }
+            });
+
+            foreach (Variable unreached in candidates.Keys.Where(candidate => !reached.Contains(candidate)).ToList())
+            {
+                candidates[unreached] = false;
+            }
+
             // Temporaries come after every declared variable.
             List<Variable> temporaries = [.. candidates.Where(pair => pair.Value).Select(pair => pair.Key).OrderByDescending(variable => variable.Offset)];
             HashSet<Variable> accepted = [];
@@ -356,7 +396,9 @@ public sealed partial class PascalDecompiler
                 continue;
             }
 
+            // A WITH of a field of its record, inside it, ends it no sooner than its own body does.
             int last = index;
+            HashSet<Variable> reached = [temporary];
             for (int next = index + 1; next < statements.Count; next++)
             {
                 if (statements[next] is Assignment { Target: VariableDesignator { Variable: var again } }
@@ -365,7 +407,14 @@ public sealed partial class PascalDecompiler
                     break;
                 }
 
-                if (Uses(statements[next], temporary)) { last = next; }
+                if (!reached.Any(variable => Uses(statements[next], variable))) { continue; }
+
+                last = next;
+                if (statements[next] is Assignment { Target: VariableDesignator { Variable: var inner } }
+                    && temporaries.Contains(inner))
+                {
+                    reached.Add(inner);
+                }
             }
 
             Designator record = assignment.Value is Address address ? address.Designator : new Dereference(assignment.Value);

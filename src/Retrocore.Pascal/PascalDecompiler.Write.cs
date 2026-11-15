@@ -28,6 +28,11 @@ public sealed partial class PascalDecompiler
     // The units of the program's own, written by Write after the program.
     private List<PascalDecompiledUnit> _unitSources = [];
 
+    // A unit's name in USES: an inferred unit's with the code file its interface is read from.
+    private string UsesName(int segment) => _inferredUnits.TryGetValue(segment, out PascalUnit? inferred)
+        ? $"(*$U {inferred.Name}.CODE*) {inferred.Name}"
+        : _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}";
+
     private string Write()
     {
         NamedFields();
@@ -52,7 +57,7 @@ public sealed partial class PascalDecompiler
 
         // The library's units, whose segments are their own; then the program's, by their code files, whose order in
         // USES numbers their segments from 7. The Compiler initializes a library's units in the reverse of their order.
-        List<string> uses = [.. Enumerable.Reverse(_unitOrder).Select(segment => _library?.Unit(segment)?.UsesName ?? $"UNIT{segment}")];
+        List<string> uses = [.. Enumerable.Reverse(_unitOrder).Select(UsesName)];
         uses.AddRange(UnitSegments().Select(segment => $"(*$U {segment.Name.Trim()}.CODE*) {segment.Name.Trim()}"));
         if (_unitSegments.Count > 0)
         {
@@ -102,7 +107,7 @@ public sealed partial class PascalDecompiler
         }
 
         string program = _source.ToString();
-        _unitSources = WriteUnits();
+        _unitSources = [.. WriteUnits(), .. WriteInferredUnits()];
         return program;
     }
 
@@ -353,8 +358,9 @@ public sealed partial class PascalDecompiler
         Declarations(procedure);
         Nested(procedure);
         _indent--;
-        IEnumerable<string> resident = procedure.Resident.Select(number => ResidentName(procedure, number));
-        Line(procedure.Resident.Count == 0 ? "BEGIN" : $"BEGIN (*$R {string.Join(",", resident)}*)");
+        // Each segment in an R option of its own: Apple III Pascal 1.0's Compiler takes only the first of a list.
+        IEnumerable<string> resident = procedure.Resident.Select(number => $"(*$R {ResidentName(procedure, number)}*)");
+        Line(procedure.Resident.Count == 0 ? "BEGIN" : $"BEGIN {string.Concat(resident)}");
         Statements(procedure, procedure.Body);
         Line("END;");
     }
@@ -362,6 +368,9 @@ public sealed partial class PascalDecompiler
     // The system's procedures the code calls that no standard procedure names, by their numbers, with the
     // arguments of a call to each.
     private readonly SortedDictionary<int, List<Argument>> _systemProcedures = [];
+
+    // The system's procedures the code calls that are functions.
+    private readonly HashSet<int> _systemFunctions = [];
 
     private static string SystemProcedure(int number) => $"SYSTEM{number}";
 
@@ -378,19 +387,41 @@ public sealed partial class PascalDecompiler
             string list = "";
             if (_systemProcedures.TryGetValue(number, out List<Argument>? arguments) && arguments.Count > 0)
             {
-                list = $"({string.Join("; ", arguments.Select(SystemParameter))})";
+                // NIL is passed to a pointer, the type of another pointer the call passes.
+                Expr? pointer = arguments.Select(argument => argument.Value).FirstOrDefault(IsPointerValue);
+                list = $"({string.Join("; ", arguments.Select((argument, index) => SystemParameter(argument, index, pointer?.Type)))})";
             }
 
-            string heading = $"PROCEDURE {SystemProcedure(number)}{list}; FORWARD;";
+            string kind = _systemFunctions.Contains(number) ? "FUNCTION" : "PROCEDURE";
+            string result = _systemFunctions.Contains(number) ? ": INTEGER" : "";
+            string heading = $"{kind} {SystemProcedure(number)}{list}{result}; FORWARD;";
             Line(Comment(_options.Comments, $"SYSTEM.{number}") is { } about ? $"{heading}  {CommentText(about)}" : heading);
         }
     }
 
-    private string SystemParameter(Argument argument, int index) => argument.Value switch
+    private static bool IsPointerValue(Expr value) => value is not (Address or Nil) && value.Type.Find().Kind == TypeKind.Pointer;
+
+    private string SystemParameter(Argument argument, int index, TypeNode? pointer)
     {
-        Address { Designator: var designator } => $"VAR A{index + 1}: {TypeName(designator.Type, parameter: true)}",
-        var value => $"A{index + 1}: {Simple(value.Type.Find()) ?? "INTEGER"}"
-    };
+        string name = $"A{index + 1}";
+        Expr value = argument.Value;
+        if (value is Address { Designator: var designator })
+        {
+            return $"VAR {name}: {TypeName(designator.Type, parameter: true)}";
+        }
+
+        // A system global that holds a file's address is passed as its file.
+        if (value is Load { Designator: VariableDesignator { Variable: var file } }
+            && _systemFiles.Contains(file)
+            && file.Type.Find().Element is { } opened)
+        {
+            return $"VAR {name}: {TypeName(opened, parameter: true)}";
+        }
+
+        if (value is Nil && pointer is not null) { return $"{name}: {TypeName(pointer, parameter: true)}"; }
+        if (IsPointerValue(value)) { return $"{name}: {TypeName(value.Type, parameter: true)}"; }
+        return $"{name}: {Simple(value.Type.Find()) ?? "INTEGER"}";
+    }
 
     // The string a designator of a length is of: its byte 0.
     private static Designator? LengthOf(Designator designator) => designator switch
@@ -684,6 +715,10 @@ public sealed partial class PascalDecompiler
         foreach (Argument argument in _systemProcedures.Values.SelectMany(arguments => arguments))
         {
             if (argument.Value is Address { Designator: var designator }) { Visit(designator.Type, parameter: true); }
+            if (IsPointerValue(argument.Value))
+            {
+                Visit(argument.Value.Type, parameter: true);
+            }
         }
 
         foreach (TypeNode type in _types) { Overlapped(type); }
@@ -1598,6 +1633,14 @@ public sealed partial class PascalDecompiler
                 for (int arm = 0; arm < choice.Arms.Count; arm++)
                 {
                     (List<int> labels, List<Statement> body) = choice.Arms[arm];
+                    if (labels.Count == 0)
+                    {
+                        // Apple III Pascal's OTHERWISE, the last.
+                        lines.Add(Indented("OTHERWISE"));
+                        Block(procedure, body, lines, forceCompound: false);
+                        continue;
+                    }
+
                     lines.Add(Indented($"{string.Join(", ", labels.Select(label => Value(label, labelType)))}:"));
                     Block(procedure, body, lines, forceCompound: false);
                     if (arm + 1 < choice.Arms.Count) { Separate(lines, 0); }
@@ -1806,9 +1849,16 @@ public sealed partial class PascalDecompiler
         {
             PascalUnitParameter? parameter = index < declared.Parameters.Count ? declared.Parameters[index] : null;
             Expr argument = arguments[index];
-            if (parameter is { IsReference: true })
+            bool stringAddress = parameter is { Type: "STRING" } && argument is Address or ByteAddress;
+            bool byAddress = parameter is { IsReference: true } || stringAddress;
+            if (byAddress)
             {
+                // A value string's variable is passed by its address, as a VAR's is.
                 parts.Add(DesignatorText(Designate(argument)));
+            }
+            else if (argument is SetValue)
+            {
+                parts.Add(Expression(argument, expected: null, 0));
             }
             else
             {

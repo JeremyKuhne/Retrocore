@@ -123,7 +123,7 @@ public sealed partial class PascalDecompiler
         if (s_predeclared.Contains(name)) { return name; }
         if (DecompilerName().IsMatch(name)) { return "the decompiler's names for types and constants"; }
 
-        foreach (PascalUnit unit in _unitOrder.Select(segment => _library?.Unit(segment)).OfType<PascalUnit>())
+        foreach (PascalUnit unit in _unitOrder.Select(UnitOf).OfType<PascalUnit>())
         {
             IEnumerable<string> names = unit.Procedures.Select(procedure => procedure.Name)
                 .Concat(unit.Enumerations.Keys)

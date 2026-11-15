@@ -699,13 +699,14 @@ public class PascalSystemDecompilerTests
 
     /// <summary>
     ///  A procedure that loads segments as it starts and releases them as it ends has the R option, naming those it
-    ///  sees and numbering the others, as a segment procedure nested in another.
+    ///  sees and numbering the others, as a segment procedure nested in another: each in an option of its own, as
+    ///  Apple III Pascal 1.0's Compiler takes only the first segment of a list.
     /// </summary>
     [TestMethod]
     public void ResidentSegmentsDecompileToTheROption()
     {
         string source = RoundTrip(ResidentSource);
-        source.Should().Contain("BEGIN (*$R SEGA,SEGB,9*)");
+        source.Should().Contain("BEGIN (*$R SEGA*)(*$R SEGB*)(*$R 9*)");
     }
 
     // MOVELEFT from a WITH's record's first field, at the record's address.
@@ -904,6 +905,155 @@ public class PascalSystemDecompilerTests
     {
         string source = RoundTrip(PlainSource);
         source.Should().Contain("ORD(A1)");
+    }
+
+    // A WITH of a field of the record of the WITH it is in, as the last statement that names the outer one's record.
+    private const string FieldWithSource = """
+        PROGRAM NW;
+        TYPE P = ^R; R = RECORD N: PACKED ARRAY[1..8] OF CHAR; L: P; K: INTEGER END;
+        VAR G: P;
+        BEGIN
+          NEW(G);
+          WITH G^ DO
+          BEGIN
+            N := 'APPLE   '; NEW(L);
+            WITH L^ DO
+            BEGIN
+              N := 'FALSE   '; NEW(L);
+              WITH L^ DO BEGIN N := 'TRUE    '; K := 1; L := NIL END
+            END
+          END
+        END.
+        """;
+
+    /// <summary>
+    ///  A WITH whose record is a field of the record of the WITH it is in keeps its statements in its body, though they
+    ///  come after the outer WITH's last use of its own temporary.
+    /// </summary>
+    [TestMethod]
+    public void WithsOfFieldsNestInTheirRecordsWith()
+    {
+        string source = RoundTrip(FieldWithSource);
+        source.Should().Contain(":= 'TRUE    ';");
+    }
+
+    // A record's first field, an array of bytes, indexed at the record's own address.
+    private const string FirstArraySource = """
+        PROGRAM FA;
+        TYPE P = ^R; R = RECORD N: PACKED ARRAY[1..8] OF CHAR; L: P; K: INTEGER END;
+        VAR G: P; I, S: INTEGER; C: PACKED ARRAY[1..8] OF CHAR;
+        BEGIN
+          NEW(G);
+          WITH G^ DO BEGIN N := C; K := 2; FOR I := 1 TO 8 DO S := S + ORD(N[I]) END
+        END.
+        """;
+
+    /// <summary>
+    ///  An index of a record's address, where its first field is an array, indexes that field.
+    /// </summary>
+    [TestMethod]
+    public void IndexesOfARecordIndexItsFirstField()
+    {
+        string source = RoundTrip(FirstArraySource);
+        source.Should().Contain("ORD(F0[G5])");
+    }
+
+    // A function's result kept in a variable and passed by value, which never reaches a record.
+    private const string KeptResultSource = """
+        PROGRAM WF;
+        VAR G: INTEGER;
+        FUNCTION F: INTEGER; BEGIN F := G END;
+        PROCEDURE Q(A, B: INTEGER; C: BOOLEAN); BEGIN IF C THEN G := A + B END;
+        PROCEDURE R;
+        VAR X: INTEGER;
+        BEGIN X := F; Q(G, X, TRUE) END;
+        BEGIN R END.
+        """;
+
+    /// <summary>
+    ///  A word assigned a word and passed on, but never used to reach a record, is a variable, not a WITH's temporary.
+    /// </summary>
+    [TestMethod]
+    public void WordsThatReachNoRecordAreNotWithTemporaries()
+    {
+        string source = RoundTrip(KeptResultSource);
+        source.Should().NotContain("WITH");
+    }
+
+    // A program compiled as part of the system that keeps a copy of a system global's file pointer, and reads its file.
+    private const string FileCopySource = """
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        TYPE UF = FILE; FP = ^UF;
+        VAR SYSCOM: INTEGER; IN1, OUT1, TERM1, SWAP: INTEGER; G6, G7: INTEGER; CODEF: FP;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
+        VAR B: PACKED ARRAY[0..511] OF CHAR; N: INTEGER; W: FP;
+        BEGIN
+          MOVELEFT(CODEF, W, 2);
+          N := BLOCKREAD(W^, B, 1, 0)
+        END;
+        BEGIN END.
+        """;
+
+    /// <summary>
+    ///  A word of the program's own that it passes as a file is a pointer to a file, as the system's globals are.
+    /// </summary>
+    [TestMethod]
+    public void WordsPassedAsFilesPointToFiles()
+    {
+        string source = RoundTrip(FileCopySource);
+        source.Should().Contain("BLOCKREAD(G260^, ");
+    }
+
+    // Sets built of members the Compiler pushes one by one, constants among them that it did not fold.
+    private const string SetMembersSource = """
+        PROGRAM SG;
+        VAR S: SET OF CHAR; C: CHAR; T: SET OF 0..255; I: INTEGER;
+        BEGIN
+          S := [CHR(13), C, ' '];
+          T := [13, I, 32];
+          T := [ORD(13), I, 32];
+          S := [C, CHR(13)]
+        END.
+        """;
+
+    /// <summary>
+    ///  A constant the code pushes as a set's member, as for CHR(13), is written so that the Compiler does not fold it
+    ///  into the set's constant.
+    /// </summary>
+    [TestMethod]
+    public void PushedConstantMembersStayOutOfTheConstant()
+    {
+        string source = RoundTrip(SetMembersSource);
+        source.Should().Contain("[ORD(13), ");
+    }
+
+    // A program compiled as part of the system that calls FOPEN, the system's procedure 5, itself, with NIL for its
+    // last argument, where RESET and REWRITE pass 0, as Apple III Pascal 1.2's Compiler does.
+    private const string OpenSource = """
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        TYPE UF = FILE; FP = ^UF;
+        VAR SYSCOM: INTEGER; IN1, OUT1, TERM1, SWAP: INTEGER; G6, G7: INTEGER; CODEF: FP;
+        PROCEDURE P2; FORWARD;
+        PROCEDURE P3; FORWARD;
+        PROCEDURE P4; FORWARD;
+        PROCEDURE OPEN(VAR F: UF; VAR S: STRING; OLD: INTEGER; J: FP); FORWARD;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
+        VAR S: STRING;
+        BEGIN S := 'X'; OPEN(CODEF^, S, 1, NIL) END;
+        BEGIN END.
+        """;
+
+    /// <summary>
+    ///  FOPEN with other than 0 for its last argument is called as the system's procedure 5, its file by the system
+    ///  global that points to it, and NIL as that pointer's type.
+    /// </summary>
+    [TestMethod]
+    public void OpensWithNilCallTheSystemsProcedure()
+    {
+        string source = RoundTrip(OpenSource);
+        source.Should().Contain("SYSTEM5(SYS8^, G3, 1, NIL)");
     }
 
     /// <summary>

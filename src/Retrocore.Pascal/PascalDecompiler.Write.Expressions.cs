@@ -434,11 +434,20 @@ public sealed partial class PascalDecompiler
 
         foreach ((Expr low, Expr? high) in set.Members)
         {
+            // A range with a variable bound is the Compiler's to push whatever its other bound.
             yield return high is null
-                ? Expression(low, element, 0)
-                : $"{Expression(low, element, 0)}..{Expression(high, element, 0)}";
+                ? Member(low, element)
+                : low is Constant && high is Constant
+                    ? $"{Member(low, element)}..{Member(high, element)}"
+                    : $"{Expression(low, element, 0)}..{Expression(high, element, 0)}";
         }
     }
+
+    // A member the code pushes, rather than one of a constant set: a constant is one the Compiler did not fold into the
+    // set's constant, as it does not CHR(13) or ORD(13), which keep it out.
+    private string Member(Expr member, TypeNode? element) => member is Constant constant
+        ? Kind(element) == ScalarKind.Char ? $"CHR({constant.Value})" : $"ORD({constant.Value})"
+        : Expression(member, element, 0);
 
     // A constant set's members from its words, the highest word first, as runs.
     private string SetText(ushort[] words, TypeNode? element)
@@ -514,6 +523,9 @@ public sealed partial class PascalDecompiler
                 Expression(call.Arguments[1], expected: null, 0),
                 Scanned(call.Arguments[2])
             ],
+            // A system function's VAR parameters take their variables.
+            _ when name.StartsWith("SYSTEM", StringComparison.Ordinal) =>
+                [.. call.Arguments.Select(argument => argument is Address address ? Untyped(address.Designator) : Expression(argument, expected: null, 0))],
             _ => [.. call.Arguments.Select(argument => Expression(argument, expected: null, 0))]
         };
 

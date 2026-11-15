@@ -148,7 +148,20 @@ What the decompiler does not decompile yet, found by decompiling every code file
   of pointers to files; booleans compared by EQUI are ORD of them; a record's bytes indexed, and SCAN's array inside
   a WITH, are its first field's; a value parameter's copy found again when a procedure is decoded again for its
   WITHs; the byte before a procedure's attributes, 1.0's buffer's, not compared; and, in the tools, 1.0's APPLE1
-  workfile deleted so that C(ompile) asks for the source. **Next:** Apple Pascal 1.2 and Apple III Compilers.
+  workfile deleted so that C(ompile) asks for the source. **Done (2026-11-15): Apple III Pascal 1.0's, 1.1's and
+  1.2's Compilers** (`Apple3PascalCompilerRoundTripTests`, about three minutes each): decompiled, compiled with
+  themselves, `(*$S++*)`, on the emulated Apple III, they have the same segments. What it took: 1.1's and 1.2's
+  call intrinsic units of the system's in SYSTEM.PASCAL (EXTFILEM, 62, and 1.2's DIRSTUFF, 60), whose code keeps
+  no interface, so the decompiler declares each from its calls as an intrinsic unit with EXTERNAL procedures and
+  untyped VAR parameters, its interface's variables where the code reaches its data segment, compiled for its
+  interface before the program; a WITH of a field of the outer WITH's record nested in it; an index of a record's
+  address its first field's; files' words from their FINIT, Apple III Pascal's 550; a word that never reaches a
+  record no WITH's temporary; one R option a segment, as 1.0 takes only the first of a list; a system function
+  (1.2's SYSTEM31); FOPEN with NIL as the system's procedure 5; a word passed as a file a pointer to one; constant
+  set members the code pushes as ORD or CHR of them, which the Compiler does not fold; CASE with OTHERWISE; and, in
+  the tools, a source too long for /WORK split past halfway with the rest on /OUT, no Filer prefix without units
+  (1.0's Filer is damaged), 1.2's listing prompt after its banner, and the 64 bits of intrinsic units Apple III
+  code files keep. **Next:** Apple Pascal 1.2's Compiler.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that
@@ -168,8 +181,8 @@ What the decompiler does not decompile yet, found by decompiling every code file
   FORWARD first (2026-11-14); the 1.1 Compiler's nested segment procedures (ROUTINE and STATEMEN inside BODYPART)
   decompile but are not yet recompiled. Its `GSEG`/`RSEG` prologues (PASCALCO.28 and .29) are not decompiled: a
   procedure that jumps to `GSEG`s and back, then `RSEG`s at its exit.
-- **Other Compilers:** recompiling with Apple Pascal 1.0's and 1.2's Compilers, and Apple III Pascal's on the emulated
-  Apple III, so code files they wrote can be checked as 1.1's are.
+- **Other Compilers:** recompiling with Apple Pascal 1.2's Compiler, so code files it wrote can be checked as 1.1's
+  are (Apple Pascal 1.0, 1.1 and 1.3's and Apple III Pascal's are done).
 - ~~**Names from a listing:**~~ done, with hints too: `--pascal decompile --listing --hints`
   ([Pascal.md](../Pascal.md#decompiling)).
 - ~~**Linking:**~~ done with Apple's own Assembler and Linker on the emulated Apple II (`--pascal assemble-native`,

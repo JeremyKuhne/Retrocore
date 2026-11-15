@@ -107,6 +107,12 @@ public sealed partial class PascalDecompiler
             }
 
             _owner.UseUnit(segment);
+            if (_owner._library?.Unit(segment) is null && _owner.IsIntrinsic(segment))
+            {
+                InferredUnitCall(segment, number, stack, statements);
+                return;
+            }
+
             PascalUnit unit = _owner._library?.Unit(segment)
                 ?? throw new InvalidDataException($"CXP {segment}, {number} calls a unit the library does not have.");
 
@@ -161,13 +167,22 @@ public sealed partial class PascalDecompiler
                         Expr window = Pop(stack);
                         Designator file = Designate(Pop(stack));
                         FileVariable(file, size);
+                        if (file is VariableDesignator { Variable: var located }
+                            && window is Address { Designator: VariableDesignator { Variable: var at } }
+                            && at.Frame == located.Frame
+                            && at.Offset > located.Offset)
+                        {
+                            located.Type.Find().WindowWords = at.Offset - located.Offset;
+                        }
 
                         if (file is VariableDesignator { Variable: var opened }) { opened.Opened = ++_opened; }
 
                         // The window is the file variable's last words; an untyped file's 40 words have none, and its
-                        // window's address is past them.
+                        // window's address is past them, which may be the next file's, as Apple III Pascal's
+                        // Compiler's untyped files are followed by its listing's text file.
                         if (file is VariableDesignator { Variable: var variable }
-                            && window is Address { Designator: VariableDesignator { Variable: var buffer } })
+                            && window is Address { Designator: VariableDesignator { Variable: var buffer } }
+                            && buffer.Opened == 0)
                         {
                             buffer.Container = variable;
                             buffer.FieldOffset = buffer.Offset - variable.Offset;
@@ -192,6 +207,17 @@ public sealed partial class PascalDecompiler
                     break;
                 case 5: // FOPEN(file, name, old, junk)
                     {
+                        // RESET and REWRITE pass 0; a program compiled as part of the system that passes other, as
+                        // Apple III Pascal 1.2's Compiler passes NIL, calls FOPEN as the system's procedure 5.
+                        if (_owner._systemProgram && stack.Count == 4 && !IsZero(stack[^1]))
+                        {
+                            List<Argument> opened = [.. stack.Select(value => new Argument(value))];
+                            stack.Clear();
+                            _owner._systemProcedures.TryAdd(number, opened);
+                            Statement(statements, SystemProcedure(number), [.. opened]);
+                            break;
+                        }
+
                         Pop(stack);
                         Expr old = Pop(stack);
                         Expr name = StringValue(Pop(stack));
@@ -401,11 +427,28 @@ public sealed partial class PascalDecompiler
                         }
 
                         // In a program compiled as part of the system, one no standard procedure names is called by a
-                        // heading the system's block declares; its arguments are what the stack holds.
+                        // heading the system's block declares; its arguments are what the stack holds, and two zero
+                        // words on top are a function's room for its result, as Apple III Pascal 1.2's system has.
+                        bool function = stack.Count >= 2 && IsZero(stack[^1]) && IsZero(stack[^2]);
+                        if (function)
+                        {
+                            Pop(stack);
+                            Pop(stack);
+                            _owner._systemFunctions.Add(number);
+                        }
+
                         List<Argument> arguments = [.. stack.Select(value => new Argument(value))];
                         stack.Clear();
                         _owner._systemProcedures.TryAdd(number, arguments);
-                        Statement(statements, SystemProcedure(number), [.. arguments]);
+                        if (function)
+                        {
+                            stack.Add(Builtin(SystemProcedure(number), ScalarKind.Integer, [.. arguments.Select(argument => argument.Value)]));
+                        }
+                        else
+                        {
+                            Statement(statements, SystemProcedure(number), [.. arguments]);
+                        }
+
                         break;
                     }
             }

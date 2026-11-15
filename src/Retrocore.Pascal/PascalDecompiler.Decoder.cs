@@ -189,6 +189,8 @@ public sealed partial class PascalDecompiler
                 return start;
             }
 
+            // A procedure decoded again, for its WITH statements, finds them again.
+            _procedure.Resident.Clear();
             _procedure.Resident.AddRange(segments);
             if (_backward.TryGetValue(start + 1, out List<int>? sources)) { sources.Remove(at); }
             return start + 1;
@@ -438,6 +440,11 @@ public sealed partial class PascalDecompiler
                 throw new InvalidDataException($"The CASE at ${ujp.Offset:X4} has code before its first arm.");
             }
 
+            // Apple III Pascal's OTHERWISE: its statement follows the table, where the XJP goes for other values, and
+            // the arms jump past it.
+            int? past = Past(at, table, starts, otherwise);
+            if (past is { } after) { end = after; }
+
             List<(List<int> Labels, List<Statement> Body)> bodies = [];
             for (int arm = 0; arm < starts.Count; arm++)
             {
@@ -455,8 +462,34 @@ public sealed partial class PascalDecompiler
                 bodies.Add((arms[_code[first].Offset], Block(first, last, [])));
             }
 
+            // OTHERWISE is an arm without labels.
+            if (past is not null) { bodies.Add(([], Block(table + 1, end, []))); }
+
             statements.Add(new CaseStatement(selector, bodies) { Offset = ujp.Offset });
             return end;
+        }
+
+        // Where a CASE with OTHERWISE ends: past the statement after its table, where every arm that ends with a jump
+        // jumps; null for a CASE without one, whose arms jump to just after the table.
+        private int? Past(int at, int table, List<int> starts, int otherwise)
+        {
+            if (otherwise < 0 || Index(otherwise) != table + 1 || starts.Count == 0) { return null; }
+
+            int? past = null;
+            for (int arm = 0; arm < starts.Count; arm++)
+            {
+                int next = arm + 1 < starts.Count ? starts[arm + 1] : table;
+                if (next - 1 <= at || _code[next - 1] is not { Opcode.Code: Pcode.Ujp } exit || exit.Targets[0] < 0)
+                {
+                    continue;
+                }
+
+                int target = Index(exit.Targets[0]);
+                if (target <= table + 1 || (past is { } other && other != target)) { return null; }
+                past = target;
+            }
+
+            return past;
         }
 
         // Value parameters that are strings, records or arrays are copied into the procedure's own variables first. A

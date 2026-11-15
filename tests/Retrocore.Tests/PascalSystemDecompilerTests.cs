@@ -256,6 +256,35 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A procedure that keeps segments in memory while it runs, one by its number, with an EXIT out of it.
+    private const string ResidentSource = """
+        PROGRAM RS;
+        VAR G: INTEGER;
+        SEGMENT PROCEDURE SEGA;
+        BEGIN G := 1 END;
+        SEGMENT PROCEDURE SEGB;
+          SEGMENT PROCEDURE SEGC;
+          BEGIN G := 4 END;
+        BEGIN G := 2; SEGC END;
+        PROCEDURE P;
+        BEGIN (*$R SEGA,SEGB,9*)
+          IF G = 3 THEN EXIT(P);
+          SEGA; SEGB
+        END;
+        BEGIN P END.
+        """;
+
+    /// <summary>
+    ///  A procedure that loads segments as it starts and releases them as it ends has the R option, naming those it
+    ///  sees and numbering the others, as a segment procedure nested in another.
+    /// </summary>
+    [TestMethod]
+    public void ResidentSegmentsDecompileToTheROption()
+    {
+        string source = RoundTrip(ResidentSource);
+        source.Should().Contain("BEGIN (*$R SEGA,SEGB,9*)");
+    }
+
     // MOVELEFT from a WITH's record's first field, at the record's address.
     private const string WithMoveSource = """
         PROGRAM WM;

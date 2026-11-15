@@ -99,6 +99,12 @@ public sealed partial class PascalDecompiler
         public SortedDictionary<int, int> Labels { get; } = [];
 
         /// <summary>
+        ///  Gets the numbers of the segments the procedure keeps in memory while it runs, which its (*$R*) option names:
+        ///  it loads them as it starts (GSEG) and releases them as it ends (RSEG).
+        /// </summary>
+        public List<int> Resident { get; } = [];
+
+        /// <summary>
         ///  Gets the WITH temporaries the Compiler kept in one word for several WITH statements, by word offset: a
         ///  variable for each store to the word, by the store's offset in the code, so that each WITH's has a type of
         ///  its own.

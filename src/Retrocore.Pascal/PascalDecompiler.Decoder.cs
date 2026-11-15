@@ -127,6 +127,8 @@ public sealed partial class PascalDecompiler
                 }
             }
 
+            start = Resident(start, end);
+
             List<Expr> stack = [];
             List<Statement> body = Block(start, end, stack);
             if (stack.Count > 0)
@@ -154,6 +156,42 @@ public sealed partial class PascalDecompiler
                 LabelStatement labelStatement = new(target) { Offset = target };
                 boundary.List.Insert(position < 0 ? boundary.List.Count : position, labelStatement);
             }
+        }
+
+        // A body with the R option starts with a jump past its end, where it loads each segment the option names
+        // (SLDC n; CSP GSEG) and jumps back; it releases them (SLDC n; CSP RSEG) after its exit. The body starts after
+        // the jump.
+        private int Resident(int start, int end)
+        {
+            if (start >= end || _code[start] is not { Opcode.Code: Pcode.Ujp } jump || jump.Targets[0] < 0)
+            {
+                return start;
+            }
+
+            int at = Index(jump.Targets[0]);
+            if (at <= end) { return start; }
+
+            List<int> segments = [];
+            while (at + 1 < _code.Count
+                && _code[at].Opcode.Code < 128
+                && _code[at + 1] is { Opcode.Code: Pcode.Csp } load
+                && load.Operands[0] == 21)
+            {
+                segments.Add(_code[at].Opcode.Code);
+                at += 2;
+            }
+
+            if (segments.Count == 0
+                || at >= _code.Count
+                || _code[at] is not { Opcode.Code: Pcode.Ujp } back
+                || back.Targets[0] != _code[start].Next)
+            {
+                return start;
+            }
+
+            _procedure.Resident.AddRange(segments);
+            if (_backward.TryGetValue(start + 1, out List<int>? sources)) { sources.Remove(at); }
+            return start + 1;
         }
 
         // A run of statements from one p-code up to another, leaving any value it ends with on the stack.

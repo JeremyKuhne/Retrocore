@@ -334,9 +334,33 @@ public sealed partial class PascalDecompiler
         Declarations(procedure);
         Nested(procedure);
         _indent--;
-        Line("BEGIN");
+        IEnumerable<string> resident = procedure.Resident.Select(number => ResidentName(procedure, number));
+        Line(procedure.Resident.Count == 0 ? "BEGIN" : $"BEGIN (*$R {string.Join(",", resident)}*)");
         Statements(procedure, procedure.Body);
         Line("END;");
+    }
+
+    // A segment the R option names: by its segment procedure's name, where the procedure sees it, declared in it or
+    // in a block around it before it; otherwise by its number, which the option takes too.
+    private string ResidentName(Procedure procedure, int number)
+    {
+        Procedure? segment = _procedures.FirstOrDefault(Loads);
+        string numbered = number.ToString(CultureInfo.InvariantCulture);
+        if (segment?.Parent is not { } parent) { return numbered; }
+
+        bool inside = parent == procedure;
+        bool around = !procedure.IsSegmentProcedure && Ancestors(procedure).Contains(parent);
+        return inside || around ? segment.Name : numbered;
+
+        static IEnumerable<Procedure> Ancestors(Procedure procedure)
+        {
+            for (Procedure? current = procedure.Parent; current is not null; current = current.Parent)
+            {
+                yield return current;
+            }
+        }
+
+        bool Loads(Procedure other) => other.Segment.Number == number && other.Number == 1 && other.IsSegmentProcedure;
     }
 
     private string Header(Procedure procedure, bool full)

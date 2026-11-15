@@ -536,6 +536,11 @@ public sealed partial class PascalDecompiler
         int words = SizeOf(root) ?? 0;
         SortedDictionary<int, TypeNode> known = root.Fields ?? [];
         int start = known.Keys.Where(offset => root.Alternatives(offset).Count > 1).DefaultIfEmpty(words).Min();
+
+        // Variants only as long as NEW takes of the record, the variant part from its start where one is shorter.
+        List<int> shorter = [.. (_allocated.GetValueOrDefault(root) ?? []).Where(size => size < words)];
+        if (shorter.Count > 0 && shorter[0] < start) { start = 0; }
+
         List<string> fixedPart = Run(0, Math.Min(start, words));
         if (start >= words) { return $"RECORD {string.Join("; ", fixedPart)} END"; }
 
@@ -568,7 +573,14 @@ public sealed partial class PascalDecompiler
             }
         }
 
-        string cases = string.Join("; ", variants.Select((fields, index) => $"{index}: ({string.Join("; ", fields)})"));
+        List<string> labelled = [.. variants.Select((fields, index) => $"{index}: ({string.Join("; ", fields)})")];
+        foreach (int size in shorter)
+        {
+            string padding = size > start ? $"X{size}N: {Declare(Padding(size - start), inline: true)}" : "";
+            labelled.Add($"{Shorter + size}: ({padding})");
+        }
+
+        string cases = string.Join("; ", labelled);
         string head = fixedPart.Count == 0 ? "" : $"{string.Join("; ", fixedPart)}; ";
         return $"RECORD {head}CASE INTEGER OF {cases} END";
 
@@ -625,6 +637,8 @@ public sealed partial class PascalDecompiler
             {
                 if (statement is Assignment assignment) { Name(assignment.Target); }
                 if (statement is WithStatement with) { Name(with.Record); }
+                if (statement is CallStatement { Callee.Builtin: "NEW" } allocation) { Allocated(allocation); }
+
             }, expression =>
             {
                 switch (expression)
@@ -710,6 +724,29 @@ public sealed partial class PascalDecompiler
         return both
             ? $"PACKED RECORD CASE INTEGER OF 0: ({string.Join("; ", wholes)}); 1: ({string.Join("; ", parts)}) END"
             : $"PACKED RECORD {string.Join("; ", parts)} END";
+    }
+
+    // The label of a variant that only makes a record as long as NEW takes, 100 more than its words.
+    private const int Shorter = 100;
+
+    // The words NEW takes of records, where fewer than the records have.
+    private readonly Dictionary<TypeNode, SortedSet<int>> _allocated = [];
+
+    private void Allocated(CallStatement allocation)
+    {
+        if (allocation.Arguments.Count != 2) { return; }
+        if (allocation.Arguments[0].Value is not Address { Designator: var pointer }) { return; }
+        if (allocation.Arguments[1].Value is not Constant { Value: var words }) { return; }
+
+        TypeNode? record = Descend(pointer, use: null).Type.Find().Element?.Find();
+        if (record is null || record.Kind != TypeKind.Record) { return; }
+        if (!_allocated.TryGetValue(record, out SortedSet<int>? sizes))
+        {
+            sizes = [];
+            _allocated[record] = sizes;
+        }
+
+        sizes.Add(words);
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
@@ -1094,6 +1131,17 @@ public sealed partial class PascalDecompiler
         }
 
         string name = callee.Builtin ?? "?";
+
+        // NEW of fewer words than a record has takes the variant that long, labelled with 100 more than its words.
+        if (name == "NEW" && call.Arguments is [{ Value: Address allocated }, { Value: Constant { Value: var words } }])
+        {
+            Designator pointer = Descend(allocated.Designator, use: null);
+            TypeNode? record = pointer.Type.Find().Element?.Find();
+            return record is { Kind: TypeKind.Record } && (SizeOf(record) ?? 0) > words
+                ? $"NEW({Pointer(pointer)}, {Shorter + words})"
+                : $"NEW({Pointer(pointer)})";
+        }
+
         List<string> parts = [];
         foreach (Argument argument in call.Arguments)
         {

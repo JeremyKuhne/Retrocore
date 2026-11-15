@@ -437,8 +437,17 @@ public sealed partial class PascalDecompiler
                     {
                         Expr words = Pop(stack);
                         Designator pointer = Designate(Pop(stack));
-                        if (words is Constant size) { pointer.Type.Target().Size(size.Value); }
-                        Statement(statements, "NEW", new Argument(new Address(pointer)));
+                        // NEW keeps the words it takes: one of a record's variants takes fewer than the record.
+                        if (words is Constant size)
+                        {
+                            pointer.Type.Target().Size(size.Value);
+                            Statement(statements, "NEW", new Argument(new Address(pointer)), new Argument(new Constant(size.Value)));
+                        }
+                        else
+                        {
+                            Statement(statements, "NEW", new Argument(new Address(pointer)));
+                        }
+
                         break;
                     }
 

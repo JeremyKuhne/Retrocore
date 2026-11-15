@@ -168,6 +168,33 @@ public class PascalSystemDecompilerTests
         source.Should().Contain("PACKED RECORD F0B0: 0..7; F0B3: BOOLEAN; X0B4: 0..15; F0B8: 0..255; F1: INTEGER; F2B0: 0..15; X2B4: 0..4095 END;");
     }
 
+    // NEW of a record's variants, each as long as its variant, as the Compiler allocates its identifiers.
+    private const string NewVariantSource = """
+        PROGRAM NV;
+        TYPE K = (A, B, C);
+          P = ^R;
+          R = RECORD S: INTEGER; L: P;
+            CASE F: K OF
+              A: (X: INTEGER);
+              B: (Y, Z, W: INTEGER);
+              C: ()
+          END;
+        VAR Q: P;
+        BEGIN NEW(Q, A); Q^.X := 1; NEW(Q, C); Q^.S := 2; NEW(Q, B); Q^.W := 3; NEW(Q); Q^.L := Q END.
+        """;
+
+    /// <summary>
+    ///  NEW of fewer words than its record has takes a variant of the record as long as the words, labelled with 100
+    ///  more than them.
+    /// </summary>
+    [TestMethod]
+    public void NewTakesVariantsAsLongAsItAllocates()
+    {
+        string source = RoundTrip(NewVariantSource);
+        source.Should().Contain("; 103: (X3N: ARRAY[1..3] OF INTEGER); 104: (X4N: ARRAY[1..4] OF INTEGER) END;");
+        source.Should().Contain("NEW(G3, 104);").And.Contain("NEW(G3, 103);");
+    }
+
     /// <summary>
     ///  Records whose words are integers in one place and pointers in another decompile with a variant part, each
     ///  use naming its variant's field.

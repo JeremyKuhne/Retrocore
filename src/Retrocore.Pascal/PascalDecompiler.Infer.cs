@@ -457,8 +457,9 @@ public sealed partial class PascalDecompiler
 
             case Assignment { Block: true, Value: Load whole } assignment
                 when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
-                // A record or array moved whole is the same type at both ends.
-                TypeNode.Unify(assignment.Target.Type, whole.Type);
+                // A record or array moved whole is the same type at both ends; fewer words than a record has are its
+                // first field's, as an identifier's name is moved from its record's address.
+                TypeNode.Unify(First(assignment.Target.Type, whole.Words), First(whole.Type, whole.Words));
                 break;
             case Assignment { Value: WordsConstant { Values.Length: 2 } } real
                 when real.Target.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar:
@@ -614,6 +615,22 @@ public sealed partial class PascalDecompiler
             default:
                 break;
         }
+    }
+
+    // A record's first field, and its first's, while the record has more words than a move of so many moves.
+    private static TypeNode First(TypeNode type, int words)
+    {
+        TypeNode current = type;
+        for (int depth = 0; depth < 8; depth++)
+        {
+            TypeNode root = current.Find();
+            bool larger = root.Kind == TypeKind.Record && root.Fields?.ContainsKey(0) == true && (SizeOf(root) ?? 0) > words;
+            if (!larger) { break; }
+
+            current = root.Field(0);
+        }
+
+        return current;
     }
 
     // An array's index is an integer, wherever the element is reached.

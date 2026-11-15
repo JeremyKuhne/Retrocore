@@ -14,8 +14,8 @@ namespace Retrocore.Desktop;
 /// <summary>
 ///  Walks the window through what the side pane does, a step a second, and saves a picture of the window at each:
 ///  running, a row selected, stopped and off with its settings, Switch Machine's quick pick, a card added with its
-///  drives, a dialog, a notification, the light theme and the settings. A check of the look without a person at the
-///  keyboard: <c>--tour folder</c>.
+///  drives, a dialog, a notification, the light theme, the settings, and fitted screens at zoom and resize extremes.
+///  Checks fitted pictures stay within their viewports: <c>--tour folder</c>.
 /// </summary>
 internal static class Tour
 {
@@ -74,6 +74,31 @@ internal static class Tour
                 session.Switch(MachineCatalog.Configuration(MachineCatalog.Machines.First(machine => machine.Id == "trs80-model1-level2")), saved: null);
                 session.Start();
             }),
+            ("12-fit", () =>
+            {
+                window.ShowView(settings: false);
+                window.Screen.Sharp = false;
+                window.Screen.InvalidateVisual();
+                window.ZoomTo(0);
+            }),
+            ("13-fit-zoom-in", () => window.ZoomTo(DesktopSettings.MaximumZoom)),
+            ("14-fit-zoom-out", () => window.ZoomTo(DesktopSettings.MinimumZoom)),
+            ("15-fit-apple2", () =>
+            {
+                session.Switch(MachineCatalog.Configuration(MachineCatalog.Machines[0]), saved: null);
+                session.Start();
+                window.ZoomTo(DesktopSettings.MaximumZoom);
+            }),
+            ("16-fit-wide", () =>
+            {
+                window.Width = 1000;
+                window.Height = 520;
+            }),
+            ("17-fit-tall", () =>
+            {
+                window.Width = 650;
+                window.Height = 900;
+            }),
         ];
 
         // With a disk, it goes in the first drive while off, and the machine boots from it.
@@ -101,7 +126,13 @@ internal static class Tour
         DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1.5) };
         timer.Tick += (_, _) =>
         {
-            if (step > 0) { Save(window, Path.Join(folder, steps[step - 1].Name + ".png")); }
+            if (step > 0 && !Save(window, Path.Join(folder, steps[step - 1].Name + ".png")))
+            {
+                timer.Stop();
+                desktop.Shutdown(1);
+                return;
+            }
+
             if (step == steps.Count)
             {
                 timer.Stop();
@@ -117,13 +148,27 @@ internal static class Tour
     }
 
     // The window as it draws itself now, at its own scale.
-    private static void Save(MainWindow window, string path)
+    private static bool Save(MainWindow window, string path)
     {
+        if (window.Screen is { Sharp: false, HasPicture: true } screen)
+        {
+            Rect picture = screen.PictureBounds;
+            Rect viewport = new Rect(screen.Bounds.Size).Inflate(0.001);
+            if (!viewport.Contains(picture))
+            {
+                Console.Error.WriteLine($"Fit picture {picture} extends beyond its viewport {screen.Bounds.Size}.");
+                return false;
+            }
+
+            Console.Out.WriteLine($"fit picture: {picture}; viewport: {screen.Bounds.Size}");
+        }
+
         double scale = window.RenderScaling;
         PixelSize size = new((int)(window.ClientSize.Width * scale), (int)(window.ClientSize.Height * scale));
         using RenderTargetBitmap bitmap = new(size, new Vector(96 * scale, 96 * scale));
         bitmap.Render(window);
         bitmap.Save(path, PngBitmapEncoderOptions.Default);
         Console.Out.WriteLine(path);
+        return true;
     }
 }

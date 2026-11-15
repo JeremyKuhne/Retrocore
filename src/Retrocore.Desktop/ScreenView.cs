@@ -88,12 +88,13 @@ internal sealed class ScreenView : Control
     internal bool Sharp { get; set; } = true;
 
     /// <summary>
-    ///  Gets or sets the space the picture is sized for, which the window sets from its own size so the picture
+    ///  Gets or sets the space the sharp picture is sized for, which the window sets from its own size so the picture
     ///  changes with the window and not with the chrome's zoom; null to size it for the control.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   The picture is centred in the control, and clipped by it if the zoomed chrome leaves it a little less room.
+    ///   A sharp picture is centred in the control, and clipped if zoomed chrome leaves less room.
+    ///   Fit mode uses the control's actual bounds so that the complete picture remains visible.
     ///  </para>
     /// </remarks>
     internal Size? SizingArea { get; set; }
@@ -209,7 +210,7 @@ internal sealed class ScreenView : Control
         if (_bitmap is not { } bitmap) { return; }
 
         // An off machine's last picture is dimmed over black, as a monitor's fading glass is, in either theme.
-        Rect destination = PictureRect(bitmap);
+        Rect destination = PictureBounds;
         if (!_host.Running) { context.FillRectangle(Brushes.Black, destination); }
         using (context.PushOpacity(_host.Running ? 1 : 0.35))
         {
@@ -218,14 +219,18 @@ internal sealed class ScreenView : Control
 
     }
 
-    // Where the picture goes: its monitor's shape, as the display panel gives it, the Apple II's 560 by 192 dots
-    // filling a 280 by 192 shape, so each line is drawn twice, and the TRS-80's filling 4 by 3.
+    /// <summary>
+    ///  Gets the picture's rectangle in control coordinates, preserving the machine's monitor aspect ratio.
+    /// </summary>
+    internal Rect PictureBounds => _bitmap is { } bitmap ? PictureRect(bitmap) : default;
+
+    // The Apple II's 560 by 192 dots fill a 280 by 192 shape, and the TRS-80's fill 4 by 3.
     private Rect PictureRect(WriteableBitmap bitmap)
     {
         double width = bitmap.PixelSize.Width;
         double aspect = Aspect(_host.KeyMapName);
         double height = width / aspect;
-        Size area = SizingArea ?? Bounds.Size;
+        Size area = Sharp ? SizingArea ?? Bounds.Size : Bounds.Size;
         Size size;
         double device = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
         (double across, double down) = SharpBase(_host.KeyMapName, width);
@@ -308,13 +313,13 @@ internal sealed class ScreenView : Control
     // over the space around it or in a drag that leaves the window, the mouse stays at the picture's nearest edge.
     private bool PlaceMouse(PointerEventArgs e, bool? pressed = null)
     {
-        if (_host.MouseSlot == 0 || !_host.Running || _bitmap is not { } bitmap)
+        if (_host.MouseSlot == 0 || !_host.Running || _bitmap is null)
         {
             HidePointer(hide: false);
             return false;
         }
 
-        Rect picture = PictureRect(bitmap);
+        Rect picture = PictureBounds;
         Point at = e.GetPosition(this);
         bool on = _host.PlaceMouse(
             (at.X - picture.X) / Math.Max(1, picture.Width),
@@ -326,7 +331,7 @@ internal sealed class ScreenView : Control
         return true;
     }
 
-    private bool OverPicture(PointerEventArgs e) => _bitmap is { } bitmap && PictureRect(bitmap).Contains(e.GetPosition(this));
+    private bool OverPicture(PointerEventArgs e) => _bitmap is not null && PictureBounds.Contains(e.GetPosition(this));
 
     private void HidePointer(bool hide)
     {

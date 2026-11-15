@@ -195,7 +195,7 @@ internal sealed class MainWindow : Window
         UpdateActivity();
         UpdateTitle();
 
-        // The picture's size follows the window, never the pane or the zoom.
+        // Sharp sizing follows the window, never the pane or the zoom; Fit uses the screen's actual bounds.
         SizeChanged += (_, _) => UpdateScreenArea();
         _body.SizeChanged += (_, _) => _pane.MaxWidth = Math.Max(160, _body.Bounds.Width - 48);
         _refresh.Tick += (_, _) => Refresh();
@@ -312,8 +312,8 @@ internal sealed class MainWindow : Window
         _settingsButton.Active = _pane.IsVisible && _settingsShown;
     }
 
-    // The space the picture is sized for: the window less the chrome at 100%, so that zooming the chrome, which takes
-    // a little more or less of the window, leaves the picture as it was.
+    // The space the sharp picture is sized for: the window less the chrome at 100%, so zooming the chrome leaves
+    // its whole-pixel size unchanged. Fit mode instead uses the actual viewport after layout.
     private void UpdateScreenArea()
     {
         _screen.SizingArea = new Size(

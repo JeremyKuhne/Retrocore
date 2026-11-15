@@ -130,6 +130,8 @@ exists is reported in the Debug Console and skipped.
 { "id": "disk2", "action": "save" }
 { "id": "disk2", "action": "save", "path": "copy.woz" }
 { "id": "disk2", "action": "save", "path": "copy.dsk", "acceptLosses": true }
+{ "id": "disk2", "action": "save", "overwrite": { "sha256": "…" } }
+{ "id": "disk2", "action": "eject", "discard": true }
 ```
 
 An action the device does not support is an error. A recording is saved to its path when its tape is ejected.
@@ -138,9 +140,29 @@ Disks the machine changes stay in memory, and `changed` shows that they differ f
 the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads them back as 35 to 40 tracks of
 sectors, in DOS's order for `.dsk` and `.do` and ProDOS's for `.po`. A `.dsk` is read in the order its file system
 reads whole in (DOS 3.3's catalog, ProDOS's volume directory or Apple Pascal's), else DOS's, and saved back in it. A
-sector image cannot hold a track that no longer reads as 16 sectors, data on a quarter or half track of its own, or
-a volume other than 254; a save that would lose any of them fails with what it would lose, unless `acceptLosses` is
-given, and the disk then stays changed. The disk then comes from that image. Other drives don't save yet.
+sector image cannot hold a track that no longer reads as 16 sectors, data on a quarter or half track of its own,
+another track's sector, or a volume other than 254. The disk then comes from that image. Other drives don't save yet.
+
+A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
+the image and replaces the image with it, follows a link to its target, retries a file another program holds for a
+moment, and keeps the revision it replaced as the image's one backup in local data (`%LOCALAPPDATA%\Retrocore\Backups`,
+or `RETROCORE_LOCAL_DATA`). It writes only over the revision of the image the disk was read from, and an unchanged
+disk saved to its own image writes nothing.
+
+What a person decides on comes back as an answer beside the devices, not as an error, to a client that sends
+`supportsRetrocoreMedia: 1` (the host says it speaks them with `supportsRetrocoreMedia` in its `initialize` answer):
+
+| `outcome` | When | What the client does |
+| --- | --- | --- |
+| `saved` | The disk was saved; `notes` and `losses` say what the save should, such as a WOZ1 image written as WOZ2 or a sector read from its second copy | Nothing, or shows the notes |
+| `changed` | An `eject`, an `insert` over a disk, or **Remove Card** would take out a disk with changes not saved (`device`, `label`, `medium`, `generation`) | Saves it, or sends the action again with `discard: true` |
+| `conflict` | The image changed since the disk was read from it (`baseline` and `current` revisions: `length`, `written`, `sha256`) | Sends the save again with `overwrite.sha256` set to `current`'s, or saves as a new image |
+| `losses` | The image's `format` cannot hold all of the disk (`losses`) | Sends the save again with `acceptLosses: true`, and the disk stays changed, or saves as a new image |
+| `readOnly` | The image cannot be written: `reason` is `file` (a read-only file), `access`, `noImage` (a disk a launch built) or `format` (an image that can only be read, as `.d13`) | Saves as a new image |
+
+A client that does not send `supportsRetrocoreMedia` has a changed disk's eject, insert or card removal refused with
+a message, as the safe default. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and
+`source` (`kind` `image` with its `path`, or `built`, and whether it `saves`).
 
 ## A machine that is off
 

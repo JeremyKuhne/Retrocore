@@ -491,17 +491,24 @@ internal sealed class MachineHost : DisposableBase
     /// <param name="id">The device's id.</param>
     /// <param name="action">The action, such as <c>insert</c>.</param>
     /// <param name="args">Its arguments, such as the image's <c>path</c>.</param>
+    /// <returns>
+    ///  Media's answer, as the debug adapter gives it, such as <c>changed</c> for a changed disk that would leave its
+    ///  drive; null when the machine simply acted.
+    /// </returns>
     /// <exception cref="ArgumentException">
     ///  There is no such device, or the action or its arguments are wrong.
     /// </exception>
-    internal void DeviceAction(string id, string action, JsonObject args)
+    internal JsonObject? DeviceAction(string id, string action, JsonObject args)
     {
         using (Gate())
         {
             IDevice device = _target.Devices.FirstOrDefault(device => device.Id == id)
                 ?? throw new ArgumentException($"There is no device '{id}'.");
 
-            _target.DeviceAction(device, action, args);
+            // The host saves disks and holds back a changed disk that would leave its drive, as the debug adapter does.
+            JsonObject? answer = MediaActions.Device(device, action, args);
+            if (answer is null) { _target.DeviceAction(device, action, args); }
+            return answer;
         }
     }
 
@@ -511,11 +518,21 @@ internal sealed class MachineHost : DisposableBase
     /// <param name="id">The hardware row's id, such as <c>slot5</c>.</param>
     /// <param name="action">The action, such as <c>addDiskII</c>.</param>
     /// <param name="args">Its arguments.</param>
+    /// <returns>
+    ///  Media's answer, such as <c>changed</c> for a card with a changed disk; null when the machine acted.
+    /// </returns>
     /// <exception cref="ArgumentException">The action or its arguments are wrong.</exception>
-    internal void HardwareAction(string id, string action, JsonObject args)
+    internal JsonObject? HardwareAction(string id, string action, JsonObject args)
     {
-        using (Gate()) { _target.HardwareAction(id, action, args); }
+        using (Gate())
+        {
+            string[]? ids = _target.Hardware().FirstOrDefault(row => row.Id == id)?.Devices;
+            if (MediaActions.Hardware(ids, _target.Devices, action, args) is { } held) { return held; }
+            _target.HardwareAction(id, action, args);
+        }
+
         _frameWanted = true;
+        return null;
     }
 
     /// <summary>

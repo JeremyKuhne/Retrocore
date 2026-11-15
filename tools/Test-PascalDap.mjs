@@ -187,6 +187,11 @@ async function sourceBreakpoints(machine) {
         const disk2 = () => request("retro/devices").then(body => body.devices.find(device => device.id === "disk2"));
         assert.equal((await disk2()).media.changed, true);
         assert.ok((await disk2()).operations.includes("save"));
+        // A changed disk does not leave its drive unsaved: a client that speaks media's answers hears changed, and an
+        // older one is refused.
+        const held = await request("retro/device", { id: "disk2", action: "eject", supportsRetrocoreMedia: 1 });
+        assert.deepEqual([held.outcome, held.device, (await disk2()).media.changed], ["changed", "disk2", true]);
+        await assert.rejects(request("retro/device", { id: "disk2", action: "eject" }), /not saved/);
         const woz = join(folder, "PASCAL2.woz");
         const sectors = join(folder, "PASCAL2.dsk");
         await request("retro/device", { id: "disk2", action: "save", path: woz });
@@ -285,7 +290,8 @@ async function compiledOnIIe(machine, compiler) {
 
 const passed = [];
 try {
-    await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    const capabilities = await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    assert.equal(capabilities.supportsRetrocoreMedia, 1, "the host speaks media's answers");
     for (const machine of machines) {
         if (!machine.disks.every(disk => existsSync(disk))) {
             console.log(`Skipped ${machine.name}: ${machine.disks.join(" or ")} is missing.`);

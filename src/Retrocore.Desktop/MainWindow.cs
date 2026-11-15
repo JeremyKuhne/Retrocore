@@ -31,6 +31,9 @@ internal sealed class MainWindow : Window
     private readonly DesktopSettings _settings;
     private readonly ScreenView _screen;
     private readonly MachinePane _machinePane;
+
+    // Whether the window may close: set once its changed disks are saved or let go.
+    private bool _mayClose;
     private readonly Grid _body = new();
     private readonly Border _pane = new()
     {
@@ -733,6 +736,28 @@ internal sealed class MainWindow : Window
         }
 
         _status.Text = string.Join(" · ", parts);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A disk with changes not saved to its image asks first, as the window closing would lose them; the window
+    ///   closes once each is saved or let go.
+    ///  </para>
+    /// </remarks>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_mayClose || _machinePane.Unsaved.Count == 0) { return; }
+        e.Cancel = true;
+        _ = CloseAfterAsking();
+    }
+
+    private async Task CloseAfterAsking()
+    {
+        if (!await _machinePane.ReleaseMedia("closing")) { return; }
+        _mayClose = true;
+        Close();
     }
 
     /// <inheritdoc/>

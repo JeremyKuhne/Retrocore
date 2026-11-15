@@ -36,6 +36,6 @@ public sealed class SectorImageCodec(string format, bool proDosOrder) : IImageCo
         }
 
         SectorImage image = SectorDiskReader.Decode(WozDisk.Load(snapshot.Image.Span, writable: true), ProDosOrder);
-        return new(image.Bytes, image.Losses);
+        return new(image.Bytes, image.Losses) { Notes = image.Notes };
     }
 }

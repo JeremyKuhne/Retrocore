@@ -164,6 +164,30 @@ public sealed class DiskIIImageTests
     }
 
     /// <summary>
+    ///  A sector whose first copy has a bad checksum but whose second reads loses nothing, and the read says so.
+    /// </summary>
+    [TestMethod]
+    public void RecoveredChecksumIsANote()
+    {
+        byte[] image = new byte[35 * TrackSize];
+        new Random(8).NextBytes(image);
+        WozDisk disk = SectorDiskConverter.Convert(image, proDosOrder: false).Writable();
+        byte[] good = (disk.Track(6 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        byte[] bad = (byte[])good.Clone();
+
+        // Physical sector 1's 100th data nibble becomes $AA, as in BadChecksumKeepsTheRestOfTheTrack.
+        int position = 160 + 3134 + 112 + 70 + 24 + (100 * 8);
+        bad[position / 8] = 0xAA;
+        disk.SetTrack(quarterTrack: 6 * 4, [.. bad, .. good], bitCount: 2 * 51024);
+
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Losses.Should().BeEmpty();
+        read.Notes.Should().ContainSingle().Which.Should().Be("Track 6, sector 1: a copy had a bad checksum, and another copy read.");
+        read.Bytes.Should().Equal(image);
+        new SectorImageCodec("DSK", proDosOrder: false).Encode(disk.Snapshot()).Notes.Should().Equal(read.Notes);
+    }
+
+    /// <summary>
     ///  Every sector in a whole revolution is read, so a second copy of a sector with other data, and the volume on
     ///  it, are losses even after all 16 sectors were found.
     /// </summary>

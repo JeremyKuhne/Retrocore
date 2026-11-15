@@ -193,7 +193,7 @@ internal sealed class MachinePane : ScrollViewer
                 State = TreeState.Expanded,
                 Children = children,
                 Inline = running
-                    ? [new("debug-restart", "Restart", () => Try(_session.Restart)), new("debug-stop", "Stop", () => Try(_session.Stop))]
+                    ? [new("debug-restart", "Restart", () => _ = Release("Restart", _session.Restart)), new("debug-stop", "Stop", () => _ = Release("Stop", _session.Stop))]
                     : [new("arrow-swap", "Switch Machine...", () => _ = SwitchMachine()), new("play", "Start This Machine", () => Try(_session.Start))],
             },
         ];
@@ -402,7 +402,137 @@ internal sealed class MachinePane : ScrollViewer
         Refresh();
     }
 
-    private void Act(DeviceState device, string action, JsonObject? args = null) => Try(() => _session.Device(device.Id, action, args));
+    private void Act(DeviceState device, string action, JsonObject? args = null) =>
+        _ = Send(answer => _session.Device(device.Id, action, answer), args ?? []);
+
+    /// <summary>
+    ///  Gets the devices with disks whose changes are not saved to their images.
+    /// </summary>
+    internal IReadOnlyList<DeviceState> Unsaved => [.. _session.Host.DeviceStates().Where(device => device.Media?.Changed == true && device.Can(MediaOperations.Save))];
+
+    /// <summary>
+    ///  Asks about each disk whose changes are not saved before something that sets the machine up again would lose
+    ///  them: save it, or let the changes go.
+    /// </summary>
+    /// <param name="what">What would lose them, such as <c>Stop</c>, for the question.</param>
+    /// <returns>True when every disk was saved or let go; false when the person cancelled.</returns>
+    internal async Task<bool> ReleaseMedia(string what)
+    {
+        foreach (DeviceState device in Unsaved)
+        {
+            string? answer = await _window.Ask(
+                $"The disk in {device.Info.Name} has changes not saved to {Path.GetFileName(device.Media?.Label)}. Save them before {what}?",
+                ["Save", "Discard"]);
+
+            if (answer is null) { return false; }
+            if (answer == "Save" && !await Send(args => _session.Device(device.Id, "save", args), [])) { return false; }
+        }
+
+        return true;
+    }
+
+    // Lets changed disks go, then acts, as Stop and Restart do.
+    private async Task Release(string what, Action action)
+    {
+        if (await ReleaseMedia(what)) { Try(action); }
+    }
+
+    // Sends a media action and answers what comes back, as the extension does: a changed disk that would leave its
+    // drive is saved or let go, a changed image is replaced or the disk saved as a new one, a lossy save is accepted
+    // or saved as a new image, and a read-only image is saved as a new one. Says whether the action went through.
+    private async Task<bool> Send(Func<JsonObject, JsonObject?> send, JsonObject args)
+    {
+        args["supportsRetrocoreMedia"] = 1;
+        while (true)
+        {
+            JsonObject? answer = null;
+            bool failed = false;
+            Try(() =>
+            {
+                failed = true;
+                answer = send((JsonObject)args.DeepClone());
+                failed = false;
+            });
+
+            if (failed) { return false; }
+            string device = answer?["device"]?.GetValue<string>() ?? "";
+            string name = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device)?.Info.Name ?? device;
+            string file = Path.GetFileName(answer?["label"]?.GetValue<string>() ?? "");
+            string label = file.Length != 0 ? file : "its image";
+            switch (answer?["outcome"]?.GetValue<string>())
+            {
+                case null:
+                    return true;
+                case "saved":
+                    Said(answer, name);
+                    return true;
+                case "changed":
+                    string? choice = await _window.Ask($"The disk in {name} has changes not saved to {label}.", ["Save", "Discard"]);
+                    if (choice is null) { return false; }
+                    if (choice == "Discard")
+                    {
+                        args["discard"] = true;
+                    }
+                    else if (!await Send(saveArgs => _session.Device(device, "save", saveArgs), []))
+                    {
+                        return false;
+                    }
+
+                    continue;
+                case "conflict":
+                    string? replace = await _window.Ask(
+                        $"The image changed since the disk in {name} was read from it. Replace it with the disk?",
+                        ["Replace", "Save As..."]);
+
+                    if (replace == "Replace")
+                    {
+                        args["overwrite"] = new JsonObject { ["sha256"] = answer["current"]?["sha256"]?.DeepClone() };
+                        continue;
+                    }
+
+                    return replace == "Save As..." && await SaveAsNew(device);
+                case "losses":
+                    string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
+                    string? accept = await _window.Ask(
+                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the disk in {name}: {losses}",
+                        ["Save Anyway", "Save As..."]);
+
+                    if (accept == "Save Anyway")
+                    {
+                        args["acceptLosses"] = true;
+                        continue;
+                    }
+
+                    return accept == "Save As..." && await SaveAsNew(device);
+                case "readOnly":
+                    string why = answer["reason"]?.GetValue<string>() switch
+                    {
+                        "noImage" => $"The disk in {name} has no image of its own.",
+                        "format" => $"The disk in {name} came from an image that can only be read.",
+                        "file" => $"The image of the disk in {name} is read-only.",
+                        _ => $"The image of the disk in {name} cannot be written.",
+                    };
+
+                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device);
+                default:
+                    return true;
+            }
+        }
+    }
+
+    // What a save says beside saving: a WOZ1 image now WOZ2, a sector that read from a second copy, what was lost.
+    private void Said(JsonObject answer, string name)
+    {
+        IEnumerable<string?> said = (answer["notes"]?.AsArray() ?? []).Concat(answer["losses"]?.AsArray() ?? [])
+            .Select(node => node?.GetValue<string>());
+
+        string text = string.Join(" ", said.Where(line => line is not null));
+        if (text.Length != 0) { _window.Notify($"Saved the disk in {name}. {text}", "info"); }
+    }
+
+    // Save As for a device by its id, as the answers offer it.
+    private async Task<bool> SaveAsNew(string id) =>
+        _session.Host.DeviceStates().FirstOrDefault(state => state.Id == id) is { } device && await SaveAs(device);
 
     private async Task SwitchMachine()
     {
@@ -419,7 +549,7 @@ internal sealed class MachinePane : ScrollViewer
         }));
 
         QuickPickItem<CatalogMachine>? picked = await _window.Pick(items, "Switch Machine", "Which machine to set up?");
-        if (picked?.Value is not { } chosen) { return; }
+        if (picked?.Value is not { } chosen || !await ReleaseMedia("switching machines")) { return; }
         Try(() => _session.Switch(MachineCatalog.Configuration(chosen), saved: null));
     }
 
@@ -433,7 +563,7 @@ internal sealed class MachinePane : ScrollViewer
             "Start Machine",
             "Which machine to start?");
 
-        if (picked?.Value is not { } chosen) { return; }
+        if (picked?.Value is not { } chosen || !await ReleaseMedia("starting another machine")) { return; }
         Try(() =>
         {
             _session.Switch(MachineCatalog.Configuration(chosen), saved: null);
@@ -444,7 +574,7 @@ internal sealed class MachinePane : ScrollViewer
     private async Task ResetSaved()
     {
         string? answer = await _window.Ask($"Forget the cards and media kept for {_session.Name}, and set it up as it comes?", ["Reset"]);
-        if (answer == "Reset") { Try(_session.ResetSaved); }
+        if (answer == "Reset" && await ReleaseMedia("resetting the machine")) { Try(_session.ResetSaved); }
     }
 
     private async Task ChangeSetting(MachineChoice choice)
@@ -482,7 +612,7 @@ internal sealed class MachinePane : ScrollViewer
             $"Add a card to {row.Name}",
             "");
 
-        if (picked?.Value is { } card) { Try(() => _session.Hardware(row.Id, card.Args())); }
+        if (picked?.Value is { } card) { _ = Send(args => _session.Hardware(row.Id, args), card.Args()); }
     }
 
     // Taking out a card with disks in it ejects them, so it asks first.
@@ -494,7 +624,7 @@ internal sealed class MachinePane : ScrollViewer
             if (answer != "Remove Card") { return; }
         }
 
-        Try(() => _session.Hardware(row.Id, new JsonObject { ["action"] = "removeCard" }));
+        _ = Send(args => _session.Hardware(row.Id, args), new JsonObject { ["action"] = "removeCard" });
     }
 
     private async Task Insert(DeviceState device)
@@ -531,9 +661,10 @@ internal sealed class MachinePane : ScrollViewer
         if (answer == "Save") { Act(device, "save"); }
     }
 
-    private async Task SaveAs(DeviceState device)
+    // Saves a disk to an image the person picks; says whether it was saved.
+    private async Task<bool> SaveAs(DeviceState device)
     {
-        if (device.Media is not { } media) { return; }
+        if (device.Media is not { } media) { return false; }
         IStorageFolder? folder = Path.GetDirectoryName(media.Label) is { Length: > 0 } directory
             ? await _window.StorageProvider.TryGetFolderFromPathAsync(directory)
             : null;
@@ -546,7 +677,8 @@ internal sealed class MachinePane : ScrollViewer
             FileTypeChoices = Filters("Disk images", [.. device.Info.Formats.Where(format => format is "woz" or "dsk" or "do" or "po")]),
         });
 
-        if (file?.TryGetLocalPath() is { } path) { Act(device, "save", new JsonObject { ["path"] = path }); }
+        return file?.TryGetLocalPath() is { } path
+            && await Send(args => _session.Device(device.Id, "save", args), new JsonObject { ["path"] = path });
     }
 
     private static List<FilePickerFileType> Filters(string name, IReadOnlyList<string> formats) =>

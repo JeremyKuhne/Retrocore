@@ -367,8 +367,7 @@ internal sealed class MainWindow : Window
             Value = _settings.PaneOpacity,
             TickFrequency = 1,
             IsSnapToTickEnabled = true,
-            MinWidth = 140,
-            MaxWidth = 180
+            Width = OptionWidth
         };
 
         ToolTip.SetTip(opacity, "How much of the machine shows through the pane");
@@ -491,12 +490,7 @@ internal sealed class MainWindow : Window
         if (_host.FastDriveKind is { } kind)
         {
             _host.FastDrives = _settings.FastDrives;
-            CheckBox fast = new()
-            {
-                Content = kind == "disk" ? "Fast disk" : "Fast tape",
-                IsChecked = _settings.FastDrives,
-                FontSize = 12,
-            };
+            CheckBox fast = new() { IsChecked = _settings.FastDrives, MinWidth = 0 };
 
             ToolTip.SetTip(fast, kind == "disk"
                 ? "Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"
@@ -509,7 +503,7 @@ internal sealed class MainWindow : Window
                 _settings.Save();
             };
 
-            options.Children.Add(Option("Drives", fast));
+            options.Children.Add(Option(kind == "disk" ? "Fast disk" : "Fast tape", fast));
         }
 
         ComboBox sound = Choice(["Off", "Speaker"], 1);
@@ -521,8 +515,7 @@ internal sealed class MainWindow : Window
             Minimum = 0,
             Maximum = 100,
             Value = _host.Volume * 100,
-            MinWidth = 140,
-            MaxWidth = 180
+            Width = OptionWidth
         };
 
         volume.ValueChanged += (_, _) => _host.Volume = (float)(volume.Value / 100);
@@ -552,13 +545,22 @@ internal sealed class MainWindow : Window
     {
         ItemsSource = items,
         SelectedIndex = selected,
-        MinWidth = 140,
-        MaxWidth = 180,
-        HorizontalAlignment = HorizontalAlignment.Stretch,
+        Width = OptionWidth,
         FontSize = 12,
     };
 
-    private static Grid Option(string name, Control control) => new()
+    // Every option's control starts at the same edge and the drop-downs and sliders are the same width, so the
+    // column lines up whatever each control is.
+    private const double OptionWidth = 180;
+
+    private static Grid Option(string name, Control control)
+    {
+        control.HorizontalAlignment = HorizontalAlignment.Left;
+        control.VerticalAlignment = VerticalAlignment.Center;
+        return OptionRow(name, control);
+    }
+
+    private static Grid OptionRow(string name, Control control) => new()
     {
         ColumnDefinitions = [new ColumnDefinition(new GridLength(90)), new ColumnDefinition(GridLength.Star)],
         Margin = new Thickness(20, 3, 8, 3),

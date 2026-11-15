@@ -44,10 +44,10 @@ public static partial class IsaParser
         List<OperandForm> forms = [];
         IsaRules rules = new();
         List<(string Name, string Base, HashSet<string> Excluded, string Message)> subsets = [];
-        Dictionary<string, (string? Base, SortedDictionary<ulong, IsaEntry> Entries)> sets = new(StringComparer.Ordinal);
+        Dictionary<string, (string? Base, SortedDictionary<ulong, IsaEntry> Entries)> sets = [with(StringComparer.Ordinal)];
 
         List<string> order = [];
-        HashSet<string> formNames = new(StringComparer.Ordinal);
+        HashSet<string> formNames = [with(StringComparer.Ordinal)];
         HashSet<(string Section, ulong Key)> listed = [];
         string section = "";
         string[] lines = text.Replace("\r\n", "\n").Split('\n');
@@ -147,7 +147,7 @@ public static partial class IsaParser
             }
         }
 
-        Dictionary<string, InstructionSet> result = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, InstructionSet> result = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (string name in order)
         {
             result[name] = InstructionSet.Create(

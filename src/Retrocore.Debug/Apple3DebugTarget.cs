@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 

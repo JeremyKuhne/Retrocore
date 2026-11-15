@@ -74,7 +74,7 @@ internal sealed class CompletionHandler
     // The summary of each documented name in the analysis, with inherited summaries.
     private Dictionary<string, string> Summaries(SourceAnalysis analysis)
     {
-        Dictionary<string, string> summaries = new(StringComparer.Ordinal);
+        Dictionary<string, string> summaries = [with(StringComparer.Ordinal)];
         DocumentationResolver resolver = _workspace.ResolverFor(analysis);
         foreach (DocumentationTopic topic in analysis.Documentation.Topics)
         {

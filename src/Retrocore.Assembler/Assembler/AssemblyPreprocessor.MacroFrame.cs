@@ -26,6 +26,6 @@ internal sealed partial class AssemblyPreprocessor
         /// <summary>
         ///  Gets the invocation's .local names and their generated replacements.
         /// </summary>
-        internal Dictionary<string, string> Locals { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, string> Locals { get; } = [with(StringComparer.Ordinal)];
     }
 }

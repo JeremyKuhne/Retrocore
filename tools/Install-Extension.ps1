@@ -25,7 +25,7 @@ try {
     npm --prefix .\extension run compile
     if ($LASTEXITCODE -ne 0) { throw 'The extension did not compile.' }
 
-    # The host the installed extension runs, framework-dependent: it needs the .NET 10 runtime.
+    # The host the installed extension runs, framework-dependent: it needs the .NET 11 runtime.
     if (Test-Path -LiteralPath $server) { Remove-Item -LiteralPath $server -Recurse -Force }
     dotnet publish .\src\Retrocore.Debug\Retrocore.Debug.csproj -c Release -o $server -warnaserror
     if ($LASTEXITCODE -ne 0) {

@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
-const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
 
 /** Starts the language server and returns request(method, params). */
 function startLanguageServer() {

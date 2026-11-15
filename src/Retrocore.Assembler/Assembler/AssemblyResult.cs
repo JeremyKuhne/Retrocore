@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Collections.ObjectModel;
 using Retrocore.Isa;
+using System.Collections.ObjectModel;
 
 namespace Retrocore.Assembler;
 

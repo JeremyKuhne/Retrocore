@@ -3,9 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 extern alias Generator;
-
-using System.Runtime.InteropServices;
 using Retrocore.Assembler;
+using System.Runtime.InteropServices;
 using GeneratorChar = Generator::System.CharExtensions;
 using GeneratorDictionary = Generator::System.Collections.Generic.DictionaryExtensions;
 using GeneratorEnum = Generator::System.EnumExtensions;
@@ -66,8 +65,8 @@ public class GeneratorPolyfillTests
     [TestMethod]
     public void DictionaryInsertionMatchesModernDotNet()
     {
-        Dictionary<string, int> legacy = new(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, int> modern = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> legacy = [with(StringComparer.OrdinalIgnoreCase)];
+        Dictionary<string, int> modern = [with(StringComparer.OrdinalIgnoreCase)];
         (string Name, int Value)[] entries = [("Entry", 1), ("entry", 2), ("Other", 3)];
         foreach ((string name, int value) in entries)
         {

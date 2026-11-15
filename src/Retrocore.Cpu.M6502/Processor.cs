@@ -176,6 +176,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
     ///  Advances exactly one clock cycle; <see cref="LastCycle"/> then describes it. Dummy and held reads
     ///  still invoke the bus. Idle stopped cycles advance the elapsed counter without accessing the bus.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void StepCycle()
     {
         if (_state.Signals != _state.PreviousSignals) { SampleSignals(); }

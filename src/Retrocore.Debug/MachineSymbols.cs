@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.RegularExpressions;
 using Retrocore.Assembler;
 using Retrocore.Machines.Apple2;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
 
@@ -91,7 +91,8 @@ internal static partial class MachineSymbols
         }
 
         Dictionary<ushort, (string, string)> names = [];
-        HashSet<string> taken = new(StringComparer.Ordinal);
+
+        HashSet<string> taken = [with(StringComparer.Ordinal)];
         foreach (var candidate in candidates
             .OrderBy(candidate => candidate.Rank)
             .ThenBy(candidate => candidate.Constant)

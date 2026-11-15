@@ -14,7 +14,7 @@ public partial class AssemblyPreprocessorTests
     /// </summary>
     private sealed class Resolver : IAssemblySourceResolver
     {
-        private readonly Dictionary<string, AssemblySource> _sources = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, AssemblySource> _sources = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         ///  Gets attempted include requests.

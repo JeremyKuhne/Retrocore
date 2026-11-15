@@ -19,7 +19,7 @@ export function startDap(root) {
     const host = process.env.RETROCORE_DAP_HOST;
     const child = host
         ? spawn(host, [])
-        : spawn("dotnet", [join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll")]);
+        : spawn("dotnet", [join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")]);
     let buffer = Buffer.alloc(0);
     let sequence = 1;
     const pending = new Map();

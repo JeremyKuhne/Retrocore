@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.RegularExpressions;
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug.Language;
 
@@ -15,8 +15,8 @@ internal sealed partial class SourceAnalysis
 {
     private const int AddressSpaceSize = 0x10000;
 
-    private readonly Dictionary<string, List<SymbolSite>> _definitions = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, string[]> _lines = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(string root, AssemblyResult result, IEnumerable<string> members, Func<string, string?> text)
@@ -30,7 +30,7 @@ internal sealed partial class SourceAnalysis
         }
 
         // The assembler knows native names; show the spelling the source used.
-        Dictionary<string, string> spelling = new(StringComparer.Ordinal);
+        Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {

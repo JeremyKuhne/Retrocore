@@ -35,7 +35,7 @@ public static class CpuCatalog
 
     private static Dictionary<string, InstructionSet> Create()
     {
-        Dictionary<string, InstructionSet> sets = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, InstructionSet> sets = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (IsaDescription description in (IsaDescription[])[M6502Isa.Description, Z80Isa.Description, M6809Isa.Description, I8080Isa.Description])
         {
             foreach (KeyValuePair<string, InstructionSet> pair in description.InstructionSets)

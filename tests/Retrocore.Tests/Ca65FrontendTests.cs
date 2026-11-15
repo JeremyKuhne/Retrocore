@@ -397,7 +397,7 @@ public class Ca65FrontendTests
 
                 result.Diagnostics.Should().BeEmpty(originalPath);
                 byte[] actual = result.Files["output.bin"].ToArray();
-                Dictionary<string, string[]> documents = new(StringComparer.Ordinal);
+                Dictionary<string, string[]> documents = [with(StringComparer.Ordinal)];
                 foreach (AssemblySourceMapEntry entry in result.SourceMap)
                 {
                     if (entry.Location is not { } location) { continue; }

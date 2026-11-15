@@ -7,6 +7,16 @@ using Retrocore.Machines.Apple2;
 using Retrocore.Perf;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
+if (args is ["--benchmark-cpu", ..])
+{
+    return CpuThroughput.Run(args[1..]);
+}
+
+if (args is ["--benchmark-machine", ..])
+{
+    return MachineThroughput.Run(args[1..]);
+}
+
 foreach (ProcessorVariant variant in Enum.GetValues<ProcessorVariant>())
 {
     Processor<RamBus> cpu = CpuWorkload.Create(variant, out RamBus bus);
@@ -316,3 +326,4 @@ if (!altairImage.Success || altair.Terminal.Line(0).TrimEnd() != "ALTAIR" || !al
 }
 
 Console.WriteLine("Altair 8800: Native AOT machine, ACIA and terminal passed.");
+return 0;

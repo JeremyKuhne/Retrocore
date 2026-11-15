@@ -44,13 +44,17 @@ public sealed class DosDiskToolTests
     /// <summary>
     ///  The tool's disk, with an AppleSoft listing from the folder and a HELLO that runs it, boots and runs it.
     /// </summary>
+    /// <param name="fileName">The source file name, whose extensions are omitted from its DOS name.</param>
     [TestMethod]
-    public void BuiltDiskRunsTheProgram()
+    [DataRow("GAME.bas")]
+    [DataRow("GAME.applesoft.bas")]
+    [DataRow("GAME.APPLESOFT.BAS")]
+    public void BuiltDiskRunsTheProgram(string fileName)
     {
         string folder = Directory.CreateTempSubdirectory().FullName;
         try
         {
-            File.WriteAllText(Path.Join(folder, "GAME.bas"), "10 POKE 7,90\n");
+            File.WriteAllText(Path.Join(folder, fileName), "10 POKE 7,90\n");
             byte[] disk = DosDiskBuilder.Build(
                 new DosDiskOptions { Files = folder, Run = "GAME", Sources = s_inputs });
 

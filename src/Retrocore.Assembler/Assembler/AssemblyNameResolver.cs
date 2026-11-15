@@ -17,10 +17,10 @@ internal sealed partial class AssemblyNameResolver
     private readonly string?[] _definitions;
     private readonly Scope _root = new(parent: null, name: "", opening: -1, procedure: false);
     private readonly string _privatePrefix;
-    private readonly Dictionary<string, string> _sizes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _sizes = [with(StringComparer.Ordinal)];
 
     // Statements that define each label, for .sizeof on a label: the size of the statement on its line.
-    private readonly Dictionary<string, int> _labelLines = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _labelLines = [with(StringComparer.Ordinal)];
     private Dictionary<string, int>? _labelSizes;
     private CancellationToken _cancellation;
 
@@ -43,7 +43,7 @@ internal sealed partial class AssemblyNameResolver
     /// <summary>
     ///  Gets bindings from plain export names to resolved compiler symbol names.
     /// </summary>
-    internal Dictionary<string, string> Exports { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> Exports { get; } = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Detects name-resolution syntax during the compiler's existing declaration-count scan.
@@ -140,7 +140,7 @@ internal sealed partial class AssemblyNameResolver
         int anonymous = 0;
         int contexts = 0;
         List<(int Index, string Name)> unnamed = [];
-        HashSet<string> defined = new(StringComparer.Ordinal);
+        HashSet<string> defined = [with(StringComparer.Ordinal)];
 
         // As in ca65, one cheap-local context spans scopes: the first definition of an ordinary symbol starts a
         // context, entering a scope keeps it, and leaving a scope or switching dialect starts an anonymous one.
@@ -345,7 +345,7 @@ internal sealed partial class AssemblyNameResolver
 
         if (_labelSizes is not null)
         {
-            project.LabelSizes ??= new(StringComparer.Ordinal);
+            project.LabelSizes ??= [with(StringComparer.Ordinal)];
             foreach (KeyValuePair<string, int> pair in _labelSizes) { project.LabelSizes[pair.Key] = pair.Value; }
         }
 
@@ -483,7 +483,7 @@ internal sealed partial class AssemblyNameResolver
                     }
 
                     size = $"{label}::{_privatePrefix}size";
-                    (_labelSizes ??= new(StringComparer.Ordinal))[size] = line;
+                    (_labelSizes ??= [with(StringComparer.Ordinal)])[size] = line;
                 }
 
                 if (size.Length == 0)

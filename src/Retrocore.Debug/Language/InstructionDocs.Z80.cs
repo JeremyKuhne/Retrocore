@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Isa;
+using System.Globalization;
 
 namespace Retrocore.Debug.Language;
 

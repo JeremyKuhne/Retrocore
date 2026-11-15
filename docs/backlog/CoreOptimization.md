@@ -157,8 +157,123 @@ these before choosing.
 
 ## .NET 11
 
-Not started (reviewed 2026-11-12, nothing measured). The repository targets `net10.0`; the 11.0.100 SDK is out.
-Take these measurements on a quiet machine: a busy one hides differences of a few percent.
+Migration and initial measurements completed 2026-11-14. Runtime libraries target `net10.0;net11.0`;
+executables and tests target only `net11.0`, using the .NET 11 SDK and C# 15. The build-only generator remains
+`netstandard2.0`. Release AOT favors speed and requires x86-64-v3 on x64. The candidates below began as the
+2026-11-12 investigation proposal; measured results follow.
+
+### .NET 11 baseline, 2026-11-14
+
+These are pre-emulator-optimization measurements on the 9950X3D, normal priority, affinity `0x50`.
+Desktop uses its real host and visible window at Max; the AppleSoft program loops over `SIN` and `STR$`
+and prints a progress dot after each 1,000 iterations. Sound and fast disk are off for this workload.
+
+| Workload, millions of emulated cycles/s | JIT | ReadyToRun | Native AOT |
+| --- | --- | --- | --- |
+| Desktop host, idle BASIC, no window | 44.79 (44.17-45.13) | 43.87 (43.79-45.33) | 37.32 (36.84-37.41) |
+| Desktop visible window, AppleSoft | 34.51 (34.39-34.69) | 36.87 (36.43-37.53) | 33.29 (31.92-33.56) |
+| CPU only, original 76-cycle RAM mix, NMOS | 170.64 | 170.82 | 152.11 |
+| CPU only, original 76-cycle RAM mix, WDC 65C02 | 165.28 | 166.05 | 151.01 |
+| CPU only, original 76-cycle RAM mix, Rockwell 65C02 | 164.05 | 165.46 | 151.03 |
+
+Values are medians of three samples, with observed min/max for Desktop. Each headless path runs
+204,096,768 cycles after 500,000 settling cycles. Visible-window samples measure all cycles over the
+actual settled interval (at least 15 seconds), rather than the old smoke runner's final one-second
+speed snapshot. CPU samples execute 760,000,000 cycles, validating the exact end state outside timing.
+JIT and R2R retain normal tiering/dynamic PGO; hot R2R methods may therefore be replaced by JIT code.
+All publishes are self-contained win-x64. Startup is reported separately in the raw window logs.
+
+`tools/Measure-IIePerformance.ps1` measures already-published builds without building alongside a timing.
+Raw baseline results and isolated binaries are under `artifacts/iie-overnight`; the preserved .NET 10
+reference is under its `baseline10` directory. The old .NET 10 visible-window figures were final-second
+snapshots, so they are not interchangeable with these whole-interval measurements.
+
+The migrated solution builds both library TFMs with no warnings. The .NET 11 tests initially pass
+41 AppleSharp and 2,227 main-suite cases, with 187 optional/external cases skipped. Missing external
+cases are not counted as correctness certification for changes to those subsystems.
+
+### Overnight results, 2026-11-15
+
+The final Windows x64 Desktop publish uses `OptimizationPreference=Speed`, x86-64-v3, and an instrumented
+application profile collected from equal-cycle math/string, graphics, and active stereo Mockingboard
+workloads. Its profile and provenance are in `src/Retrocore.Desktop/Profiles`. The profile converter is
+built from pinned runtime v11.0.0 sources, not an unavailable NuGet tool. Reproduce with
+`tools/Build-PgoTool.ps1` and `tools/Update-DesktopPgoCorpus.ps1`.
+
+| Final emulated MHz, median of three processes | JIT | ReadyToRun | Native AOT |
+| --- | --- | --- | --- |
+| Desktop host, idle BASIC, no window | 50.46 (49.47-50.72) | 50.13 (49.79-50.53) | 51.63 (50.86-52.27) |
+| Visible Desktop, AppleSoft math/string loop | 40.56 (38.77-40.72) | 40.76 (39.12-41.18) | 47.49 (45.71-47.76) |
+| First visible frame, median milliseconds | 1,194 | 598 | 275 |
+
+R2R retains normal tiering/dynamic PGO; hot methods can become JIT code. Its startup improvement is
+clearer than its steady-state difference. The display's behavior changed during the session: early
+callbacks were about 135 Hz; late callbacks were about 75-90 Hz with roughly 33 ms p99. The preserved
+.NET 10 app shows the same late behavior. Do not attribute the entire early-to-late visible-window delta
+to optimizations. Paired pilots below and matched headless work establish the individual wins.
+
+Isolated headless controls, unchanged emulator algorithm, normal priority/affinity `0x50`:
+.NET 10 original AOT 34.50 MHz; .NET 11 blended/base 35.53; .NET 11 speed/base 37.41
+(one 34.70 outlier); .NET 11 speed/v3 37.36. Runtime migration alone is a small part of the final result.
+Explicit host-native ISA gives no repeatable advantage over v3.
+
+#### Kept
+
+| Change | Evidence |
+| --- | --- |
+| Precompute immutable per-frame scan offsets, visible-cell indices, mixed-text regions | Three paired AOT product runs: 33.15/32.13/28.99 -> 36.75/36.16/35.65 MHz. No scan or floating-bus fetch skipped. Existing mixed-mode test rejects a deliberately wrong boundary. |
+| Inline the 6502 public per-cycle wrapper | Paired actual Desktop gain about 5%. Full Native AOT BDN: 6.642 -> 5.784 ns NMOS, 6.652 -> 6.135 WDC, 6.649 -> 6.168 Rockwell; no allocation. BDN uses host-native ISA; shipping application pilots separately use v3. |
+| Instrumented application PGO | Paired AOT product 37.29/38.13/37.26 -> 47.38/46.16/45.60 MHz. Graphics, speaker, and Mockingboard holdouts improve. Compiler input, nonempty edge/type data, and native execution verified. |
+| Cache AY output, invalidate only on amplitude-relevant changes | Active stereo tone workload: about 17 -> 24 MHz, then about 23 -> 25 MHz after dependency-aware invalidation. Every counter/LFSR still advances at its original clock. 50 chip/audio tests, including long recordings, pass. New test rejects deliberately stale output. |
+| Broaden PGO to graphics and active audio | No target regression; active audio improves further to about 26-27 MHz. Shipping profile generation uses the same reproducible corpus. |
+
+#### Rejected
+
+| Candidate | Why rejected |
+| --- | --- |
+| Cache the scanned flash phase by absolute clock block | -4.3%/-0.2% product results; reverted. |
+| Cache exact rendered rows | -1.4%/+0.7%, no gain for about 0.5 MB extra state per machine; reverted. |
+| Inline a separate already-captured-cycle guard | +2.2%/+1.4%/-0.7%, overlapping ranges; reverted. |
+| Pack scan-position entries into uint | Consistently about 0.7% slower; keep named tuple mapping. |
+| Outline complex Cxxx dispatch to inline RAM/ROM reads | Fresh-profile product +5.1%/+3.9%/-0.3%, below gate with overlap; reverted. |
+| Cache opcode execution groups/store/modify flags | All vectors pass, but promising short results do not survive full BDN: NMOS about 3% slower, CMOS only 2-3% faster; product neutral/slightly worse. Reverted including private snapshot fields. |
+| Value-type Apple II bus adapter | Fresh AOT+PGO product has no gain; reverted all public generic/API changes. |
+| Ryzen-native ISA | -1.4%/+0.4%/-0.5%, no repeatable gain over v3. |
+
+#### AppleWin: matched work, not the screenshot's score
+
+An external, licensed AppleWin v1.32.0.0 harness uses its real CPU, paging, soft switches, and NTSC renderer.
+It has no UI presentation or outer disk/audio scheduler. It remains under ignored artifacts, never copied
+into MIT production sources.
+
+For 256 finite pairs of genuine AppleSoft ROM expression evaluations (25,396,270 cycles), every implementation
+produces the same completion count, result bytes, DONE marker, PC/registers, and full-memory hash. The CPU
+status B bit is normalized because AppleWin synthesizes it as set. Six warm samples across three processes:
+
+| Headless finite work | Emulated MHz |
+| --- | --- |
+| AppleWin CPU + NTSC | 49.70 |
+| Retrocore JIT, complete IIe step/device path | 49.88 |
+| Retrocore R2R, complete IIe step/device path | 50.82 |
+| Retrocore AOT, complete IIe step/device path | 56.68 |
+
+This is about a 14% AOT win for this workload, **not a blanket claim over AppleWin's stock UI or games**.
+Our lookup/raster-history renderer and AppleWin's continuously generated composite NTSC pixels do different
+video work. Existing Retrocore functionality and per-cycle observability are preserved.
+
+The CPU-only synthetic program remains much faster in AppleWin: 1,300.78 MHz against Retrocore AOT 167.16,
+JIT 161.96, R2R 160.88. Both run the same initial RAM and actual warmup/work cycles and end at the same state.
+AppleWin dispatches complete instructions and adds their cycle costs; Retrocore executes each cycle, dummy
+access, signal check, resumable phase, and observable bus record. Closing that gap requires a substantially
+different exact core, not retargeting or dropping accuracy. This investigation explains the current gap;
+it does not prove a future exact implementation cannot improve it.
+
+Final validation: both library TFMs build with zero warnings; .NET 11 has 41 AppleSharp and 2,229 main tests
+passed, 187 optional/external skips; all 7,660,000 6502 bus-vector cases and functional/signal gates pass.
+Native validation across all cores/machines, 14 DAP scripts, extension compilation, and 111 extension tests
+pass. Both old and new AOT keep 1.000x, type 42, and play idle speaker audio without underruns in a matched
+late normal-speed check. ARM64's evaluated configuration has neither the x64 ISA nor the Windows profile;
+other-OS runtime execution was not available locally.
 
 ### Candidates
 

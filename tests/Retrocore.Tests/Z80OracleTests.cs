@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json;
 using Retrocore.Assembler;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
+using System.Text.Json;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
 namespace Retrocore.Tests;

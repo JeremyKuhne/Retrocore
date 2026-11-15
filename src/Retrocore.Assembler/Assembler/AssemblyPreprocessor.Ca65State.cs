@@ -16,7 +16,7 @@ internal sealed partial class AssemblyPreprocessor
         /// <summary>
         ///  Gets inline textual definitions.
         /// </summary>
-        internal Dictionary<string, TextDefinition> Defines { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, TextDefinition> Defines { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets or sets one bit per defined name length (63 for longer names), so lines that cannot mention a
@@ -27,7 +27,7 @@ internal sealed partial class AssemblyPreprocessor
         /// <summary>
         ///  Gets known type and field sizes by canonical name.
         /// </summary>
-        internal Dictionary<string, long> Sizes { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, long> Sizes { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets open structure, union and enumeration frames.

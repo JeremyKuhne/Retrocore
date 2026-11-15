@@ -105,7 +105,7 @@ internal sealed partial class AssemblyPreprocessor
             string replacement = definition.Text;
             if (definition.Parameters is { } parameters)
             {
-                Dictionary<string, string> names = new(StringComparer.Ordinal);
+                Dictionary<string, string> names = [with(StringComparer.Ordinal)];
                 for (int index = 0; index < parameters.Length; index++)
                 {
                     while (end < text.Length && char.IsWhiteSpace(text[end])) { end++; }

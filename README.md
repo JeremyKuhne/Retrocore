@@ -34,7 +34,7 @@ model runs with nothing external.
 
 Prerequisites:
 
-- the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0);
+- the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0);
 - [Node.js](https://nodejs.org) with npm, to compile and package the extension;
 - [VS Code](https://code.visualstudio.com) 1.140 or later, with its `code` command on `PATH`;
 - PowerShell 7 (the install script is tested on Windows only).
@@ -61,9 +61,30 @@ To build only the VSIX (for example, to install on another machine):
 
 Copy the `.vsix` file over and install it with **Extensions: Install from VSIX...** in the Command Palette, or
 run `code --install-extension retrocore-<version>.vsix`. The packaged host is framework-dependent, so that
-machine needs the [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0), but it does not need the
+machine needs the [.NET 11 runtime](https://dotnet.microsoft.com/download/dotnet/11.0), but it does not need the
 .NET SDK, Node.js, or any ROM dumps. To run the in-repo extension directly in a separate development
 window while working on it, see [Installing and self-hosting](extension/README.md#installing-and-self-hosting).
+
+Runtime libraries target .NET 10 and .NET 11; applications, tools, and tests target .NET 11 only. All projects
+use C# 15, with the build-only Roslyn generator kept on .NET Standard 2.0. Release Native AOT publishing favors
+speed over size. Native x64 binaries require an x86-64-v3 (AVX2-class) CPU; ARM64 keeps its own instruction
+baseline. Set `IlcInstructionSet` explicitly when publishing for a different CPU baseline.
+
+The Windows x64 Desktop AOT publish also uses its checked-in instrumented Apple IIe profile. Set
+`-p:RetrocorePgoProfile=` to measure without it, or set that property to an absolute `.mibc` path to use a
+different profile. Other runtime identifiers do not implicitly consume this Windows profile. To refresh it
+after changes to hot code (Windows, .NET 11, PowerShell 7, Git, and `dotnet-trace` required):
+
+```powershell
+.\tools\Build-PgoTool.ps1
+.\tools\Update-DesktopPgoCorpus.ps1 -PgoTool .\artifacts\pgo-tool\bin\dotnet-pgo.exe -OutputDirectory .\artifacts\pgo-training-new
+```
+
+The converter is built from pinned official runtime sources. Training generates fresh SDK DOS disks for
+math/string, graphics, and active stereo Mockingboard workloads, runs the JIT application with instrumented
+PGO, and validates nonempty edge/block counts before replacing the profile. The adjacent JSON records
+provenance. `Update-DesktopPgo.ps1` can also train one custom disk independently. Recheck normal-speed behavior
+before accepting a refreshed profile; training throughput alone is not the acceptance test.
 
 ## Assembly language
 

@@ -15,8 +15,8 @@ public sealed class DocumentationCpu
 {
     private static readonly Dictionary<IsaDescription, DocumentationCpu> s_cpus = [];
 
-    private readonly Dictionary<string, IsaFlag> _words = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _registers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IsaFlag> _words = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly HashSet<string> _registers = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly bool _alternates;
 
     private DocumentationCpu(IsaDescription description)

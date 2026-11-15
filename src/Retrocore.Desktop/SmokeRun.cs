@@ -28,6 +28,8 @@ internal static class SmokeRun
     internal static void Start(MainWindow window, MachineHost host, double seconds, IClassicDesktopStyleApplicationLifetime desktop)
     {
         long started = Stopwatch.GetTimestamp();
+        long measureStarted = 0;
+        ulong measureCycles = 0;
         bool settled = false;
         bool typed = false;
         int ticks = 0;
@@ -47,6 +49,7 @@ internal static class SmokeRun
             if (!settled && elapsed >= s_settle)
             {
                 settled = true;
+                (measureCycles, measureStarted) = host.Sample();
                 window.Screen.Stats.Restart();
             }
 
@@ -58,22 +61,26 @@ internal static class SmokeRun
                 host.Key(13);
             }
 
-            if (elapsed.TotalSeconds < seconds + s_settle.TotalSeconds) { return; }
+            if (!settled || Stopwatch.GetElapsedTime(measureStarted).TotalSeconds < seconds) { return; }
             timer.Stop();
-            Report(window, host, seconds, fast * 100 / Math.Max(1, ticks), busyUntil);
+            (ulong cycles, long ended) = host.Sample();
+            Report(window, host, Stopwatch.GetElapsedTime(measureStarted, ended).TotalSeconds,
+                cycles - measureCycles, fast * 100 / Math.Max(1, ticks), busyUntil);
+
             desktop.Shutdown();
         };
 
         timer.Start();
     }
 
-    private static void Report(MainWindow window, MachineHost host, double seconds, int fastPercent, double busyUntil)
+    private static void Report(MainWindow window, MachineHost host, double seconds, ulong cycles, int fastPercent, double busyUntil)
     {
         FrameStats stats = window.Screen.Stats;
         bool reached = host.ScreenText().Contains("42", StringComparison.Ordinal);
-        double speed = host.MeasuredHertz / host.ClockHertz;
+        double hertz = cycles / seconds;
+        double speed = hertz / host.ClockHertz;
         Console.Out.WriteLine($"machine: {host.Name}");
-        Console.Out.WriteLine($"seconds: {seconds:0.0}");
+        Console.Out.WriteLine($"seconds: {seconds:0.000}");
         if (stats.FirstFrame is { } first)
         {
             Console.Out.WriteLine($"first frame after start: {(first - Process.GetCurrentProcess().StartTime).TotalMilliseconds:0} ms");
@@ -82,6 +89,7 @@ internal static class SmokeRun
         Console.Out.WriteLine($"display frames: {stats.Frames} ({stats.Frames / seconds:0.0} a second), pictures drawn: {stats.Drawn}");
         Console.Out.WriteLine($"frame time ms: median {stats.Percentile(50):0.00}, p99 {stats.Percentile(99):0.00}, max {stats.Percentile(100):0.00}");
         Console.Out.WriteLine($"emulated speed: {speed:0.000}x of {host.ClockHertz} Hz");
+        Console.Out.WriteLine($"emulated throughput: {hertz / 1e6:0.000} MHz, {cycles:N0} cycles");
         Console.Out.WriteLine($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start");
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");

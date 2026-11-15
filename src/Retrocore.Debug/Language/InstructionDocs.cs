@@ -177,7 +177,7 @@ internal static partial class InstructionDocs
                 return table;
             }
 
-            table = new(StringComparer.OrdinalIgnoreCase);
+            table = [with(StringComparer.OrdinalIgnoreCase)];
             Span<byte> bytes = stackalloc byte[3];
             for (int code = 0; code < OpcodeCount; code++)
             {

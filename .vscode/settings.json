@@ -7,11 +7,16 @@
         "**/src/**/Roms/**/*.mac": "retrocore-macro10",
         "**/sample/**/*.asm": "retrocore-asm"
     },
-    // The VS Code builds and profiles the extension tests download; their bundled extensions are not ours to lint.
+    // Separate checkouts are not part of this workspace; open them in their own VS Code window.
     "files.exclude": {
+        "**/.claude/worktrees": true,
         "artifacts/vscode-*": true
     },
+    "search.exclude": {
+        "**/.claude/worktrees/**": true
+    },
     "files.watcherExclude": {
+        "**/.claude/worktrees/**": true,
         "artifacts/**": true
     }
 }

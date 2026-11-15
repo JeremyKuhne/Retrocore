@@ -35,7 +35,7 @@ public sealed partial class BasicEvaluator
     private readonly IBasicMemory _memory;
     private readonly BasicVariables _variables;
     private readonly Func<string, (string Parameter, string Body)?>? _functions;
-    private readonly Dictionary<string, BasicValue> _bound = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, BasicValue> _bound = [with(StringComparer.Ordinal)];
     private byte[] _bytes = [];
     private int _at;
     private int _depth;

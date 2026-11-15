@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Retrocore.Assembler;
 using Retrocore.Debug;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Tests;
 

@@ -229,7 +229,7 @@ internal sealed class AnalysisEngine
             Error("RCDIS001", _project.Origin, "The analysis mode is invalid.");
         }
 
-        HashSet<string> names = new(StringComparer.Ordinal);
+        HashSet<string> names = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<ushort, string> pair in _project.Symbols)
         {
             if (pair.Value is null || !AssemblySyntax.IsPlainIdentifier(pair.Value) || !names.Add(pair.Value))
@@ -700,7 +700,7 @@ internal sealed class AnalysisEngine
     /// <returns>The independent symbol snapshot; generated names are never written back to the project.</returns>
     private Dictionary<ushort, string> Symbols(DisassemblyReference[] references)
     {
-        Dictionary<ushort, string> symbols = new(_project.Symbols.Count + references.Length);
+        Dictionary<ushort, string> symbols = [with(_project.Symbols.Count + references.Length)];
         foreach (KeyValuePair<ushort, string> pair in _project.Symbols) { symbols.Add(pair.Key, pair.Value); }
         if (!_project.GenerateLabels || _diagnostics.Any(diagnostic => diagnostic.IsError)) { return symbols; }
 

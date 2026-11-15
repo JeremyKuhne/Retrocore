@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using Retrocore.Machines.Altair;
 using Retrocore.Machines.Devices;
+using System.Text.Json.Nodes;
 using Touki;
 
 namespace Retrocore.Debug;

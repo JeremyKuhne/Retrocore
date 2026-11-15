@@ -59,7 +59,7 @@ jobs:
       - name: Assemble the IIe sample
         run: |
           mkdir -p artifacts/iie-sample
-          dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
+          dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
       - name: Debug adapter tests
         run: |

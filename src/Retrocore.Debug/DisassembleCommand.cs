@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
-using System.Text.Json;
 using Retrocore.Assembler;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Globalization;
+using System.Text.Json;
 using Touki.Text;
 
 namespace Retrocore.Debug;
@@ -47,7 +47,8 @@ internal static class DisassembleCommand
     internal static int Run(string[] args)
     {
         List<string> positional = [];
-        Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
+
+        Dictionary<string, string> options = [with(StringComparer.OrdinalIgnoreCase)];
         for (int index = 0; index < args.Length; index++)
         {
             if (!args[index].StartsWith("--", StringComparison.Ordinal))
@@ -109,7 +110,8 @@ internal static class DisassembleCommand
         // The first pass finds what the code refers to; only those of the machine's names go in the source.
         DisassemblyResult found = Disassembler.Analyze(program.Project(new Dictionary<ushort, string>()));
         Dictionary<ushort, string> names = [];
-        Dictionary<string, string> files = new(StringComparer.Ordinal);
+
+        Dictionary<string, string> files = [with(StringComparer.Ordinal)];
         HashSet<string> hinted = new(program.Hints.Names.Values, StringComparer.Ordinal);
         foreach (ushort target in found.References.Select(reference => reference.Target).Distinct())
         {

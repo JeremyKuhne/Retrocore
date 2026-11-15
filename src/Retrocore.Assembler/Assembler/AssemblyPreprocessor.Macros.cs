@@ -26,7 +26,7 @@ internal sealed partial class AssemblyPreprocessor
         string parameters = text[nameLength..].Trim().ToString();
         if (parameters.Length != 0 && parameters[0] == ',') { parameters = parameters[1..].Trim(); }
         List<string> names = Arguments(parameters);
-        HashSet<string> unique = new(StringComparer.Ordinal);
+        HashSet<string> unique = [with(StringComparer.Ordinal)];
         foreach (string parameter in names)
         {
             if (!AssemblySyntax.IsPlainIdentifier(parameter) || !unique.Add(parameter))
@@ -42,7 +42,7 @@ internal sealed partial class AssemblyPreprocessor
             return;
         }
 
-        List<Line> frozen = new(body.Count);
+        List<Line> frozen = [with(body.Count)];
         foreach (Line line in body)
         {
             frozen.Add(new(Substitute(line.Text, substitutions, frame), line.Location, line.Dialect));
@@ -69,7 +69,7 @@ internal sealed partial class AssemblyPreprocessor
             return;
         }
 
-        Dictionary<string, string> names = new(StringComparer.Ordinal);
+        Dictionary<string, string> names = [with(StringComparer.Ordinal)];
         for (int index = 0; index < macro.Parameters.Length; index++)
         {
             names.Add(macro.Parameters[index], index < arguments.Count ? arguments[index] : "");
@@ -78,7 +78,7 @@ internal sealed partial class AssemblyPreprocessor
         // Each invocation gets its own call-site identity, so a debugger can tell expansions from one line apart,
         // such as successive iterations of a .repeat.
         AssemblyLocation call = invocation.Location.Occurrence();
-        List<Line> expanded = new(macro.Body.Count);
+        List<Line> expanded = [with(macro.Body.Count)];
         foreach (Line line in macro.Body)
         {
             AssemblyLocation physical = line.Location;

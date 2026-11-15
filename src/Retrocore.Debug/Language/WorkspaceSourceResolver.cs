@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Diagnostics.CodeAnalysis;
 using Retrocore.Assembler;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Retrocore.Debug.Language;
 
@@ -24,7 +24,7 @@ internal sealed class WorkspaceSourceResolver : IAssemblySourceResolver, IAssemb
     /// <summary>
     ///  Gets every path resolved so far, which the analysis treats as part of its root.
     /// </summary>
-    internal HashSet<string> Resolved { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal HashSet<string> Resolved { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <inheritdoc/>
     public bool TryResolve(string fromPath, string request, [NotNullWhen(returnValue: true)] out AssemblySource? source)

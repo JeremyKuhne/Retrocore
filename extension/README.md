@@ -41,7 +41,7 @@ icon theme has none of its own for the file.
 VSX. Build its VSIX from the repository and install that. There are two ways to use
 it: installed, for everyday work in any folder, and self-hosted, to fix it.
 
-To build and install it, run this from the repository root. It needs the .NET 10
+To build and install it, run this from the repository root. It needs the .NET 11
 SDK, Node.js with npm, PowerShell 7, and VS Code's `code` command on `PATH`:
 
 ```powershell
@@ -59,7 +59,7 @@ keep.
 
 `-PackageOnly` only writes the VSIX. To install that VSIX somewhere else, use
 **Extensions: Install from VSIX...** or `code --install-extension` with its path.
-The packaged host is framework-dependent, so it needs the .NET 10 runtime.
+The packaged host is framework-dependent, so it needs the .NET 11 runtime.
 
 The installed extension uses the host packaged with it, so it works in any folder
 and stays on that build even with this repository open. A self-hosted extension
@@ -174,7 +174,7 @@ is not marked as a compiler error; that is the language server's job, below.
 The extension starts `Retrocore.Debug --language-server` for `retrocore-asm` documents. It
 uses `retrocore.languageServer.host`, or by default the host packaged with the installed
 extension; a self-hosted extension uses the workspace's Release build,
-`artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll`, first.
+`artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll`, first.
 `retrocore.languageServer.enabled` turns it off.
 
 The server assembles with retrocore itself, so everything follows the real dialect,

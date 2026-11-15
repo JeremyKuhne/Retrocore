@@ -6,10 +6,10 @@ using Retrocore.Assembler;
 using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
-using System.Text.Json.Nodes;
 using System.Diagnostics;
-using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
@@ -90,7 +90,7 @@ internal sealed partial class DebugSession
     // What the launch powers on to: the reset handler, a loaded program's entry, or (null) a BASIC launch already
     // past reset at the prompt.
     private string? _powerOn;
-    private readonly Dictionary<string, JsonObject> _requested = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, JsonObject> _requested = [with(StringComparer.OrdinalIgnoreCase)];
 
     // Pasted keys still to type, on a machine with a typing pace, and the cycle the next may go at.
     private readonly Queue<int> _typing = new();

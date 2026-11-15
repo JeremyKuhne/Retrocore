@@ -16,7 +16,7 @@ export async function testProgramBreakpoints(workspace: vscode.WorkspaceFolder):
     assert.ok(await vscode.debug.startDebugging(workspace, {
         type: "retrocore", request: "launch", name: "Program breakpoints", machine: "apple2", model: "iie-enhanced",
         stopOnEntry: false, sound: "off",
-        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll")
+        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")
     }));
     const session = vscode.debug.activeDebugSession;
     if (session === undefined) throw new Error("VS Code did not create the session.");

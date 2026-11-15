@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Security.Cryptography;
 using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 

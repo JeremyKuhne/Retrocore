@@ -124,7 +124,7 @@ internal sealed partial class Apple1DebugTarget
         {
             if (!BasicActive) { return null; }
             int count = Math.Min((int)Peek(IntegerBasicDialect.GosubIndex), GosubDepth);
-            List<(int, int)> entries = new(count);
+            List<(int, int)> entries = [with(count)];
             for (int index = count - 1; index >= 0; index--)
             {
                 int line = Peek((ushort)(GosubLineLow + index)) | (Peek((ushort)(GosubLineHigh + index)) << 8);

@@ -14,9 +14,9 @@ internal static class DiskCommands
     /// </summary>
     /// <param name="output">-o, The image to write: .dsk or .do (DOS 3.3), .d13 (DOS 3.2), or .woz.</param>
     /// <param name="files">
-    ///  -f, A folder of files to put on the disk. NAME.bas is an AppleSoft listing, NAME.txt a text file, and
-    ///  NAME#TTAAAA (CiderPress II's naming) a file of ProDOS type TT: 04 text, FA Integer BASIC, FC AppleSoft,
-    ///  or 06 binary with load address AAAA.
+    ///  -f, A folder of files to put on the disk. NAME.bas or NAME.applesoft.bas is an AppleSoft listing stored as
+    ///  NAME, NAME.txt a text file, and NAME#TTAAAA (CiderPress II's naming) a file of ProDOS type TT: 04 text,
+    ///  FA Integer BASIC, FC AppleSoft, or 06 binary with load address AAAA.
     /// </param>
     /// <param name="run">-r, Writes a HELLO that runs this file: BRUN for a binary, RUN for a program.</param>
     /// <param name="dos">Which DOS: 3.3 (the default) or 3.2, the 13-sector DOS.</param>

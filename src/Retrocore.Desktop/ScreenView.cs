@@ -9,6 +9,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
+using System.Diagnostics;
 
 namespace Retrocore.Desktop;
 
@@ -41,6 +43,10 @@ internal sealed class ScreenView : Control
     // the pointer itself, captured while a button is down.
     private Point? _mouseAt;
     private IPointer? _mousePointer;
+    private bool _releasing;
+
+    // When the mouse card took the pointer, for the note that says how to let it go.
+    private long _capturedAt;
     private double _mouseX;
     private double _mouseY;
 
@@ -230,7 +236,29 @@ internal sealed class ScreenView : Control
         if (MouseCaptured && this.TryFindResource(Palette.Focus, ActualThemeVariant, out object? focus) && focus is IBrush outline)
         {
             context.DrawRectangle(new Pen(outline, 2), destination.Inflate(1));
+            if (Stopwatch.GetElapsedTime(_capturedAt) < s_noteTime) { DrawNote(context, destination); }
         }
+    }
+
+    // How long the note shows after the mouse card takes the pointer.
+    private static readonly TimeSpan s_noteTime = TimeSpan.FromSeconds(3);
+
+    // A note at the top of the picture, as a game says it has the mouse: in VS Code's widget colours.
+    private void DrawNote(DrawingContext context, Rect picture)
+    {
+        IBrush background = this.TryFindResource(Palette.Widget, ActualThemeVariant, out object? widget) && widget is IBrush fill ? fill : Brushes.Black;
+        IBrush text = this.TryFindResource(Palette.Text, ActualThemeVariant, out object? foreground) && foreground is IBrush ink ? ink : Brushes.White;
+        FormattedText note = new(
+            $"The mouse card in slot {_host.MouseSlot} has the mouse · press Esc to let it go",
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            Typeface.Default,
+            13,
+            text);
+
+        Rect box = new(picture.X + ((picture.Width - note.Width) / 2) - 12, picture.Y + 12, note.Width + 24, note.Height + 12);
+        context.DrawRectangle(background, pen: null, box, 4, 4);
+        context.DrawText(note, new Point(box.X + 12, box.Y + 6));
     }
 
     // Where the picture goes: its monitor's shape, as the display panel gives it, the Apple II's 560 by 192 dots
@@ -293,16 +321,17 @@ internal sealed class ScreenView : Control
         if (!MouseCaptured)
         {
             _mouseX = _mouseY = 0;
+            _capturedAt = Stopwatch.GetTimestamp();
             Cursor = new Cursor(StandardCursorType.None);
+            Hold(e.Pointer);
             Recentre(e.GetPosition(this));
             MouseChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
+            DispatcherTimer.RunOnce(InvalidateVisual, s_noteTime);
         }
         else
         {
-            // Captured while the button is down, so its release comes here even off the window.
-            e.Pointer.Capture(this);
-            _mousePointer = e.Pointer;
+            Hold(e.Pointer);
             _host.Mouse(0, 0, pressed: true);
         }
 
@@ -313,8 +342,37 @@ internal sealed class ScreenView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        if (MouseCaptured && e.InitialPressMouseButton == MouseButton.Left) { _host.Mouse(0, 0, pressed: false); }
-        _mousePointer = null;
+        if (!MouseCaptured) { return; }
+        if (e.InitialPressMouseButton == MouseButton.Left) { _host.Mouse(0, 0, pressed: false); }
+
+        // Avalonia ends a capture when the buttons come up; the card keeps the pointer until Escape.
+        IPointer pointer = e.Pointer;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (MouseCaptured) { Hold(pointer); }
+        });
+    }
+
+    /// <inheritdoc/>
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+
+        // Anything else that takes the capture while the card has the pointer gives it back to the card, unless the
+        // card is letting go.
+        if (!MouseCaptured || _releasing) { return; }
+        IPointer pointer = e.Pointer;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (MouseCaptured && pointer.Captured is null) { Hold(pointer); }
+        });
+    }
+
+    // Captures the pointer, so every move comes here whatever is under it, the side pane among them.
+    private void Hold(IPointer pointer)
+    {
+        _mousePointer = pointer;
+        if (pointer.Captured != this) { pointer.Capture(this); }
     }
 
     /// <inheritdoc/>
@@ -355,25 +413,34 @@ internal sealed class ScreenView : Control
         }
     }
 
-    // Holds the hidden pointer at the screen's centre, where Windows can move it; elsewhere it stays where it is,
-    // and the card's mouse stops where the pointer leaves the window.
-    private void Recentre(Point at)
+    // On Windows, keeps the hidden pointer inside the picture and puts it back at the picture's centre after each
+    // move, so it never reaches an edge; elsewhere the capture alone keeps its moves coming here.
+    private unsafe void Recentre(Point at)
     {
         _mouseAt = at;
-        if (!OperatingSystem.IsWindows()) { return; }
-        Point centre = new(Bounds.Width / 2, Bounds.Height / 2);
-        PixelPoint screen = this.PointToScreen(centre);
-        if (NativeMethods.SetCursorPos(screen.X, screen.Y)) { _mouseAt = centre; }
+        if (!OperatingSystem.IsWindows() || _bitmap is not { } bitmap) { return; }
+        Rect picture = PictureRect(bitmap);
+        PixelPoint topLeft = this.PointToScreen(picture.TopLeft);
+        PixelPoint bottomRight = this.PointToScreen(picture.BottomRight);
+
+        // Windows lets go of a clip when another window is activated, so it is set again with each move.
+        int* clip = stackalloc int[] { topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y };
+        NativeMethods.ClipCursor(clip);
+        PixelPoint centre = this.PointToScreen(picture.Center);
+        if (NativeMethods.SetCursorPos(centre.X, centre.Y)) { _mouseAt = picture.Center; }
     }
 
     // The mouse card gives the pointer back, its button up.
-    private void ReleaseMouse()
+    private unsafe void ReleaseMouse()
     {
         if (!MouseCaptured) { return; }
         _mouseAt = null;
         IPointer? pointer = _mousePointer;
         _mousePointer = null;
+        _releasing = true;
         if (pointer?.Captured == this) { pointer.Capture(control: null); }
+        _releasing = false;
+        if (OperatingSystem.IsWindows()) { NativeMethods.ClipCursor(rectangle: null); }
         Cursor = Cursor.Default;
         _host.Mouse(0, 0, pressed: false);
         MouseChanged?.Invoke(this, EventArgs.Empty);

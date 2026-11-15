@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Documentation;
+using System.Globalization;
 
 namespace Retrocore.Debug;
 
@@ -182,7 +182,7 @@ internal sealed class DebugContracts
             HashSet<string>? changes = null;
             if (topic.SectionsNamed("Uses").Any(Applies))
             {
-                changes = new(StringComparer.OrdinalIgnoreCase);
+                changes = [with(StringComparer.OrdinalIgnoreCase)];
                 IEnumerable<string> uses = topic.SectionsNamed("Uses").Where(Applies).SelectMany(section => section.Items);
                 changes.UnionWith(uses);
                 foreach (DocumentationEntry entry in topic.SectionsNamed("Out").Where(Applies).SelectMany(section => section.Entries))

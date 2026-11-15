@@ -69,7 +69,7 @@ export async function run(): Promise<void> {
         assert.equal(await vscode.debug.startDebugging(workspace, {
             type: "retrocore", request: "launch", name: "M1 integration",
             machine: "apple2", romDirectory, stopOnEntry: true, model: "iie-enhanced",
-            debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll"),
+            debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll"),
             program: path.join(root, "artifacts", "iie-sample", "main.bin"),
             debugFile: path.join(root, "artifacts", "iie-sample", "main.dbg"), loadAddress: 0x6000
         }), true);

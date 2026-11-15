@@ -273,6 +273,15 @@ internal sealed class MachineHost : DisposableBase
     internal ulong CycleCount => Volatile.Read(ref _publishedCycles);
 
     /// <summary>
+    ///  Samples the cycle count and host timestamp together while the machine cannot advance.
+    /// </summary>
+    /// <returns>The machine cycles and matching stopwatch timestamp.</returns>
+    internal (ulong Cycles, long Timestamp) Sample()
+    {
+        using (Gate()) { return (_target.CycleCount, Stopwatch.GetTimestamp()); }
+    }
+
+    /// <summary>
     ///  Gets the machine's clock in cycles a second.
     /// </summary>
     internal int ClockHertz => _target.ClockHertz;

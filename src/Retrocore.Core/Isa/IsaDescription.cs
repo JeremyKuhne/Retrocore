@@ -66,7 +66,7 @@ public sealed class IsaDescription
         Dictionary<string, OperandForm>? byName = _byName;
         if (byName is null)
         {
-            byName = new(StringComparer.Ordinal);
+            byName = [with(StringComparer.Ordinal)];
             foreach (OperandForm form in Forms)
             {
                 if (!byName.ContainsKey(form.Name)) { byName.Add(form.Name, form); }

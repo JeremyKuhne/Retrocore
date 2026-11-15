@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Runtime.InteropServices;
 using Retrocore.Machines.Coco;
+using System.Runtime.InteropServices;
 
 namespace Retrocore.Tests;
 

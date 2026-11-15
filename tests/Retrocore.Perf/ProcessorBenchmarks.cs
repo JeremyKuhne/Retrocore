@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using BenchmarkDotNet.Attributes;
+using System.Diagnostics;
 
 namespace Retrocore.Perf;
 
@@ -28,6 +29,12 @@ public class ProcessorBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            using Process process = Process.GetCurrentProcess();
+            process.PriorityClass = ProcessPriorityClass.Normal;
+        }
+
         _cpu = CpuWorkload.Create(Variant, out _bus);
         _cpu.Run(cycleBudget: CpuWorkload.CyclesPerLoop);
         CpuWorkload.Validate(_cpu, _bus);

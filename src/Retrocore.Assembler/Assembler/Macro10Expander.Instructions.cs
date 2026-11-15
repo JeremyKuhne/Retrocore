@@ -7,27 +7,29 @@ namespace Retrocore.Assembler;
 internal sealed partial class Macro10Expander
 {
     // The 6502's instructions, which the M6502 universal file defines under their usual names.
-    private static readonly HashSet<string> s_mnemonics = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_mnemonics =
+    [
+        with(StringComparer.Ordinal),
         "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI",
         "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY",
         "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA",
         "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"
-    };
+    ];
 
     // Instructions with a zero-page form, and those also indexed by X or Y in zero page.
-    private static readonly HashSet<string> s_zeroPage = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_zeroPage =
+    [
+        with(StringComparer.Ordinal),
         "ADC", "AND", "ASL", "BIT", "CMP", "CPX", "CPY", "DEC", "EOR", "INC", "LDA", "LDX", "LDY", "LSR", "ORA", "ROL",
         "ROR", "SBC", "STA", "STX", "STY"
-    };
+    ];
 
-    private static readonly HashSet<string> s_zeroPageX = new(StringComparer.Ordinal)
-    {
-        "ADC", "AND", "ASL", "CMP", "DEC", "EOR", "INC", "LDA", "LDY", "LSR", "ORA", "ROL", "ROR", "SBC", "STA", "STY"
-    };
+    private static readonly HashSet<string> s_zeroPageX =
+    [
+with(StringComparer.Ordinal),         "ADC", "AND", "ASL", "CMP", "DEC", "EOR", "INC", "LDA", "LDY", "LSR", "ORA", "ROL", "ROR", "SBC", "STA", "STY"
+    ];
 
-    private static readonly HashSet<string> s_zeroPageY = new(StringComparer.Ordinal) { "LDX", "STX" };
+    private static readonly HashSet<string> s_zeroPageY = [with(StringComparer.Ordinal), "LDX", "STX"];
 
     /// <summary>
     ///  Emits an M6502 instruction.

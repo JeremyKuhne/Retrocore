@@ -24,7 +24,7 @@ public sealed class AssemblyProject
     ///  Creates an empty project whose statement list starts with the given capacity.
     /// </summary>
     /// <param name="statementCapacity">The expected statement count.</param>
-    internal AssemblyProject(int statementCapacity) => Statements = new List<AssemblyStatement>(statementCapacity);
+    internal AssemblyProject(int statementCapacity) => Statements = [with(statementCapacity)];
 
     /// <summary>
     ///  Gets the editable collection of original source documents retained alongside the statements.

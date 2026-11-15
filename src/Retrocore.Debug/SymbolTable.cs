@@ -13,11 +13,11 @@ namespace Retrocore.Debug;
 internal sealed partial class SymbolTable
 {
     private readonly Dictionary<ushort, (string Path, int Line)> _locations = [];
-    private readonly Dictionary<(string Path, int Line), List<ushort>> _addresses = new(LineComparer.Instance);
-    private readonly Dictionary<string, long> _labels = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string Path, int Line), List<ushort>> _addresses = [with(LineComparer.Instance)];
+    private readonly Dictionary<string, long> _labels = [with(StringComparer.OrdinalIgnoreCase)];
 
     // The names in _labels that a debug file marks as constants (type=equ) rather than addresses.
-    private readonly HashSet<string> _constants = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _constants = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Loads debug metadata from a cc65 .dbg or VICE label file.

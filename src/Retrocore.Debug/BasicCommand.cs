@@ -49,7 +49,7 @@ internal static class BasicCommand
             return 2;
         }
 
-        Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> options = [with(StringComparer.OrdinalIgnoreCase)];
         for (int index = positional; index < args.Length; index += 2) { options[args[index]] = args[index + 1]; }
         BasicDialect? dialect = null;
         if (options.TryGetValue("--dialect", out string? name) && (dialect = BasicDialect.FromName(name)) is null)

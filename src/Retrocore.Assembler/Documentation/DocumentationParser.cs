@@ -316,7 +316,7 @@ public static partial class DocumentationParser
     // Macros whose body starts with data make the labels they follow tables.
     private static HashSet<string> DataMacros(string[] lines)
     {
-        HashSet<string> macros = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> macros = [with(StringComparer.OrdinalIgnoreCase)];
         List<string?> none = [];
         for (int index = 0; index < lines.Length; index++)
         {

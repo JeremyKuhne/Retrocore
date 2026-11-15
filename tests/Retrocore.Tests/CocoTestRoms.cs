@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Collections.Concurrent;
 using Retrocore.Debug;
 using Retrocore.Machines.Coco;
+using System.Collections.Concurrent;
 
 namespace Retrocore.Tests;
 

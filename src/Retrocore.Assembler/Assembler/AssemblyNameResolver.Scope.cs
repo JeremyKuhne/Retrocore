@@ -44,12 +44,12 @@ internal sealed partial class AssemblyNameResolver
         /// <summary>
         ///  Gets names declared anywhere in this scope.
         /// </summary>
-        internal HashSet<string> Definitions { get; } = new(StringComparer.Ordinal);
+        internal HashSet<string> Definitions { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets directly nested namespaces.
         /// </summary>
-        internal Dictionary<string, Scope> Children { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, Scope> Children { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Qualifies a name in this namespace.

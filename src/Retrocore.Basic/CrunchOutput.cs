@@ -19,8 +19,8 @@ internal sealed class CrunchOutput
     /// <param name="capacity">The bytes expected.</param>
     internal CrunchOutput(int capacity)
     {
-        _bytes = new(capacity);
-        _positions = new(capacity);
+        _bytes = [with(capacity)];
+        _positions = [with(capacity)];
     }
 
     /// <summary>

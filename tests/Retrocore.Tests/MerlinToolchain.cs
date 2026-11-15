@@ -85,7 +85,7 @@ internal static class MerlinToolchain
 
         byte[] bytes = File.ReadAllBytes(output);
         Assert.IsNotEmpty(bytes, "The reference must emit nonempty work.");
-        Dictionary<string, long> symbols = new(StringComparer.Ordinal);
+        Dictionary<string, long> symbols = [with(StringComparer.Ordinal)];
         foreach (string line in File.ReadLines(output + "_Symbols.txt").Skip(1))
         {
             string[] columns = line.Split(';');

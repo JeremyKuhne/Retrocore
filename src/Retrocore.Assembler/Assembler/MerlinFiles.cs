@@ -23,7 +23,7 @@ internal static class MerlinFiles
     /// <returns>A compilation-only view with statement indices unchanged.</returns>
     internal static AssemblyProject Prepare(AssemblyProject source)
     {
-        Dictionary<string, int> equates = new(StringComparer.Ordinal);
+        Dictionary<string, int> equates = [with(StringComparer.Ordinal)];
         for (int index = 0; index < source.Statements.Count; index++)
         {
             AssemblyStatement node = source.Statements[index];
@@ -37,7 +37,7 @@ internal static class MerlinFiles
         }
 
         if (equates.Count == 0) { return source; }
-        HashSet<string> required = new(StringComparer.Ordinal);
+        HashSet<string> required = [with(StringComparer.Ordinal)];
         Queue<string> pending = new();
         void References(ReadOnlyMemory<char> text)
         {
@@ -60,7 +60,7 @@ internal static class MerlinFiles
         while (pending.Count != 0) { References(source.Statements[equates[pending.Dequeue()]].Operand.Memory); }
 
         // Unused equates compile only when valid and closed over names that stay defined, found as a fixpoint.
-        HashSet<string> labels = new(StringComparer.Ordinal);
+        HashSet<string> labels = [with(StringComparer.Ordinal)];
         foreach (AssemblyStatement node in source.Statements)
         {
             if (node.Label is { } label && !equates.ContainsKey(label)) { labels.Add(label); }

@@ -16,17 +16,8 @@
   "activationEvents": [
     "onDebugResolve:retrocore",
     "onDebugDynamicConfigurations:retrocore",
-    "onCustomEditor:retrocore.memory",
     "onFileSystem:retrocore-basic",
-    "onFileSystem:retrocore-basic-file",
-    "onLanguage:retrocore-applesoft",
-    "onLanguage:retrocore-level2",
-    "onLanguage:retrocore-integer",
-    "onLanguage:retrocore-business",
-    "onLanguage:retrocore-apple1",
-    "onLanguage:retrocore-level1",
-    "onLanguage:retrocore-colorbasic",
-    "onLanguage:retrocore-basic"
+    "onFileSystem:retrocore-basic-file"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
@@ -289,7 +280,7 @@
         "retrocore.languageServer.host": {
           "type": "string",
           "default": "",
-          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net10.0."
+          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
         },
         "retrocore.basic.dialect": {
           "type": "string",
@@ -1764,7 +1755,7 @@
             "machine": "apple2",
             "name": "Debug IIe sample",
             "romDirectory": "${env:RETROCORE_IIE_ROMS}",
-            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net11.0\\Retrocore.Debug.dll",
             "program": "${workspaceFolder}\\artifacts\\iie-sample\\main.bin",
             "debugFile": "${workspaceFolder}\\artifacts\\iie-sample\\main.dbg",
             "stopOnEntry": true
@@ -1775,7 +1766,7 @@
             "machine": "apple2",
             "name": "Debug IIe source",
             "romDirectory": "${env:RETROCORE_IIE_ROMS}",
-            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net11.0\\Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           },
@@ -1784,7 +1775,7 @@
             "request": "launch",
             "machine": "trs80-model1",
             "name": "Boot TRS-80 Model I",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
           {
@@ -1792,7 +1783,7 @@
             "request": "launch",
             "machine": "trs80-model1",
             "name": "Debug Model I Z80 source",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           },
@@ -1802,7 +1793,7 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
           {
@@ -1811,7 +1802,7 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           }

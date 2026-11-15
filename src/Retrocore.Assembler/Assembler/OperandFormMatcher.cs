@@ -59,7 +59,7 @@ internal sealed partial class OperandFormMatcher
     private readonly string[] _prefixes;
     private readonly string[] _suffixes;
     private readonly HashSet<(string Word, char Before, char After)> _words = [];
-    private readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _names = [with(StringComparer.OrdinalIgnoreCase)];
 
     // Bit n is set when some literal pattern, or some pattern word, is n characters long (n below 64), so most
     // operands and names are rejected without a comparison or a string.
@@ -76,7 +76,7 @@ internal sealed partial class OperandFormMatcher
         List<ushort> empty = [];
         List<Entry> literals = [];
         List<Entry> entries = [];
-        Dictionary<string, Entry> groups = new(StringComparer.Ordinal);
+        Dictionary<string, Entry> groups = [with(StringComparer.Ordinal)];
         foreach (OperandForm form in forms)
         {
             _prefixes[form.Id] = "";

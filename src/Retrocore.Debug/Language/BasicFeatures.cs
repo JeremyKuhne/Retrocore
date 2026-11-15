@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.RegularExpressions;
 using Retrocore.Basic;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug.Language;
 

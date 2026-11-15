@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Media;
 using Retrocore.Pascal;
+using System.Globalization;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 

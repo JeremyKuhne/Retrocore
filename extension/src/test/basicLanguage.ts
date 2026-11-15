@@ -103,7 +103,7 @@ export async function testBasicLanguage(root: string): Promise<void> {
     await until("the pragma's dialect", () => level2.languageId === "retrocore-level2" ? true : undefined);
 
     // A tape opens as its listing, and saving writes the tape again.
-    const host = path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+    const host = path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
     const tape = path.join(folder, "game.cas");
     execFileSync("dotnet", [host, "--basic", "tokenize", plain, tape]);
     const listingUri = await vscode.commands.executeCommand<vscode.Uri>("retrocore.basic.openListing", vscode.Uri.file(tape));

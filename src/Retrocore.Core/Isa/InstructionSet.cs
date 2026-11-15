@@ -28,7 +28,7 @@ public sealed partial class InstructionSet
 
     private readonly List<string> _mnemonics = [];
     private readonly List<string> _baseNames = [];
-    private readonly Dictionary<string, int> _ids = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _ids = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<uint, int> _packed = [];
     private readonly List<IsaEncoding> _encodings = [];
     private readonly List<InstructionFlow> _flows = [];

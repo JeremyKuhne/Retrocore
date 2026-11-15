@@ -2,6 +2,8 @@
   <!-- Retrocore Desktop: the standalone emulator, with the extension's views in an Avalonia window
        (docs/backlog/Desktop.md). This is its phase 0 spike: dotnet publish -r win-x64 builds it native. -->
   <PropertyGroup>
+    <TargetFrameworks />
+    <TargetFramework>net11.0</TargetFramework>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Retrocore.Desktop</RootNamespace>
     <AssemblyName>retrocore-desktop</AssemblyName>
@@ -9,6 +11,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RetrocorePgoProfile Condition="'$(RetrocorePgoProfile)' == '' and '$(RuntimeIdentifier)' == 'win-x64'">$(MSBuildThisFileDirectory)Profiles\Apple2-win-x64-net11.mibc</RetrocorePgoProfile>
     <!-- The spike references the debug host's executable for its machines; phase 1's Retrocore.Hosting library
          replaces that reference, and this with it. -->
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
@@ -24,4 +27,11 @@
     <!-- The spike reaches the debug host's machines through its internals; phase 1 moves them to a library. -->
     <ProjectReference Include="..\Retrocore.Debug\Retrocore.Debug.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Release' and '$(PublishAot)' == 'true' and '$(RetrocorePgoProfile)' != ''">
+    <MibcFile Include="$(RetrocorePgoProfile)" />
+  </ItemGroup>
+  <Target Name="ValidatePgoProfile" BeforeTargets="PrepareForBuild"
+          Condition="'$(Configuration)' == 'Release' and '$(PublishAot)' == 'true' and '$(RetrocorePgoProfile)' != ''">
+    <Error Condition="!Exists('$(RetrocorePgoProfile)')" Text="Native AOT profile not found: $(RetrocorePgoProfile). Run tools\Update-DesktopPgoCorpus.ps1 or explicitly publish with -p:RetrocorePgoProfile= to disable application PGO." />
+  </Target>
 </Project>

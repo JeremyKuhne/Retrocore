@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Diagnostics;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Trs80;
+using System.Diagnostics;
 
 namespace Retrocore.Tests;
 

@@ -3,8 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
 

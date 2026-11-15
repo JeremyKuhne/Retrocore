@@ -17,7 +17,7 @@
     <!-- Input Directories -->
     <PackagesDir Condition="'$(PackagesDir)'==''">$(RepoDir)packages\</PackagesDir>
 
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <RootNamespace>Retrocore</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -43,6 +43,7 @@
     <Optimize Condition="'$(Optimize)' == ''">true</Optimize>
     <DebugType Condition="'$(DebugType)' == ''">pdbonly</DebugType>
     <DefineConstants>$(DefineConstants);TRACE</DefineConstants>
+    <OptimizationPreference>Speed</OptimizationPreference>
   </PropertyGroup>
 
   <!-- Set up the default output and intermediate paths -->
@@ -66,7 +67,7 @@
 
   <!-- Other settings -->
   <PropertyGroup>
-    <LangVersion>14.0</LangVersion>
+    <LangVersion>15.0</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- IDE diagnostics must run during builds before warnings-as-errors can enforce them. -->
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

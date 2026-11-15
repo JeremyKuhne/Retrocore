@@ -178,6 +178,29 @@ public class Apple2VideoTests
     }
 
     /// <summary>
+    ///  Captures a flash transition on its first visible clock without changing cells not yet scanned.
+    /// </summary>
+    [TestMethod]
+    public void ScannedFlashChangesOnTheFirstFetchAfterItsClockBoundary()
+    {
+        byte[] characters = new byte[4096];
+        Array.Fill(characters, (byte)255);
+        characters[0x81 * 8 + 3] = 254;
+        Apple2Bus bus = new(new Apple2Roms(new byte[16384], characters));
+        bus.SetRam(auxiliary: false, address: 0x480, value: 0x41);
+        bus.SetRam(auxiliary: false, address: 0x481, value: 0x41);
+        Advance(bus, 65 * 4203 + 25);
+        Pixel(bus.Video.RenderScannedBitmap(), x: 0, y: 11).Should().Equal(182, 243, 182, 255);
+        bus.Video.ScanCycle();
+        byte[] pixels = bus.Video.RenderScannedBitmap();
+        Pixel(pixels, x: 0, y: 11).Should().Equal(16, 21, 16, 255);
+        Pixel(pixels, x: 14, y: 11).Should().Equal(182, 243, 182, 255);
+        bus.Tick();
+        bus.Video.ScanCycle();
+        Pixel(bus.Video.RenderScannedBitmap(), x: 14, y: 11).Should().Equal(16, 21, 16, 255);
+    }
+
+    /// <summary>
     ///  Checks HGR phase colours, adjacent white bits and a half-dot high-bit delay.
     /// </summary>
     [TestMethod]

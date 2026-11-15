@@ -37,15 +37,15 @@ internal sealed partial class Macro10Expander
 
     private readonly List<Output> _output = [];
     private readonly List<(string Message, AssemblyLocation Location)> _errors = [];
-    private readonly Dictionary<string, Macro> _macros = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, long?> _values = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Macro> _macros = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, long?> _values = [with(StringComparer.Ordinal)];
 
     // Label addresses as this expander lays code out, for conditionals and instruction sizes only; the native
     // assembler computes the addresses it emits.
-    private readonly Dictionary<string, long> _addresses = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, int> _assignments = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _natives = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _addresses = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, int> _assignments = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, string> _aliases = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _natives = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly int _maximumStatements;
     private readonly int _maximumDepth;
     private int _statements;
@@ -101,7 +101,7 @@ internal sealed partial class Macro10Expander
         Process(new(text.Replace("\r\n", "\n"), location));
 
         // A symbol assigned more than once is a native variable, so each use reads the value assigned before it.
-        List<(string Text, AssemblyLocation Location)> lines = new(_output.Count);
+        List<(string Text, AssemblyLocation Location)> lines = [with(_output.Count)];
         foreach (Output output in _output)
         {
             if (output.Variable is not { } variable)

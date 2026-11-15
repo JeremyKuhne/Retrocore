@@ -12,10 +12,10 @@ namespace Retrocore.Documentation;
 /// </summary>
 public sealed class DocumentationSet
 {
-    private readonly Dictionary<string, DocumentationTopic> _topics = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DocumentationTopic> _topics = [with(StringComparer.Ordinal)];
     private readonly List<DocumentationTopic> _ordered = [];
     private readonly IReadOnlyDictionary<string, long> _symbols;
-    private readonly Dictionary<string, List<(int Line, IsaDescription Cpu)>> _cpus = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<(int Line, IsaDescription Cpu)>> _cpus = [with(StringComparer.OrdinalIgnoreCase)];
 
     // The CPU every statement was assembled for, unless they were for more than one.
     private IsaDescription? _onlyCpu;
@@ -86,7 +86,7 @@ public sealed class DocumentationSet
         if (result is not null && relocation != 0)
         {
             // Code that runs away from where it was assembled moves its labels; its constants stay.
-            Dictionary<string, long> moved = new(StringComparer.Ordinal);
+            Dictionary<string, long> moved = [with(StringComparer.Ordinal)];
             foreach (KeyValuePair<string, long> symbol in symbols) { moved[symbol.Key] = symbol.Value; }
             foreach (AssemblySymbol symbol in result.SymbolDefinitions)
             {
@@ -191,7 +191,7 @@ public sealed class DocumentationSet
         List<DocumentationFile> list = [.. files];
         DocumentationSet set = new(module, model, symbols, list);
         if (sourceMap is not null) { ReadCpus(set, sourceMap); }
-        Dictionary<string, List<DocumentationComment>> byName = new(StringComparer.Ordinal);
+        Dictionary<string, List<DocumentationComment>> byName = [with(StringComparer.Ordinal)];
         List<string> order = [];
         foreach (DocumentationFile file in list)
         {

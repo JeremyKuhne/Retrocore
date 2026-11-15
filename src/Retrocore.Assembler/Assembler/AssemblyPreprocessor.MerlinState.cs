@@ -14,7 +14,7 @@ internal sealed partial class AssemblyPreprocessor
         /// <summary>
         ///  Gets macro files already loaded by USE, which Merlin 32 loads once however often they are named.
         /// </summary>
-        internal HashSet<string> Used { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal HashSet<string> Used { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         ///  Gets the collision-checked source-name mapping.

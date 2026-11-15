@@ -102,7 +102,7 @@ public sealed partial class BasicProgram
     /// <param name="labels">The labels.</param>
     /// <returns>The statements.</returns>
     internal static string Resolved(BasicDialect dialect, BasicTextLine line, IReadOnlyDictionary<string, BasicLabel> labels) =>
-        Resolve(dialect, line, new Dictionary<string, BasicLabel>(labels), []);
+        Resolve(dialect, line, [with(labels)], []);
 
     // Puts the numbers of the labels a line names in place of their names.
     private static string Resolve(

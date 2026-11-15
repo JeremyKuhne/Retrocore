@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(IlcInstructionSet)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-x64'))">
+    <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+  </PropertyGroup>
   <!-- Native AOT compiles with the SDK's bundled ILCompiler pack, which can trail a security fix (10.0.13 has
        GHSA-p3jp-9v83-76w9). The SDK warns on an explicit ILCompiler reference, so raise the pack it picks. -->
   <PropertyGroup>

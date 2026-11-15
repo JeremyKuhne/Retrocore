@@ -74,7 +74,7 @@ internal static partial class SourceIncludes
             .Where(IsAssemblySource)
             .Select(Path.GetFullPath)];
 
-        HashSet<string> included = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> included = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (string file in files) { included.UnionWith(IncludesOf(file)); }
         return [.. files.Where(file => !included.Contains(file))];
     }
@@ -94,7 +94,7 @@ internal static partial class SourceIncludes
     internal static string RootOf(string path)
     {
         List<string> candidates = Neighbors(path);
-        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase) { path };
+        HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase), path];
         string current = path;
         while (candidates.FirstOrDefault(candidate =>
             !seen.Contains(candidate) && IncludesOf(candidate).Contains(current, StringComparer.OrdinalIgnoreCase)) is { } includer)

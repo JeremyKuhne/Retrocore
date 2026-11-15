@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Microsoft.CodeAnalysis.Text;
 using Retrocore.Assembler;
 using Retrocore.Cpu.M6502;
-using Microsoft.CodeAnalysis.Text;
 
 namespace Retrocore.Generators;
 

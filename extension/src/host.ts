@@ -21,7 +21,7 @@ export function bundledHost(context: vscode.ExtensionContext): string | undefine
 /** The Release build in an open workspace folder, such as this repository's. */
 export function workspaceHost(): string | undefined {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        const candidate = path.join(folder.uri.fsPath, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", hostName);
+        const candidate = path.join(folder.uri.fsPath, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", hostName);
         if (fs.existsSync(candidate)) return candidate;
     }
     return undefined;

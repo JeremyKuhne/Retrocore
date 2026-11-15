@@ -46,7 +46,7 @@ export async function testAppleSoftLaunch(root: string, romDirectory: string, st
     fs.writeFileSync(file, "REM retrocore applesoft\n    HOME\nagain:\n    PRINT \"HELLO\": GOTO again\n");
     assert.ok(await vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
         type: "retrocore", request: "launch", name: "AppleSoft file", machine: "apple2", romDirectory, basic: file, stopOnEntry: true,
-        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll")
+        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")
     }));
     const session = vscode.debug.activeDebugSession;
     if (session === undefined) throw new Error("VS Code did not create the AppleSoft session.");
@@ -72,7 +72,7 @@ export async function testBasicLaunch(root: string, stop: () => Promise<string>)
     const workspace = vscode.workspace.workspaceFolders?.[0];
     assert.ok(await vscode.debug.startDebugging(workspace, {
         type: "retrocore", request: "launch", name: "BASIC file", machine: "trs80-model1", basic: file, stopOnEntry: true,
-        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll")
+        debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")
     }));
     const session = vscode.debug.activeDebugSession;
     if (session === undefined) throw new Error("VS Code did not create the BASIC session.");

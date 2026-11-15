@@ -156,7 +156,7 @@ public sealed partial class BasicProgram
         bool labeled,
         List<BasicDiagnostic> diagnostics)
     {
-        List<BasicTextLine> numbered = new(lines.Count);
+        List<BasicTextLine> numbered = [with(lines.Count)];
         int last = -1;
         for (int index = 0; index < lines.Count; index++)
         {
@@ -207,7 +207,7 @@ public sealed partial class BasicProgram
         List<BasicLabel> marks,
         List<BasicDiagnostic> diagnostics)
     {
-        Dictionary<string, BasicLabel> labels = new(StringComparer.Ordinal);
+        Dictionary<string, BasicLabel> labels = [with(StringComparer.Ordinal)];
         foreach (BasicLabel mark in marks)
         {
             BasicTextLine? after = lines.FirstOrDefault(line => line.Line > mark.Line && line.Number >= 0);

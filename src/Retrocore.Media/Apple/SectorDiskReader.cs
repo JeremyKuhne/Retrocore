@@ -51,7 +51,7 @@ public static class SectorDiskReader
     // The track's nibbles, twice around.
     private static List<byte> Nibbles(DiskTrack track)
     {
-        List<byte> nibbles = new(track.BitCount / 4);
+        List<byte> nibbles = [with(track.BitCount / 4)];
         int shift = 0;
         for (int bit = 0; bit < track.BitCount * 2; bit++)
         {

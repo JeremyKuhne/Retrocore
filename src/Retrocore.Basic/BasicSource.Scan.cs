@@ -80,7 +80,7 @@ public sealed partial class BasicSource
     // tokenizer refuses another BASIC's statements itself.
     private static HashSet<string> ForeignWords(BasicDialect dialect)
     {
-        HashSet<string> foreign = new(StringComparer.Ordinal);
+        HashSet<string> foreign = [with(StringComparer.Ordinal)];
         if (dialect is IntegerBasicDialect || dialect == BasicDialect.BusinessBasic) { return foreign; }
         HashSet<string> own = [.. dialect.AllKeywords.Select(Letters)];
         foreach (BasicDialect other in (BasicDialect[])[BasicDialect.AppleSoft, BasicDialect.Level2])

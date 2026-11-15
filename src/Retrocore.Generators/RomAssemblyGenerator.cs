@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Assembler;
-using Retrocore.Isa;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
+using Retrocore.Assembler;
+using Retrocore.Isa;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -65,7 +65,7 @@ public sealed class RomAssemblyGenerator : IIncrementalGenerator
                 return;
             }
 
-            HashSet<string> names = new(StringComparer.Ordinal);
+            HashSet<string> names = [with(StringComparer.Ordinal)];
             AdditionalAssemblySourceResolver resolver = new(allFiles, input.Left.Right, output.CancellationToken);
             foreach (AdditionalText file in assembly.OrderBy(file => file.Path, StringComparer.Ordinal))
             {

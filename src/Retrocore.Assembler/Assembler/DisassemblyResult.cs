@@ -41,7 +41,7 @@ public sealed class DisassemblyResult
         Regions = Array.AsReadOnly(regions);
         References = Array.AsReadOnly(references);
         SymbolMap = symbols;
-        CommentMap = new Dictionary<ushort, string>(project.Comments);
+        CommentMap = [with(project.Comments)];
         Symbols = new ReadOnlyDictionary<ushort, string>(SymbolMap);
         Comments = new ReadOnlyDictionary<ushort, string>(CommentMap);
         Diagnostics = Array.AsReadOnly(diagnostics);

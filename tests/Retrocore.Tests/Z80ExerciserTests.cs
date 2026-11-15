@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text;
 using Retrocore.Cpu.Z80;
+using System.Text;
 
 namespace Retrocore.Tests;
 

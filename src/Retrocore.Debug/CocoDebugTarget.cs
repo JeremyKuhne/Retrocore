@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Cpu.M6809;
 using Retrocore.Isa;
 using Retrocore.Machines.Coco;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 

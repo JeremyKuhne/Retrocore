@@ -154,7 +154,7 @@ internal sealed partial class AssemblyLinker
     /// <param name="image">Resolved output whose section indices stay unchanged for source maps.</param>
     internal void Emit(AssemblyImage image)
     {
-        Dictionary<string, List<byte>> files = new(StringComparer.Ordinal);
+        Dictionary<string, List<byte>> files = [with(StringComparer.Ordinal)];
         foreach (AssemblyMemoryRegion memory in _memory)
         {
             if (memory.File.Length == 0) { continue; }
@@ -195,7 +195,7 @@ internal sealed partial class AssemblyLinker
 
     private void Parse()
     {
-        HashSet<string> blocks = new(StringComparer.Ordinal);
+        HashSet<string> blocks = [with(StringComparer.Ordinal)];
         List<(string Name, Dictionary<string, string> Attributes)> memory = [];
         List<(string Name, Dictionary<string, string> Attributes)> segments = [];
         while (Peek() != '\0')
@@ -224,7 +224,7 @@ internal sealed partial class AssemblyLinker
                 }
 
                 Expect(':');
-                Dictionary<string, string> attributes = new(StringComparer.Ordinal);
+                Dictionary<string, string> attributes = [with(StringComparer.Ordinal)];
                 do
                 {
                     string attribute = Token().ToLowerInvariant();

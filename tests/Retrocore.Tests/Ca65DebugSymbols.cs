@@ -19,7 +19,7 @@ internal static partial class Ca65DebugSymbols
     /// <returns>Case-sensitive, qualified symbol values.</returns>
     internal static Dictionary<string, long> Read(string path)
     {
-        Dictionary<string, (string Name, string? Parent)> scopes = new(StringComparer.Ordinal);
+        Dictionary<string, (string Name, string? Parent)> scopes = [with(StringComparer.Ordinal)];
         List<Dictionary<string, string>> symbols = [];
         foreach (string line in File.ReadLines(path))
         {
@@ -28,7 +28,7 @@ internal static partial class Ca65DebugSymbols
             if (space < 0) { continue; }
             string kind = line[..space];
             if (kind is not ("scope" or "sym")) { continue; }
-            Dictionary<string, string> fields = new(StringComparer.Ordinal);
+            Dictionary<string, string> fields = [with(StringComparer.Ordinal)];
             foreach (Match match in Fields().Matches(line[(space + 1)..]))
             {
                 fields.Add(match.Groups[1].Value, match.Groups[2].Value.Trim('"'));
@@ -44,7 +44,7 @@ internal static partial class Ca65DebugSymbols
             }
         }
 
-        Dictionary<string, long> values = new(StringComparer.Ordinal);
+        Dictionary<string, long> values = [with(StringComparer.Ordinal)];
         foreach (Dictionary<string, string> symbol in symbols)
         {
             string name = symbol["name"];

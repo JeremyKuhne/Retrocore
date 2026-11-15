@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using ScanPosition = (ushort HiresOffset, short Cell, bool MixedText);
+
 namespace Retrocore.Machines.Apple2;
 
 /// <summary>
@@ -44,6 +46,8 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
     /// </summary>
     public const int Height = 192;
 
+    private static readonly ScanPosition[] s_scanPositions = CreateScanPositions();
+
     private readonly Apple2Bus _bus;
     private readonly Apple2Roms _roms;
     private readonly byte[] _main = new byte[40 * Height];
@@ -85,22 +89,38 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
     {
         get
         {
-            return _fetchCycle == _bus.CycleCount ? _fetchAddress : CurrentFetchAddress(_bus.Scanline, _bus.ColumnClock);
+            return _fetchCycle == _bus.CycleCount
+                ? _fetchAddress : CurrentFetchAddress(s_scanPositions[(int)(_bus.CycleCount % CyclesPerFrame)]);
         }
     }
 
-    private ushort CurrentFetchAddress(int scanline, int columnClock)
+    private ushort CurrentFetchAddress(in ScanPosition position)
     {
-        int row = scanline;
-        int column = columnClock == 0 ? 1 : columnClock;
-        if (scanline >= 192) { column -= 8; }
-        row = row >= 256 ? 58 + (row & 255) : row % 192;
-        int rowOffset = ((row >> 3) & 7) * 128 + (row >> 6) * 40;
-        int offset = (rowOffset & ~127) + ((rowOffset + column - 25) & 127);
         Apple2Switches switches = _bus.Switches;
-        bool hires = Has(switches, Apple2Switches.HiRes) && !IsText(switches, row);
+        bool text = Has(switches, Apple2Switches.Text) || (Has(switches, Apple2Switches.Mixed) && position.MixedText);
+        bool hires = Has(switches, Apple2Switches.HiRes) && !text;
         int page = Has(switches, Apple2Switches.Page2) && !Has(switches, Apple2Switches.Store80) ? 2 : 1;
-        return (ushort)(page * (hires ? 0x2000 : 0x400) + offset + (hires ? (row & 7) * 1024 : 0));
+        return (ushort)(page * (hires ? 0x2000 : 0x400) + (hires ? position.HiresOffset : position.HiresOffset & 0x3FF));
+    }
+
+    private static ScanPosition[] CreateScanPositions()
+    {
+        ScanPosition[] positions = new ScanPosition[CyclesPerFrame];
+        for (int scanline = 0; scanline < 262; scanline++)
+        {
+            int row = scanline >= 256 ? 58 + (scanline & 255) : scanline % 192;
+            int rowOffset = ((row >> 3) & 7) * 128 + (row >> 6) * 40;
+            for (int columnClock = 0; columnClock < 65; columnClock++)
+            {
+                int column = columnClock == 0 ? 1 : columnClock;
+                if (scanline >= Height) { column -= 8; }
+                int offset = (rowOffset & ~127) + ((rowOffset + column - 25) & 127) + (row & 7) * 1024;
+                short cell = scanline < Height && columnClock >= 25 ? (short)(scanline * 40 + columnClock - 25) : (short)-1;
+                positions[scanline * 65 + columnClock] = new((ushort)offset, cell, row is >= 160 and < 192);
+            }
+        }
+
+        return positions;
     }
 
     /// <summary>
@@ -117,16 +137,13 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
     {
         ulong cycle = _bus.CycleCount;
         if (_fetchCycle == cycle) { return; }
-
-        // The beam, worked out once: the same as Beam's scanline and column clock.
-        int columnClock = (int)(cycle % 65);
-        int scanline = (int)(cycle / 65 % 262);
-        ushort address = CurrentFetchAddress(scanline, columnClock);
+        ref readonly ScanPosition position = ref s_scanPositions[(int)(cycle % CyclesPerFrame)];
+        ushort address = CurrentFetchAddress(position);
         _fetchAddress = address;
         _floatingBus = _bus.MainMemory[address];
         _fetchCycle = cycle;
-        if (columnClock < 25 || scanline >= 192) { return; }
-        int index = scanline * 40 + columnClock - 25;
+        int index = position.Cell;
+        if (index < 0) { return; }
         _main[index] = _bus.MainMemory[address];
         _auxiliary[index] = _bus.AuxiliaryMemory[address];
         _switches[index] = _bus.Switches;
@@ -291,6 +308,7 @@ public sealed class Apple2Video : IVideoSource, ICharacterSet
             {
                 RenderMonochromeLine(line, row, main, auxiliary, switches, flash);
             }
+
         }
     }
 

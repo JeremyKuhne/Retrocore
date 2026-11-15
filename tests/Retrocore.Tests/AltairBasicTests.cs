@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Security.Cryptography;
 using Retrocore.Machines.Altair;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 

@@ -77,7 +77,7 @@ internal sealed partial class LanguageWorkspace
     /// </summary>
     private Dictionary<string, List<Diagnostic>> DocumentationDiagnostics(SourceAnalysis analysis)
     {
-        Dictionary<string, List<Diagnostic>> byFile = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
         void Add(string path, int line, string message, DiagnosticSeverity severity)
         {
             if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }

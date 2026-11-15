@@ -89,7 +89,7 @@ Assemble a file without a test:
 
 ```powershell
 dotnet build src/Retrocore.Debug -c Release
-dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll --assemble program.asm program.bin --cpu Z80 --origin $7000
+dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble program.asm program.bin --cpu Z80 --origin $7000
 ```
 
 It writes the binary and a `.dbg` file, or prints each error with its file and line. In VS Code, a

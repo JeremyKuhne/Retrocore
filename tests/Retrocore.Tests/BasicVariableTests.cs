@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Trs80;
+using System.Text;
 
 namespace Retrocore.Tests;
 

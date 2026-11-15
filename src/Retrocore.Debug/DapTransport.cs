@@ -23,7 +23,7 @@ namespace Retrocore.Debug;
 internal sealed class DapTransport(Stream input, Stream output)
 {
     private readonly MessageFraming _wire = new(input, output);
-    private readonly Dictionary<string, Func<JsonObject, JsonNode?>> _handlers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Func<JsonObject, JsonNode?>> _handlers = [with(StringComparer.Ordinal)];
 
     // Numbered as each message is written, under the wire's lock, so the numbers go out in order.
     private int _sequence;

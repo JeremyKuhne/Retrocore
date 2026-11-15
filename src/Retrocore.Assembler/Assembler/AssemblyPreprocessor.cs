@@ -16,14 +16,14 @@ internal sealed partial class AssemblyPreprocessor
     private readonly List<AssemblySource> _sources = [];
     private readonly AssemblyProject _project = new();
     private readonly List<Conditional> _conditions = [];
-    private readonly Dictionary<string, Macro> _macros = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Macro> _macros = [with(StringComparer.Ordinal)];
 
     // Created once so translating each ca65 line does not allocate a delegate.
     private readonly Func<string, bool> _isMacro;
     private readonly AssemblySymbols _constants = new();
-    private readonly HashSet<string> _defined = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _activeIncludes = new(
-        Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly HashSet<string> _defined = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _activeIncludes = [with(
+        Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)];
     private int _visited;
     private int _invocation;
     private bool _stopped;
@@ -442,7 +442,7 @@ internal sealed partial class AssemblyPreprocessor
                         string name = operand.Split(' ')[0];
                         if (_macros.TryGetValue(name, out Macro? macro))
                         {
-                            HashSet<string> labels = new(StringComparer.Ordinal);
+                            HashSet<string> labels = [with(StringComparer.Ordinal)];
                             foreach (Line member in body)
                             {
                                 MerlinFrontend.Split(member.Text.Span, out string local, out _, out _);

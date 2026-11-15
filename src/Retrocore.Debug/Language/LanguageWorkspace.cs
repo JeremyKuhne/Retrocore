@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Collections.Concurrent;
 using Retrocore.Assembler;
+using System.Collections.Concurrent;
 
 namespace Retrocore.Debug.Language;
 
@@ -194,7 +194,7 @@ internal sealed partial class LanguageWorkspace
 
     private void Publish(SourceAnalysis analysis)
     {
-        Dictionary<string, List<Diagnostic>> byFile = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<Diagnostic>> byFile = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (string member in analysis.Members) { byFile[member] = []; }
         foreach (AssemblyDiagnostic diagnostic in analysis.Result.Diagnostics)
         {
@@ -215,7 +215,7 @@ internal sealed partial class LanguageWorkspace
         }
 
         // Files this root reported before but no longer includes get their diagnostics cleared.
-        HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => new(StringComparer.OrdinalIgnoreCase));
+        HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => [with(StringComparer.OrdinalIgnoreCase)]);
         lock (previous)
         {
             foreach (string stale in previous.Where(path => !byFile.ContainsKey(path)).ToList()) { byFile[stale] = []; }

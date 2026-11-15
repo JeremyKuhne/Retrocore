@@ -17,7 +17,7 @@ public static partial class AssemblyDebugFile
         // Compiler-generated names: private scope labels, Merlin macro locals and loop counters, and variable versions.
         private static readonly string[] s_internalMarkers = ["__retro_", "__merlin_", "__Merlin", "#"];
 
-        private readonly Dictionary<string, int> _files = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _files = [with(StringComparer.Ordinal)];
         private readonly Dictionary<(int File, int Line, int Type, int Count), int> _lineIds = [];
         private readonly List<(int File, int Line, int Type, int Count, List<int> Spans)> _lines = [];
         private readonly Dictionary<(int Section, int Base), int> _segmentIds = [];
@@ -192,7 +192,7 @@ public static partial class AssemblyDebugFile
         /// </summary>
         private void CollectSymbols()
         {
-            Dictionary<string, string> sourceNames = new(StringComparer.Ordinal);
+            Dictionary<string, string> sourceNames = [with(StringComparer.Ordinal)];
             foreach (KeyValuePair<string, string> alias in result.SymbolAliases)
             {
                 sourceNames[alias.Value] = alias.Key;

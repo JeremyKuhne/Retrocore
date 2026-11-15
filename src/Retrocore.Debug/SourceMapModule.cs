@@ -28,10 +28,10 @@ internal sealed partial class SourceMapModule : IDebugModule
     // The earlier statements at an address that a later one also covers, as code assembled for where it is copied
     // overlaps code assembled where it is stored; the one whose bytes memory holds applies.
     private readonly Dictionary<ushort, List<int>> _overlapped = [];
-    private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, long> _symbols = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, long> _symbols = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly (string Name, long Value)[] _labels;
-    private readonly Dictionary<string, string[]> _sourceText = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string[]> _sourceText = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly AssemblyResult _result;
     private readonly int _relocation;
     private readonly bool _wholeImage;
@@ -69,7 +69,7 @@ internal sealed partial class SourceMapModule : IDebugModule
 
         // Statements emit in source order, so each invocation's statements are contiguous.
         List<(ushort Address, byte[] Bytes, List<AssemblyLocation> Levels)> emitted = [];
-        Dictionary<AssemblyLocation, int> invocationSizes = new(ReferenceEqualityComparer.Instance);
+        Dictionary<AssemblyLocation, int> invocationSizes = [with(ReferenceEqualityComparer.Instance)];
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
             if (entry.Size == 0 || entry.Location is not { } location) { continue; }
@@ -84,8 +84,8 @@ internal sealed partial class SourceMapModule : IDebugModule
             emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels));
         }
 
-        HashSet<AssemblyLocation> started = new(ReferenceEqualityComparer.Instance);
-        HashSet<AssemblyLocation> previous = new(ReferenceEqualityComparer.Instance);
+        HashSet<AssemblyLocation> started = [with(ReferenceEqualityComparer.Instance)];
+        HashSet<AssemblyLocation> previous = [with(ReferenceEqualityComparer.Instance)];
         _statements = new Statement[emitted.Count];
         for (int index = 0; index < emitted.Count; index++)
         {
@@ -133,7 +133,7 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
         }
 
-        Dictionary<string, string> sourceNames = new(StringComparer.Ordinal);
+        Dictionary<string, string> sourceNames = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { sourceNames[alias.Value] = alias.Key; }
 
         List<(string Name, long Value)> labels = [];

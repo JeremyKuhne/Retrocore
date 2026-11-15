@@ -649,8 +649,8 @@ internal sealed class IntegerBasicDialect : BasicDialect
     // listing has spaced out; the positions it reports are mapped back to the statements' own.
     private IntegerSyntaxResult Typed(ReadOnlySpan<int> text)
     {
-        List<int> line = new(text.Length + 1) { '0' };
-        List<int> map = new(text.Length + 1) { 0 };
+        List<int> line = [with(text.Length + 1), '0'];
+        List<int> map = [with(text.Length + 1), 0];
         bool quoted = false;
         bool remark = false;
         for (int index = 0; index < text.Length; index++)

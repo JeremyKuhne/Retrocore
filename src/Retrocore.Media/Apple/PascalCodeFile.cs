@@ -135,7 +135,7 @@ public sealed class PascalCodeFile
         }
 
         int count = Math.Min((int)code[length - 1], (length - 2) / 2);
-        List<PascalProcedure> procedures = new(count);
+        List<PascalProcedure> procedures = [with(count)];
         for (int index = 1; index <= count; index++)
         {
             int pointer = length - 2 - (index * 2);
@@ -172,7 +172,7 @@ public sealed class PascalCodeFile
             if (pointer < 0) { return null; }
 
             int items = Word(code, pointer);
-            List<int> offsets = new(Math.Min(items, pointer / 2));
+            List<int> offsets = [with(Math.Min(items, pointer / 2))];
             for (int item = 0; item < items; item++)
             {
                 pointer -= 2;

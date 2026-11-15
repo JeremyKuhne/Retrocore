@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Debug.Language;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 

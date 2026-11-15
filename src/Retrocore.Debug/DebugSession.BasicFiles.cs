@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using System.Globalization;
 using System.Text.Json.Nodes;
-using Retrocore.Basic;
 
 namespace Retrocore.Debug;
 
@@ -15,8 +15,8 @@ internal sealed partial class DebugSession
 {
     private const string NoBasicSource = "The debugger has no source for this machine's BASIC ROM, so it cannot load a BASIC file.";
 
-    private readonly Dictionary<string, BasicFile> _basicFiles = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, JsonObject> _basicFileBreakpoints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, BasicFile> _basicFiles = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, JsonObject> _basicFileBreakpoints = [with(StringComparer.OrdinalIgnoreCase)];
     private string? _basicLaunched;
 
     // Whether the frames last showed the launched file, to say once when the program stops matching it.
@@ -195,8 +195,9 @@ internal sealed partial class DebugSession
     // A frame's place in an in-sync workspace file: its line, and its statement's column there.
     private static (int Line, int Column)? FilePlace(BasicFile file, int number, int statement)
     {
-        if (file.Source.LineNumbered(number) is not { } line || statement >= line.Statements.Count) { return null; }
-        return (line.Line + 1, line.Statements[statement].Column + 1);
+        return file.Source.LineNumbered(number) is not { } line || statement >= line.Statements.Count
+            ? null
+            : (line.Line + 1, line.Statements[statement].Column + 1);
     }
 
     // Breakpoints in a workspace BASIC file: bound while the program in memory is what the file compiles to. A

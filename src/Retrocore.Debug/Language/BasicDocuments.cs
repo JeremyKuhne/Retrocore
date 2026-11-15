@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Collections.Concurrent;
 using Retrocore.Basic;
+using System.Collections.Concurrent;
 
 namespace Retrocore.Debug.Language;
 

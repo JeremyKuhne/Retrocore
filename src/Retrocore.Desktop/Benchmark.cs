@@ -39,7 +39,7 @@ internal static class Benchmark
         (probe as IDisposable)?.Dispose();
         // A whole number of the raw paths' 256-cycle batches, at least one, so all three run the same cycles.
         ulong work = Math.Max(1, (ulong)(clock * seconds * 20 / 256)) * 256;
-        Console.Out.WriteLine($"clock {clock} Hz; each timing runs {work:N0} cycles after {SettleCycles:N0}");
+        Console.Out.WriteLine(FormattableString.Invariant($"clock {clock} Hz; each timing runs {work:N0} cycles after {SettleCycles:N0}"));
 
         Report("debug target StepCycle", Time(configuration, work, target =>
         {
@@ -136,5 +136,5 @@ internal static class Benchmark
     }
 
     private static void Report(string name, double hertz, int clock) =>
-        Console.Out.WriteLine($"{name}: {hertz / 1e6:0.00} MHz, {hertz / clock:0.0}x");
+        Console.Out.WriteLine(FormattableString.Invariant($"{name}: {hertz / 1e6:0.00} MHz, {hertz / clock:0.0}x"));
 }

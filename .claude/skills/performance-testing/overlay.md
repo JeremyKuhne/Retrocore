@@ -7,14 +7,24 @@ differ, this page wins for Retrocore.
 
 | Core placeholder | Retrocore |
 | --- | --- |
-| `<root>.perf` | `tests/Retrocore.Perf` (BenchmarkDotNet 0.15.8, `BenchmarkSwitcher`) |
-| `<tfm>` | `net10.0` only. Never pass a second target. |
+| `<root>.perf` | `tests/Retrocore.Perf` (BenchmarkDotNet 0.16.0-preview.2, `BenchmarkSwitcher`) |
+| `<tfm>` | `net11.0` only for tests and executable benchmark hosts. Runtime libraries also build for `net10.0`. |
 | Trace analyzer | `filtrace` (global tool `klutzyninja.filtrace`); see [Profiling](#profiling) |
 | Recorded results | `tests/Retrocore.Perf/*Results.csv` (one row per benchmark, with the report path) |
 | Related skills | None vendored. Skip the core's framework-JIT and scratch-buffer links: Retrocore has no .NET Framework target. |
 
 ```powershell
 dotnet run -c Release --project tests/Retrocore.Perf -- --filter *Z80Benchmarks*
+```
+
+Use the .NET 11 SDK and C# 15. Compare JIT, published ReadyToRun, and Native AOT separately; report startup,
+warmup, and settled throughput. R2R normally permits tiered JIT replacement. Release AOT favors speed and
+defaults to x86-64-v3 on x64; record explicit instruction-set overrides in every result.
+BenchmarkDotNet 0.16.0-preview.2 is used because 0.15.8 cannot validate .NET 11 Native AOT jobs, even with an
+explicit custom toolchain. Use the supported runtime token for a Native AOT benchmark:
+
+```powershell
+dotnet run -c Release --project tests/Retrocore.Perf -- --runtimes nativeaot11.0 --filter *ProcessorBenchmarks* --affinity 80
 ```
 
 The CPU benchmarks are `ProcessorBenchmarks` and `ProcessorTraceBenchmarks` (6502, with `RamBus` and
@@ -81,6 +91,11 @@ and lower clocks), so an unpinned run varies by about 10% depending on where Win
 - For fast throughput loops, a small console harness referencing the project is fine for
   screening. Confirm the chosen change with the BenchmarkDotNet benchmark before recording it.
 
+The measurement and profile-refresh scripts pin to `0x50` only when both logical processors are in the
+inherited affinity; otherwise they retain the inherited mask. Desktop benchmark output and numeric command
+arguments use invariant culture. Run `.\tools\Test-IIePerformance.ps1` to check measurement parsing,
+odd/even medians, and the affinity fallback without running benchmarks.
+
 ## Test-suite time
 
 `dotnet test` without `-c` is Debug, which is unoptimized: CPU-heavy tests run about 5 times slower
@@ -115,3 +130,59 @@ A profile forms the hypothesis; only an interleaved A/B decides it. Several plau
 for the Z80's cost (call overhead, store-forwarding stalls on the cycle record) measured smaller than
 the profile suggested. Report the measured effect, and correct an earlier claim when the
 measurement contradicts it.
+
+## Native AOT PGO maintenance
+
+Windows x64 Release Desktop publishing consumes
+[`Apple2-win-x64-net11.mibc`](../../../src/Retrocore.Desktop/Profiles/Apple2-win-x64-net11.mibc).
+The adjacent JSON is provenance, not compiler input. The project selects the profile through `MibcFile`;
+other runtime identifiers do not implicitly consume this Windows profile.
+
+### When to refresh
+
+Assess a refresh when changes materially affect:
+
+- Hot 6502 instruction dispatch, control flow, helpers, generic instantiations, or bus call targets.
+- Apple II memory mapping, scanner, device/audio stepping, or Desktop/debug-host execution paths.
+- Method/type identities used by those paths, which can stop old profile entries matching.
+- The .NET SDK, runtime/ILCompiler version, AOT configuration, or target OS/architecture.
+- The representative workload mix or a demonstrated profile-related performance regression.
+
+An ordinary rebuild does not require retraining. Neither do documentation, formatting, or changes outside
+the profiled paths unless they alter relevant generated code or workload behavior. Profiles are optimization
+feedback, not an exact-binary cache; stale data can become unused or unrepresentative without changing
+program semantics. Do not equate successful compilation with an effective profile.
+
+### How to refresh
+
+On Windows x64, from the repository root, build the converter if it is not already available:
+
+```powershell
+.\tools\Build-PgoTool.ps1
+.\tools\Update-DesktopPgoCorpus.ps1 -PgoTool .\artifacts\pgo-tool\bin\dotnet-pgo.exe -OutputDirectory .\artifacts\pgo-training-new
+```
+
+Use a new output directory. The scripts use pinned official runtime sources, train JIT builds on equal-cycle
+math/string, graphics, and active stereo Mockingboard workloads, and merge their profiles. Keep this corpus
+representative rather than tuning it to one favorable benchmark. Do not hand-edit the binary or provenance;
+retain both generated files together in `src/Retrocore.Desktop/Profiles`.
+
+The instrumented trace needs `Microsoft-Windows-DotNETRuntime:0x1E000080018:5`: level 4 was insufficient
+for JIT-start events in the validated .NET 11 workflow. A CPU-sampling trace alone is not instrumented PGO.
+The generator must find nonzero edge/block counts before replacing the profile.
+
+### Acceptance and handoff
+
+1. Retain the previous profile/build and compare old/new profiles against the same changed source and settings.
+   `-p:RetrocorePgoProfile=` explicitly disables application PGO for an additional control.
+2. Verify the actual native compiler arguments include the intended `--mibc`, speed preference, and ISA.
+   Do not accidentally apply the Windows profile or x64 baseline to ARM64/other-OS publishes.
+3. Use uninstrumented, interleaved Release application runs for performance acceptance. Separate JIT, R2R,
+   AOT, startup, and steady-state results; do not benchmark the trace collector's training run.
+4. Run the relevant exactness gates above on .NET 11 and validate native execution, including graphics,
+   disk, speaker/Mockingboard, and normal-speed input/audio behavior. Missing fixtures are not passes.
+   Build both library TFMs; do not add a .NET 10 test run.
+5. Accept only reproducible product gains without correctness/functionality or important workload regressions.
+   Record retained/rejected evidence in the optimization ledger and state the profile refresh decision in
+   the change summary. If tooling, fixtures, or a suitable machine are unavailable, preserve the profile
+   and report what was not validated rather than claiming it is current.

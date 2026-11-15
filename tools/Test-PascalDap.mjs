@@ -196,7 +196,7 @@ async function sourceBreakpoints(machine) {
         assert.equal(statSync(sectors).size, 143360);
         // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
         const native = process.env.RETROCORE_DAP_HOST;
-        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
         for (const image of [woz, sectors]) {
             const args = ["--pascal", "catalog", image];
             const catalog = native

@@ -38,6 +38,8 @@ internal sealed class MainWindow : Window
         BorderThickness = new Thickness(0, 0, 1, 0),
         BoxShadow = BoxShadows.Parse("4 0 12 0 #40000000")
     };
+    // The pane's background, under its contents, so its opacity leaves the text and controls solid.
+    private readonly Border _paneBackdrop = new();
     private readonly LayoutTransformControl _paneZoom = new();
     private readonly LayoutTransformControl _activityZoom = new();
     private readonly LayoutTransformControl _statusZoom = new();
@@ -95,8 +97,10 @@ internal sealed class MainWindow : Window
         _machineView = MachineView();
         _settingsView = SettingsView();
         _paneZoom.Child = _machineView;
-        _pane.Child = _paneZoom;
-        _pane.Themed(Border.BackgroundProperty, Palette.SideBar).Themed(Border.BorderBrushProperty, Palette.Border);
+        _paneBackdrop.Opacity = settings.PaneOpacity / 100.0;
+        _paneBackdrop.Themed(Border.BackgroundProperty, Palette.SideBar);
+        _pane.Child = new Panel { Children = { _paneBackdrop, _paneZoom } };
+        _pane.Themed(Border.BorderBrushProperty, Palette.Border);
 
         _body.ColumnDefinitions =
         [
@@ -347,6 +351,41 @@ internal sealed class MainWindow : Window
         };
 
         appearance.Children.Add(Option("Zoom", zoom));
+
+        TextBlock opacityText = new TextBlock
+        {
+            Text = $"{_settings.PaneOpacity}%",
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 40,
+            Margin = new Thickness(6, 0, 0, 0)
+        }.Themed(TextBlock.ForegroundProperty, Palette.Text);
+
+        Slider opacity = new()
+        {
+            Minimum = DesktopSettings.MinimumPaneOpacity,
+            Maximum = 100,
+            Value = _settings.PaneOpacity,
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            MinWidth = 140,
+            MaxWidth = 180
+        };
+
+        ToolTip.SetTip(opacity, "How much of the machine shows through the pane");
+        opacity.ValueChanged += (_, _) =>
+        {
+            int percent = (int)Math.Round(opacity.Value);
+            if (percent == _settings.PaneOpacity) { return; }
+            _settings.PaneOpacity = percent;
+            _paneBackdrop.Opacity = percent / 100.0;
+            opacityText.Text = $"{percent}%";
+            _settings.Save();
+        };
+
+        appearance.Children.Add(Option(
+            "Pane opacity",
+            new StackPanel { Orientation = Orientation.Horizontal, Children = { opacity, opacityText } }));
+
         appearance.Children.Add(new TextBlock
         {
             Text = "Ctrl with the mouse wheel zooms too, anywhere in the window.",
@@ -446,7 +485,11 @@ internal sealed class MainWindow : Window
 
         Slider volume = new()
         {
-            Minimum = 0, Maximum = 100, Value = _host.Volume * 100, MinWidth = 140, MaxWidth = 180
+            Minimum = 0,
+            Maximum = 100,
+            Value = _host.Volume * 100,
+            MinWidth = 140,
+            MaxWidth = 180
         };
 
         volume.ValueChanged += (_, _) => _host.Volume = (float)(volume.Value / 100);

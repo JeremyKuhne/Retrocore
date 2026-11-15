@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 namespace Retrocore.Desktop;
 
 /// <summary>
-///  The desktop app's own settings, its theme and zoom, kept under <c>desktop</c> in Retrocore's roaming
+///  The desktop app's own settings, its theme, zoom and pane opacity, kept under <c>desktop</c> in Retrocore's roaming
 ///  <c>settings.json</c>, beside the settings the hosts share.
 /// </summary>
 internal sealed class DesktopSettings
@@ -23,13 +23,24 @@ internal sealed class DesktopSettings
     /// </summary>
     internal const int MaximumZoom = 6;
 
+    /// <summary>
+    ///  The least opaque the side pane can be, in percent.
+    /// </summary>
+    internal const int MinimumPaneOpacity = 50;
+
+    /// <summary>
+    ///  How opaque the side pane is unless set, in percent: enough that the machine is barely visible through it.
+    /// </summary>
+    internal const int DefaultPaneOpacity = 85;
+
     private readonly string? _path;
 
-    private DesktopSettings(string? path, string theme, int zoom)
+    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity)
     {
         _path = path;
         ThemeName = theme;
         Zoom = zoom;
+        PaneOpacity = paneOpacity;
     }
 
     /// <summary>
@@ -48,6 +59,12 @@ internal sealed class DesktopSettings
     internal double Scale => Math.Pow(1.2, Zoom);
 
     /// <summary>
+    ///  Gets or sets how opaque the side pane's background is, in percent, from
+    ///  <see cref="MinimumPaneOpacity"/> to 100.
+    /// </summary>
+    internal int PaneOpacity { get; set; }
+
+    /// <summary>
     ///  Gets the roaming settings file: <c>%APPDATA%\Retrocore\settings.json</c> on Windows.
     /// </summary>
     internal static string DefaultPath =>
@@ -62,6 +79,7 @@ internal sealed class DesktopSettings
     {
         string theme = "system";
         int zoom = 0;
+        int paneOpacity = DefaultPaneOpacity;
         if (path is not null && Read(path)?["desktop"] is JsonObject desktop)
         {
             if (desktop["theme"] is JsonValue themeValue && themeValue.GetValueKind() == JsonValueKind.String)
@@ -73,9 +91,18 @@ internal sealed class DesktopSettings
             {
                 zoom = zoomValue.GetValue<int>();
             }
+
+            if (desktop["paneOpacity"] is JsonValue opacityValue && opacityValue.GetValueKind() == JsonValueKind.Number)
+            {
+                paneOpacity = opacityValue.GetValue<int>();
+            }
         }
 
-        return new(path, theme is "light" or "dark" ? theme : "system", Math.Clamp(zoom, MinimumZoom, MaximumZoom));
+        return new(
+            path,
+            theme is "light" or "dark" ? theme : "system",
+            Math.Clamp(zoom, MinimumZoom, MaximumZoom),
+            Math.Clamp(paneOpacity, MinimumPaneOpacity, 100));
     }
 
     /// <summary>
@@ -85,7 +112,7 @@ internal sealed class DesktopSettings
     {
         if (_path is null) { return; }
         JsonObject root = Read(_path) ?? [];
-        root["desktop"] = new JsonObject { ["theme"] = ThemeName, ["zoom"] = Zoom };
+        root["desktop"] = new JsonObject { ["theme"] = ThemeName, ["zoom"] = Zoom, ["paneOpacity"] = PaneOpacity };
 
         // Written beside the file and moved over it, so a failed write leaves the settings as they were.
         if (Path.GetDirectoryName(_path) is { Length: > 0 } directory) { Directory.CreateDirectory(directory); }

@@ -71,7 +71,8 @@ internal sealed class MainWindow : Window
 
         .Themed(TextBlock.ForegroundProperty, Palette.Text);
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMilliseconds(250) };
-    private GridLength _paneWidth = new(280);
+    // Auto, to fit the pane's contents, until the splitter is dragged; a double-click on it fits them again.
+    private GridLength _paneWidth = GridLength.Auto;
 
     private string? _drivesShown;
     private bool _settingsShown;
@@ -97,7 +98,14 @@ internal sealed class MainWindow : Window
         _pane.Child = _paneZoom;
         _pane.Themed(Border.BackgroundProperty, Palette.SideBar).Themed(Border.BorderBrushProperty, Palette.Border);
 
-        _body.ColumnDefinitions = [new ColumnDefinition(_paneWidth), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)];
+        _body.ColumnDefinitions =
+        [
+            new ColumnDefinition(_paneWidth) { MinWidth = 160 },
+            new ColumnDefinition(GridLength.Auto),
+            new ColumnDefinition(GridLength.Star)
+        ];
+
+        _splitter.DoubleTapped += (_, _) => FitPane();
         _splitter.Width = 4;
         // The screen fills the body, and the pane and its splitter open over it, so opening, closing or resizing the
         // pane never moves or resizes the picture.
@@ -136,6 +144,7 @@ internal sealed class MainWindow : Window
 
         // The picture's size follows the window, never the pane or the zoom.
         SizeChanged += (_, _) => UpdateScreenArea();
+        _body.SizeChanged += (_, _) => _pane.MaxWidth = Math.Max(160, _body.Bounds.Width - 48);
         _refresh.Tick += (_, _) => Refresh();
         _refresh.Start();
         Opened += (_, _) => _screen.Focus();
@@ -193,6 +202,13 @@ internal sealed class MainWindow : Window
         _splitter.IsVisible = open;
         _body.ColumnDefinitions[0].Width = open ? _paneWidth : new GridLength(0);
         if (!open) { _screen.Focus(); }
+    }
+
+    // Back to as wide as the pane's contents need, within the window.
+    private void FitPane()
+    {
+        _paneWidth = GridLength.Auto;
+        if (_pane.IsVisible) { _body.ColumnDefinitions[0].Width = _paneWidth; }
     }
 
     private void UpdateActivity()
@@ -428,7 +444,11 @@ internal sealed class MainWindow : Window
         sound.SelectionChanged += (_, _) => _host.SoundOn = sound.SelectedIndex == 1;
         options.Children.Add(Option("Sound", sound));
 
-        Slider volume = new() { Minimum = 0, Maximum = 100, Value = _host.Volume * 100, MinWidth = 80, MaxWidth = 180 };
+        Slider volume = new()
+        {
+            Minimum = 0, Maximum = 100, Value = _host.Volume * 100, MinWidth = 140, MaxWidth = 180
+        };
+
         volume.ValueChanged += (_, _) => _host.Volume = (float)(volume.Value / 100);
         options.Children.Add(Option("Volume", volume));
 
@@ -456,7 +476,7 @@ internal sealed class MainWindow : Window
     {
         ItemsSource = items,
         SelectedIndex = selected,
-        MinWidth = 80,
+        MinWidth = 140,
         MaxWidth = 180,
         HorizontalAlignment = HorizontalAlignment.Stretch,
         FontSize = 12,

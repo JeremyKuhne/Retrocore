@@ -36,7 +36,7 @@ internal static class Palette
     internal const string ActivityBorder = "Retrocore.ActivityBorder";
 
     /// <summary>
-    ///  The side pane's background.
+    ///  The side pane's background, partly transparent, since the pane opens over the machine's screen.
     /// </summary>
     internal const string SideBar = "Retrocore.SideBar";
 
@@ -92,12 +92,12 @@ internal static class Palette
     internal static void Install(Application application)
     {
         application.Resources.ThemeDictionaries[ThemeVariant.Dark] = Colours(
-            activityBar: "#181818", active: "#D7D7D7", inactive: "#868686", border: "#0078D4", sideBar: "#181818",
+            activityBar: "#181818", active: "#D7D7D7", inactive: "#868686", border: "#0078D4", sideBar: "#B8181818",
             text: "#CCCCCC", dim: "#9D9D9D", editor: "#1F1F1F", statusBar: "#181818", statusText: "#CCCCCC",
             line: "#2B2B2B", reading: "#89D185", writing: "#F14C4C", seeking: "#CCA700");
 
         application.Resources.ThemeDictionaries[ThemeVariant.Light] = Colours(
-            activityBar: "#F8F8F8", active: "#1F1F1F", inactive: "#616161", border: "#005FB8", sideBar: "#F8F8F8",
+            activityBar: "#F8F8F8", active: "#1F1F1F", inactive: "#616161", border: "#005FB8", sideBar: "#B8F8F8F8",
             text: "#3B3B3B", dim: "#717171", editor: "#FFFFFF", statusBar: "#F8F8F8", statusText: "#3B3B3B",
             line: "#E5E5E5", reading: "#388A34", writing: "#E51400", seeking: "#BF8803");
     }

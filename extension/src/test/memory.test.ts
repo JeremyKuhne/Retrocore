@@ -872,8 +872,8 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.match(html, /class="ln data"/);
     // The listing scrolls both ways, as a long .byte line is wider than it, and takes one tab stop.
     assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*overflow:auto/);
-    // A line is as wide as its text and source, which never shrinks away, so scrolling reaches it.
-    assert.match(memoryEditorHtml("NONCE"), /#listing \.ln\{[^}]*min-width:max-content/);
+    // One grid column, as wide as the widest line or the pane: each line's source stays in reach and lines out.
+    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*display:grid;align-content:start/);
     assert.match(memoryEditorHtml("NONCE"), /#listing \.src\{flex:none/);
     assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
     assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");

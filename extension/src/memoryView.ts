@@ -74,8 +74,9 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
-#listing{flex:none;width:46ch;overflow:auto;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
-#listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch;min-width:max-content}
+#listing{flex:none;width:46ch;overflow:auto;display:grid;align-content:start;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
+#listing[hidden]{display:none}
+#listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
 #listing .ln:hover{background:var(--vscode-list-hoverBackground)}
 #listing .ln:focus,#listing a:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #listing .ln.sel{background:var(--vscode-editor-inactiveSelectionBackground)}
@@ -634,9 +635,12 @@ function showListingLines() {
     if (!listingPanel.querySelector) return;
     if (focused !== null) {
         // Drawing the lines again keeps the focus where it was, on a line or one of its links.
+        // Without scrolling to it, so the listing stays where the user scrolled it; where the line has left the
+        // listing, as when the bytes scroll, the listing's tab stop takes it, so keys still reach the listing.
         const line = listingPanel.querySelector('[data-a="' + focused.address + '"]');
-        // Without scrolling to it, so the listing stays where the user scrolled it.
-        if (line !== null) (focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line).focus({ preventScroll: true });
+        const target = line === null ? listingPanel.querySelector('[tabindex="0"]')
+            : focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line;
+        if (target !== null) target.focus({ preventScroll: true });
     }
     if (cursor !== listingCursor) {
         // The cursor's line scrolls into view as the cursor moves, not as the listing scrolls; until the listing

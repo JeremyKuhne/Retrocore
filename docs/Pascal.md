@@ -263,12 +263,12 @@ its own segments copied out by the Librarian, into other slots and without segme
 segments by number and leaves out those with no code and the outer block. A source too long for APPLE1 beside its
 code file, such as a Compiler's, is compiled from a volume of its own, SOURCE:, in a second Disk II in slot 5 (units
 11 and 12), to CODE: beside it; Apple Pascal 1.1 sees both. One too long for a volume, such as Apple Pascal 1.3's
-Compiler's, is cut before procedures of the outer block into pieces of about 40K characters, or fewer where the main file would
-not fit: the main file keeps
-every other piece and includes each of the others where it was (`(*$I SOURCE:INC1.TEXT*)`; the Compiler includes no
-file from an included one), each on SOURCE: while it fits, then on CODE:, where the code file needs the rest. The
-code file is read back without the empty blocks after its code, which it keeps of the room CODE: had and the Linker
-cannot copy.
+Compiler's, is cut before procedures of the outer block into pieces of about 40K characters, or fewer where the main
+file would not fit: the main file keeps every other piece and includes each of the others where it was (`(*$I
+SOURCE:INC1.TEXT*)`; the Compiler includes no file from an included one), each on SOURCE: while it fits, then on the
+boot disk, then on CODE:, which keeps room for the code file. The code file is read back without the empty blocks
+after its code, which it keeps of the room CODE: had and the Linker cannot copy.
+
 ### Rebuilding a linked program
 
 The byte the Compiler skips to put an `LDC`'s or `XJP`'s words on a word boundary holds whatever its buffer had,

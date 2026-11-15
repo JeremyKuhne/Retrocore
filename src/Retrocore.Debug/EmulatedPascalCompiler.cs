@@ -159,10 +159,9 @@ internal static partial class EmulatedPascalCompiler
     // drive, SOURCE:, and the code file onto another in its second, CODE:; the Compiler asks for both by name.
     private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
     {
-        (byte[] sources, byte[] codes) = Volumes(source);
-
         // Apple Pascal 1.0's APPLE1 comes with a workfile, which C(ompile) would take without asking.
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
+        (byte[] sources, byte[] codes) = Volumes(source, boot);
         EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
         system.Type("C");
         if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
@@ -217,20 +216,25 @@ internal static partial class EmulatedPascalCompiler
     ///   the outer block into pieces of about 40K characters, or less where the main file would not fit: the main
     ///   file, <c>PROGRAM.TEXT</c>, keeps every other piece and includes each of the others where it was, as
     ///   <c>INCn.TEXT</c>, as the Compiler includes no file from an included one. The main file goes on SOURCE:, and
-    ///   each included file beside it while it fits, then on CODE:, which keeps room for the code file.
+    ///   each included file beside it while it fits, then on the boot disk's room, then on CODE:, which keeps room for
+    ///   the code file.
     ///  </para>
     /// </remarks>
     /// <param name="source">The source.</param>
+    /// <param name="boot">The boot disk's image, which included files may go on, or null for none.</param>
     /// <returns>SOURCE:'s and CODE:'s images.</returns>
-    /// <exception cref="IOException">The source does not fit on the two volumes.</exception>
-    internal static (byte[] Sources, byte[] Codes) Volumes(string source)
+    /// <exception cref="IOException">The source does not fit on the volumes.</exception>
+    internal static (byte[] Sources, byte[] Codes) Volumes(string source, byte[]? boot = null)
     {
         IOException? last = null;
         foreach (int length in s_pieceLengths)
         {
+            byte[]? copy = boot is null ? null : (byte[])boot.Clone();
             try
             {
-                return Volumes(Pieces(source, length));
+                (byte[] Sources, byte[] Codes) volumes = Volumes(Pieces(source, length), copy);
+                if (boot is not null && copy is not null) { copy.CopyTo(boot, 0); }
+                return volumes;
             }
             catch (IOException tooLong)
             {
@@ -241,33 +245,40 @@ internal static partial class EmulatedPascalCompiler
         throw new IOException($"The source does not fit on SOURCE: and CODE:: {last?.Message}", last);
     }
 
-    // SOURCE: and CODE: for a source's pieces.
-    private static (byte[] Sources, byte[] Codes) Volumes(List<string> pieces)
+    // SOURCE: and CODE: for a source's pieces, the included ones on SOURCE:, the boot disk or CODE:, in that order.
+    private static (byte[] Sources, byte[] Codes) Volumes(List<string> pieces, byte[]? boot)
     {
         byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
         byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
+        List<(string Name, byte[] Image)> volumes = [("SOURCE", sources)];
+        if (boot is not null) { volumes.Add((PascalVolume.Read(boot, proDosOrder: false).Name, boot)); }
+        volumes.Add(("CODE", codes));
         List<string> included = [.. pieces.Where((_, index) => index % 2 == 1)];
 
-        // Each directive is as long on either volume, so the main file is as long whichever each piece goes on.
-        string Directive(int number, bool onSource) =>
-            onSource ? $"(*$I SOURCE:INC{number}.TEXT*)\n" : $"(*$I CODE:INC{number}.TEXT  *)\n";
+        // Each directive is as long on any volume, so the main file is as long whichever each piece goes on.
+        int longest = volumes.Max(volume => volume.Name.Length);
+        string Directive(int number, int on) =>
+            $"(*$I {volumes[on].Name}:INC{number}.TEXT{new string(' ', longest - volumes[on].Name.Length)}*)\n";
 
-        string Main(IReadOnlyList<bool> onSource) => string.Concat(pieces.Select((piece, index) =>
-            index % 2 == 0 ? piece : Directive((index / 2) + 1, onSource[index / 2])));
+        string Main(IReadOnlyList<int> on) => string.Concat(pieces.Select((piece, index) =>
+            index % 2 == 0 ? piece : Directive((index / 2) + 1, on[index / 2])));
 
-        bool[] placed = [.. included.Select(_ => true)];
+        int[] placed = new int[included.Count];
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
         for (int number = 1; number <= included.Count; number++)
         {
             byte[] text = PascalTextFile.Write(included[number - 1]);
-            try
+            for (int on = 0; ; on++)
             {
-                PascalVolume.WriteFile(sources, proDosOrder: false, $"INC{number}.TEXT", PascalFileKind.Text, text);
-            }
-            catch (IOException)
-            {
-                placed[number - 1] = false;
-                PascalVolume.WriteFile(codes, proDosOrder: false, $"INC{number}.TEXT", PascalFileKind.Text, text);
+                try
+                {
+                    PascalVolume.WriteFile(volumes[on].Image, proDosOrder: false, $"INC{number}.TEXT", PascalFileKind.Text, text);
+                    placed[number - 1] = on;
+                    break;
+                }
+                catch (IOException) when (on < volumes.Count - 1)
+                {
+                }
             }
         }
 

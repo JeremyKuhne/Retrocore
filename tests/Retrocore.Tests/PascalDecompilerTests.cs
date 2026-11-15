@@ -670,27 +670,51 @@ public class PascalDecompilerTests
     [TestMethod]
     public void ALongSourceIsIncludedInPieces()
     {
-        string body = string.Concat(Enumerable.Repeat("    X := X + 1; (* a comment that makes the procedure long enough *)\n", 50));
-        string source = "PROGRAM LONG;\nSEGMENT PROCEDURE S;\n  VAR X: INTEGER;\n"
-            + string.Concat(Enumerable.Range(1, 45).Select(number => $"  PROCEDURE P{number};\n  BEGIN\n{body}  END;\n"))
-            + "BEGIN\nEND;\nBEGIN\nEND.\n";
-
+        string source = LongSource(45);
         (byte[] sources, byte[] codes) = EmulatedPascalCompiler.Volumes(source);
-        PascalVolume first = PascalVolume.Read(sources, proDosOrder: false);
-        PascalVolume second = PascalVolume.Read(codes, proDosOrder: false);
-        string main = PascalTextFile.Read(first.ReadFile("PROGRAM.TEXT"));
-        List<string> included = [.. main.Split('\n').Where(line => line.StartsWith("(*$I ", StringComparison.Ordinal)).Select(line => $"{line}\n")];
-
+        List<string> included = Included(source, sources, [("SOURCE", sources), ("CODE", codes)]);
         included.Should().HaveCountGreaterThan(1).And.Contain(directive => directive.Contains("CODE:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  A source too long for SOURCE: and CODE: puts pieces on the boot disk too, between them, where it has room.
+    /// </summary>
+    [TestMethod]
+    public void ALongerSourceIsIncludedFromTheBootDiskToo()
+    {
+        string source = LongSource(75);
+        byte[] boot = EmptyVolume("APPLE1");
+        (byte[] sources, byte[] codes) = EmulatedPascalCompiler.Volumes(source, boot);
+        List<string> included = Included(source, sources, [("SOURCE", sources), ("APPLE1", boot), ("CODE", codes)]);
+        included.Should().Contain(directive => directive.Contains("APPLE1:", StringComparison.Ordinal));
+    }
+
+    // A source of procedures of 50 lines each, as long as their number makes it.
+    private static string LongSource(int procedures)
+    {
+        string body = string.Concat(Enumerable.Repeat("    X := X + 1; (* a comment that makes the procedure long enough *)\n", 50));
+        return "PROGRAM LONG;\nSEGMENT PROCEDURE S;\n  VAR X: INTEGER;\n"
+            + string.Concat(Enumerable.Range(1, procedures).Select(number => $"  PROCEDURE P{number};\n  BEGIN\n{body}  END;\n"))
+            + "BEGIN\nEND;\nBEGIN\nEND.\n";
+    }
+
+    // The main file's directives, checking the files they include, put back in their places, are the source.
+    private static List<string> Included(string source, byte[] sources, List<(string Name, byte[] Image)> volumes)
+    {
+        string main = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT"));
+        List<string> included = [.. main.Split('\n').Where(line => line.StartsWith("(*$I ", StringComparison.Ordinal)).Select(line => $"{line}\n")];
         string whole = main;
         foreach (string directive in included)
         {
-            string name = directive[(directive.IndexOf(':', StringComparison.Ordinal) + 1)..directive.IndexOf(".TEXT", StringComparison.Ordinal)] + ".TEXT";
-            PascalVolume volume = directive.Contains("SOURCE:", StringComparison.Ordinal) ? first : second;
-            whole = whole.Replace(directive, PascalTextFile.Read(volume.ReadFile(name)), StringComparison.Ordinal);
+            int colon = directive.IndexOf(':', StringComparison.Ordinal);
+            string volume = directive[5..colon];
+            string name = directive[(colon + 1)..directive.IndexOf(".TEXT", StringComparison.Ordinal)] + ".TEXT";
+            byte[] image = volumes.Single(entry => entry.Name == volume).Image;
+            whole = whole.Replace(directive, PascalTextFile.Read(PascalVolume.Read(image, proDosOrder: false).ReadFile(name)), StringComparison.Ordinal);
         }
 
         whole.TrimEnd().Should().Be(source.TrimEnd());
+        return included;
     }
 
     // A function, of a word, that adds 1 to its parameter, for the Assembler.

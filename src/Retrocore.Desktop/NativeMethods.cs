@@ -25,6 +25,16 @@ internal static unsafe partial class NativeMethods
     internal static partial bool SetCursorPos(int x, int y);
 
     /// <summary>
+    ///  Gets where the pointer is on the screen.
+    /// </summary>
+    /// <param name="point">Two ints, across and down in screen pixels, as Win32's <c>POINT</c>.</param>
+    /// <returns>Whether it was read.</returns>
+    [SupportedOSPlatform("windows")]
+    [LibraryImport("user32.dll", EntryPoint = "GetCursorPos")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetCursorPos(int* point);
+
+    /// <summary>
     ///  Keeps the pointer inside a rectangle of the screen, or lets it go anywhere again.
     /// </summary>
     /// <param name="rectangle">

@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace Retrocore.Desktop;
 
@@ -43,6 +44,11 @@ internal sealed class ScreenView : Control
     // the pointer itself, captured while a button is down.
     private Point? _mouseAt;
     private IPointer? _mousePointer;
+
+    // On Windows, where the pointer last was in screen pixels, read from Windows rather than from the move events,
+    // which can be older than the last time the pointer was put back.
+    private int _cursorX;
+    private int _cursorY;
     private bool _releasing;
 
     // When the mouse card took the pointer, for the note that says how to let it go.
@@ -381,14 +387,39 @@ internal sealed class ScreenView : Control
         base.OnPointerMoved(e);
         if (_mouseAt is not { } last || _bitmap is not { } bitmap) { return; }
 
-        // Movement in the picture's 280 by 192 dots, as the panel sends it; the hidden pointer goes back to the
-        // screen's centre after each move, so it never stops at the window's edge.
-        Point at = e.GetPosition(this);
-        if (at == last) { return; }
+        // Movement in the picture's 280 by 192 dots, as the panel sends it. On Windows it is read from where Windows
+        // has the pointer, since a move event can come from before the pointer was last put back, and the hidden
+        // pointer goes back to the picture's centre as it nears an edge, so it never stops there.
         Rect picture = PictureRect(bitmap);
-        _mouseX += (at.X - last.X) * 280 / Math.Max(1, picture.Width);
-        _mouseY += (at.Y - last.Y) * 192 / Math.Max(1, picture.Height);
-        Recentre(at);
+        double across;
+        double down;
+        if (OperatingSystem.IsWindows())
+        {
+            if (!ReadCursor(out int x, out int y) || (x == _cursorX && y == _cursorY)) { return; }
+            double scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            across = (x - _cursorX) / scale;
+            down = (y - _cursorY) / scale;
+            _cursorX = x;
+            _cursorY = y;
+
+            // Put back at the centre only once it nears the picture's edge, so few moves are lost to the putting back.
+            PixelPoint centre = this.PointToScreen(picture.Center);
+            if (Math.Abs(x - centre.X) > picture.Width * scale / 4 || Math.Abs(y - centre.Y) > picture.Height * scale / 4)
+            {
+                Recentre(picture.Center);
+            }
+        }
+        else
+        {
+            Point at = e.GetPosition(this);
+            if (at == last) { return; }
+            across = at.X - last.X;
+            down = at.Y - last.Y;
+            _mouseAt = at;
+        }
+
+        _mouseX += across * 280 / Math.Max(1, picture.Width);
+        _mouseY += down * 192 / Math.Max(1, picture.Height);
         int dx = (int)Math.Truncate(_mouseX);
         int dy = (int)Math.Truncate(_mouseY);
         _mouseX -= dx;
@@ -428,6 +459,22 @@ internal sealed class ScreenView : Control
         NativeMethods.ClipCursor(clip);
         PixelPoint centre = this.PointToScreen(picture.Center);
         if (NativeMethods.SetCursorPos(centre.X, centre.Y)) { _mouseAt = picture.Center; }
+        if (!ReadCursor(out _cursorX, out _cursorY))
+        {
+            _cursorX = centre.X;
+            _cursorY = centre.Y;
+        }
+    }
+
+    // Where the pointer is now, in screen pixels.
+    [SupportedOSPlatform("windows")]
+    private static unsafe bool ReadCursor(out int x, out int y)
+    {
+        int* point = stackalloc int[2];
+        bool read = NativeMethods.GetCursorPos(point);
+        x = point[0];
+        y = point[1];
+        return read;
     }
 
     // The mouse card gives the pointer back, its button up.

@@ -173,6 +173,19 @@ internal sealed class MainWindow : Window
         _screen.PasteRequested += (_, _) => _ = _screen.PasteAsync();
         _screen.KeysChanged += (_, _) => PaintKeys();
         _screen.MouseChanged += (_, _) => Refresh();
+
+        // A click in the screen collapses the side pane, so the whole picture is the machine's.
+        _screen.AddHandler(
+            PointerPressedEvent,
+            (_, e) =>
+            {
+                if (!_pane.IsVisible || !e.GetCurrentPoint(_screen).Properties.IsLeftButtonPressed) { return; }
+                SetPaneOpen(open: false);
+                UpdateActivity();
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+
         session.Changed += (_, _) =>
         {
             UpdateTitle();

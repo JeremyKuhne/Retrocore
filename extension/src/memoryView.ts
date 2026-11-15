@@ -75,7 +75,7 @@ button:disabled{opacity:.5;cursor:default}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
 #listing{flex:none;width:46ch;overflow:auto;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
-#listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
+#listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch;min-width:max-content}
 #listing .ln:hover{background:var(--vscode-list-hoverBackground)}
 #listing .ln:focus,#listing a:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #listing .ln.sel{background:var(--vscode-editor-inactiveSelectionBackground)}
@@ -86,7 +86,7 @@ button:disabled{opacity:.5;cursor:default}
 #listing .data .t{color:var(--vscode-debugTokenExpression-number,var(--vscode-editor-foreground))}
 #listing a{color:var(--vscode-textLink-foreground);text-decoration:none;cursor:pointer}
 #listing a:hover{text-decoration:underline}
-#listing .src{margin-left:auto;padding-left:1ch;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-descriptionForeground)}
+#listing .src{flex:none;margin-left:auto;padding-left:1ch;color:var(--vscode-descriptionForeground)}
 #listing p{margin:8px;white-space:normal;color:var(--vscode-descriptionForeground);font-family:var(--vscode-font-family);font-size:12px}
 body.narrow #listing{display:none}
 body.narrow .main{flex-direction:column}

@@ -193,17 +193,25 @@ internal sealed partial class DebugSession
     {
         if (Pascal is not { } pascal || pascal.Segment(frame)?.Segment.Name is not { } name) { return null; }
 
+        // Sources are kept once a breakpoint is set in them, so two can share a listing's name, as HELLO.PAS in two
+        // folders, or one since deleted: the frame is in the one that still has the listing's line there.
+        (PascalListing Listing, PascalListingLine Line, string? Path)? unsourced = null;
         foreach ((string path, string[] text) in _pascalSources)
         {
             if (ListingFor(path) is { } listing
                 && listing.Listing.Compiles(frame.SegmentNumber, name)
                 && listing.Listing.LineAt(frame.SegmentNumber, frame.Procedure, frame.Offset) is { } line)
             {
-                // A source that no longer has the listing's line there is not where the frame is.
-                bool same = line.Line <= text.Length && SameText(text[line.Line - 1], line.Text);
-                return (listing.Listing, line, same ? path : null);
+                if (line.Line <= text.Length && SameText(text[line.Line - 1], line.Text))
+                {
+                    return (listing.Listing, line, path);
+                }
+
+                unsourced ??= (listing.Listing, line, null);
             }
         }
+
+        if (unsourced is not null) { return unsourced; }
 
         foreach ((_, PascalListing listing) in pascal.Listings)
         {

@@ -288,6 +288,34 @@ internal static partial class PascalCommand
         }
     }
 
+    // A hints file's lists of constants, { "constants": { "SYMBOL": ["IDENT", "COMMA"] } }, and what takes their
+    // names, { "values": { "PASCALCO.1@15": "SYMBOL" } }.
+    private static (Dictionary<string, IReadOnlyList<string>> Constants, Dictionary<string, string> Values) Constants(byte[] data)
+    {
+        JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
+        Dictionary<string, IReadOnlyList<string>> constants = new(StringComparer.OrdinalIgnoreCase);
+        if (root["constants"] is JsonObject lists)
+        {
+            foreach ((string list, JsonNode? names) in lists)
+            {
+                constants[list] = names is JsonArray array
+                    ? [.. array.Select(name => name?.GetValue<string>() ?? "")]
+                    : throw new InvalidDataException($"The constants {list} are not a list of names.");
+            }
+        }
+
+        Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+        if (root["values"] is JsonObject entries)
+        {
+            foreach ((string key, JsonNode? list) in entries)
+            {
+                values[key] = list?.GetValue<string>() ?? throw new InvalidDataException($"The values of {key} name no constants.");
+            }
+        }
+
+        return (constants, values);
+    }
+
     // Assembles p-code source into a code file.
     private static int Assemble(string source, string output)
     {
@@ -348,7 +376,8 @@ internal static partial class PascalCommand
         if (hints is not null)
         {
             (Dictionary<string, string> names, Dictionary<string, string> comments) = Hints(hints);
-            options = options with { Names = names, Comments = comments };
+            (Dictionary<string, IReadOnlyList<string>> constants, Dictionary<string, string> values) = Constants(hints);
+            options = options with { Names = names, Comments = comments, Constants = constants, Values = values };
         }
 
         PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(data), options);

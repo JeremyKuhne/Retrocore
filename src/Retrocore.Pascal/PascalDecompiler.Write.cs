@@ -36,8 +36,8 @@ public sealed partial class PascalDecompiler
     private string Write()
     {
         NamedFields();
-        NameTypes();
         Prefixes();
+        NameTypes();
 
         Options([.. _procedures.Where(procedure => !InUnit(procedure))]);
 
@@ -99,11 +99,12 @@ public sealed partial class PascalDecompiler
         Alignment([.. _procedures.Select(procedure => procedure.Segment).Where(segment => !_unitSegments.Contains(segment)).Distinct()]);
 
         // The constants the statements named, which come before the types.
-        if (_constants.Count > 0)
+        // And those the hints name values by.
+        if (_constants.Count > 0 || _declaredConstants.Count > 0)
         {
             _source.Insert(
                 constants,
-                $"CONST\n{string.Concat(_constants.Select(constant => $"  {constant.Value} = {constant.Key.ToString(CultureInfo.InvariantCulture)};\n"))}");
+                $"CONST\n{string.Concat(_constants.Select(constant => $"  {constant.Value} = {constant.Key.ToString(CultureInfo.InvariantCulture)};\n"))}{ConstantDeclarations()}");
         }
 
         string program = _source.ToString();
@@ -1993,9 +1994,9 @@ public sealed partial class PascalDecompiler
         return record != outer.Type.Find().Element?.Find() && (SizeOf(record) ?? 0) > offset;
     }
 
-    private string Value(int value, TypeNode type) => type.Find().Kind == TypeKind.Scalar
+    private string Value(int value, TypeNode type) => ValueName(value, type) ?? (type.Find().Kind == TypeKind.Scalar
         ? ConstantText(value, type)
-        : value.ToString(CultureInfo.InvariantCulture);
+        : value.ToString(CultureInfo.InvariantCulture));
 
     private static string Character(int value) => value switch
     {

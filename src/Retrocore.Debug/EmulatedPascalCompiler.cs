@@ -201,8 +201,12 @@ internal static partial class EmulatedPascalCompiler
         return code[..end];
     }
 
-    // The characters of source in each piece of one too long for a volume of its own.
-    private const int PieceLength = 40 * 1024;
+    // The characters of source in each piece of one too long for a volume of its own, longest first: shorter pieces
+    // leave the main file less of the source.
+    private static readonly int[] s_pieceLengths = [40 * 1024, 32 * 1024, 24 * 1024, 16 * 1024, 12 * 1024];
+
+    // The blocks the code file needs on CODE:, Apple Pascal 1.3's Compiler's and some.
+    private const int CodeBlocks = 100;
 
     /// <summary>
     ///  Makes the volumes SOURCE: and CODE: for a source too long for APPLE1.
@@ -210,19 +214,38 @@ internal static partial class EmulatedPascalCompiler
     /// <remarks>
     ///  <para>
     ///   A source too long for a volume of its own, such as Apple Pascal 1.3's Compiler's, is cut before procedures of
-    ///   the outer block into pieces of about 40K characters: the main file, <c>PROGRAM.TEXT</c>, keeps every other
-    ///   piece and includes each of the others where it was, as <c>INCn.TEXT</c>, as the Compiler includes no file
-    ///   from an included one. The main file goes on SOURCE:, and each included file beside it while it fits, then on
-    ///   CODE:, which the code file needs room on.
+    ///   the outer block into pieces of about 40K characters, or less where the main file would not fit: the main
+    ///   file, <c>PROGRAM.TEXT</c>, keeps every other piece and includes each of the others where it was, as
+    ///   <c>INCn.TEXT</c>, as the Compiler includes no file from an included one. The main file goes on SOURCE:, and
+    ///   each included file beside it while it fits, then on CODE:, which keeps room for the code file.
     ///  </para>
     /// </remarks>
     /// <param name="source">The source.</param>
     /// <returns>SOURCE:'s and CODE:'s images.</returns>
+    /// <exception cref="IOException">The source does not fit on the two volumes.</exception>
     internal static (byte[] Sources, byte[] Codes) Volumes(string source)
+    {
+        IOException? last = null;
+        foreach (int length in s_pieceLengths)
+        {
+            try
+            {
+                return Volumes(Pieces(source, length));
+            }
+            catch (IOException tooLong)
+            {
+                last = tooLong;
+            }
+        }
+
+        throw new IOException($"The source does not fit on SOURCE: and CODE:: {last?.Message}", last);
+    }
+
+    // SOURCE: and CODE: for a source's pieces.
+    private static (byte[] Sources, byte[] Codes) Volumes(List<string> pieces)
     {
         byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
         byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
-        List<string> pieces = Pieces(source);
         List<string> included = [.. pieces.Where((_, index) => index % 2 == 1)];
 
         // Each directive is as long on either volume, so the main file is as long whichever each piece goes on.
@@ -248,14 +271,17 @@ internal static partial class EmulatedPascalCompiler
             }
         }
 
+        // The code file needs its room after the included files.
+        PascalVolume.WriteFile((byte[])codes.Clone(), proDosOrder: false, "ROOM.CODE", PascalFileKind.Code, new byte[CodeBlocks * 512]);
+
         _ = PascalVolume.DeleteFile(sources, proDosOrder: false, "PROGRAM.TEXT");
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
         return (sources, codes);
     }
 
     // A source too long for a volume of its own in pieces, cut before procedures of the outer block, each but the
-    // last at least PieceLength characters; one that fits is one piece.
-    private static List<string> Pieces(string source)
+    // last at least the length given; one that fits is one piece.
+    private static List<string> Pieces(string source, int pieceLength)
     {
         if (PascalTextFile.Write(source).Length <= 128 * 1024) { return [source]; }
 
@@ -269,7 +295,7 @@ internal static partial class EmulatedPascalCompiler
                 || lines[index].StartsWith("  FUNCTION ", StringComparison.Ordinal)
                 || lines[index].StartsWith("  SEGMENT ", StringComparison.Ordinal);
 
-            if (outer && length >= PieceLength && index > start)
+            if (outer && length >= pieceLength && index > start)
             {
                 pieces.Add(string.Join('\n', lines[start..index]) + "\n");
                 start = index;

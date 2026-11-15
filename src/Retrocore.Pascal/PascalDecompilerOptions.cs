@@ -37,4 +37,18 @@ public sealed record PascalDecompilerOptions
     ///  Gets comments to write above a procedure's heading, by its key.
     /// </summary>
     public IReadOnlyDictionary<string, string> Comments { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    ///  Gets constants to declare, by the name of the list they make: each list's names, for the values from 0, an
+    ///  empty name for a value it leaves unnamed.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> Constants { get; init; } =
+        new Dictionary<string, IReadOnlyList<string>>();
+
+    /// <summary>
+    ///  Gets the lists of <see cref="Constants"/> whose names a variable's, field's or type's values are written by,
+    ///  by its key: <c>SEGMENT.N@WORD</c> or <c>SYSTEM@WORD</c> for a variable or parameter, <c>Tn.FIELD</c> for a
+    ///  field, <c>Tn</c> for a type, or a set type's elements.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Values { get; init; } = new Dictionary<string, string>();
 }

@@ -208,6 +208,12 @@ warning. Comments go with the same keys: a type's above its declaration, a field
 written a field to a line, a variable's (`SEGMENT.N@WORD`, `SYSTEM@8`) beside its declaration, and a system
 procedure's (`SYSTEM.43`) beside its heading. A comment of several lines (`\n`) is written as several, in the Pascal
 and in the Assembler's source, where each line is also wrapped to fit the 80 characters the Assembler reads of one.
+Hints can also name a variable's, field's or type's values (a set type's elements, for a set): `constants` gives
+lists of names, for the values from 0 (`"SYMBOL": ["IDENT", "COMMA", ...]`, an empty name for a value left unnamed),
+and `values` which keys take them (`"PASCALCO.1@15": "SYMBOL"`, `"T6.T6F1": "STRUCTFORM"`, `"T42": "SYMBOL"`). The
+lists are declared as `CONST`s in the program's block, and a constant compared with, stored in, passed for or a
+`CASE` label or set member of one of those is written by its name: a constant loads as the number it is, so the
+code is the same. Each name must be unlike every other in the source, or its list is left out, with a warning.
 Apple Pascal 1.3's Compiler, named and commented so, is kept outside this repository.
 
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
@@ -257,7 +263,8 @@ its own segments copied out by the Librarian, into other slots and without segme
 segments by number and leaves out those with no code and the outer block. A source too long for APPLE1 beside its
 code file, such as a Compiler's, is compiled from a volume of its own, SOURCE:, in a second Disk II in slot 5 (units
 11 and 12), to CODE: beside it; Apple Pascal 1.1 sees both. One too long for a volume, such as Apple Pascal 1.3's
-Compiler's, is cut before procedures of the outer block into pieces of about 40K characters: the main file keeps
+Compiler's, is cut before procedures of the outer block into pieces of about 40K characters, or fewer where the main file would
+not fit: the main file keeps
 every other piece and includes each of the others where it was (`(*$I SOURCE:INC1.TEXT*)`; the Compiler includes no
 file from an included one), each on SOURCE: while it fits, then on CODE:, where the code file needs the rest. The
 code file is read back without the empty blocks after its code, which it keeps of the room CODE: had and the Linker

@@ -23,7 +23,7 @@ public sealed partial class PascalDecompiler
     // eight letters: the procedures', the variables', the other types' and fields', and the predeclared words.
     private void NameTypesFromHints()
     {
-        if (_options.Names.Count == 0 && _options.Comments.Count == 0) { return; }
+        if (_options.Names.Count == 0 && _options.Comments.Count == 0 && _options.Values.Count == 0) { return; }
 
         HashSet<string> taken = Taken();
         Dictionary<string, TypeNode> byName = new(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +52,8 @@ public sealed partial class PascalDecompiler
                 _fieldNames[(type, field)] = name;
             }
         }
+
+        NameValues(taken);
     }
 
     // A field's key, T2.F0, as its type's name and its own; null for others, such as a procedure's, PASCALCO.4.

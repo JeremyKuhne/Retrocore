@@ -231,6 +231,7 @@ public sealed partial class PascalDecompiler
     private string ConstantText(int value, TypeNode? expected)
     {
         TypeNode? root = expected?.Find();
+        if (ValueName(value, root) is { } name) { return name; }
         if (root?.Kind == TypeKind.Pointer && value == 0) { return "NIL"; }
         if (root is not { Kind: TypeKind.Scalar }) { return value.ToString(CultureInfo.InvariantCulture); }
 

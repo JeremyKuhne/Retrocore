@@ -414,6 +414,31 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
+    ///  Hints give a variable's values names, declared as constants, which a constant compared with it, stored in it
+    ///  or a CASE label on it is written by; a list with a name another in the source has is left out, with a warning.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameAVariablesValues()
+    {
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(P1Bytes), new PascalDecompilerOptions
+        {
+            Constants = new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["COLOR"] = ["", "RED", "", "GREEN", "BLUE", "", "", "WHITE"],
+                ["SIZES"] = ["SMALL", "G3"]
+            },
+            Values = new Dictionary<string, string> { ["P1.1@4"] = "COLOR", ["P1.1@3"] = "SIZES", ["P1.1@9"] = "COLOR" }
+        });
+
+        string source = result.Source;
+        source.Should().StartWith("PROGRAM P1;\nCONST\n  (* COLOR *)\n  RED = 1; GREEN = 3; BLUE = 4; WHITE = 7;\nVAR\n");
+        source.Should().Contain("  CASE G4 OF\n    RED:\n").And.Contain("    GREEN, BLUE:\n").And.Contain("    WHITE:\n");
+        source.Should().Contain("      G4 := 0\n").And.Contain("G3 := 5;");
+        result.Warnings.Should().Contain(warning => warning.Contains("G3 for SIZES's constant would clash", StringComparison.Ordinal));
+        result.Warnings.Should().Contain(warning => warning.Contains("The values of P1.1@9 cannot be named", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  With the listing the Compiler wrote of HILBERT's own source, its decompilation names its procedures and
     ///  variables as the source did, nested procedures' too, and still compiles to the same code.
     /// </summary>

@@ -355,6 +355,10 @@ try {
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await request("evaluate", { expression: "A" })).result, "$48 (72)");
+    // A word is the 6809's, high byte first, as the reset vector at $FFFE is.
+    const word = (await request("evaluate", { expression: "[$FFFE].w", context: "watch" })).result;
+    assert.equal(word, (await request("evaluate", { expression: "[$FFFE]*256+[$FFFF]", context: "watch" })).result);
+    assert.equal((await request("retro/memoryBanks")).banks[0].bigEndian, true, "the CPU's memory is big-endian");
     let stack = await request("stackTrace", { threadId: 1 });
     assert.equal(stack.stackFrames[0].line, jsr);
     assert.ok(stack.totalFrames >= 2, "PRINT is on the call stack");

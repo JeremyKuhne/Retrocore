@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Isa;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -212,7 +213,8 @@ internal sealed partial class DebugSession
     ///  <para>
     ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
     ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
-    ///   and within a module the first name in order.
+    ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
+    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryLabels(JsonObject args)
@@ -231,6 +233,23 @@ internal sealed partial class DebugSession
                 {
                     labels[address] = name;
                 }
+            }
+        }
+
+        // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
+        // rather than code, so they apply whatever is mapped; a label at the same address comes first.
+        IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
+        foreach (IDebugModule module in _debug.Modules)
+        {
+            foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
+            {
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || labels.ContainsKey((int)value))
+                {
+                    continue;
+                }
+
+                if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
+                labels[(int)value] = name;
             }
         }
 
@@ -431,9 +450,10 @@ internal sealed partial class DebugSession
     ///  Lists the CPU's memory and the machine's banks: each one's memory reference, and where the memory map
     ///  reads and writes it now.
     /// </summary>
-    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes, bool Coprocessor)> MemoryBanks()
+    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes, bool Coprocessor, bool BigEndian)> MemoryBanks()
     {
-        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF", false);
+        bool big = Target.InstructionSet.Endianness == Endianness.Big;
+        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF", false, big);
         foreach (DebugMemoryBank bank in Target.Banks)
         {
             yield return (
@@ -443,7 +463,8 @@ internal sealed partial class DebugSession
                 bank.Poke is null,
                 Mapped(bank, write: false),
                 bank.Poke is null ? "" : Mapped(bank, write: true),
-                bank.InstructionSet is not null);
+                bank.InstructionSet is not null,
+                bank.InstructionSet is { } isa ? isa.Endianness == Endianness.Big : big);
         }
     }
 
@@ -485,7 +506,8 @@ internal sealed partial class DebugSession
             ["readOnly"] = bank.ReadOnly,
             ["reads"] = bank.Reads,
             ["writes"] = bank.ReadOnly ? null : bank.Writes,
-            ["coprocessor"] = bank.Coprocessor
+            ["coprocessor"] = bank.Coprocessor,
+            ["bigEndian"] = bank.BigEndian
 }).ToJsonArray()
     };
 

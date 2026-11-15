@@ -25,6 +25,8 @@ export interface MemoryBank {
     writes: string | null;
     /** Whether it is a coprocessor's address space, such as the SoftCard's Z80's. */
     coprocessor?: boolean;
+    /** Whether its CPU keeps a word's high byte first, as the 6809 does. */
+    bigEndian?: boolean;
 }
 
 /** Retrocore Memory's view type. */
@@ -253,7 +255,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     await panel.webview.postMessage({
                         type: "init",
                         address: start.address,
-                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly }
+                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly, bigEndian: bank.bigEndian === true }
                     });
                     ready();
                     return;
@@ -269,6 +271,25 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "read":
                             await reply(await session.customRequest("retro/memory/read", { memoryReference: base, offset: received.offset, count: received.count }));
                             break;
+                        case "banks": {
+                            // The other banks this editor's bytes can be compared with, read now, as a card can go in.
+                            const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
+                            await reply({
+                                banks: banks.filter(item => item.name !== start.bank).map(item => ({
+                                    memoryReference: item.memoryReference,
+                                    label: item.name === null ? item.label : `${item.label} (${item.name})`
+                                }))
+                            });
+                            break;
+                        }
+                        case "readOther": {
+                            // Only a bank the machine has, as the page lists them.
+                            const reference = String(received.reference);
+                            const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
+                            if (!banks.some(item => item.memoryReference === reference)) throw new Error(`The machine has no memory bank at ${reference} now.`);
+                            await reply(await session.customRequest("retro/memory/read", { memoryReference: reference, offset: received.offset, count: received.count }));
+                            break;
+                        }
                         case "labels":
                             await reply(await session.customRequest("retro/memory/labels", { memoryReference: base }));
                             break;

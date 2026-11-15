@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -31,6 +32,7 @@ internal sealed partial class SourceMapModule : IDebugModule
     private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, long> _symbols = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly (string Name, long Value)[] _labels;
+    private readonly (string Name, long Value, IsaDescription Cpu)[] _addressConstants;
     private readonly Dictionary<string, string[]> _sourceText = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly AssemblyResult _result;
     private readonly int _relocation;
@@ -151,6 +153,82 @@ internal sealed partial class SourceMapModule : IDebugModule
         }
 
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];
+        _addressConstants = AddressConstantsOf(result, sourceNames);
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
+
+    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: those that begin a memory or
+    // pointer operand, not an index's offset, an immediate value or a term added to another address.
+    private static (string Name, long Value, IsaDescription Cpu)[] AddressConstantsOf(
+        AssemblyResult result,
+        Dictionary<string, string> sourceNames)
+    {
+        Dictionary<string, AssemblySymbol> constants = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+        {
+            if (!symbol.IsConstant || symbol.Value is < 0 or > 0xFFFF) { continue; }
+            string name = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
+            if (s_internalMarkers.Any(marker => name.Contains(marker, StringComparison.Ordinal))) { continue; }
+            constants.TryAdd(name, symbol);
+        }
+
+        Dictionary<string, (string Name, long Value, IsaDescription Cpu)> found = [with(StringComparer.OrdinalIgnoreCase)];
+        if (constants.Count == 0) { return []; }
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size == 0 || entry.InstructionSet is not { } isa) { continue; }
+            OperandForm? form = isa.Forms.FirstOrDefault(item => item.Name == entry.AddressMode);
+            if (form is null || form.Role == OperandRole.None || form.IsIndexed || form.Patterns.Count == 0)
+            {
+                continue;
+            }
+
+            if (AddressName(entry.Operand, form.Patterns[0]) is not { } name
+                || !constants.TryGetValue(name, out AssemblySymbol? symbol)
+                || found.ContainsKey(name))
+            {
+                continue;
+            }
+
+            found[name] = (sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name, symbol.Value, isa.Description);
+        }
+
+        return [.. found.Values.OrderBy(item => item.Value).ThenBy(item => item.Name, StringComparer.Ordinal)];
+    }
+
+    // The name an operand's address expression begins with, such as CH in CH+1, (BASL),Y or A,(CURSOR): past the
+    // operands the form's pattern puts before the address, and its brackets and size marks, a name followed by the
+    // end of the expression or by an operator; null when the expression begins with anything else.
+    private static string? AddressName(string operand, string pattern)
+    {
+        int hole = pattern.IndexOf("{}", StringComparison.Ordinal);
+        if (hole < 0) { return null; }
+        int commas = pattern.AsSpan(0, hole).Count(',');
+        int start = 0;
+        for (int comma = 0; comma < commas; comma++)
+        {
+            int next = operand.IndexOf(',', start);
+            if (next < 0) { return null; }
+            start = next + 1;
+        }
+
+        while (start < operand.Length && operand[start] is ' ' or '\t' or '(' or '[' or '<' or '>' or '!' or '|')
+        {
+            start++;
+        }
+
+        int end = start;
+        while (end < operand.Length && (char.IsAsciiLetterOrDigit(operand[end]) || operand[end] is '_' or '.' or '@' or '?' or ':'))
+        {
+            end++;
+        }
+
+        if (end == start || char.IsAsciiDigit(operand[start])) { return null; }
+        return end == operand.Length || operand[end] is ' ' or '\t' or '+' or '-' or ')' or ']' or ',' or ';'
+            ? operand[start..end]
+            : null;
     }
 
     /// <inheritdoc/>

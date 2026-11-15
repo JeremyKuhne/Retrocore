@@ -160,6 +160,9 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     public InstructionSet InstructionSet => M6502Isa.Get(ProcessorVariant.Mos6502);
 
     /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Terminal;
+
+    /// <inheritdoc/>
     public DebugRegisters Registers => s_registers;
 
     /// <inheritdoc/>

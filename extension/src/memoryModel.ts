@@ -303,23 +303,54 @@ export function parseByte(text: string): number | string {
     return value & 0xFF;
 }
 
-/** The offsets a RAM search starts from: every byte that can be read and written. */
-export function searchStart(readable: Uint8Array, readOnly: Uint8Array): number[] {
+/**
+ * A value a RAM search compares with: a byte, or with a size of 2 a 16-bit word, as hex with $ or 0x, binary with %,
+ * or decimal, which may be negative; or why the text is not one.
+ */
+export function parseValue(text: string, size = 1): number | string {
+    if (size === 1) return parseByte(text);
+    const trimmed = text.trim();
+    let value: number;
+    if (/^(\$|0[xX])[0-9A-Fa-f]{1,4}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
+    else if (/^%[01]{1,16}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
+    else if (/^-?[0-9]{1,5}$/.test(trimmed)) value = parseInt(trimmed, 10);
+    else return "Type a word, such as $1F00, %0001111100000000 or 7936.";
+    if (value < -32768 || value > 0xFFFF) return `${trimmed} does not fit in a word.`;
+    return value & 0xFFFF;
+}
+
+/** The value at an offset: a byte, or with a size of 2 a word in the CPU's byte order. */
+export function valueAt(data: Uint8Array, offset: number, size = 1, bigEndian = false): number {
+    if (size === 1) return data[offset];
+    return bigEndian ? (data[offset] << 8) | data[offset + 1] : data[offset] | (data[offset + 1] << 8);
+}
+
+/**
+ * The offsets a RAM search starts from: every byte that can be read and written, or with a size of 2 every word
+ * whose two bytes can.
+ */
+export function searchStart(readable: Uint8Array, readOnly: Uint8Array, size = 1): number[] {
     const offsets: number[] = [];
-    for (let offset = 0; offset < readable.length; offset++) {
-        if (readable[offset] === 1 && readOnly[offset] !== 1) offsets.push(offset);
+    for (let offset = 0; offset + size <= readable.length; offset++) {
+        let usable = true;
+        for (let index = 0; index < size && usable; index++) usable = readable[offset + index] === 1 && readOnly[offset + index] !== 1;
+        if (usable) offsets.push(offset);
     }
     return offsets;
 }
 
 /**
- * Narrows a RAM search: keeps the candidates whose byte now passes the test against what it was before, or against
- * a value. A byte that can no longer be read drops out.
+ * Narrows a RAM search: keeps the candidates whose value now passes the test against what it was before, or against
+ * a value. A byte that can no longer be read drops out, and so does a word with one.
  */
-export function narrowSearch(candidates: number[], before: Uint8Array, now: Uint8Array, readable: Uint8Array, test: SearchTest, value = 0): number[] {
+export function narrowSearch(
+    candidates: number[], before: Uint8Array, now: Uint8Array, readable: Uint8Array, test: SearchTest, value = 0, size = 1, bigEndian = false
+): number[] {
     return candidates.filter(offset => {
-        if (readable[offset] !== 1) return false;
-        const was = before[offset], is = now[offset];
+        for (let index = 0; index < size; index++) {
+            if (readable[offset + index] !== 1) return false;
+        }
+        const was = valueAt(before, offset, size, bigEndian), is = valueAt(now, offset, size, bigEndian);
         switch (test) {
             case "changed": return is !== was;
             case "unchanged": return is === was;
@@ -332,4 +363,4 @@ export function narrowSearch(candidates: number[], before: Uint8Array, now: Uint
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText, parseByte, searchStart, narrowSearch];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];

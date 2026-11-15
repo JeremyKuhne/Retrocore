@@ -121,6 +121,9 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public InstructionSet InstructionSet => M6502Isa.Get(ProcessorVariant.Mos6502);
 
     /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Video;
+
+    /// <inheritdoc/>
     public DebugRegisters Registers => s_registers;
 
     /// <inheritdoc/>

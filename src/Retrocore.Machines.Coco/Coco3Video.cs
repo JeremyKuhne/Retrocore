@@ -24,7 +24,7 @@ namespace Retrocore.Machines.Coco;
 ///   256 dots are doubled.
 ///  </para>
 /// </remarks>
-public sealed class Coco3Video : IVideoSource
+public sealed class Coco3Video : IVideoSource, ICharacterSet
 {
     private const int MaximumLines = 225;
     private const int MaximumBytes = 160;
@@ -280,6 +280,77 @@ public sealed class Coco3Video : IVideoSource
             Fetch(state, _lineBytes.AsSpan(active * MaximumBytes, MaximumBytes));
             Advance(state, ref _position, ref _lineInRow);
         }
+    }
+
+    /// <inheritdoc/>
+    int ICharacterSet.CharacterWidth => 8;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The compatible mode's characters are 12 lines, the GIME's text 8.
+    ///  </para>
+    /// </remarks>
+    int ICharacterSet.CharacterHeight => _gime.CompatibleVideo ? 12 : 8;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   In the compatible mode, as the VDG's alphanumerics and four-element semigraphics draw now, lit where the
+    ///   foreground or an element is, with the GIME's lowercase; in the GIME's text modes, a character byte from the
+    ///   high-resolution font, as attributes leave it.
+    ///  </para>
+    /// </remarks>
+    bool ICharacterSet.IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        if (pixel is < 0 or >= 8) { return false; }
+        if (!_gime.CompatibleVideo)
+        {
+            return line is >= 0 and < 8 && (GimeCharacterSet.HighResolution[((code & 0x7F) * 8) + line] & (0x80 >> pixel)) != 0;
+        }
+
+        if (line is < 0 or >= 12) { return false; }
+        if ((code & 0x80) != 0)
+        {
+            int element = (line < 6 ? 3 : 1) - (pixel >= 4 ? 1 : 0);
+            return (code & (1 << element)) != 0;
+        }
+
+        ReadOnlySpan<byte> font = GimeCharacterSet.LowResolution;
+        int character = code & 0x3F;
+        bool inverse = (code & 0x40) != 0;
+        byte vdgMode = _bus.VideoMode;
+        byte pattern = font[(character * 12) + line];
+        if (!inverse && (vdgMode & 0x10) != 0 && character < 32)
+        {
+            pattern = (byte)~font[((character + 64) * 12) + line];
+        }
+
+        if ((vdgMode & 0x20) != 0) { inverse = !inverse; }
+        if (inverse) { pattern = (byte)~pattern; }
+        return (pattern & (0x80 >> pixel)) != 0;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   In the compatible mode, uppercase, or the GIME's lowercase for codes 0 to 31 without the inverse bit while
+    ///   it is on, and none for semigraphics; in the GIME's text modes, ASCII, and none for control codes.
+    ///  </para>
+    /// </remarks>
+    char ICharacterSet.Character(byte code)
+    {
+        if (!_gime.CompatibleVideo)
+        {
+            char ascii = (char)(code & 0x7F);
+            return ascii is >= ' ' and < (char)0x7F ? ascii : '\0';
+        }
+
+        if ((code & 0x80) != 0) { return '\0'; }
+        int character = code & 0x3F;
+        char upper = (char)(character < 32 ? character + 64 : character);
+        bool lowercase = (code & 0x40) == 0 && (_bus.VideoMode & 0x10) != 0 && character < 32;
+        return lowercase ? char.ToLowerInvariant(upper) : upper;
     }
 
     private LineState Capture(int position, int lineInRow) => new()

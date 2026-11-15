@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, copyText, cpuWatches, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, type PatternByte } from "../memoryModel";
+import { addressAt, copyText, cpuWatches, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -136,6 +136,34 @@ test("a RAM search reads values and narrows by how bytes changed", () => {
     assert.deepEqual(narrowSearch(start, before, now, readable, "equal", 5), [1]);
     assert.deepEqual(narrowSearch(start, before, now, readable, "notEqual", 5), [0, 3]);
     assert.deepEqual(narrowSearch(start, before, now, Uint8Array.from([2, 1, 1, 1, 2]), "decreased"), [], "a byte that cannot be read drops out");
+});
+
+test("a RAM search for words reads them in the CPU's byte order", () => {
+    assert.equal(parseValue("$1F00", 2), 0x1F00);
+    assert.equal(parseValue("7936", 2), 7936);
+    assert.equal(parseValue("-1", 2), 0xFFFF);
+    assert.equal(parseValue("%1", 2), 1);
+    assert.equal(typeof parseValue("65536", 2), "string");
+    assert.equal(typeof parseValue("$12345", 2), "string");
+    assert.equal(parseValue("$1F"), 0x1F, "a byte by default");
+    assert.equal(typeof parseValue("$1F00"), "string");
+
+    const data = Uint8Array.from([0x34, 0x12, 0x00]);
+    assert.equal(valueAt(data, 0, 2), 0x1234, "low byte first");
+    assert.equal(valueAt(data, 0, 2, true), 0x3412, "high byte first, as on the 6809");
+    assert.equal(valueAt(data, 1), 0x12);
+
+    // A word needs both bytes readable and writable, and one starting at the last byte has no second.
+    const readable = Uint8Array.from([1, 1, 1, 2, 1, 1]);
+    const start = searchStart(readable, Uint8Array.from([0, 0, 0, 0, 0, 1]), 2);
+    assert.deepEqual(start, [0, 1]);
+    // Bytes 00 01 00 become 00 02 00: low byte first, the word at 0 rises from $0100 to $0200; high byte first, the
+    // word at 1 does.
+    const before = Uint8Array.from([0x00, 0x01, 0x00, 0, 0, 0]), now = Uint8Array.from([0x00, 0x02, 0x00, 0, 0, 0]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "equal", 0x0200, 2), [0]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "equal", 0x0200, 2, true), [1]);
+    assert.deepEqual(narrowSearch(start, before, now, readable, "increased", 0, 2), [0, 1]);
+    assert.deepEqual(narrowSearch([1, 2], before, now, readable, "changed", 0, 2), [1], "a word with an unreadable byte drops out");
 });
 
 test("copying gives hex or text, with unreadable bytes marked", () => {
@@ -361,11 +389,16 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
     page.send({ type: "reply", id: all.id, error: "The machine has no memory bank named slot6." });
     await page.settle();
     assert.equal(page.elements.get("status")!.textContent, "The machine has no memory bank named slot6.");
-    assert.equal(page.elements.get("compareLabel")?.hidden ?? true, true, "Compare does not appear");
+    assert.doesNotMatch(page.elements.get("compareWith")!.innerHTML, /snapshot/, "there is no snapshot to compare with");
 });
 
 // Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.
-function answer(page: ReturnType<typeof runPage>, fill: (offset: number) => number, readOnly: (offset: number) => boolean = () => false): void {
+function answer(
+    page: ReturnType<typeof runPage>,
+    fill: (offset: number) => number,
+    readOnly: (offset: number) => boolean = () => false,
+    labels: { address: number; name: string }[] = [{ address: 0x0400, name: "TEXT_PAGE" }]
+): void {
     for (const sent of page.posted.splice(0)) {
         if (sent.type === "read") {
             const offset = sent.offset as number, count = sent.count as number;
@@ -377,9 +410,16 @@ function answer(page: ReturnType<typeof runPage>, fill: (offset: number) => numb
             }
             page.send({ type: "reply", id: sent.id, result: { data: data.toString("base64"), unreadable: [], readOnly: runs } });
         } else if (sent.type === "labels") {
-            page.send({ type: "reply", id: sent.id, result: { labels: [{ address: 0x0400, name: "TEXT_PAGE" }] } });
+            page.send({ type: "reply", id: sent.id, result: { labels } });
         } else if (sent.type === "characters") {
             page.send({ type: "reply", id: sent.id, result: {} });
+        } else if (sent.type === "banks") {
+            page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
+        } else if (sent.type === "readOther") {
+            // Auxiliary RAM differs from what the editor shows only at $0481.
+            const data = Buffer.alloc(sent.count as number);
+            for (let index = 0; index < data.length; index++) data[index] = fill(index) ^ (index === 0x0481 ? 0xFF : 0);
+            page.send({ type: "reply", id: sent.id, result: { data: data.toString("base64"), unreadable: [{ offset: 0x0490, count: 16 }] } });
         }
     }
 }
@@ -394,6 +434,60 @@ test("labels show in the gutter and the inspector", async () => {
     assert.match(page.elements.get("rows")!.innerHTML, /class="lab" style="width:9ch" title="TEXT_PAGE">TEXT_PAGE</);
     assert.match(page.elements.get("rows")!.innerHTML, /class=" lb" data-o="1024" title="TEXT_PAGE"/);
     assert.match(page.elements.get("inspector")!.innerHTML, /\$0402 · TEXT_PAGE\+2/);
+});
+
+test("rows aligned to labels start where each label does, and moving keeps the column", async () => {
+    const page = runPage();
+    const labels = [{ address: 0x0400, name: "TEXT_PAGE" }, { address: 0x0405, name: "MSG" }];
+    // The cursor's address, as the inspector shows it.
+    const at = () => parseInt(/class="where">\$([0-9A-F]{4})/.exec(page.elements.get("inspector")!.innerHTML)![1], 16);
+    page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0, () => false, labels);
+        await page.settle();
+    }
+    // Rows of 16 until asked.
+    page.key("ArrowDown");
+    assert.equal(at(), 0x0412);
+    page.key("ArrowUp");
+    const align = page.elements.get("align")!;
+    assert.equal(page.elements.get("alignLabel")!.hidden, false, "the toggle shows once there are labels");
+    (align as unknown as { checked: boolean }).checked = true;
+    align.dispatch("change", {});
+    await page.settle();
+    const html = page.elements.get("rows")!.innerHTML;
+    assert.match(html, /<span class="addr">0400<\/span>/);
+    assert.match(html, /<span class="addr">0405<\/span><span class="lab" style="width:9ch" title="MSG">MSG</);
+    // Row $0400 ends before MSG, and row $0405 leaves its first five columns empty.
+    page.key("End");
+    assert.equal(at(), 0x0404);
+    page.key("ArrowDown");
+    assert.equal(at(), 0x0405, "column 4 is before the row's first byte, so the cursor goes to it");
+    page.key("ArrowDown");
+    assert.equal(at(), 0x0415);
+    page.key("Home");
+    assert.equal(at(), 0x0410);
+    page.key("ArrowUp");
+    assert.equal(at(), 0x0405);
+    page.key("ArrowUp");
+    assert.equal(at(), 0x0404, "column 5 is past the row's last byte, so the cursor goes to it");
+});
+
+test("a stop leaves the view where it was scrolled to, away from the cursor", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    const grid = page.elements.get("grid")!;
+    grid.scrollTop = 0x200 * 20;
+    page.send({ type: "stopped" });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    assert.equal(grid.scrollTop, 0x200 * 20);
 });
 
 test("bytes that are not RAM are shaded and refuse typing", async () => {
@@ -696,8 +790,37 @@ test("a RAM search narrows all of RAM to the byte that holds a value", async () 
     state = await drive(page, [{ goto: 0x0480 }], fill, lists);
     assert.equal(state.differs, true);
     assert.match(page.elements.get("inspector")!.innerHTML, /In the snapshot.*\$02/);
+    assert.match(page.elements.get("compareWith")!.innerHTML, /<option value="snapshot">the snapshot<\/option><option value="aux:0x0000">Auxiliary RAM \(aux\)<\/option>/);
     state = await drive(page, [{ compare: false }], fill, lists);
     assert.equal(state.differs, false, "without comparing, changes count from the last stop");
+
+    // Another bank highlights the bytes that differ from it at the same addresses, and not where it has none.
+    state = await drive(page, [{ compare: "aux:0x0000" }, { goto: 0x0481 }], fill, lists);
+    assert.equal(state.differs, true);
+    assert.match(page.elements.get("inspector")!.innerHTML, /In Auxiliary RAM \(aux\).*\$FF/);
+    assert.equal(page.elements.get("status")!.textContent, "The bytes that differ from Auxiliary RAM (aux) are highlighted.");
+    state = await drive(page, [{ goto: 0x0480 }], fill, lists);
+    assert.equal(state.differs, false);
+    state = await drive(page, [{ goto: 0x0491 }], fill, lists);
+    assert.equal(state.differs, false, "auxiliary RAM has no byte there");
+});
+
+test("a RAM search for words finds a score in the CPU's byte order", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false, bigEndian: true } });
+    let score = 0x0123;
+    const fill = (offset: number) => offset === 0x0480 ? score >> 8 : offset === 0x0481 ? score & 0xFF : 0;
+    let state = await drive(page, [{ search: "start", size: 2 }], fill, lists);
+    assert.equal(state.candidates, 0xFFFF, "every word but the one that starts at the last byte");
+    score = 0x0124;
+    state = await drive(page, [{ search: "increased" }, { search: "equal", value: "$0124" }], fill, lists);
+    assert.equal(state.candidates, 1);
+    const panel = page.elements.get("search")!.innerHTML;
+    assert.match(panel, /1<\/span> word left after 2 steps/);
+    assert.match(panel, /\$0480 TEXT_PAGE\+128<\/span><span class="v">\$0124 → \$0124/);
+    assert.match(panel, /data-w="\[\$0480\]\.w"/);
+    assert.equal(page.elements.get("status")!.textContent, "1 word left.");
 });
 
 test("a read-only bank refuses typing before writing", async () => {

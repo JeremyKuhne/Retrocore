@@ -39,9 +39,18 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Labels** from the program and the SDK's ROM sources name the bytes: the first label in each row shows in a
   gutter beside the address (dimmed when it starts partway along the row), and a mark on the byte where each
   starts. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
-- **The machine's characters.** On the Apple II, the TRS-80 Models I, II, III and 4 and the CoCo 1 and 2, the
-  text column draws each byte as the machine's own character generator does under its current modes: the Apple
-  II's inverse and flashing text, flashing as it does, the Model I's block graphics, the CoCo's semigraphics.
+  Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: the
+  Monitor's `STA CH` names $24 `CH`, but `CMP #CR` does not name $0D, nor does an index's offset or a term added to
+  another address. A label at the same address comes first.
+- **Align to labels** in the toolbar, shown once there are labels, starts a row where each label starts, so a
+  label's bytes begin a row of their own; each byte stays in its column, and **Up** and **Down** keep the column,
+  or go to the nearest byte the row has. Each editor remembers the choice.
+- **The machine's characters.** On the Apple-1, the Apple II, the Apple III, the TRS-80 Models I, II, III and 4
+  and the CoCo 1, 2 and 3, the text column draws each byte as the machine's own character generator does under its
+  current modes: the Apple II's inverse and flashing text, flashing as it does, the Apple III's character set as
+  SOS loaded it, the Model I's block graphics, the CoCo's semigraphics, and the CoCo 3's GIME text once it is on.
+  The Apple-1 keeps its screen in the terminal rather than memory, so a byte draws as the terminal would show it
+  written to the display.
   Elsewhere it shows each byte's low seven bits as ASCII, so the Apple II's text, kept with bit 7 set, still reads.
   **Machine text** in the toolbar turns this off to show ASCII instead, for typing, finding and copying too; each
   editor remembers the choice.
@@ -49,8 +58,10 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   anything is written.
 - **Changes.** Bytes that differ from what they held at the stop before are highlighted at each stop, and the
   inspector shows what they were.
-- **Snapshots.** **Snapshot** in the toolbar keeps a copy of every byte; with **Compare** on, the bytes that differ
-  from it are highlighted instead of the stop's changes, and the inspector shows what the snapshot held.
+- **Comparing.** **Compare with** in the toolbar picks what the highlighted bytes differ from: what they held at
+  the last stop, a snapshot, or another bank's bytes at the same addresses, such as auxiliary RAM beside main RAM,
+  read again at each stop. **Snapshot** keeps a copy of every byte and compares with it. The inspector shows what
+  the byte at the cursor holds in the snapshot or the other bank.
 - **Editing.** Type two hex digits in the hex column to write a byte, or a character in the text column. Writes
   go to RAM at once; a read-only bank or byte refuses typing. **Ctrl+Z** undoes and **Ctrl+Y** or
   **Ctrl+Shift+Z** redoes, by writing the bytes back. Typing a character writes a code the machine shows it with,
@@ -69,16 +80,18 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
   Its **Watch** and **Freeze** buttons act on the selection.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
-  as the word `[$4100].w`, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
+  as the word `[$4100].w`, in the CPU's byte order, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
   a machine with a SoftCard the CPU's editor watches `[cpu:$4100]`, which stays the 6502's while the Z80's frame is
   focused. There **Break on Value Change** sets a data breakpoint
   on it, and a frozen byte's value says `(frozen)`. The editor adds watches through VS Code's own **Add to Watch**
   command, as extensions have no API for it; remove them in the Watch view.
-- **RAM search**, a tab beside the inspector, finds the byte that holds a value, such as a game's lives. **Start
-  with all RAM** takes every byte a write can reach; then, after the value changes in the game, keep the bytes
-  that changed, did not change, rose or fell since the step before, or that equal or do not equal a value (hex
-  with `$`, binary with `%`, or decimal). Each step reads all of memory again. **Back a step** undoes one; at 200
-  bytes or fewer they are listed, with what they were and are, to go to or watch.
+- **RAM search**, a tab beside the inspector, finds the byte that holds a value, such as a game's lives, or the
+  16-bit word that holds a score, in the CPU's byte order: low byte first, but high byte first on the 6809.
+  **Start with all RAM** takes every byte or word a write can reach; then, after the value changes in the game,
+  keep the values that changed, did not change, rose or fell since the step before, or that equal or do not equal
+  a value (hex with `$`, binary with `%`, or decimal). Each step reads all of memory again. **Back a step** undoes
+  one, and **Start over** chooses bytes or words again; at 200 or fewer they are listed, with what they were and
+  are, to go to or watch.
 - **Freezing** holds a byte at a value while the machine runs: the debugger writes it back before each slice it
   runs, every few milliseconds. Frozen bytes show in blue, and the **Frozen** tab lists them to watch or thaw;
   typing over one changes the value it is held at. Only RAM can be frozen. Frozen bytes are the session's, so
@@ -134,7 +147,7 @@ behind it, and the bytes come from the debugger.
 The Machine view's **Memory** rows and **Open Memory** list the CPU's memory and each bank with where the memory
 map reads and writes it now, such as `Auxiliary RAM: at $0000-$01FF` with ALTZP on, and read again at each stop.
 `retro/memoryBanks` returns the same list, with `coprocessor` true for a coprocessor's address space, such as
-`z80`. The Model I maps each address to one place, so it has no banks.
+`z80`, and `bigEndian` true where its CPU keeps a word's high byte first, as the 6809 does. The Model I maps each address to one place, so it has no banks.
 
 Banks work anywhere an address does:
 
@@ -169,7 +182,7 @@ Retrocore Memory uses five more requests:
 | Request | Returns |
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
-| `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now. |
+| `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |

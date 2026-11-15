@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Isa;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -178,8 +179,11 @@ internal sealed partial class ExpressionEvaluator
             long value = Peek(bank, cpu, address);
             if (_position < _tokens.Length && _tokens[_position] == ".w")
             {
+                // A word in its CPU's byte order: low byte first but on the 6809.
                 _position++;
-                value += (long)Peek(bank, cpu, (ushort)(address + 1)) << 8;
+                long next = Peek(bank, cpu, (ushort)(address + 1));
+                InstructionSet isa = bank?.InstructionSet ?? (cpu ? _target.Machine : _target).InstructionSet;
+                value = isa.Endianness == Endianness.Big ? (value << 8) | next : value | (next << 8);
             }
 
             return value;

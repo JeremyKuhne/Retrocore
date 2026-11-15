@@ -194,7 +194,12 @@ internal sealed partial class SourceMapModule : IDebugModule
         HashSet<(AssemblySymbol Symbol, IsaDescription Cpu)> found = [];
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
-            if (entry.Size == 0 || entry.InstructionSet is not { } isa) { continue; }
+            // Data directives, such as .byte $85, CH, have no operand form: their bytes are not an instruction.
+            if (entry.Size == 0 || entry.InstructionSet is not { } isa || string.IsNullOrEmpty(entry.AddressMode))
+            {
+                continue;
+            }
+
             ReadOnlySpan<byte> bytes = result.Sections[entry.Section].Bytes.Span.Slice(entry.Offset, entry.Size);
             if (EncodedAddress(bytes, (ushort)(entry.Address + relocation), isa) is not { } address) { continue; }
             foreach (AssemblySymbol symbol in OperandConstants(entry.Operand, byName))
@@ -265,7 +270,9 @@ internal sealed partial class SourceMapModule : IDebugModule
                 index++;
             }
 
-            string token = operand[start..index];
+            // A width override, as in STA z:CH or STA a:CH, is not part of the name; a scope's :: is.
+            bool width = index - start > 2 && operand[start + 1] == ':' && operand[start + 2] != ':';
+            string token = operand[(width ? start + 2 : start)..index];
             if (!byName.TryGetValue(token, out List<AssemblySymbol>? symbols)) { continue; }
             foreach (AssemblySymbol symbol in symbols) { yield return symbol; }
         }

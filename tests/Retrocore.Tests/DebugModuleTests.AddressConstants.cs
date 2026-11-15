@@ -12,7 +12,8 @@ public sealed partial class DebugModuleTests
 {
     /// <summary>
     ///  An equate names the address an instruction's bytes access through it, not an immediate value, an index's
-    ///  offset or a term added to another address; names that differ only in case or scope name their own values.
+    ///  offset, a term added to another address or data that looks like an instruction; names that differ only in
+    ///  case or scope name their own values, and a width override does not hide a name.
     /// </summary>
     [TestMethod]
     public void AddressConstantsAreTheEquatesInstructionsAccess()
@@ -28,6 +29,9 @@ public sealed partial class DebugModuleTests
             Spot = $50
             .endscope
             Spot = $51
+            Wide = $60
+            Narrow = $61
+            Table = $70
             start:
               sta CH
               cmp #CR
@@ -35,7 +39,10 @@ public sealed partial class DebugModuleTests
               lda (BASL),y
               lda $0400+OFF
               sta Inner::Spot
+              sta a:Wide
+              sta z:Narrow
               rts
+              .byte $85, Table
 
             """);
 
@@ -44,7 +51,9 @@ public sealed partial class DebugModuleTests
             ["CH"] = 0x24,
             ["cell"] = 0x31,
             ["BASL"] = 0x28,
-            ["Inner::Spot"] = 0x50
+            ["Inner::Spot"] = 0x50,
+            ["Wide"] = 0x60,
+            ["Narrow"] = 0x61
         });
     }
 

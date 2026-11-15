@@ -361,7 +361,7 @@ public sealed partial class PascalDecompiler
     {
         if (_plainParameters.Contains(parameter))
         {
-            return TypeName(_plainPointers[parameter.Type.Find()], parameter: true);
+            return TypeName(_plainPointers[Punned(parameter)], parameter: true);
         }
 
         if (parameter.Copy is { } copy) { return TypeName(copy.Type, parameter: true); }
@@ -377,8 +377,43 @@ public sealed partial class PascalDecompiler
 
     private void PlainParameters()
     {
-        // But those whose record a statement needs whole: by its address, as a VAR argument is, or a block's.
-        HashSet<Variable> whole = [];
+        // Each parameter whose word is used both ways, but a VAR one that is assigned.
+        HashSet<Variable> assigned = [];
+        List<(Expr Argument, Variable Formal)> passed = [];
+        HashSet<Expr> arguments = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(
+                procedure.Body,
+                statement =>
+                {
+                    if (statement is Assignment assignment && Root(assignment.Target) is { } target)
+                    {
+                        assigned.Add(target);
+                    }
+
+                    if (statement is CallStatement { Callee.Procedure: { } callee } call)
+                    {
+                        Passed(callee, [.. call.Arguments.Select(argument => argument.Value)]);
+                    }
+                },
+                expression =>
+                {
+                    if (expression is Call { Callee.Procedure: { } callee } call) { Passed(callee, call.Arguments); }
+                });
+        }
+
+        HashSet<Variable> plain =
+        [
+            .. _parameters.Values
+                .SelectMany(parameters => parameters)
+                .Where(parameter => parameter.Copy is null && IsPunned(Punned(parameter)))
+                .Where(parameter => !parameter.IsReference || !assigned.Contains(parameter))
+        ];
+
+        // Whose record a statement needs whole, by its address or as a block: but as a VAR argument to one that is
+        // plain too.
+        List<(Variable Variable, Variable? Formal)> wholes = [];
         foreach (Procedure procedure in _procedures)
         {
             Walk(
@@ -387,26 +422,49 @@ public sealed partial class PascalDecompiler
                 {
                     if (statement is Assignment { Block: true, Target: VariableDesignator { Variable: var target } })
                     {
-                        whole.Add(target);
+                        wholes.Add((target, null));
                     }
                 },
                 expression =>
                 {
-                    if (expression is Address { Designator: VariableDesignator { Variable: var addressed } })
+                    if (expression is Address { Designator: VariableDesignator { Variable: var addressed } }
+                        && !arguments.Contains(expression))
                     {
-                        whole.Add(addressed);
+                        wholes.Add((addressed, null));
                     }
                 });
         }
 
-        foreach (Variable parameter in _parameters.Values.SelectMany(parameters => parameters))
+        foreach ((Expr argument, Variable formal) in passed)
         {
-            if (parameter.IsReference || parameter.Copy is not null || !IsPunned(parameter.Type) || whole.Contains(parameter))
+            if (Source(argument) is { } source) { wholes.Add((source, formal.IsReference ? formal : null)); }
+        }
+
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach ((Variable variable, Variable? formal) in wholes)
             {
-                continue;
+                if (plain.Contains(variable) && (formal is null || !plain.Contains(formal)))
+                {
+                    changed |= plain.Remove(variable);
+                }
             }
 
-            TypeNode punned = parameter.Type.Find();
+            // A VAR one is passed what is used both ways too.
+            foreach ((Expr argument, Variable formal) in passed)
+            {
+                if (formal.IsReference && plain.Contains(formal) && !Punnable(argument))
+                {
+                    changed |= plain.Remove(formal);
+                }
+            }
+        }
+
+        foreach (Variable parameter in plain)
+        {
+            TypeNode punned = Punned(parameter);
             if (!_plainPointers.ContainsKey(punned))
             {
                 TypeNode pointer = TypeNode.Of(TypeKind.Pointer);
@@ -416,7 +474,50 @@ public sealed partial class PascalDecompiler
 
             _plainParameters.Add(parameter);
         }
+
+        void Passed(Procedure callee, IReadOnlyList<Expr> values)
+        {
+            if (!_parameters.ContainsKey(callee)) { return; }
+
+            List<Variable> slots = Slots(callee, values);
+            for (int index = 0; index < values.Count && index < slots.Count; index++)
+            {
+                if (values[index] is Address) { arguments.Add(values[index]); }
+                if (values[index] is Address || slots[index].IsReference) { passed.Add((values[index], slots[index])); }
+            }
+        }
+
+        // The parameter an argument passes the address of: its own, or a VAR one's on.
+        static Variable? Source(Expr argument) => argument switch
+        {
+            Address { Designator: VariableDesignator { Variable: var variable } } => variable,
+            Load { Designator: VariableDesignator { Variable: { IsReference: true } variable } } => variable,
+            _ => null
+        };
+
+        bool Punnable(Expr argument) => argument switch
+        {
+            Address { Designator: var designator } => IsPunned(designator.Type),
+            Load { Designator: VariableDesignator { Variable: { IsReference: true } variable } } =>
+                IsPunned(Punned(variable)),
+            _ => false
+        };
     }
+
+    // A parameter's type, or a VAR one's target's.
+    private static TypeNode Punned(Variable parameter) =>
+        (parameter.IsReference ? parameter.Type.Target() : parameter.Type).Find();
+
+    // The variable a designator is part of, a VAR parameter's for what it points to.
+    private static Variable? Root(Designator designator) => designator switch
+    {
+        VariableDesignator { Variable: var variable } => variable,
+        Dereference { Pointer: Load { Designator: VariableDesignator { Variable: { IsReference: true } variable } } } =>
+            variable,
+        FieldDesignator field => Root(field.Record),
+        IndexDesignator index => Root(index.Array),
+        _ => null
+    };
 
     private void NameTypes()
     {
@@ -1388,8 +1489,13 @@ public sealed partial class PascalDecompiler
         IsPunned(pointer.Type) && !IsPlain(pointer) ? $"{DesignatorText(pointer)}.P" : DesignatorText(pointer);
 
     // Whether a designator is a value parameter written as its pointer.
-    private bool IsPlain(Designator designator) =>
-        designator is VariableDesignator { Variable: var variable } && _plainParameters.Contains(variable);
+    private bool IsPlain(Designator designator) => designator switch
+    {
+        VariableDesignator { Variable: var variable } => _plainParameters.Contains(variable),
+        Dereference { Pointer: Load { Designator: VariableDesignator { Variable: { IsReference: true } variable } } } =>
+            _plainParameters.Contains(variable),
+        _ => false
+    };
 
     private static string Invocation(string name, List<string> arguments) =>
         arguments.Count == 0 ? name : $"{name}({string.Join(", ", arguments)})";
@@ -1403,7 +1509,12 @@ public sealed partial class PascalDecompiler
         {
             Variable parameter = slots[index];
             Expr argument = arguments[index];
-            if (parameter.IsReference || parameter.Copy is not null)
+            if (parameter.IsReference && _plainParameters.Contains(parameter))
+            {
+                // A VAR parameter written as its pointer takes the pointer of a word used both ways.
+                parts.Add(Pointer(Designate(argument)));
+            }
+            else if (parameter.IsReference || parameter.Copy is not null)
             {
                 TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
                 parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));

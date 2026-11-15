@@ -256,6 +256,29 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A pointer used both ways passed by value, and on by reference to a procedure that only reads it.
+    private const string PlainReferenceSource = """
+        PROGRAM PR;
+        TYPE P = ^R;
+          R = RECORD N: INTEGER; L: P END;
+          W = RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (Q: P) END;
+        VAR G: W; H: INTEGER;
+        PROCEDURE MARK(VAR V: P); BEGIN V^.N := 5 END;
+        PROCEDURE SHOW(V: P); VAR K: INTEGER; BEGIN MARK(V); K := 3; H := V^.N + ORD(V) + K END;
+        BEGIN NEW(G.Q); SHOW(G.Q); G.I := G.I + 2; SHOW(G.Q) END.
+        """;
+
+    /// <summary>
+    ///  A value parameter used both ways that is passed on to a VAR parameter is its pointer, as is the VAR one, so
+    ///  that neither is a record to copy.
+    /// </summary>
+    [TestMethod]
+    public void WordsUsedBothWaysPassByReferenceAsTheirPointers()
+    {
+        string source = RoundTrip(PlainReferenceSource);
+        source.Should().Contain("(VAR A1: T");
+    }
+
     // A procedure declared FORWARD before the body of another, in which one is nested: it is numbered first.
     private const string NumberingSource = """
         PROGRAM NU;

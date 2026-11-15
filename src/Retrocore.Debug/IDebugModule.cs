@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Documentation;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -51,6 +52,12 @@ internal interface IDebugModule
     ///  Gets the module's labels: the names it gives addresses, not its constants.
     /// </summary>
     IEnumerable<(string Name, long Value)> Labels { get; }
+
+    /// <summary>
+    ///  Gets the module's constants that its instructions address memory through, such as a zero-page equate that
+    ///  <c>STA CH</c> stores to, with the CPU whose instructions do, so a memory view can name those bytes.
+    /// </summary>
+    IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => [];
 
     /// <summary>
     ///  Gets whether the module's label for an address applies to memory now, where the module itself does.

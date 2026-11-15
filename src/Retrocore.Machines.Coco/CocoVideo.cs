@@ -252,8 +252,21 @@ public sealed class CocoVideo : IVideoSource, ICharacterSet
             && (_bus.VideoMode & GraphicsMode0Bit) != 0
             && character < 32;
 
-        return lowercase ? char.ToLowerInvariant(ascii) : ascii;
+        return lowercase ? LowercaseCharacter(character) : ascii;
     }
+
+    /// <summary>
+    ///  Gets the character the MC6847T1's lowercase, which the CoCo 3's GIME shares, draws for codes 0 to 31: a
+    ///  caret, the letters, then the braces, bar, tilde and underline its font has after them.
+    /// </summary>
+    /// <param name="code">The code, 0 to 31.</param>
+    /// <returns>The character.</returns>
+    internal static char LowercaseCharacter(int code) => code switch
+    {
+        0 => '^',
+        < 27 => (char)('a' + code - 1),
+        _ => "{|}~_"[code - 27]
+    };
 
     /// <inheritdoc/>
     public void Render(Span<byte> pixels, bool scanned)

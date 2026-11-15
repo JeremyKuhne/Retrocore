@@ -68,7 +68,8 @@ offer **Edit Condition** and **Edit Hit Count** there.
   lifts it.
 
 Expressions read registers, labels (with `scope::name` for scoped labels), numbers (`$1F`, `0x1F`, `31`),
-memory (`[address]` for a byte, `[address].w` for a little-endian word), and C's arithmetic, comparison and
+memory (`[address]` for a byte, `[address].w` for a word in the CPU's byte order: low byte first, but high byte
+first on the 6809), and C's arithmetic, comparison and
 logical operators. Reading memory has no side effects, so a condition never triggers a soft switch.
 
 ## Hit counts

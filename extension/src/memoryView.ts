@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Retrocore Memory's page: a hex and text grid over a whole 64K space, with labels, the machine's own characters,
-// read-only shading, changes since the last stop or a snapshot, go to, find, copy, editing with undo, an inspector,
-// RAM search, watching in VS Code's Watch view and frozen bytes. The page asks the extension for bytes, labels,
+// Retrocore Memory's page: a hex and text grid over a whole 64K space, with labels, rows aligned to them, the
+// machine's own characters, read-only shading, changes since the last stop or differences from a snapshot or another
+// bank, go to, find, copy, editing with undo, an inspector, RAM search of bytes or words, watching in VS Code's Watch
+// view and frozen bytes. The page asks the extension for bytes, labels,
 // characters, writes, freezes and watches; the extension asks the debugger, or VS Code for watches.
 
 import { pageFunctions } from "./memoryModel";
@@ -22,6 +23,7 @@ body{margin:0;display:flex;flex-direction:column;background:var(--vscode-editor-
 .bar label{display:flex;gap:4px;align-items:center;white-space:nowrap}
 .bar .title{font-weight:600;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 input{font-family:var(--vscode-editor-font-family);font-size:12px;padding:2px 4px;border-radius:2px;width:150px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent)}
+select{font-family:var(--vscode-font-family);font-size:12px;padding:1px 2px;border-radius:2px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border,transparent)}
 input[type=checkbox]{width:auto;margin:0}
 input:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 button{font-family:var(--vscode-font-family);font-size:12px;padding:2px 8px;border-radius:2px;cursor:pointer;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground);border:1px solid var(--vscode-button-border,transparent)}
@@ -85,9 +87,10 @@ body.narrow .item .k{width:auto}
 </style></head>
 <body>
 <div class="bar"><span class="title" id="title">Memory</span>
+<label id="alignLabel" title="Start a row where each label starts, so a label's bytes begin a row of their own" hidden><input type="checkbox" id="align"> Align to labels</label>
 <label id="machineLabel" title="Draw the text column in the machine's own characters, or as ASCII" hidden><input type="checkbox" id="machineText" checked> Machine text</label>
 <button id="snapshot" title="Keep a copy of every byte now, to compare with">Snapshot</button>
-<label id="compareLabel" title="Highlight the bytes that differ from the snapshot, rather than the bytes that changed since the stop before" hidden><input type="checkbox" id="compare"> Compare</label>
+<label title="Highlight the bytes that differ from what they held at the stop before, from the snapshot, or from another bank's bytes at the same addresses">Compare with <select id="compareWith" aria-label="Compare with"><option value="">the last stop</option></select></label>
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
 <label title="Hex bytes with ?? for any byte, such as A9 ?? 20, or text in quotes; Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20 or &quot;TEXT&quot;"></label>
 </div>
@@ -119,13 +122,88 @@ let stops = 0;
 let labels = [], labelAt = new Map(), labelWidth = 0;
 // The machine's character set as the debugger gave it, whether the text column uses it (the page remembers), and the set in effect.
 let machineSet = null, machineText = true, charset = null, glyphStyle = null, flashTimer = null;
+// Whether rows start where labels do; then each row's first address, else every row is ROW bytes from a multiple of ROW.
+let aligned = false, rowStarts = null;
 try {
     const saved = vscode.getState();
     if (saved && typeof saved.machineText === "boolean") machineText = saved.machineText;
+    if (saved && typeof saved.aligned === "boolean") aligned = saved.aligned;
 } catch {
-    // A page without saved state uses the machine's characters.
+    // A page without saved state uses the machine's characters, in rows of ROW bytes.
+}
+
+// Remembers the page's choices, which are conveniences.
+function remember() {
+    try {
+        vscode.setState({ machineText, aligned });
+    } catch {
+        // Nothing to do: the page works without them.
+    }
+}
+
+// The rows: with rows aligned to labels, a row starts at each multiple of ROW and at each label between.
+function layoutRows() {
+    // What shows stays: the cursor's row where it is when it shows, else the top row's address at the top.
+    const top = Math.floor(grid.scrollTop / LINE), within = grid.scrollTop - top * LINE, shownAt = rowOf(cursor) - top, topAddress = rowStart(Math.min(top, rowCount() - 1));
+    const showing = shownAt >= 0 && shownAt < visibleRows();
+    rowStarts = null;
+    if (aligned && labels.length > 0) {
+        const starts = [];
+        let next = 0;
+        for (let block = 0; block < SIZE; block += ROW) {
+            starts.push(block);
+            while (next < labels.length && labels[next].address < block + ROW) {
+                if (labels[next].address > block && labels[next].address !== starts[starts.length - 1]) starts.push(labels[next].address);
+                next++;
+            }
+        }
+        rowStarts = Int32Array.from(starts);
+    }
+    document.getElementById("spacer").style.height = (rowCount() * LINE) + "px";
+    // Partway into a row, the view stays as far into it.
+    grid.scrollTop = (showing ? Math.max(0, rowOf(cursor) - shownAt) : rowOf(topAddress)) * LINE + within;
+}
+
+function rowCount() {
+    return rowStarts === null ? ROWS : rowStarts.length;
+}
+
+// A row's first address.
+function rowStart(row) {
+    return rowStarts === null ? row * ROW : rowStarts[row];
+}
+
+// A row's last address.
+function rowEnd(row) {
+    return row + 1 >= rowCount() ? SIZE - 1 : rowStart(row + 1) - 1;
+}
+
+// The row an address is in.
+function rowOf(offset) {
+    if (rowStarts === null) return Math.floor(offset / ROW);
+    let low = 0, high = rowStarts.length - 1;
+    while (low < high) {
+        const middle = (low + high + 1) >> 1;
+        if (rowStarts[middle] <= offset) low = middle;
+        else high = middle - 1;
+    }
+    return low;
+}
+
+// The address in a row at a column, or the nearest the row has, as moving up and down keeps the column.
+function atColumn(row, column) {
+    const start = rowStart(row), end = rowEnd(row);
+    return Math.min(end, Math.max(start, start - start % ROW + column));
+}
+
+// Moves the cursor by rows, keeping its column.
+function moveRows(count, extend) {
+    const row = Math.min(rowCount() - 1, Math.max(0, rowOf(cursor) + count));
+    moveTo(atColumn(row, cursor % ROW), extend, false);
 }
 const machineBox = document.getElementById("machineText"), machineLabel = document.getElementById("machineLabel");
+const alignBox = document.getElementById("align"), alignLabel = document.getElementById("alignLabel");
+alignBox.checked = aligned;
 
 // Puts the machine's characters in effect, or ASCII, as the toggle says; the toggle shows when there is a set.
 function applyText() {
@@ -133,16 +211,19 @@ function applyText() {
     machineLabel.hidden = machineSet === null;
     machineBox.checked = machineText;
 }
-// A snapshot of every byte to compare with, and whether the grid highlights the bytes that differ from it.
-let snapshot = null, comparing = false;
-// A RAM search: the offsets still in it, every byte as the last step saw it, and the steps before, to go back.
+// What the grid highlights the bytes that differ from: "" for what they held at the stop before, "snapshot", or
+// another bank's memory reference. Then the snapshot of every byte, the other banks, and the compared bank's bytes,
+// read again at each stop.
+let comparison = "", snapshot = null, otherBanks = [], other = null;
+// A RAM search: the size of the values it looks for, 1 or 2 bytes, the offsets still in it, every byte as the last
+// step saw it, and the steps before, to go back.
 let search = null;
 // The frozen bytes as the debugger keeps them, by the value each is held at, and the last watch expressions added.
 let frozen = new Map(), lastWatch = [];
 const side = document.getElementById("side"), searchPanel = document.getElementById("search"), frozenPanel = document.getElementById("frozen");
-const compareBox = document.getElementById("compare"), compareLabel = document.getElementById("compareLabel");
+const compareSelect = document.getElementById("compareWith");
 let tab = "inspector";
-let info = { bank: null, label: "", readOnly: false };
+let info = { bank: null, label: "", readOnly: false, bigEndian: false };
 let cursor = 0, anchor = 0, pane = "hex", nibble = null, ended = false, dragging = false, generation = 0;
 // Counts the cursor's moves and pane switches, so an edit still waiting on the debugger knows the user went elsewhere.
 let moves = 0;
@@ -262,6 +343,8 @@ async function loadExtras() {
         labels = result.labels;
         labelAt = new Map(labels.map(label => [label.address, label.name]));
         labelWidth = Math.min(16, labels.reduce((widest, label) => Math.max(widest, label.name.length), 0));
+        alignLabel.hidden = labels.length === 0;
+        layoutRows();
         render();
     } catch {
         // Labels are extra; the bytes show without them.
@@ -345,8 +428,8 @@ function useCharacters(result) {
 // Reads the pages from one row to another that have not been read since memory last changed, in runs.
 function ensure(firstRow, lastRow) {
     if (ended) return;
-    const firstPage = Math.max(0, Math.floor(firstRow * ROW / PAGE));
-    const lastPage = Math.min(SIZE / PAGE - 1, Math.floor((lastRow * ROW + ROW - 1) / PAGE));
+    const firstPage = Math.floor(rowStart(Math.max(0, firstRow)) / PAGE);
+    const lastPage = Math.floor(rowEnd(Math.min(rowCount() - 1, Math.max(0, lastRow))) / PAGE);
     let start = -1;
     for (let page = firstPage; page <= lastPage + 1; page++) {
         const wanted = page <= lastPage && pages[page] === 0;
@@ -376,12 +459,18 @@ function escape(character) {
 }
 
 function rowHtml(row) {
-    const base = row * ROW;
+    const start = rowStart(row), end = rowEnd(row), base = start - start % ROW;
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
     let hexPart = "", textPart = "";
     for (let index = 0; index < ROW; index++) {
         const offset = base + index;
         let classes = index === 8 ? "mid" : "";
+        // A row aligned to a label leaves the columns before it, and after the next, empty.
+        if (offset < start || offset > end) {
+            hexPart += '<span class="' + classes + '"> </span>';
+            textPart += "<span> </span>";
+            continue;
+        }
         if (low !== high && offset >= low && offset <= high) classes += " sel";
         if (readable[offset] === 1 && differs(offset)) classes += " chg";
         if (frozen.has(offset)) classes += " frz";
@@ -420,16 +509,16 @@ function rowHtml(row) {
     let gutter = "";
     if (labelWidth > 0) {
         let name = "", inside = false;
-        for (let index = 0; index < ROW && name === ""; index++) {
-            if (labelAt.has(base + index)) {
-                name = labelAt.get(base + index);
-                inside = index > 0;
+        for (let offset = start; offset <= end && name === ""; offset++) {
+            if (labelAt.has(offset)) {
+                name = labelAt.get(offset);
+                inside = offset > start;
             }
         }
         gutter = '<span class="lab' + (inside ? " in" : "") + '" style="width:' + labelWidth + 'ch"'
             + (name === "" ? "" : ' title="' + escapeText(name) + '"') + ">" + escapeText(name) + "</span>";
     }
-    return '<div class="row"><span class="addr">' + hex(base, 4) + "</span>" + gutter + '<span class="hex">' + hexPart
+    return '<div class="row"><span class="addr">' + hex(start, 4) + "</span>" + gutter + '<span class="hex">' + hexPart
         + '</span><span class="txt' + (charset !== null ? " g" : "") + '">' + textPart + "</span></div>";
 }
 
@@ -437,7 +526,7 @@ function render() {
     const top = Math.floor(grid.scrollTop / LINE);
     const count = visibleRows() + 2;
     let html = "";
-    for (let row = top; row < Math.min(ROWS, top + count); row++) html += rowHtml(row);
+    for (let row = top; row < Math.min(rowCount(), top + count); row++) html += rowHtml(row);
     rows.style.transform = "translateY(" + (top * LINE) + "px)";
     rows.innerHTML = html;
     if (layout()) { render(); return; }
@@ -446,10 +535,75 @@ function render() {
     if (tab === "frozen") showFrozen();
 }
 
-// Whether the grid highlights a byte: it differs from the snapshot when comparing, or else changed at the last stop.
+// The bytes the grid compares with, when not the stop before: the snapshot or the other bank, once read.
+function compared() {
+    return comparison === "snapshot" ? snapshot : comparison === "" ? null : other;
+}
+
+// Whether the grid highlights a byte: it differs from the snapshot or the other bank, or else changed at the last stop.
 function differs(offset) {
-    if (comparing && snapshot !== null) return snapshot.readable[offset] === 1 && readable[offset] === 1 && snapshot.bytes[offset] !== bytes[offset];
-    return changed[offset] === 1;
+    if (comparison === "") return changed[offset] === 1;
+    const base = compared();
+    return base !== null && base.readable[offset] === 1 && readable[offset] === 1 && base.bytes[offset] !== bytes[offset];
+}
+
+// What the grid compares with, for the inspector and the status line.
+function comparedName() {
+    if (comparison === "snapshot") return "the snapshot";
+    return otherBanks.find(bank => bank.memoryReference === comparison)?.label ?? comparison;
+}
+
+// Lists what the grid can compare with: the stop before, the snapshot once taken, and the other banks.
+function compareOptions() {
+    let html = '<option value="">the last stop</option>';
+    if (snapshot !== null) html += '<option value="snapshot">the snapshot</option>';
+    for (const bank of otherBanks) html += '<option value="' + escapeText(bank.memoryReference) + '">' + escapeText(bank.label) + "</option>";
+    compareSelect.innerHTML = html;
+    compareSelect.value = comparison;
+}
+
+// Asks for the other banks, which a card going in or out changes; a bank compared with that has gone is no longer.
+async function loadBanks() {
+    try {
+        otherBanks = (await request({ type: "banks" })).banks;
+    } catch {
+        otherBanks = [];
+    }
+    if (comparison !== "" && comparison !== "snapshot" && !otherBanks.some(bank => bank.memoryReference === comparison)) {
+        comparison = "";
+        other = null;
+        render();
+    }
+    compareOptions();
+}
+
+// Reads the bank compared with, reporting whether it could.
+async function readOther() {
+    const reference = comparison;
+    if (reference === "" || reference === "snapshot") return true;
+    try {
+        const result = await request({ type: "readOther", reference, offset: 0, count: SIZE });
+        if (comparison !== reference) return false;
+        const known = new Uint8Array(SIZE).fill(1);
+        for (const gap of result.unreadable) known.fill(2, gap.offset, gap.offset + gap.count);
+        other = { bytes: decode(result.data), readable: known };
+        render();
+        return true;
+    } catch (error) {
+        if (comparison === reference) status(String(error.message || error), true);
+        return false;
+    }
+}
+
+// Compares with the stop before, the snapshot or another bank.
+async function compareWith(value) {
+    comparison = value;
+    other = null;
+    compareOptions();
+    render();
+    if (value === "") { status(""); return; }
+    if (value !== "snapshot" && !await readOther()) return;
+    if (comparison === value) status("The bytes that differ from " + comparedName() + " are highlighted.");
 }
 
 function where(offset) {
@@ -476,7 +630,7 @@ function showInspector() {
     if (high > low) html += " · " + (high - low + 1) + " bytes, " + where(low) + "-$" + hex(high, 4);
     html += "</div>";
     const rows = inspect(bytes, readable, cursor, charset === null ? undefined : charset.text);
-    if (comparing && snapshot !== null && differs(cursor)) rows.push({ label: "In the snapshot", value: "$" + hex(snapshot.bytes[cursor], 2) });
+    if (comparison !== "" && differs(cursor)) rows.push({ label: comparison === "snapshot" ? "In the snapshot" : "In " + comparedName(), value: "$" + hex(compared().bytes[cursor], 2) });
     else if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
     if (frozen.has(cursor)) rows.push({ label: "Frozen at", value: "$" + hex(frozen.get(cursor), 2) });
     if (readable[cursor] === 1 && readOnly[cursor]) rows.push({ label: "Writes", value: "refused: not RAM now" });
@@ -511,7 +665,7 @@ function escapeText(text) {
 }
 
 function reveal(offset, center) {
-    const row = Math.floor(offset / ROW), top = Math.floor(grid.scrollTop / LINE), shown = visibleRows();
+    const row = rowOf(offset), top = Math.floor(grid.scrollTop / LINE), shown = visibleRows();
     if (center) {
         grid.scrollTop = Math.max(0, row - Math.floor(shown / 3)) * LINE;
     } else if (row < top) {
@@ -729,8 +883,8 @@ async function refreshAll() {
 async function takeSnapshot() {
     if (!await refreshAll()) return;
     snapshot = { bytes: bytes.slice(), readable: readable.slice() };
-    compareLabel.hidden = false;
-    comparing = compareBox.checked = true;
+    comparison = "snapshot";
+    compareOptions();
     render();
     status("Took a snapshot; the bytes that differ from it are highlighted.");
 }
@@ -750,30 +904,35 @@ const HITS = 200;
 
 function showSearch() {
     if (search === null) {
-        searchPanel.innerHTML = "<p>Find the byte that holds a value, such as a game's lives: start with all of RAM, "
-            + "then let the value change and keep the bytes that changed the same way, until few are left.</p>"
+        searchPanel.innerHTML = "<p>Find the byte that holds a value, such as a game's lives, or the word that holds a score: "
+            + "start with all of RAM, then let the value change and keep the values that changed the same way, until few are left.</p>"
+            + '<div class="filters">Look for <select id="searchSize" aria-label="Value size"><option value="1">bytes</option>'
+            + '<option value="2">words, ' + (info.bigEndian ? "high" : "low") + " byte first</option></select></div>"
             + '<button data-act="start">Start with all RAM</button>';
         return;
     }
+    const unit = search.size === 2 ? "word" : "byte";
     const value = document.getElementById("searchValue");
     const typed = value === null ? "" : value.value;
-    let html = '<div><span class="count">' + search.candidates.length + "</span> " + (search.candidates.length === 1 ? "byte" : "bytes")
+    let html = '<div><span class="count">' + search.candidates.length + "</span> " + unit + (search.candidates.length === 1 ? "" : "s")
         + " left after " + search.steps.length + (search.steps.length === 1 ? " step" : " steps") + "</div>"
-        + '<div class="filters">Keep the bytes that '
+        + '<div class="filters">Keep the ' + unit + 's that '
         + '<button data-act="narrow" data-test="changed">changed</button><button data-act="narrow" data-test="unchanged">did not change</button>'
         + '<button data-act="narrow" data-test="increased">rose</button><button data-act="narrow" data-test="decreased">fell</button></div>'
         + '<div class="filters">or <button data-act="narrow" data-test="equal">equal</button><button data-act="narrow" data-test="notEqual">do not equal</button>'
-        + '<input id="searchValue" aria-label="Value" placeholder="$03 or 3" value="' + escapeText(typed) + '"></div>'
+        + '<input id="searchValue" aria-label="Value" placeholder="' + (search.size === 2 ? "$0300 or 768" : "$03 or 3") + '" value="' + escapeText(typed) + '"></div>'
         + '<div class="filters"><button data-act="back"' + (search.steps.length === 0 ? " disabled" : "") + ">Back a step</button>"
-        + '<button data-act="start">Start over</button></div>';
+        + '<button data-act="reset" title="Start again, with bytes or words">Start over</button></div>';
     if (search.candidates.length <= HITS) {
         html += '<div class="hits">';
         for (const offset of search.candidates) {
             const name = labelOf(labels, offset);
-            const before = search.steps.length === 0 ? null : search.steps[search.steps.length - 1].before[offset];
+            const digits = search.size * 2;
+            const before = search.steps.length === 0 ? null : valueAt(search.steps[search.steps.length - 1].before, offset, search.size, search.bigEndian);
+            const watched = "[" + where(offset) + "]" + (search.size === 2 ? ".w" : "");
             html += '<div class="hit" data-go="' + offset + '"><span class="a">' + where(offset) + (name === undefined ? "" : " " + escapeText(name)) + "</span>"
-                + '<span class="v">' + (before === null ? "" : "$" + hex(before, 2) + " → ") + "$" + hex(search.before[offset], 2) + "</span>"
-                + '<button data-act="watchHit" data-o="' + offset + '" title="Add [' + where(offset) + '] to the Watch view">Watch</button></div>';
+                + '<span class="v">' + (before === null ? "" : "$" + hex(before, digits) + " → ") + "$" + hex(valueAt(search.before, offset, search.size, search.bigEndian), digits) + "</span>"
+                + '<button data-act="watchHit" data-o="' + offset + '" data-w="' + escapeText(watched) + '" title="Add ' + escapeText(watched) + ' to the Watch view">Watch</button></div>';
         }
         html += "</div>";
     } else {
@@ -782,27 +941,30 @@ function showSearch() {
     searchPanel.innerHTML = html;
 }
 
-async function startSearch() {
+// Starts a RAM search for bytes or, with a size of 2, words in the CPU's byte order.
+async function startSearch(size) {
     if (!await refreshAll()) return;
-    search = { candidates: searchStart(readable, readOnly), before: bytes.slice(), steps: [] };
+    search = { size, bigEndian: info.bigEndian === true, candidates: searchStart(readable, readOnly, size), before: bytes.slice(), steps: [] };
     showSearch();
-    status("Searching " + search.candidates.length + " bytes of RAM.");
+    status("Searching " + search.candidates.length + (size === 2 ? " words" : " bytes") + " of RAM.");
 }
 
 async function narrowBy(test, text) {
     if (search === null) return;
     let value = 0;
     if (test === "equal" || test === "notEqual") {
-        const parsed = parseByte(text);
+        const parsed = parseValue(text, search.size);
         if (typeof parsed === "string") { status(parsed, true); return; }
         value = parsed;
     }
-    if (!await refreshAll()) return;
+    // Memory is read first; a search started over or stepped back meanwhile is not narrowed by it.
+    const current = search, depth = search.steps.length;
+    if (!await refreshAll() || search !== current || current.steps.length !== depth) return;
     search.steps.push({ candidates: search.candidates, before: search.before });
-    search.candidates = narrowSearch(search.candidates, search.before, bytes, readable, test, value);
+    search.candidates = narrowSearch(search.candidates, search.before, bytes, readable, test, value, search.size, search.bigEndian);
     search.before = bytes.slice();
     showSearch();
-    status(search.candidates.length + (search.candidates.length === 1 ? " byte" : " bytes") + " left.");
+    status(search.candidates.length + (search.size === 2 ? " word" : " byte") + (search.candidates.length === 1 ? "" : "s") + " left.");
 }
 
 function backSearch() {
@@ -841,10 +1003,11 @@ side.addEventListener("click", event => {
         switch (action.dataset.act) {
             case "watch": queue(watchSelection); break;
             case "freeze": queue(toggleFreeze); break;
-            case "start": void startSearch(); break;
+            case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
+            case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
             case "back": backSearch(); break;
-            case "watchHit": void watch(["[" + where(offset) + "]"]); break;
+            case "watchHit": void watch([action.dataset.w ?? "[" + where(offset) + "]"]); break;
             case "thaw": void freeze([], [offset]).catch(error => status(String(error.message || error), true)); break;
         }
         return;
@@ -860,9 +1023,8 @@ side.addEventListener("keydown", event => {
     }
 });
 document.getElementById("snapshot").addEventListener("click", () => void takeSnapshot());
-compareBox.addEventListener("change", () => {
-    comparing = compareBox.checked;
-    render();
+compareSelect.addEventListener("change", () => {
+    void compareWith(compareSelect.value);
     grid.focus();
 });
 
@@ -929,7 +1091,6 @@ grid.addEventListener("keydown", event => {
     const control = event.ctrlKey || event.metaKey;
     const key = event.key;
     let handled = true;
-    const page = visibleRows() * ROW;
     if (control && (key === "z" || key === "Z")) {
         queue(event.shiftKey ? redo : undo);
     } else if (control && (key === "y" || key === "Y")) {
@@ -949,19 +1110,19 @@ grid.addEventListener("keydown", event => {
     } else if (key === "ArrowRight") {
         moveTo(cursor + 1, event.shiftKey, false);
     } else if (key === "ArrowUp") {
-        moveTo(cursor - ROW, event.shiftKey, false);
+        moveRows(-1, event.shiftKey);
     } else if (key === "ArrowDown") {
-        moveTo(cursor + ROW, event.shiftKey, false);
+        moveRows(1, event.shiftKey);
     } else if (key === "PageUp") {
         grid.scrollTop -= visibleRows() * LINE;
-        moveTo(cursor - page, event.shiftKey, false);
+        moveRows(-visibleRows(), event.shiftKey);
     } else if (key === "PageDown") {
         grid.scrollTop += visibleRows() * LINE;
-        moveTo(cursor + page, event.shiftKey, false);
+        moveRows(visibleRows(), event.shiftKey);
     } else if (key === "Home") {
-        moveTo(control ? 0 : cursor - cursor % ROW, event.shiftKey, false);
+        moveTo(control ? 0 : rowStart(rowOf(cursor)), event.shiftKey, false);
     } else if (key === "End") {
-        moveTo(control ? SIZE - 1 : cursor - cursor % ROW + ROW - 1, event.shiftKey, false);
+        moveTo(control ? SIZE - 1 : rowEnd(rowOf(cursor)), event.shiftKey, false);
     } else if (key === "Tab" && (event.shiftKey ? pane === "text" : pane === "hex")) {
         // Tab goes from the hex column to the text column and Shift+Tab back; past them, focus moves on as usual.
         moves++;
@@ -984,13 +1145,17 @@ grid.addEventListener("keydown", event => {
     }
 });
 
+alignBox.addEventListener("change", () => {
+    aligned = alignBox.checked;
+    remember();
+    layoutRows();
+    render();
+    grid.focus();
+});
+
 machineBox.addEventListener("change", () => {
     machineText = machineBox.checked;
-    try {
-        vscode.setState({ machineText });
-    } catch {
-        // Remembering is a convenience.
-    }
+    remember();
     applyText();
     render();
     grid.focus();
@@ -1022,11 +1187,16 @@ async function test(actions) {
         if (action.redo) await redo();
         if (action.extras) await loadExtras();
         if (action.snapshot) await takeSnapshot();
-        if (action.compare !== undefined) { comparing = action.compare; render(); }
-        if (action.search === "start") await startSearch();
+        if (action.compare !== undefined) await compareWith(action.compare === true ? "snapshot" : action.compare === false ? "" : action.compare);
+        if (action.search === "start") await startSearch(action.size ?? 1);
         else if (action.search !== undefined) await narrowBy(action.search, action.value ?? "");
         if (action.watch) await watchSelection();
         if (action.freeze) await toggleFreeze();
+        if (action.align !== undefined) {
+            aligned = action.align;
+            layoutRows();
+            render();
+        }
         if (action.machineText !== undefined) {
             machineText = action.machineText;
             applyText();
@@ -1047,7 +1217,8 @@ async function test(actions) {
         lastWatch,
         frozen: frozen.has(cursor) ? frozen.get(cursor) : null,
         inspector: inspect(bytes, readable, cursor, charset === null ? undefined : charset.text),
-        hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64)
+        hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64),
+        row: { start: rowStart(rowOf(cursor)), end: rowEnd(rowOf(cursor)), count: rowCount() }
     };
 }
 
@@ -1067,6 +1238,7 @@ window.addEventListener("message", event => {
         render();
         grid.focus();
         void loadExtras();
+        void loadBanks();
     } else if (message.type === "changed") {
         generation++;
         pages.fill(0);
@@ -1083,6 +1255,7 @@ window.addEventListener("message", event => {
         pages.fill(0);
         render();
         void loadExtras();
+        void loadBanks().then(readOther);
     } else if (message.type === "stopped") {
         // Changes count from here, and banks may have switched the labels and characters.
         stops++;
@@ -1090,6 +1263,7 @@ window.addEventListener("message", event => {
         pages.fill(0);
         render();
         void loadExtras();
+        void readOther();
     } else if (message.type === "ended") {
         ended = true;
         document.getElementById("ended").hidden = false;

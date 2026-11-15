@@ -13,6 +13,11 @@ import { addressAt, cpuWatches, hex, parseReference, referenceIn, resolveIn } fr
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
+/** A bank's reference from $0000, which a memory view reads its bytes by: 0x0000 for the CPU's memory. */
+function bankBase(name: string | null): string {
+    return name === null ? "0x0000" : `${name}:0x0000`;
+}
+
 export interface MemoryBank {
     /** The bank's prefix in memory references, such as "aux"; null for memory as the CPU maps it. */
     name: string | null;
@@ -25,6 +30,8 @@ export interface MemoryBank {
     writes: string | null;
     /** Whether it is a coprocessor's address space, such as the SoftCard's Z80's. */
     coprocessor?: boolean;
+    /** Whether its CPU keeps a word's high byte first, as the 6809 does. */
+    bigEndian?: boolean;
 }
 
 /** Retrocore Memory's view type. */
@@ -234,7 +241,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            const base = start.bank === null ? "0x0000" : `${start.bank}:0x0000`;
+            const base = bankBase(start.bank);
             let ready!: () => void;
             const editor: MemoryEditor = {
                 session, reference: base, panel, tests: new Map(),
@@ -253,7 +260,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     await panel.webview.postMessage({
                         type: "init",
                         address: start.address,
-                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly }
+                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly, bigEndian: bank.bigEndian === true }
                     });
                     ready();
                     return;
@@ -269,6 +276,27 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "read":
                             await reply(await session.customRequest("retro/memory/read", { memoryReference: base, offset: received.offset, count: received.count }));
                             break;
+                        case "banks": {
+                            // The other banks this editor's bytes can be compared with, read now, as a card can go in.
+                            // Each is read from $0000, as this editor's own is, so its bytes line up by address; the
+                            // machine's references, such as bank1:0xD000, start where the bank does.
+                            const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
+                            await reply({
+                                banks: banks.filter(item => item.name !== start.bank).map(item => ({
+                                    memoryReference: bankBase(item.name),
+                                    label: item.name === null ? item.label : `${item.label} (${item.name})`
+                                }))
+                            });
+                            break;
+                        }
+                        case "readOther": {
+                            // Only a bank the machine has, as the page lists them.
+                            const reference = String(received.reference);
+                            const { banks } = await session.customRequest("retro/memoryBanks") as { banks: MemoryBank[] };
+                            if (!banks.some(item => bankBase(item.name) === reference)) throw new Error(`The machine has no memory bank at ${reference} now.`);
+                            await reply(await session.customRequest("retro/memory/read", { memoryReference: reference, offset: received.offset, count: received.count }));
+                            break;
+                        }
                         case "labels":
                             await reply(await session.customRequest("retro/memory/labels", { memoryReference: base }));
                             break;

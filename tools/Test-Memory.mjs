@@ -314,6 +314,16 @@ try {
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x11, "bank 2 holds what the program wrote");
+
+    // The Monitor's equates name the bytes its instructions address, as STA CH and (BASL),Y do, but not a value it
+    // only compares with, as CMP #CR does.
+    at = "naming RAM by the Monitor's equates";
+    const named = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
+    assert.equal(named.get(0x24), "CH");
+    assert.equal(named.get(0x28), "BASL");
+    assert.equal(named.get(0xC000), "KBD");
+    // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
+    assert.notEqual(named.get(0x0D), "CR");
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
     assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");

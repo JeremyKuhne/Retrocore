@@ -4,7 +4,6 @@
 
 using Retrocore.Assembler;
 using Retrocore.Isa;
-using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -62,14 +61,28 @@ internal sealed partial class DebugSession
             }
         }
 
-        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
+        // be checked against memory again at every byte of it.
+        ListingMemory memory = new(bank is null ? Target : new BankMemory(bank), address => MemoryByte(bank, address));
+        Dictionary<int, DebugPosition?> positions = [];
+        DebugPosition? Position(int address)
+        {
+            if (!positions.TryGetValue(address, out DebugPosition? position))
+            {
+                position = _debug.Position(memory, (ushort)address);
+                positions.Add(address, position);
+            }
+
+            return position;
+        }
+
         InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
         SortedDictionary<int, string> labels = LabelsIn(bank, constants: false);
         SortedDictionary<int, string> names = LabelsIn(bank, constants: true);
         bool Boundary(int address)
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
-            return _debug.Position(memory, (ushort)address) is { Start: { } start } && start == address;
+            return Position(address) is { Start: { } start } && start == address;
         }
 
         // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the
@@ -84,7 +97,7 @@ internal sealed partial class DebugSession
 
         int end = Math.Min(0x10000, from + count);
         int first = -1;
-        if (_debug.Position(memory, (ushort)from) is { Start: { } covering } && covering <= from)
+        if (Position(from) is { Start: { } covering } && covering <= from)
         {
             first = covering;
         }
@@ -110,7 +123,14 @@ internal sealed partial class DebugSession
         int address = first;
         while (address < end)
         {
-            DebugPosition? position = _debug.Position(memory, (ushort)address);
+            // Bytes that cannot be read, such as past a bank's end, list nothing, as the grid shows nothing there.
+            if (!memory.Readable(address))
+            {
+                address++;
+                continue;
+            }
+
+            DebugPosition? position = Position(address);
             string kind = position is null ? "unknown" : "code";
             int size;
             string text;
@@ -124,7 +144,7 @@ internal sealed partial class DebugSession
                 size = Math.Min(DataPerLine, Math.Min(start + length, 0x10000) - address);
                 for (int index = 1; index < size; index++)
                 {
-                    if (Boundary(address + index))
+                    if (!memory.Readable(address + index) || Boundary(address + index))
                     {
                         size = index;
                         break;
@@ -135,18 +155,20 @@ internal sealed partial class DebugSession
             }
             else
             {
-                int available = Math.Min(LongestInstruction, 0x10000 - address);
-                for (int index = 0; index < available; index++)
+                // An instruction decodes from the bytes that can be read, up to the first that cannot.
+                int available = 0;
+                while (available < Math.Min(LongestInstruction, 0x10000 - address) && memory.Readable(address + available))
                 {
-                    bytes[index] = memory.Peek((ushort)(address + index));
+                    bytes[available] = memory.Peek((ushort)(address + available));
+                    available++;
                 }
 
                 if (Disassembler.TryDecode(bytes[..available], (ushort)address, set, out DisassembledInstruction instruction)
                     && !RunsOver(address, instruction.Size, Boundary))
                 {
                     size = instruction.Size;
-                    target = OperandAddress(instruction, directPage);
-                    text = Named(instruction.ToString(), target, names);
+                    (target, int? shown) = ListingOperands.OperandAddress(instruction, directPage);
+                    text = ListingOperands.Named(instruction.ToString(), target, shown, names);
                 }
                 else
                 {
@@ -194,42 +216,4 @@ internal sealed partial class DebugSession
     // Bytes as a .byte line.
     private static string DataText(IDebugMemory memory, int address, int size) =>
         ".byte " + string.Join(", ", Enumerable.Range(0, size).Select(index => $"${memory.Peek((ushort)(address + index)):X2}"));
-
-    // The address an instruction's operand names, for going there: a memory or pointer operand, a branch's target,
-    // a target the opcode implies, as RST $08 has, or a postbyte's pointer or PC-relative address; null for values,
-    // registers and offsets from a register. With a direct page (null for a CPU without one, -1 where it is not
-    // known), a one-byte memory operand is an offset in that page, and names no address where the page is unknown.
-    private static int? OperandAddress(in DisassembledInstruction instruction, int? directPage)
-    {
-        OperandForm form = instruction.Form;
-        if (form.FieldCount == 0) { return instruction.DirectTarget; }
-        if (form.HasPostbyte)
-        {
-            return instruction.PostbyteReference == PostbyteReference.None ? null : instruction.Field(0);
-        }
-
-        if (instruction.RelativeTarget is { } relative) { return relative; }
-        if (form.Role == OperandRole.None) { return instruction.DirectTarget; }
-        if (directPage is not { } page || form.Field(0) != OperandFieldKind.Byte) { return instruction.Operand; }
-        return page < 0 ? null : (page << 8) | (instruction.Operand & 0xFF);
-    }
-
-    // An instruction's text with the address its operand names given by its label, as LDA KBD for LDA $C000.
-    private static string Named(string text, int? target, SortedDictionary<int, string> names)
-    {
-        if (target is not { } address || !names.TryGetValue(address, out string? name)) { return text; }
-        for (int position = text.IndexOf('$'); position >= 0; position = text.IndexOf('$', position + 1))
-        {
-            int digits = position + 1;
-            while (digits < text.Length && char.IsAsciiHexDigit(text[digits])) { digits++; }
-            if (digits > position + 1
-                && int.TryParse(text.AsSpan(position + 1, digits - position - 1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value)
-                && value == address)
-            {
-                return string.Concat(text.AsSpan(0, position), name, text.AsSpan(digits));
-            }
-        }
-
-        return text;
-    }
 }

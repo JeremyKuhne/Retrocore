@@ -1,0 +1,50 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Assembler;
+using Retrocore.Cpu.M6809;
+using Retrocore.Cpu.Z80;
+using Retrocore.Debug;
+
+namespace Retrocore.Tests;
+
+/// <summary>
+///  The targets and names Retrocore Memory's listing gives instruction operands.
+/// </summary>
+[TestClass]
+public sealed class MemoryListingTests
+{
+    /// <summary>
+    ///  A 6809 direct-page operand is an offset in DP's page: with DP at $12, <c>LDA $34</c> accesses $1234, which
+    ///  its label names in place of the $34 the text shows; with the page unknown it names nothing.
+    /// </summary>
+    [TestMethod]
+    public void DirectPageOperandsAreInDpsPage()
+    {
+        bool decoded = Disassembler.TryDecode([0x96, 0x34], address: 0x3000, M6809Isa.InstructionSet, out DisassembledInstruction load);
+        decoded.Should().BeTrue();
+        (int? target, int? shown) = ListingOperands.OperandAddress(load, directPage: 0x12);
+        (target, shown).Should().Be(((int?)0x1234, (int?)0x34));
+
+        SortedDictionary<int, string> names = new() { [0x1234] = "BUFFER", [0x0034] = "ZERO" };
+        string text = ListingOperands.Named(load.ToString(), target, shown, names);
+        text.Should().Contain("BUFFER").And.NotContain("$34").And.NotContain("ZERO");
+
+        ListingOperands.OperandAddress(load, directPage: -1).Should().Be(((int?)null, (int?)null));
+    }
+
+    /// <summary>
+    ///  A Z80 restart's target is the address its opcode implies, so <c>RST $08</c> goes to $0008 by its label.
+    /// </summary>
+    [TestMethod]
+    public void RestartsTargetTheirAddress()
+    {
+        bool decoded = Disassembler.TryDecode([0xCF], address: 0x1000, Z80Isa.InstructionSet, out DisassembledInstruction restart);
+        decoded.Should().BeTrue();
+        (int? target, int? shown) = ListingOperands.OperandAddress(restart, directPage: null);
+        target.Should().Be(0x0008);
+        SortedDictionary<int, string> names = new() { [0x0008] = "SYNTAX" };
+        ListingOperands.Named(restart.ToString(), target, shown, names).Should().Contain("SYNTAX");
+    }
+}

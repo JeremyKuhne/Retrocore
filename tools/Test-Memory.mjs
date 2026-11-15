@@ -367,6 +367,14 @@ try {
     assert.equal((await listing(0x6030, 6))[0].address, 0x6030, "nothing known starts an instruction near $6030");
     lines = await listing(0x6030, 6, [0x6001]);
     assert.deepEqual([lines[0].address, lines[0].size], [0x602E, 3], JSON.stringify(lines));
+    // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
+    const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
+    await write("bank1:0xDFFF", [0xAD]);
+    lines = (await request("retro/memory/listing", { memoryReference: "bank1:0xD000", address: 0xDFFD, count: 6, starts: [0xDFFF] })).lines;
+    await write("bank1:0xDFFF", [lastByte]);
+    assert.deepEqual(lines.at(-1), { ...lines.at(-1), address: 0xDFFF, size: 1, text: ".byte $AD" }, JSON.stringify(lines));
+    assert.equal((await request("retro/memory/listing", { memoryReference: "bank1:0xD000", address: 0xE000, count: 16 })).lines.length, 0,
+        "nothing lists where the bank has no bytes");
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
     assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");

@@ -256,6 +256,34 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A GOTO out of a WHILE to the end of the THEN around it.
+    private const string ThenEndSource = """
+        (*$G+*)
+        PROGRAM TE;
+        LABEL 1;
+        VAR I, J: INTEGER;
+        BEGIN
+          I := 0; J := 0;
+          IF I = 0 THEN
+          BEGIN
+            WHILE J < 3 DO BEGIN IF J = 2 THEN GOTO 1; J := J + 1 END;
+            I := 5;
+            1:
+          END
+          ELSE I := 7
+        END.
+        """;
+
+    /// <summary>
+    ///  A GOTO to an IF's jump over its ELSE goes to a label at the end of its THEN.
+    /// </summary>
+    [TestMethod]
+    public void GotosToTheEndOfAThenHaveALabelThere()
+    {
+        string source = RoundTrip(ThenEndSource);
+        source.Should().Contain("GOTO 1");
+    }
+
     // An IF with an empty ELSE, which jumps to where the ELSE starts.
     private const string EmptyElseSource = """
         PROGRAM EE;

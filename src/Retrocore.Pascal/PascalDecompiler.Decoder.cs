@@ -351,6 +351,9 @@ public sealed partial class PascalDecompiler
                 if (end >= target && end <= to && !IsCaseJump(last))
                 {
                     List<Statement> then = Block(at + 1, target - 1, []);
+
+                    // A GOTO to the jump over the ELSE goes to the end of the THEN: a label before its END.
+                    _boundaries.TryAdd(last.Offset, (then, then.Count));
                     List<Statement> otherwise = Block(target, end, []);
                     statements.Add(new IfStatement(condition, then, otherwise) { Offset = fjp.Offset });
                     return end;

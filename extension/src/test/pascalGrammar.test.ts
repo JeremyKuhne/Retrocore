@@ -74,3 +74,16 @@ test("strings double their quotes, comments span lines, and compiler options are
     assertScope("{ BRACES } BEGIN", "BRACES", "comment.block.braces.pascal.retrocore");
     assertScope("(*$L APPLE1:HELLO.LST.TEXT*)", "HELLO", "meta.preprocessor.pascal.retrocore");
 });
+
+test("Apple Pascal's own words: OTHERWISE, intrinsic units' headings, and the Compiler's searches", () => {
+    assertScope("    OTHERWISE WRITELN('?')", "OTHERWISE", "keyword.control.pascal.retrocore");
+    assertScope("UNIT UNIT62; INTRINSIC CODE 62 DATA 63;", "INTRINSIC", "storage.modifier.pascal.retrocore");
+    assertScope("UNIT UNIT62; INTRINSIC CODE 62 DATA 63;", "CODE", "storage.modifier.pascal.retrocore");
+    assertScope("UNIT UNIT62; INTRINSIC CODE 62 DATA 63;", "62", "constant.numeric.integer.pascal.retrocore", 1);
+    assertScope("UNIT UNIT62; INTRINSIC CODE 62 DATA 63;", "DATA", "storage.modifier.pascal.retrocore");
+    assertScope("SEPARATE UNIT LONGINT;", "SEPARATE", "storage.modifier.pascal.retrocore");
+    assertScope("CODE := DATA + 1;", "CODE", "source.retrocore-pascal");
+    assert.ok(!scopes(["CODE := DATA + 1;"], "CODE").includes("storage.modifier.pascal.retrocore"), "CODE outside a heading is a name");
+    assertScope("IDSEARCH(G3, G4^);", "IDSEARCH", "support.function.pascal.retrocore");
+    assertScope("K := TREESEARCH(ROOT, NODE, ID);", "TREESEARCH", "support.function.pascal.retrocore");
+});

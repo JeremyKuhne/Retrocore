@@ -435,6 +435,7 @@ internal sealed class MachineHost : DisposableBase
     {
         long paceTime = 0;
         ulong paceCycles = 0;
+        int paceClock = 0;
         while (!_stopping)
         {
             bool ahead;
@@ -449,6 +450,16 @@ internal sealed class MachineHost : DisposableBase
 
                 long slice = Stopwatch.GetTimestamp();
                 double speed = _speed;
+
+                // A machine that changes its own clock, as the Model 4 does between 2 and 4 MHz, is paced from the
+                // change at its new clock: the old clock's time is not counted again at the new one.
+                int clock = _target.ClockHertz;
+                if (clock != paceClock)
+                {
+                    paceTime = slice;
+                    paceCycles = _target.CycleCount;
+                    paceClock = clock;
+                }
 
                 // While a drive is busy with fast drives on, the machine runs as fast as it can, and its pacing
                 // starts over from wherever it is once the drive is done, rather than waiting for the clock.
@@ -471,10 +482,12 @@ internal sealed class MachineHost : DisposableBase
                 // as long as 15.6 at Windows' default timer resolution, which held it to a fraction of its speed.
                 ulong due = speed == 0 || accelerated
                     ? ulong.MaxValue
-                    : paceCycles + (ulong)(Stopwatch.GetElapsedTime(paceTime).TotalSeconds * _target.ClockHertz * speed);
+                    : paceCycles + (ulong)(Stopwatch.GetElapsedTime(paceTime).TotalSeconds * clock * speed);
 
-                // Too far behind, as after the window was dragged: keep time from here rather than racing to catch up.
-                if (speed != 0 && !accelerated && due > _target.CycleCount + (ulong)(_target.ClockHertz * speed * MaximumLagSeconds))
+                // Too far behind, as after the window was dragged, or too far ahead, as nothing else should leave it:
+                // keep time from here rather than racing to catch up or waiting for the clock.
+                ulong lag = (ulong)(clock * speed * MaximumLagSeconds);
+                if (speed != 0 && !accelerated && (due > _target.CycleCount + lag || due + lag < _target.CycleCount))
                 {
                     paceTime = slice;
                     paceCycles = _target.CycleCount;

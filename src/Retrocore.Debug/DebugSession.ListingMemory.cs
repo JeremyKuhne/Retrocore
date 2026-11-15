@@ -33,6 +33,14 @@ internal sealed partial class DebugSession
         /// <inheritdoc/>
         public Enum WriteArea(ushort address) => memory.WriteArea(address);
 
+        /// <inheritdoc/>
+        /// <remarks>
+        ///  <para>
+        ///   A listing's bytes are read once, so what a module finds holds for the rest of the request.
+        ///  </para>
+        /// </remarks>
+        public Dictionary<object, bool>? Findings { get; } = [with(ReferenceEqualityComparer.Instance)];
+
         // The byte at an address, or -1 where it cannot be read.
         private int Read(ushort address)
         {

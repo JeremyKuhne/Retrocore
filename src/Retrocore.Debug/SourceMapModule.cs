@@ -330,15 +330,14 @@ internal sealed partial class SourceMapModule : IDebugModule
     private bool Applies(IDebugMemory memory, int index)
     {
         if (!Holds(memory, _statements[index])) { return false; }
-        if (_wholeImage)
-        {
-            foreach (Statement other in _statements)
-            {
-                if (!Holds(memory, other)) { return false; }
-            }
-        }
+        if (!_wholeImage) { return true; }
 
-        return true;
+        // Memory that does not change keeps whether the whole image holds, found once.
+        Dictionary<object, bool>? findings = memory.Findings;
+        if (findings is not null && findings.TryGetValue(this, out bool whole)) { return whole; }
+        whole = _statements.All(other => Holds(memory, other));
+        findings?.Add(this, whole);
+        return whole;
     }
 
     // A statement's position, entering its macro levels only at its first byte.
@@ -353,8 +352,23 @@ internal sealed partial class SourceMapModule : IDebugModule
             statement.Data);
     }
 
-    // Whether memory holds the bytes a statement assembled to, where it runs.
+    // Whether memory holds the bytes a statement assembled to, where it runs; memory that does not change keeps
+    // the answer, so a long statement is compared once, not at each of its bytes.
     private static bool Holds(IDebugMemory memory, Statement statement)
+    {
+        Dictionary<object, bool>? findings = memory.Findings;
+        if (findings is null) { return Compare(memory, statement); }
+        if (!findings.TryGetValue(statement, out bool held))
+        {
+            held = Compare(memory, statement);
+            findings.Add(statement, held);
+        }
+
+        return held;
+    }
+
+    // Compares memory with a statement's bytes.
+    private static bool Compare(IDebugMemory memory, Statement statement)
     {
         for (int offset = 0; offset < statement.Bytes.Length; offset++)
         {

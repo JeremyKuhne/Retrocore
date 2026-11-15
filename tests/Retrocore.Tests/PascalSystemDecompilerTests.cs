@@ -256,6 +256,33 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A GOTO out of an inner WHILE to the end of the outer one's body.
+    private const string LoopEndSource = """
+        (*$G+*)
+        PROGRAM LE;
+        LABEL 1;
+        VAR I, J: INTEGER;
+        BEGIN
+          I := 0;
+          WHILE I < 5 DO
+          BEGIN
+            I := I + 1; J := 0;
+            WHILE J < 3 DO BEGIN IF J = I THEN GOTO 1; J := J + 1 END;
+            1:
+          END
+        END.
+        """;
+
+    /// <summary>
+    ///  A GOTO to the jump back of a WHILE goes to a label at the end of its body.
+    /// </summary>
+    [TestMethod]
+    public void GotosToTheEndOfALoopsBodyHaveALabelThere()
+    {
+        string source = RoundTrip(LoopEndSource);
+        source.Should().Contain("GOTO 1");
+    }
+
     // A procedure that keeps segments in memory while it runs, one by its number, with an EXIT out of it.
     private const string ResidentSource = """
         PROGRAM RS;

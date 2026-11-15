@@ -275,6 +275,9 @@ public sealed partial class PascalDecompiler
                 if (condition.Count != 0 || stack.Count != 1) { break; }
 
                 List<Statement> body = Block(test + 1, jump, []);
+
+                // A GOTO to the jump back goes to the end of the body: a label before its END.
+                _boundaries.TryAdd(_code[jump].Offset, (body, body.Count));
                 Statement loop = (Statement?)For(stack[0], body, statements, offset)
                     ?? new WhileStatement(stack[0], body) { Offset = offset };
 

@@ -182,7 +182,13 @@ leaves its own pattern of jumps, and the stack holds each expression whole. What
   (`FUNCTION FUNC2(A4: INTEGER; A3: INTEGER): BOOLEAN; EXTERNAL;` in FORMATTER), and the words below them its
   parameters. A segment the Linker linked them into is marked for the 6502, not p-code; it decompiles all the same.
 - **Options**: `(*$I-*)`, `(*$R-*)`, `(*$G+*)` and `(*$V-*)` are written where the code shows unchecked I/O, unchecked
-  indexes, GOTO, or a string passed to a VAR string of another length.
+  indexes, GOTO, or a string passed to a VAR string of another length. A procedure that loads segments as it starts
+  (GSEG) and releases them as it ends (RSEG) has `(*$R ...*)` after its BEGIN, naming each segment it sees and
+  numbering the others (`(*$R DECLARAT,BODYPART,11,12*)`).
+- **The system's other procedures**: a program compiled as part of the system that calls one of the system's
+  procedures no standard procedure names (`CXP 0, 43`) declares headings for the system's procedures up to it in the
+  system's block, FORWARD, which the Compiler numbers as the system does; the called ones take their arguments as
+  parameters (`PROCEDURE SYSTEM43(VAR A1: T55; A2: INTEGER; A3: INTEGER); FORWARD;`).
 
 With the Compiler's listing of the program (`--listing`), procedures, parameters and variables are named as the
 source named them; with HILBERT's, the decompiled source reads as the original. Hints (`--hints`, the JSON file

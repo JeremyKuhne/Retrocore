@@ -99,8 +99,8 @@ Built 2026-11-13, the third round:
   their frames read (`Apple2PascalTests`, `Apple3PascalTests`). 1.0's R(un) runs no code its C(ompile) wrote, so
   the tests X(ecute) it; its Compiler leaves the code file open when it also writes a listing, so 1.0 compiles
   without one; and Apple III Pascal 1.0's first disk has its known damaged Filer.
-- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings and
-  saplings), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
+- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings,
+  saplings and trees), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
 - **Apple III Pascal 1.2** boots from disks built from 1.1's and the update's, compiles and runs HELLO (code
   version 6), and its frames read. Its larger `SYSTEM.PASCAL` leaves no room on the boot disk for 1.1's Filer and
   Library, so they go on the second. Its Editor asks `Edit what file?` and its Quit asks `Write to what file?`.

@@ -62,6 +62,15 @@ internal sealed class MachinePane : ScrollViewer
         Refresh();
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The theme's scroll viewer template, which a type of its own would not otherwise get: without it the pane
+    ///   has no scroll bar and clips what does not fit.
+    ///  </para>
+    /// </remarks>
+    protected override Type StyleKeyOverride => typeof(ScrollViewer);
+
     /// <summary>
     ///  Gets the Machine section's tree, for the smoke run's checks.
     /// </summary>

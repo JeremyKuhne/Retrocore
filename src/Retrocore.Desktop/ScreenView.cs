@@ -37,7 +37,8 @@ internal sealed class ScreenView : Control
     private readonly bool[] _held = new bool[2];
     private readonly bool[] _latched = new bool[2];
 
-    // The mouse card's mouse, while the screen has the pointer: where it last was, and the part of a dot not yet sent.
+    // The mouse card's mouse, while it has the pointer: where the pointer is, the part of a dot not yet sent, and
+    // the pointer itself, captured while a button is down.
     private Point? _mouseAt;
     private IPointer? _mousePointer;
     private double _mouseX;
@@ -286,19 +287,22 @@ internal sealed class ScreenView : Control
         PointerPointProperties point = e.GetCurrentPoint(this).Properties;
         if (!point.IsLeftButtonPressed || !_host.Running || _host.MouseSlot == 0) { return; }
 
-        // The mouse card: a click gives it the pointer, and then its left button is the card's.
+        // The mouse card: a click gives it the pointer, which it keeps until Escape or the window loses the keyboard,
+        // and then the left button is the card's. The pointer is hidden and held at the screen's centre, so it never
+        // stops at the window's edge.
         if (!MouseCaptured)
         {
-            _mouseAt = e.GetPosition(this);
             _mouseX = _mouseY = 0;
-            e.Pointer.Capture(this);
-            _mousePointer = e.Pointer;
             Cursor = new Cursor(StandardCursorType.None);
+            Recentre(e.GetPosition(this));
             MouseChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
         else
         {
+            // Captured while the button is down, so its release comes here even off the window.
+            e.Pointer.Capture(this);
+            _mousePointer = e.Pointer;
             _host.Mouse(0, 0, pressed: true);
         }
 
@@ -310,6 +314,7 @@ internal sealed class ScreenView : Control
     {
         base.OnPointerReleased(e);
         if (MouseCaptured && e.InitialPressMouseButton == MouseButton.Left) { _host.Mouse(0, 0, pressed: false); }
+        _mousePointer = null;
     }
 
     /// <inheritdoc/>
@@ -318,13 +323,14 @@ internal sealed class ScreenView : Control
         base.OnPointerMoved(e);
         if (_mouseAt is not { } last || _bitmap is not { } bitmap) { return; }
 
-        // Movement in the picture's 280 by 192 dots, as the panel sends it; the pointer, hidden, goes back to where
-        // it was taken, so it never stops at the window's edge.
+        // Movement in the picture's 280 by 192 dots, as the panel sends it; the hidden pointer goes back to the
+        // screen's centre after each move, so it never stops at the window's edge.
         Point at = e.GetPosition(this);
+        if (at == last) { return; }
         Rect picture = PictureRect(bitmap);
         _mouseX += (at.X - last.X) * 280 / Math.Max(1, picture.Width);
         _mouseY += (at.Y - last.Y) * 192 / Math.Max(1, picture.Height);
-        _mouseAt = at;
+        Recentre(at);
         int dx = (int)Math.Truncate(_mouseX);
         int dy = (int)Math.Truncate(_mouseY);
         _mouseX -= dx;
@@ -333,16 +339,12 @@ internal sealed class ScreenView : Control
     }
 
     /// <inheritdoc/>
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        base.OnPointerCaptureLost(e);
-        ReleaseMouse();
-    }
-
-    /// <inheritdoc/>
     protected override void OnLostFocus(FocusChangedEventArgs e)
     {
         base.OnLostFocus(e);
+
+        // Another window or control taking the keyboard takes the pointer back from the mouse card.
+        ReleaseMouse();
 
         // A key let go while the screen lacks the keyboard never says so, so a held Apple key lets go here.
         for (int button = 0; button < 2; button++)
@@ -351,6 +353,17 @@ internal sealed class ScreenView : Control
             _held[button] = false;
             SendButton(button);
         }
+    }
+
+    // Holds the hidden pointer at the screen's centre, where Windows can move it; elsewhere it stays where it is,
+    // and the card's mouse stops where the pointer leaves the window.
+    private void Recentre(Point at)
+    {
+        _mouseAt = at;
+        if (!OperatingSystem.IsWindows()) { return; }
+        Point centre = new(Bounds.Width / 2, Bounds.Height / 2);
+        PixelPoint screen = this.PointToScreen(centre);
+        if (NativeMethods.SetCursorPos(screen.X, screen.Y)) { _mouseAt = centre; }
     }
 
     // The mouse card gives the pointer back, its button up.

@@ -86,6 +86,12 @@ internal static class Tour
                 {
                     session.Start();
                     window.Pane.DriveTree.SelectRow(Drive());
+                    window.Pane.DriveTree.Expand(Drive());
+                }),
+                ("06c2-scrolled", () =>
+                {
+                    Console.Out.WriteLine($"pane: viewport {window.Pane.Viewport}, extent {window.Pane.Extent}, bounds {window.Pane.Bounds}");
+                    window.Pane.Offset = new Vector(0, window.Pane.Extent.Height);
                 }),
                 ("06d-stopped", session.Stop),
             ]);

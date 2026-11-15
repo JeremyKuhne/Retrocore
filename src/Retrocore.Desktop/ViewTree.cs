@@ -91,6 +91,15 @@ internal sealed class ViewTree : Border
         }
     }
 
+    /// <summary>
+    ///  Opens the row with an identity, as a click on its chevron would, for the tour.
+    /// </summary>
+    /// <param name="id">The row's identity.</param>
+    internal void Expand(string id)
+    {
+        if (_visible.FirstOrDefault(candidate => candidate.Node.Id == id) is { } row) { Toggle(row, open: true); }
+    }
+
     // Everything a row draws, and its children's, so an unchanged tree is left as it is.
     private static string Signature(IReadOnlyList<TreeNode> nodes)
     {

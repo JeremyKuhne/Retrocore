@@ -23,10 +23,16 @@ internal static class ImageWriter
     // How long a sharing violation, as OneDrive or an antivirus program holding a new file, is retried.
     private static readonly TimeSpan s_retryFor = TimeSpan.FromSeconds(2);
 
+    // How many links a path may go through, as the file systems' own limits are about this.
+    private const int MaximumLinks = 40;
+
     /// <summary>
     ///  Writes an image.
     /// </summary>
-    /// <param name="path">The image's full path; a link is followed to its target.</param>
+    /// <param name="path">
+    ///  The image's full path; a link, to the file or to a folder on its way, is followed to its target, so every path
+    ///  to one image takes the same lock and backup.
+    /// </param>
     /// <param name="bytes">The image.</param>
     /// <param name="expected">
     ///  The revision the image must still be, or null for no file there, as a save to a new file does.
@@ -99,7 +105,9 @@ internal static class ImageWriter
                 return new("readOnly", current, Reason: "access");
             }
 
-            return new("written", FileRevision.Read(target), Backup: backup);
+            // The revision written is the bytes committed, not a read after, which another writer may already have
+            // replaced: a change made since stays a change.
+            return new("written", FileRevision.Of(target, bytes), Backup: backup);
         }
         finally
         {
@@ -107,11 +115,34 @@ internal static class ImageWriter
         }
     }
 
-    // The file a path names: a symbolic link's final target, so a link into a repository stays a link.
+    // The file a path names, with every link on the way followed, to the file and to the folders it is in: so a link
+    // into a repository stays a link, and two paths to one image are the same file for its lock and its backup.
     private static string Resolve(string path)
     {
-        FileInfo file = new(path);
-        return file.LinkTarget is null ? file.FullName : file.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? file.FullName;
+        string current = Path.GetFullPath(path);
+        for (int links = 0; links < MaximumLinks; links++)
+        {
+            string? folder = Path.GetDirectoryName(current);
+            string resolved = folder is null ? current : Path.Join(ResolveFolder(folder, depth: 0), Path.GetFileName(current));
+            FileInfo file = new(resolved);
+            if (file.LinkTarget is null) { return resolved; }
+            current = file.ResolveLinkTarget(returnFinalTarget: false)?.FullName ?? resolved;
+        }
+
+        throw new IOException($"{path} goes through more than {MaximumLinks} links.");
+    }
+
+    // A folder with every link on its way followed, from the root down.
+    private static string ResolveFolder(string folder, int depth)
+    {
+        if (depth > MaximumLinks) { throw new IOException($"{folder} goes through more than {MaximumLinks} links."); }
+        DirectoryInfo info = new(folder);
+        if (info.Parent is null) { return info.FullName; }
+        string resolved = Path.Join(ResolveFolder(info.Parent.FullName, depth), info.Name);
+        DirectoryInfo at = new(resolved);
+        return at.LinkTarget is null || at.ResolveLinkTarget(returnFinalTarget: true) is not DirectoryInfo target
+            ? resolved
+            : ResolveFolder(target.FullName, depth + 1);
     }
 
     // Takes the image's lock, which another host may hold for a moment.

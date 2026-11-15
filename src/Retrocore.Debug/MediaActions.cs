@@ -82,7 +82,7 @@ internal static class MediaActions
                 $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
         }
 
-        if (action == "save" && device is Apple2FloppyDrive drive) { return Save(drive, args); }
+        if (action == "save" && device is Apple2FloppyDrive drive) { return Unspoken(drive, Save(drive, args), args); }
         return action == "eject" || (action == "insert" && device.Media is not null)
             ? Detach([device], args, action == "eject" ? "eject it" : "insert another disk")
             : null;
@@ -234,6 +234,24 @@ internal static class MediaActions
         if (!encoded.IsLossless) { answer["losses"] = encoded.Losses.ToJsonArray(); }
         if (written.Backup is not null) { answer["backup"] = written.Backup; }
         return answer;
+    }
+
+    // A save that did not save is an error for a client that does not speak the answers, which would otherwise take
+    // the answer for a save; one that does hears the answer.
+    private static JsonObject Unspoken(Apple2FloppyDrive drive, JsonObject answer, JsonObject args)
+    {
+        string? outcome = answer.String("outcome");
+        if (args["supportsRetrocoreMedia"] is not null || outcome == "saved") { return answer; }
+        string name = drive.Info.Name;
+        throw new InvalidOperationException(outcome switch
+        {
+            "losses" => $"{answer.String("format")} cannot hold all of the disk in {name}, so it was not saved: "
+                + $"{string.Join(" ", (answer.Array("losses") ?? []).Select(loss => loss?.GetValue<string>()))} "
+                + "Save it with acceptLosses: true, or as .woz.",
+            "conflict" => $"The image of the disk in {name} is not the one it was read from, so it was not saved. "
+                + "Save it with overwrite's sha256 set to the image's now, or with another path.",
+            _ => $"The disk in {name} cannot be saved to its image ({answer.String("reason")}). Save it with another path.",
+        });
     }
 
     // An answer about a drive's disk, and the mount it is about.

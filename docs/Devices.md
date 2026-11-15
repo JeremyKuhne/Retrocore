@@ -146,7 +146,8 @@ another track's sector, or a volume other than 254. The disk then comes from tha
 
 A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
 the image and replaces the image with it, follows a link to its target, retries a file another program holds for a
-moment, and keeps the revision it replaced as the image's one backup in local data (`%LOCALAPPDATA%\Retrocore\Backups`,
+moment, follows links to the folders it is in, so every path to one image shares its lock and backup, and keeps the
+revision it replaced as the image's one backup in local data (`%LOCALAPPDATA%\Retrocore\Backups`,
 or `RETROCORE_LOCAL_DATA`). It writes only over the revision of the image the disk was read from, or, for a save to
 another `path`, only where there is no file, unless `overwrite.sha256` names the revision there the person agreed to
 replace (a client sends the hash of the file the person chose in its save dialog; `null` agrees to write where there
@@ -165,12 +166,13 @@ What a person decides on comes back as an answer beside the devices, not as an e
 | `readOnly` | The image cannot be written: `reason` is `file` (a read-only file), `access`, `noImage` (a disk a launch built) or `format` (an image that can only be read, as `.d13`) | Saves as a new image |
 
 Every answer gives the mount `generation` it is about (a number no other mount in the host has had, even in a drive
-whose card was put back in), and an answer holds only for that mount: a request whose
-`generation` is not the drive's mount now is refused, and `discards` lets go only of the mounts it lists, so a
-question left open while another disk went in never saves or lets go of the new one. A client that does not send
-`supportsRetrocoreMedia` has a changed disk's eject, insert or card removal refused with a message, as the safe
-default; `discard: true` lets every changed disk the action takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and
-`source` (`kind` `image` with its `path`, or `built`, and whether it `saves`).
+whose card was put back in), and an answer holds only for that mount: a request whose `generation` is not the drive's
+mount now is refused, and `discards` lets go only of the mounts it lists, so a question left open while another disk
+went in never saves or lets go of the new one. A client that does not send `supportsRetrocoreMedia` has a changed disk's
+eject, insert or card removal refused with a message, as the safe default, and a save that did not save (`losses`,
+`conflict` or `readOnly`) is an error with what to send instead; `discard: true` lets every changed disk the action
+takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and `source` (`kind` `image`
+with its `path`, or `built`, and whether it `saves`).
 
 ## A machine that is off
 

@@ -746,14 +746,15 @@ internal sealed class MainWindow : Window
     ///  <para>
     ///   The machine holds still first, so it cannot change a disk as the window closes. A disk with changes not
     ///   saved to its image then asks, as closing would lose them; the window closes once each is saved or let go.
-    ///   One close asks at a time: another close request while it does waits on its answer.
+    ///   One close asks at a time, and not while Stop, Restart or another change asks: a close request then waits on
+    ///   its answer.
     ///  </para>
     /// </remarks>
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
         if (_mayClose) { return; }
-        if (_closing)
+        if (_closing || _machinePane.Busy)
         {
             e.Cancel = true;
             return;

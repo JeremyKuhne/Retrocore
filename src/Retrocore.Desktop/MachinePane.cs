@@ -429,6 +429,15 @@ internal sealed class MachinePane : ScrollViewer
     /// </returns>
     internal async Task<bool> ReleaseMedia(string what)
     {
+        // One at a time: Stop, Restart, switching, starting, resetting and closing each hold the machine for their
+        // questions, so one asking while another is would let go of the other's hold.
+        if (Busy)
+        {
+            _window.Notify("Retrocore: answer the open question about the disks first.", "info");
+            return false;
+        }
+
+        Busy = true;
         MachineHost held = _session.Host;
         held.Pause();
         bool released = false;
@@ -439,9 +448,15 @@ internal sealed class MachinePane : ScrollViewer
         }
         finally
         {
+            Busy = false;
             if (!released) { held.Resume(); }
         }
     }
+
+    /// <summary>
+    ///  Gets whether something that sets the machine up again is asking about its changed disks, holding it still.
+    /// </summary>
+    internal bool Busy { get; private set; }
 
     /// <summary>
     ///  Holds the machine still, as before something that sets it up again: the window closing holds it, and asks

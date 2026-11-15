@@ -323,6 +323,67 @@ public sealed class MediaSaveTests
         save.Should().Throw<InvalidOperationException>().WithMessage("*since you were asked*");
     }
 
+    /// <summary>
+    ///  A save that does not save is an error for a client that does not speak the answers, so it never takes one
+    ///  for a save.
+    /// </summary>
+    [TestMethod]
+    public void UnsavedOutcomesAreErrorsForOlderClients()
+    {
+        string woz = Path.Join(s_root, $"older-{Guid.NewGuid():N}.woz");
+        File.WriteAllBytes(woz, SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false, volume: 7).Export());
+        Apple2FloppyDrive drive = Drive(woz);
+        JsonObject older = new() { ["path"] = Path.ChangeExtension(woz, ".dsk") };
+        Action lossy = () => MediaActions.Device(drive, "save", older);
+        lossy.Should().Throw<InvalidOperationException>().WithMessage("*was not saved*");
+
+        older["acceptLosses"] = true;
+        MediaActions.Device(drive, "save", older)?.String("outcome").Should().Be("saved");
+    }
+
+    /// <summary>
+    ///  A save through a linked folder is a save to the image itself: its backup is the image's, as a save by its own
+    ///  path keeps it, so both paths share one lock and one backup.
+    /// </summary>
+    [TestMethod]
+    public void LinkedFolderIsTheSameImage()
+    {
+        string real = Directory.CreateDirectory(Path.Join(s_root, $"real-{Guid.NewGuid():N}")).FullName;
+        string link = Path.Join(s_root, $"link-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateSymbolicLink(link, real);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Windows makes symbolic links only with the privilege; a junction, which anyone can make, links too.
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.ProcessStartInfo start = new("cmd.exe", ["/c", "mklink", "/J", link, real]);
+                start.CreateNoWindow = true;
+                using System.Diagnostics.Process? junction = System.Diagnostics.Process.Start(start);
+
+                junction?.WaitForExit();
+            }
+
+            if (!Directory.Exists(link))
+            {
+                Assert.Inconclusive($"Folder links cannot be made here: {exception.Message}");
+            }
+        }
+
+        string image = Path.Join(real, "linked.dsk");
+        byte[] bytes = new byte[35 * 4096];
+        new Random(7).NextBytes(bytes);
+        File.WriteAllBytes(image, bytes);
+        Apple2FloppyDrive drive = Drive(Path.Join(link, "linked.dsk"));
+        Change(drive);
+        JsonObject saved = MediaActions.Save(drive, Speaking());
+        saved.String("outcome").Should().Be("saved");
+        saved.String("backup").Should().Be(LocalData.BackupFor(image));
+        Directory.Delete(link);
+    }
+
     // A 35-track DOS-order sector image of random bytes, in the tests' folder.
     private static (string Path, byte[] Bytes) Image(string name)
     {

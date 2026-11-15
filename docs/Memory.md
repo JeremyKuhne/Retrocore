@@ -57,12 +57,15 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   editor remembers the choice.
 - **The listing**, beside the bytes, shows the bytes in view as instructions and data, in the CPU's own syntax,
   as the Disassembly view does. It starts at the nearest place an instruction is known to start: the statement a
-  debug file or source describes, or a label. A statement the sources make data, such as `.byte`, lists as data;
-  bytes no source describes are dimmed, as they may not be code. Operands name their labels, such as `LDA KBD`, and
+  debug file or source describes, or a label. A statement the sources make data, such as `.byte`, lists as data,
+  eight bytes a line; bytes no source describes are dimmed, as they may not be code. Operands name their labels, such as `LDA KBD`, and
   clicking one goes to its address; clicking a line selects its bytes, and its source, such as `main.s:12`, opens
   beside the editor. Where the listing decodes from the wrong byte, **Decode from here** in the inspector
-  (**Ctrl+D**) starts an instruction at the cursor. **Listing** in the toolbar hides it; each editor remembers the
-  choice, and a narrow editor leaves it out.
+  (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing
+  scrolls with the lines the bytes in view decode to, keeps the cursor's line in view, and decodes again after
+  typing or undo. It takes one tab stop: **Up** and **Down** move between lines, **Left** and **Right** to a line's
+  operand and source, **Enter** does what a click does, and **Escape** goes back to the bytes. **Listing** in the
+  toolbar hides it; each editor remembers the choice, and a narrow editor leaves it out.
 - **Read-only bytes** (ROM, I/O, keyboard and unmapped addresses) are shaded, and typing there is refused before
   anything is written.
 - **Changes.** Bytes that differ from what they held at the stop before are highlighted at each stop, and the
@@ -192,7 +195,7 @@ Retrocore Memory uses five more requests:
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
 | `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through, from the modules whose code is installed: in the bank its area is in, so a ROM's while RAM is mapped over it, but not a card's firmware without the card. |
-| `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to: each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), `label`, the `target` its operand names, and the source `path` and `line`. |
+| `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), `label`, the `target` its operand names, and the source `path` and `line`. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |

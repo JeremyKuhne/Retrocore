@@ -866,14 +866,30 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     const html = page.elements.get("listing")!.innerHTML;
     const top = (state.listing as string[])[0].substring(0, 4);
     assert.deepEqual((state.listing as string[]).map(line => line.substring(5)), ["LDA #$C1", "JMP START", ".byte $01, $02"]);
-    assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
-    assert.match(html, new RegExp('<span class="t">JMP <a data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
+    assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
+    assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);
+    // The listing scrolls, and takes one tab stop, on the cursor's line.
+    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*overflow-y:auto/);
+    assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
+    assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");
 
     // A line selects its bytes, the cursor on the first.
     state = await drive(page, [{ listingLine: 1 }], () => 0, lists);
     assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16) + 2, parseInt(top, 16) + 4]);
-    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" data-a="[0-9]+" data-s="3"/);
+    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" tabindex="0" data-a="[0-9]+" data-s="3"/);
+
+    // Enter on a line does what a click does.
+    const lineElement = { dataset: { a: String(parseInt(top, 16)), s: "2" }, querySelectorAll: () => [] };
+    const focusedLine = { ...lineElement, closest: (selector: string) => selector === "[data-a]" ? lineElement : null };
+    page.elements.get("listing")!.dispatch("keydown", { key: "Enter", target: focusedLine, preventDefault: () => undefined, stopPropagation: () => undefined });
+    state = await drive(page, [], () => 0, lists);
+    assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16), parseInt(top, 16) + 1]);
+
+    // A write asks for the listing again, as the bytes it decodes changed.
+    listingStarts.length = 0;
+    state = await drive(page, [{ goto: 0x0300 }, { pane: "hex" }, { type: "EA" }], () => 0, lists);
+    assert.ok(listingStarts.length > 0, "the listing is asked for after the write");
 
     // Decode from here asks for the listing again, starting an instruction at the cursor.
     listingStarts.length = 0;

@@ -26,9 +26,12 @@ internal sealed partial class DebugSession
     ///  <para>
     ///   Instruction boundaries are ambiguous in memory nobody described, so the listing starts at the nearest known
     ///   boundary at or before <c>address</c>: the start of the debug file's statement there, a label, or one of
-    ///   <c>starts</c>, which the editor's Decode from here adds; failing those, <c>address</c> itself. From there a
-    ///   statement the sources mark as data lists as <c>.byte</c>, and anything else decodes as an instruction,
-    ///   except where one would run over a later boundary, which lists as a byte so the boundary starts a line.
+    ///   <c>starts</c>, which the editor's Decode from here adds; failing those, <c>address</c> itself. A label or
+    ///   start farther back than the short look for a statement still counts, up to 4096 bytes back, so a correction
+    ///   holds as the view scrolls. From there a statement the sources mark as data lists as <c>.byte</c>, eight
+    ///   bytes a line, and anything else decodes as an instruction, except where one would run over a later
+    ///   boundary, which lists as a byte so the boundary starts a line. A start in <c>starts</c> decodes an
+    ///   instruction even in data. Lines that end before <c>address</c> are left out.
     ///  </para>
     ///  <para>
     ///   Each line has its <c>address</c>, <c>size</c> and <c>text</c>, its <c>kind</c> (<c>code</c> or <c>data</c>
@@ -67,21 +70,26 @@ internal sealed partial class DebugSession
         }
 
         int end = Math.Min(0x10000, from + count);
-        int first = from;
-        if (!forced.Contains(from) && _debug.Position(memory, (ushort)from) is { Start: { } covering })
+        int first = -1;
+        if (_debug.Position(memory, (ushort)from) is { Start: { } covering } && covering <= from)
         {
             first = covering;
         }
-        else
+
+        for (int back = from; back >= Math.Max(0, from - ListingLookBack); back--)
         {
-            for (int back = from; back >= Math.Max(0, from - ListingLookBack); back--)
+            if (Boundary(back))
             {
-                if (Boundary(back))
-                {
-                    first = back;
-                    break;
-                }
+                first = Math.Max(first, back);
+                break;
             }
+        }
+
+        if (first < 0)
+        {
+            // A Decode from here start or a label farther back still anchors the listing.
+            int farthest = Math.Max(0, from - ListingMaximum);
+            first = forced.Concat(labels.Keys).Where(start => start >= farthest && start <= from).DefaultIfEmpty(from).Max();
         }
 
         List<JsonNode?> lines = [];
@@ -94,10 +102,22 @@ internal sealed partial class DebugSession
             int size;
             string text;
             int? target = null;
-            if (position is { Data: true, Start: { } start } && start == address)
+            int start = position?.Data == true ? position.Start ?? -1 : -1;
+            int length = position?.Size ?? 0;
+            if (start >= 0 && address < start + length && !forced.Contains(address))
             {
+                // A data statement lists eight bytes a line, a line ending early where a later boundary starts.
                 kind = "data";
-                size = Math.Min(DataPerLine, Math.Max(1, Math.Min(position.Size, 0x10000 - address)));
+                size = Math.Min(DataPerLine, Math.Min(start + length, 0x10000) - address);
+                for (int index = 1; index < size; index++)
+                {
+                    if (Boundary(address + index))
+                    {
+                        size = index;
+                        break;
+                    }
+                }
+
                 text = DataText(memory, address, size);
             }
             else
@@ -120,6 +140,12 @@ internal sealed partial class DebugSession
                     size = 1;
                     text = DataText(memory, address, 1);
                 }
+            }
+
+            if (address + size <= from)
+            {
+                address += size;
+                continue;
             }
 
             SourceLine? source = position?.Chain[^1];

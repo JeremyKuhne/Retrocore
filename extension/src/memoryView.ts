@@ -74,9 +74,10 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
-#listing{flex:none;width:46ch;overflow:hidden;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
+#listing{flex:none;width:46ch;overflow-x:hidden;overflow-y:auto;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
 #listing .ln:hover{background:var(--vscode-list-hoverBackground)}
+#listing .ln:focus,#listing a:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #listing .ln.sel{background:var(--vscode-editor-inactiveSelectionBackground)}
 #listing .ln.cur{outline:1px solid var(--vscode-editorCursor-foreground,var(--vscode-focusBorder));outline-offset:-1px}
 #listing .a{color:var(--vscode-editorLineNumber-foreground)}
@@ -143,6 +144,8 @@ let aligned = false, rowStarts = null;
 // Whether the listing shows (the page remembers), the lines it shows, which request they answer, its width, and the
 // addresses Decode from here started an instruction at.
 let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
+// The writes the page made, which change what the listing shows, and the cursor the listing last scrolled to.
+let writes = 0, listingCursor = -1;
 const forcedStarts = new Set();
 try {
     const saved = vscode.getState();
@@ -567,7 +570,7 @@ function wantListing() {
     if (!showListing || ended || narrow === true) return;
     const top = Math.min(Math.floor(grid.scrollTop / LINE), rowCount() - 1);
     const start = rowStart(top), end = rowEnd(Math.min(rowCount() - 1, top + visibleRows() + 1));
-    const key = start + ":" + end + ":" + generation + ":" + labels.length + ":" + forcedStarts.size;
+    const key = start + ":" + end + ":" + generation + ":" + writes + ":" + labels.length + ":" + forcedStarts.size;
     if (key === listingKey) return;
     listingKey = key;
     void loadListing(start, Math.min(0x1000, end - start + 1), key);
@@ -596,8 +599,11 @@ function fileName(path) {
 function showListingLines() {
     if (!showListing || listingLines.length === 0) return;
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
+    // The line that takes the listing's one tab stop: the cursor's, or the first.
+    const stop = Math.max(0, listingLines.findIndex(line => cursor >= line.address && cursor < line.address + line.size));
+    const focused = focusedListing();
     let html = "";
-    for (const line of listingLines) {
+    for (const [index, line] of listingLines.entries()) {
         const last = line.address + line.size - 1;
         let classes = "ln " + line.kind;
         if (high > low && line.address <= high && last >= low) classes += " sel";
@@ -608,16 +614,38 @@ function showListingLines() {
         if (operand !== "") {
             text += " " + (line.target === null || line.target === undefined
                 ? escapeText(operand)
-                : '<a data-go="' + line.target + '" title="Go to ' + where(line.target) + '">' + escapeText(operand) + "</a>");
+                : '<a role="link" tabindex="-1" data-go="' + line.target + '" title="Go to ' + where(line.target) + '">' + escapeText(operand) + "</a>");
         }
         const source = line.path === null || line.path === undefined ? ""
-            : '<a class="src" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
+            : '<a class="src" role="link" tabindex="-1" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
-        html += '<div class="' + classes + '" role="listitem" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
+        html += '<div class="' + classes + '" role="listitem" tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
             + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>" + source + "</div>";
     }
     listingPanel.innerHTML = html;
+    if (!listingPanel.querySelector) return;
+    if (focused !== null) {
+        // Drawing the lines again keeps the focus where it was, on a line or one of its links.
+        const line = listingPanel.querySelector('[data-a="' + focused.address + '"]');
+        if (line !== null) (focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line).focus();
+    }
+    if (cursor !== listingCursor) {
+        // The cursor's line scrolls into view as the cursor moves, not as the listing scrolls.
+        listingCursor = cursor;
+        const current = listingPanel.querySelector(".ln.cur");
+        if (current !== null) current.scrollIntoView({ block: "nearest" });
+    }
+}
+
+// Where the focus is in the listing: the address of its line, and which of the line's links has it, or -1 for the
+// line; null when the listing does not have it.
+function focusedListing() {
+    const active = document.activeElement;
+    if (!active || !listingPanel.contains || !listingPanel.contains(active) || !active.closest) return null;
+    const line = active.closest("[data-a]");
+    if (line === null) return null;
+    return { address: Number(line.dataset.a), link: active === line ? -1 : Array.from(line.querySelectorAll("a")).indexOf(active) };
 }
 
 // Selects a line's bytes, the cursor on its first.
@@ -633,25 +661,52 @@ function decodeHere() {
     status("The listing decodes an instruction from " + where(cursor) + ".");
 }
 
-listingPanel.addEventListener("click", event => {
-    const target = event.target;
-    if (!target.closest) return;
+// A listing line or link clicked, or Enter or Space on one: a source opens, an operand goes to its address, and a
+// line selects its bytes. Reports whether it was one of those.
+function activateListing(target) {
+    if (!target || !target.closest) return false;
     const source = target.closest("[data-src]");
     if (source !== null) {
         void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
-        return;
+        return true;
     }
     const go = target.closest("[data-go]");
     if (go !== null) {
         moveTo(Number(go.dataset.go), false, true);
         grid.focus();
-        return;
+        return true;
     }
     const line = target.closest("[data-a]");
-    if (line !== null) {
-        selectLine(Number(line.dataset.a), Number(line.dataset.s));
-        grid.focus();
-    }
+    if (line === null) return false;
+    selectLine(Number(line.dataset.a), Number(line.dataset.s));
+    grid.focus();
+    return true;
+}
+
+listingPanel.addEventListener("click", event => { activateListing(event.target); });
+
+// Up and Down move between lines, Left and Right between a line and its links, Home and End to the first and last
+// line, Enter or Space does what a click does, and Escape goes back to the bytes.
+listingPanel.addEventListener("keydown", event => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    const line = target.closest("[data-a]");
+    if (line === null) return;
+    const stops = [line, ...Array.from(line.querySelectorAll("a"))];
+    let next = null;
+    if (event.key === "Enter" || event.key === " ") {
+        if (!activateListing(target)) return;
+    } else if (event.key === "ArrowDown") next = line.nextElementSibling;
+    else if (event.key === "ArrowUp") next = line.previousElementSibling;
+    else if (event.key === "Home") next = listingPanel.firstElementChild;
+    else if (event.key === "End") next = listingPanel.lastElementChild;
+    else if (event.key === "ArrowRight") next = stops[Math.min(stops.length - 1, stops.indexOf(target) + 1)];
+    else if (event.key === "ArrowLeft") next = stops[Math.max(0, stops.indexOf(target) - 1)];
+    else if (event.key === "Escape") grid.focus();
+    else return;
+    if (next) next.focus();
+    event.preventDefault();
+    event.stopPropagation();
 });
 
 // The bytes the grid compares with, when not the stop before: the snapshot or the other bank, once read.
@@ -832,6 +887,9 @@ async function write(offset, values, record) {
     render();
     try {
         await request({ type: "write", offset, data: values });
+        // The listing decodes what memory holds now.
+        writes++;
+        wantListing();
     } catch (error) {
         before.forEach((value, index) => { bytes[offset + index] = value; });
         render();

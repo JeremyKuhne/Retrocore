@@ -36,8 +36,12 @@ internal sealed class EmulatedApple3PascalSystem
     /// <param name="output">
     ///  A fourth volume's image, in .D4, for output too big to go beside the work; null for none.
     /// </param>
+    /// <param name="prefix">
+    ///  Whether to make /WORK the prefix with the Filer, for names without a volume; Apple III Pascal 1.0's Filer, on
+    ///  its damaged first disk, cannot.
+    /// </param>
     /// <exception cref="TimeoutException">The system never booted.</exception>
-    public EmulatedApple3PascalSystem(byte[] system, byte[] tools, byte[] work, string? roms, byte[]? output = null)
+    public EmulatedApple3PascalSystem(byte[] system, byte[] tools, byte[] work, string? roms, byte[]? output = null, bool prefix = true)
     {
         string sources = Apple3SdkModules.Directory(roms);
         byte[] boot = Apple3SdkModules.AssembleBootRom(Path.Join(sources, "BootRom.asm")).Sections[0].Bytes.ToArray();
@@ -65,6 +69,7 @@ internal sealed class EmulatedApple3PascalSystem
         }
 
         Run(tenths: 10);
+        if (!prefix) { return; }
 
         // Names without a volume, such as a unit's code file a source's (*$U*) names, are /WORK's.
         Type("F");

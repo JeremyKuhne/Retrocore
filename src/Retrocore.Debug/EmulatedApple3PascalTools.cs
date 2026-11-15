@@ -59,18 +59,30 @@ internal static partial class EmulatedApple3PascalTools
         string? roms = null,
         IReadOnlyDictionary<string, byte[]>? files = null)
     {
-        SosVolumeBuilder work = new("WORK");
         byte[] text = PascalTextFile.Write(source);
-        work.Add("SOURCE.TEXT", TextType, auxType: 0, text);
-        foreach ((string name, byte[] data) in files ?? new Dictionary<string, byte[]>())
+        IReadOnlyDictionary<string, byte[]> units = files ?? new Dictionary<string, byte[]>();
+
+        // A source too long to leave room on /WORK for its code, such as a Compiler's, has the code go to /OUT; one too
+        // long for /WORK at all is split, at most its second half included from /OUT, which leaves room there for the code.
+        bool large = text.Length > 100 * 512;
+        string? rest = null;
+        if (Work(text, units) is not { } work)
         {
-            work.Add(name, CodeType, auxType: 0, data);
+            (string first, rest) = EmulatedPascalCompiler.Split(source, "/OUT/REST.TEXT", limit: 0);
+            work = Work(PascalTextFile.Write(first), units) ?? throw new InvalidOperationException("/WORK has no room for half the source.");
         }
 
-        // A source too long to leave room on /WORK for its code, such as a Compiler's, has the code go to /OUT.
-        bool large = text.Length > 100 * 512;
-        byte[]? output = large ? new SosVolumeBuilder("OUT").Build(proDosOrder: false) : null;
-        EmulatedApple3PascalSystem system = new(File.ReadAllBytes(systemDisk), File.ReadAllBytes(toolsDisk), work.Build(proDosOrder: false), roms, output);
+        SosVolumeBuilder? outputVolume = large ? new("OUT") : null;
+        if (rest is not null) { outputVolume?.Add("REST.TEXT", TextType, auxType: 0, PascalTextFile.Write(rest)); }
+        byte[]? output = outputVolume?.Build(proDosOrder: false);
+        // The source and code are named by their volumes; only the units a source's $U options name need the prefix.
+        EmulatedApple3PascalSystem system = new(
+            File.ReadAllBytes(systemDisk),
+            File.ReadAllBytes(toolsDisk),
+            work.Build(proDosOrder: false),
+            roms,
+            output,
+            prefix: files is { Count: > 0 });
 
         system.Type("C");
         Expect(system, "Compile what text?", "The Compiler never asked for its text");
@@ -78,8 +90,8 @@ internal static partial class EmulatedApple3PascalTools
         Expect(system, "To what codefile?", "The Compiler never asked for a code file");
         system.Type(large ? "/OUT/HOST\n" : "/WORK/HOST\n");
 
-        // 1.0's Compiler asks for no listing.
-        if (system.WaitFor(["Listing file", "Apple /// Pascal Compiler"], seconds: 60) == "Listing file")
+        // 1.0's Compiler asks for no listing, and starts on the source's first line; 1.2's shows its name before it asks.
+        if (system.WaitFor(["Listing file", "<   0>"], seconds: 60) == "Listing file")
         {
             system.Type(listing is null ? "\n" : $"/WORK/{listing}\n");
         }
@@ -183,6 +195,22 @@ internal static partial class EmulatedApple3PascalTools
         system.Run(tenths: 20);
         SosVolume volume = system.EjectWork();
         return (Has(volume, "LINKED.CODE") ? volume.ReadFile("LINKED.CODE") : null, screen);
+    }
+
+    // /WORK with a source and code files beside it, or null when they do not fit.
+    private static SosVolumeBuilder? Work(byte[] text, IReadOnlyDictionary<string, byte[]> codes)
+    {
+        SosVolumeBuilder work = new("WORK");
+        try
+        {
+            work.Add("SOURCE.TEXT", TextType, auxType: 0, text);
+            foreach ((string name, byte[] data) in codes) { work.Add(name, CodeType, auxType: 0, data); }
+            return work;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static bool Has(SosVolume volume, string name) =>

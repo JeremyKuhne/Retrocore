@@ -284,6 +284,39 @@ internal static partial class EmulatedPascalCompiler
     }
 
     /// <summary>
+    ///  Splits a source too long for a volume of its own, such as an Apple III Pascal Compiler's, before the first
+    ///  procedure of the outer block past halfway: the first part includes the rest, at most half, which goes on
+    ///  another volume beside the code file.
+    /// </summary>
+    /// <param name="source">The source.</param>
+    /// <param name="included">The included file's name, as the first part's <c>$I</c> option names it.</param>
+    /// <param name="limit">The longest text file, in bytes, left whole.</param>
+    /// <returns>The first part, and the rest, or null when the source is left whole.</returns>
+    internal static (string First, string? Included) Split(string source, string included, int limit)
+    {
+        if (PascalTextFile.Write(source).Length <= limit) { return (source, null); }
+
+        string[] lines = source.Split('\n');
+        int half = source.Length / 2;
+        int length = 0;
+        int split = -1;
+        for (int index = 0; index < lines.Length && split < 0; index++)
+        {
+            bool heading = lines[index].StartsWith("  PROCEDURE ", StringComparison.Ordinal)
+                || lines[index].StartsWith("  FUNCTION ", StringComparison.Ordinal)
+                || lines[index].StartsWith("  SEGMENT ", StringComparison.Ordinal);
+
+            if (heading && length >= half) { split = index; }
+            length += lines[index].Length + 1;
+        }
+
+        if (split <= 0) { return (source, null); }
+
+        string first = string.Join('\n', lines[..split]) + $"\n(*$I {included}*)\n";
+        return (first, string.Join('\n', lines[split..]));
+    }
+
+    /// <summary>
     ///  Puts back the bytes a decompiled source records after its <c>END.</c>, as
     ///  <c>(* Alignment bytes SEGMENT $OFFSET=$VALUE ... *)</c>: the byte the Compiler skips to put an LDC's or XJP's
     ///  words on a word boundary holds whatever its buffer had there, which no source says.

@@ -425,6 +425,41 @@ public sealed partial class PascalDecompiler
 
             if (procedure.IsFunction) { Visit(procedure.ResultType, parameter: true); }
         }
+
+        foreach (TypeNode type in _types) { Overlapped(type); }
+    }
+
+    // A record's field that starts inside the one before it, which is longer than a word and cannot be shorter, as a
+    // real or a record cannot, is a variant's: the Compiler would put it after.
+    private static void Overlapped(TypeNode record)
+    {
+        if (record.Kind != TypeKind.Record || record.PackedFields is not null || record.Fields is not { } fields)
+        {
+            return;
+        }
+
+        int end = 0;
+        foreach (int offset in fields.Keys.ToList())
+        {
+            TypeNode field = fields[offset];
+            if (offset < end)
+            {
+                fields.Remove(offset);
+                record.Variants ??= [];
+                if (!record.Variants.TryGetValue(offset, out List<TypeNode>? variants))
+                {
+                    variants = [];
+                    record.Variants[offset] = variants;
+                }
+
+                variants.Insert(0, field);
+                continue;
+            }
+
+            TypeNode root = field.Find();
+            bool fixedSize = root.Kind is TypeKind.Real or TypeKind.Record or TypeKind.Set;
+            end = fixedSize && SizeOf(root) is { } size ? offset + size : offset + 1;
+        }
     }
 
     // A pointer's target is a type's name, so an untyped file it points to is named too.
@@ -613,7 +648,16 @@ public sealed partial class PascalDecompiler
 
         int words = SizeOf(root) ?? 0;
         SortedDictionary<int, TypeNode> known = root.Fields ?? [];
-        int start = known.Keys.Where(offset => root.Alternatives(offset).Count > 1).DefaultIfEmpty(words).Min();
+        // The offsets of variants' fields: those with more than one, and those where the fixed part has none.
+        IEnumerable<int> offsets = root.Variants is { } all ? known.Keys.Union(all.Keys) : known.Keys;
+        List<int> varied = [.. offsets.Order().Where(offset => root.Alternatives(offset).Count > 1 || !known.ContainsKey(offset))];
+        int start = varied.DefaultIfEmpty(words).Min();
+
+        // But not inside a field of the fixed part, which is whole there.
+        start = known.Keys
+            .Where(offset => offset < start && offset + (SizeOf(known[offset]) ?? 1) > start)
+            .DefaultIfEmpty(start)
+            .Min();
 
         // Variants only as long as NEW takes of the record, the variant part from its start where one is shorter.
         List<int> shorter = [.. (_allocated.GetValueOrDefault(root) ?? []).Where(size => size < words)];
@@ -625,10 +669,10 @@ public sealed partial class PascalDecompiler
         // The other fields, each in the first variant it does not overlap a field of.
         List<List<string>> variants = [Run(start, words)];
         List<int> ends = [words];
-        foreach (int offset in known.Keys.Where(key => key >= start))
+        foreach (int offset in varied)
         {
             List<TypeNode> alternatives = root.Alternatives(offset);
-            for (int index = 1; index < alternatives.Count; index++)
+            for (int index = known.ContainsKey(offset) ? 1 : 0; index < alternatives.Count; index++)
             {
                 TypeNode field = alternatives[index];
                 int size = Math.Max(1, SizeOf(field) ?? 1);

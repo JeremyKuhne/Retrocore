@@ -256,6 +256,28 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A record whose variant has a field inside the words of another variant's real.
+    private const string OverlapSource = """
+        PROGRAM OV;
+        TYPE R = RECORD N: INTEGER;
+            CASE BOOLEAN OF
+              TRUE: (X: REAL);
+              FALSE: (L: INTEGER; S: PACKED ARRAY[0..3] OF CHAR)
+          END;
+        VAR P: ^R; C: CHAR;
+        BEGIN NEW(P); P^.X := 1.5; C := P^.S[1]; P^.L := 2 END.
+        """;
+
+    /// <summary>
+    ///  A field that starts inside a real before it is a variant's, so that it keeps its word.
+    /// </summary>
+    [TestMethod]
+    public void FieldsInsideARealAreAnotherVariants()
+    {
+        string source = RoundTrip(OverlapSource);
+        source.Should().Contain("0: (F1: REAL; F3: INTEGER); 1: (F1V1: INTEGER; F2: T3) END;");
+    }
+
     // A word used both ways passed by value: the Compiler passes a pointer's word, where it would copy a record's.
     private const string PlainSource = """
         PROGRAM PL;

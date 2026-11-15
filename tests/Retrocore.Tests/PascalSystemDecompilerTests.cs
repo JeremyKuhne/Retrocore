@@ -256,6 +256,30 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A local record moved whole from a global, whose first field, a pointer, is otherwise used alone.
+    private const string WholeLocalSource = """
+        PROGRAM WL;
+        TYPE P = ^R;
+          R = RECORD A: P; B, C: INTEGER END;
+        VAR G: R; H: INTEGER;
+        PROCEDURE X;
+          VAR L: R; K: INTEGER;
+          PROCEDURE Y(VAR Q: P); BEGIN H := Q^.C END;
+        BEGIN L := G; K := 1; Y(L.A); IF L.A <> NIL THEN K := L.A^.B; H := H + K END;
+        BEGIN NEW(G.A); G.B := 4; G.C := 5; X END.
+        """;
+
+    /// <summary>
+    ///  A local a record moves to whole is that record, though the code otherwise uses only its first word, so the
+    ///  locals after it keep their offsets.
+    /// </summary>
+    [TestMethod]
+    public void LocalsMovedToWholeAreTheRecord()
+    {
+        string source = RoundTrip(WholeLocalSource);
+        source.Should().Contain("A1: T");
+    }
+
     // A pointer used both ways passed by value, and on by reference to a procedure that only reads it.
     private const string PlainReferenceSource = """
         PROGRAM PR;

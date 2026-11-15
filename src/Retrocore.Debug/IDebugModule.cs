@@ -60,6 +60,14 @@ internal interface IDebugModule
     IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => [];
 
     /// <summary>
+    ///  Gets whether memory holds the module's code now, so its <see cref="AddressConstants"/> name what it uses: a
+    ///  card's firmware is not there without the card, nor a ROM with RAM mapped over it.
+    /// </summary>
+    /// <param name="memory">The machine's memory.</param>
+    /// <returns>Whether any of its code is in memory.</returns>
+    bool InMemory(IDebugMemory memory) => true;
+
+    /// <summary>
     ///  Gets whether the module's label for an address applies to memory now, where the module itself does.
     /// </summary>
     /// <remarks>

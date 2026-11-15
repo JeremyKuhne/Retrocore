@@ -26,8 +26,18 @@ internal sealed class DebugFileModule(SymbolTable symbols, Enum? area = null) : 
     public Enum? Area => area;
 
     /// <inheritdoc/>
-    public DebugPosition? Position(IDebugMemory memory, ushort address) =>
-        symbols.Location(address) is { } location ? new([new(location.Path, location.Line)], EntryDepth: 0) : null;
+    /// <remarks>
+    ///  <para>
+    ///   A position's statement is the smallest debug span covering the address; the file does not say which bytes
+    ///   are data, so none are.
+    ///  </para>
+    /// </remarks>
+    public DebugPosition? Position(IDebugMemory memory, ushort address)
+    {
+        if (symbols.Location(address) is not { } location) { return null; }
+        (ushort Start, int Size)? span = symbols.Span(address);
+        return new([new(location.Path, location.Line)], EntryDepth: 0, span?.Start, span?.Size ?? 0);
+    }
 
     /// <inheritdoc/>
     public IEnumerable<ushort> Entries(string path, int line) => symbols.Addresses(path, line);

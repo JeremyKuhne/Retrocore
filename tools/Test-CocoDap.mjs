@@ -359,6 +359,19 @@ try {
     const word = (await request("evaluate", { expression: "[$FFFE].w", context: "watch" })).result;
     assert.equal(word, (await request("evaluate", { expression: "[$FFFE]*256+[$FFFF]", context: "watch" })).result);
     assert.equal((await request("retro/memoryBanks")).banks[0].bigEndian, true, "the CPU's memory is big-endian");
+    // The listing decodes the 6809's five-byte instructions, as CMPD [$1234] is.
+    // The bytes it borrows are put back after.
+    const borrowed = (await request("readMemory", { memoryReference: "0x3000", count: 5 })).data;
+    await request("writeMemory", { memoryReference: "0x3000", data: Buffer.from([0x10, 0xA3, 0x9F, 0x12, 0x34]).toString("base64") });
+    const cmpd = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 5, starts: [0x3000] })).lines[0];
+    await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
+    assert.deepEqual([cmpd.size, cmpd.text.startsWith("CMPD")], [5, true], JSON.stringify(cmpd));
+    // A direct-page operand is an offset in DP's page, as LDA <$34 is.
+    await request("writeMemory", { memoryReference: "0x3000", data: Buffer.from([0x96, 0x34]).toString("base64") });
+    const direct = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 2, starts: [0x3000] })).lines[0];
+    await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
+    const dp = parseInt((await request("evaluate", { expression: "DP" })).result.substring(1), 16);
+    assert.equal(direct.target, dp * 256 + 0x34, JSON.stringify(direct));
     let stack = await request("stackTrace", { threadId: 1 });
     assert.equal(stack.stackFrames[0].line, jsr);
     assert.ok(stack.totalFrames >= 2, "PRINT is on the call stack");

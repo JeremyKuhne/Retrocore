@@ -40,7 +40,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   gutter beside the address (dimmed when it starts partway along the row), and a mark on the byte where each
   starts. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
   Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: an
-  equate counts where an instruction's bytes access its value, so the Monitor's `STA CH` names $24 `CH`, and the
+  equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CH` names $24 `CH`, and the
   6809's `LDA [Vector]` names `Vector`, but `CMP #CR` does not make `CR` a name for $0D, nor does an index's offset
   or a term added to another address. A label at the same address comes first.
 - **Align to labels** in the toolbar, shown once there are labels, starts a row where each label starts, so a
@@ -55,6 +55,17 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   Elsewhere it shows each byte's low seven bits as ASCII, so the Apple II's text, kept with bit 7 set, still reads.
   **Machine text** in the toolbar turns this off to show ASCII instead, for typing, finding and copying too; each
   editor remembers the choice.
+- **The listing**, beside the bytes, shows the bytes in view as instructions and data, in the CPU's own syntax,
+  as the Disassembly view does. It starts at the nearest place an instruction is known to start: the statement a
+  debug file or source describes, or a label. A statement the sources make data, such as `.byte`, lists as data,
+  eight bytes a line; bytes no source describes are dimmed, as they may not be code. Operands name their labels, such as `LDA KBD`, and
+  clicking one goes to its address; clicking a line selects its bytes, and its source, such as `main.s:12`, opens
+  beside the editor. Where the listing decodes from the wrong byte, **Decode from here** in the inspector
+  (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing
+  scrolls with the lines the bytes in view decode to, keeps the cursor's line in view, and decodes again after
+  typing or undo. It takes one tab stop: **Up** and **Down** move between lines, **Left** and **Right** to a line's
+  operand and source, **Enter** does what a click does, and **Escape** goes back to the bytes. **Listing** in the
+  toolbar hides it; each editor remembers the choice, and a narrow editor leaves it out.
 - **Read-only bytes** (ROM, I/O, keyboard and unmapped addresses) are shaded, and typing there is refused before
   anything is written.
 - **Changes.** Bytes that differ from what they held at the stop before are highlighted at each stop, and the
@@ -183,7 +194,8 @@ Retrocore Memory uses five more requests:
 | Request | Returns |
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
-| `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through. |
+| `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through, from the modules whose code is installed: in the bank its area is in, so a ROM's while RAM is mapped over it, but not a card's firmware without the card. |
+| `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), `label`, the `target` its operand names (a restart's implied address; for a 6809 direct-page operand, in the page DP holds at the stop, and none in another CPU's memory), and the source `path` and `line`. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |

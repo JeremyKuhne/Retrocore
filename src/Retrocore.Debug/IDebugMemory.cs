@@ -29,4 +29,13 @@ internal interface IDebugMemory
     /// <param name="address">The CPU address.</param>
     /// <returns>The area; the one a read uses unless the machine maps writes apart from reads.</returns>
     Enum WriteArea(ushort address) => ReadArea(address);
+
+    /// <summary>
+    ///  Gets where modules keep what they found about memory that does not change while it is read, such as one
+    ///  Retrocore Memory listing's, so a statement is checked against it once rather than at each of its bytes.
+    /// </summary>
+    /// <value>
+    ///  The findings, by what they are about; null, the default, for memory that can change between reads.
+    /// </value>
+    Dictionary<object, bool>? Findings => null;
 }

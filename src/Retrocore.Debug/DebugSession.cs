@@ -143,6 +143,7 @@ internal sealed partial class DebugSession
         transport.On("retro/memoryBanks", _ => Reply(MemoryBankList));
         transport.On("retro/memory/read", args => Reply(() => ReadMemoryRange(args)));
         transport.On("retro/memory/labels", args => Reply(() => MemoryLabels(args)));
+        transport.On("retro/memory/listing", args => Reply(() => MemoryListing(args)));
         transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
         transport.On("retro/memory/freeze", args => Reply(() => FreezeMemory(args)));
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));

@@ -258,10 +258,10 @@ public sealed partial class PascalDecompiler
                         break;
                     }
 
-                case 20: // FWRITEBYTES(file, array, length, width)
+                case 20: // FWRITEBYTES(file, array, width, length)
                     {
-                        Expr width = Pop(stack);
                         Expr length = Pop(stack);
+                        Expr width = Pop(stack);
                         Expr array = Pop(stack);
                         Expr value = array is PackedConstant or StringConstant ? array : new Load(Designate(array), 1);
                         // What WRITE writes bytes of is a packed array of them, as long as a constant count says.

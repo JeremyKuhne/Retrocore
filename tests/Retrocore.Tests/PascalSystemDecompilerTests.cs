@@ -289,6 +289,23 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // Bytes written with a width of their own, a constant and a variable.
+    private const string WidthSource = """
+        PROGRAM WB;
+        VAR A: PACKED ARRAY[0..9] OF CHAR; W: INTEGER;
+        BEGIN W := 3; WRITE(A:5); WRITE(A:W) END.
+        """;
+
+    /// <summary>
+    ///  WRITE of bytes passes their field's width, then their count (FWRITEBYTES), so the width is the one before.
+    /// </summary>
+    [TestMethod]
+    public void WrittenBytesKeepTheirWidths()
+    {
+        string source = RoundTrip(WidthSource);
+        source.Should().Contain("WRITE(G3:5, G3:G8)");
+    }
+
     // A record's name that the code only writes, with words after it that the code never names.
     private const string WrittenNameSource = """
         PROGRAM WN;

@@ -75,7 +75,9 @@ internal static class ListingOperands
             return text;
         }
 
-        for (int position = text.IndexOf('$'); position >= 0; position = text.IndexOf('$', position + 1))
+        // From the last operand back, as a branch's destination comes last, after the byte a 65C02 bit branch tests,
+        // which can have the same value.
+        for (int position = text.LastIndexOf('$'); position >= 0; position = position == 0 ? -1 : text.LastIndexOf('$', position - 1))
         {
             int digits = position + 1;
             while (digits < text.Length && char.IsAsciiHexDigit(text[digits])) { digits++; }

@@ -10,7 +10,7 @@ namespace Retrocore.Machines.Apple2;
 /// <summary>
 ///  One of the Disk II card's two drives.
 /// </summary>
-public sealed class Apple2FloppyDrive : IDiskDrive
+public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
 {
     private readonly DiskIIController _controller;
     private string _label = "";
@@ -135,6 +135,12 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     /// </summary>
     public WozDisk? Disk => _controller.MediaIn(Drive);
 
+    /// <inheritdoc/>
+    public IMedium? Medium => Disk;
+
+    /// <inheritdoc/>
+    public int MountGeneration => _controller.MountGeneration(Drive);
+
     /// <summary>
     ///  Covers or uncovers the disk's write-protect notch. The disk keeps what is written to it in memory; its image
     ///  file does not change.
@@ -142,17 +148,31 @@ public sealed class Apple2FloppyDrive : IDiskDrive
     /// <param name="writeProtected">Whether the disk is protected.</param>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
     public void SetWriteProtected(bool writeProtected) =>
-        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsReadOnly = writeProtected;
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsWriteProtected = writeProtected;
 
     /// <summary>
     ///  Records that the disk was saved to an image, which it now comes from.
     /// </summary>
     /// <param name="label">What the host calls the image, such as its path.</param>
     /// <param name="format">Its image format, such as <c>WOZ</c>.</param>
+    /// <param name="whole">
+    ///  Whether the image holds all of the disk; a lossy save leaves the disk changed, as reloading the image would not
+    ///  give it back.
+    /// </param>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
-    public void Saved(string label, string format)
+    public void Saved(string label, string format, bool whole = true)
     {
-        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).MarkSaved();
+        WozDisk disk = Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.");
+        if (whole)
+        {
+            disk.MarkSaved();
+        }
+        else
+        {
+            // The image cannot give the disk back, so the disk stays changed against it, whatever it was before.
+            disk.MarkChanged();
+        }
+
         _label = label;
         _format = format;
     }

@@ -17,8 +17,11 @@ public static class SectorDiskConverter
     /// </summary>
     /// <param name="image">Raw 4096-byte tracks.</param>
     /// <param name="proDosOrder">Whether the file uses ProDOS rather than DOS 3.3 sector order.</param>
+    /// <param name="volume">
+    ///  The volume each address field gives, 254 as a sector image is read back as; DOS's INIT writes others.
+    /// </param>
     /// <returns>Generated WOZ media.</returns>
-    public static WozDisk Convert(ReadOnlySpan<byte> image, bool proDosOrder)
+    public static WozDisk Convert(ReadOnlySpan<byte> image, bool proDosOrder, byte volume = 254)
     {
         if (image.Length % 4096 != 0 || image.Length / 4096 is < 35 or > 40)
         {
@@ -38,10 +41,10 @@ public static class SectorDiskConverter
                 writer.Byte(value: 0xD5);
                 writer.Byte(value: 0xAA);
                 writer.Byte(value: 0x96);
-                writer.Address(value: 254);
+                writer.Address(volume);
                 writer.Address((byte)track);
                 writer.Address((byte)physical);
-                writer.Address((byte)(254 ^ track ^ physical));
+                writer.Address((byte)(volume ^ track ^ physical));
                 Epilogue(ref writer);
                 for (int count = 0; count < 7; count++) { writer.Sync(); }
                 writer.Byte(value: 0xD5);

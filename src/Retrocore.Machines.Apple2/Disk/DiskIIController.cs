@@ -145,6 +145,13 @@ public sealed class DiskIIController
     public WozDisk? MediaIn(int drive) => GetDrive(drive).Media;
 
     /// <summary>
+    ///  Gets a drive's mount generation, which changes each time media goes in or comes out, by any path.
+    /// </summary>
+    /// <param name="drive">The drive, from one.</param>
+    /// <returns>The generation.</returns>
+    public int MountGeneration(int drive) => GetDrive(drive).MountGeneration;
+
+    /// <summary>
     ///  Gets side-effect-free drive telemetry.
     /// </summary>
     /// <param name="drive">The drive, from one.</param>
@@ -159,7 +166,7 @@ public sealed class DiskIIController
             selected.BitCount,
             _motor && _selected == drive - 1,
             selected.Media is not null,
-            selected.Media?.IsReadOnly ?? true,
+            selected.Media?.IsWriteProtected ?? true,
             selected.Media?.IsDirty ?? false);
     }
 
@@ -241,7 +248,7 @@ public sealed class DiskIIController
                 break;
             case 10:
             case 14:
-                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsReadOnly ?? true);
+                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsWriteProtected ?? true);
                 _latch = (byte)((_latch >> 1) | (protectedMedia ? 128 : 0));
                 break;
             case 11:

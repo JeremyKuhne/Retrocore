@@ -252,7 +252,7 @@ public class Apple2PascalTests
 
         // A converted image is read-only; a writable copy takes the workfile, the code and the listing.
         WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), apple1, "DSK");
+        machine.Drives[0].Insert(media.Writable(), apple1, "DSK");
         machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(tools), proDosOrder: false), apple2, "DSK");
         machine.Bus.ResetSwitches();
         machine.Processor.Reset();

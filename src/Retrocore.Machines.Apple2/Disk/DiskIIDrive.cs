@@ -23,12 +23,18 @@ internal sealed class DiskIIDrive
     internal WozDisk? Media { get; private set; }
 
     /// <summary>
+    ///  Gets a count that changes each time media goes in or comes out, however it does.
+    /// </summary>
+    internal int MountGeneration { get; private set; }
+
+    /// <summary>
     ///  Changes media while retaining its angular position across differing track lengths.
     /// </summary>
     /// <param name="media">The new disk, or null for eject.</param>
     internal void SetMedia(WozDisk? media)
     {
         int oldLength = BitCount;
+        if (!ReferenceEquals(media, Media) || media is not null) { MountGeneration++; }
         Media = media;
         BitPosition = (int)((long)BitPosition * BitCount / oldLength);
         _headWindow = 0;
@@ -88,7 +94,7 @@ internal sealed class DiskIIDrive
             _fraction -= interval;
             DiskTrack? track = Media?.Track(QuarterTrack);
             bool raw = track?.ReadBit(BitPosition) ?? false;
-            if (writing && Media is { IsReadOnly: false } media)
+            if (writing && Media is { IsWriteProtected: false } media)
             {
                 media.WriteBit(QuarterTrack, BitPosition, _writeFlux);
             }
@@ -117,7 +123,11 @@ internal sealed class DiskIIDrive
     /// </summary>
     internal void EndWrite()
     {
-        if (_writing && Media is { IsReadOnly: false } media) { media.WriteBit(QuarterTrack, BitPosition, _writeFlux); }
+        if (_writing && Media is { IsWriteProtected: false } media)
+        {
+            media.WriteBit(QuarterTrack, BitPosition, _writeFlux);
+        }
+
         _writeFlux = _writing = false;
     }
 }

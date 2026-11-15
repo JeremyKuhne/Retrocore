@@ -242,7 +242,7 @@ public class Apple3PascalTests
         {
             // A converted image is read-only; a writable copy takes the Editor's and Compiler's writes.
             WozDisk media = SectorDiskConverter.Convert(disks[drive].Image, proDosOrder: false);
-            machine.Drives[drive].Insert(WozDisk.Load(media.Export(), writable: true), disks[drive].Name, "DSK");
+            machine.Drives[drive].Insert(media.Writable(), disks[drive].Name, "DSK");
         }
 
         return machine;

@@ -34,7 +34,7 @@ public class DiskMediaTests
         disk.MarkSaved();
         disk.IsDirty.Should().BeFalse();
         WozDisk readOnly = WozDisk.Load(disk.Export());
-        readOnly.IsReadOnly.Should().BeTrue();
+        readOnly.IsWriteProtected.Should().BeTrue();
         Action write = () => readOnly.WriteBit(quarterTrack: 0, position: 0, transition: true);
         write.Should().Throw<InvalidOperationException>();
     }
@@ -175,7 +175,7 @@ public class DiskMediaTests
     public void RawFloppyConversionProducesRealBitstreams(bool proDos)
     {
         WozDisk disk = SectorDiskConverter.Convert(new byte[35 * 4096], proDos);
-        disk.IsReadOnly.Should().BeTrue();
+        disk.IsWriteProtected.Should().BeTrue();
         DiskTrack track = disk.Track(0) ?? throw new InvalidOperationException();
         track.BitCount.Should().Be(51024);
         disk.Track(1).Should().BeSameAs(track);

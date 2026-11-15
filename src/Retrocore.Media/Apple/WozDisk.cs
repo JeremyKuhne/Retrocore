@@ -11,17 +11,18 @@ namespace Retrocore.Media;
 ///  Specification: https://applesaucefdc.com/woz/reference2/ . Flux-stream WOZ 2.1 media is
 ///  explicitly unsupported; it must not be mistaken for a bitstream track.
 /// </summary>
-public sealed class WozDisk
+public sealed class WozDisk : IMedium
 {
     private readonly DiskTrack?[] _tracks = new DiskTrack?[160];
     private readonly byte[] _map = new byte[160];
     private readonly byte[] _info;
     private readonly List<(uint Id, byte[] Data)> _extraChunks = [];
+    private bool _writeProtected;
 
     private WozDisk(byte[] info, bool writable)
     {
         _info = info;
-        IsReadOnly = !writable || info[2] != 0;
+        _writeProtected = !writable || info[2] != 0;
         OptimalBitTiming = info[0] >= 2 ? info[39] : (byte)32;
         if (OptimalBitTiming == 0) { throw new InvalidDataException("WOZ optimal bit timing cannot be zero."); }
         Array.Fill(_map, (byte)255);
@@ -29,9 +30,25 @@ public sealed class WozDisk
 
     /// <summary>
     ///  Gets or sets whether writes are prohibited, as the disk's write-protect notch does: at first by the caller or
-    ///  the image's write-protection flag.
+    ///  the image's write-protection flag. Changing it changes <see cref="Version"/>, and an exported image keeps it in
+    ///  its write-protection flag.
     /// </summary>
-    public bool IsReadOnly { get; set; }
+    public bool IsWriteProtected
+    {
+        get => _writeProtected;
+        set
+        {
+            if (value == _writeProtected) { return; }
+            _writeProtected = value;
+            Version++;
+        }
+    }
+
+    /// <summary>
+    ///  Gets the WOZ version of the image the disk was loaded from: 1, 2 or 3, or 2 for a disk made here. An image is
+    ///  always exported as WOZ2.
+    /// </summary>
+    public int SourceVersion => _info[0];
 
     /// <summary>
     ///  Gets the bit-cell duration in 125-nanosecond units.
@@ -222,7 +239,7 @@ public sealed class WozDisk
     public void SetTrack(int quarterTrack, ReadOnlySpan<byte> bits, int bitCount)
     {
         if ((uint)quarterTrack >= 160) { throw new ArgumentOutOfRangeException(nameof(quarterTrack)); }
-        if (IsReadOnly) { throw new InvalidOperationException("WOZ media is read-only."); }
+        if (IsWriteProtected) { throw new InvalidOperationException("WOZ media is read-only."); }
         int index = _map[quarterTrack] == 255 ? Array.FindIndex(_tracks, track => track is null) : _map[quarterTrack];
         if (index < 0) { throw new InvalidOperationException("No free WOZ track descriptor remains."); }
         _tracks[index] = new(bits, bitCount);
@@ -243,7 +260,7 @@ public sealed class WozDisk
             throw new ArgumentOutOfRangeException(nameof(quarterTrack));
         }
 
-        if (IsReadOnly) { throw new InvalidOperationException("WOZ media is read-only."); }
+        if (IsWriteProtected) { throw new InvalidOperationException("WOZ media is read-only."); }
         if (_map[sourceQuarterTrack] == 255)
         {
             throw new ArgumentException("Source track is unformatted.", nameof(sourceQuarterTrack));
@@ -262,7 +279,7 @@ public sealed class WozDisk
     /// <param name="transition">Whether a flux transition is present.</param>
     public void WriteBit(int quarterTrack, int position, bool transition)
     {
-        if (IsReadOnly) { throw new InvalidOperationException("WOZ media is read-only."); }
+        if (IsWriteProtected) { throw new InvalidOperationException("WOZ media is read-only."); }
         DiskTrack? track = Track(quarterTrack);
         if ((uint)position >= (track?.BitCount ?? 51024)) { throw new ArgumentOutOfRangeException(nameof(position)); }
         if (track is null)
@@ -298,6 +315,7 @@ public sealed class WozDisk
         image[7] = 10;
         WriteChunk(image, offset: 12, id: 0x4F464E49, length: 60);
         _info.CopyTo(image, index: 20);
+        image[22] = (byte)(IsWriteProtected ? 1 : 0);
         image[20] = 2;
         image[57] = 1;
         image[59] = OptimalBitTiming;
@@ -334,9 +352,26 @@ public sealed class WozDisk
     }
 
     /// <summary>
+    ///  Takes the disk as it is now as a WOZ2 image, kind <c>woz2</c>, which is lossless: every track, its length and
+    ///  the quarter-track map, the unknown chunks and the lock.
+    /// </summary>
+    /// <returns>The snapshot.</returns>
+    public MediumSnapshot Snapshot() => new(SnapshotKind, Version, IsWriteProtected, Export());
+
+    /// <summary>
+    ///  The kind of a Disk II disk's snapshot: a WOZ2 image.
+    /// </summary>
+    public const string SnapshotKind = "woz2";
+
+    /// <summary>
     ///  Acknowledges that the caller successfully persisted the exported image.
     /// </summary>
     public void MarkSaved() => IsDirty = false;
+
+    /// <summary>
+    ///  Marks the media changed though nothing was written, as after a save to an image that could not hold all of it.
+    /// </summary>
+    public void MarkChanged() => IsDirty = true;
 
     private static void WriteChunk(Span<byte> image, int offset, uint id, uint length)
     {

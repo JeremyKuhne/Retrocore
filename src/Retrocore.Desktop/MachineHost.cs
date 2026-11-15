@@ -27,6 +27,9 @@ internal sealed class MachineHost : DisposableBase
     // Further behind than this, the machine gives up catching up and keeps time from now, as after a pause.
     private const double MaximumLagSeconds = 0.1;
 
+    // The cycles run between looks at the clock.
+    private const int BatchCycles = 256;
+
     private readonly IDebugTarget _target;
     private readonly Lock _gate = new();
     private readonly Thread _thread;
@@ -287,14 +290,11 @@ internal sealed class MachineHost : DisposableBase
                     due = paceCycles;
                 }
 
-                for (int count = 0; _target.CycleCount < due; count++)
+                // With no debugger attached, the machine runs without the debugger's tracking, in batches between
+                // looks at the clock.
+                while (_target.CycleCount < due && Stopwatch.GetElapsedTime(slice).TotalMilliseconds < SliceMilliseconds)
                 {
-                    if ((count & 255) == 0 && Stopwatch.GetElapsedTime(slice).TotalMilliseconds >= SliceMilliseconds)
-                    {
-                        break;
-                    }
-
-                    _target.StepCycle();
+                    _target.RunCycles((int)Math.Min(BatchCycles, due - _target.CycleCount));
                 }
 
                 ahead = _target.CycleCount >= due;

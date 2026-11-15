@@ -224,6 +224,14 @@ internal sealed class AltairDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _instruction = false;
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address)
     {
         byte opcode = Peek(address);

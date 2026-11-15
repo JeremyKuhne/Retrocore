@@ -222,6 +222,14 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _instruction = false;
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         M6809CallStack.CallAt(this, address, _machine.Processor.Registers.DP);
 

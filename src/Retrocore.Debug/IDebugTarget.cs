@@ -262,6 +262,23 @@ internal interface IDebugTarget : IDebugMemory
     bool StepCycle();
 
     /// <summary>
+    ///  Runs cycles with nothing tracked for a debugger, for a host that runs the machine with none attached.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The calls and statements <see cref="StepCycle"/> tracks are not followed, and the call stack is cleared
+    ///   after, so a debug session never runs this way: it is a third or more faster than stepping, at the cost
+    ///   of what only a debugger shows.
+    ///  </para>
+    /// </remarks>
+    /// <param name="cycles">The cycles to run.</param>
+    /// <exception cref="InvalidOperationException">The CPU stopped.</exception>
+    void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { StepCycle(); }
+    }
+
+    /// <summary>
     ///  Gets the call an instruction makes, for call cycle counts and contract checks.
     /// </summary>
     /// <param name="address">The instruction's address.</param>

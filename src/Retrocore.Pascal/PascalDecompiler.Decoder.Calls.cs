@@ -386,7 +386,20 @@ public sealed partial class PascalDecompiler
                     }
 
                 default:
-                    throw new InvalidDataException($"CXP 0, {number} is a system procedure that is not decompiled.");
+                    {
+                        if (!_owner._systemProgram)
+                        {
+                            throw new InvalidDataException($"CXP 0, {number} is a system procedure that is not decompiled.");
+                        }
+
+                        // In a program compiled as part of the system, one no standard procedure names is called by a
+                        // heading the system's block declares; its arguments are what the stack holds.
+                        List<Argument> arguments = [.. stack.Select(value => new Argument(value))];
+                        stack.Clear();
+                        _owner._systemProcedures.TryAdd(number, arguments);
+                        Statement(statements, SystemProcedure(number), [.. arguments]);
+                        break;
+                    }
             }
         }
 

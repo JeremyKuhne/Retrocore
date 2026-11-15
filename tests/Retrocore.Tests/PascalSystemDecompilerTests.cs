@@ -61,6 +61,39 @@ public class PascalSystemDecompilerTests
         BEGIN END.
         """;
 
+    // A program compiled as part of the system that calls a system procedure past the standard ones, sets a string's
+    // length, and passes strings of two lengths to a VAR string that only its own statements show is one.
+    private static readonly string s_systemCallSource = $"""
+        (*$U-*)
+        PROGRAM PASCALSYSTEM;
+        TYPE UF = FILE; FP = ^UF; SR = RECORD A, B: INTEGER END; SP = ^STRING;
+        VAR SYSCOM: ^SR; IN1, OUT1, TERM1, SWAP: INTEGER; G6, G7: INTEGER;
+            CODEF, SYMF: FP; ERRNUM, ERRBLK, ERRSYM: INTEGER; SLOW, STUPID: BOOLEAN; ALT: CHAR;
+        {string.Join("\n", Enumerable.Range(2, 41).Select(number => $"PROCEDURE P{number}; FORWARD;"))}
+        PROCEDURE FIXNAME(VAR S: STRING; A, B: INTEGER); FORWARD;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
+        VAR L: STRING[40]; P: SP; N: INTEGER;
+        PROCEDURE GET(VAR S: STRING; K: INTEGER); BEGIN IF S = 'XY' THEN N := K END;
+        BEGIN
+          GET(L, 40); FIXNAME(L, 1, 40); L[0] := CHR(N);
+          NEW(P); GET(P^, 80)
+        END;
+        BEGIN END.
+        """;
+
+    /// <summary>
+    ///  A program compiled as part of the system calls a system procedure no standard procedure names by a heading in
+    ///  the system's block, FORWARD, numbered with those before it; a string's length is set as its byte 0; and strings
+    ///  of two lengths passed to one VAR string keep their own.
+    /// </summary>
+    [TestMethod]
+    public void SystemProgramsCallTheSystemsOtherProcedures()
+    {
+        string source = RoundTrip(s_systemCallSource);
+        source.Should().Contain("PROCEDURE SYSTEM42; FORWARD;\nPROCEDURE SYSTEM43(VAR A1: ");
+        source.Should().Contain("SYSTEM43(").And.Contain("[0] := CHR(");
+    }
+
     // The Compiler's own IDSEARCH and TREESEARCH, CSP IDS and CSP TRS.
     private const string SearchSource = """
         PROGRAM SEARCH;

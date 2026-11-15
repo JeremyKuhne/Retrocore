@@ -207,6 +207,19 @@ public sealed partial class PascalDecompiler
             Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { });
         }
 
+        foreach ((TypeNode formal, TypeNode actual) in _bytesPassed)
+        {
+            if (formal.Find().Kind == TypeKind.String || actual.Find().Kind == TypeKind.String)
+            {
+                formal.String(0);
+                actual.String(0);
+            }
+            else
+            {
+                TypeNode.Unify(formal, actual);
+            }
+        }
+
         // A pointer takes no constant but NIL, which LDCN loads: one a number is stored in is a word used both ways,
         // as FORMATTER keeps RWTS's address, $3D00, to read it into.
         foreach (TypeNode stored in _constantStores)
@@ -952,6 +965,10 @@ public sealed partial class PascalDecompiler
         return root.Element;
     }
 
+    // The bytes VAR parameters were passed, with their arguments', to meet once the statements have shown which are
+    // strings.
+    private readonly List<(TypeNode Formal, TypeNode Actual)> _bytesPassed = [];
+
     // A call of a procedure in the code file: VAR parameters share their arguments' types.
     private void Pass(Procedure callee, IReadOnlyList<Expr> arguments)
     {
@@ -973,6 +990,12 @@ public sealed partial class PascalDecompiler
                 {
                     formal.String(0);
                     actual.String(0);
+                }
+                else if (formal.Find() is { Kind: TypeKind.Array, Bytes: true }
+                    && actual.Find() is { Kind: TypeKind.Array, Bytes: true })
+                {
+                    // Bytes may be a string's, which the statements after may show: they meet once all have.
+                    _bytesPassed.Add((formal, actual));
                 }
                 else
                 {

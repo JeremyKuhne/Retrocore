@@ -147,6 +147,8 @@ public sealed partial class PascalDecompiler
             when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true } => ScalarKind.Char,
         Load { Designator: IndexDesignator { Index: Constant { Value: 0 }, High: null } length }
             when length.Array.Type.Find().Kind == TypeKind.String => ScalarKind.Integer,
+        Load { Designator: IndexDesignator character }
+            when character.Array.Type.Find().Kind == TypeKind.String => ScalarKind.Char,
         _ => Kind(expression.Type)
     };
 

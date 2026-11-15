@@ -79,6 +79,7 @@ public sealed partial class PascalDecompiler
         if (_systemProgram)
         {
             Declarations(_system);
+            SystemProcedures();
             SystemSegment();
         }
         else
@@ -340,6 +341,47 @@ public sealed partial class PascalDecompiler
         Line("END;");
     }
 
+    // The system's procedures the code calls that no standard procedure names, by their numbers, with the
+    // arguments of a call to each.
+    private readonly SortedDictionary<int, List<Argument>> _systemProcedures = [];
+
+    private static string SystemProcedure(int number) => $"SYSTEM{number}";
+
+    // A heading for each of the system's procedures up to the last the code calls that no standard procedure names,
+    // in the system's block: the Compiler numbers them as the system does. Those the code calls take parameters as
+    // their arguments are: a VAR one for an address, a value otherwise.
+    private void SystemProcedures()
+    {
+        if (_systemProcedures.Count == 0) { return; }
+
+        Line("(* The system's procedures, by number: the code calls those with parameters. *)");
+        for (int number = 2; number <= _systemProcedures.Keys.Max(); number++)
+        {
+            string list = "";
+            if (_systemProcedures.TryGetValue(number, out List<Argument>? arguments) && arguments.Count > 0)
+            {
+                list = $"({string.Join("; ", arguments.Select(SystemParameter))})";
+            }
+
+            Line($"PROCEDURE {SystemProcedure(number)}{list}; FORWARD;");
+        }
+    }
+
+    private string SystemParameter(Argument argument, int index) => argument.Value switch
+    {
+        Address { Designator: var designator } => $"VAR A{index + 1}: {TypeName(designator.Type, parameter: true)}",
+        var value => $"A{index + 1}: {Simple(value.Type.Find()) ?? "INTEGER"}"
+    };
+
+    // The string a designator of a length is of: its byte 0.
+    private static Designator? LengthOf(Designator designator) => designator switch
+    {
+        LengthDesignator length => length.Text,
+        IndexDesignator { Index: Constant { Value: 0 }, High: null } index
+            when index.Array.Type.Find().Kind == TypeKind.String => index.Array,
+        _ => null
+    };
+
     // A segment the R option names: by its segment procedure's name, where the procedure sees it, declared in it or
     // in a block around it before it; otherwise by its number, which the option takes too.
     private string ResidentName(Procedure procedure, int number)
@@ -563,6 +605,12 @@ public sealed partial class PascalDecompiler
             }
 
             if (procedure.IsFunction) { Visit(procedure.ResultType, parameter: true); }
+        }
+
+        // The system's procedures take their arguments' types, named, as parameters.
+        foreach (Argument argument in _systemProcedures.Values.SelectMany(arguments => arguments))
+        {
+            if (argument.Value is Address { Designator: var designator }) { Visit(designator.Type, parameter: true); }
         }
 
         foreach (TypeNode type in _types) { Overlapped(type); }
@@ -1337,6 +1385,14 @@ public sealed partial class PascalDecompiler
                 {
                     Expr value = Narrow(assignment.Value);
                     Designator target = Descend(assignment.Target, value is Constant ? null : value.Type);
+                    if (LengthOf(target) is { } counted)
+                    {
+                        // A string's length is its byte 0, a character, which range checks off let the code index.
+                        string count = Expression(assignment.Value, TypeNode.Scalar(ScalarKind.Integer), 0);
+                        lines.Add(Indented($"{DesignatorText(counted)}[0] := CHR({count})"));
+                        break;
+                    }
+
                     string text = DesignatorText(target);
                     if (Viewed(target) && target.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
                     {

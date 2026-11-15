@@ -13,8 +13,9 @@ namespace Retrocore.Media;
 /// <remarks>
 ///  <para>
 ///   A file of one block or less is a seedling, its one data block; a larger one a sapling, an index block naming up
-///   to 256 data blocks by their low bytes in its first half and high bytes in its second. The bitmap marks a free
-///   block with a 1, from the high bit of its first byte. The directory has room for 51 files.
+///   to 256 data blocks by their low bytes in its first half and high bytes in its second; a larger one still a tree,
+///   a master index block naming such index blocks in the same way. The bitmap marks a free block with a 1, from the
+///   high bit of its first byte. The directory has room for 51 files.
 ///  </para>
 /// </remarks>
 public sealed class SosVolumeBuilder
@@ -26,6 +27,7 @@ public sealed class SosVolumeBuilder
     private const int Bitmap = Directory + DirectoryBlocks;
     private const int EntryLength = 0x27;
     private const int EntriesPerBlock = 0x0D;
+    private const int IndexEntries = 256;
 
     private readonly string _name;
     private readonly byte[] _boot = new byte[2 * BlockSize];
@@ -69,8 +71,7 @@ public sealed class SosVolumeBuilder
     /// <param name="auxType">Its auxiliary type.</param>
     /// <param name="data">Its contents.</param>
     /// <exception cref="ArgumentException">
-    ///  The name is not a SOS name or is taken, the type is not a byte, or the file needs more than a sapling's 256
-    ///  blocks.
+    ///  The name is not a SOS name or is taken, or the type is not a byte.
     /// </exception>
     /// <exception cref="InvalidOperationException">The directory or the volume is full.</exception>
     public void Add(string name, int fileType, int auxType, ReadOnlySpan<byte> data)
@@ -81,11 +82,6 @@ public sealed class SosVolumeBuilder
         if (_files.Any(file => file.Name == name))
         {
             throw new ArgumentException($"The volume already has {name}.", nameof(name));
-        }
-
-        if (data.Length > 256 * BlockSize)
-        {
-            throw new ArgumentException($"{name} is more than 256 blocks.", nameof(data));
         }
 
         if (_files.Count == (DirectoryBlocks * EntriesPerBlock) - 1)
@@ -152,28 +148,31 @@ public sealed class SosVolumeBuilder
         {
             (string name, int fileType, int auxType, byte[] data) = _files[index];
             int dataBlocks = Math.Max(1, (data.Length + BlockSize - 1) / BlockSize);
-            bool sapling = data.Length > BlockSize;
+            int storage = Storage(data.Length);
             int key = next++;
-            if (sapling)
+            if (storage == 1)
             {
-                for (int part = 0; part < dataBlocks; part++)
-                {
-                    int block = next++;
-                    blocks[key][part] = (byte)block;
-                    blocks[key][256 + part] = (byte)(block >> 8);
-                    Copy(data, part, blocks[block]);
-                }
+                Copy(data, 0, blocks[key]);
+            }
+            else if (storage == 2)
+            {
+                Index(data, key, 0, dataBlocks);
             }
             else
             {
-                Copy(data, 0, blocks[key]);
+                for (int sapling = 0; sapling * IndexEntries < dataBlocks; sapling++)
+                {
+                    int indexBlock = next++;
+                    Point(blocks[key], sapling, indexBlock);
+                    Index(data, indexBlock, sapling * IndexEntries, Math.Min(IndexEntries, dataBlocks - (sapling * IndexEntries)));
+                }
             }
 
             // The header entry is the first of the first block's thirteen.
             int slot = index + 1;
             byte[] directory = blocks[Directory + (slot / EntriesPerBlock)];
             int entry = 4 + ((slot % EntriesPerBlock) * EntryLength);
-            WriteName(directory, entry, sapling ? 2 : 1, name);
+            WriteName(directory, entry, storage, name);
             directory[entry + 0x10] = (byte)fileType;
             Word(directory, entry + 0x11, key);
             Word(directory, entry + 0x13, Blocks(data.Length));
@@ -197,10 +196,41 @@ public sealed class SosVolumeBuilder
         }
 
         return image;
+
+        // An index block naming the data blocks from one of the file's, each taking the next free block.
+        void Index(byte[] data, int indexBlock, int first, int count)
+        {
+            for (int part = 0; part < count; part++)
+            {
+                int block = next++;
+                Point(blocks[indexBlock], part, block);
+                Copy(data, first + part, blocks[block]);
+            }
+        }
     }
 
-    // The blocks a file takes: its data, and an index block when it has more than one.
-    private static int Blocks(int length) => length <= BlockSize ? 1 : ((length + BlockSize - 1) / BlockSize) + 1;
+    // Names a block in an index block: its low byte in the first half, its high byte in the second.
+    private static void Point(byte[] index, int entry, int block)
+    {
+        index[entry] = (byte)block;
+        index[IndexEntries + entry] = (byte)(block >> 8);
+    }
+
+    // A file's storage type: a seedling of a block, a sapling of up to an index block's 256, or a tree.
+    private static int Storage(int length) => length <= BlockSize ? 1 : length <= IndexEntries * BlockSize ? 2 : 3;
+
+    // The blocks a file takes: its data, an index block for each 256 of them when it has more than one, and a master
+    // index block when it has more than 256.
+    private static int Blocks(int length)
+    {
+        int data = Math.Max(1, (length + BlockSize - 1) / BlockSize);
+        return Storage(length) switch
+        {
+            1 => 1,
+            2 => data + 1,
+            _ => data + ((data + IndexEntries - 1) / IndexEntries) + 1
+        };
+    }
 
     private static void Copy(byte[] data, int part, byte[] block)
     {

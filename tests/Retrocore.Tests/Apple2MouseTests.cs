@@ -122,6 +122,34 @@ public sealed class Apple2MouseTests
     }
 
     /// <summary>
+    ///  Placing the mouse maps a host pointer's fraction of the picture onto the bounds the program set, the ends
+    ///  of each axis to its bounds, and holds anything past them at the bounds; it moves nothing while the mouse is off.
+    /// </summary>
+    [TestMethod]
+    public void PlacesWithinTheBounds()
+    {
+        Apple2Machine machine = Machine(Apple2Model.IIeEnhanced, slot: 4);
+        Apple2MouseCard mouse = machine.Bus.Mouse;
+        mouse.Place(0.5, 0.5);
+        (mouse.X, mouse.Y).Should().Be((0, 0), "the mouse is off");
+
+        Call(machine, MouseRom.SETMOUSE, a: 1);
+        SetHole(machine, 0x0478, 0, 0);
+        SetHole(machine, 0x04F8, 0, 559);
+        Call(machine, MouseRom.CLAMPMOUSE, a: 0);
+        SetHole(machine, 0x0478, 0, 0);
+        SetHole(machine, 0x04F8, 0, 191);
+        Call(machine, MouseRom.CLAMPMOUSE, a: 1);
+
+        mouse.Place(1, 1);
+        (mouse.X, mouse.Y).Should().Be((559, 191));
+        mouse.Place(0.5, 0.25);
+        (mouse.X, mouse.Y).Should().Be((280, 48));
+        mouse.Place(-0.5, 2);
+        (mouse.X, mouse.Y).Should().Be((0, 191));
+    }
+
+    /// <summary>
     ///  With the VBL interrupt on, the card interrupts as vertical blanking starts; SERVEMOUSE claims it with carry
     ///  clear and sets bit 3 in the status hole, and once served, carry set says the next one is not the mouse's.
     /// </summary>

@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -24,7 +25,7 @@ internal sealed class ActivityButton : Button
     ///  Creates the icon.
     /// </summary>
     /// <param name="icon">
-    ///  The icon: a <see cref="PathIcon"/> or a <see cref="TextBlock"/>, coloured from the theme.
+    ///  The icon: a Codicon's <see cref="TextBlock"/> or a stroked <see cref="Shape"/>, coloured from the theme.
     /// </param>
     /// <param name="name">The view's name, for the tooltip.</param>
     internal ActivityButton(Control icon, string name)
@@ -54,7 +55,13 @@ internal sealed class ActivityButton : Button
         set
         {
             _indicator.IsVisible = value;
-            _icon.Themed(_icon is TextBlock ? TextBlock.ForegroundProperty : TemplatedControl.ForegroundProperty, value ? Palette.ActivityActive : Palette.ActivityInactive);
+            string colour = value ? Palette.ActivityActive : Palette.ActivityInactive;
+            _icon.Themed(_icon switch
+            {
+                TextBlock => TextBlock.ForegroundProperty,
+                Shape => Shape.StrokeProperty,
+                _ => TemplatedControl.ForegroundProperty,
+            }, colour);
         }
     }
 }

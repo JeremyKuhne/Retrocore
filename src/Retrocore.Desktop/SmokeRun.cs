@@ -22,11 +22,12 @@ internal static class SmokeRun
     ///  Starts the run.
     /// </summary>
     /// <param name="window">The window.</param>
-    /// <param name="host">The machine.</param>
+    /// <param name="session">The machine.</param>
     /// <param name="seconds">How long to measure.</param>
     /// <param name="desktop">The application, to shut down at the end.</param>
-    internal static void Start(MainWindow window, MachineHost host, double seconds, IClassicDesktopStyleApplicationLifetime desktop)
+    internal static void Start(MainWindow window, MachineSession session, double seconds, IClassicDesktopStyleApplicationLifetime desktop)
     {
+        MachineHost host = session.Host;
         long started = Stopwatch.GetTimestamp();
         long measureStarted = 0;
         ulong measureCycles = 0;
@@ -41,7 +42,7 @@ internal static class SmokeRun
             TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
             ticks++;
             if (host.Accelerated) { fast++; }
-            if (host.Devices().Any(drive => drive.Activity != DeviceActivity.Idle))
+            if (host.DeviceStates().Any(drive => drive.Activity != DeviceActivity.Idle))
             {
                 busyUntil = elapsed.TotalSeconds;
             }
@@ -93,6 +94,16 @@ internal static class SmokeRun
         Console.Out.WriteLine(FormattableString.Invariant($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start"));
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");
+
+        // The side pane's rows, as its sections show them, so a run shows what the views list for the machine.
+        foreach ((string section, ViewTree tree) in (ReadOnlySpan<(string, ViewTree)>)[("machine", window.Pane.MachineTree), ("drives", window.Pane.DriveTree)])
+        {
+            foreach ((int depth, string label, string? description) in tree.Shown)
+            {
+                Console.Out.WriteLine($"{section}: {new string(' ', depth * 2)}{label}{(description is null ? "" : " · " + description)}");
+            }
+        }
+
         if (!reached)
         {
             // What the screen shows instead, such as a prompt the line answered.

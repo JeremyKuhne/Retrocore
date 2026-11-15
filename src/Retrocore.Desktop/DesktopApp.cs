@@ -13,12 +13,13 @@ namespace Retrocore.Desktop;
 ///  The application: Avalonia's Fluent theme in the light or dark variant the settings ask for, and one window for
 ///  the machine.
 /// </summary>
-/// <param name="host">The machine.</param>
+/// <param name="session">The machine.</param>
 /// <param name="settings">The theme and zoom.</param>
 /// <param name="smokeSeconds">
 ///  For a smoke run, how long to run before reporting and closing; null to run until closed.
 /// </param>
-internal sealed class DesktopApp(MachineHost host, DesktopSettings settings, double? smokeSeconds) : Application
+/// <param name="tour">For a tour, the folder its pictures go in and a disk to boot; null for none.</param>
+internal sealed class DesktopApp(MachineSession session, DesktopSettings settings, double? smokeSeconds, (string Folder, string? Disk)? tour) : Application
 {
     /// <inheritdoc/>
     public override void Initialize()
@@ -35,10 +36,11 @@ internal sealed class DesktopApp(MachineHost host, DesktopSettings settings, dou
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            MainWindow window = new(host, settings);
+            MainWindow window = new(session, settings);
             desktop.MainWindow = window;
-            host.Start();
-            if (smokeSeconds is { } seconds) { SmokeRun.Start(window, host, seconds, desktop); }
+            session.Start();
+            if (smokeSeconds is { } seconds) { SmokeRun.Start(window, session, seconds, desktop); }
+            if (tour is { } walk) { Tour.Start(window, session, walk.Folder, walk.Disk, desktop); }
         }
 
         base.OnFrameworkInitializationCompleted();

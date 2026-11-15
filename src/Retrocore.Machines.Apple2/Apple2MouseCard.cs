@@ -143,6 +143,20 @@ public sealed class Apple2MouseCard
     }
 
     /// <summary>
+    ///  Puts the mouse at a place within the bounds a program set, as a fraction of the way across and down them, so a
+    ///  host's pointer over the picture can stand for the mouse wherever the program keeps it. Nothing moves while the
+    ///  mouse is off.
+    /// </summary>
+    /// <param name="across">How far across the bounds, from 0 at the left to 1 at the right.</param>
+    /// <param name="down">How far down the bounds, from 0 at the top to 1 at the bottom.</param>
+    public void Place(double across, double down)
+    {
+        int x = _minimumX + (int)Math.Round(Math.Clamp(across, 0, 1) * Math.Max(0, _maximumX - _minimumX));
+        int y = _minimumY + (int)Math.Round(Math.Clamp(down, 0, 1) * Math.Max(0, _maximumY - _minimumY));
+        Move(x - X, y - Y);
+    }
+
+    /// <summary>
     ///  Turns the mouse off and puts it at 0, 0 with bounds of 0 to 1023, as the card's reset does.
     /// </summary>
     public void Reset()

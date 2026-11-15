@@ -399,15 +399,24 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return [];
     }
 
-    // apple2/mouse: moves the mouse card's mouse by dx and dy and sets its button when pressed is given. Without the
-    // card, nothing happens.
+    // apple2/mouse: moves the mouse card's mouse by dx and dy, or puts it at x and y, each a fraction from 0 to 1 of
+    // the bounds the program set, and sets its button when pressed is given; it says whether the program has the
+    // mouse on. Without the card, nothing happens.
     private JsonObject Mouse(JsonObject args)
     {
         if (_machine.Bus.MouseSlot == 0) { return []; }
         Apple2MouseCard mouse = _machine.Bus.Mouse;
-        mouse.Move(args.Int("dx") ?? 0, args.Int("dy") ?? 0);
+        if (args.Double("x") is { } across && args.Double("y") is { } down)
+        {
+            mouse.Place(across, down);
+        }
+        else
+        {
+            mouse.Move(args.Int("dx") ?? 0, args.Int("dy") ?? 0);
+        }
+
         if (args.Bool("pressed") is { } pressed) { mouse.Button = pressed; }
-        return [];
+        return new JsonObject { ["on"] = mouse.IsOn };
     }
 
     /// <inheritdoc/>

@@ -8,8 +8,9 @@ using System.Text.Json.Nodes;
 namespace Retrocore.Desktop;
 
 /// <summary>
-///  The desktop app's own settings, its theme, zoom, pane opacity and fast drives, kept under <c>desktop</c> in Retrocore's roaming
-///  <c>settings.json</c>, beside the settings the hosts share.
+///  The desktop app's own settings, its theme, zoom, pane opacity and fast drives, and the machine it last showed with
+///  its cards and media, kept under <c>desktop</c> in Retrocore's roaming <c>settings.json</c>, beside the settings the
+///  hosts share.
 /// </summary>
 internal sealed class DesktopSettings
 {
@@ -35,8 +36,10 @@ internal sealed class DesktopSettings
 
     private readonly string? _path;
 
-    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity, bool fastDrives)
+    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity, bool fastDrives, JsonObject? machine, JsonObject? machineState)
     {
+        Machine = machine;
+        MachineState = machineState;
         FastDrives = fastDrives;
         _path = path;
         ThemeName = theme;
@@ -71,6 +74,22 @@ internal sealed class DesktopSettings
     internal bool FastDrives { get; set; }
 
     /// <summary>
+    ///  Gets or sets the launch configuration of the machine last shown, or null for the Apple IIe.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Kept as the extension keeps its off machine in its workspace state, until machine files replace both
+    ///   (<c>docs/backlog/MachineFiles.md</c>).
+    ///  </para>
+    /// </remarks>
+    internal JsonObject? Machine { get; set; }
+
+    /// <summary>
+    ///  Gets or sets that machine's cards and media, as a saved machine keeps them, or null.
+    /// </summary>
+    internal JsonObject? MachineState { get; set; }
+
+    /// <summary>
     ///  Gets the roaming settings file: <c>%APPDATA%\Retrocore\settings.json</c> on Windows.
     /// </summary>
     internal static string DefaultPath =>
@@ -87,6 +106,8 @@ internal sealed class DesktopSettings
         int zoom = 0;
         int paneOpacity = DefaultPaneOpacity;
         bool fastDrives = true;
+        JsonObject? machine = null;
+        JsonObject? machineState = null;
         if (path is not null && Read(path).Root?["desktop"] is JsonObject desktop)
         {
             if (desktop["theme"] is JsonValue themeValue && themeValue.GetValueKind() == JsonValueKind.String)
@@ -110,6 +131,13 @@ internal sealed class DesktopSettings
             {
                 fastDrives = fastValue.GetValue<bool>();
             }
+
+            // A machine that is not an object naming one is left out, and the Apple IIe shown.
+            if (desktop["machine"] is JsonObject { } kept && kept["machine"] is JsonValue named && named.GetValueKind() == JsonValueKind.String)
+            {
+                machine = (JsonObject)kept.DeepClone();
+                machineState = desktop["machineState"] is JsonObject state ? (JsonObject)state.DeepClone() : null;
+            }
         }
 
         return new(
@@ -117,7 +145,9 @@ internal sealed class DesktopSettings
             theme is "light" or "dark" ? theme : "system",
             Math.Clamp(zoom, MinimumZoom, MaximumZoom),
             Math.Clamp(paneOpacity, MinimumPaneOpacity, 100),
-            fastDrives);
+            fastDrives,
+            machine,
+            machineState);
     }
 
     /// <summary>
@@ -148,7 +178,9 @@ internal sealed class DesktopSettings
                 ["theme"] = ThemeName,
                 ["zoom"] = Zoom,
                 ["paneOpacity"] = PaneOpacity,
-                ["fastDrives"] = FastDrives
+                ["fastDrives"] = FastDrives,
+                ["machine"] = Machine?.DeepClone(),
+                ["machineState"] = MachineState?.DeepClone()
             };
 
             string temporary = $"{_path}.{Environment.ProcessId}.{Guid.NewGuid():N}.saving";

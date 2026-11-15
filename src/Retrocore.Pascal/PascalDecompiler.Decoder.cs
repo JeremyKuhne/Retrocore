@@ -343,8 +343,11 @@ public sealed partial class PascalDecompiler
                 throw new InvalidDataException($"The FJP at ${fjp.Offset:X4} leaves its statement.");
             }
 
+            // A UJP before the target is the jump over an ELSE, but where an IF inside jumps to the target too: then
+            // it is that IF's, as a GOTO in its THEN.
             PcodeInstruction last = _code[target - 1];
-            if (target - 1 > at && last.Opcode.Code == Pcode.Ujp && last.Targets[0] >= 0)
+            bool inner = Enumerable.Range(at + 1, Math.Max(0, target - at - 2)).Any(JumpsThere);
+            if (target - 1 > at && last.Opcode.Code == Pcode.Ujp && last.Targets[0] >= 0 && !inner)
             {
                 int end = Index(last.Targets[0]);
                 // An ELSE with nothing in it jumps to where it starts.
@@ -363,6 +366,9 @@ public sealed partial class PascalDecompiler
             List<Statement> only = Block(at + 1, target, []);
             statements.Add(new IfStatement(condition, only, otherwise: null) { Offset = fjp.Offset });
             return target;
+
+            bool JumpsThere(int index) =>
+                _code[index] is { Opcode.Code: Pcode.Fjp } other && other.Targets[0] == fjp.Targets[0];
         }
 
         private bool IsCaseJump(PcodeInstruction ujp) =>

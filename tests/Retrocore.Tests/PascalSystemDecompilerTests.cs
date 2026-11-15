@@ -256,6 +256,35 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // An IF inside an IF, whose THEN is a GOTO: the UJP before the outer IF's end is the inner one's.
+    private const string InnerGotoSource = """
+        (*$G+*)
+        PROGRAM IG;
+        LABEL 1;
+        VAR I: INTEGER; B: BOOLEAN;
+        BEGIN
+          I := 0; B := TRUE;
+          WHILE I < 10 DO
+          BEGIN
+            I := I + 1;
+            IF B THEN IF I IN [2, 4] THEN GOTO 1;
+            B := I < 7;
+            1:
+          END
+        END.
+        """;
+
+    /// <summary>
+    ///  A UJP that ends an IF's THEN is not the jump over an ELSE where an IF inside jumps to the same place, as a
+    ///  GOTO in the inner IF's THEN.
+    /// </summary>
+    [TestMethod]
+    public void GotosEndingAnInnerIfAreNotElses()
+    {
+        string source = RoundTrip(InnerGotoSource);
+        source.Should().Contain("GOTO 1");
+    }
+
     // A GOTO out of a WHILE to the end of the THEN around it.
     private const string ThenEndSource = """
         (*$G+*)

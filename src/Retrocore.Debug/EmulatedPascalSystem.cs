@@ -39,7 +39,9 @@ internal sealed class EmulatedPascalSystem
         if (!model.IsIIe()) { _machine.Bus.InstallLanguageCard(); }
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
         _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
-        _machine.Drives[1].Insert(SectorDiskConverter.Convert(DiskImageFile.Sectors(toolsDisk), proDosOrder: false), "APPLE2", "DSK");
+        // APPLE2 is written too, by 1.3's Assembler, whose temporary file goes on its own disk: a copy takes it.
+        WozDisk tools = SectorDiskConverter.Convert(DiskImageFile.Sectors(toolsDisk), proDosOrder: false);
+        _machine.Drives[1].Insert(WozDisk.Load(tools.Export(), writable: true), "APPLE2", "DSK");
         IReadOnlyList<byte[]> extras = more ?? [];
         for (int drive = 0; drive < Math.Min(2, extras.Count); drive++)
         {

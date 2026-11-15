@@ -869,8 +869,8 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
     assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);
-    // The listing scrolls, and takes one tab stop, on the cursor's line.
-    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*overflow-y:auto/);
+    // The listing scrolls both ways, as a long .byte line is wider than it, and takes one tab stop.
+    assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*overflow:auto/);
     assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
     assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");
 

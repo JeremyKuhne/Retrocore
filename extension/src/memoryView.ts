@@ -74,7 +74,7 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
-#listing{flex:none;width:46ch;overflow-x:hidden;overflow-y:auto;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
+#listing{flex:none;width:46ch;overflow:auto;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
 #listing .ln:hover{background:var(--vscode-list-hoverBackground)}
 #listing .ln:focus,#listing a:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
@@ -631,10 +631,13 @@ function showListingLines() {
         if (line !== null) (focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line).focus();
     }
     if (cursor !== listingCursor) {
-        // The cursor's line scrolls into view as the cursor moves, not as the listing scrolls.
-        listingCursor = cursor;
+        // The cursor's line scrolls into view as the cursor moves, not as the listing scrolls; until the listing
+        // has the line, which may come with the next listing, it tries again.
         const current = listingPanel.querySelector(".ln.cur");
-        if (current !== null) current.scrollIntoView({ block: "nearest" });
+        if (current !== null) {
+            current.scrollIntoView({ block: "nearest" });
+            listingCursor = cursor;
+        }
     }
 }
 

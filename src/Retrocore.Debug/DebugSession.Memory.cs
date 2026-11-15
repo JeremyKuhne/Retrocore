@@ -234,9 +234,9 @@ internal sealed partial class DebugSession
     // Whether a module's code is installed: in the bank that holds its area, such as the system ROM while the language
     // card's RAM is mapped over it, or in memory as the CPU maps it for code in no area; a card's firmware with no
     // card in its slot has no bank and is not.
-    private bool Installed(IDebugModule module, IDebugMemory memory)
+    private bool Installed(IDebugModule module)
     {
-        if (module.Area is not { } area) { return module.InMemory(memory); }
+        if (module.Area is not { } area) { return module.InMemory(Target); }
         foreach (DebugMemoryBank bank in Target.Banks)
         {
             foreach ((ushort start, int _) in bank.Ranges)
@@ -275,7 +275,7 @@ internal sealed partial class DebugSession
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
         foreach (IDebugModule module in _debug.Modules)
         {
-            if (!module.AddressConstants.Any() || !Installed(module, memory)) { continue; }
+            if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
             foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
             {
                 if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || labels.ContainsKey((int)value))

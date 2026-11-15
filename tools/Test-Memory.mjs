@@ -122,6 +122,13 @@ try {
     assert.equal(labels.get("DISPLAY_CHAR"), 0x0033, "the ROM's label, which the program's constant names too");
     assert.equal(labels.has("ERR_SN"), false, "a constant is not a label");
 
+    // A restart's target is the address its opcode implies, which the listing names and goes to.
+    at = "listing a restart";
+    const restart = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x0000, count: 0x1000 })).lines
+        .find(line => line.text.startsWith("RST") && line.target !== null && line.target > 0);
+    assert.ok(restart, "Level II calls its restarts");
+    assert.equal(restart.text.includes("$"), false, "the restart's label names it: " + restart.text);
+
     // The character set is the Model I's: 6x12, with block graphics from $80.
     at = "reading the character set";
     const characters = await request("retro/memory/characters");

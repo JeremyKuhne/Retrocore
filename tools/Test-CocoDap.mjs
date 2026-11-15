@@ -366,6 +366,12 @@ try {
     const cmpd = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 5, starts: [0x3000] })).lines[0];
     await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
     assert.deepEqual([cmpd.size, cmpd.text.startsWith("CMPD")], [5, true], JSON.stringify(cmpd));
+    // A direct-page operand is an offset in DP's page, as LDA <$34 is.
+    await request("writeMemory", { memoryReference: "0x3000", data: Buffer.from([0x96, 0x34]).toString("base64") });
+    const direct = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 2, starts: [0x3000] })).lines[0];
+    await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
+    const dp = parseInt((await request("evaluate", { expression: "DP" })).result.substring(1), 16);
+    assert.equal(direct.target, dp * 256 + 0x34, JSON.stringify(direct));
     let stack = await request("stackTrace", { threadId: 1 });
     assert.equal(stack.stackFrames[0].line, jsr);
     assert.ok(stack.totalFrames >= 2, "PRINT is on the call stack");

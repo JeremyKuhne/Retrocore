@@ -19,6 +19,9 @@ internal sealed partial class DebugSession
     private const int ListingMaximum = 0x1000;
     private const int DataPerLine = 8;
 
+    // The register that holds the page a one-byte memory operand is in, on a CPU that has one.
+    private const string DirectPageRegister = "DP";
+
     /// <summary>
     ///  Answers retro/memory/listing: the instructions and data in a range of a memory view's space.
     /// </summary>
@@ -67,6 +70,16 @@ internal sealed partial class DebugSession
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
             return _debug.Position(memory, (ushort)address) is { Start: { } start } && start == address;
+        }
+
+        // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the
+        // page is known for the CPU's own memory, from its registers at the stop, and not for another CPU's.
+        int? directPage = null;
+        if (set.Description.Registers.Any(register => register.Name == DirectPageRegister))
+        {
+            bool own = ReferenceEquals(set.Description, Target.InstructionSet.Description);
+            long? page = own ? Target.Registers.Value(Target.Frame, DirectPageRegister) : null;
+            directPage = page is { } value ? (int)(value & 0xFF) : -1;
         }
 
         int end = Math.Min(0x10000, from + count);
@@ -132,7 +145,7 @@ internal sealed partial class DebugSession
                     && !RunsOver(address, instruction.Size, Boundary))
                 {
                     size = instruction.Size;
-                    target = OperandAddress(instruction);
+                    target = OperandAddress(instruction, directPage);
                     text = Named(instruction.ToString(), target, names);
                 }
                 else
@@ -183,18 +196,22 @@ internal sealed partial class DebugSession
         ".byte " + string.Join(", ", Enumerable.Range(0, size).Select(index => $"${memory.Peek((ushort)(address + index)):X2}"));
 
     // The address an instruction's operand names, for going there: a memory or pointer operand, a branch's target,
-    // or a postbyte's pointer or PC-relative address; null for values, registers and offsets from a register.
-    private static int? OperandAddress(in DisassembledInstruction instruction)
+    // a target the opcode implies, as RST $08 has, or a postbyte's pointer or PC-relative address; null for values,
+    // registers and offsets from a register. With a direct page (null for a CPU without one, -1 where it is not
+    // known), a one-byte memory operand is an offset in that page, and names no address where the page is unknown.
+    private static int? OperandAddress(in DisassembledInstruction instruction, int? directPage)
     {
         OperandForm form = instruction.Form;
-        if (form.FieldCount == 0) { return null; }
+        if (form.FieldCount == 0) { return instruction.DirectTarget; }
         if (form.HasPostbyte)
         {
             return instruction.PostbyteReference == PostbyteReference.None ? null : instruction.Field(0);
         }
 
         if (instruction.RelativeTarget is { } relative) { return relative; }
-        return form.Role == OperandRole.None ? null : instruction.Operand;
+        if (form.Role == OperandRole.None) { return instruction.DirectTarget; }
+        if (directPage is not { } page || form.Field(0) != OperandFieldKind.Byte) { return instruction.Operand; }
+        return page < 0 ? null : (page << 8) | (instruction.Operand & 0xFF);
     }
 
     // An instruction's text with the address its operand names given by its label, as LDA KBD for LDA $C000.

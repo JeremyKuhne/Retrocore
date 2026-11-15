@@ -19,7 +19,7 @@ export function memoryEditorHtml(nonce: string): string {
 [hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;display:flex;flex-direction:column;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);overflow:hidden}
-.bar{display:flex;gap:12px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border)}
+.bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border)}
 .bar label{display:flex;gap:4px;align-items:center;white-space:nowrap}
 .bar .title{font-weight:600;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 input{font-family:var(--vscode-editor-font-family);font-size:12px;padding:2px 4px;border-radius:2px;width:150px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent)}

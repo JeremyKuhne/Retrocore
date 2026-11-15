@@ -282,18 +282,31 @@ public sealed partial class PascalDecompiler
         {
             if (child.Code.IsNative && declared.Contains(child)) { continue; }
 
-            foreach (Procedure earlier in ordinary.Where(other => other.Number < child.Number && !declared.Contains(other)).OrderBy(other => other.Number))
-            {
-                if (earlier.Code.IsNative) { WriteProcedure(earlier, forwarded: false); }
-                else { Line($"{Header(earlier, full: true)} FORWARD;"); }
+            // The Compiler numbers a procedure at its first heading: those numbered before the child, or before one
+            // nested in it, are declared first.
+            int numbered = Descendants(child).Select(nested => nested.Number).DefaultIfEmpty(child.Number).Max();
+            numbered = Math.Max(numbered, child.Number);
+            List<Procedure> earlier = [.. ordinary.Where(other => other.Number < numbered && other != child && !declared.Contains(other))];
+            if (earlier.Any(other => other.Number > child.Number) && !declared.Contains(child)) { earlier.Add(child); }
 
-                declared.Add(earlier);
+            foreach (Procedure heading in earlier.OrderBy(other => other.Number))
+            {
+                if (heading.Code.IsNative) { WriteProcedure(heading, forwarded: false); }
+                else { Line($"{Header(heading, full: true)} FORWARD;"); }
+
+                declared.Add(heading);
             }
 
             WriteProcedure(child, declared.Contains(child));
             declared.Add(child);
         }
     }
+
+    // The procedures nested in one, in its segment, and those nested in them.
+    private static IEnumerable<Procedure> Descendants(Procedure procedure) =>
+        procedure.Children
+            .Where(child => !child.IsSegmentProcedure)
+            .SelectMany(child => (IEnumerable<Procedure>)[child, .. Descendants(child)]);
 
     // Whether a procedure, or one nested in it, calls another.
     private static bool Reaches(Procedure caller, Procedure callee)

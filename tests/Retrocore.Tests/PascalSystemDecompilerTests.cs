@@ -256,6 +256,30 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A procedure declared FORWARD before the body of another, in which one is nested: it is numbered first.
+    private const string NumberingSource = """
+        PROGRAM NU;
+        VAR G: INTEGER;
+        PROCEDURE A; FORWARD;
+        PROCEDURE C; FORWARD;
+        PROCEDURE A;
+          PROCEDURE B; BEGIN G := G + 1 END;
+        BEGIN B; C END;
+        PROCEDURE C; BEGIN G := 2 END;
+        BEGIN A END.
+        """;
+
+    /// <summary>
+    ///  A procedure numbered before one nested in an earlier body has its heading before that body, as the Compiler
+    ///  numbers a procedure at its first heading.
+    /// </summary>
+    [TestMethod]
+    public void ProceduresNumberedBeforeNestedOnesAreDeclaredFirst()
+    {
+        string source = RoundTrip(NumberingSource);
+        source.Should().Contain("PROCEDURE PROC2; FORWARD;\nPROCEDURE PROC3; FORWARD;\n");
+    }
+
     // A move of a record's first words, which no field of the decompiled record is as long as.
     private const string MoveSource = """
         PROGRAM MV;

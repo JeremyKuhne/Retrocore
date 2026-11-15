@@ -83,7 +83,7 @@ closing or dragging it never moves or resizes the machine's picture.
   - **Display and Sound**: what the display panel offers: speed, sound, volume, scale, screen, fast disk and the beam
     overlay.
 
-  The pane opens over the screen, partly transparent (85% opaque unless changed, so the machine is barely visible
+  The pane opens over the screen, partly transparent (95% opaque unless changed, so the machine shows faintly
   through it), with a shadow along its edge. It is as wide as its contents need, within the window, so nothing is cut off; dragging its edge
   sets a width of the user's own, and double-clicking the edge fits it to its contents again.
 - **The status bar** runs the whole width: the machine and its state, its speed and frame rate, the busy drive, and
@@ -145,6 +145,7 @@ The spike is in [src/Retrocore.Desktop](../../src/Retrocore.Desktop), and passes
 | Keys | `PRINT 6*7` typed through the same path as the keyboard prints `42` on the Apple IIe; the TRS-80's key map and 4 by 3 picture work too. |
 | Sound | The Apple IIe's speaker plays through SDL3 with no underruns, once each stream starts with 40 ms of silence. |
 | Theme | Light Modern and Dark Modern, from `Palette` resources that follow the application's theme variant; the Fluent controls follow it too. Settings → Appearance → Theme switches it while running. |
+| Speed | `--benchmark 3` measures without the window. At Max the host runs whole 4 ms slices and never sleeps, and keeps 95% of the machine's own speed: 23× for the Apple IIe, 42× for the Apple-1, 18.5× for the TRS-80 Model I and about 16× for the CoCo. In the window the Apple IIe runs 22× at Max with frames still at the display's rate, and exactly 8× at 8×. Before, Max ran 4 ms of the machine's time and then slept for a millisecond, which lasts as long as 15.6 ms at Windows' default timer resolution: 0.25× without the window and about 2× with it. The window's calls into the machine step in between slices, so they wait no more than one. The rest of the cost is the debug target's per-cycle bookkeeping (call stack, BASIC and fetch tracking), about a third: the Apple IIe's machine alone runs 36×. Phase 1's host can run the machine without it while no debugger is attached. |
 | Zoom | With the screen holding the keyboard, Ctrl and one wheel notch over the screen zoom the chrome to 120%, and Ctrl+= then goes to the machine, leaving the zoom alone. The picture measures 560 by 384 at 100%, at 173%, and after zooming with the wheel while running. |
 
 Not yet tried: following the system's theme as it changes while the app is open, and the settings file being

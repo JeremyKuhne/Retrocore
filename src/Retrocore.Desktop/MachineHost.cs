@@ -32,6 +32,10 @@ internal sealed class MachineHost : DisposableBase
     private readonly Thread _thread;
     private readonly SdlAudio _audio = new();
     private volatile bool _stopping;
+
+    // The window's calls waiting for the gate; the run thread steps aside for them between slices, since a lock
+    // released and taken straight back can keep them waiting for many slices.
+    private int _waiting;
     private volatile bool _frameWanted = true;
     private double _speed = 1;
     private bool _paceAgain = true;
@@ -46,6 +50,7 @@ internal sealed class MachineHost : DisposableBase
     // Measured on the run thread over the last second.
     private long _measureStart = Stopwatch.GetTimestamp();
     private ulong _measureCycles;
+    private ulong _publishedCycles;
 
     /// <summary>
     ///  Builds the machine a launch configuration describes, as the debug host's launch does.
@@ -71,7 +76,7 @@ internal sealed class MachineHost : DisposableBase
     {
         get
         {
-            lock (_gate)
+            using (Gate())
             {
                 HardwareRow? model = _target.Hardware().FirstOrDefault(row => row.Id == "model");
                 return model?.Name ?? Configuration["machine"]?.GetValue<string>() ?? "Machine";
@@ -92,7 +97,7 @@ internal sealed class MachineHost : DisposableBase
         get => Volatile.Read(ref _speed);
         set
         {
-            lock (_gate)
+            using (Gate())
             {
                 _speed = value;
                 _paceAgain = true;
@@ -121,6 +126,11 @@ internal sealed class MachineHost : DisposableBase
     internal double MeasuredHertz { get; private set; }
 
     /// <summary>
+    ///  Gets the machine's cycles so far, read without the gate, so it may be a slice behind.
+    /// </summary>
+    internal ulong CycleCount => Volatile.Read(ref _publishedCycles);
+
+    /// <summary>
     ///  Gets the machine's clock in cycles a second.
     /// </summary>
     internal int ClockHertz => _target.ClockHertz;
@@ -140,7 +150,7 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal IReadOnlyList<string> Screens
     {
-        get { lock (_gate) { return _target.Screens; } }
+        get { using (Gate()) { return _target.Screens; } }
     }
 
     /// <summary>
@@ -148,10 +158,10 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal string Screen
     {
-        get { lock (_gate) { return _target.Screen; } }
+        get { using (Gate()) { return _target.Screen; } }
         set
         {
-            lock (_gate) { _target.Screen = value; }
+            using (Gate()) { _target.Screen = value; }
             _frameWanted = true;
         }
     }
@@ -167,7 +177,7 @@ internal sealed class MachineHost : DisposableBase
     /// <param name="code">The ASCII code, 0-127.</param>
     internal void Key(int code)
     {
-        lock (_gate) { _target.Key(code); }
+        using (Gate()) { _target.Key(code); }
     }
 
     /// <summary>
@@ -175,7 +185,7 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal void Reset()
     {
-        lock (_gate) { _target.Reset(); }
+        using (Gate()) { _target.Reset(); }
     }
 
     /// <summary>
@@ -184,7 +194,7 @@ internal sealed class MachineHost : DisposableBase
     /// <returns>The rows.</returns>
     internal IReadOnlyList<HardwareRow> Hardware()
     {
-        lock (_gate) { return _target.Hardware(); }
+        using (Gate()) { return _target.Hardware(); }
     }
 
     /// <summary>
@@ -193,7 +203,7 @@ internal sealed class MachineHost : DisposableBase
     /// <returns>The devices' names, media, kind, lock and activity.</returns>
     internal List<DriveRow> Devices()
     {
-        lock (_gate)
+        using (Gate())
         {
             return [.. _target.Devices.Select(device => new DriveRow(
                 device.Info.Name,
@@ -210,7 +220,7 @@ internal sealed class MachineHost : DisposableBase
     /// <returns>The rows, one a line.</returns>
     internal string ScreenText()
     {
-        lock (_gate)
+        using (Gate())
         {
             return _target.DisplayState(running: true)["rows"] is JsonArray rows
                 ? string.Join('\n', rows.Select(row => row?.GetValue<string>() ?? ""))
@@ -235,6 +245,15 @@ internal sealed class MachineHost : DisposableBase
         }
     }
 
+    // Takes the gate for the window, telling the run thread to let it in.
+    private Lock.Scope Gate()
+    {
+        Interlocked.Increment(ref _waiting);
+        Lock.Scope scope = _gate.EnterScope();
+        Interlocked.Decrement(ref _waiting);
+        return scope;
+    }
+
     private void Run()
     {
         long paceTime = 0;
@@ -254,8 +273,10 @@ internal sealed class MachineHost : DisposableBase
 
                 long slice = Stopwatch.GetTimestamp();
                 double speed = _speed;
+                // As fast as it can, the machine runs whole slices and never sleeps: a sleep of a millisecond lasts
+                // as long as 15.6 at Windows' default timer resolution, which held it to a fraction of its speed.
                 ulong due = speed == 0
-                    ? _target.CycleCount + (ulong)(_target.ClockHertz / 250)
+                    ? ulong.MaxValue
                     : paceCycles + (ulong)(Stopwatch.GetElapsedTime(paceTime).TotalSeconds * _target.ClockHertz * speed);
 
                 // Too far behind, as after the window was dragged: keep time from here rather than racing to catch up.
@@ -284,9 +305,11 @@ internal sealed class MachineHost : DisposableBase
                 }
 
                 audio = _target.TakeAudio();
+                Volatile.Write(ref _publishedCycles, _target.CycleCount);
                 Measure();
             }
 
+            while (Volatile.Read(ref _waiting) != 0) { Thread.Yield(); }
             if (audio is not null && SoundOn && _speed == 1) { _audio.Queue(audio); }
             if (ahead) { Thread.Sleep(1); }
         }

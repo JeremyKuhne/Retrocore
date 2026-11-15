@@ -467,7 +467,15 @@ internal sealed class MainWindow : Window
     {
         StackPanel options = new() { Margin = new Thickness(0, 0, 0, 8) };
 
-        ComboBox speed = Choice(["1×", "2×", "4×", "8×", "Max"], 0);
+        ComboBox speed = Choice(["1×", "2×", "4×", "8×", "Max"], _host.Speed switch
+        {
+            2 => 1,
+            4 => 2,
+            8 => 3,
+            0 => 4,
+            _ => 0
+        });
+
         speed.SelectionChanged += (_, _) => _host.Speed = speed.SelectedIndex switch
         {
             1 => 2,

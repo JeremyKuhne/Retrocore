@@ -29,9 +29,9 @@ internal sealed class DesktopSettings
     internal const int MinimumPaneOpacity = 50;
 
     /// <summary>
-    ///  How opaque the side pane is unless set, in percent: enough that the machine is barely visible through it.
+    ///  How opaque the side pane is unless set, in percent: just enough that the machine shows faintly through it.
     /// </summary>
-    internal const int DefaultPaneOpacity = 85;
+    internal const int DefaultPaneOpacity = 95;
 
     private readonly string? _path;
 

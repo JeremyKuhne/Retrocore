@@ -28,6 +28,8 @@ internal static class Program
         string composition = "lowLatency";
         string? theme = null;
         int? zoom = null;
+        double? benchmarkSeconds = null;
+        double? speed = null;
         for (int index = 0; index < args.Length; index++)
         {
             string? value = index + 1 < args.Length ? args[index + 1] : null;
@@ -49,14 +51,28 @@ internal static class Program
                     theme = value;
                     index++;
                     break;
+                case "--benchmark" when value is not null && double.TryParse(value, out double length) && length > 0:
+                    benchmarkSeconds = length;
+                    index++;
+                    break;
+                case "--speed" when value is "0" or "1" or "2" or "4" or "8":
+                    speed = double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+                    index++;
+                    break;
                 case "--zoom" when value is not null && int.TryParse(value, out int level):
                     zoom = level;
                     index++;
                     break;
                 default:
-                    Console.Error.WriteLine($"Unknown or incomplete option {args[index]}. Usage: retrocore-desktop [--machine json] [--smoke-seconds n] [--composition lowLatency|default] [--theme system|light|dark] [--zoom n]");
+                    Console.Error.WriteLine($"Unknown or incomplete option {args[index]}. Usage: retrocore-desktop [--machine json] [--smoke-seconds n] [--composition lowLatency|default] [--theme system|light|dark] [--zoom n] [--speed 0|1|2|4|8] [--benchmark n]");
                     return 1;
             }
+        }
+
+        if (benchmarkSeconds is { } benchmark)
+        {
+            Benchmark.Run(configuration, benchmark);
+            return 0;
         }
 
         // A smoke run neither reads nor writes the user's settings, so it measures the same every time.
@@ -68,6 +84,7 @@ internal static class Program
         }
 
         using MachineHost host = new(configuration);
+        if (speed is { } times) { host.Speed = times; }
         AppBuilder builder = AppBuilder.Configure(() => new DesktopApp(host, settings, smokeSeconds)).UsePlatformDetect();
 
         // On Windows, a low-latency DXGI swap chain paces frames to the display's vertical blank; Avalonia's

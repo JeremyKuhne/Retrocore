@@ -417,12 +417,13 @@ function answer(
         } else if (sent.type === "characters") {
             page.send({ type: "reply", id: sent.id, result: {} });
         } else if (sent.type === "listing") {
-            // An instruction, a jump to a label, and data, from the address asked for; the starts asked for are kept.
+            // An instruction, a jump to a label, and data, from the address asked for, or nothing from $E000, as
+            // past a bank's end; the starts asked for are kept.
             listingStarts.push(sent.starts as number[]);
             const at = sent.address as number;
             page.send({
                 type: "reply", id: sent.id, result: {
-                    lines: [
+                    lines: at >= 0xE000 ? [] : [
                         { address: at, size: 2, text: "LDA #$C1", kind: "code", label: "START", target: null, path: "C:/src/hello.s", line: 3 },
                         { address: at + 2, size: 3, text: "JMP START", kind: "code", label: null, target: at, path: "C:/src/hello.s", line: 4 },
                         { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null }
@@ -897,6 +898,10 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.ok(listingStarts.some(starts => starts.includes(0x0301)), JSON.stringify(listingStarts));
     assert.equal(state.status, "The listing decodes an instruction from $0301.");
     assert.match(page.elements.get("inspector")!.innerHTML, /data-act="decode"/);
+
+    // Where nothing lists, the old lines go.
+    await drive(page, [{ goto: 0xE100 }], () => 0, lists);
+    assert.equal(page.elements.get("listing")!.innerHTML, "");
 });
 
 test("a read-only bank refuses typing before writing", async () => {

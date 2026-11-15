@@ -146,6 +146,8 @@ let aligned = false, rowStarts = null;
 let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
 // The writes the page made, which change what the listing shows, and the cursor the listing last scrolled to.
 let writes = 0, listingCursor = -1;
+// Why the last listing request failed, which shows in place of lines; empty when it did not.
+let listingError = "";
 const forcedStarts = new Set();
 try {
     const saved = vscode.getState();
@@ -581,11 +583,11 @@ async function loadListing(start, count, key) {
         const result = await request({ type: "listing", address: start, count, starts: Array.from(forcedStarts) });
         if (key !== listingKey) return;
         listingLines = result.lines;
+        listingError = "";
     } catch (error) {
         if (key !== listingKey) return;
         listingLines = [];
-        listingPanel.innerHTML = "<p>" + escapeText(String(error.message || error)) + "</p>";
-        return;
+        listingError = String(error.message || error);
     }
     showListingLines();
 }
@@ -597,7 +599,12 @@ function fileName(path) {
 
 // Shows the listing's lines, marking those in the selection and the one the cursor is in.
 function showListingLines() {
-    if (!showListing || listingLines.length === 0) return;
+    if (!showListing) return;
+    if (listingLines.length === 0) {
+        // Nothing lists where the space has no bytes, such as past a bank's end, so no old lines stay.
+        listingPanel.innerHTML = listingError === "" ? "" : "<p>" + escapeText(listingError) + "</p>";
+        return;
+    }
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
     // The line that takes the listing's one tab stop: the cursor's, or the first.
     const stop = Math.max(0, listingLines.findIndex(line => cursor >= line.address && cursor < line.address + line.size));

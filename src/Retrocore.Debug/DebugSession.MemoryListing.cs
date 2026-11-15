@@ -77,8 +77,7 @@ internal sealed partial class DebugSession
         }
 
         InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
-        SortedDictionary<int, string> labels = LabelsIn(bank, constants: false);
-        SortedDictionary<int, string> names = LabelsIn(bank, constants: true);
+        (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
         bool Boundary(int address)
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
@@ -168,6 +167,9 @@ internal sealed partial class DebugSession
                 {
                     size = instruction.Size;
                     (target, int? shown) = ListingOperands.OperandAddress(instruction, directPage);
+
+                    // An operand outside the space, as JSR $FDED is in a view of main RAM, goes nowhere from it.
+                    if (target is { } going && !memory.Readable(going)) { target = null; }
                     text = ListingOperands.Named(instruction.ToString(), target, shown, names);
                 }
                 else

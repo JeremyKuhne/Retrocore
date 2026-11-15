@@ -253,6 +253,17 @@ internal sealed partial class DebugSession
     private SortedDictionary<int, string> LabelsIn(DebugMemoryBank? bank, bool constants)
     {
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) found = LabelsAndNames(bank, memory, constants);
+        return constants ? found.Names : found.Labels;
+    }
+
+    // The labels in a space, and with constants also the labels and equates together, found in one pass through
+    // the modules, reading memory as given, such as a listing's, which keeps what the modules find.
+    private (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) LabelsAndNames(
+        DebugMemoryBank? bank,
+        IDebugMemory memory,
+        bool constants = true)
+    {
         SortedDictionary<int, string> labels = [];
         foreach (IDebugModule module in _debug.Modules)
         {
@@ -271,24 +282,26 @@ internal sealed partial class DebugSession
         // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
         // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
         // label at the same address comes first.
-        if (!constants) { return labels; }
+        if (!constants) { return (labels, labels); }
+        SortedDictionary<int, string> names = [];
+        foreach ((int address, string name) in labels) { names.Add(address, name); }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
         foreach (IDebugModule module in _debug.Modules)
         {
             if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
             foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || labels.ContainsKey((int)value))
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || names.ContainsKey((int)value))
                 {
                     continue;
                 }
 
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                labels[(int)value] = name;
+                names[(int)value] = name;
             }
         }
 
-        return labels;
+        return (labels, names);
     }
 
     /// <summary>

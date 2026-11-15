@@ -342,6 +342,10 @@ try {
     assert.equal(lines[0].address, 0x0300, "the statement around $0301 starts at $0300");
     assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LCBANK2", "code", "BANK2", program.indexOf("BANK2:") + 2]);
     assert.equal(lines[0].path, switching);
+    assert.equal(lines[0].target, 0xC083, "the CPU's view goes to the soft switch");
+    // A view of main RAM has no soft switches, so the operand goes nowhere from it.
+    const mainLines = (await request("retro/memory/listing", { memoryReference: "main:0x0000", address: 0x0300, count: 3 })).lines;
+    assert.deepEqual([mainLines[0].text, mainLines[0].target], ["LDA $C083", null], JSON.stringify(mainLines[0]));
     const loop = lines.find(line => line.text.startsWith("JMP"));
     assert.equal(loop.text, "JMP SWITCHED", "an operand's label names it");
     assert.equal(loop.target, loop.address, "and the line says where it goes");

@@ -635,7 +635,8 @@ function showListingLines() {
     if (focused !== null) {
         // Drawing the lines again keeps the focus where it was, on a line or one of its links.
         const line = listingPanel.querySelector('[data-a="' + focused.address + '"]');
-        if (line !== null) (focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line).focus();
+        // Without scrolling to it, so the listing stays where the user scrolled it.
+        if (line !== null) (focused.link < 0 ? line : line.querySelectorAll("a")[focused.link] || line).focus({ preventScroll: true });
     }
     if (cursor !== listingCursor) {
         // The cursor's line scrolls into view as the cursor moves, not as the listing scrolls; until the listing

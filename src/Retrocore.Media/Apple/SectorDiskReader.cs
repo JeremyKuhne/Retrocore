@@ -6,31 +6,54 @@ namespace Retrocore.Media;
 
 /// <summary>
 ///  Reads a 16-sector disk's sectors back from its bits, the reverse of <see cref="SectorDiskConverter.Convert"/>, so
-///  the files on a disk the machine has written can be read.
+///  the files on a disk the machine has written can be read, and the disk saved as a sector image.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   Each track is read as the Disk II's sequencer reads it: bits shift in until the top bit is set, which makes a
-///   nibble. An address field (<c>D5 AA 96</c>) gives the sector's number in 4-and-4, and the data field after it
-///   (<c>D5 AA AD</c>) its 342 6-and-2 nibbles and a checksum. The track is read twice around, so a sector across the
-///   index is read whole.
+///   nibble. An address field (<c>D5 AA 96</c>) gives the sector's volume and number in 4-and-4, and the data field
+///   after it (<c>D5 AA AD</c>) its 342 6-and-2 nibbles and a checksum. The track is read twice around, so a sector
+///   across the index is read whole.
+///  </para>
+///  <para>
+///   A sector image holds 35 to 40 whole tracks of 16 sectors and nothing else, so <see cref="Decode"/> says what of
+///   the disk it could not hold: a track that does not read as 16 sectors, data on a quarter or half track the whole
+///   tracks do not cover, and a volume other than the 254 a sector image is read back as. A WOZ disk has no track past
+///   the 40th.
 ///  </para>
 /// </remarks>
 public static class SectorDiskReader
 {
-    private const int Tracks = 35;
+    private const int StandardTracks = 35;
+    private const int MostTracks = 40;
     private const int TrackSize = 16 * 256;
+    private const int StandardVolume = 254;
 
     /// <summary>
-    ///  Reads a disk's 35 tracks into a sector image.
+    ///  Reads a disk's tracks into a sector image, failing on anything that does not read.
     /// </summary>
     /// <param name="disk">The disk.</param>
     /// <param name="proDosOrder">
     ///  Whether to write the image in ProDOS's sector order (<c>.po</c>) rather than DOS's.
     /// </param>
-    /// <returns>The 143,360-byte image.</returns>
+    /// <returns>The image: 35 tracks, 143,360 bytes, or up to 40 when the disk has them.</returns>
     /// <exception cref="InvalidDataException">A track is missing a sector, or a sector's checksum is wrong.</exception>
     public static byte[] Read(WozDisk disk, bool proDosOrder)
+    {
+        SectorImage image = Decode(disk, proDosOrder);
+        return image.Unreadable.Count == 0 ? image.Bytes : throw new InvalidDataException(image.Unreadable[0]);
+    }
+
+    /// <summary>
+    ///  Reads a disk's tracks into a sector image, saying what of the disk the image cannot hold. A sector that does not
+    ///  read is left as zeros.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <param name="proDosOrder">
+    ///  Whether to write the image in ProDOS's sector order (<c>.po</c>) rather than DOS's.
+    /// </param>
+    /// <returns>The image, its track count, and its losses.</returns>
+    public static SectorImage Decode(WozDisk disk, bool proDosOrder)
     {
         ArgumentNullException.ThrowIfNull(disk);
         Span<sbyte> values = stackalloc sbyte[256];
@@ -38,14 +61,53 @@ public static class SectorDiskReader
         ReadOnlySpan<byte> gcr = SectorDiskConverter.Gcr;
         for (int value = 0; value < gcr.Length; value++) { values[gcr[value]] = (sbyte)value; }
 
-        byte[] image = new byte[Tracks * TrackSize];
-        for (int track = 0; track < Tracks; track++)
+        // The whole tracks a sector image can hold: 35, or up to the last the disk has, to 40.
+        int tracks = StandardTracks;
+        for (int track = StandardTracks; track < MostTracks; track++)
         {
-            DiskTrack bits = disk.Track(track * 4) ?? throw new InvalidDataException($"Track {track} is not formatted.");
-            ReadTrack(Nibbles(bits), track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder);
+            if (disk.Track(track * 4) is not null) { tracks = track + 1; }
         }
 
-        return image;
+        List<string> unreadable = [];
+        List<string> losses = [];
+        SortedSet<int> volumes = [];
+        byte[] image = new byte[tracks * TrackSize];
+        for (int track = 0; track < tracks; track++)
+        {
+            if (disk.Track(track * 4) is not { } bits)
+            {
+                unreadable.Add($"Track {track} is not formatted.");
+                continue;
+            }
+
+            if (ReadTrack(Nibbles(bits), track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder, volumes) is { } problem)
+            {
+                unreadable.Add(problem);
+            }
+        }
+
+        losses.AddRange(unreadable);
+
+        // A quarter or half track holds data of its own unless it is the whole track beside it, as a sector image's
+        // disk maps the quarter tracks either side of each whole track to it.
+        for (int quarter = 0; quarter < 160; quarter++)
+        {
+            if (quarter % 4 == 0 || disk.Track(quarter) is not { } extra) { continue; }
+            DiskTrack? below = disk.Track(quarter / 4 * 4);
+            DiskTrack? above = quarter / 4 * 4 + 4 < 160 ? disk.Track((quarter / 4 * 4) + 4) : null;
+            if (!ReferenceEquals(extra, below) && !ReferenceEquals(extra, above))
+            {
+                losses.Add($"Track {quarter / 4}.{quarter % 4 * 25} holds data of its own, which a sector image cannot.");
+            }
+        }
+
+        volumes.Remove(StandardVolume);
+        if (volumes.Count != 0)
+        {
+            losses.Add($"The disk's volume is {string.Join(", ", volumes)}; a sector image is read back as volume {StandardVolume}.");
+        }
+
+        return new(image, tracks, losses, unreadable);
     }
 
     // The track's nibbles, twice around.
@@ -66,7 +128,14 @@ public static class SectorDiskReader
         return nibbles;
     }
 
-    private static void ReadTrack(List<byte> nibbles, int track, ReadOnlySpan<sbyte> values, Span<byte> output, bool proDosOrder)
+    // Reads a track's 16 sectors into the image, noting each sector's volume; says what did not read, or null.
+    private static string? ReadTrack(
+        List<byte> nibbles,
+        int track,
+        ReadOnlySpan<sbyte> values,
+        Span<byte> output,
+        bool proDosOrder,
+        SortedSet<int> volumes)
     {
         int found = 0;
         Span<byte> sector = stackalloc byte[256];
@@ -92,20 +161,19 @@ public static class SectorDiskReader
 
             if (!DecodeSector(nibbles, data + 3, values, sector))
             {
-                throw new InvalidDataException($"Track {track}, sector {physical} has a bad checksum.");
+                return $"Track {track}, sector {physical} has a bad checksum.";
             }
 
             int logical = physical == 15 ? 15 : physical * (proDosOrder ? 8 : 7) % 15;
             sector.CopyTo(output.Slice(logical * 256, 256));
+            volumes.Add(volume);
             found |= 1 << physical;
             index = data + 3 + 343;
         }
 
-        if (found != 0xFFFF)
-        {
-            int missing = System.Numerics.BitOperations.TrailingZeroCount(~found);
-            throw new InvalidDataException($"Track {track} has no readable sector {missing}.");
-        }
+        if (found == 0xFFFF) { return null; }
+        int missing = System.Numerics.BitOperations.TrailingZeroCount(~found);
+        return $"Track {track} has no readable sector {missing}.";
     }
 
     private static int FourAndFour(List<byte> nibbles, int index) => ((nibbles[index] << 1) | 1) & nibbles[index + 1];

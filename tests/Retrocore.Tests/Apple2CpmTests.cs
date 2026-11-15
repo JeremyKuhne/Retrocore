@@ -61,7 +61,7 @@ public sealed class Apple2CpmTests
         machine.Bus.InstallDiskII(slot: 6, SdkModules.BuildDiskII(sectors: 16, s_inputs));
         machine.Bus.InstallSoftCard(slot: 4);
         WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), disk, "DSK");
+        machine.Drives[0].Insert(media.Writable(), disk, "DSK");
         machine.Reset();
         return machine;
     }

@@ -163,7 +163,7 @@ public class DeviceModelTests
         drive.Media?.WriteProtected.Should().BeTrue("a sector image loads protected");
         drive.SetWriteProtected(writeProtected: false);
         drive.Media?.WriteProtected.Should().BeFalse();
-        drive.Disk?.IsReadOnly.Should().BeFalse();
+        drive.Disk?.IsWriteProtected.Should().BeFalse();
         drive.SetWriteProtected(writeProtected: true);
         drive.Media?.WriteProtected.Should().BeTrue();
     }

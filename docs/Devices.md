@@ -129,13 +129,18 @@ exists is reported in the Debug Console and skipped.
 { "id": "cassette", "action": "eject" }
 { "id": "disk2", "action": "save" }
 { "id": "disk2", "action": "save", "path": "copy.woz" }
+{ "id": "disk2", "action": "save", "path": "copy.dsk", "acceptLosses": true }
 ```
 
 An action the device does not support is an error. A recording is saved to its path when its tape is ejected.
 Disks the machine changes stay in memory, and `changed` shows that they differ from their images. An Apple drive's
-`save` writes its disk to its own image, or to `path`: a `.woz` keeps the disk's tracks as they are, and a `.dsk`,
-`.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
-drives don't save yet.
+`save` writes its disk to its own image, in the format and sector order it was read in, or to `path`: a `.woz` keeps
+the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads them back as 35 to 40 tracks of
+sectors, in DOS's order for `.dsk` and `.do` and ProDOS's for `.po`. A `.dsk` is read in the order its file system
+reads whole in (DOS 3.3's catalog, ProDOS's volume directory or Apple Pascal's), else DOS's, and saved back in it. A
+sector image cannot hold a track that no longer reads as 16 sectors, data on a quarter or half track of its own, or
+a volume other than 254; a save that would lose any of them fails with what it would lose, unless `acceptLosses` is
+given, and the disk then stays changed. The disk then comes from that image. Other drives don't save yet.
 
 ## A machine that is off
 

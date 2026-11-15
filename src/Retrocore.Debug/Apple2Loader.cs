@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Runtime.CompilerServices;
 
 namespace Retrocore.Debug;
 
@@ -53,40 +54,51 @@ internal static class Apple2Loader
     /// <param name="path">The image's full path.</param>
     internal static void Insert(Apple2FloppyDrive drive, string path)
     {
-        byte[] data = File.ReadAllBytes(path);
-        string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
-        WozDisk disk = extension switch
-        {
-            "WOZ" => WozDisk.Load(data),
-            "D13" => SectorDiskConverter.ConvertThirteenSector(data),
-            _ => SectorDiskConverter.Convert(data, extension == "PO")
-        };
-
-        drive.Insert(disk, path, extension.Length == 0 ? "DSK" : extension);
+        LoadedDisk loaded = DiskIIImage.Load(File.ReadAllBytes(path), Path.GetExtension(path));
+        if (loaded.Codec is { } codec) { s_codecs.AddOrUpdate(loaded.Disk, codec); }
+        drive.Insert(loaded.Disk, path, loaded.Codec?.Format ?? "D13");
     }
 
+    // The codec each disk read from an image saves back to it with, so a .dsk keeps the sector order it was found in.
+    private static readonly ConditionalWeakTable<WozDisk, IImageCodec> s_codecs = [];
+
     /// <summary>
-    ///  Saves the disk in a drive, with what the machine wrote to it, to an image: a WOZ image for <c>.woz</c>, else a
-    ///  sector image in the order its extension names (<c>.po</c> in ProDOS's, <c>.dsk</c> and <c>.do</c> in DOS's).
+    ///  Saves the disk in a drive, with what the machine wrote to it, to an image: its own image in the format and
+    ///  sector order it was read in, or another as its extension names (a WOZ image for <c>.woz</c>, a sector image in
+    ///  ProDOS's order for <c>.po</c> and DOS's for <c>.dsk</c> and <c>.do</c>).
     /// </summary>
     /// <param name="drive">The drive.</param>
     /// <param name="path">The image to write; the disk's own image when null.</param>
+    /// <param name="acceptLosses">
+    ///  Whether to save though the format cannot hold all of the disk; the disk then stays changed.
+    /// </param>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
-    /// <exception cref="ArgumentException">The image's format can't hold the disk.</exception>
+    /// <exception cref="ArgumentException">The image's format can't hold a Disk II disk.</exception>
     /// <exception cref="InvalidDataException">
-    ///  A sector image was asked for, and a track no longer reads as 16 sectors.
+    ///  The format cannot hold all of the disk, such as a track that no longer reads as 16 sectors, and
+    ///  <paramref name="acceptLosses"/> is false.
     /// </exception>
-    internal static void Save(Apple2FloppyDrive drive, string? path)
+    internal static void Save(Apple2FloppyDrive drive, string? path, bool acceptLosses = false)
     {
         WozDisk disk = drive.Disk ?? throw new InvalidOperationException($"{drive.Info.Name} is empty.");
-        path = Path.GetFullPath(path ?? drive.Media?.Label ?? "");
-        string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
-        byte[] image = extension switch
+        string own = drive.Media?.Label ?? "";
+        path = Path.GetFullPath(path ?? own);
+        // Its own image is written in the format and order it was read in; another, as its extension says.
+        IImageCodec? codec = DiskIIImage.CodecFor(Path.GetExtension(path));
+        if (SameFile(path, own) && s_codecs.TryGetValue(disk, out IImageCodec? read)) { codec = read; }
+        if (codec is null)
         {
-            "WOZ" => disk.Export(),
-            "DSK" or "DO" or "PO" => SectorDiskReader.Read(disk, extension == "PO"),
-            _ => throw new ArgumentException($"{Path.GetFileName(path)} is not a .woz, .dsk, .do or .po image; save it as .woz.")
-        };
+            throw new ArgumentException($"{Path.GetFileName(path)} is not a .woz, .dsk, .do or .po image; save it as .woz.");
+        }
+
+        EncodedImage encoded = codec.Encode(disk.Snapshot());
+        if (!encoded.IsLossless && !acceptLosses)
+        {
+            throw new InvalidDataException(
+                $"{codec.Format} cannot hold all of the disk: {string.Join(" ", encoded.Losses)} Save it as .woz to keep all of it.");
+        }
+
+        byte[] image = encoded.Bytes;
 
         // Written to a new file beside it and moved over it, so a failed write leaves the image as it was.
         string temporary = Path.Join(Path.GetDirectoryName(path), $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.saving");
@@ -104,8 +116,14 @@ internal static class Apple2Loader
             File.Delete(temporary);
         }
 
-        drive.Saved(path, extension);
+        // The disk now comes from the image just written, which a lossy save leaves it changed against.
+        s_codecs.AddOrUpdate(disk, codec);
+        drive.Saved(path, codec.Format, encoded.IsLossless);
     }
+
+    // Whether a path names a drive's own image.
+    private static bool SameFile(string path, string own) =>
+        Path.IsPathFullyQualified(own) && string.Equals(path, Path.GetFullPath(own), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///  Inserts a 3.5-inch disk image (<c>.po</c>, <c>.2mg</c>, <c>.hdv</c>, <c>.img</c> or <c>.dsk</c>) in a 3.5

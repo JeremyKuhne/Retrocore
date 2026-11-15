@@ -88,7 +88,7 @@ internal sealed class DiskIIDrive
             _fraction -= interval;
             DiskTrack? track = Media?.Track(QuarterTrack);
             bool raw = track?.ReadBit(BitPosition) ?? false;
-            if (writing && Media is { IsReadOnly: false } media)
+            if (writing && Media is { IsWriteProtected: false } media)
             {
                 media.WriteBit(QuarterTrack, BitPosition, _writeFlux);
             }
@@ -117,7 +117,11 @@ internal sealed class DiskIIDrive
     /// </summary>
     internal void EndWrite()
     {
-        if (_writing && Media is { IsReadOnly: false } media) { media.WriteBit(QuarterTrack, BitPosition, _writeFlux); }
+        if (_writing && Media is { IsWriteProtected: false } media)
+        {
+            media.WriteBit(QuarterTrack, BitPosition, _writeFlux);
+        }
+
         _writeFlux = _writing = false;
     }
 }

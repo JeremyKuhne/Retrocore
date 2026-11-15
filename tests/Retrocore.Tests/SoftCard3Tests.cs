@@ -137,7 +137,7 @@ public sealed class SoftCard3Tests
         Apple3Machine machine = Machine();
         machine.Bus.InstallSoftCard(slot: 4, Prom());
         WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), Master, "DSK");
+        machine.Drives[0].Insert(media.Writable(), Master, "DSK");
 
         RunUntil(machine, "A>", seconds: 60);
         Screen(machine).Should().Contain("Apple SoftCard /// CP/M").And.Contain("56K Version 2.20");

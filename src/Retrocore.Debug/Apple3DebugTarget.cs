@@ -475,7 +475,7 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             case (Apple2FloppyDrive drive, "save"):
-                Apple2Loader.Save(drive, args.String("path"));
+                Apple2Loader.Save(drive, args.String("path"), args.Bool("acceptLosses") ?? false);
                 break;
             case (ProFileDrive drive, "insert"):
                 ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));

@@ -159,7 +159,7 @@ public sealed class DiskIIController
             selected.BitCount,
             _motor && _selected == drive - 1,
             selected.Media is not null,
-            selected.Media?.IsReadOnly ?? true,
+            selected.Media?.IsWriteProtected ?? true,
             selected.Media?.IsDirty ?? false);
     }
 
@@ -241,7 +241,7 @@ public sealed class DiskIIController
                 break;
             case 10:
             case 14:
-                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsReadOnly ?? true);
+                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsWriteProtected ?? true);
                 _latch = (byte)((_latch >> 1) | (protectedMedia ? 128 : 0));
                 break;
             case 11:

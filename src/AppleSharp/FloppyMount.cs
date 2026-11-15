@@ -30,8 +30,7 @@ internal sealed class FloppyMount : DisposableBase
         Disk = extension switch
         {
             ".woz" => WozDisk.Load(data, writable),
-            ".dsk" or ".do" or ".po" when !writable => SectorDiskConverter.Convert(data, extension == ".po"),
-            ".d13" when !writable => SectorDiskConverter.ConvertThirteenSector(data),
+            ".dsk" or ".do" or ".po" or ".d13" when !writable => DiskIIImage.Load(data, extension).Disk,
             ".dsk" or ".do" or ".po" or ".d13" => throw new NotSupportedException(
                 "Writable raw floppy conversion is not supported. Export to .woz first, or use the slot-seven .po block device."),
             _ => throw new InvalidDataException("Disk II mounts .woz, .dsk, .do, .po or .d13 floppy images.")
@@ -54,7 +53,11 @@ internal sealed class FloppyMount : DisposableBase
     internal void Save()
     {
         if (!Disk.IsDirty) { return; }
-        if (Disk.IsReadOnly) { throw new InvalidOperationException("Read-only media unexpectedly became dirty."); }
+        if (Disk.IsWriteProtected)
+        {
+            throw new InvalidOperationException("Read-only media unexpectedly became dirty.");
+        }
+
         if (!MemoryExtensions.SequenceEqual(SHA256.HashData(File.ReadAllBytes(Path)), _savedHash))
         {
             throw new IOException("The floppy image changed outside AppleSharp; refusing to overwrite it.");

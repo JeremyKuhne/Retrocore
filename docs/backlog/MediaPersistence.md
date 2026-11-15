@@ -3,7 +3,8 @@
 How disks, tapes and other media the machines change get back to image files, on every machine and in every format,
 without losing what the machine wrote.
 
-**Status:** proposed 2026-11-14 and revised the same day after two reviews; nothing here is built. The
+**Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1's media layer is built
+([phases](#phases)); the host's save steps, detach paths and protocol answers are next. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -802,7 +803,18 @@ After the reviews:
    counted; the sector reader's 35-40 tracks, quarter tracks, volumes and `.dsk` order; the save steps with
    snapshots, ordered commits, revision checks, retries, links and one backup; prepare to detach on every path; the
    protocol's outcomes. Today's Disk II defaults stay. Done when the Disk II saves as it does now, plus conflicts, lossy
-   saves that stay changed, and every detach path, with the tests above.
+   saves that stay changed, and every detach path, with the tests above. It lands in two parts:
+   - **The media layer (built).** `IMedium` (version, lock, snapshot), `MediumSnapshot`, `IMediumSlot` (medium and
+     mount generation) and `IImageCodec` with `EncodedImage`'s losses and notes. `WozDisk` is a medium: its lock
+     (`IsWriteProtected`, which was `IsReadOnly`) counts as a change and is written to the WOZ image's flag, and its
+     snapshot is a WOZ2 image. `WozCodec` notes a WOZ1 image becoming WOZ2; `SectorImageCodec` writes 35 to 40
+     tracks and lists a track that does not read, a quarter or half track of its own, and a volume other than 254.
+     `DiskIIImage` loads each format with the codec that writes it back, finding a `.dsk`'s order from DOS 3.3's
+     catalog, ProDOS's directory or Apple Pascal's volume header. The debug host's `save` uses them: a lossy save
+     fails with its losses unless `acceptLosses` is given, and then leaves the disk changed. A WOZ disk has 160
+     quarter tracks, so no track lies past the 40th. Tests: `DiskIIImageTests`.
+   - **The host (next).** The save steps, prepare to detach, the protocol's outcomes, and the clients' prompts: a
+     minimal Save, Discard or Cancel in the extension and Retrocore Desktop until phase 3's UI.
 2. **Every drive saves.** The 3.5 drive with its 2MG header; the ProFile; slot 7 with a writable device and its
    lock at power-on; `FloppyDisk` writes counted; JV1, JV3 and JVC fixed; a DMK writer, and DMK on the CoCo. Done when
    each drive saves to each format it offers, reports losses, and boots again from the saved image, pinned by

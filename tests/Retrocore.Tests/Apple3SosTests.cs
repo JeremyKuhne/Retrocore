@@ -211,7 +211,7 @@ public class Apple3SosTests
 
         // A converted image is read-only; a writable copy takes the tests' writes.
         WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), disk, "DSK");
+        machine.Drives[0].Insert(media.Writable(), disk, "DSK");
         return machine;
     }
 

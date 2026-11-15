@@ -70,7 +70,7 @@ internal sealed partial class SourceMapModule : IDebugModule
         _wholeImage = wholeImage;
 
         // Statements emit in source order, so each invocation's statements are contiguous.
-        List<(ushort Address, byte[] Bytes, List<AssemblyLocation> Levels)> emitted = [];
+        List<(ushort Address, byte[] Bytes, List<AssemblyLocation> Levels, bool Data)> emitted = [];
         Dictionary<AssemblyLocation, int> invocationSizes = [with(ReferenceEqualityComparer.Instance)];
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
@@ -83,7 +83,8 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
 
             byte[] bytes = result.Sections[entry.Section].Bytes.Slice(entry.Offset, entry.Size).ToArray();
-            emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels));
+            // A statement with no operand form, such as .byte, is data.
+            emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels, string.IsNullOrEmpty(entry.AddressMode)));
         }
 
         HashSet<AssemblyLocation> started = [with(ReferenceEqualityComparer.Instance)];
@@ -91,7 +92,7 @@ internal sealed partial class SourceMapModule : IDebugModule
         _statements = new Statement[emitted.Count];
         for (int index = 0; index < emitted.Count; index++)
         {
-            (ushort address, byte[] bytes, List<AssemblyLocation> levels) = emitted[index];
+            (ushort address, byte[] bytes, List<AssemblyLocation> levels, bool data) = emitted[index];
 
             // A single-statement invocation debugs as its call line when collapsing is requested.
             List<AssemblyLocation> kept = [];
@@ -121,7 +122,7 @@ internal sealed partial class SourceMapModule : IDebugModule
 
             previous.Clear();
             previous.UnionWith(kept);
-            _statements[index] = new(address, bytes, chain, entryDepth);
+            _statements[index] = new(address, bytes, chain, entryDepth, data);
             for (int offset = 0; offset < bytes.Length; offset++)
             {
                 ushort at = (ushort)(address + offset);
@@ -158,6 +159,27 @@ internal sealed partial class SourceMapModule : IDebugModule
 
     /// <inheritdoc/>
     public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   At least half its instructions are in memory; data, such as a buffer of zeros, matches empty RAM too.
+    ///  </para>
+    /// </remarks>
+    public bool InMemory(IDebugMemory memory)
+    {
+        int instructions = _statements.Count(statement => !statement.Data);
+        int held = 0, missed = 0;
+        foreach (Statement statement in _statements)
+        {
+            if (statement.Data) { continue; }
+            if (Holds(memory, statement)) { held++; } else { missed++; }
+            if (held * 2 >= instructions) { return instructions > 0; }
+            if (missed * 2 > instructions) { return false; }
+        }
+
+        return false;
+    }
 
     // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: a constant the operand
     // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
@@ -323,7 +345,12 @@ internal sealed partial class SourceMapModule : IDebugModule
     private DebugPosition At(int index, ushort address)
     {
         Statement statement = _statements[index];
-        return new(statement.Chain, address == statement.Address ? statement.EntryDepth : 0);
+        return new(
+            statement.Chain,
+            address == statement.Address ? statement.EntryDepth : 0,
+            statement.Address,
+            statement.Bytes.Length,
+            statement.Data);
     }
 
     // Whether memory holds the bytes a statement assembled to, where it runs.

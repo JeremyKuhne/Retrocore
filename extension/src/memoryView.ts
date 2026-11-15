@@ -74,6 +74,20 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
+#listing{flex:none;width:46ch;overflow:hidden;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
+#listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
+#listing .ln:hover{background:var(--vscode-list-hoverBackground)}
+#listing .ln.sel{background:var(--vscode-editor-inactiveSelectionBackground)}
+#listing .ln.cur{outline:1px solid var(--vscode-editorCursor-foreground,var(--vscode-focusBorder));outline-offset:-1px}
+#listing .a{color:var(--vscode-editorLineNumber-foreground)}
+#listing .l{width:10ch;flex:none;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
+#listing .unknown .t{opacity:.7}
+#listing .data .t{color:var(--vscode-debugTokenExpression-number,var(--vscode-editor-foreground))}
+#listing a{color:var(--vscode-textLink-foreground);text-decoration:none;cursor:pointer}
+#listing a:hover{text-decoration:underline}
+#listing .src{margin-left:auto;padding-left:1ch;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-descriptionForeground)}
+#listing p{margin:8px;white-space:normal;color:var(--vscode-descriptionForeground);font-family:var(--vscode-font-family);font-size:12px}
+body.narrow #listing{display:none}
 body.narrow .main{flex-direction:column}
 body.narrow #grid{flex:1}
 body.narrow #side{flex:none;max-height:40%;border-left:none;border-top:1px solid var(--vscode-panel-border)}
@@ -87,6 +101,7 @@ body.narrow .item .k{width:auto}
 </style></head>
 <body>
 <div class="bar"><span class="title" id="title">Memory</span>
+<label title="Show the bytes as instructions and data beside them"><input type="checkbox" id="listingBox" checked> Listing</label>
 <label id="alignLabel" title="Start a row where each label starts, so a label's bytes begin a row of their own" hidden><input type="checkbox" id="align"> Align to labels</label>
 <label id="machineLabel" title="Draw the text column in the machine's own characters, or as ASCII" hidden><input type="checkbox" id="machineText" checked> Machine text</label>
 <button id="snapshot" title="Keep a copy of every byte now, to compare with">Snapshot</button>
@@ -95,6 +110,7 @@ body.narrow .item .k{width:auto}
 <label title="Hex bytes with ?? for any byte, such as A9 ?? 20, or text in quotes; Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20 or &quot;TEXT&quot;"></label>
 </div>
 <div class="main"><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div>
+<div id="listing" role="list" aria-label="Listing"></div>
 <div id="side"><div class="tabs" role="tablist"><button role="tab" data-tab="inspector" class="on">Inspector</button><button role="tab" data-tab="search">RAM search</button><button role="tab" data-tab="frozen" id="frozenTab">Frozen</button></div>
 <div id="inspector" class="panel" aria-live="polite"></div><div id="search" class="panel" hidden></div><div id="frozen" class="panel" hidden></div></div></div>
 <div id="status" role="status"></div>
@@ -124,8 +140,13 @@ let labels = [], labelAt = new Map(), labelWidth = 0;
 let machineSet = null, machineText = true, charset = null, glyphStyle = null, flashTimer = null;
 // Whether rows start where labels do; then each row's first address, else every row is ROW bytes from a multiple of ROW.
 let aligned = false, rowStarts = null;
+// Whether the listing shows (the page remembers), the lines it shows, which request they answer, its width, and the
+// addresses Decode from here started an instruction at.
+let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
+const forcedStarts = new Set();
 try {
     const saved = vscode.getState();
+    if (saved && typeof saved.showListing === "boolean") showListing = saved.showListing;
     if (saved && typeof saved.machineText === "boolean") machineText = saved.machineText;
     if (saved && typeof saved.aligned === "boolean") aligned = saved.aligned;
 } catch {
@@ -135,7 +156,7 @@ try {
 // Remembers the page's choices, which are conveniences.
 function remember() {
     try {
-        vscode.setState({ machineText, aligned });
+        vscode.setState({ machineText, aligned, showListing });
     } catch {
         // Nothing to do: the page works without them.
     }
@@ -220,6 +241,9 @@ let comparison = "", snapshot = null, otherBanks = [], other = null;
 let search = null;
 // The frozen bytes as the debugger keeps them, by the value each is held at, and the last watch expressions added.
 let frozen = new Map(), lastWatch = [];
+const listingPanel = document.getElementById("listing"), listingBox = document.getElementById("listingBox");
+listingBox.checked = showListing;
+listingPanel.hidden = !showListing;
 const side = document.getElementById("side"), searchPanel = document.getElementById("search"), frozenPanel = document.getElementById("frozen");
 const compareSelect = document.getElementById("compareWith");
 let tab = "inspector";
@@ -532,8 +556,103 @@ function render() {
     if (layout()) { render(); return; }
     ensure(top - count, top + 2 * count);
     showInspector();
+    wantListing();
+    showListingLines();
     if (tab === "frozen") showFrozen();
 }
+
+// Asks for the listing of the bytes in view, when they, memory, the labels or the starts Decode from here made
+// have changed since it was last asked for.
+function wantListing() {
+    if (!showListing || ended || narrow === true) return;
+    const top = Math.min(Math.floor(grid.scrollTop / LINE), rowCount() - 1);
+    const start = rowStart(top), end = rowEnd(Math.min(rowCount() - 1, top + visibleRows() + 1));
+    const key = start + ":" + end + ":" + generation + ":" + labels.length + ":" + forcedStarts.size;
+    if (key === listingKey) return;
+    listingKey = key;
+    void loadListing(start, Math.min(0x1000, end - start + 1), key);
+}
+
+async function loadListing(start, count, key) {
+    try {
+        const result = await request({ type: "listing", address: start, count, starts: Array.from(forcedStarts) });
+        if (key !== listingKey) return;
+        listingLines = result.lines;
+    } catch (error) {
+        if (key !== listingKey) return;
+        listingLines = [];
+        listingPanel.innerHTML = "<p>" + escapeText(String(error.message || error)) + "</p>";
+        return;
+    }
+    showListingLines();
+}
+
+// The file's name in a path, for the listing's source column.
+function fileName(path) {
+    return path.substring(Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92))) + 1);
+}
+
+// Shows the listing's lines, marking those in the selection and the one the cursor is in.
+function showListingLines() {
+    if (!showListing || listingLines.length === 0) return;
+    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
+    let html = "";
+    for (const line of listingLines) {
+        const last = line.address + line.size - 1;
+        let classes = "ln " + line.kind;
+        if (high > low && line.address <= high && last >= low) classes += " sel";
+        if (cursor >= line.address && cursor <= last) classes += " cur";
+        const space = line.text.indexOf(" ");
+        const mnemonic = space < 0 ? line.text : line.text.substring(0, space), operand = space < 0 ? "" : line.text.substring(space + 1);
+        let text = escapeText(mnemonic);
+        if (operand !== "") {
+            text += " " + (line.target === null || line.target === undefined
+                ? escapeText(operand)
+                : '<a data-go="' + line.target + '" title="Go to ' + where(line.target) + '">' + escapeText(operand) + "</a>");
+        }
+        const source = line.path === null || line.path === undefined ? ""
+            : '<a class="src" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
+                + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
+        const label = line.label === null || line.label === undefined ? "" : line.label;
+        html += '<div class="' + classes + '" role="listitem" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
+            + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>" + source + "</div>";
+    }
+    listingPanel.innerHTML = html;
+}
+
+// Selects a line's bytes, the cursor on its first.
+function selectLine(address, size) {
+    moveTo(address + size - 1, false, false);
+    moveTo(address, true, false);
+}
+
+// Starts an instruction at the cursor, where the listing decoded from the wrong byte.
+function decodeHere() {
+    forcedStarts.add(cursor);
+    render();
+    status("The listing decodes an instruction from " + where(cursor) + ".");
+}
+
+listingPanel.addEventListener("click", event => {
+    const target = event.target;
+    if (!target.closest) return;
+    const source = target.closest("[data-src]");
+    if (source !== null) {
+        void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
+        return;
+    }
+    const go = target.closest("[data-go]");
+    if (go !== null) {
+        moveTo(Number(go.dataset.go), false, true);
+        grid.focus();
+        return;
+    }
+    const line = target.closest("[data-a]");
+    if (line !== null) {
+        selectLine(Number(line.dataset.a), Number(line.dataset.s));
+        grid.focus();
+    }
+});
 
 // The bytes the grid compares with, when not the stop before: the snapshot or the other bank, once read.
 function compared() {
@@ -623,7 +742,8 @@ function showInspector() {
     const count = high > low ? " " + (high - low + 1) + " bytes" : "";
     const watchTitle = "Add to VS Code's Watch view as " + watchExpressions(low, high).join(", ");
     let html = '<div class="acts"><button data-act="watch" title="' + escapeText(watchTitle) + '">' + (high === low + 1 ? "Watch word" : "Watch" + count) + "</button>"
-        + '<button data-act="freeze" title="' + (allFrozen ? freezeTitle.thaw : freezeTitle.freeze) + '">' + (allFrozen ? "Thaw" : "Freeze") + count + "</button></div>";
+        + '<button data-act="freeze" title="' + (allFrozen ? freezeTitle.thaw : freezeTitle.freeze) + '">' + (allFrozen ? "Thaw" : "Freeze") + count + "</button>"
+        + (showListing ? '<button data-act="decode" title="Start an instruction at the cursor in the listing, where it decodes from the wrong byte (Ctrl+D)">Decode from here</button>' : "") + "</div>";
     html += '<div class="where">' + where(cursor);
     const name = labelOf(labels, cursor);
     if (name !== undefined) html += " · " + escapeText(name);
@@ -650,7 +770,9 @@ function layout() {
     const first = rows.firstElementChild;
     if (!first || !document.body) return false;
     const content = first.offsetWidth + (grid.offsetWidth - grid.clientWidth);
-    const docked = document.body.clientWidth < content + INSPECTOR;
+    // The listing takes its width too, while it shows.
+    if (showListing && listingPanel.offsetWidth > 0) listingWidth = listingPanel.offsetWidth;
+    const docked = document.body.clientWidth < content + INSPECTOR + (showListing ? listingWidth : 0);
     grid.style.width = docked ? "" : content + "px";
     if (docked === narrow) return false;
     narrow = docked;
@@ -1003,6 +1125,7 @@ side.addEventListener("click", event => {
         switch (action.dataset.act) {
             case "watch": queue(watchSelection); break;
             case "freeze": queue(toggleFreeze); break;
+            case "decode": decodeHere(); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1097,6 +1220,8 @@ grid.addEventListener("keydown", event => {
         queue(redo);
     } else if (control && (key === "c" || key === "C")) {
         void copy();
+    } else if (control && (key === "d" || key === "D")) {
+        decodeHere();
     } else if (control && (key === "g" || key === "G")) {
         gotoBox.focus();
         gotoBox.select();
@@ -1153,6 +1278,16 @@ alignBox.addEventListener("change", () => {
     grid.focus();
 });
 
+listingBox.addEventListener("change", () => {
+    showListing = listingBox.checked;
+    listingPanel.hidden = !showListing;
+    listingKey = "";
+    narrow = null;
+    remember();
+    render();
+    grid.focus();
+});
+
 machineBox.addEventListener("change", () => {
     machineText = machineBox.checked;
     remember();
@@ -1197,6 +1332,8 @@ async function test(actions) {
             layoutRows();
             render();
         }
+        if (action.decode) decodeHere();
+        if (action.listingLine !== undefined) selectLine(listingLines[action.listingLine].address, listingLines[action.listingLine].size);
         if (action.machineText !== undefined) {
             machineText = action.machineText;
             applyText();
@@ -1218,7 +1355,8 @@ async function test(actions) {
         frozen: frozen.has(cursor) ? frozen.get(cursor) : null,
         inspector: inspect(bytes, readable, cursor, charset === null ? undefined : charset.text),
         hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64),
-        row: { start: rowStart(rowOf(cursor)), end: rowEnd(rowOf(cursor)), count: rowCount() }
+        row: { start: rowStart(rowOf(cursor)), end: rowEnd(rowOf(cursor)), count: rowCount() },
+        listing: listingLines.map(line => hex(line.address, 4) + " " + line.text)
     };
 }
 

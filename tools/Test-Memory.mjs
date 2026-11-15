@@ -305,6 +305,8 @@ try {
         "    STA $D000",
         "SWITCHED:",
         "    JMP SWITCHED",
+        "TABLE:",
+        "    .byte $01, $02, $03",
     ];
     writeFileSync(switching, program.join("\n") + "\n");
     await request("launch", { machine: "apple2", model: "iie-enhanced", source: switching, loadAddress: 0x0300, stopOnEntry: true, speed: "max" });
@@ -324,6 +326,27 @@ try {
     assert.equal(named.get(0xC000), "KBD");
     // $0D is the firmware's RamTest::R6H, which it stores to, but never CR, which is only compared with.
     assert.notEqual(named.get(0x0D), "CR");
+
+    // The listing starts at the statement around the address asked for, lists the program's lines with their
+    // labels and source, names an operand's label, lists data as .byte, and names the Monitor's code by its labels.
+    at = "listing the program";
+    const listing = async (address, count, starts) => (await request("retro/memory/listing", { memoryReference: "0x0000", address, count, starts })).lines;
+    let lines = await listing(0x0301, 40);
+    assert.equal(lines[0].address, 0x0300, "the statement around $0301 starts at $0300");
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].label, lines[0].line], ["LDA LCBANK2", "code", "BANK2", program.indexOf("BANK2:") + 2]);
+    assert.equal(lines[0].path, switching);
+    const loop = lines.find(line => line.text.startsWith("JMP"));
+    assert.equal(loop.text, "JMP SWITCHED", "an operand's label names it");
+    assert.equal(loop.target, loop.address, "and the line says where it goes");
+    const table = lines.find(line => line.label === "TABLE");
+    assert.deepEqual([table.text, table.kind, table.size], [".byte $01, $02, $03", "data", 3]);
+    // The language card's RAM is mapped over the Monitor now, so its code lists from the ROM's bank.
+    lines = (await request("retro/memory/listing", { memoryReference: "rom:0x0000", address: 0xFDED, count: 3 })).lines;
+    assert.deepEqual([lines[0].address, lines[0].label, lines[0].kind], [0xFDED, "COUT", "code"]);
+    assert.equal((await listing(0xFDED, 3))[0].kind, "unknown", "RAM is mapped there, which no source describes");
+    // Decode from here starts where it is told, inside the instruction at $0300.
+    lines = await listing(0x0301, 2, [0x0301]);
+    assert.deepEqual([lines[0].address, lines[0].kind], [0x0301, "code"]);
     await request("retro/memory/freeze", { memoryReference: "0x0000", freeze: [{ offset: 0xD000, value: 0x55 }] });
     assert.equal((await read("main:0xD000", 1)).bytes[0], 0x55, "the freeze writes bank 2");
     assert.equal((await request("evaluate", { expression: "[$D000]", context: "watch" })).result.endsWith("(frozen)"), true, "a watch on bank 2 says it is frozen");

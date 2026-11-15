@@ -220,6 +220,38 @@ internal sealed partial class DebugSession
     private JsonObject MemoryLabels(JsonObject args)
     {
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        SortedDictionary<int, string> labels = LabelsIn(bank, constants: true);
+        return new JsonObject
+        {
+            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
+            {
+                ["address"] = pair.Key,
+                ["name"] = pair.Value
+            }).ToJsonArray()
+        };
+    }
+
+    // Whether a module's code is installed: in the bank that holds its area, such as the system ROM while the language
+    // card's RAM is mapped over it, or in memory as the CPU maps it for code in no area; a card's firmware with no
+    // card in its slot has no bank and is not.
+    private bool Installed(IDebugModule module, IDebugMemory memory)
+    {
+        if (module.Area is not { } area) { return module.InMemory(memory); }
+        foreach (DebugMemoryBank bank in Target.Banks)
+        {
+            foreach ((ushort start, int _) in bank.Ranges)
+            {
+                if (Equals(bank.AreaOf(start), area)) { return module.InMemory(new BankMemory(bank)); }
+            }
+        }
+
+        return module.InMemory(Target);
+    }
+
+    // The labels in a space, by address, from the debug modules that apply at each address now, and with constants
+    // the equates its CPU's instructions address memory through.
+    private SortedDictionary<int, string> LabelsIn(DebugMemoryBank? bank, bool constants)
+    {
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
         SortedDictionary<int, string> labels = [];
         foreach (IDebugModule module in _debug.Modules)
@@ -237,10 +269,13 @@ internal sealed partial class DebugSession
         }
 
         // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
-        // rather than code, so they apply whatever is mapped; a label at the same address comes first.
+        // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
+        // label at the same address comes first.
+        if (!constants) { return labels; }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
         foreach (IDebugModule module in _debug.Modules)
         {
+            if (!module.AddressConstants.Any() || !Installed(module, memory)) { continue; }
             foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
             {
                 if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || labels.ContainsKey((int)value))
@@ -253,14 +288,7 @@ internal sealed partial class DebugSession
             }
         }
 
-        return new JsonObject
-        {
-            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
-            {
-                ["address"] = pair.Key,
-                ["name"] = pair.Value
-            }).ToJsonArray()
-        };
+        return labels;
     }
 
     /// <summary>

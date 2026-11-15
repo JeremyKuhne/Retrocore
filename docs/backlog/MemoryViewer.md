@@ -1,6 +1,6 @@
 # Backlog: a memory viewer and editor
 
-Status: **steps 1 to 3 built** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
+Status: **steps 1 to 3 built, and step 4's listing begun** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
 `retro/memory/read`, `retro/memory/labels`, `retro/memory/characters` and `retro/memory/freeze`. The watch list is
 VS Code's own Watch view, which the editor adds expressions such as `[$4100]` to, so data breakpoints come from
 there.
@@ -9,6 +9,11 @@ Steps 2 and 3 are whole: rows align to labels, every machine with a text screen 
 the CPU's instructions address memory through name those bytes (so `CH` names $24; step 5's regions and doc
 comments add what the code alone does not say), the bytes compare with another bank's, and RAM search finds 16-bit
 words in the CPU's byte order.
+
+Step 4 so far is the listing pane: `retro/memory/listing` decodes from the nearest known instruction start, lists the
+sources' data as data, names operands by label, links lines to their source, and takes **Decode from here**'s starts.
+Left from step 4: analysis's code/data guesses for memory no source describes; marking, naming and comments in the
+hints file; breakpoints from the listing's gutter; and find by instruction pattern.
 
 Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor

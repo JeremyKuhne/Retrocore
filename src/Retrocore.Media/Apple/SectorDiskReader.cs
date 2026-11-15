@@ -85,16 +85,22 @@ public static class SectorDiskReader
 
         losses.InsertRange(0, unreadable);
 
-        // A quarter or half track holds data of its own unless it is the whole track beside it, as a sector image's
-        // disk maps the quarter tracks either side of each whole track to it.
+        // A sector image's disk maps each whole track's quarter track below it and the one above it to it, and leaves
+        // the half tracks unformatted, so any other quarter or half track is a loss: one with data of its own, a half
+        // track with any, or a quarter track mapped to the other whole track beside it.
         for (int quarter = 0; quarter < 160; quarter++)
         {
             if (quarter % 4 == 0 || disk.Track(quarter) is not { } extra) { continue; }
-            DiskTrack? below = disk.Track(quarter / 4 * 4);
-            DiskTrack? above = quarter / 4 * 4 + 4 < 160 ? disk.Track((quarter / 4 * 4) + 4) : null;
-            if (!ReferenceEquals(extra, below) && !ReferenceEquals(extra, above))
+            DiskTrack? expected = (quarter % 4) switch
             {
-                losses.Add($"Track {quarter / 4}.{quarter % 4 * 25} holds data of its own, which a sector image cannot.");
+                1 => disk.Track(quarter - 1),
+                3 when (quarter + 1) / 4 < tracks => disk.Track(quarter + 1),
+                _ => null,
+            };
+
+            if (!ReferenceEquals(extra, expected))
+            {
+                losses.Add($"Track {quarter / 4}.{quarter % 4 * 25} holds data a sector image cannot put back there.");
             }
         }
 
@@ -166,11 +172,13 @@ public static class SectorDiskReader
             int check = FourAndFour(nibbles, index + 9);
             if ((volume ^ number ^ physical ^ check) != 0) { continue; }
 
+            // Every whole address field's volume counts, whether or not its sector reads.
+            volumes.Add(volume);
+
             // A sector whose address field is whole but names another track, or a sector past 15, has no place in a
             // sector image.
             if (number != track || physical > 15)
             {
-                volumes.Add(volume);
                 losses.Add($"Track {track} has a sector that calls itself track {number}, sector {physical}, which a sector image cannot hold.");
                 index += 10;
                 continue;
@@ -187,7 +195,6 @@ public static class SectorDiskReader
             if (data + 3 + 343 > nibbles.Count || nibbles[data + 2] != 0xAD) { continue; }
 
             // A bad checksum leaves the sector to another copy of it, and the scan goes on to the sectors after it.
-            volumes.Add(volume);
             index = data + 3 + 343 - 1;
             if (!DecodeSector(nibbles, data + 3, values, sector))
             {

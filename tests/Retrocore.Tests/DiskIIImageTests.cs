@@ -255,6 +255,44 @@ public sealed class DiskIIImageTests
     }
 
     /// <summary>
+    ///  A quarter or half track mapped otherwise than a sector image's disk maps it is a loss, since reading the image
+    ///  back would not put it there: a half track mapped to the track below, or a quarter track to the track above it
+    ///  where the one below belongs.
+    /// </summary>
+    [TestMethod]
+    public void QuarterTrackMappedElsewhereIsALoss()
+    {
+        WozDisk half = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false).Writable();
+        half.MapTrack(quarterTrack: 2, sourceQuarterTrack: 0);
+        SectorDiskReader.Decode(half, proDosOrder: false).Losses.Should().ContainSingle().Which.Should().Contain("Track 0.50");
+
+        WozDisk crossed = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false).Writable();
+        crossed.MapTrack(quarterTrack: 1, sourceQuarterTrack: 4);
+        SectorDiskReader.Decode(crossed, proDosOrder: false).Losses.Should().ContainSingle().Which.Should().Contain("Track 0.25");
+    }
+
+    /// <summary>
+    ///  An address field's volume counts though no data field follows it.
+    /// </summary>
+    [TestMethod]
+    public void VolumeOfAnAddressWithoutDataIsALoss()
+    {
+        WozDisk disk = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false).Writable();
+        WozDisk other = SectorDiskConverter.Convert(new byte[35 * TrackSize], proDosOrder: false, volume: 7);
+
+        // The other disk's syncs and first address field, then 80 $FF nibbles where its data field would start.
+        byte[] own = (disk.Track(9 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        byte[] address = (other.Track(9 * 4) ?? throw new InvalidOperationException()).Bits[..34].ToArray();
+        byte[] filler = new byte[80];
+        Array.Fill(filler, (byte)0xFF);
+        disk.SetTrack(quarterTrack: 9 * 4, [.. own, .. address, .. filler], bitCount: (own.Length + 34 + 80) * 8);
+
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Unreadable.Should().BeEmpty();
+        read.Losses.Should().ContainSingle().Which.Should().Contain("volume is 7");
+    }
+
+    /// <summary>
     ///  A volume other than 254 is a loss, since a sector image is read back as volume 254.
     /// </summary>
     [TestMethod]

@@ -123,15 +123,16 @@ internal static partial class EmulatedPascalCompiler
         return (code, screen, text);
     }
 
-    // Waits for the Compiler to end with the space it had left, or stop at an error. 1.3 asks first for a listing
+    // Waits for the Compiler to end with the space it had left, or stop at an error or out of memory, which leaves the
+    // system to be reset. 1.3 asks first for a listing
     // file, even of a workfile, which RETURN answers with none: a listing the source names is its own.
     private static string Ended(EmulatedPascalSystem system, int seconds)
     {
-        string? ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)", "LISTING FILE"], seconds);
+        string? ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)", "STACK OVERFLOW", "LISTING FILE"], seconds);
         if (ended == "LISTING FILE")
         {
             system.Type("\n");
-            ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)"], seconds);
+            ended = system.WaitFor(["SMALLEST AVAILABLE", "(CONTINUE)", "STACK OVERFLOW"], seconds);
         }
 
         return ended ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
@@ -159,8 +160,13 @@ internal static partial class EmulatedPascalCompiler
     private static byte[]? CompileLarge(string source, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
     {
         byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
-        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
         byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
+        (string first, string? rest) = Split(source);
+        PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(first));
+        if (rest is not null)
+        {
+            PascalVolume.WriteFile(codes, proDosOrder: false, "REST.TEXT", PascalFileKind.Text, PascalTextFile.Write(rest));
+        }
 
         EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
         system.Type("C");
@@ -188,6 +194,35 @@ internal static partial class EmulatedPascalCompiler
         byte[] code = volume.ReadFile("PROGRAM.CODE");
         RestoreAlignment(code, source);
         return code;
+    }
+
+    // A source too long for a volume of its own, such as Apple Pascal 1.3's Compiler's, is split before a procedure of
+    // the outer block's, about halfway: the first part includes the rest, which goes on CODE: beside the code file.
+    private static (string First, string? Included) Split(string source)
+    {
+        byte[] whole = PascalTextFile.Write(source);
+        if (whole.Length <= 128 * 1024) { return (source, null); }
+
+        string[] lines = source.Split('\n');
+        int half = source.Length / 2;
+        int length = 0;
+        int split = -1;
+        for (int index = 0; index < lines.Length && length < half; index++)
+        {
+            if (lines[index].StartsWith("  PROCEDURE ", StringComparison.Ordinal)
+                || lines[index].StartsWith("  FUNCTION ", StringComparison.Ordinal)
+                || lines[index].StartsWith("  SEGMENT ", StringComparison.Ordinal))
+            {
+                split = index;
+            }
+
+            length += lines[index].Length + 1;
+        }
+
+        if (split <= 0) { return (source, null); }
+
+        string first = string.Join('\n', lines[..split]) + "\n(*$I CODE:REST.TEXT*)\n";
+        return (first, string.Join('\n', lines[split..]));
     }
 
     /// <summary>

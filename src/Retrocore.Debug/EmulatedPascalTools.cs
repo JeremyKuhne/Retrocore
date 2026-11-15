@@ -69,23 +69,28 @@ internal static partial class EmulatedPascalTools
             return EmulatedApple3PascalTools.Link(host, libraries, bootDisk, toolsDisk, roms);
         }
 
+        // The host is the workfile, each library by name; or, where they and the output do not fit on APPLE1, as 1.3's
+        // Compiler's do not, all are on a volume of their own, LINK:, in a second card's first drive.
         byte[] boot = Apple1(bootDisk);
-        PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.CODE", PascalFileKind.Code, host);
+        byte[]? link = Fits(boot, host, libraries) ? null : PascalVolume.Format("LINK", proDosOrder: false);
+        byte[] files = link ?? boot;
+        string volume = link is null ? "" : "LINK:";
+        PascalVolume.WriteFile(files, proDosOrder: false, link is null ? "SYSTEM.WRK.CODE" : "HOST.CODE", PascalFileKind.Code, host);
         for (int index = 0; index < libraries.Count; index++)
         {
-            PascalVolume.WriteFile(boot, proDosOrder: false, $"LIB{index + 1}.CODE", PascalFileKind.Code, libraries[index]);
+            PascalVolume.WriteFile(files, proDosOrder: false, $"LIB{index + 1}.CODE", PascalFileKind.Code, libraries[index]);
         }
 
-        // The host is the workfile; each library by name, then an empty line; no map; and the output.
-        EmulatedPascalSystem system = new(boot, toolsDisk, roms);
+        // Each library by name, then an empty line; no map; and the output.
+        EmulatedPascalSystem system = link is null ? new(boot, toolsDisk, roms) : new(boot, toolsDisk, roms, [link]);
         system.Type("L");
-        Expect(system, "HOST FILE", "The Linker never asked for a host");
-        system.Type("\n");
+        Expect(system, "HOST FILE", "The Linker never asked for a host", or: "HOST CODEFILE");
+        system.Type(link is null ? "\n" : "LINK:HOST\n");
         for (int index = 0; index <= libraries.Count; index++)
         {
-            Expect(system, "LIB FILE", "The Linker never asked for a library");
+            Expect(system, "LIB FILE", "The Linker never asked for a library", or: "LIBRARY FILE");
             system.Run(tenths: 5);
-            system.Type(index < libraries.Count ? $"LIB{index + 1}\n" : "\n");
+            system.Type(index < libraries.Count ? $"{volume}LIB{index + 1}\n" : "\n");
             system.Run(tenths: 20);
         }
 
@@ -95,7 +100,7 @@ internal static partial class EmulatedPascalTools
         string screen = system.Screen;
         if (asked is null) { return (null, screen); }
 
-        system.Type("LINKED.CODE\n");
+        system.Type($"{volume}LINKED.CODE\n");
         if (system.WaitFor(EmulatedPascalSystem.Prompts, seconds: 300) is null)
         {
             throw new TimeoutException($"The Linker never finished:\n{system.Screen}");
@@ -103,8 +108,29 @@ internal static partial class EmulatedPascalTools
 
         screen = system.Screen;
         system.Run(tenths: 50);
-        PascalVolume volume = system.Eject();
-        return (volume.Files.Any(file => file.Name == "LINKED.CODE") ? volume.ReadFile("LINKED.CODE") : null, screen);
+        PascalVolume written = link is null ? system.Eject() : system.EjectSlot5(drive: 1);
+        return (written.Files.Any(file => file.Name == "LINKED.CODE") ? written.ReadFile("LINKED.CODE") : null, screen);
+    }
+
+    // Whether the host, the libraries and the output, about as long as they, fit on APPLE1.
+    private static bool Fits(byte[] boot, byte[] host, IReadOnlyList<byte[]> libraries)
+    {
+        byte[] copy = (byte[])boot.Clone();
+        try
+        {
+            PascalVolume.WriteFile(copy, proDosOrder: false, "SYSTEM.WRK.CODE", PascalFileKind.Code, host);
+            for (int index = 0; index < libraries.Count; index++)
+            {
+                PascalVolume.WriteFile(copy, proDosOrder: false, $"LIB{index + 1}.CODE", PascalFileKind.Code, libraries[index]);
+            }
+
+            PascalVolume.WriteFile(copy, proDosOrder: false, "LINKED.CODE", PascalFileKind.Code, new byte[host.Length + libraries.Sum(library => library.Length)]);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
     }
 
     // APPLE1 with room for the files: the Editor, which none of this needs, is taken off.
@@ -115,9 +141,9 @@ internal static partial class EmulatedPascalTools
         return boot;
     }
 
-    private static void Expect(EmulatedPascalSystem system, string text, string failure)
+    private static void Expect(EmulatedPascalSystem system, string text, string failure, string? or = null)
     {
-        if (system.WaitFor([text], seconds: 300) is null)
+        if (system.WaitFor(or is null ? [text] : [text, or], seconds: 300) is null)
         {
             throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"{failure}:\n{system.Screen}"));
         }

@@ -122,23 +122,19 @@ What the decompiler does not decompile yet, found by decompiling every code file
 
 - **System programs:** code compiled with `(*$U-*)` (SOROCGOTO, HAZELGOTO, the system's Filer, Editor, Compiler and
   Linker). Done (2026-11-14) for their globals: the outer block declares them, the program is its segment procedure
-  1, whose segment procedures `(*$NS 7*)` numbers from 7 ([Pascal.md](../Pascal.md#decompiling)). **Not done:** the system's
-  procedures past `CXP 0, 29` (the 1.1 Compiler calls `CXP 0, 43` in COMPOPTI), which the outer block can declare
-  FORWARD and never define, as a probe shows (`PROCEDURE P2; FORWARD;` there compiles to `CXP 0, 2`), but whose
-  parameters the call alone does not give; and the Compiler's types: a few words used as both pointers and integers
-  join, through unification, most of its words into one punned type, which a function cannot return (error 120).
-  The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all. A pointer used as an integer is now
-  `ORD(P)`, which compiles to nothing, so it no longer puns (2026-11-14). Records with variant parts decompile
-  (2026-11-14 and 15): each field the code reaches has a type of its own, put in its record once the links settle,
-  in the field at its offset or as another variant's where the two cannot be one (a pointer and an integer, pointers
-  to records that differ, an array and a scalar, a boolean and an integer as their links show); each WITH has its
-  own temporary though the Compiler keeps several in one word; nested segment procedures sit in the procedures their
-  callers are in. **The decompiled 1.1 Compiler now compiles**, whole, with the 1.1 Compiler, on Apple III Pascal
-  (`--pascal sos --add` puts the Apple II Compiler, its segments marked version 4, on a tools disk), which has the
-  memory it needs; on the Apple II it runs out of room in DECLARAT, even under Apple Pascal 1.2 on a 128K IIe
-  (`--iie`). **Next:** the segments differ: record sizes and field offsets (`NEW` of 10 words where the Compiler
-  allocates 3; `INC 3` for `INC 2`), and the procedures not yet decompiled (GOTOs into statements, FJPs out of
-  them, `CXP 0, 43`, `GSEG`/`RSEG`) compile empty.
+  1, whose segment procedures `(*$NS 7*)` numbers from 7 ([Pascal.md](../Pascal.md#decompiling)). The system's
+  procedures past `CXP 0, 29` (the 1.1 Compiler calls `CXP 0, 43` in COMPOPTI) are declared FORWARD in the outer
+  block, never defined, taking the call's arguments as parameters (2026-11-15). **Done (2026-11-15): the decompiled
+  1.1 Compiler recompiles, with the 1.1 Compiler, to the same segments** (`--pascal compare`). It compiles on Apple
+  III Pascal (`--pascal sos --add` puts the Apple II Compiler, its segments marked version 4, on a tools disk), which
+  has the memory it needs, with `(*$S++*)`; on the Apple II it runs out of room in DECLARAT, even under Apple Pascal
+  1.2 on a 128K IIe (`--iie`). What it took, past the system programs' globals: records with variant parts, each
+  field the code reaches typed alone and put in its record once the links settle; one WITH temporary for each WITH;
+  nested segment procedures; words used as pointers and integers passed by value or VAR as pointers; NEW of a
+  variant's words; moves of a record's first words as an array view; records' first fields moved to whole; field
+  names by type under nested WITHs; FORWARD headings where nested procedures take numbers; the R option; GOTOs to
+  the ends of bodies; and FWRITEBYTES's width before its count. **Next:** Apple Pascal 1.0, 1.2 and Apple III
+  Compilers.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

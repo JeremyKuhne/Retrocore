@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -401,6 +402,7 @@ internal sealed class MainWindow : Window
         };
 
         ToolTip.SetTip(opacity, "How much of the machine shows through the pane");
+        AutomationProperties.SetName(opacity, "Pane opacity");
         opacity.ValueChanged += (_, _) =>
         {
             int percent = (int)Math.Round(opacity.Value);
@@ -591,6 +593,9 @@ internal sealed class MainWindow : Window
     {
         control.HorizontalAlignment = HorizontalAlignment.Left;
         control.VerticalAlignment = VerticalAlignment.Center;
+
+        // The label beside it is visual only, so the control carries its name for a screen reader.
+        if (AutomationProperties.GetName(control) is null) { AutomationProperties.SetName(control, name); }
         return OptionRow(name, control);
     }
 

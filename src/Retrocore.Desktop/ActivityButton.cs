@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -40,6 +41,7 @@ internal sealed class ActivityButton : Button
         BorderThickness = new Thickness(0);
         CornerRadius = new CornerRadius(0);
         ToolTip.SetTip(this, name);
+        AutomationProperties.SetName(this, name);
         Active = false;
     }
 

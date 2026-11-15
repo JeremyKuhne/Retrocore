@@ -246,8 +246,16 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal float Volume
     {
-        get => _audio.Volume;
-        set => _audio.Volume = value;
+        get
+        {
+            using (Gate()) { return _audio.Volume; }
+        }
+        set
+        {
+            // Under the gate, where the run thread opens and replaces the sound stream, so the gain never goes to a
+            // stream that has just been destroyed.
+            using (Gate()) { _audio.Volume = value; }
+        }
     }
 
     /// <summary>

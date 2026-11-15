@@ -190,7 +190,8 @@ internal sealed class DesktopSettings
     }
 
     // Reads the file: its object, or null with Broken false when there is none, or null with Broken true when it is
-    // there but is not a settings object.
+    // there but is not a settings object or cannot be read, as when another program holds it or it may not be read.
+    // Loading then keeps the defaults, and saving leaves the file alone.
     private static (JsonObject? Root, bool Broken) Read(string path)
     {
         if (!File.Exists(path)) { return (null, false); }
@@ -198,7 +199,7 @@ internal sealed class DesktopSettings
         {
             return JsonNode.Parse(File.ReadAllText(path)) is JsonObject root ? (root, false) : (null, true);
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
             // A file someone broke by hand is left for them to fix; the defaults hold until then.
             return (null, true);

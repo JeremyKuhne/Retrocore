@@ -40,7 +40,7 @@ internal static class Program
                     configuration = machine;
                     index++;
                     break;
-                case "--smoke-seconds" when value is not null && double.TryParse(value, out double seconds) && seconds > 0:
+                case "--smoke-seconds" when value is not null && double.TryParse(value, out double seconds) && double.IsFinite(seconds) && seconds > 0:
                     smokeSeconds = seconds;
                     index++;
                     break;
@@ -52,7 +52,7 @@ internal static class Program
                     theme = value;
                     index++;
                     break;
-                case "--benchmark" when value is not null && double.TryParse(value, out double length) && length > 0:
+                case "--benchmark" when value is not null && double.TryParse(value, out double length) && double.IsFinite(length) && length is > 0 and <= 3600:
                     benchmarkSeconds = length;
                     index++;
                     break;
@@ -76,8 +76,7 @@ internal static class Program
 
         if (benchmarkSeconds is { } benchmark)
         {
-            Benchmark.Run(configuration, benchmark);
-            return 0;
+            return Benchmark.Run(configuration, benchmark);
         }
 
         // A smoke run neither reads nor writes the user's settings, so it measures the same every time.

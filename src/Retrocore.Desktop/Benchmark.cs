@@ -14,20 +14,33 @@ namespace Retrocore.Desktop;
 /// </summary>
 internal static class Benchmark
 {
+    // Cycles run before each timing, past the boot's own work, the same for every path.
+    private const ulong SettleCycles = 500_000;
+
     /// <summary>
-    ///  Runs the measurements and writes them to the console.
+    ///  Checks that running without tracking ends where stepping does, then times each path over the same cycles
+    ///  from the same state, and writes it all to the console.
     /// </summary>
     /// <param name="configuration">The machine's launch configuration.</param>
-    /// <param name="seconds">How long each measurement runs.</param>
-    internal static void Run(JsonObject configuration, double seconds)
+    /// <param name="seconds">
+    ///  The work each timing runs: twenty times this many seconds of the machine's clock, about this long at 20x.
+    /// </param>
+    /// <returns>0, or 1 when running without tracking does not end where stepping does.</returns>
+    internal static int Run(JsonObject configuration, double seconds)
     {
-        IDebugTarget target = OffMachine.Build(configuration);
-        int clock = target.ClockHertz;
-        Console.Out.WriteLine($"machine: {configuration["machine"]}, clock {clock} Hz");
+        Console.Out.WriteLine($"machine: {configuration["machine"]}");
+        string? difference = Difference(configuration);
+        Console.Out.WriteLine($"RunCycles ends where stepping does: {difference ?? "yes"}");
+        if (difference is not null) { return 1; }
 
-        // Settle first, so the boot's own work is not measured.
-        Cycles(target, 0.5, () => target.RunCycles(256));
-        Report("debug target StepCycle", Cycles(target, seconds, () =>
+        // Each timing starts from a machine of its own, settled the same way, and runs the same cycles.
+        IDebugTarget probe = OffMachine.Build(configuration);
+        int clock = probe.ClockHertz;
+        (probe as IDisposable)?.Dispose();
+        ulong work = (ulong)(clock * seconds * 20);
+        Console.Out.WriteLine($"clock {clock} Hz; each timing runs {work:N0} cycles after {SettleCycles:N0}");
+
+        Report("debug target StepCycle", Time(configuration, work, target =>
         {
             for (int count = 0; count < 256; count++)
             {
@@ -35,32 +48,34 @@ internal static class Benchmark
             }
         }), clock);
 
-        Report("debug target RunCycles", Cycles(target, seconds, () => target.RunCycles(256)), clock);
-        (target as IDisposable)?.Dispose();
-
-        Console.Out.WriteLine($"RunCycles ends where stepping does: {Difference(configuration) ?? "yes"}");
+        Report("debug target RunCycles", Time(configuration, work, target => target.RunCycles(256)), clock);
 
         using MachineHost host = new(configuration) { Speed = 0, SoundOn = false };
         host.Start();
-        Thread.Sleep(1000);
-        ulong start = host.CycleCount;
+        while (host.CycleCount < SettleCycles) { Thread.Sleep(1); }
+        ulong from = host.CycleCount;
         long started = Stopwatch.GetTimestamp();
-        Thread.Sleep(TimeSpan.FromSeconds(seconds));
-        double hertz = (host.CycleCount - start) / Stopwatch.GetElapsedTime(started).TotalSeconds;
-        Report("host at max speed", hertz, clock);
+        while (host.CycleCount < from + work) { Thread.Sleep(1); }
+        Report("host at max speed", (host.CycleCount - from) / Stopwatch.GetElapsedTime(started).TotalSeconds, clock);
+        return 0;
     }
 
-    private static double Cycles(IDebugTarget target, double seconds, Action run)
+    // Builds the machine, settles it, and times one path over the given cycles: cycles a second.
+    private static double Time(JsonObject configuration, ulong work, Action<IDebugTarget> run)
     {
-        ulong start = target.CycleCount;
-        long started = Stopwatch.GetTimestamp();
-        TimeSpan length = TimeSpan.FromSeconds(seconds);
-        while (Stopwatch.GetElapsedTime(started) < length)
+        IDebugTarget target = OffMachine.Build(configuration);
+        try
         {
-            for (int count = 0; count < 100; count++) { run(); }
+            while (target.CycleCount < SettleCycles) { target.RunCycles(256); }
+            ulong from = target.CycleCount;
+            long started = Stopwatch.GetTimestamp();
+            while (target.CycleCount < from + work) { run(target); }
+            return (target.CycleCount - from) / Stopwatch.GetElapsedTime(started).TotalSeconds;
         }
-
-        return (target.CycleCount - start) / Stopwatch.GetElapsedTime(started).TotalSeconds;
+        finally
+        {
+            (target as IDisposable)?.Dispose();
+        }
     }
 
     // Runs three of the machine the same cycles, two stepped and one without tracking, and compares where they end:

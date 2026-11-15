@@ -83,7 +83,7 @@ closing or dragging it never moves or resizes the machine's picture.
   - **Display and Sound**: what the display panel offers: speed, sound, volume, scale, screen, fast disk and the beam
     overlay.
 
-  The pane opens over the screen, partly transparent (about 72% opaque) so the machine shows through, with a shadow
+  The pane opens over the screen, partly transparent (about 82% opaque) so the machine shows through, with a shadow
   along its edge. It is as wide as its contents need, within the window, so nothing is cut off; dragging its edge
   sets a width of the user's own, and double-clicking the edge fits it to its contents again.
 - **The status bar** runs the whole width: the machine and its state, its speed and frame rate, the busy drive, and

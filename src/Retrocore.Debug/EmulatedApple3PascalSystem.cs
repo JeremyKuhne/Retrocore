@@ -33,8 +33,11 @@ internal sealed class EmulatedApple3PascalSystem
     /// <param name="tools">/PASCAL2's image.</param>
     /// <param name="work">The work volume's image, whose files the work reads and writes.</param>
     /// <param name="roms">The SDK's sources, or null for the copy beside the host.</param>
+    /// <param name="output">
+    ///  A fourth volume's image, in .D4, for output too big to go beside the work; null for none.
+    /// </param>
     /// <exception cref="TimeoutException">The system never booted.</exception>
-    public EmulatedApple3PascalSystem(byte[] system, byte[] tools, byte[] work, string? roms)
+    public EmulatedApple3PascalSystem(byte[] system, byte[] tools, byte[] work, string? roms, byte[]? output = null)
     {
         string sources = Apple3SdkModules.Directory(roms);
         byte[] boot = Apple3SdkModules.AssembleBootRom(Path.Join(sources, "BootRom.asm")).Sections[0].Bytes.ToArray();
@@ -43,7 +46,7 @@ internal sealed class EmulatedApple3PascalSystem
         byte[] sequencer = SdkModules.AssembleDiskII(sequencerSource, origin: 0).Sections[0].Bytes.ToArray();
 
         _machine = new(new Apple3Roms(boot, sequencer), ramKilobytes: 256);
-        byte[][] disks = [system, tools, work];
+        byte[][] disks = output is null ? [system, tools, work] : [system, tools, work, output];
         for (int drive = 0; drive < disks.Length; drive++)
         {
             WozDisk media = SectorDiskConverter.Convert(disks[drive], proDosOrder: false);
@@ -130,9 +133,18 @@ internal sealed class EmulatedApple3PascalSystem
     /// </summary>
     /// <returns>The volume as the system left it.</returns>
     /// <exception cref="InvalidOperationException">The disk left the drive.</exception>
-    public SosVolume EjectWork()
+    public SosVolume EjectWork() => Eject(drive: 2);
+
+    /// <summary>
+    ///  Takes the output volume out of .D4, and reads it.
+    /// </summary>
+    /// <returns>The volume as the system left it.</returns>
+    /// <exception cref="InvalidOperationException">The disk left the drive.</exception>
+    public SosVolume EjectOutput() => Eject(drive: 3);
+
+    private SosVolume Eject(int drive)
     {
-        WozDisk disk = _machine.Drives[2].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
+        WozDisk disk = _machine.Drives[drive].Eject() ?? throw new InvalidOperationException("The disk left the drive.");
         return SosVolume.Read(SectorDiskReader.Read(disk, proDosOrder: false), proDosOrder: false);
     }
 }

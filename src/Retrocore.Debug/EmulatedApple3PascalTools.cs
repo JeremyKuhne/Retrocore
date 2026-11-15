@@ -60,19 +60,23 @@ internal static partial class EmulatedApple3PascalTools
         IReadOnlyDictionary<string, byte[]>? files = null)
     {
         SosVolumeBuilder work = new("WORK");
-        work.Add("SOURCE.TEXT", TextType, auxType: 0, PascalTextFile.Write(source));
+        byte[] text = PascalTextFile.Write(source);
+        work.Add("SOURCE.TEXT", TextType, auxType: 0, text);
         foreach ((string name, byte[] data) in files ?? new Dictionary<string, byte[]>())
         {
             work.Add(name, CodeType, auxType: 0, data);
         }
 
-        EmulatedApple3PascalSystem system = new(File.ReadAllBytes(systemDisk), File.ReadAllBytes(toolsDisk), work.Build(proDosOrder: false), roms);
+        // A source too long to leave room on /WORK for its code, such as a Compiler's, has the code go to /OUT.
+        bool large = text.Length > 100 * 512;
+        byte[]? output = large ? new SosVolumeBuilder("OUT").Build(proDosOrder: false) : null;
+        EmulatedApple3PascalSystem system = new(File.ReadAllBytes(systemDisk), File.ReadAllBytes(toolsDisk), work.Build(proDosOrder: false), roms, output);
 
         system.Type("C");
         Expect(system, "Compile what text?", "The Compiler never asked for its text");
         system.Type("/WORK/SOURCE\n");
         Expect(system, "To what codefile?", "The Compiler never asked for a code file");
-        system.Type("/WORK/HOST\n");
+        system.Type(large ? "/OUT/HOST\n" : "/WORK/HOST\n");
 
         // 1.0's Compiler asks for no listing.
         if (system.WaitFor(["Listing file", "Apple /// Pascal Compiler"], seconds: 60) == "Listing file")
@@ -81,7 +85,7 @@ internal static partial class EmulatedApple3PascalTools
         }
 
         // It ends with the space it had left, or stops at an error with a prompt to go on, stop or edit.
-        string ended = system.WaitFor(["Smallest available space", "<esc>", "continue"], seconds: 1_800)
+        string ended = system.WaitFor(["Smallest available space", "<esc>", "continue"], seconds: large ? 7_200 : 1_800)
             ?? throw new TimeoutException($"The Compiler never finished:\n{system.Screen}");
 
         string screen = system.Screen;
@@ -90,8 +94,9 @@ internal static partial class EmulatedApple3PascalTools
         Expect(system, EmulatedApple3PascalSystem.CommandLine, "The system never came back from the Compiler");
         system.Run(tenths: 20);
         SosVolume volume = system.EjectWork();
-        string? text = listing is not null && Has(volume, listing) ? PascalTextFile.Read(volume.ReadFile(listing)) : null;
-        return (Has(volume, "HOST.CODE") ? volume.ReadFile("HOST.CODE") : null, screen, text);
+        string? listed = listing is not null && Has(volume, listing) ? PascalTextFile.Read(volume.ReadFile(listing)) : null;
+        SosVolume codes = large ? system.EjectOutput() : volume;
+        return (Has(codes, "HOST.CODE") ? codes.ReadFile("HOST.CODE") : null, screen, listed);
     }
 
     /// <summary>

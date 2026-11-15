@@ -45,7 +45,7 @@ internal static partial class PascalCommand
                --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
                --pascal disassemble (file.code | disk NAME) [--library L] [--listing L] [--hints file.json] output.asm
                --pascal assemble source.asm output.code
-               --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
+               --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
                --pascal assembly (file.code | disk NAME) output.text
@@ -71,7 +71,7 @@ internal static partial class PascalCommand
                 ["disassemble", .. string[] rest] when rest.Any(IsSource) => DisassembleToSource(rest),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
                 ["assemble", string source, string output] => Assemble(source, output),
-                ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
+                ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") || rest.Contains("--add") => Sos(output, name, rest),
                 ["decompile", .. string[] rest] => Decompile(rest),
                 ["compile", .. string[] rest] => Compile(rest),
                 ["assembly", .. string[] rest] when rest.Length >= 2 && CodeFile(rest[..^1], out _) is { } file => Assembly(file, rest[..^1], rest[^1]),
@@ -141,6 +141,11 @@ internal static partial class PascalCommand
                     break;
                 case "--from" when index + 1 < args.Length:
                     from = OpenSos(args[++index]);
+                    break;
+                case "--add" when index + 2 < args.Length:
+                    // A Pascal code file from the host, as SOS file type 2, Pascal code.
+                    builder.Add(args[index + 2], fileType: 0x02, auxType: 0, File.ReadAllBytes(args[index + 1]));
+                    index += 2;
                     break;
                 case string file when from is not null:
                     builder.Add(from, file);

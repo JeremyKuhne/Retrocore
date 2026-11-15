@@ -82,10 +82,14 @@ public sealed partial class PascalDecompiler
             return list;
         }
 
-        for (; _placed < _sites.Count; _placed++)
+        // Pointers go in last, as whether two can be one depends on the records they point to, whose fields go in
+        // first.
+        List<int> order = [.. Enumerable.Range(_placed, _sites.Count - _placed).OrderBy(index => _sites[index].Field.Find().Kind == TypeKind.Pointer)];
+        _placed = _sites.Count;
+        foreach (int index in order)
         {
             // Reaching a field makes a record of what is at the address.
-            (TypeNode record, int offset, TypeNode field) = _sites[_placed];
+            (TypeNode record, int offset, TypeNode field) = _sites[index];
             record.Field(offset);
             TypeNode root = record.Find();
             if (root.Alternatives(offset).Contains(field.Find())) { continue; }
@@ -727,6 +731,15 @@ public sealed partial class PascalDecompiler
 
             placed = PlaceSites();
         }
+
+        // The fields' bytes, now in their records, are characters too.
+        HashSet<TypeNode> placedSeen = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            foreach (Variable variable in procedure.Frame.Variables.Values) { Characters(variable.Type, placedSeen); }
+        }
+
+        foreach ((_, _, TypeNode field) in _sites) { Characters(field, placedSeen); }
 
         Dictionary<TypeNode, TypeNode> classes = [];
         TypeNode Class(TypeNode type)

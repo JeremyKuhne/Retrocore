@@ -1077,9 +1077,9 @@ public sealed partial class PascalDecompiler
             {
                 Keyword keyword => keyword.Text,
 
-                // NEW and MARK set a pointer: a word used both ways by its pointer view.
-                Address address when name is "NEW" or "MARK" or "RELEASE" && IsPunned(address.Designator.Type) =>
-                    $"{DesignatorText(address.Designator)}.P",
+                // NEW and MARK set a pointer, a record's first field where it is a record's address: a word used
+                // both ways by its pointer view.
+                Address address when name is "NEW" or "MARK" or "RELEASE" => Pointer(Descend(address.Designator, use: null)),
                 Address address => DesignatorText(address.Designator),
                 ByteAddress address => DesignatorText(address.Designator),
                 Load
@@ -1094,6 +1094,8 @@ public sealed partial class PascalDecompiler
             ? Invocation(name, [FileName(call.Arguments[0]), .. parts.Skip(1)])
             : Invocation(name, parts);
     }
+
+    private string Pointer(Designator pointer) => IsPunned(pointer.Type) ? $"{DesignatorText(pointer)}.P" : DesignatorText(pointer);
 
     private static string Invocation(string name, List<string> arguments) =>
         arguments.Count == 0 ? name : $"{name}({string.Join(", ", arguments)})";
@@ -1112,7 +1114,7 @@ public sealed partial class PascalDecompiler
                 TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
                 parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));
             }
-            else if (argument is Load { Designator: var whole }
+            else if (Narrow(argument) is Load { Designator: var whole }
                 && IsPunned(parameter.Type)
                 && whole.Type.Find() == parameter.Type.Find())
             {

@@ -445,8 +445,9 @@ public sealed partial class PascalDecompiler
                 return root.Element ??= Scalar(ScalarKind.Char);
             }
 
+            // A byte is a scalar: a character, or a small number.
             if (root.Kind == TypeKind.Unknown) { root.Kind = TypeKind.Array; }
-            root.Element ??= new TypeNode();
+            root.Element ??= Of(TypeKind.Scalar);
             if (root.Kind == TypeKind.Array) { root.Bytes = true; }
             Bounds(root, low, high);
             return root.Element;
@@ -666,6 +667,11 @@ public sealed partial class PascalDecompiler
 
             foreach (TypeNode alternative in alternatives)
             {
+                // A record and a thing that is not one are two variants' fields, not the record's first.
+                bool records = alternative.Find().Kind == TypeKind.Record || root.Kind == TypeKind.Record;
+                bool known = alternative.Find().Kind != TypeKind.Unknown && root.Kind != TypeKind.Unknown;
+                if (records && known && alternative.Find().Kind != root.Kind) { continue; }
+
                 if (!Differ(alternative, root, depth: 3) && !Booleans(alternative, root, evidence))
                 {
                     Unify(alternative, root);
@@ -705,6 +711,21 @@ public sealed partial class PascalDecompiler
             TypeNode b = second.Find();
             if (a == b) { return false; }
             if (Conflicts(a, b) || Longer(a, b) || Longer(b, a)) { return true; }
+
+            // An array and a scalar at one offset are two variants', as a constant's characters and another's number.
+            if ((a.Kind, b.Kind) is (TypeKind.Array, TypeKind.Scalar) or (TypeKind.Scalar, TypeKind.Array))
+            {
+                return true;
+            }
+
+            // So are an array of bytes and one of words, or arrays whose elements cannot be one.
+            if (a.Kind == TypeKind.Array && b.Kind == TypeKind.Array)
+            {
+                if (a.Bytes != b.Bytes) { return true; }
+                bool elements = depth > 0 && a.Element is { } mine && b.Element is { } theirs && Differ(mine, theirs, depth - 1);
+                if (elements) { return true; }
+            }
+
             if (depth == 0) { return false; }
 
             if (a.Kind == TypeKind.Pointer && b.Kind == TypeKind.Pointer)
@@ -714,6 +735,9 @@ public sealed partial class PascalDecompiler
 
             if (a.Kind == TypeKind.Record && b.Kind == TypeKind.Record && a.Fields is { } fields && b.Fields is { } others)
             {
+                // A field inside another's words, as a word inside an identifier's name, is of another record.
+                if (Inside(fields, others) || Inside(others, fields)) { return true; }
+
                 foreach ((int offset, TypeNode field) in fields)
                 {
                     if (others.TryGetValue(offset, out TypeNode? match) && Differ(field, match, depth - 1))
@@ -725,10 +749,21 @@ public sealed partial class PascalDecompiler
 
             return false;
 
+            static bool Inside(SortedDictionary<int, TypeNode> wide, SortedDictionary<int, TypeNode> narrow)
+            {
+                foreach ((int offset, TypeNode field) in wide)
+                {
+                    int words = field.Find().Words;
+                    if (words > 1 && narrow.Keys.Any(key => key > offset && key < offset + words)) { return true; }
+                }
+
+                return false;
+            }
+
             static bool Longer(TypeNode array, TypeNode word)
             {
                 bool bytes = array.Kind == TypeKind.Array && array.Bytes;
-                return bytes && word.Kind == TypeKind.Scalar && array.IndexHigh - array.IndexLow + 1 > 2;
+                return bytes && word.Kind == TypeKind.Scalar && (array.IndexHigh - array.IndexLow + 1 > 2 || array.Words > 1);
             }
         }
 
@@ -741,15 +776,17 @@ public sealed partial class PascalDecompiler
         /// <returns>Whether they are kept apart.</returns>
         public static bool Conflicts(TypeNode first, TypeNode second)
         {
-            TypeKind a = first.Find().Kind;
-            TypeKind b = second.Find().Kind;
+            TypeNode one = first.Find();
+            TypeNode other = second.Find();
+            TypeKind a = one.Kind;
+            TypeKind b = other.Kind;
             if (a == b || a is TypeKind.Unknown or TypeKind.Record || b is TypeKind.Unknown or TypeKind.Record)
             {
                 return false;
             }
 
             bool strings = (a, b) is (TypeKind.Array, TypeKind.String) or (TypeKind.String, TypeKind.Array);
-            bool bytes = (a, b) is (TypeKind.Array, TypeKind.Scalar) or (TypeKind.Scalar, TypeKind.Array);
+            bool bytes = (a == TypeKind.Array && one.Bytes && b == TypeKind.Scalar) || (b == TypeKind.Array && other.Bytes && a == TypeKind.Scalar);
             return !strings && !bytes;
         }
 

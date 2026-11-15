@@ -25,8 +25,10 @@ public sealed partial class PascalDecompiler
             Index = index;
             Low = low;
             High = high;
-            Type = element;
+            _element = element;
         }
+
+        private readonly TypeNode _element;
 
         /// <summary>
         ///  Gets the array.
@@ -55,6 +57,12 @@ public sealed partial class PascalDecompiler
         public bool Neutral { get; init; }
 
         /// <inheritdoc/>
-        public override TypeNode Type { get; }
+        /// <remarks>
+        ///  <para>
+        ///   The array's element now: the array may since have become one with another, whose element it keeps.
+        ///  </para>
+        /// </remarks>
+        public override TypeNode Type =>
+            Array.Type.Find() is { Kind: TypeKind.Array, Element: { } element } ? element : _element;
     }
 }

@@ -122,7 +122,7 @@ What the decompiler does not decompile yet, found by decompiling every code file
 
 - **System programs:** code compiled with `(*$U-*)` (SOROCGOTO, HAZELGOTO, the system's Filer, Editor, Compiler and
   Linker). Done (2026-11-14) for their globals: the outer block declares them, the program is its segment procedure
-  1, with FORWARD segments 2 to 6 before its own ([Pascal.md](../Pascal.md#decompiling)). **Not done:** the system's
+  1, whose segment procedures `(*$NS 7*)` numbers from 7 ([Pascal.md](../Pascal.md#decompiling)). **Not done:** the system's
   procedures past `CXP 0, 29` (the 1.1 Compiler calls `CXP 0, 43` in COMPOPTI), which the outer block can declare
   FORWARD and never define, as a probe shows (`PROCEDURE P2; FORWARD;` there compiles to `CXP 0, 2`), but whose
   parameters the call alone does not give; and the Compiler's types: a few words used as both pointers and integers

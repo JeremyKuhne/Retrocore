@@ -19,6 +19,9 @@ public sealed partial class PascalDecompiler
     // The WITH statements the writer is inside, innermost last: their records' fields go by name alone.
     private readonly List<Variable> _with = [];
 
+    // The number the Compiler gives the next segment procedure, in a (*$U-*) program, which numbers them in order.
+    private int? _nextSegment;
+
     // The records of the WITH statements, by their temporaries.
     private readonly Dictionary<Variable, Designator> _withRecords = [];
 
@@ -130,8 +133,8 @@ public sealed partial class PascalDecompiler
     private static bool IsStringReference(Variable parameter) =>
         parameter.IsReference && parameter.Type.Target().Find().Kind == TypeKind.String;
 
-    // A (*$U-*) program's segment procedure, segment 1, after FORWARD declarations of it and the system's segments up
-    // to the first of its own, which the Compiler numbers on from them; then the system's outer block, empty.
+    // A (*$U-*) program's segment procedure, segment 1, then the system's outer block, empty. The Compiler numbers
+    // its segment procedures on from 2, so the first of Apple's, 7, needs (*$NS 7*).
     private void SystemSegment()
     {
         if (Main.Number != 1)
@@ -139,20 +142,9 @@ public sealed partial class PascalDecompiler
             Warn($"The program's segment is {Main.Number}, not 1, as the system's user program is.");
         }
 
-        string header = $"SEGMENT PROCEDURE {Program.Name}{ParameterList(Program)};";
-        int first = _procedures.Where(procedure => procedure.IsSegmentProcedure).Select(procedure => procedure.Segment.Number).DefaultIfEmpty(2).Min();
-        if (first > 2)
-        {
-            if (Comment(Program) is { } early) { Line(early); }
-            Line($"{header} FORWARD;");
-            for (int segment = 2; segment < first; segment++) { Line($"SEGMENT PROCEDURE SYSSEG{segment}; FORWARD;"); }
-            Line($"SEGMENT PROCEDURE {Program.Name};");
-        }
-        else
-        {
-            if (Comment(Program) is { } about) { Line(about); }
-            Line(header);
-        }
+        if (Comment(Program) is { } about) { Line(about); }
+        Line($"SEGMENT PROCEDURE {Program.Name}{ParameterList(Program)};");
+        _nextSegment = 2;
 
         _indent++;
         Labels(Program);
@@ -266,7 +258,17 @@ public sealed partial class PascalDecompiler
             declared.Add(earlier);
         }
 
-        foreach (Procedure segment in segments) { WriteProcedure(segment, forwarded: false); }
+        foreach (Procedure segment in segments)
+        {
+            // A segment the Compiler would number otherwise is numbered with NS, the next segment's number.
+            if (_nextSegment is { } next && segment.Segment.Number != next)
+            {
+                Line($"(*$NS {segment.Segment.Number}*)  (* The next segment is numbered {segment.Segment.Number}. *)");
+            }
+
+            if (_nextSegment is not null) { _nextSegment = segment.Segment.Number + 1; }
+            WriteProcedure(segment, forwarded: false);
+        }
 
         Ordinary(ordinary, declared);
     }

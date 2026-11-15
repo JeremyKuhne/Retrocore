@@ -38,22 +38,17 @@ public class PascalSystemDecompilerTests
 
     // A program compiled as part of the system: the system's outer block declares its globals, a pointer to its
     // SYSCOM record and pointers to files among them, and the program is its segment procedure 1, whose own segment
-    // procedures follow the system's, 2 to 6, as Apple's Compilers' do.
+    // procedures NS numbers from 7, as Apple's Compilers' are.
     private const string SystemSource = """
         (*$U-*)
         PROGRAM PASCALSYSTEM;
         TYPE UF = FILE; FP = ^UF; SR = RECORD A, B: INTEGER END;
         VAR SYSCOM: ^SR; IN1, OUT1, TERM1, SWAP: INTEGER; G6, G7: INTEGER;
             CODEF, SYMF: FP; ERRNUM, ERRBLK, ERRSYM: INTEGER; SLOW, STUPID: BOOLEAN; ALT: CHAR;
-        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER); FORWARD;
-        SEGMENT PROCEDURE D2; FORWARD;
-        SEGMENT PROCEDURE D3; FORWARD;
-        SEGMENT PROCEDURE D4; FORWARD;
-        SEGMENT PROCEDURE D5; FORWARD;
-        SEGMENT PROCEDURE D6; FORWARD;
-        SEGMENT PROCEDURE COMPILER;
+        SEGMENT PROCEDURE COMPILER(Q, R: INTEGER);
         VAR B: PACKED ARRAY[0..511] OF CHAR; N: INTEGER;
         PROCEDURE ERROR(E: INTEGER); FORWARD;
+        (*$NS 7*)
         SEGMENT PROCEDURE INIT;
         BEGIN
           IF BLOCKREAD(SYMF^, B, 1, 0) <> 1 THEN ERROR(3);
@@ -229,8 +224,8 @@ public class PascalSystemDecompilerTests
         string source = RoundTrip(SystemSource);
         source.Should().StartWith("(*$U-*)  (* Compiled as part of the system: its globals are the system's, I/O and range checks off. *)\nPROGRAM PASCALSY;\n");
         source.Should().Contain("  SYS8: T4;\n  SYS9: T4;\n").And.Contain("IF BLOCKREAD(SYS8^, G3, 1, 0) <> 1 THEN");
-        source.Should().Contain("SEGMENT PROCEDURE COMPILER(G2: INTEGER; G1: INTEGER); FORWARD;\nSEGMENT PROCEDURE SYSSEG2; FORWARD;");
-        source.Should().Contain("SEGMENT PROCEDURE SYSSEG6; FORWARD;\nSEGMENT PROCEDURE COMPILER;\n");
+        source.Should().Contain("SEGMENT PROCEDURE COMPILER(G2: INTEGER; G1: INTEGER);\n");
+        source.Should().Contain("  (*$NS 7*)  (* The next segment is numbered 7. *)\n  SEGMENT PROCEDURE INIT;");
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 

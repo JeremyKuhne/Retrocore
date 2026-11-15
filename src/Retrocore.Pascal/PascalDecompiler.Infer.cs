@@ -268,6 +268,11 @@ public sealed partial class PascalDecompiler
             }
         }
 
+        // A parameter whose own value the procedure stores as a word, or compares with NIL, is a pointer, though its
+        // calls pass the address of what it points to, as they do a VAR record's.
+        HashSet<Variable> pointers = [];
+        Walk(procedure.Body, statement => Stored(statement, pointers), expression => Compared(expression, pointers));
+
         int first = procedure.IsFunction ? 3 : 1;
         for (int offset = first; offset <= procedure.Frame.ParameterWords; offset++)
         {
@@ -276,14 +281,30 @@ public sealed partial class PascalDecompiler
             Variable parameter = procedure.Frame.At(offset);
             if (parameter.Copy is not null) { continue; }
 
-            bool reference = addressed.Contains(parameter)
-                || (!valued.Contains(parameter) && parameter.Type.Find().Kind == TypeKind.Pointer && sites.Count == 0);
+            bool reference = !pointers.Contains(parameter)
+                && (addressed.Contains(parameter) || (!valued.Contains(parameter) && parameter.Type.Find().Kind == TypeKind.Pointer && sites.Count == 0));
 
             changed |= reference != parameter.IsReference;
             parameter.IsReference = reference;
         }
 
         return changed;
+    }
+
+    // A variable whose word an assignment stores, or a comparison compares with NIL.
+    private static void Stored(Statement statement, HashSet<Variable> pointers)
+    {
+        if (statement is Assignment { Block: false } stored) { Pointer(stored.Value, pointers); }
+    }
+
+    private static void Compared(Expr expression, HashSet<Variable> pointers)
+    {
+        if (expression is Comparison { Right: Nil } compared) { Pointer(compared.Left, pointers); }
+    }
+
+    private static void Pointer(Expr value, HashSet<Variable> pointers)
+    {
+        if (value is Load { Designator: VariableDesignator { Variable: var variable } }) { pointers.Add(variable); }
     }
 
     // Whether an argument is an address: a designator's, a file's window (its first word), or a VAR parameter's.

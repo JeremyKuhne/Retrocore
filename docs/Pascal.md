@@ -211,15 +211,18 @@ A program compiled as part of the system, `(*$U-*)`, such as Apple's Compilers, 
 start with the two `NOP`s (or the jump) a program's does. Found by compiling probes: with `(*$U-*)` before `PROGRAM`,
 the program is the system's outer block, at level -1, segment 0, and its variables are the system's globals, from
 word 1, beside the `INPUT`, `OUTPUT` and `KEYBOARD` the Compiler still declares at words 2 to 4; its segment
-procedures are numbered from 1, and `(*$U-*)` turns off I/O and range checks. Apple's Compiler is segment procedure 1
-with its own from 7, so it is decompiled as
+procedures are numbered from 1, and `(*$U-*)` turns off I/O and range checks. Each takes a slot of the code file's
+16 too, so a placeholder can't number them on; the Compiler's own option `(*$NS n*)` (next segment), found in its
+options parser, COMPOPTI, sets the next one's number without a slot. Apple's Compiler is segment procedure 1 with
+its own from 7, so it is decompiled as
 
     (*$U-*)
     PROGRAM PASCALSYSTEM;
     VAR SYS1: T1; ... SYS8: T4; ...        (* the system's globals the code reaches *)
-    SEGMENT PROCEDURE PASCALCO(G2: ...; G1: ...); FORWARD;
-    SEGMENT PROCEDURE SYSSEG2; FORWARD;    (* ... to 6, which the Compiler numbers but writes empty *)
-    SEGMENT PROCEDURE PASCALCO;
+    SEGMENT PROCEDURE PASCALCO(G2: ...; G1: ...);
+      ...
+      (*$NS 7*)
+      SEGMENT PROCEDURE COMPINIT;
       ...
     BEGIN ... END;
     BEGIN

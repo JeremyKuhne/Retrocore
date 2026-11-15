@@ -693,6 +693,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _goneFetching = false;
+        _returnedFromInterrupt = false;
+        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
+        {
+            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
+        }
+    }
+
+    /// <inheritdoc/>
     public IDebugTarget? Coprocessor
     {
         get

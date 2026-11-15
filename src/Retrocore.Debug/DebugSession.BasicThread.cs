@@ -100,7 +100,8 @@ internal sealed partial class DebugSession
     // Pascal's too once its interpreter is found, and the coprocessor's while the machine has one.
     private JsonArray Threads()
     {
-        JsonArray threads = [new JsonObject { ["id"] = 1, ["name"] = _target?.ThreadName ?? "CPU" }];
+        // As a JsonNode, so the array takes it with Add(JsonNode) rather than Add<T>, which Native AOT cannot compile.
+        JsonArray threads = [(JsonNode)new JsonObject { ["id"] = 1, ["name"] = _target?.ThreadName ?? "CPU" }];
         if (_target is not null && HasBasicThread)
         {
             threads.Add((JsonNode)new JsonObject

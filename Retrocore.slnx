@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/AppleSharp/AppleSharp.csproj" />
     <Project Path="src/Retrocore.Debug/Retrocore.Debug.csproj" />
+    <Project Path="src/Retrocore.Desktop/Retrocore.Desktop.csproj" />
     <Project Path="src/Retrocore.Generators/Retrocore.Generators.csproj" />
     <Project Path="src/Retrocore.Input/Retrocore.Input.csproj" />
   </Folder>

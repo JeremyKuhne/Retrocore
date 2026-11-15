@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Retrocore Desktop: the standalone emulator, with the extension's views in an Avalonia window
+       (docs/backlog/Desktop.md). This is its phase 0 spike: dotnet publish -r win-x64 builds it native. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Retrocore.Desktop</RootNamespace>
+    <AssemblyName>retrocore-desktop</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The spike references the debug host's executable for its machines; phase 1's Retrocore.Hosting library
+         replaces that reference, and this with it. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="SDL3-CS" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.Windows" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.Linux" Version="3.4.20" />
+    <PackageReference Include="SDL3-CS.MacOS" Version="3.4.20" />
+    <!-- The spike reaches the debug host's machines through its internals; phase 1 moves them to a library. -->
+    <ProjectReference Include="..\Retrocore.Debug\Retrocore.Debug.csproj" />
+  </ItemGroup>
+</Project>

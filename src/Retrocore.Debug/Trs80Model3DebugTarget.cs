@@ -186,6 +186,18 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _instruction = false;
+        if (_machine.Processor.Status == ProcessorExecutionStatus.Stopped)
+        {
+            throw new InvalidOperationException("CPU stopped.");
+        }
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address)
     {
         byte opcode = Peek(address);

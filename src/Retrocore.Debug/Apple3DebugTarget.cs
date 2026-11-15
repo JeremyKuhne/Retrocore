@@ -221,6 +221,17 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
+        {
+            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
+        }
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         Peek(address) == JsrOpcode ? ((ushort)(Peek((ushort)(address + 1)) | (Peek((ushort)(address + 2)) << 8)), 3) : null;
 

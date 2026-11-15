@@ -126,7 +126,6 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
     public void Insert(WozDisk disk, string label, string format)
     {
         _controller.Mount(Drive, disk);
-        MountGeneration++;
         _label = label;
         _format = format;
     }
@@ -140,7 +139,7 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
     public IMedium? Medium => Disk;
 
     /// <inheritdoc/>
-    public int MountGeneration { get; private set; }
+    public int MountGeneration => _controller.MountGeneration(Drive);
 
     /// <summary>
     ///  Covers or uncovers the disk's write-protect notch. The disk keeps what is written to it in memory; its image
@@ -164,7 +163,16 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
     public void Saved(string label, string format, bool whole = true)
     {
         WozDisk disk = Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.");
-        if (whole) { disk.MarkSaved(); }
+        if (whole)
+        {
+            disk.MarkSaved();
+        }
+        else
+        {
+            // The image cannot give the disk back, so the disk stays changed against it, whatever it was before.
+            disk.MarkChanged();
+        }
+
         _label = label;
         _format = format;
     }
@@ -177,7 +185,6 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
     {
         _label = "";
         _format = "";
-        MountGeneration++;
         return _controller.Eject(Drive);
     }
 }

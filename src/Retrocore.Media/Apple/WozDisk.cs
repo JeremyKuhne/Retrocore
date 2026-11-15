@@ -368,6 +368,11 @@ public sealed class WozDisk : IMedium
     /// </summary>
     public void MarkSaved() => IsDirty = false;
 
+    /// <summary>
+    ///  Marks the media changed though nothing was written, as after a save to an image that could not hold all of it.
+    /// </summary>
+    public void MarkChanged() => IsDirty = true;
+
     private static void WriteChunk(Span<byte> image, int offset, uint id, uint length)
     {
         BinaryPrimitives.WriteUInt32LittleEndian(image[offset..], id);

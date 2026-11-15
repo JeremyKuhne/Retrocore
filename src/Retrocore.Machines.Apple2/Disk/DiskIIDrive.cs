@@ -23,12 +23,18 @@ internal sealed class DiskIIDrive
     internal WozDisk? Media { get; private set; }
 
     /// <summary>
+    ///  Gets a count that changes each time media goes in or comes out, however it does.
+    /// </summary>
+    internal int MountGeneration { get; private set; }
+
+    /// <summary>
     ///  Changes media while retaining its angular position across differing track lengths.
     /// </summary>
     /// <param name="media">The new disk, or null for eject.</param>
     internal void SetMedia(WozDisk? media)
     {
         int oldLength = BitCount;
+        if (!ReferenceEquals(media, Media) || media is not null) { MountGeneration++; }
         Media = media;
         BitPosition = (int)((long)BitPosition * BitCount / oldLength);
         _headWindow = 0;

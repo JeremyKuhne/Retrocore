@@ -129,6 +129,71 @@ public sealed class DiskIIImageTests
     }
 
     /// <summary>
+    ///  A bad checksum loses only its own sector: the sectors after it on the track still read.
+    /// </summary>
+    [TestMethod]
+    public void BadChecksumKeepsTheRestOfTheTrack()
+    {
+        byte[] image = new byte[35 * TrackSize];
+        new Random(5).NextBytes(image);
+        WozDisk disk = SectorDiskConverter.Convert(image, proDosOrder: false).Writable();
+
+        // Physical sector 1's 100th data nibble becomes $AA, which no 6-and-2 value encodes. Each sector the converter
+        // writes is 3,134 bits: its address field, 7 syncs, the data prologue, 343 nibbles, the epilogue and 16 syncs.
+        byte[] bits = (disk.Track(5 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        int position = 160 + 3134 + 112 + 70 + 24 + (100 * 8);
+        for (int bit = 0; bit < 8; bit++)
+        {
+            int at = position + bit;
+            bool one = (0xAA & (0x80 >> bit)) != 0;
+            bits[at / 8] = (byte)(one ? bits[at / 8] | (0x80 >> (at % 8)) : bits[at / 8] & ~(0x80 >> (at % 8)));
+        }
+
+        disk.SetTrack(quarterTrack: 5 * 4, bits, bitCount: 51024);
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Unreadable.Should().ContainSingle().Which.Should().Be("Track 5 has a bad checksum in sector 1.");
+
+        // DOS order puts physical sector 1 at logical 7; every other sector reads as it was.
+        for (int physical = 0; physical < 16; physical++)
+        {
+            int logical = physical == 15 ? 15 : physical * 7 % 15;
+            int offset = (5 * TrackSize) + (logical * 256);
+            byte[] expected = physical == 1 ? new byte[256] : image.AsSpan(offset, 256).ToArray();
+            read.Bytes.AsSpan(offset, 256).ToArray().Should().Equal(expected, $"physical sector {physical}");
+        }
+    }
+
+    /// <summary>
+    ///  Every sector in a whole revolution is read, so a second copy of a sector with other data, and the volume on
+    ///  it, are losses even after all 16 sectors were found.
+    /// </summary>
+    [TestMethod]
+    public void SectorsFoundTwiceWithOtherDataAreLosses()
+    {
+        byte[] first = new byte[35 * TrackSize];
+        byte[] second = new byte[35 * TrackSize];
+        new Random(1).NextBytes(first);
+        new Random(2).NextBytes(second);
+        WozDisk disk = SectorDiskConverter.Convert(first, proDosOrder: false).Writable();
+        WozDisk other = SectorDiskConverter.Convert(second, proDosOrder: false, volume: 7);
+
+        // Track 9 is the disk's own sixteen sectors followed by the other disk's sixteen, round one longer track.
+        byte[] own = (disk.Track(9 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        byte[] theirs = (other.Track(9 * 4) ?? throw new InvalidOperationException()).Bits.ToArray();
+        disk.SetTrack(quarterTrack: 9 * 4, [.. own, .. theirs], bitCount: 2 * 51024);
+
+        SectorImage read = SectorDiskReader.Decode(disk, proDosOrder: false);
+        read.Unreadable.Should().BeEmpty();
+        read.Losses.Should().Contain(loss => loss.Contains("more than one sector 0", StringComparison.Ordinal));
+        read.Losses.Should().Contain(loss => loss.Contains("volume is 7", StringComparison.Ordinal));
+        read.Bytes.AsSpan(9 * TrackSize, TrackSize).ToArray().Should().Equal(first.AsSpan(9 * TrackSize, TrackSize).ToArray(), "the first copy is kept");
+
+        // The same sectors twice with the same data lose nothing.
+        disk.SetTrack(quarterTrack: 9 * 4, [.. own, .. own], bitCount: 2 * 51024);
+        SectorDiskReader.Decode(disk, proDosOrder: false).Losses.Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  Data on a half track, which the whole tracks beside it do not cover, is a loss; the quarter tracks a sector
     ///  image's disk maps to its whole tracks are not.
     /// </summary>

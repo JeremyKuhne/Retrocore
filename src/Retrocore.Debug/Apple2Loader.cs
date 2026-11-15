@@ -121,9 +121,13 @@ internal static class Apple2Loader
         drive.Saved(path, codec.Format, encoded.IsLossless);
     }
 
-    // Whether a path names a drive's own image.
+    // Whether a path names a drive's own image: compared without case where the file system ignores it, as Windows'
+    // and macOS's do by default, and with it elsewhere.
     private static bool SameFile(string path, string own) =>
-        Path.IsPathFullyQualified(own) && string.Equals(path, Path.GetFullPath(own), StringComparison.OrdinalIgnoreCase);
+        Path.IsPathFullyQualified(own) && string.Equals(path, Path.GetFullPath(own), PathComparison);
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>
     ///  Inserts a 3.5-inch disk image (<c>.po</c>, <c>.2mg</c>, <c>.hdv</c>, <c>.img</c> or <c>.dsk</c>) in a 3.5

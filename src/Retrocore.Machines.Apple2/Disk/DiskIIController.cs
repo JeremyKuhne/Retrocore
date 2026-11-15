@@ -145,6 +145,13 @@ public sealed class DiskIIController
     public WozDisk? MediaIn(int drive) => GetDrive(drive).Media;
 
     /// <summary>
+    ///  Gets a drive's mount generation, which changes each time media goes in or comes out, by any path.
+    /// </summary>
+    /// <param name="drive">The drive, from one.</param>
+    /// <returns>The generation.</returns>
+    public int MountGeneration(int drive) => GetDrive(drive).MountGeneration;
+
+    /// <summary>
     ///  Gets side-effect-free drive telemetry.
     /// </summary>
     /// <param name="drive">The drive, from one.</param>

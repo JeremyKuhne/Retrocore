@@ -80,13 +80,10 @@ public static class SectorDiskReader
                 continue;
             }
 
-            if (ReadTrack(Nibbles(bits), track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder, volumes) is { } problem)
-            {
-                unreadable.Add(problem);
-            }
+            ReadTrack(bits, track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder, volumes, unreadable, losses);
         }
 
-        losses.AddRange(unreadable);
+        losses.InsertRange(0, unreadable);
 
         // A quarter or half track holds data of its own unless it is the whole track beside it, as a sector image's
         // disk maps the quarter tracks either side of each whole track to it.
@@ -110,17 +107,21 @@ public static class SectorDiskReader
         return new(image, tracks, losses, unreadable);
     }
 
-    // The track's nibbles, twice around.
-    private static List<byte> Nibbles(DiskTrack track)
+    // The track's nibbles, twice around, and how many of them start in the first time around.
+    private static List<byte> Nibbles(DiskTrack track, out int firstRevolution)
     {
         List<byte> nibbles = [with(track.BitCount / 4)];
+        firstRevolution = 0;
         int shift = 0;
+        int start = 0;
         for (int bit = 0; bit < track.BitCount * 2; bit++)
         {
+            if (shift == 0) { start = bit; }
             shift = (shift << 1) | (track.ReadBit(bit % track.BitCount) ? 1 : 0);
             if ((shift & 0x80) != 0)
             {
                 nibbles.Add((byte)shift);
+                if (start < track.BitCount) { firstRevolution = nibbles.Count; }
                 shift = 0;
             }
         }
@@ -128,18 +129,25 @@ public static class SectorDiskReader
         return nibbles;
     }
 
-    // Reads a track's 16 sectors into the image, noting each sector's volume; says what did not read, or null.
-    private static string? ReadTrack(
-        List<byte> nibbles,
+    // Reads a track's 16 sectors into the image. Every address field that starts in one revolution is read, the second
+    // revolution only finishing a sector across the index, so a sector found twice with other data, or a volume on any
+    // sector, is not missed. Notes each sector's volume, the sectors that did not read, and the duplicates.
+    private static void ReadTrack(
+        DiskTrack bits,
         int track,
         ReadOnlySpan<sbyte> values,
         Span<byte> output,
         bool proDosOrder,
-        SortedSet<int> volumes)
+        SortedSet<int> volumes,
+        List<string> unreadable,
+        List<string> losses)
     {
+        List<byte> nibbles = Nibbles(bits, out int firstRevolution);
         int found = 0;
+        int bad = 0;
+        int duplicated = 0;
         Span<byte> sector = stackalloc byte[256];
-        for (int index = 0; index + 14 < nibbles.Count && found != 0xFFFF; index++)
+        for (int index = 0; index < firstRevolution && index + 14 < nibbles.Count; index++)
         {
             if (nibbles[index] != 0xD5 || nibbles[index + 1] != 0xAA || nibbles[index + 2] != 0x96) { continue; }
 
@@ -159,21 +167,50 @@ public static class SectorDiskReader
 
             if (data + 3 + 343 > nibbles.Count || nibbles[data + 2] != 0xAD) { continue; }
 
+            // A bad checksum leaves the sector to another copy of it, and the scan goes on to the sectors after it.
+            volumes.Add(volume);
+            index = data + 3 + 343 - 1;
             if (!DecodeSector(nibbles, data + 3, values, sector))
             {
-                return $"Track {track}, sector {physical} has a bad checksum.";
+                bad |= 1 << physical;
+                continue;
             }
 
             int logical = physical == 15 ? 15 : physical * (proDosOrder ? 8 : 7) % 15;
-            sector.CopyTo(output.Slice(logical * 256, 256));
-            volumes.Add(volume);
-            found |= 1 << physical;
-            index = data + 3 + 343;
+            Span<byte> place = output.Slice(logical * 256, 256);
+            if ((found & (1 << physical)) == 0)
+            {
+                sector.CopyTo(place);
+                found |= 1 << physical;
+            }
+            else if (!sector.SequenceEqual(place))
+            {
+                duplicated |= 1 << physical;
+            }
         }
 
-        if (found == 0xFFFF) { return null; }
-        int missing = System.Numerics.BitOperations.TrailingZeroCount(~found);
-        return $"Track {track} has no readable sector {missing}.";
+        // One line for each track: the sectors that never read, and those whose only copies had bad checksums.
+        List<int> missing = [.. Enumerable.Range(0, 16).Where(physical => (found & (1 << physical)) == 0 && (bad & (1 << physical)) == 0)];
+        List<int> failed = [.. Enumerable.Range(0, 16).Where(physical => (found & (1 << physical)) == 0 && (bad & (1 << physical)) != 0)];
+        if (missing.Count == 16)
+        {
+            unreadable.Add($"Track {track} has no readable sectors.");
+        }
+        else if (missing.Count + failed.Count != 0)
+        {
+            List<string> parts = [];
+            if (missing.Count != 0) { parts.Add($"no readable sector {string.Join(", ", missing)}"); }
+            if (failed.Count != 0) { parts.Add($"a bad checksum in sector {string.Join(", ", failed)}"); }
+            unreadable.Add($"Track {track} has {string.Join(" and ", parts)}.");
+        }
+
+        for (int physical = 0; physical < 16; physical++)
+        {
+            if ((duplicated & (1 << physical)) != 0)
+            {
+                losses.Add($"Track {track} has more than one sector {physical}, with other data; a sector image keeps the first.");
+            }
+        }
     }
 
     private static int FourAndFour(List<byte> nibbles, int index) => ((nibbles[index] << 1) | 1) & nibbles[index + 1];

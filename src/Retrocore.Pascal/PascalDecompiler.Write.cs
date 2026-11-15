@@ -663,6 +663,10 @@ public sealed partial class PascalDecompiler
         List<int> shorter = [.. (_allocated.GetValueOrDefault(root) ?? []).Where(size => size < words)];
         if (shorter.Count > 0 && shorter[0] < start) { start = 0; }
 
+        // Views of the first words as one array, for moves of them.
+        SortedSet<int> views = _moved.GetValueOrDefault(root) ?? [];
+        if (views.Count > 0) { start = 0; }
+
         List<string> fixedPart = Run(0, Math.Min(start, words));
         if (start >= words) { return $"RECORD {string.Join("; ", fixedPart)} END"; }
 
@@ -700,6 +704,11 @@ public sealed partial class PascalDecompiler
         {
             string padding = size > start ? $"X{size}N: {Declare(Padding(size - start), inline: true)}" : "";
             labelled.Add($"{Shorter + size}: ({padding})");
+        }
+
+        foreach (int size in views)
+        {
+            labelled.Add($"{Viewing + size}: (B{size}N: {Declare(Padding(size), inline: true)})");
         }
 
         string cases = string.Join("; ", labelled);
@@ -760,6 +769,7 @@ public sealed partial class PascalDecompiler
                 if (statement is Assignment assignment) { Name(assignment.Target); }
                 if (statement is WithStatement with) { Name(with.Record); }
                 if (statement is CallStatement { Callee.Builtin: "NEW" } allocation) { Allocated(allocation); }
+                if (statement is Assignment { Block: true } moved) { Moved(moved); }
 
             }, expression =>
             {
@@ -869,6 +879,58 @@ public sealed partial class PascalDecompiler
         }
 
         sizes.Add(words);
+    }
+
+    // The label of a variant that views a record's first words as one array, 200 more than its words.
+    private const int Viewing = 200;
+
+    // The words of records that moves take, where no field is as long, and the moves that take them.
+    private readonly Dictionary<TypeNode, SortedSet<int>> _moved = [];
+    private readonly HashSet<Assignment> _moves = [];
+
+    // A move of fewer words than its records have, where no first field of each is as long, moves an array of them,
+    // which each record has as a variant.
+    private void Moved(Assignment move)
+    {
+        if (move.Value is not Load { Designator: var source } whole) { return; }
+
+        int words = whole.Words;
+        TypeNode target = move.Target.Type.Find();
+        TypeNode from = source.Type.Find();
+        if (!Viewable(target, words) || !Viewable(from, words) || (Prefix(target, words) && Prefix(from, words)))
+        {
+            return;
+        }
+
+        foreach (TypeNode record in (TypeNode[])[target, from])
+        {
+            if (!_moved.TryGetValue(record, out SortedSet<int>? sizes))
+            {
+                sizes = [];
+                _moved[record] = sizes;
+            }
+
+            sizes.Add(words);
+        }
+
+        _moves.Add(move);
+
+        static bool Viewable(TypeNode record, int words) =>
+            record.Kind == TypeKind.Record && record.PackedFields is null && SizeOf(record) > words && words > 1;
+
+        // Whether a record's first field, or its first field's, is as long as the move.
+        static bool Prefix(TypeNode record, int words)
+        {
+            TypeNode current = record;
+            for (int depth = 0; depth < 8; depth++)
+            {
+                if (SizeOf(current) == words) { return true; }
+                if (current.Kind != TypeKind.Record || current.Fields?.ContainsKey(0) != true) { return false; }
+                current = current.Field(0).Find();
+            }
+
+            return false;
+        }
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
@@ -1086,6 +1148,13 @@ public sealed partial class PascalDecompiler
     {
         switch (statement)
         {
+            case Assignment { Value: Load { Designator: var source } whole } move when _moves.Contains(move):
+                {
+                    string view = $"B{whole.Words}N";
+                    lines.Add(Indented($"{DesignatorText(move.Target)}.{view} := {DesignatorText(source)}.{view}"));
+                    break;
+                }
+
             case Assignment assignment:
                 {
                     Expr value = Narrow(assignment.Value);

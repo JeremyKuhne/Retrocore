@@ -81,6 +81,13 @@ public sealed partial class PascalDecompiler
         List<TypeNode> ordered = [.. Ordered().Where(types.Contains)];
         if (ordered.Count == 0) { return; }
 
+        // Each record laid out first, which sizes the arrays of its words that the code shows no length of: the
+        // declarations of those arrays, which come before, then have it.
+        foreach (TypeNode type in ordered.Where(type => type.Find().Kind == TypeKind.Record))
+        {
+            _ = Declare(type, inline: false);
+        }
+
         Line("TYPE");
         _indent++;
         foreach (TypeNode type in ordered) { Line($"{type.Name} = {Declare(type, inline: false)};"); }

@@ -256,6 +256,28 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A move of a record's first words, which no field of the decompiled record is as long as.
+    private const string MoveSource = """
+        PROGRAM MV;
+        TYPE R = RECORD
+            CASE BOOLEAN OF
+              TRUE: (H: ARRAY[1..3] OF INTEGER; K: INTEGER);
+              FALSE: (A, B, C, D, E: INTEGER)
+          END;
+        VAR P, Q: ^R;
+        BEGIN NEW(P); NEW(Q); P^.H := Q^.H; P^.E := 1; P^.A := 2 END.
+        """;
+
+    /// <summary>
+    ///  A move of a record's first words, where no field is as long, moves a variant that views them as one array.
+    /// </summary>
+    [TestMethod]
+    public void MovesOfARecordsFirstWordsViewThemAsAnArray()
+    {
+        string source = RoundTrip(MoveSource);
+        source.Should().Contain("203: (B3N: ARRAY[1..3] OF INTEGER)").And.Contain(".B3N := ");
+    }
+
     // A record whose variant has a field inside the words of another variant's real.
     private const string OverlapSource = """
         PROGRAM OV;

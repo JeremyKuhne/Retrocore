@@ -585,6 +585,9 @@ async function loadListing(start, count, key) {
         if (key !== listingKey) return;
         listingLines = result.lines;
         listingError = "";
+        // New lines can move the cursor's, as when Decode from here or a write changes the instructions' sizes,
+        // so its line is brought into view again.
+        listingCursor = -1;
     } catch (error) {
         if (key !== listingKey) return;
         listingLines = [];

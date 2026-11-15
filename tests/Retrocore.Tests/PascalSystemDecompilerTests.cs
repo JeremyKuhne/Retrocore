@@ -256,6 +256,26 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A word used both ways assigned whole, which the Compiler moves as the one-word record it is.
+    private const string WholeWordSource = """
+        PROGRAM WW;
+        TYPE P = ^R;
+          R = RECORD N: INTEGER END;
+          W = RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (Q: P) END;
+        VAR A, B: W;
+        BEGIN NEW(A.Q); A.Q^.N := 1; B := A; B.I := B.I + 1 END.
+        """;
+
+    /// <summary>
+    ///  A word used both ways that is moved whole is assigned whole, so that it is moved again.
+    /// </summary>
+    [TestMethod]
+    public void WordsUsedBothWaysMovedWholeAreAssignedWhole()
+    {
+        string source = RoundTrip(WholeWordSource);
+        source.Should().Contain("G3 := G4;");
+    }
+
     // A local record moved whole from a global, whose first field, a pointer, is otherwise used alone.
     private const string WholeLocalSource = """
         PROGRAM WL;

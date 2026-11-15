@@ -1286,6 +1286,18 @@ public sealed partial class PascalDecompiler
                         break;
                     }
 
+                    // A word used both ways moved whole, as the Compiler moves a record, is assigned whole.
+                    if (assignment.Block
+                        && Narrow(assignment.Value) is Load { Designator: var moved }
+                        && IsPunned(target.Type)
+                        && moved.Type.Find() == target.Type.Find()
+                        && !IsPlain(target)
+                        && !IsPlain(moved))
+                    {
+                        lines.Add(Indented($"{text} := {DesignatorText(moved)}"));
+                        break;
+                    }
+
                     if (Viewed(target) && IsPunned(target.Type))
                     {
                         bool pointer = assignment.Value is Nil || Natural(assignment.Value) is null && assignment.Value is not Constant;

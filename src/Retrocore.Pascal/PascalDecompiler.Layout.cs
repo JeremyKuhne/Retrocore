@@ -266,7 +266,8 @@ public sealed partial class PascalDecompiler
             case TypeKind.Array when root.IndexHigh is null:
                 {
                     int low = root.IndexLow ?? 0;
-                    int count = root.Bytes ? words * 2 : root.PerWord > 0 ? words * root.PerWord : words / Math.Max(1, root.ElementWords);
+                    int fits = root.Bytes ? words * 2 : root.PerWord > 0 ? words * root.PerWord : words / Math.Max(1, root.ElementWords);
+                    int count = root.Count ?? fits;
                     root.IndexLow = low;
                     root.IndexHigh = low + count - 1;
                     break;
@@ -329,6 +330,8 @@ public sealed partial class PascalDecompiler
                 {
                     if (root.IndexLow is not { } low || root.IndexHigh is not { } high)
                     {
+                        // As many elements as the code shows, where it shows no bounds.
+                        if (root.Count is { } shown && root.Bytes) { return Math.Max((shown + 1) / 2, root.Words); }
                         return root.Words == 0 ? null : root.Words;
                     }
 

@@ -89,6 +89,12 @@ public sealed partial class PascalDecompiler
         public int? IndexHigh { get; set; }
 
         /// <summary>
+        ///  Gets or sets how many elements the code shows an array has, as WRITE shows of the bytes it writes, where it
+        ///  shows no bounds: the array is as long, from wherever it starts.
+        /// </summary>
+        public int? Count { get; set; }
+
+        /// <summary>
         ///  Gets or sets an array's element size in words.
         /// </summary>
         public int ElementWords { get; set; }
@@ -549,6 +555,7 @@ public sealed partial class PascalDecompiler
             if (b.Low is { } low) { a.Low = a.Low is { } oldLow ? Math.Min(oldLow, low) : low; }
             if (b.High is { } high) { a.High = a.High is { } oldHigh ? Math.Max(oldHigh, high) : high; }
             Bounds(a, b.IndexLow, b.IndexHigh);
+            if (b.Count is { } count) { a.Count = a.Count is { } oldCount ? Math.Max(oldCount, count) : count; }
             if (a.ElementWords == 0) { a.ElementWords = b.ElementWords; }
             if (a.PerWord == 0)
             {
@@ -818,6 +825,7 @@ public sealed partial class PascalDecompiler
                 Element = Element,
                 IndexLow = IndexLow,
                 IndexHigh = IndexHigh,
+                Count = Count,
                 ElementWords = ElementWords,
                 PerWord = PerWord,
                 Bits = Bits,

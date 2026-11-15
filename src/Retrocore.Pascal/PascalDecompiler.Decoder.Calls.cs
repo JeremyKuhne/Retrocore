@@ -273,6 +273,14 @@ public sealed partial class PascalDecompiler
                             {
                                 root.IndexHigh ??= low + bytes.Value - 1;
                             }
+                            else if (length is Constant count)
+                            {
+                                // A record's bytes at its address are its first field's.
+                                TypeNode written = root.Find();
+                                if (written.Kind == TypeKind.Record) { written = written.Field(0).Find(); }
+
+                                written.Count ??= count.Value;
+                            }
                         }
 
                         Argument file = File(Pop(stack));

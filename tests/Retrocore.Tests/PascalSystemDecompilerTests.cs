@@ -289,6 +289,25 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A record's name that the code only writes, with words after it that the code never names.
+    private const string WrittenNameSource = """
+        PROGRAM WN;
+        TYPE R = RECORD N: PACKED ARRAY[0..7] OF CHAR; X, Y: INTEGER; K: INTEGER END;
+        VAR P: ^R;
+        BEGIN NEW(P); P^.K := 1; WRITELN(P^.N, P^.K) END.
+        """;
+
+    /// <summary>
+    ///  Bytes that WRITE writes, with no bounds the code shows, are as many as it writes, not as many as the words up to
+    ///  the next field hold.
+    /// </summary>
+    [TestMethod]
+    public void WrittenBytesAreAsLongAsWriteWrites()
+    {
+        string source = RoundTrip(WrittenNameSource);
+        source.Should().Contain("PACKED ARRAY[0..7] OF CHAR");
+    }
+
     // An IF whose THEN is only a GOTO into the next IF's THEN.
     private const string GotoIntoSource = """
         (*$G+*)

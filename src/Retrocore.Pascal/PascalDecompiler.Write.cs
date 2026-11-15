@@ -71,6 +71,8 @@ public sealed partial class PascalDecompiler
             foreach (Variable global in _declared[_system]) { Reach(global.Type, types); }
         }
 
+        foreach (TypeNode pointer in _plainPointers.Values) { Reach(pointer, types); }
+
         Types(types);
 
         if (_systemProgram)
@@ -344,14 +346,70 @@ public sealed partial class PascalDecompiler
 
     private string ParameterType(Variable parameter)
     {
+        if (_plainParameters.Contains(parameter))
+        {
+            return TypeName(_plainPointers[parameter.Type.Find()], parameter: true);
+        }
+
         if (parameter.Copy is { } copy) { return TypeName(copy.Type, parameter: true); }
         return TypeName(parameter.IsReference ? parameter.Type.Target() : parameter.Type, parameter: true);
     }
 
     // Gives a name to each type a declaration cannot write in place: records, pointers, arrays, sets and files, and
     // any type a parameter has that is not a single word.
+    // Value parameters whose words are used both ways, which are their pointers: a record, though of a word, is passed
+    // by its address and copied, as the Compiler's pointers are not. Each pointer type, by the word's type.
+    private readonly HashSet<Variable> _plainParameters = [];
+    private readonly Dictionary<TypeNode, TypeNode> _plainPointers = [];
+
+    private void PlainParameters()
+    {
+        // But those whose record a statement needs whole: by its address, as a VAR argument is, or a block's.
+        HashSet<Variable> whole = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(
+                procedure.Body,
+                statement =>
+                {
+                    if (statement is Assignment { Block: true, Target: VariableDesignator { Variable: var target } })
+                    {
+                        whole.Add(target);
+                    }
+                },
+                expression =>
+                {
+                    if (expression is Address { Designator: VariableDesignator { Variable: var addressed } })
+                    {
+                        whole.Add(addressed);
+                    }
+                });
+        }
+
+        foreach (Variable parameter in _parameters.Values.SelectMany(parameters => parameters))
+        {
+            if (parameter.IsReference || parameter.Copy is not null || !IsPunned(parameter.Type) || whole.Contains(parameter))
+            {
+                continue;
+            }
+
+            TypeNode punned = parameter.Type.Find();
+            if (!_plainPointers.ContainsKey(punned))
+            {
+                TypeNode pointer = TypeNode.Of(TypeKind.Pointer);
+                pointer.Element = punned.Element ?? new TypeNode();
+                _plainPointers[punned] = pointer;
+            }
+
+            _plainParameters.Add(parameter);
+        }
+    }
+
     private void NameTypes()
     {
+        PlainParameters();
+        foreach (TypeNode pointer in _plainPointers.Values) { Visit(pointer, parameter: false); }
+
         if (_declared.TryGetValue(_system, out List<Variable>? globals))
         {
             foreach (Variable global in globals) { Visit(global.Type, parameter: false); }
@@ -404,7 +462,7 @@ public sealed partial class PascalDecompiler
         }
     }
 
-    // The named types, each after those its declaration names, but a pointer's target, which may come later.
+    // The named types, each after those its declaration names.
     private List<TypeNode> Ordered()
     {
         List<TypeNode> ordered = [];
@@ -413,6 +471,9 @@ public sealed partial class PascalDecompiler
         return ordered;
     }
 
+    // A type after the types it is made of, a pointer's target among them: a pointer is a forward reference only
+    // where the types are recursive. The 1.1 Compiler loses one of two forward references to the same type that come
+    // together in its list of them, other than first, and then stops with error 117.
     private void Order(TypeNode type, List<TypeNode> ordered, HashSet<TypeNode> done)
     {
         TypeNode root = type.Find();
@@ -420,13 +481,30 @@ public sealed partial class PascalDecompiler
 
         IEnumerable<TypeNode> parts = root.Kind switch
         {
-            TypeKind.Pointer => [],
+            TypeKind.Pointer when root.Element is { } target && Names(target, root, []) => [],
             TypeKind.Record => [.. root.AllFields, .. root.PackedFields?.Values.Select(field => field.Type) ?? []],
             _ => root.Element is { } element ? [element] : []
         };
 
         foreach (TypeNode part in parts) { Order(part, ordered, done); }
         if (root.Name is not null && _types.Contains(root)) { ordered.Add(root); }
+    }
+
+    // Whether a type's declaration names a pointer type, there or in the types it is made of, but those a pointer
+    // points to: then the pointer comes first, as a forward reference.
+    private static bool Names(TypeNode type, TypeNode pointer, HashSet<TypeNode> seen)
+    {
+        TypeNode root = type.Find();
+        if (root == pointer) { return true; }
+        if (!seen.Add(root) || root.Kind == TypeKind.Pointer) { return false; }
+
+        IEnumerable<TypeNode> parts = root.Element is { } element ? [element] : [];
+        if (root.Kind == TypeKind.Record)
+        {
+            parts = [.. root.AllFields, .. root.PackedFields?.Values.Select(field => field.Type) ?? []];
+        }
+
+        return parts.Any(part => Names(part, pointer, seen));
     }
 
     // A type's name where it has one; otherwise its declaration.
@@ -975,6 +1053,12 @@ public sealed partial class PascalDecompiler
                         break;
                     }
 
+                    if (target is VariableDesignator { Variable: var plain } && _plainParameters.Contains(plain))
+                    {
+                        lines.Add(Indented($"{text} := {Expression(assignment.Value, expected: null, 0)}"));
+                        break;
+                    }
+
                     if (Viewed(target) && IsPunned(target.Type))
                     {
                         bool pointer = assignment.Value is Nil || Natural(assignment.Value) is null && assignment.Value is not Constant;
@@ -1174,7 +1258,12 @@ public sealed partial class PascalDecompiler
             : Invocation(name, parts);
     }
 
-    private string Pointer(Designator pointer) => IsPunned(pointer.Type) ? $"{DesignatorText(pointer)}.P" : DesignatorText(pointer);
+    private string Pointer(Designator pointer) =>
+        IsPunned(pointer.Type) && !IsPlain(pointer) ? $"{DesignatorText(pointer)}.P" : DesignatorText(pointer);
+
+    // Whether a designator is a value parameter written as its pointer.
+    private bool IsPlain(Designator designator) =>
+        designator is VariableDesignator { Variable: var variable } && _plainParameters.Contains(variable);
 
     private static string Invocation(string name, List<string> arguments) =>
         arguments.Count == 0 ? name : $"{name}({string.Join(", ", arguments)})";
@@ -1192,6 +1281,13 @@ public sealed partial class PascalDecompiler
             {
                 TypeNode formal = parameter.Copy?.Type ?? parameter.Type.Target();
                 parts.Add(argument is StringConstant or StringFunction ? Expression(argument, expected: null, 0) : DesignatorText(Descend(Designate(argument), formal)));
+            }
+            else if (_plainParameters.Contains(parameter))
+            {
+                // A parameter written as its pointer takes the pointer of a word used both ways.
+                parts.Add(Narrow(argument) is Load { Designator: var punned } && IsPunned(punned.Type)
+                    ? Pointer(punned)
+                    : Expression(argument, _plainPointers[parameter.Type.Find()], 0));
             }
             else if (Narrow(argument) is Load { Designator: var whole }
                 && IsPunned(parameter.Type)

@@ -256,6 +256,28 @@ public class PascalSystemDecompilerTests
         source.Should().EndWith("END;\nBEGIN\nEND.\n");
     }
 
+    // A word used both ways passed by value: the Compiler passes a pointer's word, where it would copy a record's.
+    private const string PlainSource = """
+        PROGRAM PL;
+        TYPE P = ^R;
+          R = RECORD N: INTEGER; L: P END;
+          W = RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (Q: P) END;
+        VAR G: W; H: INTEGER;
+        PROCEDURE SHOW(V: P); BEGIN H := V^.N + ORD(V) END;
+        BEGIN NEW(G.Q); G.Q^.N := 3; SHOW(G.Q); G.I := G.I + 2; SHOW(G.Q) END.
+        """;
+
+    /// <summary>
+    ///  A value parameter whose word is used both ways is declared as its pointer, so that it is passed as the word
+    ///  it is rather than as a record to copy, and its uses as an integer read it with ORD.
+    /// </summary>
+    [TestMethod]
+    public void WordsUsedBothWaysPassByValueAsTheirPointers()
+    {
+        string source = RoundTrip(PlainSource);
+        source.Should().Contain("ORD(A1)");
+    }
+
     /// <summary>
     ///  CSP IDS and CSP TRS decompile to IDSEARCH and TREESEARCH.
     /// </summary>

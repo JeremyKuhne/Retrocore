@@ -666,18 +666,29 @@ public sealed partial class PascalDecompiler
         SortedDictionary<(int Word, int Bit), (int Width, TypeNode Type)> packed = root.PackedFields ?? [];
         SortedDictionary<int, TypeNode> known = root.Fields ?? [];
         List<string> parts = [];
+
+        // A word also used whole, as an integer or read by bytes, is another variant's field.
+        bool both = known.Any(pair => pair.Value.Find().Kind != TypeKind.Unknown && packed.Keys.Any(key => key.Word == pair.Key));
+        List<string> wholes = [];
         for (int word = 0; word < words; word++)
         {
             List<KeyValuePair<(int Word, int Bit), (int Width, TypeNode Type)>> fields = [.. packed.Where(pair => pair.Key.Word == word)];
+            if (both)
+            {
+                wholes.Add(known.TryGetValue(word, out TypeNode? used) && SizeOf(used) is 1
+                    ? $"F{word}: {TypeName(used, parameter: false)}"
+                    : $"X{word}: INTEGER");
+            }
+
             if (fields.Count == 0)
             {
                 if (known.TryGetValue(word, out TypeNode? whole) && SizeOf(whole) is 1)
                 {
-                    parts.Add($"F{word}: {TypeName(whole, parameter: false)}");
+                    parts.Add(both ? $"X{word}V1: INTEGER" : $"F{word}: {TypeName(whole, parameter: false)}");
                 }
                 else
                 {
-                    parts.Add($"F{word}: INTEGER");
+                    parts.Add(both ? $"X{word}V1: INTEGER" : $"F{word}: INTEGER");
                 }
 
                 continue;
@@ -696,7 +707,9 @@ public sealed partial class PascalDecompiler
             if (bit is > 0 and < 16) { parts.Add($"X{word}B{bit}: 0..{(1 << (16 - bit)) - 1}"); }
         }
 
-        return $"PACKED RECORD {string.Join("; ", parts)} END";
+        return both
+            ? $"PACKED RECORD CASE INTEGER OF 0: ({string.Join("; ", wholes)}); 1: ({string.Join("; ", parts)}) END"
+            : $"PACKED RECORD {string.Join("; ", parts)} END";
     }
 
     // A field's name: its offset's, and for another variant's field, which of the offset's it is.
@@ -979,14 +992,23 @@ public sealed partial class PascalDecompiler
                 }
 
             case CaseStatement choice:
-                // A selector is a scalar: a word used both ways by its integer view, a pointer by ORD.
+                // A selector is a scalar: a word used both ways by its integer view, a pointer by ORD. A label is a
+                // constant, which a character that is not printable has none of: the selector is then ORD of it.
                 TypeNode? selector = choice.Selector.Type.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : null;
+                TypeNode labelType = choice.Selector.Type.Find();
+                bool unprintable = Kind(labelType) == ScalarKind.Char && choice.Arms.SelectMany(arm => arm.Labels).Any(label => label is < 32 or >= 127);
+                if (unprintable)
+                {
+                    selector = TypeNode.Scalar(ScalarKind.Integer);
+                    labelType = selector;
+                }
+
                 lines.Add(Indented($"CASE {Expression(choice.Selector, selector, 0)} OF"));
                 _indent++;
                 for (int arm = 0; arm < choice.Arms.Count; arm++)
                 {
                     (List<int> labels, List<Statement> body) = choice.Arms[arm];
-                    lines.Add(Indented($"{string.Join(", ", labels.Select(label => Value(label, choice.Selector.Type.Find())))}:"));
+                    lines.Add(Indented($"{string.Join(", ", labels.Select(label => Value(label, labelType)))}:"));
                     Block(procedure, body, lines, forceCompound: false);
                     if (arm + 1 < choice.Arms.Count) { Separate(lines, 0); }
                 }
@@ -1013,7 +1035,9 @@ public sealed partial class PascalDecompiler
                         ? _procedures.FirstOrDefault(other => other.Segment == _main && other.Number == exit.Procedure)
                         : FindSegment(exit.Segment, exit.Procedure);
 
-                    lines.Add(Indented($"EXIT({(target == _program ? "PROGRAM" : target?.Name ?? "PROGRAM")})"));
+                    // A system program is a segment procedure, which EXIT names; PROGRAM would be the system's.
+                    string exited = target == _program && !_systemProgram ? "PROGRAM" : target?.Name ?? "PROGRAM";
+                    lines.Add(Indented($"EXIT({exited})"));
                     break;
                 }
 
@@ -1195,6 +1219,12 @@ public sealed partial class PascalDecompiler
             case IndexDesignator { Array: VariableDesignator { Variable: var bytes } } byteIndex
                 when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
                 return $"{bytes.Name}.B[{Expression(byteIndex.Index, expected: null, 0)}]";
+            case IndexDesignator { Array: var whole } recordBytes
+                when whole.Type.Find().Kind == TypeKind.Record
+                    && Descend(whole, use: null) is var first
+                    && first.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
+                // A record read by bytes is its first word's byte view.
+                return $"{DesignatorText(first)}.B[{Expression(recordBytes.Index, expected: null, 0)}]";
             case IndexDesignator index:
                 {
                     // Arrays are declared with integer subranges for indexes.

@@ -465,6 +465,7 @@ public sealed partial class PascalDecompiler
                 real.Target.Type.Find().Kind = TypeKind.Real;
                 break;
             case Assignment assignment:
+                Indexes(assignment.Target);
                 Assign(assignment.Target.Type, assignment.Value);
                 if ((assignment.Value is Checked check ? check.Value : assignment.Value) is Constant number)
                 {
@@ -598,17 +599,35 @@ public sealed partial class PascalDecompiler
                 limit.Type.Vote(ScalarKind.Integer, 2);
                 test.Character.Type.Vote(ScalarKind.Char, 2);
                 break;
-            case Load { Designator: IndexDesignator index }:
-                index.Index.Type.Vote(ScalarKind.Integer);
-                break;
             case Load { Designator: StringIndexDesignator index }:
                 index.Index.Type.Vote(ScalarKind.Integer, 2);
+                break;
+            case Load { Designator: var loaded }:
+                Indexes(loaded);
+                break;
+            case Address { Designator: var addressed }:
+                Indexes(addressed);
                 break;
             case SetValue set:
                 Set(set);
                 break;
             default:
                 break;
+        }
+    }
+
+    // An array's index is an integer, wherever the element is reached.
+    private static void Indexes(Designator designator)
+    {
+        switch (designator)
+        {
+            case IndexDesignator index:
+                index.Index.Type.Vote(ScalarKind.Integer);
+                Indexes(index.Array);
+                break;
+            case FieldDesignator field: Indexes(field.Record); break;
+            case PackedFieldDesignator field: Indexes(field.Record); break;
+            default: break;
         }
     }
 

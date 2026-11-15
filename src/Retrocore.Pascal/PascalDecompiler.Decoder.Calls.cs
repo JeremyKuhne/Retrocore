@@ -264,11 +264,15 @@ public sealed partial class PascalDecompiler
                         Expr length = Pop(stack);
                         Expr array = Pop(stack);
                         Expr value = array is PackedConstant or StringConstant ? array : new Load(Designate(array), 1);
-                        if (array is not (PackedConstant or StringConstant) && length is Constant bytes)
+                        // What WRITE writes bytes of is a packed array of them, as long as a constant count says.
+                        if (array is not (PackedConstant or StringConstant))
                         {
                             TypeNode root = Designate(array).Type.Find();
                             root.ByteElement(low: null, high: null);
-                            if (root.IndexLow is { } low) { root.IndexHigh ??= low + bytes.Value - 1; }
+                            if (length is Constant bytes && root.IndexLow is { } low)
+                            {
+                                root.IndexHigh ??= low + bytes.Value - 1;
+                            }
                         }
 
                         Argument file = File(Pop(stack));

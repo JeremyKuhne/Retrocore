@@ -129,13 +129,16 @@ What the decompiler does not decompile yet, found by decompiling every code file
   join, through unification, most of its words into one punned type, which a function cannot return (error 120).
   The 1.1 Compiler's decompiled source also needs `(*$S+*)` to compile at all. A pointer used as an integer is now
   `ORD(P)`, which compiles to nothing, so it no longer puns (2026-11-14). Records with variant parts decompile
-  (the same day): a pointer field and an integer field at one offset of records that meet are two variants' fields,
-  written `CASE INTEGER OF 0: (...); 1: (...)`, and a word used both ways (the Compiler's VALU) no longer draws in
-  the integers and pointers read from it. The decompiled 1.1 Compiler now compiles past its declarations to line
-  389 of about 7,200 (COMPINIT's `S7P3`). **Next:** its identifier records (NAME, an ALPHA, at offset 0) and type
-  records (SIZE, an integer, at offset 0) still meet as one record, T2, through a few integer-to-pointer flows
-  (the first: a field at offset 6 of DECLARAT.19's local record, word 10, into G12); a packed array and an integer
-  at one offset are taken for a word read by bytes, so they do not become variants.
+  (2026-11-14 and 15): each field the code reaches has a type of its own, put in its record once the links settle,
+  in the field at its offset or as another variant's where the two cannot be one (a pointer and an integer, pointers
+  to records that differ, an array and a scalar, a boolean and an integer as their links show); each WITH has its
+  own temporary though the Compiler keeps several in one word; nested segment procedures sit in the procedures their
+  callers are in. **The decompiled 1.1 Compiler now compiles**, whole, with the 1.1 Compiler, on Apple III Pascal
+  (`--pascal sos --add` puts the Apple II Compiler, its segments marked version 4, on a tools disk), which has the
+  memory it needs; on the Apple II it runs out of room in DECLARAT, even under Apple Pascal 1.2 on a 128K IIe
+  (`--iie`). **Next:** the segments differ: record sizes and field offsets (`NEW` of 10 words where the Compiler
+  allocates 3; `INC 3` for `INC 2`), and the procedures not yet decompiled (GOTOs into statements, FJPs out of
+  them, `CXP 0, 43`, `GSEG`/`RSEG`) compile empty.
 - **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
   GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
   is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that

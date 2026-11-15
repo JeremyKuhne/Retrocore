@@ -127,8 +127,8 @@ The debugger supports:
 - **Apple Pascal debugging:** a **Pascal** thread for Apple Pascal on the Apple II and Apple III Pascal, with the
   p-machine's procedures as its call stack, breakpoints and steps by source line through the compiler's listing,
   named variables, and `pascal` breakpoints on p-code ([Pascal.md](docs/Pascal.md));
-- **Live memory views:** side-effect-free inspection and editing in Microsoft's Hex Editor or Memory Inspector,
-  kept current while the machine runs, with Apple II language-card banks, firmware/slot ROMs, and IIe auxiliary
+- **Live memory views:** side-effect-free inspection and editing in Retrocore Memory, with go to, find and an
+  inspector, RAM search, snapshots and frozen bytes, kept current while the machine runs, with Apple II language-card banks, firmware/slot ROMs, and IIe auxiliary
   RAM addressable directly regardless of active soft switches ([Memory.md](docs/Memory.md));
 - **Cycle counts and contracts:** each source line's CPU cycles, each call's total cycles (`JSR`, `CALL`, `RST`),
   and runtime checks of documented `;; Keeps:` contracts;

@@ -90,8 +90,31 @@ try {
     assert.equal(fromDisassembly.breakpoints[0].instructionReference, "z80:0x0102");
     await request("setInstructionBreakpoints", { breakpoints: [] });
     assert.equal((await request("evaluate", { expression: "PC", frameId: z80Frame })).memoryReference, "z80:0x0100");
+    // The frame decides whose registers an expression reads, so Retrocore Memory's Go to evaluates in the focused one:
+    // in the 6502's frame, z80:PC is the 6502's PC taken as a Z80 address.
+    assert.equal((await request("evaluate", { expression: "z80:PC", frameId: z80Frame, context: "retrocore" })).memoryReference, "z80:0x0100");
+    assert.notEqual((await request("evaluate", { expression: "z80:PC", context: "retrocore" })).memoryReference, "z80:0x0100");
+    // cpu: names the 6502's memory from the Z80's frame, as Retrocore Memory's CPU view watches it: the Z80's $0100 is
+    // the Apple's $1100, so the 6502's own $0100 differs.
+    const apple0100 = (await request("evaluate", { expression: "[$0100]" })).result;
+    assert.notEqual((await request("evaluate", { expression: "[$0100]", frameId: z80Frame })).result, apple0100);
+    assert.equal((await request("evaluate", { expression: "[cpu:$0100]", frameId: z80Frame })).result, apple0100);
+    assert.equal((await request("evaluate", { expression: "[$1100]" })).result, (await request("evaluate", { expression: "[$0100]", frameId: z80Frame })).result);
+    assert.equal((await request("evaluate", { expression: "cpu:$0400", frameId: z80Frame, context: "retrocore" })).memoryReference, "0x0400");
+    assert.equal((await request("dataBreakpointInfo", { name: "[cpu:$0400]" })).dataId, "mem:0400:1");
+    const coprocessors = (await request("retro/memoryBanks")).banks.filter(bank => bank.coprocessor).map(bank => bank.name);
+    assert.deepEqual(coprocessors, ["z80"]);
     assert.match(disassembly.instructions[0].instruction, /ld\s+a,\$12/i);
     assert.equal((await request("evaluate", { expression: "[z80:$0100]", frameId: z80Frame })).result, "$3E (62)");
+
+    // Z80 $E000 is the Apple's I/O through the card's translation: Retrocore Memory shades it read-only, and it
+    // cannot be frozen, while the Z80's RAM can.
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "z80:0x0000", offset: 0xE000, count: 2 })).readOnly, [{ offset: 0, count: 2 }]);
+    assert.deepEqual((await request("retro/memory/read", { memoryReference: "z80:0x0000", offset: 0x0100, count: 2 })).readOnly, []);
+    await assert.rejects(request("retro/memory/freeze", { memoryReference: "z80:0x0000", freeze: [{ offset: 0xE000, value: 0 }] }), /not RAM now/);
+    const frozen = await request("retro/memory/freeze", { memoryReference: "z80:0x0000", freeze: [{ offset: 0x0100, value: 0x3E }] });
+    assert.deepEqual(frozen.frozen, [{ address: 0x0100, value: 0x3E }]);
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "z80:0x0000", thaw: [0x0100] })).frozen, []);
 
     await request("next", { threadId: 4 });
     frame = await stoppedOn("step", 4);

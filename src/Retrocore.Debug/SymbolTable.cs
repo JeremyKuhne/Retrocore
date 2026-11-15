@@ -16,6 +16,9 @@ internal sealed partial class SymbolTable
     private readonly Dictionary<(string Path, int Line), List<ushort>> _addresses = new(LineComparer.Instance);
     private readonly Dictionary<string, long> _labels = new(StringComparer.OrdinalIgnoreCase);
 
+    // The names in _labels that a debug file marks as constants (type=equ) rather than addresses.
+    private readonly HashSet<string> _constants = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     ///  Loads debug metadata from a cc65 .dbg or VICE label file.
     /// </summary>
@@ -64,7 +67,7 @@ internal sealed partial class SymbolTable
         Dictionary<int, (int Segment, int Start, int Size)> spans = [];
         Dictionary<int, (string Name, int Parent)> scopes = [];
         List<(int File, int Line, bool Macro, string Spans)> sourceLines = [];
-        List<(string Name, int Scope, long Value)> symbols = [];
+        List<(string Name, int Scope, long Value, bool Constant)> symbols = [];
         foreach (string line in lines)
         {
             int separator = line.IndexOf('\t');
@@ -93,7 +96,8 @@ internal sealed partial class SymbolTable
                     break;
                 case "sym" when fields.TryGetValue("val", out string? value):
                     int scope = fields.TryGetValue("scope", out string? container) ? checked((int)Number(container)) : -1;
-                    symbols.Add((fields["name"].TrimStart('.'), scope, Number(value)));
+                    bool constant = fields.TryGetValue("type", out string? symbolType) && symbolType == "equ";
+                    symbols.Add((fields["name"].TrimStart('.'), scope, Number(value), constant));
                     break;
             }
         }
@@ -138,16 +142,21 @@ internal sealed partial class SymbolTable
         }
 
         // A plain name resolves to its first definition; a scoped one is also reachable as scope::name.
-        foreach ((string name, int scope, long value) in symbols)
+        foreach ((string name, int scope, long value, bool constant) in symbols)
         {
-            _labels.TryAdd(name, value);
+            if (_labels.TryAdd(name, value) && constant) { _constants.Add(name); }
             string qualified = name;
             for (int id = scope; scopes.TryGetValue(id, out (string Name, int Parent) owner) && owner.Name.Length != 0; id = owner.Parent)
             {
                 qualified = $"{owner.Name}::{qualified}";
             }
 
-            if (!ReferenceEquals(qualified, name)) { _labels[qualified] = value; }
+            if (!ReferenceEquals(qualified, name))
+            {
+                _labels[qualified] = value;
+                if (constant) { _constants.Add(qualified); }
+                else { _constants.Remove(qualified); }
+            }
         }
     }
 
@@ -161,6 +170,11 @@ internal sealed partial class SymbolTable
     ///  Gets every label and constant by name.
     /// </summary>
     internal IReadOnlyDictionary<string, long> Labels => _labels;
+
+    /// <summary>
+    ///  Gets the labels that name addresses: every symbol but those a debug file marks as constants.
+    /// </summary>
+    internal IEnumerable<KeyValuePair<string, long>> AddressLabels => _labels.Where(pair => !_constants.Contains(pair.Key));
 
     /// <summary>
     ///  Gets the source location associated with an address.
@@ -208,6 +222,7 @@ internal sealed partial class SymbolTable
         _locations.Clear();
         _addresses.Clear();
         _labels.Clear();
+        _constants.Clear();
     }
 
     private static int Integer(Dictionary<string, string> fields, string name) => checked((int)Number(fields[name]));

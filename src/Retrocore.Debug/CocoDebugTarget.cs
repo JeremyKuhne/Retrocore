@@ -231,13 +231,19 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) != CocoMemoryArea.Ram)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) == CocoMemoryArea.Ram;
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Bus.VideoOutput as Machines.ICharacterSet;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

@@ -40,9 +40,10 @@ internal sealed partial class DebugSession
     private DebugMemoryBank? ThreadBank(int thread) =>
         thread == SoftCardThread && ThreadTarget(thread) is SoftCardDebugTarget softCard ? softCard.Bank : null;
 
-    // A frame id's thread and its index in that thread's frames.
+    // A frame id's thread and its index in that thread's frames. The coprocessor's frames run from
+    // SoftCardFrameBase up to the Pascal thread's.
     private static (int Thread, int Index) FrameIndex(int frameId) =>
-        frameId > SoftCardFrameBase && frameId < BanksScope / 2
+        frameId > SoftCardFrameBase && frameId < PascalFrameBase
             ? (SoftCardThread, frameId - SoftCardFrameBase - 1)
             : (1, frameId - 1);
 

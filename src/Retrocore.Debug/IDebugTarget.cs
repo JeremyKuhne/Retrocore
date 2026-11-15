@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Isa;
+using Retrocore.Machines;
 using Retrocore.Machines.Devices;
 
 namespace Retrocore.Debug;
@@ -32,6 +33,12 @@ internal interface IDebugTarget : IDebugMemory
     ///  machine has none. It shares the machine and memory, and runs only while it has the bus.
     /// </summary>
     IDebugTarget? Coprocessor => null;
+
+    /// <summary>
+    ///  Gets the machine's own CPU's view, which <c>cpu:</c> names in expressions: this one, except for a
+    ///  coprocessor's, such as the SoftCard's Z80, whose is the machine it sits in.
+    /// </summary>
+    IDebugTarget Machine => this;
 
     /// <summary>
     ///  Gets whether <see cref="Coprocessor"/> has the bus now, so its instructions are the ones running.
@@ -326,6 +333,20 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="address">The address.</param>
     /// <param name="value">The value.</param>
     void Poke(ushort address, byte value);
+
+    /// <summary>
+    ///  Gets whether <see cref="Poke"/> can write an address now: whether it reads RAM rather than ROM, I/O or
+    ///  nothing.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>Whether a write would succeed.</returns>
+    bool CanPoke(ushort address);
+
+    /// <summary>
+    ///  Gets the characters the machine's text screen shows for its bytes, for memory views; null when the
+    ///  debugger cannot draw them.
+    /// </summary>
+    ICharacterSet? CharacterSet => null;
 
     /// <summary>
     ///  Reads memory through an Apple III extended address, as an indirect access through zero page with that X-byte

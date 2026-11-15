@@ -22,7 +22,7 @@ namespace Retrocore.Machines.Trs80;
 ///   Inverse video (port <c>$84</c> bit 3) instead shows codes from <c>$80</c> as their low seven bits inverted.
 ///  </para>
 /// </remarks>
-public sealed class Trs80Model3Video : IVideoSource
+public sealed class Trs80Model3Video : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  Pixels per character.
@@ -220,6 +220,25 @@ public sealed class Trs80Model3Video : IVideoSource
                 }
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public int CharacterWidth => PixelsPerCharacter;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => Eighty ? 10 : 12;
+
+    /// <inheritdoc/>
+    public bool IsLit(byte code, int line, int pixel, bool flashed) =>
+        Lit(code, line, pixel, AlternateCharacters, Inverse);
+
+    /// <inheritdoc/>
+    public char Character(byte code)
+    {
+        // Graphics, special characters, and the glyphs below $20, which differ between the chips.
+        if (code >= 0x80 && !Inverse) { return '\0'; }
+        int low = code & 0x7F;
+        return low < 0x20 ? '\0' : (char)low;
     }
 
     // Whether a character cell's pixel is lit.

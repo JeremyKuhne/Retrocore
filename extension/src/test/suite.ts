@@ -19,7 +19,7 @@ import { testFavorites } from "./favorites";
 import { testProgramBreakpoints } from "./basicBreakpoints";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
-import { memoryUri, type MemoryBank } from "../memory";
+import { openMemory, type MemoryBank } from "../memory";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -224,16 +224,95 @@ export async function run(): Promise<void> {
         assert.equal(listed[0].media, null);
         assert.equal(listed[0].transport?.mode, "stopped");
 
-        // Memory views open through VS Code's debug memory file system, as the Hex Editor does: it reads and writes
-        // through readMemory and writeMemory, and the Model I has no banks beside the CPU's memory.
+        // The Model I has no banks beside the CPU's memory.
         const banks: MemoryBank[] = await vscode.commands.executeCommand("retrocore.memory.banks");
         assert.deepEqual(banks.map(bank => bank.name), [null]);
-        const videoRam = memoryUri(model, "0x3C00", "video", { from: 0, to: 64 });
-        const direct = Buffer.from((await model.customRequest("readMemory", { memoryReference: "0x3C00", count: 64 })).data, "base64");
-        assert.deepEqual(Buffer.from(await vscode.workspace.fs.readFile(videoRam)), direct);
-        assert.equal((await vscode.workspace.fs.stat(videoRam)).permissions, undefined, "the memory view is writable");
-        await vscode.workspace.fs.writeFile(memoryUri(model, "0x3C00", "video", { from: 0, to: 1 }), Uint8Array.of(0x2A));
-        assert.equal(Buffer.from((await model.customRequest("readMemory", { memoryReference: "0x3C00", count: 1 })).data, "base64")[0], 0x2A);
+        await model.customRequest("writeMemory", { memoryReference: "0x3C00", data: Buffer.of(0x2A).toString("base64") });
+
+        // Retrocore Memory edits through the debugger, as typing in its page would.
+        await openMemory(model, "0x3C00");
+        const memoryTab = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+        assert.ok(memoryTab instanceof vscode.TabInputCustom && memoryTab.viewType === "retrocore.memory", "Retrocore Memory opens");
+        assert.equal(memoryTab.uri.scheme, "retrocore-memory", "on its own scheme, not a .bin file");
+        assert.equal(vscode.window.tabGroups.activeTabGroup.activeTab?.label, "Memory $3C00");
+        type MemoryState = {
+            cursor: number; status: string; label: string | null; text: string; glyphs: boolean; readOnly: boolean;
+            lastWatch: string[]; frozen: number | null; candidates: number | null;
+            inspector: { label: string; value: string }[];
+        };
+        const drive = async (actions: unknown[]): Promise<MemoryState> => {
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    return await vscode.commands.executeCommand("retrocore.memory.test", actions);
+                } catch (error) {
+                    // The editor is still resolving its reference.
+                    if (attempt >= 40) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                }
+            }
+        };
+        const videoByte = async () => Buffer.from((await model.customRequest("readMemory", { memoryReference: "0x3C00", count: 1 })).data, "base64")[0];
+        let memoryState = await drive([{ goto: 0x3C00 }, { type: "2B" }]);
+        assert.equal(memoryState.cursor, 0x3C01, "the cursor moves past the byte typed");
+        assert.equal(await videoByte(), 0x2B);
+        memoryState = await drive([{ undo: true }]);
+        assert.equal(await videoByte(), 0x2A, "undo writes the byte back");
+        memoryState = await drive([{ goto: 0x3C00 }, { pane: "text" }, { type: "A" }]);
+        assert.equal(await videoByte(), 0x41);
+        memoryState = await drive([{ extras: true }, { goto: 0x3C00 }]);
+        assert.equal(memoryState.inspector.find(row => row.label === "Byte")?.value, "$41");
+        assert.equal(memoryState.glyphs, true, "the text column draws the Model I's characters");
+        assert.equal(memoryState.text, "A");
+        memoryState = await drive([{ goto: 0x7002 }]);
+        assert.equal(memoryState.label, "START+2", "the program's labels name its bytes");
+        memoryState = await drive([{ goto: 0x0000 }]);
+        assert.equal(memoryState.label, "RESET", "and the ROM's, from the SDK's source");
+        assert.equal(memoryState.readOnly, true);
+        memoryState = await drive([{ pane: "hex" }, { type: "00" }]);
+        assert.match(memoryState.status, /not RAM/, "ROM refuses the write");
+        memoryState = await drive([{ goto: 0x3C00 }, { watch: true }, { freeze: true }]);
+        assert.deepEqual(memoryState.lastWatch, ["[$3C00]"], "the inspector watches a byte in the Watch view");
+        assert.equal(memoryState.frozen, 0x41, "and freezes it at its value");
+        assert.match((await model.customRequest("evaluate", { expression: "[$3C00]", context: "watch" })).result, /\(frozen\)$/);
+        memoryState = await drive([{ search: "start" }]);
+        assert.ok((memoryState.candidates ?? 0) > 0x4000, "a RAM search starts from all of RAM");
+        memoryState = await drive([{ freeze: true }]);
+        assert.equal(memoryState.frozen, null);
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+
+        // Open in Retrocore Memory, as the Variables and Watch views call it: VS Code is sent no memory references,
+        // which would bring its Hex Editor icon, so the command asks for a variable's by its scope and name, and
+        // evaluates a watch expression.
+        const openedAt = () => {
+            const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+            return input instanceof vscode.TabInputCustom && input.viewType === "retrocore.memory"
+                ? decodeURIComponent(input.uri.path.split("/")[1])
+                : undefined;
+        };
+        const frameScopes = (await model.customRequest("scopes", { frameId: ready.stackFrames[0].id })).scopes as { name: string; variablesReference: number }[];
+        const registerScope = frameScopes.find(scope => scope.name === "Registers")!;
+        const pc = ((await model.customRequest("variables", { variablesReference: registerScope.variablesReference })).variables as { name: string; value: string; memoryReference?: string }[])
+            .find(variable => variable.name === "PC")!;
+        assert.equal(pc.memoryReference, undefined, "VS Code's views get no memory reference");
+        await vscode.commands.executeCommand("retrocore.memory.openVariable", { sessionId: model.id, container: { variablesReference: registerScope.variablesReference }, variable: { name: "PC", value: pc.value } });
+        assert.equal(openedAt(), `0x${pc.value.slice(1).padStart(4, "0")}`, "a register opens where it points");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        await vscode.commands.executeCommand("retrocore.memory.openVariable", { sessionId: model.id, container: { expression: "$3C10" }, variable: { name: "$3C10", evaluateName: "$3C10" } });
+        assert.equal(openedAt(), "0x3C10", "a watch expression opens at its value");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        // The Machine view's Memory row opens the CPU's 64K, as the Model I has no banks, and an assembly editor's
+        // context menu opens the label or address under the cursor.
+        const memoryRows: { label: string; description: string; opens: string }[] = await vscode.commands.executeCommand("retrocore.machine.memoryRows");
+        assert.deepEqual(memoryRows, [{ label: "Memory", description: "$0000-$FFFF", opens: "0x0000" }]);
+        await vscode.commands.executeCommand("retrocore.memory.openReference", memoryRows[0].opens);
+        assert.equal(openedAt(), "0x0000", "the Memory row opens the CPU's 64K");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        const assembly = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ language: "retrocore-asm", content: "        JP   RESET\n" }));
+        assembly.selection = new vscode.Selection(0, 15, 0, 15);
+        await vscode.commands.executeCommand("retrocore.memory.openAtCursor");
+        assert.equal(openedAt(), "0x0000", "a label under the cursor opens where it is");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
 
         // A function breakpoint from the Breakpoints view, with a hit count: Level II prints READY through
         // DISPLAY_CHAR, and the second character stops there. The hit count command reads its hits.
@@ -267,7 +346,7 @@ export async function run(): Promise<void> {
         await testBasicVariables(model, stop);
         await vscode.debug.stopDebugging(model);
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-        console.log("Isolated VS Code passed: the Model I boot configuration stops as it powers on, at Level II's READY and at the reset button's NMI, lists its devices, reads and writes memory views, counts a function breakpoint's hits, edits, saves, imports and exports its BASIC program, and debugs it on the BASIC thread with its variables.");
+        console.log("Isolated VS Code passed: the Model I boot configuration stops as it powers on, at Level II's READY and at the reset button's NMI, lists its devices, edits, watches and freezes memory in Retrocore Memory, counts a function breakpoint's hits, edits, saves, imports and exports its BASIC program, and debugs it on the BASIC thread with its variables.");
 
         // A labeled BASIC file launched and debugged in place.
         await testBasicLaunch(root, stop);

@@ -67,6 +67,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\DebugPosition.cs" Link="DebugPosition.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\IDebugModule.cs" Link="IDebugModule.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.cs" Link="SourceMapModule.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DebugFileModule.cs" Link="DebugFileModule.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />

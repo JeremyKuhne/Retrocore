@@ -19,7 +19,7 @@ namespace Retrocore.Machines.Trs80;
 ///   sync toggles the real-time clock, which interrupts every other frame, 30 times a second.
 ///  </para>
 /// </remarks>
-public sealed class Trs80Model2Video : IVideoSource
+public sealed class Trs80Model2Video : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  The most scanlines a character row is drawn with.
@@ -245,6 +245,27 @@ public sealed class Trs80Model2Video : IVideoSource
                 }
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public int CharacterWidth => 8;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => LinesPerRow;
+
+    /// <inheritdoc/>
+    public bool IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        int dots = _characterGenerator[((code & 0x7F) << 4) | line];
+        return ((dots & (0x80 >> pixel)) != 0) != ((code & 0x80) != 0);
+    }
+
+    /// <inheritdoc/>
+    public char Character(byte code)
+    {
+        // Codes below $20 are the character generator's graphics; bit 7 shows a code inverse.
+        int low = code & 0x7F;
+        return low < 0x20 ? '\0' : (char)low;
     }
 
     private static uint Rgba(byte red, byte green, byte blue) =>

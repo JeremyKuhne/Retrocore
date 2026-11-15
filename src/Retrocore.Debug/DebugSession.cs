@@ -141,6 +141,11 @@ internal sealed partial class DebugSession
         transport.On("disassemble", args => Reply(() => Disassemble(args)));
         transport.On("retro/breakpoints", args => Reply(() => BreakpointList(args)));
         transport.On("retro/memoryBanks", _ => Reply(MemoryBankList));
+        transport.On("retro/memory/read", args => Reply(() => ReadMemoryRange(args)));
+        transport.On("retro/memory/labels", args => Reply(() => MemoryLabels(args)));
+        transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
+        transport.On("retro/memory/freeze", args => Reply(() => FreezeMemory(args)));
+        transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
             _configured = true;
@@ -165,25 +170,32 @@ internal sealed partial class DebugSession
                 _ => Scopes(args)
             }));
 
-        transport.On("variables", args => Reply(() => Variables((args.Int("variablesReference") ?? 0))));
+        transport.On("variables", args => Reply(() => WithoutMemoryReferences(Variables(args.Int("variablesReference") ?? 0))));
         transport.On("evaluate", args => Reply(() =>
         {
             string expression = Required(args, "expression");
             int frameId = args.Int("frameId") ?? 1;
-            if (frameId >= BasicFrameBase && HasBasicThread) { return EvaluateBasic(expression); }
+            if (frameId >= BasicFrameBase && HasBasicThread)
+            {
+                // BASIC names no memory, so an address Retrocore Memory opens while a BASIC frame is focused, such
+                // as a label, is the CPU's.
+                if (args.String("context") != AddressContext) { return EvaluateBasic(expression); }
+                frameId = 1;
+            }
 
             // In a Pascal frame, a variable its listing names; other expressions are the CPU's, as the machine is now.
             if (frameId is >= PascalFrameBase and < BasicFrameBase)
             {
                 if (PascalVariableNamed(frameId, expression.Trim()) is { } named && Pascal is { } pascal)
                 {
-                    return new JsonObject
+                    return Evaluated(args, new JsonObject
                     {
                         ["result"] = PascalValue(pascal.Memory, named.At, named.Variable),
                         ["type"] = named.Variable.Type,
                         ["variablesReference"] = 0,
-                        ["memoryReference"] = named.At.Bank == 0 ? Reference(bank: null, named.At.Address) : null
-                    };
+                        // On the Apple II, in main or auxiliary RAM by its bank, where Apple Pascal 1.3 keeps it.
+                        ["memoryReference"] = PascalReference(named.At)
+                    });
                 }
 
                 frameId = 1;
@@ -191,10 +203,11 @@ internal sealed partial class DebugSession
 
             long value;
             DebugMemoryBank? bank;
+            bool cpu;
             try
             {
                 value = new ExpressionEvaluator(FrameTarget(frameId), _debug, expression, FrameRegisters(frameId))
-                    .EvaluateReference(out bank);
+                    .EvaluateReference(out bank, out cpu);
             }
             catch (FormatException) when (HasBasicThread
                 && args.String("context") is "hover" or "watch"
@@ -215,15 +228,17 @@ internal sealed partial class DebugSession
                 result = $"{result} · {summary}";
             }
 
-            return new JsonObject
+            if (FrozenIn(expression, frameId)) { result = $"{result} (frozen)"; }
+            return Evaluated(args, new JsonObject
             {
                 ["result"] = result,
                 ["variablesReference"] = 0,
-                // A value in a coprocessor's frame, such as the Z80's PC, opens memory in that CPU's address space.
+                // A value in a coprocessor's frame, such as the Z80's PC, opens memory in that CPU's address space,
+                // unless cpu: names the machine's own.
                 ["memoryReference"] = value is >= 0 and <= 0xFFFF
-                    ? Reference(bank ?? ThreadBank(FrameIndex(frameId).Thread), (int)value)
+                    ? Reference(bank ?? (cpu ? null : ThreadBank(FrameIndex(frameId).Thread)), (int)value)
                     : null
-            };
+            });
         }));
 
         transport.On("setVariable", args => Reply(() =>
@@ -374,6 +389,8 @@ internal sealed partial class DebugSession
 
             if (_run is not { IsCancellationRequested: false })
             {
+                // A card's ROM or RAM now shows at its slot's addresses.
+                NotifyMemory();
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
 
                 // The panel's Sound button follows the cards, so a stopped machine sends it a frame too.
@@ -450,6 +467,8 @@ internal sealed partial class DebugSession
             Invalidate();
             if (_run is not { IsCancellationRequested: false })
             {
+                // A reset switches banks back, as the language card's ROM does.
+                NotifyMemory();
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
                 NotifyFrame(running: false);
             }
@@ -548,11 +567,11 @@ internal sealed partial class DebugSession
         ["supportsDataBreakpoints"] = true,
         ["supportsDataBreakpointBytes"] = true,
         ["supportsDisassembleRequest"] = true,
+        ["supportsReadMemoryRequest"] = true,
+        ["supportsWriteMemoryRequest"] = true,
         ["supportsSteppingGranularity"] = true,
         ["supportsExceptionInfoRequest"] = true,
         ["supportsEvaluateForHovers"] = true,
-        ["supportsReadMemoryRequest"] = true,
-        ["supportsWriteMemoryRequest"] = true,
         ["supportsExceptionFilterOptions"] = true,
         ["exceptionBreakpointFilters"] = FilterJson(ExceptionFilters(machine: null))
     };
@@ -771,6 +790,7 @@ internal sealed partial class DebugSession
         _basicEntry = basicFile is not null && _stopOnEntry && (args.Bool("run") ?? true);
         RebindBreakpoints();
         _memoryViews.Clear();
+        _frozen.Clear();
         _memoryFrames = 0;
         _sentPixels = [];
 
@@ -1003,7 +1023,6 @@ internal sealed partial class DebugSession
                 ["variablesReference"] = frameId * 2,
                 ["expensive"] = false
             },
-            new JsonObject { ["name"] = "Memory", ["variablesReference"] = BanksScope, ["expensive"] = false }
         ];
 
         // The documented routine the frame is in: its summary names the scope, and its sections fill it.
@@ -1136,7 +1155,6 @@ internal sealed partial class DebugSession
         if (reference >= PascalReferences) { return PascalVariablesOf(reference); }
         if (reference >= BasicReferences) { return BasicVariablesOf(reference); }
         if (reference > DocumentationScope) { return DocumentationVariables(reference - DocumentationScope); }
-        if (reference == BanksScope) { return BankVariables(); }
         List<JsonNode?> variables = [];
         int frameId = (reference + 1) / 2;
         (int thread, int index) = FrameIndex(frameId);
@@ -1503,6 +1521,9 @@ internal sealed partial class DebugSession
 
                         // Each slice runs until it has kept up with the machine's clock, or for a few milliseconds.
                         long slice = Stopwatch.GetTimestamp();
+
+                        // Frozen bytes go back to their values before each slice runs.
+                        if (_frozen.Count != 0) { ApplyFreezes(); }
                         ulong due = Due(ref paceTime, ref paceCycles);
                         ahead = false;
                         for (int count = 0; !token.IsCancellationRequested && Target.CycleCount < due; count++)

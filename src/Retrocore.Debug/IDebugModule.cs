@@ -48,6 +48,25 @@ internal interface IDebugModule
     string? Label(ushort address);
 
     /// <summary>
+    ///  Gets the module's labels: the names it gives addresses, not its constants.
+    /// </summary>
+    IEnumerable<(string Name, long Value)> Labels { get; }
+
+    /// <summary>
+    ///  Gets whether the module's label for an address applies to memory now, where the module itself does.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   By default a label applies where memory holds the code the module describes, so a program's labels go once
+    ///   other code replaces it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="memory">The machine's memory, for reading the bytes at the address.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>True when the label names what is at the address now.</returns>
+    bool LabelApplies(IDebugMemory memory, ushort address) => Position(memory, address) is not null;
+
+    /// <summary>
     ///  Gets the documentation comments of the module's sources, with its symbol values.
     /// </summary>
     DocumentationSet Documentation { get; }

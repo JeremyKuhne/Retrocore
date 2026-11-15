@@ -26,6 +26,10 @@ namespace Retrocore.Debug;
 ///  The instruction set of the CPU the bank's addresses are for, when it is not the machine's own, such as the
 ///  SoftCard's Z80; null for the machine's CPU.
 /// </param>
+/// <param name="CanPoke">
+///  Whether a write reaches an address now, for a bank whose writes can land on ROM or I/O, such as the SoftCard's
+///  Z80 through its address translation; null when every byte it has can be written.
+/// </param>
 internal sealed record DebugMemoryBank(
     string Name,
     string Label,
@@ -33,8 +37,18 @@ internal sealed record DebugMemoryBank(
     IReadOnlyList<(ushort Start, int Length)> Ranges,
     Func<ushort, byte?> Peek,
     Func<ushort, byte, bool>? Poke,
-    Retrocore.Isa.InstructionSet? InstructionSet = null)
+    Retrocore.Isa.InstructionSet? InstructionSet = null,
+    Func<ushort, bool>? CanPoke = null)
 {
+    /// <summary>
+    ///  Gets whether a write reaches an address of the bank now.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>True when the bank has a byte there that a write changes.</returns>
+    internal bool Writable(ushort address) => Poke is not null
+        && Peek(address) is not null
+        && (CanPoke?.Invoke(address) ?? true);
+
     /// <summary>
     ///  Gets the memory area that holds an address.
     /// </summary>

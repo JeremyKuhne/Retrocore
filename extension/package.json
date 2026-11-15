@@ -16,6 +16,7 @@
   "activationEvents": [
     "onDebugResolve:retrocore",
     "onDebugDynamicConfigurations:retrocore",
+    "onCustomEditor:retrocore.memory",
     "onFileSystem:retrocore-basic",
     "onFileSystem:retrocore-basic-file",
     "onLanguage:retrocore-applesoft",
@@ -31,7 +32,7 @@
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -482,7 +483,45 @@
         "contents": "Start a retro machine without a launch.json: the Apple II family or the TRS-80 Model I.\n[Start Retro Machine](command:retrocore.startMachine)"
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "retrocore.memory",
+        "displayName": "Retrocore Memory",
+        "selector": [
+          {
+            "filenamePattern": "retrocore-memory:/**"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "menus": {
+      "debug/variables/context": [
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/",
+          "group": "navigation@10"
+        }
+      ],
+      "debug/watch/context": [
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && watchItemType == expression",
+          "group": "navigation@1"
+        }
+      ],
       "view/title": [
         {
           "command": "retrocore.machine.switch",
@@ -713,6 +752,10 @@
           "when": "false"
         },
         {
+          "command": "retrocore.machine.memoryRows",
+          "when": "false"
+        },
+        {
           "command": "retrocore.machine.change",
           "when": "false"
         },
@@ -738,6 +781,22 @@
         },
         {
           "command": "retrocore.memory.banks",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openReference",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/"
+        },
+        {
+          "command": "retrocore.memory.test",
           "when": "false"
         },
         {
@@ -827,6 +886,13 @@
           "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
           "group": "navigation@9"
         }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "retrocore.memory.open",
+          "when": "debugType == retrocore",
+          "group": "navigation@100"
+        }
       ]
     },
     "commands": [
@@ -856,6 +922,25 @@
       {
         "command": "retrocore.memory.banks",
         "title": "Retrocore: List Memory Banks"
+      },
+      {
+        "command": "retrocore.memory.openVariable",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openReference",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openAtCursor",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.test",
+        "title": "Retrocore: Drive the Memory Editor"
       },
       {
         "command": "retrocore.hardware.addCard",
@@ -923,6 +1008,10 @@
       {
         "command": "retrocore.machine.off",
         "title": "Retrocore: Off Machine"
+      },
+      {
+        "command": "retrocore.machine.memoryRows",
+        "title": "Retrocore: Memory Rows"
       },
       {
         "command": "retrocore.machine.change",

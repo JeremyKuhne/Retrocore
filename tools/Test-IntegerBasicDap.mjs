@@ -45,6 +45,10 @@ try {
     assert.equal(top.source.path.toLowerCase(), file.toLowerCase());
     assert.deepEqual([top.line, top.column], [2, 4]);
 
+    // In a BASIC frame a watch is BASIC, but an address Retrocore Memory opens is the CPU's, as BASIC names no memory.
+    assert.equal((await request("evaluate", { expression: "$0400", frameId: top.id, context: "retrocore" })).memoryReference, "0x0400");
+    assert.equal((await request("evaluate", { expression: "A", frameId: top.id, context: "watch" })).memoryReference, undefined);
+
     // A step goes to the statement after the colon, then to the next line.
     await request("next", { threadId: 2 });
     await stopped("step");

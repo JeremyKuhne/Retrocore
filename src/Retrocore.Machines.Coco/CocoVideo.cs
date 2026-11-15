@@ -24,7 +24,7 @@ namespace Retrocore.Machines.Coco;
 ///   the next.
 ///  </para>
 /// </remarks>
-public sealed class CocoVideo : IVideoSource
+public sealed class CocoVideo : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  The first active line.
@@ -203,6 +203,56 @@ public sealed class CocoVideo : IVideoSource
         int code = value & 0x3F;
         char ascii = (char)(code < 32 ? code + 64 : code);
         return (value & 0x40) == 0 && char.IsAsciiLetterUpper(ascii) ? char.ToLowerInvariant(ascii) : ascii;
+    }
+
+    /// <inheritdoc/>
+    public int CharacterWidth => 8;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => 12;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Codes from <c>$80</c> are semigraphics in the current mode, lit where an element is on whatever its color.
+    ///  </para>
+    /// </remarks>
+    public bool IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        byte mode = _bus.VideoMode;
+        if ((code & 0x80) != 0)
+        {
+            bool four = _t1 || (mode & GraphicsMode0Bit) == 0;
+            int element = four ? (line < 6 ? 3 : 1) : (line < 4 ? 5 : line < 8 ? 3 : 1);
+            if (pixel >= 4) { element--; }
+            return (code & (1 << element)) != 0;
+        }
+
+        Span<uint> cell = stackalloc uint[8];
+        RenderCharacter(cell, code, mode, css: false, line);
+        // The ink is the dark color, so normal text draws as dark characters on the green screen.
+        return cell[pixel] != s_palette[0];
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The character as the screen draws it now: uppercase in either style, except that the MC6847T1 with GM0 set
+    ///   draws codes 0 to 31 without the inverse bit as its lowercase, as <see cref="RenderCharacter"/> does.
+    ///   Semigraphics have none.
+    ///  </para>
+    /// </remarks>
+    char ICharacterSet.Character(byte code)
+    {
+        if ((code & 0x80) != 0) { return '\0'; }
+        int character = code & 0x3F;
+        char ascii = (char)(character < 32 ? character + 64 : character);
+        bool lowercase = _t1
+            && (code & 0x40) == 0
+            && (_bus.VideoMode & GraphicsMode0Bit) != 0
+            && character < 32;
+
+        return lowercase ? char.ToLowerInvariant(ascii) : ascii;
     }
 
     /// <inheritdoc/>

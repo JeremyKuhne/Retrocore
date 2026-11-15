@@ -50,7 +50,8 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
             [(0x0000, 0x10000)],
             address => host.InstalledSoftCard is { } current ? current.Peek(address) : null,
             (address, value) => host.InstalledSoftCard is { } current && PokeHost(host, current.Translate(address), value),
-            Z80Isa.InstructionSet);
+            Z80Isa.InstructionSet,
+            address => host.InstalledSoftCard is { } current && host.CanPoke(current.Translate(address)));
     }
 
     // Writes a byte the Z80 reaches, or reports that ROM or I/O is there, so a write can roll back or stop part way.
@@ -207,6 +208,9 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public IReadOnlyList<DebugMemoryBank> Banks => _host.Banks;
 
     /// <inheritdoc/>
+    public IDebugTarget Machine => _host;
+
+    /// <inheritdoc/>
     public IReadOnlyList<string> Screens => _host.Screens;
 
     /// <inheritdoc/>
@@ -266,6 +270,12 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public void Poke(ushort address, byte value) => _host.Poke(Card.Translate(address), value);
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _host.CanPoke(Card.Translate(address));
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _host.CharacterSet;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

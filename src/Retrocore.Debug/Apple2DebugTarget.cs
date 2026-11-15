@@ -775,6 +775,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     }
 
     /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.HoldsRam(_machine.Bus.ReadArea(address), address);
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Bus.Video;
+
+    /// <inheritdoc/>
     public Enum WriteArea(ushort address) => _machine.Bus.WriteArea(address);
 
     /// <inheritdoc/>

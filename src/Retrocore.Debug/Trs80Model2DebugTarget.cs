@@ -183,13 +183,19 @@ internal sealed partial class Trs80Model2DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) is not (Trs80Model2MemoryArea.Ram or Trs80Model2MemoryArea.Video))
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM or video RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) is Trs80Model2MemoryArea.Ram or Trs80Model2MemoryArea.Video;
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Bus.Video;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

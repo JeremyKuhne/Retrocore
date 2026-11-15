@@ -14,7 +14,7 @@ namespace Retrocore.Machines.Trs80;
 ///   no RAM for bit 6, which reads as the inverse of bit 5; the lowercase modification adds it.
 ///  </para>
 /// </remarks>
-public sealed class Trs80Video : IVideoSource
+public sealed class Trs80Video : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  Columns in 64-character mode.
@@ -205,12 +205,33 @@ public sealed class Trs80Video : IVideoSource
                     int pixel = wide ? (x % (PixelsPerCharacter * 2)) / 2 : x % PixelsPerCharacter;
                     byte code = source[(row * Columns) + column];
                     if (scanned && Snow && snow[column] >= 0) { code = (byte)snow[column]; }
-                    if (!Lowercase) { code |= (byte)((~code & 0x20) << 1); }
-                    scan[x] = Lit(code, line, pixel) ? s_on : s_off;
+                    scan[x] = Lit(Shown(code), line, pixel) ? s_on : s_off;
                 }
             }
         }
     }
+
+    /// <inheritdoc/>
+    public int CharacterWidth => PixelsPerCharacter;
+
+    /// <inheritdoc/>
+    public int CharacterHeight => LinesPerRow;
+
+    /// <inheritdoc/>
+    public bool IsLit(byte code, int line, int pixel, bool flashed) => Lit(Shown(code), line, pixel);
+
+    /// <inheritdoc/>
+    public char Character(byte code)
+    {
+        code = Shown(code);
+
+        // Graphics, and the lowercase modification's symbols below $20.
+        return (code & 0x80) != 0 || code < 0x20 ? '\0' : (char)code;
+    }
+
+    // The code the character generator shows for a byte: without the lowercase modification, bit 6 reads as the
+    // inverse of bit 5.
+    private byte Shown(byte code) => Lowercase ? code : (byte)((code & 0xBF) | ((~code & 0x20) << 1));
 
     // Whether a character cell's pixel is lit.
     private bool Lit(byte code, int line, int pixel)

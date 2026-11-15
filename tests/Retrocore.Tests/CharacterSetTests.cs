@@ -99,6 +99,13 @@ public class CharacterSetTests
         characters.IsLit(0x80 | 0x08, 0, 4, flashed: false).Should().BeFalse();
         characters.IsLit(0x80 | 0x08, 8, 0, flashed: false).Should().BeFalse();
 
+        // With the GIME's lowercase on, codes 0 to 31 without the inverse bit are what its font draws there.
+        SetVideoMode(machine, 0x10);
+        string lowercase = new([.. Enumerable.Range(0, 32).Select(code => characters.Character((byte)code))]);
+        lowercase.Should().Be("^abcdefghijklmnopqrstuvwxyz{|}~_");
+        characters.Character(0x41).Should().Be('A', "the inverse bit keeps uppercase");
+        SetVideoMode(machine, 0x00);
+
         CocoMachineTests.Type(machine, "width 40\r");
         (characters.CharacterWidth, characters.CharacterHeight).Should().Be((8, 8));
         characters.Character(0x4F).Should().Be('O');
@@ -123,5 +130,28 @@ public class CharacterSetTests
         on.Should().ContainSingle();
         off.Should().ContainSingle();
         on.Should().NotIntersectWith(off);
+    }
+
+    /// <summary>
+    ///  The MC6847T1 draws codes 0 to 31 as its lowercase while GM0 is set, as copying, finding and typing read them.
+    /// </summary>
+    [TestMethod]
+    public void TheT1sLowercaseIsWhatItDraws()
+    {
+        CocoMachine machine = CocoMachineTests.Create(CocoModel.Coco2, 13, 11, 64);
+        machine.Run(2 * (ulong)CocoTiming.ClockHertz);
+        ICharacterSet characters = machine.Bus.Video;
+        SetVideoMode(machine, 0x10);
+        string lowercase = new([.. Enumerable.Range(0, 32).Select(code => characters.Character((byte)code))]);
+        lowercase.Should().Be("^abcdefghijklmnopqrstuvwxyz{|}~_");
+    }
+
+    // Writes PIA 1's port B, whose top bits are the VDG's mode, as the test of the T1's lowercase does.
+    private static void SetVideoMode(CocoMachine machine, byte mode)
+    {
+        machine.Bus.Pia1.Write(3, (byte)(machine.Bus.Pia1.ControlB & ~0x04));
+        machine.Bus.Pia1.Write(2, 0xF8);
+        machine.Bus.Pia1.Write(3, (byte)(machine.Bus.Pia1.ControlB | 0x04));
+        machine.Bus.Pia1.Write(2, mode);
     }
 }

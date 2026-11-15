@@ -350,7 +350,7 @@ public sealed class Coco3Video : IVideoSource, ICharacterSet
         int character = code & 0x3F;
         char upper = (char)(character < 32 ? character + 64 : character);
         bool lowercase = (code & 0x40) == 0 && (_bus.VideoMode & 0x10) != 0 && character < 32;
-        return lowercase ? char.ToLowerInvariant(upper) : upper;
+        return lowercase ? CocoVideo.LowercaseCharacter(character) : upper;
     }
 
     private LineState Capture(int position, int lineInRow) => new()

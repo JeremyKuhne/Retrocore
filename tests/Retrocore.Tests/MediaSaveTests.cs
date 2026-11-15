@@ -286,7 +286,8 @@ public sealed class MediaSaveTests
 
     /// <summary>
     ///  Letting a disk go holds only for the mount it was asked about: a card's other changed disk is asked about in
-    ///  turn, a disk that went in since is asked about again, and an answer for an old mount does nothing.
+    ///  turn, a disk that went in since is asked about again, and an answer for an old mount does nothing. Each drive
+    ///  here is built anew, as a card put back in is, and still gives its mount a generation of its own.
     /// </summary>
     [TestMethod]
     public void AnswersHoldOnlyForTheMountAskedAbout()
@@ -297,6 +298,7 @@ public sealed class MediaSaveTests
         Apple2FloppyDrive two = Drive(second, "disk2");
         Change(one);
         Change(two);
+        one.MountGeneration.Should().NotBe(two.MountGeneration, "no two mounts share a generation, even in drives built anew");
         Apple2FloppyDrive[] card = [one, two];
         string[] ids = ["disk1", "disk2"];
 

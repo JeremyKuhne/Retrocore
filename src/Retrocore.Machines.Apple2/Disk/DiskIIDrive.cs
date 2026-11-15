@@ -22,8 +22,13 @@ internal sealed class DiskIIDrive
     /// </summary>
     internal WozDisk? Media { get; private set; }
 
+    // The last mount generation given out, by any drive: a generation is never given twice in the process, so a drive
+    // built again, as a card put back in, never repeats one an answer still names.
+    private static int s_lastMount;
+
     /// <summary>
-    ///  Gets a count that changes each time media goes in or comes out, however it does.
+    ///  Gets a number that changes each time media goes in or comes out, however it does, and that no other mount in
+    ///  the process has had.
     /// </summary>
     internal int MountGeneration { get; private set; }
 
@@ -34,7 +39,11 @@ internal sealed class DiskIIDrive
     internal void SetMedia(WozDisk? media)
     {
         int oldLength = BitCount;
-        if (!ReferenceEquals(media, Media) || media is not null) { MountGeneration++; }
+        if (!ReferenceEquals(media, Media) || media is not null)
+        {
+            MountGeneration = Interlocked.Increment(ref s_lastMount);
+        }
+
         Media = media;
         BitPosition = (int)((long)BitPosition * BitCount / oldLength);
         _headWindow = 0;

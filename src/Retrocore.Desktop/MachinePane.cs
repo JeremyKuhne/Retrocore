@@ -423,11 +423,35 @@ internal sealed class MachinePane : ScrollViewer
     ///  </para>
     /// </remarks>
     /// <param name="what">What would lose them, such as <c>Stop</c>, for the question.</param>
-    /// <returns>True when every disk was saved or let go; false when the person cancelled.</returns>
+    /// <returns>
+    ///  True when every disk was saved or let go, with the machine held; false when the person cancelled or a save
+    ///  failed, with the machine running on.
+    /// </returns>
     internal async Task<bool> ReleaseMedia(string what)
     {
-        if (Unsaved.Count == 0) { return true; }
-        _session.Host.Pause();
+        MachineHost held = _session.Host;
+        held.Pause();
+        bool released = false;
+        try
+        {
+            released = await AskAboutUnsaved(what);
+            return released;
+        }
+        finally
+        {
+            if (!released) { held.Resume(); }
+        }
+    }
+
+    /// <summary>
+    ///  Holds the machine still, as before something that sets it up again: the window closing holds it, and asks
+    ///  only when a disk has changes not saved.
+    /// </summary>
+    internal void Hold() => _session.Host.Pause();
+
+    // Asks about each changed disk until it is saved or let go; says whether all were, or false when one was not.
+    private async Task<bool> AskAboutUnsaved(string what)
+    {
         HashSet<(string Id, int? Generation)> discarded = [];
         HashSet<(string Id, int? Generation)> saved = [];
         while (Unsaved.FirstOrDefault(device => !discarded.Contains((device.Id, device.Generation))) is { } device)
@@ -448,20 +472,21 @@ internal sealed class MachinePane : ScrollViewer
 
             saved.Add(mount);
             JsonObject save = new() { ["generation"] = device.Generation };
-            if (answer is null || !await Send(args => _session.Device(device.Id, "save", args), save))
-            {
-                _session.Host.Resume();
-                return false;
-            }
+            if (answer is null || !await Send(args => _session.Device(device.Id, "save", args), save)) { return false; }
         }
 
         return true;
     }
 
-    // Lets changed disks go, then acts, as Stop and Restart do.
+    // Lets changed disks go, then acts, as Stop, Restart, switching, starting another machine and resetting do. The
+    // machine held for the questions runs on if the action left it in place, as when Stop could not write a recording
+    // or the new machine could not be built.
     private async Task Release(string what, Action action)
     {
-        if (await ReleaseMedia(what)) { Try(action); }
+        MachineHost held = _session.Host;
+        if (!await ReleaseMedia(what)) { return; }
+        Try(action);
+        if (ReferenceEquals(_session.Host, held)) { held.Resume(); }
     }
 
     // Sends a media action and answers what comes back, as the extension does: a changed disk that would leave its
@@ -528,7 +553,7 @@ internal sealed class MachinePane : ScrollViewer
                         continue;
                     }
 
-                    return replace == "Save As..." && await SaveAsNew(device);
+                    return replace == "Save As..." && await SaveAsNew(device, generation);
                 case "losses":
                     string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
                     string? accept = await _window.Ask(
@@ -542,7 +567,7 @@ internal sealed class MachinePane : ScrollViewer
                         continue;
                     }
 
-                    return accept == "Save As..." && await SaveAsNew(device);
+                    return accept == "Save As..." && await SaveAsNew(device, generation);
                 case "readOnly":
                     string why = answer["reason"]?.GetValue<string>() switch
                     {
@@ -552,7 +577,7 @@ internal sealed class MachinePane : ScrollViewer
                         _ => $"The image of the disk in {name} cannot be written.",
                     };
 
-                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device);
+                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation);
                 default:
                     return true;
             }
@@ -573,8 +598,10 @@ internal sealed class MachinePane : ScrollViewer
     private static JsonObject SaveOf(JsonNode? generation) => new() { ["generation"] = generation?.DeepClone() };
 
     // Save As for a device by its id, as the answers offer it.
-    private async Task<bool> SaveAsNew(string id) =>
-        _session.Host.DeviceStates().FirstOrDefault(state => state.Id == id) is { } device && await SaveAs(device);
+    // It carries the mount the answer was about, so a disk that went in since is not the one saved.
+    private async Task<bool> SaveAsNew(string id, JsonNode? generation) =>
+        _session.Host.DeviceStates().FirstOrDefault(state => state.Id == id) is { } device
+            && await SaveAs(device, generation?.GetValue<int>());
 
     private async Task SwitchMachine()
     {
@@ -591,8 +618,8 @@ internal sealed class MachinePane : ScrollViewer
         }));
 
         QuickPickItem<CatalogMachine>? picked = await _window.Pick(items, "Switch Machine", "Which machine to set up?");
-        if (picked?.Value is not { } chosen || !await ReleaseMedia("switching machines")) { return; }
-        Try(() => _session.Switch(MachineCatalog.Configuration(chosen), saved: null));
+        if (picked?.Value is not { } chosen) { return; }
+        await Release("switching machines", () => _session.Switch(MachineCatalog.Configuration(chosen), saved: null));
     }
 
     private async Task StartMachine()
@@ -605,8 +632,8 @@ internal sealed class MachinePane : ScrollViewer
             "Start Machine",
             "Which machine to start?");
 
-        if (picked?.Value is not { } chosen || !await ReleaseMedia("starting another machine")) { return; }
-        Try(() =>
+        if (picked?.Value is not { } chosen) { return; }
+        await Release("starting another machine", () =>
         {
             _session.Switch(MachineCatalog.Configuration(chosen), saved: null);
             _session.Start();
@@ -616,7 +643,7 @@ internal sealed class MachinePane : ScrollViewer
     private async Task ResetSaved()
     {
         string? answer = await _window.Ask($"Forget the cards and media kept for {_session.Name}, and set it up as it comes?", ["Reset"]);
-        if (answer == "Reset" && await ReleaseMedia("resetting the machine")) { Try(_session.ResetSaved); }
+        if (answer == "Reset") { await Release("resetting the machine", _session.ResetSaved); }
     }
 
     private async Task ChangeSetting(MachineChoice choice)
@@ -704,7 +731,7 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // Saves a disk to an image the person picks; says whether it was saved.
-    private async Task<bool> SaveAs(DeviceState device)
+    private async Task<bool> SaveAs(DeviceState device, int? generation = null)
     {
         if (device.Media is not { } media) { return false; }
         IStorageFolder? folder = Path.GetDirectoryName(media.Label) is { Length: > 0 } directory
@@ -722,7 +749,7 @@ internal sealed class MachinePane : ScrollViewer
         if (file?.TryGetLocalPath() is not { } path) { return false; }
 
         // The person chose the file as it is now, so the save may replace that and nothing that comes after it.
-        JsonObject args = new() { ["path"] = path, ["generation"] = device.Generation };
+        JsonObject args = new() { ["path"] = path, ["generation"] = generation ?? device.Generation };
         FileRevision? chosen = null;
         Try(() => chosen = FileRevision.Read(path));
         if (chosen is not null) { args["overwrite"] = new JsonObject { ["sha256"] = chosen.Sha256 }; }

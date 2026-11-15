@@ -164,7 +164,8 @@ What a person decides on comes back as an answer beside the devices, not as an e
 | `losses` | The image's `format` cannot hold all of the disk (`losses`) | Sends the save again with `acceptLosses: true` and the `generation`, and the disk stays changed, or saves as a new image |
 | `readOnly` | The image cannot be written: `reason` is `file` (a read-only file), `access`, `noImage` (a disk a launch built) or `format` (an image that can only be read, as `.d13`) | Saves as a new image |
 
-Every answer gives the mount `generation` it is about, and an answer holds only for that mount: a request whose
+Every answer gives the mount `generation` it is about (a number no other mount in the host has had, even in a drive
+whose card was put back in), and an answer holds only for that mount: a request whose
 `generation` is not the drive's mount now is refused, and `discards` lets go only of the mounts it lists, so a
 question left open while another disk went in never saves or lets go of the new one. A client that does not send
 `supportsRetrocoreMedia` has a changed disk's eject, insert or card removal refused with a message, as the safe

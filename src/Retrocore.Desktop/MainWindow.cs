@@ -34,6 +34,9 @@ internal sealed class MainWindow : Window
 
     // Whether the window may close: set once its changed disks are saved or let go.
     private bool _mayClose;
+
+    // Whether a close is asking about changed disks, so another close request waits on it rather than asking again.
+    private bool _closing;
     private readonly Grid _body = new();
     private readonly Border _pane = new()
     {
@@ -741,22 +744,40 @@ internal sealed class MainWindow : Window
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   A disk with changes not saved to its image asks first, as the window closing would lose them; the window
-    ///   closes once each is saved or let go.
+    ///   The machine holds still first, so it cannot change a disk as the window closes. A disk with changes not
+    ///   saved to its image then asks, as closing would lose them; the window closes once each is saved or let go.
+    ///   One close asks at a time: another close request while it does waits on its answer.
     ///  </para>
     /// </remarks>
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        if (_mayClose || _machinePane.Unsaved.Count == 0) { return; }
+        if (_mayClose) { return; }
+        if (_closing)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        _machinePane.Hold();
+        if (_machinePane.Unsaved.Count == 0) { return; }
         e.Cancel = true;
         _ = CloseAfterAsking();
     }
 
     private async Task CloseAfterAsking()
     {
-        if (!await _machinePane.ReleaseMedia("closing")) { return; }
-        _mayClose = true;
+        _closing = true;
+        try
+        {
+            if (!await _machinePane.ReleaseMedia("closing")) { return; }
+            _mayClose = true;
+        }
+        finally
+        {
+            _closing = false;
+        }
+
         Close();
     }
 

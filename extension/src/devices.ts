@@ -695,7 +695,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null }, generation };
                         continue;
                     }
-                    return choice === "Save As..." && await saveAsNew(session, id);
+                    return choice === "Save As..." && await saveAsNew(session, id, generation);
                 }
                 case "losses": {
                     const choice = await vscode.window.showWarningMessage(
@@ -705,7 +705,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         current = { ...current, acceptLosses: true, generation };
                         continue;
                     }
-                    return choice === "Save As..." && await saveAsNew(session, id);
+                    return choice === "Save As..." && await saveAsNew(session, id, generation);
                 }
                 case "readOnly": {
                     const why = body.reason === "noImage" ? `The disk in ${name} has no image of its own.`
@@ -713,7 +713,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         : body.reason === "file" ? `The image of the disk in ${name} is read-only.`
                         : `The image of the disk in ${name} cannot be written.`;
                     const choice = await vscode.window.showWarningMessage(`${why} Save the disk as a new image?`, { modal: true }, "Save As...");
-                    return choice === "Save As..." && await saveAsNew(session, id);
+                    return choice === "Save As..." && await saveAsNew(session, id, generation);
                 }
                 default:
                     return true;
@@ -750,7 +750,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     }));
     // Save As asks where, and saves the disk there, in the machine of the session it was asked for; says whether it
     // was saved. The person chose the file as it was then, so the save may replace that revision and no later one.
-    const saveAs = async (session: vscode.DebugSession | undefined, device: Device): Promise<boolean> => {
+    // An answer's Save As carries the mount it was about, so a disk that went in since is not the one saved.
+    const saveAs = async (session: vscode.DebugSession | undefined, device: Device, generation?: number): Promise<boolean> => {
         if (!device.media) return false;
         const file = await vscode.window.showSaveDialog({
             title: `Save the disk in ${device.name} as`,
@@ -759,13 +760,13 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         });
         if (file === undefined || (session !== undefined && !still(session))) return false;
         const chosen = await readFile(file.fsPath).then(bytes => createHash("sha256").update(bytes).digest("hex"), () => undefined);
-        const args: Record<string, unknown> = { id: device.id, action: "save", path: file.fsPath, generation: device.media.generation };
+        const args: Record<string, unknown> = { id: device.id, action: "save", path: file.fsPath, generation: generation ?? device.media.generation };
         const saving = chosen === undefined ? args : { ...args, overwrite: { sha256: chosen } };
         return session === undefined ? send("device", saving) : sendTo(session, "device", saving);
     };
-    const saveAsNew = async (session: vscode.DebugSession, id: string): Promise<boolean> => {
+    const saveAsNew = async (session: vscode.DebugSession, id: string, generation: number | undefined): Promise<boolean> => {
         const device = still(session) ? tree.devices.find(candidate => candidate.id === id) : undefined;
-        return device !== undefined && await saveAs(session, device);
+        return device !== undefined && await saveAs(session, device, generation);
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveAs", async (node?: Node) => {
         const session = vscode.debug.activeDebugSession;

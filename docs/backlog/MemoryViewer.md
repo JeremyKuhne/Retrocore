@@ -12,8 +12,10 @@ words in the CPU's byte order.
 
 Step 4 so far is the listing pane: `retro/memory/listing` decodes from the nearest known instruction start, lists the
 sources' data as data, names operands by label, links lines to their source, and takes **Decode from here**'s starts.
-Left from step 4: analysis's code/data guesses for memory no source describes; marking, naming and comments in the
-hints file; breakpoints from the listing's gutter; and find by instruction pattern.
+Where no source describes the bytes, `AnalysisEngine` guesses at code and data from the PC, the starts and the
+sources' code labels, analyzing the space once until its bytes or those entry points change.
+Left from step 4: marking, naming and comments in the hints file; breakpoints from the listing's gutter; and find
+by instruction pattern.
 
 Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor

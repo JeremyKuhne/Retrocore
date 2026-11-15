@@ -371,6 +371,23 @@ try {
     assert.equal((await listing(0x6030, 6))[0].address, 0x6030, "nothing known starts an instruction near $6030");
     lines = await listing(0x6030, 6, [0x6001]);
     assert.deepEqual([lines[0].address, lines[0].size], [0x602E, 3], JSON.stringify(lines));
+    // Analysis guesses at what no source describes, from a start: JSR $6110 and RTS, and at the subroutine it calls,
+    // LDA #$01 and RTS, are code; the text between, which nothing reaches, is not guessed.
+    at = "guessing at code no source describes";
+    await write("0x6100", [0x20, 0x10, 0x61, 0x60, 0xC8, 0xC5, 0xCC, 0xCC, 0xCF, 0, 0, 0, 0, 0, 0, 0, 0xA9, 0x01, 0x60]);
+    lines = await listing(0x6100, 0x13, [0x6100]);
+    const at6 = address => lines.find(line => line.address === address);
+    assert.deepEqual([at6(0x6100).text, at6(0x6100).guess], ["JSR $6110", false], "a start from Decode from here is the user's, not a guess");
+    assert.deepEqual([at6(0x6103).text, at6(0x6103).kind, at6(0x6103).guess], ["RTS", "code", true]);
+    assert.deepEqual([at6(0x6104).kind, at6(0x6104).guess], ["unknown", false]);
+    assert.deepEqual([at6(0x6110).text, at6(0x6110).kind, at6(0x6110).guess], ["LDA #$01", "code", true], JSON.stringify(lines));
+    // JMP ($6150) makes its pointer data and where it points code.
+    await write("0x6140", [0x6C, 0x50, 0x61]);
+    await write("0x6150", [0x60, 0x61]);
+    await write("0x6160", [0x60]);
+    lines = await listing(0x6140, 0x21, [0x6140]);
+    assert.deepEqual([at6(0x6150).text, at6(0x6150).kind, at6(0x6150).guess], [".byte $60, $61", "data", true], JSON.stringify(lines));
+    assert.deepEqual([at6(0x6160).text, at6(0x6160).kind, at6(0x6160).guess], ["RTS", "code", true]);
     // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
     const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
     await write("bank1:0xDFFF", [0xAD]);

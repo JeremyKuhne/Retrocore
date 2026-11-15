@@ -39,6 +39,10 @@ internal sealed partial class DebugSession
 
     // Data breakpoints the current instruction has hit, checked when it finishes.
     private readonly List<(BreakpointState Breakpoint, string Description)> _dataHits = [];
+
+    // The data breakpoints the 6502 hit while it ran beside a Z80 finishing its instruction: they belong to the 6502's
+    // instruction, so they wait for it to end on the 6502's own view.
+    private readonly List<(BreakpointState Breakpoint, string Description)> _hostDataHits = [];
     private JsonObject? _functionRequest;
     private JsonObject? _instructionRequest;
     private JsonObject? _dataRequest;
@@ -233,6 +237,7 @@ internal sealed partial class DebugSession
         _basicSites.Clear();
         _watches.Clear();
         _dataHits.Clear();
+        _hostDataHits.Clear();
         foreach (JsonObject request in _requested.Values.ToArray())
         {
             Breakpoints(request);
@@ -372,7 +377,7 @@ internal sealed partial class DebugSession
             {
                 ["id"] = state.Id,
                 ["verified"] = state.Problem is null,
-                ["instructionReference"] = address is { } bound ? $"0x{bound:X4}" : null
+                ["instructionReference"] = address is { } bound ? $"{SpaceOf(bank)}0x{bound:X4}" : null
             };
 
             responses.Add(Describe(state, changed: false));
@@ -531,7 +536,7 @@ internal sealed partial class DebugSession
             {
                 ["id"] = state.Id,
                 ["verified"] = state.Problem is null,
-                ["instructionReference"] = $"0x{address:X4}"
+                ["instructionReference"] = $"{SpaceOf(bank)}0x{address:X4}"
             };
 
             responses.Add(Describe(state, changed: false));
@@ -549,6 +554,7 @@ internal sealed partial class DebugSession
         _basicWatches.Clear();
         _basicWatchValues.Clear();
         _dataHits.Clear();
+        _hostDataHits.Clear();
         HashSet<string> kept = [];
         List<JsonObject> responses = [];
         foreach (JsonObject breakpoint in (args["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
@@ -691,8 +697,9 @@ internal sealed partial class DebugSession
         };
     }
 
-    // A variable in the Variables view: the memory scope's bytes can be watched, and registers cannot.
-    private static (bool, DebugMemoryBank?, int, int)? Variable(int reference, string name, out string? reason)
+    // A variable in the Variables view: the memory scope's bytes can be watched, and registers cannot. A coprocessor
+    // frame's scope, whose reference is twice its frame's id, is in that CPU's address space, such as the Z80's.
+    private (bool, DebugMemoryBank?, int, int)? Variable(int reference, string name, out string? reason)
     {
         reason = null;
         if (reference == BanksScope)
@@ -707,7 +714,7 @@ internal sealed partial class DebugSession
             return null;
         }
 
-        return (false, null, Address(name), 1);
+        return (false, ThreadBank(FrameIndex(reference / 2).Thread), Address(name), 1);
     }
 
     // Add Data Breakpoint at Address: an address expression, which may name a bank, such as aux:$0400.
@@ -893,17 +900,23 @@ internal sealed partial class DebugSession
     {
         List<BreakpointSite> sites = _breakpoints.GetValueOrDefault(pc) ?? s_noSites;
         if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
+
+        // Breakpoints apply to the CPU running: an address with no bank or module is the machine CPU's, and a
+        // coprocessor's are in its bank, such as z80:0x0100, or in its modules.
+        IDebugTarget cpu = Cpu;
+        bool machineCpu = IsMachineCpu(cpu);
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];
         int? hidden = null;
         string? description = null;
         foreach (BreakpointSite site in sites)
         {
-            if (site.Bank is { } bank && !bank.Areas.Contains(Target.ReadArea(pc))) { continue; }
+            if (site.Bank is { } bank && !bank.Areas.Contains(cpu.ReadArea(pc))) { continue; }
+            if (site.Bank is null && site.Module is null && !machineCpu) { continue; }
             int? levels = null;
             if (site.Module is { } module)
             {
-                if (!DebugInfo.Active(module, Target, pc) || module.Position(Target, pc) is not { } position)
+                if (!DebugInfo.Active(module, cpu, pc) || module.Position(cpu, pc) is not { } position)
                 {
                     continue;
                 }
@@ -922,7 +935,7 @@ internal sealed partial class DebugSession
             description ??= error;
         }
 
-        if (_systemCallBreakpoints.Count != 0 && Target.SystemCall(pc) is { } call)
+        if (_systemCallBreakpoints.Count != 0 && machineCpu && Target.SystemCall(pc) is { } call)
         {
             foreach ((byte? number, BreakpointState state) in _systemCallBreakpoints)
             {
@@ -941,19 +954,31 @@ internal sealed partial class DebugSession
         return stops.Count == 0 ? null : new(stops[0].Kind, [.. stops.Select(state => state.Id)], hidden, description);
     }
 
-    // Notes the data breakpoints a bus cycle hits, for when its instruction finishes.
-    private void Watch(in ProcessorCycle cycle)
+    // Notes the data breakpoints a bus cycle hits, for when its instruction finishes. A coprocessor's cycle comes in its
+    // own addresses too: a watch on its bank, such as z80:$0100, matches those, and every other watch the machine's.
+    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle) => Watch(hostCycle, ownCycle, _dataHits);
+
+    private void Watch(in ProcessorCycle hostCycle, ProcessorCycle? ownCycle, List<(BreakpointState Breakpoint, string Description)> hits)
     {
         foreach (DataWatch watch in _watches)
         {
-            if (!watch.Matches(cycle, out bool write) || _dataHits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
+            bool own = watch.Bank is { } watched && watched.Areas.Contains(SoftCardMemoryArea.Z80);
+            ProcessorCycle cycle = hostCycle;
+            if (own)
+            {
+                if (ownCycle is not { } z80) { continue; }
+                cycle = z80;
+            }
+
+            if (!watch.Matches(cycle, out bool write) || hits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
             {
                 continue;
             }
 
             // A bank's watch sees only the accesses the memory map sends to it; the map has not changed since, as
             // only accesses to soft switches change it.
-            if (watch.Bank is { } bank
+            if (!own
+                && watch.Bank is { } bank
                 && !bank.Areas.Contains(write ? Target.WriteArea(cycle.Address) : Target.ReadArea(cycle.Address)))
             {
                 continue;
@@ -962,29 +987,44 @@ internal sealed partial class DebugSession
             int address = watch.Port && watch.Start + watch.Length <= 0x100 ? cycle.Address & 0xFF : cycle.Address;
             string place = Describe(watch.Port, address, length: 1, watch.Bank?.Name);
             string description = write ? $"Wrote ${cycle.Value:X2} to {place}." : $"Read ${cycle.Value:X2} from {place}.";
-            _dataHits.Add((watch.Breakpoint, description));
+            hits.Add((watch.Breakpoint, description));
         }
     }
 
     // Stops for the data breakpoints the instruction that just finished hit, if their conditions and hit counts say
-    // to. Returns false when it stops.
-    private bool DataStop()
+    // to. Returns false when it stops. The CPU that ran the instruction evaluates their conditions and messages and
+    // owns the stop, though the instruction may have handed the bus to the other CPU.
+    private bool DataStop(IDebugTarget cpu)
     {
         List<BreakpointState> stops = [];
         string? description = null;
-        foreach ((BreakpointState state, string seen) in _dataHits)
+        _triggering = cpu;
+        try
         {
-            if (!Triggers(state, seen, out string? error)) { continue; }
-            stops.Add(state);
-            description ??= error ?? seen;
+            foreach ((BreakpointState state, string seen) in _dataHits)
+            {
+                if (!Triggers(state, seen, out string? error)) { continue; }
+                stops.Add(state);
+                description ??= error ?? seen;
+            }
+        }
+        finally
+        {
+            _triggering = null;
         }
 
         _dataHits.Clear();
         if (stops.Count == 0) { return true; }
-        Stopped("data breakpoint", [.. stops.Select(state => state.Id)], description);
+        Stopped("data breakpoint", [.. stops.Select(state => state.Id)], description, threadId: ThreadOf(cpu));
         _unchecked = true;
         return false;
     }
+
+    // The CPU a breakpoint's condition and message are evaluated on: the one data breakpoints are being applied for,
+    // else the one with the bus.
+    private IDebugTarget? _triggering;
+
+    private IDebugTarget TriggeringCpu => _triggering ?? Cpu;
 
     /// <summary>
     ///  Applies a breakpoint's condition, hit count and log message where it is reached.
@@ -1000,7 +1040,7 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (Evaluate(condition) == 0) { return false; }
+                if (new ExpressionEvaluator(TriggeringCpu, _debug, condition).Evaluate() == 0) { return false; }
             }
             catch (Exception exception) when (IsEvaluationError(exception))
             {
@@ -1119,7 +1159,8 @@ internal sealed partial class DebugSession
         string expression = format.Length == 0 ? placeholder : placeholder[..comma];
         try
         {
-            long value = Evaluate(expression);
+            // The CPU that reached the logpoint, as its condition uses: a Z80 logpoint's {A} is the Z80's.
+            long value = new ExpressionEvaluator(TriggeringCpu, _debug, expression).Evaluate();
             return format switch
             {
                 "d" => value.ToString(CultureInfo.InvariantCulture),

@@ -38,7 +38,7 @@ internal static class Benchmark
         Report("debug target RunCycles", Cycles(target, seconds, () => target.RunCycles(256)), clock);
         (target as IDisposable)?.Dispose();
 
-        Console.Out.WriteLine($"RunCycles ends where stepping does: {(Matches(configuration) ? "yes" : "NO")}");
+        Console.Out.WriteLine($"RunCycles ends where stepping does: {Difference(configuration) ?? "yes"}");
 
         using MachineHost host = new(configuration) { Speed = 0, SoundOn = false };
         host.Start();
@@ -63,28 +63,49 @@ internal static class Benchmark
         return (target.CycleCount - start) / Stopwatch.GetElapsedTime(started).TotalSeconds;
     }
 
-    // Runs two of the machine the same cycles, one stepped and one without tracking, and compares where they end:
-    // the cycle count, program counter, memory and picture.
-    private static bool Matches(JsonObject configuration)
+    // Runs three of the machine the same cycles, two stepped and one without tracking, and compares where they end:
+    // the cycle count, program counter, memory and picture. An address that changes while it is read, or that the
+    // two stepped ones disagree on, such as the Apple III's clock, which reads the host's time as it is read, is left
+    // out. Returns the first difference, or null.
+    private static string? Difference(JsonObject configuration)
     {
         const int Cycles = 300_000;
         IDebugTarget stepped = OffMachine.Build(configuration);
+        IDebugTarget again = OffMachine.Build(configuration);
         IDebugTarget run = OffMachine.Build(configuration);
         try
         {
-            for (int count = 0; count < Cycles; count++) { stepped.StepCycle(); }
-            for (int count = 0; count < Cycles; count += 1000) { run.RunCycles(1000); }
-            if (run.CycleCount != stepped.CycleCount || run.ProgramCounter != stepped.ProgramCounter) { return false; }
-            for (int address = 0; address <= 0xFFFF; address++)
+            for (int count = 0; count < Cycles; count++)
             {
-                if (run.Peek((ushort)address) != stepped.Peek((ushort)address)) { return false; }
+                stepped.StepCycle();
+                again.StepCycle();
             }
 
-            return run.RenderVideo().SequenceEqual(stepped.RenderVideo());
+            for (int count = 0; count < Cycles; count += 1000) { run.RunCycles(1000); }
+            if (run.CycleCount != stepped.CycleCount)
+            {
+                return $"NO, cycles {run.CycleCount} against {stepped.CycleCount}";
+            }
+
+            if (run.ProgramCounter != stepped.ProgramCounter)
+            {
+                return $"NO, PC ${run.ProgramCounter:X4} against ${stepped.ProgramCounter:X4}";
+            }
+
+            for (int address = 0; address <= 0xFFFF; address++)
+            {
+                byte expected = stepped.Peek((ushort)address);
+                byte got = run.Peek((ushort)address);
+                if (stepped.Peek((ushort)address) != expected || again.Peek((ushort)address) != expected) { continue; }
+                if (got != expected) { return $"NO, ${address:X4} holds ${got:X2} against ${expected:X2}"; }
+            }
+
+            return run.RenderVideo().SequenceEqual(stepped.RenderVideo()) ? null : "NO, the picture differs";
         }
         finally
         {
             (stepped as IDisposable)?.Dispose();
+            (again as IDisposable)?.Dispose();
             (run as IDisposable)?.Dispose();
         }
     }

@@ -10,7 +10,7 @@ namespace Retrocore.Machines.Altair;
 public sealed class AltairConfiguration
 {
     /// <summary>
-    ///  The baud rates the 88-2SIO's jumpers offer.
+    ///  The baud rates the 88-2SIO's and 88-SIO's jumpers offer.
     /// </summary>
     public static IReadOnlyList<int> BaudRates { get; } = [110, 150, 300, 600, 1200, 2400, 4800, 9600];
 
@@ -25,9 +25,24 @@ public sealed class AltairConfiguration
     public ushort Switches { get; set; }
 
     /// <summary>
-    ///  Gets or sets the 88-2SIO's baud rate, the same on both ports.
+    ///  Gets or sets the terminal's baud rate, on the 88-2SIO's two ports and the 88-SIO.
     /// </summary>
     public int BaudRate { get; set; } = 9600;
+
+    /// <summary>
+    ///  Gets or sets the serial board the terminal is on.
+    /// </summary>
+    public AltairConsole Console { get; set; } = AltairConsole.Serial2Sio;
+
+    /// <summary>
+    ///  Gets or sets whether the 88-ACR cassette interface, with its recorder, is at ports $06 and $07.
+    /// </summary>
+    public bool CassetteInterface { get; set; } = true;
+
+    /// <summary>
+    ///  Gets or sets whether the terminal types lowercase letters as capitals, as Altair BASIC needs.
+    /// </summary>
+    public bool UpperCase { get; set; }
 
     /// <summary>
     ///  Checks the settings.
@@ -35,6 +50,7 @@ public sealed class AltairConfiguration
     /// <exception cref="ArgumentException">A setting is out of range.</exception>
     public void Validate()
     {
+        if (!Enum.IsDefined(Console)) { throw new ArgumentException("The console must be the 88-2SIO or the 88-SIO."); }
         if (RamKilobytes is < 1 or > 64) { throw new ArgumentException("RAM must be 1 to 64 KB."); }
         if (!BaudRates.Contains(BaudRate))
         {

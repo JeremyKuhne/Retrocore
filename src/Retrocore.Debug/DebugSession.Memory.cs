@@ -50,6 +50,10 @@ internal sealed partial class DebugSession
     }
 
     // The reference that names an address, in a bank or as the CPU maps it.
+    // The prefix an instruction address carries in its own address space: a coprocessor's bank, which has its own
+    // instruction set, such as z80:; none for the machine CPU's, whose banks are views of its own addresses.
+    private static string SpaceOf(DebugMemoryBank? bank) => bank?.InstructionSet is null ? "" : $"{bank.Name}:";
+
     private static string Reference(DebugMemoryBank? bank, int address) =>
         bank is null ? $"0x{address:X4}" : $"{bank.Name}:0x{address:X4}";
 

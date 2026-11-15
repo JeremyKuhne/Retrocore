@@ -61,7 +61,7 @@ public sealed class AltairMachine : IMachine
     public AltairFrontPanel FrontPanel => Bus.FrontPanel;
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices => [];
+    public IReadOnlyList<IDevice> Devices => Bus.Cassette is { } cassette ? [cassette] : [];
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;

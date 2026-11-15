@@ -14,6 +14,7 @@
     <AdditionalFiles Include="Roms\*.rom.asm" />
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />
     <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\Retrocore.Generators\Retrocore.Generators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />

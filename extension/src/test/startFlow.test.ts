@@ -35,6 +35,7 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.deepEqual(kinds("apple1"), ["machine", "source", "program", "basic", "tape"], "the Apple-1 loads BASIC, and has no disks");
     assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "basic", "disk", "tape"]);
     assert.deepEqual(kinds("coco3"), ["machine", "source", "program", "disk", "tape"], "the CoCo 3's BASIC files do not launch yet");
+    assert.deepEqual(kinds("altair"), ["machine", "source", "program"], "an Altair tape needs a bootstrap keyed in first");
     assert.match(runChoices(machine("coco1")).find(choice => choice.kind === "basic")?.detail ?? "", /Color BASIC/);
     assert.match(runChoices(machine("apple2-ii")).find(choice => choice.kind === "basic")?.detail ?? "", /Integer BASIC/);
     assert.match(runChoices(machine("apple1")).find(choice => choice.kind === "basic")?.detail ?? "", /Apple-1 BASIC/);

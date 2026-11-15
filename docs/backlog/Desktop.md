@@ -81,8 +81,8 @@ closing or dragging it never moves or resizes the machine's picture.
   - **Drives**: each card with drives, and its drives with their media, lock, head and activity, as the extension's
     Drives view shows them, with the same insert, eject, lock and save actions;
   - **Display and Sound**: what the display panel offers: speed, sound, volume, scale, screen, fast disk and the beam
-    overlay. **Fast disk** (Fast tape on the machines that load from tape: the Apple-1, the CoCo and the TRS-80
-    Models I and III) runs the machine as fast as it can while a drive's motor turns or the tape plays, then goes
+    overlay. **Fast disk** (Fast tape on the machines that load from tape: the Apple-1, the Altair, the CoCo and
+    the TRS-80 Models I and III) runs the machine as fast as it can while a drive's motor turns or the tape plays, then goes
     back to the chosen speed with its sound, as the panel's does. It is on unless turned off, and kept as
     `fastDrives` in `settings.json`; the status bar shows "fast disk" while it is running fast.
 

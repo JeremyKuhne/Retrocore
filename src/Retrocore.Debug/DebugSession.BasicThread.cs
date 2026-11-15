@@ -97,7 +97,7 @@ internal sealed partial class DebugSession
     private bool HasBasicThread => _target is { Basic: not null, BasicRom: not null };
 
     // The threads: the CPU's, and BASIC's on a machine with a BASIC the debugger knows.
-    // Pascal's too once its interpreter is found.
+    // Pascal's too once its interpreter is found, and the coprocessor's while the machine has one.
     private JsonArray Threads()
     {
         // As a JsonNode, so the array takes it with Add(JsonNode) rather than Add<T>, which Native AOT cannot compile.
@@ -115,6 +115,14 @@ internal sealed partial class DebugSession
             threads.Add((JsonNode)new JsonObject
             {
                 ["id"] = PascalThread, ["name"] = "Pascal"
+            });
+        }
+
+        if (_target?.Coprocessor is { } coprocessor)
+        {
+            threads.Add((JsonNode)new JsonObject
+            {
+                ["id"] = SoftCardThread, ["name"] = coprocessor.ThreadName
             });
         }
 

@@ -116,7 +116,7 @@ internal sealed class MachineHost : DisposableBase
     internal string? FastDriveKind => _target switch
     {
         Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget => "disk",
-        Apple1DebugTarget or CocoDebugTarget or Trs80DebugTarget or Trs80Model3DebugTarget => "tape",
+        Apple1DebugTarget or CocoDebugTarget or Trs80DebugTarget or Trs80Model3DebugTarget or AltairDebugTarget => "tape",
         _ => null
     };
 
@@ -139,6 +139,7 @@ internal sealed class MachineHost : DisposableBase
                     CocoDebugTarget coco => coco.FastCassette,
                     Trs80DebugTarget model1 => model1.FastCassette,
                     Trs80Model3DebugTarget model3 => model3.FastCassette,
+                    AltairDebugTarget altair => altair.FastCassette,
                     _ => false
                 };
             }
@@ -169,6 +170,9 @@ internal sealed class MachineHost : DisposableBase
                         break;
                     case Trs80Model3DebugTarget model3:
                         model3.FastCassette = value;
+                        break;
+                    case AltairDebugTarget altair:
+                        altair.FastCassette = value;
                         break;
                 }
             }

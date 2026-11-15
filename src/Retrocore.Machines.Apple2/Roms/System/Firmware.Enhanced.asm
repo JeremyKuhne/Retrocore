@@ -2923,16 +2923,18 @@ UPSHIFT:
 UPSHIFT_1:
     rts                             ; $CE1E
 
-;; Inverts the character at column $057B unless $04FB bit 4 (cursor off) is set; FLIPCURSOR_1 always does.
-;; Out:   A = $10 when the character is skipped
-;; Keeps: A, Y (when the character is inverted)
+;; Inverts the character at column $057B unless $04FB bit 4 (cursor off) is set; <FLIPCURSOR_1> always does.
+;; Out:   A = $00 when the character is inverted, $10 when it is skipped
+;; Keeps: Y
 FLIPCURSOR:
     lda MODE80                      ; $CE1F
     and #$10                        ; $CE22
     bne FLIPCURSOR_2                ; $CE24
 
+;; Inverts the character at column $057B, whatever $04FB bit 4 says: <FLIPCURSOR> without its cursor-off check.
+;; Keeps: A, Y
 FLIPCURSOR_1:
-    pha                             ; $CE26 invert regardless of bit 4
+    pha                             ; $CE26
     tya                             ; $CE27
     pha                             ; $CE28
     ldy OURCH                       ; $CE29

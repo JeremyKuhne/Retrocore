@@ -99,7 +99,7 @@ public sealed class Apple2BlockStorage : IBlockStorage, IMediumSlot
 
     /// <summary>
     ///  Locks or unlocks the image: writes are refused or allowed at once, and the ROM says so from the next reset, or
-    ///  at once for a lock set as the machine is set up, before it runs.
+    ///  at once for a lock set before the machine has run, which is the lock it starts with.
     /// </summary>
     /// <param name="writeProtected">Whether the image is locked.</param>
     /// <param name="powerOn">
@@ -110,7 +110,7 @@ public sealed class Apple2BlockStorage : IBlockStorage, IMediumSlot
     {
         IMedium medium = Medium ?? throw new InvalidOperationException($"{Info.Name}'s image cannot be unlocked.");
         medium.IsWriteProtected = writeProtected;
-        if (powerOn) { _bus.RefreshSlot7Rom(); }
+        if (powerOn || _bus.CycleCount == 0) { _bus.RefreshSlot7Rom(); }
     }
 
     /// <inheritdoc/>

@@ -195,7 +195,7 @@ public sealed class BlockMediaSaveTests
 
     /// <summary>
     ///  Slot 7's image loads locked, as it always has; unlocked, the machine writes it and it saves, and the ROM says
-    ///  the device writes from the next reset.
+    ///  the device writes from the next reset, or at once before the machine has run.
     /// </summary>
     [TestMethod]
     public void Slot7SavesOnceUnlocked()
@@ -207,6 +207,12 @@ public sealed class BlockMediaSaveTests
         storage.WritesAnnounced.Should().BeFalse();
         storage.Info.Operations.Should().Be(MediaOperations.WriteProtect | MediaOperations.Save);
 
+        storage.SetWriteProtected(writeProtected: false);
+        storage.WritesAnnounced.Should().BeTrue("a lock set before the machine runs is the one it starts with");
+        storage.SetWriteProtected(writeProtected: true);
+        storage.WritesAnnounced.Should().BeFalse();
+
+        machine.Run(1000);
         storage.SetWriteProtected(writeProtected: false);
         storage.WritesAnnounced.Should().BeFalse("ProDOS read the ROM as it started");
         machine.Reset();

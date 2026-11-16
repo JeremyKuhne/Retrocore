@@ -47,6 +47,7 @@ internal sealed class MemoryHints
         JsonObject root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
             ?? throw new InvalidDataException($"{path} is not a JSON object.");
 
+        Validate(root);
         MemoryHints hints = new(root);
         foreach (JsonNode? entry in root["entries"] as JsonArray ?? [])
         {
@@ -241,8 +242,54 @@ internal sealed class MemoryHints
         Set("data", data, data.Count);
         Set("names", names, names.Count);
         Set("comments", comments, comments.Count);
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".");
-        File.WriteAllText(path, _root.ToJsonString(s_indented) + Environment.NewLine);
+        // The new file is written beside the old and then takes its place, so a write that fails leaves the old.
+        string full = Path.GetFullPath(path);
+        string directory = Path.GetDirectoryName(full) ?? ".";
+        Directory.CreateDirectory(directory);
+        string temporary = Path.Join(directory, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllText(temporary, _root.ToJsonString(s_indented) + Environment.NewLine);
+            File.Move(temporary, full, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+    }
+
+    // Refuses a file whose parts the disassembler reads are not the shapes it takes, so marks never rewrite one.
+    private static void Validate(JsonObject root)
+    {
+        Shape<JsonArray>(root, "entries");
+        Shape<JsonArray>(root, "data");
+        Shape<JsonArray>(root, "noReturn");
+        Shape<JsonObject>(root, "names");
+        Shape<JsonObject>(root, "comments");
+        Shape<JsonObject>(root, "inline");
+        foreach (JsonNode? range in root["data"] as JsonArray ?? [])
+        {
+            if (range is not JsonObject) { throw new InvalidDataException("Each data range is an object."); }
+        }
+
+        foreach (string part in (string[])["names", "comments"])
+        {
+            foreach ((string key, JsonNode? value) in root[part] as JsonObject ?? [])
+            {
+                if (value is not JsonValue text || !text.TryGetValue(out string? _))
+                {
+                    throw new InvalidDataException($"The {part} entry {key} is not text.");
+                }
+            }
+        }
+    }
+
+    private static void Shape<T>(JsonObject root, string name) where T : JsonNode
+    {
+        if (root[name] is { } node && node is not T)
+        {
+            throw new InvalidDataException($"The hints file's {name} is not a JSON {(typeof(T) == typeof(JsonArray) ? "array" : "object")}.");
+        }
     }
 
     // Puts a part of the file in place, or takes it away when it is empty.

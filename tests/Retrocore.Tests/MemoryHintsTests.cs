@@ -106,4 +106,34 @@ public sealed class MemoryHintsTests
             File.Delete(path);
         }
     }
+
+    /// <summary>
+    ///  A file whose parts are not the shapes the disassembler takes is refused rather than read as empty, and a
+    ///  write leaves no temporary file behind.
+    /// </summary>
+    [TestMethod]
+    public void MalformedFilesAreRefused()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hints-").FullName;
+        string path = Path.Join(directory, "bad.hints.json");
+        try
+        {
+            foreach (string text in (string[])["""{ "entries": { "$0800": true } }""", """{ "data": [1] }""", """{ "names": { "$0800": 1 } }"""])
+            {
+                File.WriteAllText(path, text);
+                Action read = () => MemoryHints.Read(path);
+                read.Should().Throw<InvalidDataException>(text);
+            }
+
+            MemoryHints hints = MemoryHints.Empty;
+            hints.Name("", 0x0800, "Start");
+            hints.Write(path);
+            Directory.GetFiles(directory).Should().Equal(path);
+            MemoryHints.Read(path).Names("").Should().ContainKey(0x0800);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }

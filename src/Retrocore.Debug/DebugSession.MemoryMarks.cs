@@ -75,7 +75,8 @@ internal sealed partial class DebugSession
     ///   The mark is made to the file as it is now, so marks made elsewhere, or edits to it, are kept; a file that
     ///   cannot be read is left alone, and the mark fails. A launch with no file to keep marks in answers
     ///   <c>needsFile</c> and marks nothing until a request gives one as <c>hints</c>. Otherwise the answer gives
-    ///   the file's <c>path</c>.
+    ///   the file's <c>path</c> and the <c>address</c> and <c>count</c> of the bytes the mark covers, a code mark's
+    ///   being its instruction's.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryMark(JsonObject args)
@@ -97,6 +98,7 @@ internal sealed partial class DebugSession
         if (args.String("kind") is { } kind)
         {
             hints.Mark(space, address, count, kind, at => InstructionSize(bank, at));
+            if (kind == "code") { count = InstructionSize(bank, address); }
         }
         else if (args["name"] is not null)
         {
@@ -114,7 +116,44 @@ internal sealed partial class DebugSession
         hints.Write(path);
         _hintsPath = path;
         _hints = hints;
-        return new JsonObject { ["path"] = path };
+        return new JsonObject { ["path"] = path, ["address"] = address, ["count"] = count };
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/note: the <c>name</c> and <c>comment</c> the hints file gives an address, or null.
+    /// </summary>
+    private JsonObject MemoryNote(JsonObject args)
+    {
+        MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        int address = args.Int("address") ?? throw new ArgumentException("address is required.");
+        string space = HintSpace(bank);
+        return new JsonObject
+        {
+            ["name"] = _hints.Names(space).TryGetValue(address, out string? name) ? name : null,
+            ["comment"] = _hints.Comments(space).TryGetValue(address, out string? comment) ? comment : null
+        };
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/starts: which of an editor's Decode from here <c>starts</c> a mark of <c>count</c>
+    ///  bytes at <c>address</c> leaves, taking out each whose instruction is in those bytes or runs into them, except
+    ///  a code mark's own (<c>keep</c>).
+    /// </summary>
+    private JsonObject MemoryStarts(JsonObject args)
+    {
+        MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        int address = args.Int("address") ?? throw new ArgumentException("address is required.");
+        int end = address + (args.Int("count") ?? 1);
+        int? keep = args.Int("keep");
+        JsonArray kept = [];
+        foreach (JsonNode? node in args["starts"] as JsonArray ?? [])
+        {
+            if (node?.GetValue<int>() is not int start || start is < 0 or > 0xFFFF) { continue; }
+            bool covered = start < end && start + InstructionSize(bank, start) > address;
+            if (start == keep || !covered) { kept.Add((JsonNode)start); }
+        }
+
+        return new JsonObject { ["starts"] = kept };
     }
 
     // The bytes of the instruction at an address of a space, or 1 where none decodes.

@@ -396,6 +396,9 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
 // The marks the page sent.
 const marksSent: Record<string, unknown>[] = [];
 
+// The Decode from here starts the page asked about after a mark.
+const startsSent: Record<string, unknown>[] = [];
+
 // The starts each listing request the page sent asked for.
 const listingStarts: number[][] = [];
 
@@ -436,7 +439,12 @@ function answer(
             });
         } else if (sent.type === "mark") {
             marksSent.push(sent);
-            page.send({ type: "reply", id: sent.id, result: { path: "C:/src/hello.hints.json" } });
+            page.send({ type: "reply", id: sent.id, result: { path: "C:/src/hello.hints.json", address: sent.address, count: sent.count } });
+        } else if (sent.type === "starts") {
+            // Each start is one byte here: those in the marked bytes go.
+            const address = Number(sent.address), end = address + Number(sent.count);
+            startsSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: { starts: (sent.starts as number[]).filter(start => start < address || start >= end) } });
         } else if (sent.type === "banks") {
             page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
         } else if (sent.type === "readOther") {
@@ -918,6 +926,8 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     listingStarts.length = 0;
     state = await drive(page, [{ goto: 0x0300 }, { mark: { kind: "data" } }], () => 0, lists);
     assert.deepEqual(marksSent.map(sent => [sent.address, sent.count, sent.kind]), [[0x0300, 1, "data"]]);
+    // Decode from here's starts give way to the data marked.
+    assert.deepEqual(startsSent.map(sent => [sent.address, sent.count]), [[0x0300, 1]]);
     assert.equal(state.status, "Kept in hello.hints.json.");
     assert.ok(listingStarts.length > 0, "the listing is asked for again");
     assert.match(page.elements.get("inspector")!.innerHTML, /data-act="markData"/);

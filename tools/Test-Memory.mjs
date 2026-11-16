@@ -462,6 +462,11 @@ try {
     const hints = JSON.parse(readFileSync(hintsFile, "utf8"));
     assert.deepEqual(hints.names, { "$6500": "MYTABLE", "$FDED": "MYCOUT", "aux:$0400": "AUXTEXT" });
     assert.deepEqual([hints.entries, hints.data, hints.comments], [["$6503"], [{ start: "$6500", length: 3 }], { "$6503": "Marked as code" }]);
+    // The hints file's name and comment at an address, whatever is listed.
+    assert.deepEqual(await request("retro/memory/note", { memoryReference: "0x0000", address: 0x6503 }), { name: null, comment: "Marked as code" });
+    // Decode from here starts give way to a mark over their instructions, except a code mark's own.
+    const startsLeft = await request("retro/memory/starts", { memoryReference: "0x0000", address: 0x6501, count: 1, starts: [0x6500, 0x6502, 0x6503] });
+    assert.deepEqual(startsLeft.starts, [0x6502, 0x6503]);
     // A comment inside a data line starts one, and one inside an instruction shows on it.
     await mark({ address: 0x6501, comment: "Inside" });
     lines = await listing(0x6500, 3);

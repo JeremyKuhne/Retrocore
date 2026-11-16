@@ -62,9 +62,16 @@ internal sealed partial class DebugSession
             }
         }
 
-        // Code marked in the hints file starts instructions, as Decode from here's starts do.
+        // Code marked in the hints file starts instructions, as Decode from here's starts do, unless the bytes have
+        // changed since so that its instruction now runs into data marked: the data, also marked, stays data.
         string space = HintSpace(bank);
-        forced.UnionWith(_hints.Code(space));
+        IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
+        bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
+        foreach (int code in _hints.Code(space))
+        {
+            int size = InstructionSize(bank, code);
+            if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked)) { forced.Add(code); }
+        }
 
         // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
         // be checked against memory again at every byte of it.
@@ -91,11 +98,8 @@ internal sealed partial class DebugSession
             GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
             forced,
             Position,
-            _hints.Data(space));
+            markedData);
 
-        // Data marked in the hints file, which analysis keeps as it is, so the listing's data there is no guess.
-        IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
-        bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
 
         // A comment starts a data line, so each shows on the line it is about; one inside an instruction shows on it.
         IReadOnlyDictionary<int, string> comments = _hints.Comments(space);

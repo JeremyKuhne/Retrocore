@@ -308,6 +308,16 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 starts: received.starts
                             }));
                             break;
+                        case "starts":
+                            // The Decode from here starts a mark leaves.
+                            await reply(await session.customRequest("retro/memory/starts", {
+                                memoryReference: base,
+                                address: received.address,
+                                count: received.count,
+                                starts: received.starts,
+                                keep: received.keep
+                            }));
+                            break;
                         case "mark": {
                             // Mark as code or data, or a name or comment, which asks for its text, kept in the hints file.
                             const args: Record<string, unknown> = { memoryReference: base, address: received.address, count: received.count };
@@ -315,10 +325,12 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 args.kind = received.kind;
                             } else {
                                 const naming = received.what === "name";
+                                // What the hints file has now, whatever the page has listed.
+                                const note = await session.customRequest("retro/memory/note", { memoryReference: base, address: received.address }) as { name: string | null; comment: string | null };
                                 const text = await vscode.window.showInputBox({
                                     title: (naming ? "Name " : "Comment on ") + "$" + Number(received.address).toString(16).toUpperCase().padStart(4, "0"),
                                     prompt: naming ? "A label for this address; empty takes the name away." : "A comment for this address; empty takes it away.",
-                                    value: String(received.value ?? "")
+                                    value: (naming ? note.name : note.comment) ?? ""
                                 });
                                 if (text === undefined) {
                                     await reply({ cancelled: true });
@@ -326,7 +338,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 }
                                 args[naming ? "name" : "comment"] = text;
                             }
-                            let marked = await session.customRequest("retro/memory/mark", args) as { needsFile?: boolean; path?: string };
+                            type Marked = { needsFile?: boolean; path?: string; address?: number; count?: number };
+                            let marked = await session.customRequest("retro/memory/mark", args) as Marked;
                             if (marked.needsFile) {
                                 // A launch with no program or source to keep marks beside asks where, once.
                                 const chosen = await vscode.window.showSaveDialog({
@@ -338,11 +351,11 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                     await reply({ cancelled: true });
                                     break;
                                 }
-                                marked = await session.customRequest("retro/memory/mark", { ...args, hints: chosen.fsPath }) as { path?: string };
+                                marked = await session.customRequest("retro/memory/mark", { ...args, hints: chosen.fsPath }) as Marked;
                             }
                             await reply(marked);
                             // Other editors on the same space show the same labels and listing.
-                            others(editor, { type: "marked" });
+                            others(editor, { type: "marked", kind: received.kind, address: marked.address, count: marked.count });
                             break;
                         }
                         case "open": {

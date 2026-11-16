@@ -83,7 +83,9 @@ internal sealed partial class DebugSession
             bank,
             memory,
             set,
-            GuessEntries(set, forced, labels.Keys.Where(label => Position(label) is { Data: false })));
+            GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
+            forced,
+            Position);
 
         GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
         bool Boundary(int address)

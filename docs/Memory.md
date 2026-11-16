@@ -58,10 +58,12 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **The listing**, beside the bytes, shows the bytes in view as instructions and data, in the CPU's own syntax,
   as the Disassembly view does. It starts at the nearest place an instruction is known to start: the statement a
   debug file or source describes, or a label. A statement the sources make data, such as `.byte`, lists as data,
-  eight bytes a line. Where no source describes the bytes, analysis guesses: from the PC, each **Decode from
-  here** start and the sources' code, it follows calls, jumps and branches into undescribed memory, and lists
-  what it reaches as code and the pointers and vectors those read as data, in italics, as guesses. Bytes nothing
-  reaches are dimmed, as they may not be code. Operands name their labels, such as `LDA KBD`, and
+  eight bytes a line. Where no source describes the bytes, analysis guesses: from the PC of the CPU that runs the
+  space (none for a bank of RAM), each **Decode from here** start and the sources' code, it follows calls, jumps
+  and branches into undescribed memory, and lists what it reaches as code and the pointers and vectors those read
+  as data, in italics, as guesses. It keeps out of the sources' data, never splits a Decode from here start's
+  instruction, and never reads a pointer from bytes that cannot be read. Bytes nothing reaches are dimmed, as they
+  may not be code. Operands name their labels, such as `LDA KBD`, and
   clicking one goes to its address; clicking a line selects its bytes, and its source, such as `main.s:12`, opens
   beside the editor. Where the listing decodes from the wrong byte, **Decode from here** in the inspector
   (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing

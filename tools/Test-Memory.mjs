@@ -388,6 +388,22 @@ try {
     lines = await listing(0x6140, 0x21, [0x6140]);
     assert.deepEqual([at6(0x6150).text, at6(0x6150).kind, at6(0x6150).guess], [".byte $60, $61", "data", true], JSON.stringify(lines));
     assert.deepEqual([at6(0x6160).text, at6(0x6160).kind, at6(0x6160).guess], ["RTS", "code", true]);
+    // A start is the user's: a jump analysis follows into its instruction does not split it.
+    await write("0x6200", [0xA9, 0x60, 0x60]);
+    await write("0x6210", [0x4C, 0x01, 0x62]);
+    lines = await listing(0x6200, 0x13, [0x6200, 0x6210]);
+    assert.deepEqual([at6(0x6200).text, at6(0x6200).size], ["LDA #$60", 2], JSON.stringify(lines));
+    // Analysis keeps out of what the sources make data: a jump into TABLE does not run through it as code, so the
+    // bytes after it are not guessed.
+    const tableStart = table.address, tableEnd = table.address + 11;
+    await write("0x6220", [0x4C, tableStart & 0xFF, tableStart >> 8]);
+    lines = await listing(tableEnd, 4, [0x6220]);
+    assert.ok(lines.every(line => !line.guess), JSON.stringify(lines));
+    // A pointer that cannot be read is not followed: main RAM has no $C100, so JMP ($C100) there guesses nothing at
+    // $0000, where unreadable bytes read as zero would point.
+    await write("main:0x6230", [0x6C, 0x00, 0xC1]);
+    lines = (await request("retro/memory/listing", { memoryReference: "main:0x0000", address: 0x0000, count: 4, starts: [0x6230] })).lines;
+    assert.ok(lines.every(line => !line.guess), JSON.stringify(lines));
     // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
     const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
     await write("bank1:0xDFFF", [0xAD]);

@@ -321,7 +321,7 @@ public class Trs80Model2Tests
         sectors[0].DoubleDensity.Should().BeTrue();
         sectors[0].Data[255].Should().Be(255);
         sectors[1].Sector.Should().Be(2);
-        sectors[1].Data.Should().AllSatisfy(value => value.Should().Be(0xE5));
+        sectors[1].Data.ToArray().Should().AllSatisfy(value => value.Should().Be(0xE5));
         sectors[1].DataAddressMark.Should().Be(0xF8, "record 4 is compressed deleted data");
     }
 

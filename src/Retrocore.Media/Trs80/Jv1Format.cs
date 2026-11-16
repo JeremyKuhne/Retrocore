@@ -13,6 +13,11 @@ namespace Retrocore.Media.Trs80;
 ///   As emulators read it, track 17's sectors carry the <c>$FA</c> data address mark TRSDOS gives its
 ///   directory; every other sector carries <c>$FB</c>.
 ///  </para>
+///  <para>
+///   A disk saves to JV1 without loss when it is one side of single-density tracks of sectors 0-9 of 256 bytes, with
+///   those marks, no CRC errors, and IDs naming the track they are on; anything else is listed as lost. The order
+///   of a track's sectors is not kept: JV1 reads back in the order 0-9, which a program sees only in its timing.
+///  </para>
 /// </remarks>
 public static class Jv1Format
 {
@@ -51,39 +56,76 @@ public static class Jv1Format
         {
             int track = offset / TrackSize;
             int sector = (offset % TrackSize) / SectorSize;
-            byte mark = track == DirectoryTrack ? (byte)0xFA : (byte)0xFB;
-            byte[] data = image.Slice(offset, SectorSize).ToArray();
-            disk.Add(track, 0, new((byte)track, 0, (byte)sector, data, doubleDensity: false, mark));
+            disk.Add(track, 0, new((byte)track, 0, (byte)sector, image.Slice(offset, SectorSize), doubleDensity: false, Mark(track)));
         }
 
         return disk;
     }
 
     /// <summary>
-    ///  Writes a disk as JV1, which holds sectors 0-9 of side 0 in single density.
+    ///  Writes a disk as JV1, listing what JV1 cannot hold of it.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <returns>The image and its losses.</returns>
+    public static EncodedImage Encode(FloppyDisk disk)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        FloppyLosses losses = new();
+        int cylinders = Math.Max(1, disk.Cylinders);
+        byte[] image = new byte[cylinders * TrackSize];
+        for (int cylinder = 0; cylinder < cylinders; cylinder++)
+        {
+            if (disk.Track(cylinder, 1).Count != 0) { losses.Add("Side 1's sectors", cylinder); }
+            bool[] seen = new bool[SectorsPerTrack];
+            foreach (FloppySector sector in disk.Track(cylinder, 0))
+            {
+                if (sector.Sector >= SectorsPerTrack || seen[sector.Sector])
+                {
+                    losses.Add("Sectors other than 0-9, or repeated", cylinder);
+                    continue;
+                }
+
+                if (sector.Data.Length != SectorSize)
+                {
+                    losses.Add("Sectors of other than 256 bytes", cylinder);
+                    continue;
+                }
+
+                seen[sector.Sector] = true;
+                if (sector.DoubleDensity) { losses.Add("Double-density sectors", cylinder); }
+                if (sector.DataAddressMark != Mark(cylinder))
+                {
+                    losses.Add("Data address marks other than $FA on track 17 and $FB elsewhere", cylinder);
+                }
+
+                if (sector.CrcError) { losses.Add("Sectors with CRC errors", cylinder); }
+                if (sector.Track != cylinder || sector.Side != 0)
+                {
+                    losses.Add("Sector IDs naming another track or side", cylinder);
+                }
+
+                sector.Data.CopyTo(image.AsSpan((cylinder * TrackSize) + (sector.Sector * SectorSize)));
+            }
+
+            if (seen.Contains(value: false)) { losses.Add("Sectors 0-9 missing, which JV1 writes as zeros", cylinder); }
+        }
+
+        return new(image, losses.ToList());
+    }
+
+    /// <summary>
+    ///  Writes a disk as JV1, which must hold all of it.
     /// </summary>
     /// <param name="disk">The disk.</param>
     /// <returns>The file's bytes.</returns>
-    /// <exception cref="InvalidOperationException">A track is not ten single-density 256-byte sectors.</exception>
+    /// <exception cref="InvalidOperationException">JV1 cannot hold all of the disk.</exception>
     public static byte[] Write(FloppyDisk disk)
     {
-        ArgumentNullException.ThrowIfNull(disk);
-        byte[] image = new byte[disk.Cylinders * TrackSize];
-        for (int cylinder = 0; cylinder < disk.Cylinders; cylinder++)
-        {
-            IReadOnlyList<FloppySector> sectors = disk.Track(cylinder, 0);
-            for (int index = 0; index < SectorsPerTrack; index++)
-            {
-                FloppySector? sector = sectors.FirstOrDefault(candidate => candidate.Sector == index);
-                if (sector is null || sector.DoubleDensity || sector.Data.Length != SectorSize)
-                {
-                    throw new InvalidOperationException($"Track {cylinder} is not a JV1 track.");
-                }
-
-                sector.Data.CopyTo(image, (cylinder * TrackSize) + (index * SectorSize));
-            }
-        }
-
-        return image;
+        EncodedImage encoded = Encode(disk);
+        return encoded.IsLossless
+            ? encoded.Bytes
+            : throw new InvalidOperationException($"JV1 cannot hold all of the disk: {string.Join(" ", encoded.Losses)}");
     }
+
+    private static byte Mark(int track) => track == DirectoryTrack ? (byte)0xFA : (byte)0xFB;
 }

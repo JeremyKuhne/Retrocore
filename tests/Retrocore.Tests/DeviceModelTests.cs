@@ -102,7 +102,7 @@ public class DeviceModelTests
         drive.Media?.Changed.Should().BeTrue();
 
         drive.SetWriteProtected(writeProtected: true);
-        disk.WriteProtected.Should().BeTrue();
+        disk.IsWriteProtected.Should().BeTrue();
         drive.Media?.WriteProtected.Should().BeTrue();
 
         bus.Write(0x37E1, 0x09);

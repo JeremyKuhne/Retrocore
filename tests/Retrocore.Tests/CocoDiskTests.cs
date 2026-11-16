@@ -81,21 +81,25 @@ public class CocoDiskTests
         byte[] sided = [JvcFormat.SectorsPerTrack, 2, .. image, .. image];
         FloppyDisk disk = JvcFormat.Read(sided);
         disk.Sides.Should().Be(2);
-        disk.Track(0, 1)[0].Data.Should().Equal(image[(18 * 256)..(19 * 256)]);
+        disk.Track(0, 1)[0].Data.ToArray().Should().Equal(image[(18 * 256)..(19 * 256)]);
         JvcFormat.Write(disk).Should().Equal(sided);
     }
 
     /// <summary>
-    ///  A disk with tracks of more sectors than a JVC track holds is not written, rather than losing the rest.
+    ///  A disk with tracks of more sectors than Disk BASIC's writes them with a header that says so, and one whose
+    ///  tracks differ is not written, rather than losing the rest.
     /// </summary>
     [TestMethod]
-    public void JvcRefusesTracksItCannotKeep()
+    public void JvcKeepsTracksOfOtherGeometries()
     {
         byte[] image = [19, .. new byte[19 * JvcFormat.SectorSize]];
         FloppyDisk disk = JvcFormat.Read(image);
         disk.Track(0, 0).Should().HaveCount(19);
+        JvcFormat.Write(disk).Should().Equal(image);
+
+        disk.Add(1, 0, new(1, 0, 1, new byte[JvcFormat.SectorSize], doubleDensity: true));
         Action write = () => JvcFormat.Write(disk);
-        write.Should().Throw<InvalidOperationException>().WithMessage("*19 sectors*");
+        write.Should().Throw<InvalidOperationException>().WithMessage("*Sectors 1-19 missing*track 1*");
     }
 
     /// <summary>
@@ -118,7 +122,12 @@ public class CocoDiskTests
         throw new AssertFailedException($"BASIC did not finish in {limit} s:\n{CocoMachineTests.Screen(machine)}");
     }
 
-    private static CocoMachine Create(CocoModel model)
+    /// <summary>
+    ///  Creates a machine with the disk controller and runs it until BASIC is ready.
+    /// </summary>
+    /// <param name="model">The model.</param>
+    /// <returns>The machine.</returns>
+    internal static CocoMachine Create(CocoModel model)
     {
         int kilobytes = model == CocoModel.Coco3 ? 128 : 64;
         CocoMachine machine = new(

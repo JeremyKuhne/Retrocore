@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Trs80;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
@@ -260,12 +261,18 @@ internal static class MediaActions
     }
 
     // The codec that writes a drive's medium as an extension says, among the formats the drive saves: a Disk II disk
-    // as WOZ or sectors, a block device as bare blocks or 2MG.
+    // as WOZ or sectors, a TRS-80 or Color Computer floppy as JV1, JV3, JVC or DMK, a block device as bare blocks or
+    // 2MG.
     private static IImageCodec? CodecFor(IDevice device, IMedium medium, string extension)
     {
         bool saves = device.Info.SaveFormats.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);
         if (!saves) { return null; }
-        return medium is WozDisk ? DiskIIImage.CodecFor(extension) : BlockImageCodec.For(extension);
+        return medium switch
+        {
+            WozDisk => DiskIIImage.CodecFor(extension),
+            FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
+            _ => BlockImageCodec.For(extension),
+        };
     }
 
     // An answer about a drive's disk, and the mount it is about.

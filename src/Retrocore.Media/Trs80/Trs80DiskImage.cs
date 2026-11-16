@@ -5,7 +5,7 @@
 namespace Retrocore.Media.Trs80;
 
 /// <summary>
-///  Reads a TRS-80 disk image in whichever format it is: JV1, JV3, DMK or IMD.
+///  Reads a TRS-80 disk image in whichever format it is: JV1, JV3, DMK or IMD; or a Color Computer's, JVC or DMK.
 /// </summary>
 public static class Trs80DiskImage
 {
@@ -36,6 +36,22 @@ public static class Trs80DiskImage
         };
 
         return (disk, format);
+    }
+
+    /// <summary>
+    ///  Reads a Color Computer disk image: DMK by its extension or a header whose tracks are the whole file, and JVC
+    ///  otherwise, as a <c>.dsk</c> file may be either.
+    /// </summary>
+    /// <param name="image">The file's bytes.</param>
+    /// <param name="extension">The file's extension, such as <c>.dsk</c>.</param>
+    /// <returns>The disk and its format's name, <c>JVC</c> or <c>DMK</c>.</returns>
+    /// <exception cref="InvalidDataException">The image is not in the format it appears to be.</exception>
+    public static (FloppyDisk Disk, string Format) ReadCoco(ReadOnlySpan<byte> image, string? extension)
+    {
+        bool dmk = string.Equals(extension, ".dmk", StringComparison.OrdinalIgnoreCase)
+            || (DmkFormat.IsDmk(image) && DmkFormat.ImageLength(image) == image.Length);
+
+        return dmk ? (DmkFormat.Read(image), "DMK") : (JvcFormat.Read(image), "JVC");
     }
 
     // IMD has a signature, JV3 a table whose sectors fit the file, and DMK a header whose tracks are the whole file.

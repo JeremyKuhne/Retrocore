@@ -83,7 +83,8 @@ public sealed class Trs80Model3Machine : IMachine
         Description = "5¼-inch floppy drive",
         Controller = "FD1793, selected at port $F4",
         Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
-        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
         Sides = 2
     };

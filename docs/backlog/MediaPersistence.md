@@ -4,7 +4,8 @@ How disks, tapes and other media the machines change get back to image files, on
 without losing what the machine wrote.
 
 **Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1 is built for the Disk II
-([phases](#phases)); phase 2, every drive saving, is under way: the Apple II's block drives save. The
+([phases](#phases)); phase 2, every drive saving, is built: the Apple II's block drives and the TRS-80's and Color
+Computer's floppies save. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -26,10 +27,10 @@ dirty tracking and save on eject; then the Model I's disk write-back"), and foll
 | Apple II | 3.5 drives (`Apple2Disk35Drive`) | `.po`, `.2mg`, `.hdv`, `.img`, 3.5-inch `.dsk` | `Disk35Disk` blocks, with `IsDirty` and `Version`; the 2MG header is dropped on load | no |
 | Apple II, Apple III | ProFile (`ProFileDrive`) | `.po`, `.hdv` | a writable `MemoryBlockDevice`, a `_changed` flag | no |
 | Apple II | Slot 7 block storage (`Apple2BlockStorage`) | `.po` | a `MemoryBlockDevice` that is read-only (its default), a `BlockWritten` flag; the ROM's write capability is set once, when the machine is built | no; its media is fixed |
-| Model I, III, 4, II | Floppy drives (`Trs80FloppyDrive`) | JV1 (`.dsk`), JV3, DMK, IMD | `FloppySector` data changed in place by the controller; a per-drive `Changed` | no; JV1 and JV3 writers exist, DMK and IMD have none |
+| Model I, III, 4, II | Floppy drives (`Trs80FloppyDrive`) | JV1 (`.dsk`), JV3, DMK, IMD | `FloppySector` data changed in place by the controller; a per-drive `Changed` | no; JV1 and JV3 writers exist, DMK and IMD have none (before phase 2) |
 | Model I, III, 4 | Cassette (`Trs80CassetteDrive`) | `.cas` | `CassetteImage` bytes, and bits buffered in the recorder until it stops | a recording is written on eject, after the tape is detached, with `File.WriteAllBytes`; stopping the session first loses it |
 | CoCo | Cassette | `.cas` | `CassetteImage` | as the TRS-80's |
-| CoCo | Floppy drives (`Trs80FloppyDrive` on `CocoDiskController`) | JVC only (`.dsk`, `.jvc`) | `FloppyDisk` | no; `JvcFormat.Write` writes only 18 sectors of 256 bytes |
+| CoCo | Floppy drives (`Trs80FloppyDrive` on `CocoDiskController`) | JVC only (`.dsk`, `.jvc`) | `FloppyDisk` | no; `JvcFormat.Write` writes only 18 sectors of 256 bytes (before phase 2) |
 | CoCo | ROM pack (`cartridge`) | ROM image | ROM; not a device | never: read-only |
 | Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact |
 | Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` |
@@ -134,10 +135,10 @@ as a format that holds it, save anyway, or cancel.
 | **`.d13`** | reads only | no writer from WOZ yet: save as `.woz` |
 | **2MG** | physical, once the header is kept: creator, version, comment, creator data, flags and unknown bytes | today `Disk35Disk` drops the header; it keeps it and rewraps on export. Its locked flag is the lock |
 | **`.po`, `.hdv`, `.img`, 3.5 `.dsk`** | physical: raw blocks | nothing |
-| **JV1** | guest-equivalent for one side, single density, sectors 0-9 of 256 bytes on every track, `$FA` marks on track 17 and `$FB` elsewhere, no CRC errors, IDs matching the track | the writer checks all of these; today it ignores side 1, extra sectors and marks |
-| **JV3** | physical for what `FloppyDisk` holds | the writer keeps each sector's ID track and side, which today it replaces with the physical ones, and checks the table's limits; it packs the table, so a changed save is guest-equivalent, not byte-exact |
-| **JVC** | guest-equivalent for uniform geometry | the writer keeps the header's sector count, size and first sector, which today it replaces with 18 sectors of 256 bytes |
-| **DMK** | physical, with gaps and CRCs | a writer is needed; it is also the TRS-80 and CoCo floppies' recovery format ([below](#the-recovery-journal)), and the CoCo learns to load it |
+| **JV1** | guest-equivalent for one side, single density, sectors 0-9 of 256 bytes on every track, `$FA` marks on track 17 and `$FB` elsewhere, no CRC errors, IDs matching the track | the writer lists each of these it finds otherwise, and does not keep a track's sector order |
+| **JV3** | physical for what `FloppyDisk` holds, but for a sector whose ID names another track or side than where it lies, which an entry cannot say, and double-density marks other than `$FB` and `$F8` | the writer puts each sector where it lies and lists those, and sectors past two tables; it packs the tables, so a changed save is guest-equivalent, not byte-exact |
+| **JVC** | guest-equivalent for uniform geometry | the writer keeps the header it was read with, its sides grown to the disk's, takes a new disk's geometry from its first track, and lists what does not fit it, single density and marks other than `$FB` |
+| **DMK** | physical, with gaps and CRCs | the floppies' snapshot, and their recovery format ([below](#the-recovery-journal)); the writer lays out IBM gaps, or none for a track too full for them. The CoCo loads it |
 | **IMD** | reads, dropping some details | a writer comes later; a changed IMD disk saves as DMK or JV3 until then |
 | **CAS** | the decoded bytes the machine wrote | timing and the analog signal. Generating a waveform from a CAS needs the machine and baud rate: the supported ones are the Model I's 500, the Model III's 500 and 1500, Level I's 250, and the CoCo's 1500 |
 | **TAP** | exact: the Altair's tape is the bytes in order, as the 88-ACR sends and receives them | none; its writer is today's eject |
@@ -218,8 +219,8 @@ defaults, including the Disk II's loading every disk locked, once the recovery j
 | Disk II | `.woz`, `.dsk`, `.do`, `.po` | the same; `.d13` needs a writer first |
 | 3.5 drive | its own format, 2MG rewrapped | `.po`, `.2mg`, `.hdv`, `.img` |
 | ProFile, slot 7 | `.po`, `.hdv` | the same, and `.2mg` |
-| TRS-80 floppies | JV1 and JVC when the disk fits, JV3, DMK | JV3 and DMK always; the others when the disk fits |
-| CoCo floppies | JVC when the disk fits, DMK | DMK always |
+| TRS-80 floppies | JV1 when the disk fits, JV3, DMK | DMK always; JV3 and JV1 when the disk fits (the Model II: DMK and JV3) |
+| CoCo floppies | JVC when the disk fits, DMK | DMK always; JVC when the disk fits |
 | Cassettes | the recording | `.cas` (TRS-80, CoCo), `.tap` (Altair) or `.wav` (Apple-1, and generated for the CAS machines' supported baud rates) |
 | CoCo ROM pack | never | never |
 
@@ -852,8 +853,22 @@ After the reviews:
      cycle short of a new session. As for the Disk II, changing the lock alone is not yet a change to save.
      Tests: `BlockMediaSaveTests`, and `Test-BlockMediaDap.mjs`, where a boot block in slot 7 writes itself to a
      ProFile and to slot 7's device, which save and boot again, the image pinned by digest.
-   - **The TRS-80 and CoCo floppies (next).** `FloppyDisk` writes counted; JV1, JV3 and JVC fixed; a DMK writer,
-     and DMK on the CoCo.
+   - **The TRS-80 and CoCo floppies (built).** `FloppyDisk` is a medium: a controller changes it only through
+     `Write` and `Format`, which count the change (`FloppySector`'s data is read-only), its lock counts in its
+     version, and its snapshot is a DMK image, which holds every ID, mark, density, CRC error and sector order. A
+     track holds what a DMK track can, at most 64 sectors in 16 KB with no gaps, more than any controller formats;
+     an image with more is refused. `DmkFormat` writes IBM gaps, or none for a track too full for them. JV1 lists
+     side 1, double density, sectors other than 0-9 of 256 bytes, marks other than its own, CRC errors and IDs naming
+     another track; JV3 writes each sector where it lies and lists IDs naming another track or side, double-density
+     marks other than `$FB` and `$F8` and sectors past two tables; JVC keeps the header it was read with (its sides
+     grown to the disk's), takes a new disk's geometry from its first track, and lists what does not fit it.
+     `FloppyImageCodec` writes them from the snapshot, `.dsk` as JVC on the Color Computer and JV1 on a TRS-80; IMD
+     has no writer, so such a disk saves as another format. The drives are `IMediumSlot`s that save (the Model I,
+     III and 4 as `.jv3`, `.dmk`, `.dsk` and `.jv1`, the Model II as `.dmk` and `.jv3`, the Color Computer as `.dsk`,
+     `.jvc` and `.dmk`), and the Color Computer reads DMK. The legacy `retro/media` eject holds back a changed disk,
+     as `retro/device`'s does. Tests: `FloppyMediaSaveTests`, where Disk BASIC's SAVE is saved as JVC and as DMK,
+     pinned by digest, and loads and runs again in a new machine, and `Test-CocoDap.mjs`, which saves a disk through
+     the protocol.
 3. **The UI.** The badged icons, the states, the prompts, Revert with Undo, the eject prompt, host-side watching, and
    the off machine's saves. Done when every row of [saving in each state](#saving-in-each-state) works in the
    self-hosted extension.

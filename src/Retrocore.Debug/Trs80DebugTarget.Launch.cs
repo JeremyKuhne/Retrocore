@@ -159,6 +159,8 @@ internal sealed partial class Trs80DebugTarget
                 throw new ArgumentException($"There is no drive {drive}.");
             }
 
+            // A changed disk is held back, as from retro/device, so an older client cannot lose it.
+            if (MediaActions.Device(_machine.Drives[drive], action, args) is { } answer) { return answer; }
             DeviceAction(_machine.Drives[drive], action, args);
         }
         else if (device == "cassette")
@@ -230,9 +232,7 @@ internal sealed partial class Trs80DebugTarget
             throw new ArgumentException($"There is no drive {drive}.");
         }
 
-        string full = Path.GetFullPath(path);
-        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(full), Path.GetExtension(full));
-        _machine.Drives[drive].Insert(disk, full, format);
+        FloppyMedia.Insert(_machine.Drives[drive], path, coco: false);
     }
 
     private JsonObject MediaState() => new JsonObject

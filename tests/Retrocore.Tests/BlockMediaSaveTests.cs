@@ -23,7 +23,7 @@ public sealed class BlockMediaSaveTests
     private static string s_root = "";
 
     /// <summary>
-    ///  Makes the tests' folder, and keeps their backups and locks in it.
+    ///  Makes the tests' folder; local data, where backups and locks go, is the run's (<see cref="TestLocalData"/>).
     /// </summary>
     /// <param name="context">The test context.</param>
     [ClassInitialize]
@@ -32,7 +32,6 @@ public sealed class BlockMediaSaveTests
         _ = context;
         s_root = Path.Join(Path.GetTempPath(), $"retrocore-blocks-{Environment.ProcessId}");
         Directory.CreateDirectory(s_root);
-        Environment.SetEnvironmentVariable("RETROCORE_LOCAL_DATA", Path.Join(s_root, "local"));
     }
 
     /// <summary>
@@ -218,6 +217,77 @@ public sealed class BlockMediaSaveTests
         MediaActions.Device(storage, "save", Speaking())?.String("outcome").Should().Be("saved");
         storage.Media?.Changed.Should().BeFalse();
         File.ReadAllBytes(path).AsSpan(9 * 512, 512).ToArray().Should().AllBeEquivalentTo((byte)0x42);
+    }
+
+    /// <summary>
+    ///  A 2MG whose data length is left zero has the length of its block count, figured without wrapping: a count too
+    ///  large for the file is refused, not taken as one that fits.
+    /// </summary>
+    [TestMethod]
+    public void TwoImgBlockCountCannotWrap()
+    {
+        byte[] file = TwoImg(blocks: 1600, locked: false, out _);
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(28), 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(20), 0x0080_0640);
+        Action load = () => MemoryBlockDevice.Load(file);
+        load.Should().Throw<InvalidDataException>();
+
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(20), 1600);
+        MemoryBlockDevice.Load(file).BlockCount.Should().Be(1600u);
+    }
+
+    /// <summary>
+    ///  A drive saves an image back as what it holds, not what its name says: a 2MG named <c>.po</c> saves as a 2MG,
+    ///  and bare blocks named <c>.2mg</c> save as bare blocks.
+    /// </summary>
+    [TestMethod]
+    public void ImageSavesAsWhatItHolds()
+    {
+        string misnamed = Path.Join(s_root, $"misnamed-{Guid.NewGuid():N}.po");
+        byte[] file = TwoImg(blocks: 280, locked: false, out _);
+        File.WriteAllBytes(misnamed, file);
+        ProFileDrive drive = ProFile();
+        ProFileMedia.Insert(drive, misnamed);
+        drive.Media?.Format.Should().Be("2MG");
+        Write(drive.Image, block: 2, 0x11);
+        MediaActions.Save(drive, Speaking()).String("outcome").Should().Be("saved");
+        byte[] saved = File.ReadAllBytes(misnamed);
+        saved.Length.Should().Be(file.Length);
+        saved.AsSpan(0, 16).SequenceEqual(file.AsSpan(0, 16)).Should().BeTrue("the 2MG's header is kept");
+
+        (string bare, byte[] blocks) = Image("bare.2mg", blocks: 280);
+        ProFileMedia.Insert(drive, bare);
+        drive.Media?.Format.Should().Be("PO");
+        Write(drive.Image, block: 2, 0x22);
+        MediaActions.Save(drive, Speaking()).String("outcome").Should().Be("saved");
+        byte[] again = File.ReadAllBytes(bare);
+        again.Length.Should().Be(blocks.Length);
+        TwoImgContainer.IsTwoImg(again).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  An image too large for a ProFile is refused by its size, a 2MG's by the data its header gives, before it is
+    ///  read; the drive keeps the image it had.
+    /// </summary>
+    [TestMethod]
+    public void OversizedImageIsRefusedUnread()
+    {
+        (string path, _) = Image("kept.po", blocks: 280);
+        ProFileDrive drive = ProFile();
+        ProFileMedia.Insert(drive, path);
+
+        string large = Path.Join(s_root, $"large-{Guid.NewGuid():N}.po");
+        using (FileStream stream = File.Create(large)) { stream.SetLength((ProFileMedia.MaximumBlocks + 1) * 512L); }
+        Action bare = () => ProFileMedia.Insert(drive, large);
+        bare.Should().Throw<InvalidDataException>();
+
+        string header = Path.Join(s_root, $"large-{Guid.NewGuid():N}.2mg");
+        byte[] file = TwoImg(blocks: 280, locked: false, out _);
+        BinaryPrimitives.WriteUInt32LittleEndian(file.AsSpan(28), (ProFileMedia.MaximumBlocks + 1) * 512u);
+        File.WriteAllBytes(header, file);
+        Action twoImg = () => ProFileMedia.Insert(drive, header);
+        twoImg.Should().Throw<InvalidDataException>();
+        drive.Media?.Label.Should().Be(path);
     }
 
     // A ProFile on no card, with a clock that never moves.

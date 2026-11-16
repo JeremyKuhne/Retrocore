@@ -31,18 +31,39 @@ internal static class ProFileMedia
     internal static void Insert(ProFileDrive drive, string path)
     {
         path = Path.GetFullPath(path);
-        byte[] bytes = File.ReadAllBytes(path);
+        byte[] bytes = ReadImage(path);
         MemoryBlockDevice image = MemoryBlockDevice.Load(bytes);
-        if (image.BlockCount > MaximumBlocks)
-        {
-            throw new InvalidDataException(
-                $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
-        }
-
-        BlockImageCodec? codec = BlockImageCodec.For(Path.GetExtension(path));
+        BlockImageCodec? codec = BlockImageCodec.ForImage(bytes, Path.GetExtension(path));
         drive.Eject();
         MediaActions.Register(image, path, codec, bytes);
         drive.Insert(image, path, codec?.Format ?? "PO");
+    }
+
+    /// <summary>
+    ///  Reads a ProDOS-order image of at most <see cref="MaximumBlocks"/> blocks, checking its size before reading it,
+    ///  so a file too large is refused without being loaded: its length, or for a 2MG the data its header gives.
+    /// </summary>
+    /// <param name="path">The image's path.</param>
+    /// <returns>The file's bytes.</returns>
+    /// <exception cref="InvalidDataException">The image holds more than <see cref="MaximumBlocks"/> blocks.</exception>
+    internal static byte[] ReadImage(string path)
+    {
+        const long MostData = MaximumBlocks * 512L;
+        using (FileStream file = File.OpenRead(path))
+        {
+            Span<byte> header = stackalloc byte[TwoImgContainer.HeaderLength];
+            int read = file.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+            bool twoImg = TwoImgContainer.IsTwoImg(header[..read]);
+
+            // A 2MG's comment and creator data follow its blocks; a megabyte is far more than any writer puts there.
+            if ((twoImg ? TwoImgContainer.DataLength(header) : file.Length) > MostData || file.Length > MostData + (1 << 20))
+            {
+                throw new InvalidDataException(
+                    $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
+            }
+        }
+
+        return File.ReadAllBytes(path);
     }
 
     /// <summary>

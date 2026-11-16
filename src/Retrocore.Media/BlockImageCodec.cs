@@ -47,6 +47,20 @@ public sealed class BlockImageCodec : IImageCodec
         };
     }
 
+    /// <summary>
+    ///  Gets the codec that writes a block image back to the file it was read from: a 2MG for a 2MG file whatever its
+    ///  extension says, and bare blocks for a file of bare blocks, even one named <c>.2mg</c>.
+    /// </summary>
+    /// <param name="image">The file's bytes.</param>
+    /// <param name="extension">The file's extension, which names the format of bare blocks.</param>
+    /// <returns>The codec, or null for bare blocks with an extension that is not a block image.</returns>
+    public static BlockImageCodec? ForImage(ReadOnlySpan<byte> image, string extension)
+    {
+        if (TwoImgContainer.IsTwoImg(image)) { return new("2MG", twoImg: true); }
+        BlockImageCodec? codec = For(extension);
+        return codec is { IsTwoImg: true } ? new("PO", twoImg: false) : codec;
+    }
+
     /// <inheritdoc/>
     public EncodedImage Encode(MediumSnapshot snapshot)
     {

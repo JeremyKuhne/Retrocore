@@ -24,7 +24,11 @@ public sealed class TwoImgContainer
     /// </summary>
     public const string SnapshotKind = "2mg";
 
-    private const int HeaderLength = 64;
+    /// <summary>
+    ///  The length of a 2MG header, the least a 2MG file starts with.
+    /// </summary>
+    public const int HeaderLength = 64;
+
     private const uint Locked = 0x8000_0000;
     private const int FlagsOffset = 16;
     private static ReadOnlySpan<byte> Magic => "2IMG"u8;
@@ -52,6 +56,17 @@ public sealed class TwoImgContainer
     public static bool IsTwoImg(ReadOnlySpan<byte> image) => image.Length >= HeaderLength && image[..4].SequenceEqual(Magic);
 
     /// <summary>
+    ///  Gets how many bytes of data a 2MG header says its file holds, before the file is read.
+    /// </summary>
+    /// <param name="header">The file's first <see cref="HeaderLength"/> bytes, a 2MG header.</param>
+    /// <returns>The data's length, or its block count times 512 when the length is left zero.</returns>
+    public static long DataLength(ReadOnlySpan<byte> header)
+    {
+        uint length = BinaryPrimitives.ReadUInt32LittleEndian(header[28..]);
+        return length != 0 ? length : BinaryPrimitives.ReadUInt32LittleEndian(header[20..]) * 512L;
+    }
+
+    /// <summary>
     ///  Reads a 2MG file of ProDOS-ordered blocks.
     /// </summary>
     /// <param name="image">The file's bytes.</param>
@@ -67,14 +82,13 @@ public sealed class TwoImgContainer
         int headerLength = BinaryPrimitives.ReadUInt16LittleEndian(image[8..]);
         uint order = BinaryPrimitives.ReadUInt32LittleEndian(image[12..]);
         uint flags = BinaryPrimitives.ReadUInt32LittleEndian(image[FlagsOffset..]);
-        uint count = BinaryPrimitives.ReadUInt32LittleEndian(image[20..]);
-        uint offset = BinaryPrimitives.ReadUInt32LittleEndian(image[24..]);
-        uint length = BinaryPrimitives.ReadUInt32LittleEndian(image[28..]);
+        long offset = BinaryPrimitives.ReadUInt32LittleEndian(image[24..]);
+        long length = DataLength(image);
         if (order != 1) { throw new InvalidDataException("A 2MG block image must hold its blocks in ProDOS order."); }
 
-        // Some writers leave the data's offset or length zero, meaning just after the header and all of the blocks.
-        if (offset == 0) { offset = (uint)Math.Max(headerLength, HeaderLength); }
-        if (length == 0) { length = count * 512; }
+        // Some writers leave the data's offset or length zero, meaning just after the header and all of the blocks;
+        // the length is figured in 64 bits, so a block count too large for the file cannot wrap to one that fits.
+        if (offset == 0) { offset = Math.Max(headerLength, HeaderLength); }
         if (offset < HeaderLength || offset > image.Length || length > image.Length - offset)
         {
             throw new InvalidDataException("The 2MG image's data runs past the end of the file.");

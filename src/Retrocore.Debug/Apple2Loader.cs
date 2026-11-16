@@ -31,7 +31,8 @@ internal static class Apple2Loader
         }
 
         string? blockPath = diskPath is null || diskFirmware is not null ? null : Path.GetFullPath(diskPath);
-        Apple2Machine machine = new(model, roms, blockPath is null ? null : Disk(blockPath));
+        string? blockFormat = null;
+        Apple2Machine machine = new(model, roms, blockPath is null ? null : Disk(blockPath, out blockFormat));
 
         if (diskFirmware is not null)
         {
@@ -41,7 +42,7 @@ internal static class Apple2Loader
         else if (machine.BlockStorage is { } storage && blockPath is not null)
         {
             storage.Label = blockPath;
-            storage.Format = Path.GetExtension(blockPath).TrimStart('.').ToUpperInvariant();
+            storage.Format = blockFormat ?? Path.GetExtension(blockPath).TrimStart('.').ToUpperInvariant();
         }
 
         return machine;
@@ -79,32 +80,27 @@ internal static class Apple2Loader
         byte[] bytes = File.ReadAllBytes(path);
         Disk35Disk disk = Disk35Disk.Load(bytes);
         drive.Eject();
-        BlockImageCodec? codec = BlockImageCodec.For(Path.GetExtension(path));
+        BlockImageCodec? codec = BlockImageCodec.ForImage(bytes, Path.GetExtension(path));
         MediaActions.Register(disk, path, codec, bytes);
         drive.Insert(disk, path, codec?.Format ?? "PO");
     }
-
-    // The most blocks a ProDOS volume, and the slot 7 device's 16-bit block count, can hold: 32 MiB.
-    private const int MaximumBlocks = 65535;
 
     /// <summary>
     ///  Reads a ProDOS-order image for slot 7: its 512-byte blocks in order with no header, or a 2MG of them. It loads
     ///  locked, as slot 7 always has, and writes once unlocked.
     /// </summary>
     /// <param name="path">The image's full path.</param>
+    /// <param name="format">The format its content shows: 2MG, or bare blocks as the extension names them.</param>
     /// <returns>The block device.</returns>
     /// <exception cref="InvalidDataException">The file is not a whole number of blocks, or holds too many.</exception>
-    private static MemoryBlockDevice Disk(string path)
+    private static MemoryBlockDevice Disk(string path, out string? format)
     {
-        byte[] bytes = File.ReadAllBytes(path);
+        // The slot 7 device counts blocks in 16 bits, as the ProFile does.
+        byte[] bytes = ProFileMedia.ReadImage(path);
         MemoryBlockDevice disk = MemoryBlockDevice.Load(bytes, writeProtected: true);
-        if (disk.BlockCount > MaximumBlocks)
-        {
-            throw new InvalidDataException(
-                $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
-        }
-
-        MediaActions.Register(disk, path, BlockImageCodec.For(Path.GetExtension(path)), bytes);
+        BlockImageCodec? codec = BlockImageCodec.ForImage(bytes, Path.GetExtension(path));
+        format = codec?.Format;
+        MediaActions.Register(disk, path, codec, bytes);
         return disk;
     }
 }

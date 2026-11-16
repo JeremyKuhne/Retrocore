@@ -73,10 +73,14 @@ internal sealed class MachineHost : DisposableBase
     ///  Builds the machine a launch configuration describes, as the debug host's launch does.
     /// </summary>
     /// <param name="configuration">The launch arguments, such as <c>{ "machine": "apple2" }</c>.</param>
-    internal MachineHost(JsonObject configuration)
+    /// <param name="saved">
+    ///  The saved machine it will be restored to, or null: slot 7's image comes from the launch, so one a Save As moved
+    ///  builds the machine, while <see cref="Configuration"/> stays the launch's own, the base the saved changes are on.
+    /// </param>
+    internal MachineHost(JsonObject configuration, JsonObject? saved = null)
     {
         Configuration = configuration;
-        _target = OffMachine.Build(configuration);
+        _target = OffMachine.Build(LaunchMedia.WithSaved(configuration, saved));
         _measureCycles = _target.CycleCount;
         _thread = new(Run) { IsBackground = true, Name = "Machine" };
     }

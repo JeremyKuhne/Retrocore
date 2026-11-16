@@ -74,11 +74,11 @@ internal static class OffMachine
     private static JsonObject With(JsonObject parameters, Action<IDebugTarget> act)
     {
         JsonObject configuration = parameters["configuration"] as JsonObject ?? throw new ArgumentException("configuration is required: the machine's launch arguments.");
-        configuration = LaunchMedia.WithSaved(configuration, parameters["machineState"]);
 
         lock (s_gate)
         {
-            IDebugTarget target = Build(configuration);
+            // Slot 7's image comes from the launch: one the saved machine moved builds it, while the launch stays its own.
+            IDebugTarget target = Build(LaunchMedia.WithSaved(configuration, parameters["machineState"]));
             try
             {
                 List<string> problems = parameters["machineState"] is JsonObject saved

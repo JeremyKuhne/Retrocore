@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Debug;
 using System.Text.Json.Nodes;
 using Touki;
 
@@ -222,8 +221,7 @@ internal sealed class MachineSession : DisposableBase
 
     private MachineHost Build(JsonObject configuration, JsonObject? saved)
     {
-        // Slot 7's image comes from the launch, so a saved machine that moved it gives the launch its image.
-        MachineHost host = new(LaunchMedia.WithSaved(configuration, saved));
+        MachineHost host = new(configuration, saved);
         Problems = saved is null ? [] : host.Restore(saved);
         return host;
     }

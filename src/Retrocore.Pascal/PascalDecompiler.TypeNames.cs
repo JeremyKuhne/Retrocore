@@ -54,6 +54,7 @@ public sealed partial class PascalDecompiler
         }
 
         NameValues(taken);
+        NameVariantLabels(taken);
     }
 
     // A field's key, T2.F0, as its type's name and its own; null for others, such as a procedure's, PASCALCO.4.
@@ -100,7 +101,8 @@ public sealed partial class PascalDecompiler
         }
 
         foreach (Variable global in _declared.GetValueOrDefault(_system) ?? []) { taken.Add(Key(global.Name)); }
-        foreach (int number in _systemProcedures.Keys) { taken.Add(Key(SystemProcedure(number))); }
+        foreach (int number in _systemProcedures.Keys) { taken.Add(Key(SystemName(SystemProcedure(number)) ?? "")); }
+        foreach (string name in _systemNames.Values) { taken.Add(Key(name)); }
         foreach (string name in UnitNames()) { taken.Add(Key(name)); }
         foreach (TypeNode type in _types) { taken.Add(Key(type.Name ?? "")); }
         if (_shell is not null) { taken.Add(Key(Identifier(_shell.Name))); }

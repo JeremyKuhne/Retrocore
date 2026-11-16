@@ -39,7 +39,7 @@ public sealed partial class PascalDecompiler
             && Viewed(viewed)
             && viewed.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
         {
-            return Convert($"{DesignatorText(viewed)}.I", Factor, ScalarKind.Integer, Kind(expected), out _);
+            return Convert($"{DesignatorText(viewed)}.{ViewName(viewed.Type, "I")}", Factor, ScalarKind.Integer, Kind(expected), out _);
         }
 
         // A value parameter written as its pointer is ORD of it where an integer is used.
@@ -52,7 +52,7 @@ public sealed partial class PascalDecompiler
         if (expression is Load { Designator: var punned } && Viewed(punned) && IsPunned(punned.Type))
         {
             bool integer = Kind(expected) is not null;
-            string pun = $"{DesignatorText(punned)}.{(integer ? "I" : "P")}";
+            string pun = $"{DesignatorText(punned)}.{ViewName(punned.Type, integer ? "I" : "P")}";
             return Convert(pun, Factor, integer ? ScalarKind.Integer : null, Kind(expected), out _);
         }
 
@@ -218,7 +218,19 @@ public sealed partial class PascalDecompiler
             case Comparison comparison:
                 return ComparisonText(comparison);
             case SetValue set:
-                return SetValueText(set);
+                {
+                    // A set passed for or assigned to a set whose elements' values are named has its constants named.
+                    TypeNode? outer = _elementOverride;
+                    if (expected?.Find() is { Kind: TypeKind.Set, Element: { } named } && ValueNamed(named))
+                    {
+                        _elementOverride ??= named;
+                    }
+
+                    (string Text, int Level) written = SetValueText(set);
+                    _elementOverride = outer;
+                    return written;
+                }
+
             case Call call:
                 return (CallText(call), Factor);
             case StringFunction function:
@@ -376,29 +388,43 @@ public sealed partial class PascalDecompiler
             return ($"{DesignatorText(leftWhole)} {symbol} {DesignatorText(rightWhole)}", Relational);
         }
 
-        return ($"{Expression(comparison.Left, left, Adding)} {symbol} {Expression(comparison.Right, right, Adding)}", Relational);
+        // A word's integer view whose values are named names the constant it is compared with.
+        if (ViewValued(comparison.Left) is { } leftView && comparison.Right is Constant) { right = leftView; }
+        if (ViewValued(comparison.Right) is { } rightView && comparison.Left is Constant) { left = rightView; }
+
+        // IN a constant set: its members are of the left operand's kind, its values' names too.
+        TypeNode? outer = _elementOverride;
+        if (comparison.Comparand == Comparand.Set && comparison.Op == Operator.In)
+        {
+            TypeNode? member = ViewValued(comparison.Left) ?? comparison.Left.Type;
+            if (ValueNamed(member)) { _elementOverride = member; }
+        }
+
+        string leftText = Expression(comparison.Left, left, Adding);
+        string rightText = Expression(comparison.Right, right, Adding);
+        _elementOverride = outer;
+        return ($"{leftText} {symbol} {rightText}", Relational);
     }
 
     // A set: a variable, a constructor, or set operators between them.
     private (string Text, int Level) SetValueText(SetValue set)
     {
-        TypeNode? element = set.Type.Find().Element;
+        TypeNode? element = _elementOverride ?? set.Type.Find().Element;
         if (set.Op is { } op && set.Left is { } left && set.Right is { } right)
         {
-            // A union of constructors is one constructor: the Compiler builds [A, B] as [A] + [B].
-            if (op == Operator.Union && IsConstructor(left) && IsConstructor(right))
+            // A set's constants are named as the other operand's elements are, where they are.
+            TypeNode? outer = _elementOverride;
+            TypeNode? leftElement = left.Type.Find().Element;
+            TypeNode? rightElement = right.Type.Find().Element;
+            _elementOverride ??= ValueNamed(leftElement) ? leftElement : ValueNamed(rightElement) ? rightElement : null;
+            try
             {
-                return ($"[{string.Join(", ", Members(left).Concat(Members(right)).Where(member => member.Length > 0))}]", Factor);
+                return CombinedSetText(op, left, right);
             }
-
-            (string symbol, int level) = op switch
+            finally
             {
-                Operator.Union => ("+", Adding),
-                Operator.Difference => ("-", Adding),
-                _ => ("*", Multiplying)
-            };
-
-            return ($"{Expression(left, expected: null, level)} {symbol} {Expression(right, expected: null, level + 1)}", level);
+                _elementOverride = outer;
+            }
         }
 
         if (set.Value is { } value)
@@ -414,6 +440,25 @@ public sealed partial class PascalDecompiler
         return ($"[{string.Join(", ", Members(set))}]", Factor);
     }
 
+    // Two sets joined: a union of constructors as one constructor, else the operator between them.
+    private (string Text, int Level) CombinedSetText(Operator op, SetValue left, SetValue right)
+    {
+        // A union of constructors is one constructor: the Compiler builds [A, B] as [A] + [B].
+        if (op == Operator.Union && IsConstructor(left) && IsConstructor(right))
+        {
+            return ($"[{string.Join(", ", Members(left).Concat(Members(right)).Where(member => member.Length > 0))}]", Factor);
+        }
+
+        (string symbol, int level) = op switch
+        {
+            Operator.Union => ("+", Adding),
+            Operator.Difference => ("-", Adding),
+            _ => ("*", Multiplying)
+        };
+
+        return ($"{Expression(left, expected: null, level)} {symbol} {Expression(right, expected: null, level + 1)}", level);
+    }
+
     private static bool IsConstructor(SetValue set) => set.Op is null
         ? set.Value is null or Constant or WordsConstant
         : set is { Op: Operator.Union, Left: { } left, Right: { } right }
@@ -422,7 +467,7 @@ public sealed partial class PascalDecompiler
 
     private IEnumerable<string> Members(SetValue set)
     {
-        TypeNode? element = set.Type.Find().Element;
+        TypeNode? element = _elementOverride ?? set.Type.Find().Element;
         if (set is { Op: not null, Left: { } left, Right: { } right })
         {
             foreach (string member in Members(left).Concat(Members(right))) { yield return member; }
@@ -517,7 +562,7 @@ public sealed partial class PascalDecompiler
             return Invocation(declared.Name, UnitArguments(declared, call.Arguments));
         }
 
-        string name = callee.Builtin ?? "?";
+        string name = SystemName(callee.Builtin) ?? "?";
         List<string> parts = name switch
         {
             "EOF" or "EOLN" => [FileName(new Argument(call.Arguments[0]))],

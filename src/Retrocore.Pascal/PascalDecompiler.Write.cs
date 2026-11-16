@@ -100,7 +100,7 @@ public sealed partial class PascalDecompiler
 
         // The constants the statements named, which come before the types.
         // And those the hints name values by.
-        if (_constants.Count > 0 || _declaredConstants.Count > 0)
+        if (_constants.Count > 0 || _declaredConstants.Count > 0 || _labelNames.Count > 0)
         {
             _source.Insert(
                 constants,
@@ -390,21 +390,29 @@ public sealed partial class PascalDecompiler
             {
                 // NIL is passed to a pointer, the type of another pointer the call passes.
                 Expr? pointer = arguments.Select(argument => argument.Value).FirstOrDefault(IsPointerValue);
-                list = $"({string.Join("; ", arguments.Select((argument, index) => SystemParameter(argument, index, pointer?.Type)))})";
+                list = $"({string.Join("; ", arguments.Select((argument, index) => SystemParameter(number, argument, index, pointer?.Type)))})";
             }
 
             string kind = _systemFunctions.Contains(number) ? "FUNCTION" : "PROCEDURE";
             string result = _systemFunctions.Contains(number) ? ": INTEGER" : "";
-            string heading = $"{kind} {SystemProcedure(number)}{list}{result}; FORWARD;";
+            string heading = $"{kind} {SystemName(SystemProcedure(number))}{list}{result}; FORWARD;";
             Line(Comment(_options.Comments, $"SYSTEM.{number}") is { } about ? $"{heading}  {CommentText(about)}" : heading);
         }
     }
 
     private static bool IsPointerValue(Expr value) => value is not (Address or Nil) && value.Type.Find().Kind == TypeKind.Pointer;
 
-    private string SystemParameter(Argument argument, int index, TypeNode? pointer)
+    private static bool IsIdentifier(string name) => name.Length > 0 && char.IsAsciiLetter(name[0]) && name.All(char.IsAsciiLetterOrDigit);
+
+    private string SystemParameter(int number, Argument argument, int index, TypeNode? pointer)
     {
+        // A parameter takes the name the hints give it, SYSTEM.43@1, where it is an identifier no word reserves.
         string name = $"A{index + 1}";
+        if (Given($"SYSTEM.{number}@{index + 1}") is { } given && IsIdentifier(given) && !s_predeclared.Contains(Key(given)))
+        {
+            name = given;
+        }
+
         Expr value = argument.Value;
         if (value is Address { Designator: var designator })
         {
@@ -872,7 +880,7 @@ public sealed partial class PascalDecompiler
         TypeNode root = type.Find();
         if (root.ByteView && root.Kind == TypeKind.Scalar)
         {
-            return "RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (B: PACKED ARRAY[0..1] OF CHAR) END";
+            return $"RECORD CASE BOOLEAN OF TRUE: ({ViewName(root, "I")}: INTEGER); FALSE: ({ViewName(root, "B")}: PACKED ARRAY[0..1] OF CHAR) END";
         }
 
         switch (root.Kind)
@@ -884,12 +892,12 @@ public sealed partial class PascalDecompiler
             case TypeKind.Pointer when root.Punned && root.Views is { Count: > 0 } views:
                 {
                     // A word that points to things that cannot be one has a variant for each.
-                    IEnumerable<string> pointers = views.Select((view, index) => $"{index + 2}: (P{index + 2}: ^{TypeName(view, parameter: true)})");
-                    return $"RECORD CASE INTEGER OF 0: (I: INTEGER); 1: (P: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}); {string.Join("; ", pointers)} END";
+                    IEnumerable<string> pointers = views.Select((view, index) => $"{index + 2}: ({ViewName(root, $"P{index + 2}")}: ^{TypeName(view, parameter: true)})");
+                    return $"RECORD CASE INTEGER OF 0: ({ViewName(root, "I")}: INTEGER); 1: ({ViewName(root, "P")}: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}); {string.Join("; ", pointers)} END";
                 }
 
             case TypeKind.Pointer when root.Punned:
-                return $"RECORD CASE BOOLEAN OF TRUE: (I: INTEGER); FALSE: (P: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}) END";
+                return $"RECORD CASE BOOLEAN OF TRUE: ({ViewName(root, "I")}: INTEGER); FALSE: ({ViewName(root, "P")}: ^{TypeName(root.Element ?? new TypeNode(), parameter: true)}) END";
             case TypeKind.Pointer:
                 return $"^{TypeName(root.Element ?? new TypeNode(), parameter: true)}";
             case TypeKind.Set:
@@ -1015,16 +1023,16 @@ public sealed partial class PascalDecompiler
             }
         }
 
-        List<string> labelled = [.. variants.Select((fields, index) => $"{index}: ({Fields(root, fields, $"{pad}         ")})")];
+        List<string> labelled = [.. variants.Select((fields, index) => $"{VariantLabel(root, index)}: ({Fields(root, fields, $"{pad}         ")})")];
         foreach (int size in shorter)
         {
             string padding = size > start ? Fields(root, [Field(root, $"X{size}N", Declare(Padding(size - start), inline: true))], "") : "";
-            labelled.Add($"{Shorter + size}: ({padding})");
+            labelled.Add($"{VariantLabel(root, Shorter + size)}: ({padding})");
         }
 
         foreach (int size in views)
         {
-            labelled.Add($"{Viewing + size}: ({Fields(root, [Field(root, $"B{size}N", Declare(Padding(size), inline: true))], "")})");
+            labelled.Add($"{VariantLabel(root, Viewing + size)}: ({Fields(root, [Field(root, $"B{size}N", Declare(Padding(size), inline: true))], "")})");
         }
 
         if (spread)
@@ -1541,7 +1549,9 @@ public sealed partial class PascalDecompiler
             case Assignment { Value: Load { Designator: var source } whole } move when _moves.Contains(move):
                 {
                     string view = $"B{whole.Words}N";
-                    lines.Add(Indented($"{DesignatorText(move.Target)}.{view} := {DesignatorText(source)}.{view}"));
+                    string target = HintedField(move.Target.Type, view);
+                    string from = HintedField(source.Type, view);
+                    lines.Add(Indented($"{DesignatorText(move.Target)}.{target} := {DesignatorText(source)}.{from}"));
                     break;
                 }
 
@@ -1560,7 +1570,7 @@ public sealed partial class PascalDecompiler
                     string text = DesignatorText(target);
                     if (Viewed(target) && target.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true })
                     {
-                        lines.Add(Indented($"{text}.I := {Expression(value, TypeNode.Scalar(ScalarKind.Integer), 0)}"));
+                        lines.Add(Indented($"{text}.{ViewName(target.Type, "I")} := {Expression(value, TypeNode.Scalar(ScalarKind.Integer), 0)}"));
                         break;
                     }
 
@@ -1585,8 +1595,8 @@ public sealed partial class PascalDecompiler
                     if (Viewed(target) && IsPunned(target.Type))
                     {
                         bool pointer = assignment.Value is Nil || Natural(assignment.Value) is null && assignment.Value is not Constant;
-                        text += pointer ? ".P" : ".I";
-                        lines.Add(Indented($"{text} := {Expression(assignment.Value, pointer ? null : TypeNode.Scalar(ScalarKind.Integer), 0)}"));
+                        text += $".{ViewName(target.Type, pointer ? "P" : "I")}";
+                        lines.Add(Indented($"{text} := {Expression(assignment.Value, pointer ? null : ViewValued(target) ?? TypeNode.Scalar(ScalarKind.Integer), 0)}"));
                         break;
                     }
 
@@ -1645,7 +1655,7 @@ public sealed partial class PascalDecompiler
                 // A selector is a scalar: a word used both ways by its integer view, a pointer by ORD. A label is a
                 // constant, which a character that is not printable has none of: the selector is then ORD of it.
                 TypeNode? selector = choice.Selector.Type.Find().Kind == TypeKind.Pointer ? TypeNode.Scalar(ScalarKind.Integer) : null;
-                TypeNode labelType = choice.Selector.Type.Find();
+                TypeNode labelType = ViewValued(choice.Selector) ?? choice.Selector.Type.Find();
                 bool unprintable = Kind(labelType) == ScalarKind.Char && choice.Arms.SelectMany(arm => arm.Labels).Any(label => label is < 32 or >= 127);
                 if (unprintable)
                 {
@@ -1751,7 +1761,7 @@ public sealed partial class PascalDecompiler
             return Invocation(declared.Name, UnitArguments(declared, [.. call.Arguments.Select(a => a.Value)]));
         }
 
-        string name = callee.Builtin ?? "?";
+        string name = SystemName(callee.Builtin) ?? "?";
 
         // NEW of fewer words than a record has takes the variant that long, labelled with 100 more than its words.
         if (name == "NEW" && call.Arguments is [{ Value: Address allocated }, { Value: Constant { Value: var words } }])
@@ -1759,7 +1769,7 @@ public sealed partial class PascalDecompiler
             Designator pointer = Descend(allocated.Designator, use: null);
             TypeNode? record = pointer.Type.Find().Element?.Find();
             return record is { Kind: TypeKind.Record } && (SizeOf(record) ?? 0) > words
-                ? $"NEW({Pointer(pointer)}, {Shorter + words})"
+                ? $"NEW({Pointer(pointer)}, {VariantLabel(record, Shorter + words)})"
                 : $"NEW({Pointer(pointer)})";
         }
 
@@ -1811,7 +1821,7 @@ public sealed partial class PascalDecompiler
     }
 
     private string Pointer(Designator pointer) =>
-        IsPunned(pointer.Type) && !IsPlain(pointer) ? $"{DesignatorText(pointer)}.P" : DesignatorText(pointer);
+        IsPunned(pointer.Type) && !IsPlain(pointer) ? $"{DesignatorText(pointer)}.{ViewName(pointer.Type, "P")}" : DesignatorText(pointer);
 
     // Whether a designator is a value parameter written as its pointer.
     private bool IsPlain(Designator designator) => designator switch
@@ -1938,13 +1948,13 @@ public sealed partial class PascalDecompiler
                 return $"LENGTH({DesignatorText(length.Array)})";
             case IndexDesignator { Array: VariableDesignator { Variable: var bytes } } byteIndex
                 when bytes.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
-                return $"{bytes.Name}.B[{Expression(byteIndex.Index, expected: null, 0)}]";
+                return $"{bytes.Name}.{ViewName(bytes.Type, "B")}[{Expression(byteIndex.Index, expected: null, 0)}]";
             case IndexDesignator { Array: var whole } recordBytes
                 when whole.Type.Find().Kind == TypeKind.Record
                     && Descend(whole, use: null) is var first
                     && first.Type.Find() is { Kind: TypeKind.Scalar, ByteView: true }:
                 // A record read by bytes is its first word's byte view.
-                return $"{DesignatorText(first)}.B[{Expression(recordBytes.Index, expected: null, 0)}]";
+                return $"{DesignatorText(first)}.{ViewName(first.Type, "B")}[{Expression(recordBytes.Index, expected: null, 0)}]";
             case IndexDesignator index:
                 {
                     // Arrays are declared with integer subranges for indexes. A record's bytes indexed from its
@@ -1985,7 +1995,7 @@ public sealed partial class PascalDecompiler
                         && word.Type.Find().Views is { } views
                         && views.FindIndex(other => other.Find() == view.Find()) is var index and >= 0)
                     {
-                        return $"{DesignatorText(word)}.P{index + 2}^";
+                        return $"{DesignatorText(word)}.{ViewName(word.Type, $"P{index + 2}")}^";
                     }
 
                     return $"{Expression(dereference.Pointer, expected: null, 4)}^";

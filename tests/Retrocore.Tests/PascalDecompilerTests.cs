@@ -689,6 +689,31 @@ public class PascalDecompilerTests
         included.Should().Contain(directive => directive.Contains("APPLE1:", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///  A source made of a main file and the files it includes by name goes on the volumes with room, each directive
+    ///  given the volume its file is on, (*$I ...*) and {$I ...} alike; an option such as $I- is left as it is.
+    /// </summary>
+    [TestMethod]
+    public void AMainFileAndItsIncludesGoWhereTheyFit()
+    {
+        string part = LongSource(25);
+        Dictionary<string, string> included = new()
+        {
+            ["FIRST.TEXT"] = part,
+            ["SECOND.TEXT"] = part,
+            ["third.text"] = part
+        };
+
+        string main = "(*$I-*)\n(*$I FIRST.TEXT*)\n{$I SECOND.TEXT}\n(*$I THIRD*)\nEND.\n";
+        byte[] boot = EmptyVolume("APPLE1");
+        (byte[] sources, byte[] codes) = EmulatedPascalCompiler.FileVolumes(main, included, boot);
+
+        string written = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT"));
+        written.Should().StartWith("(*$I-*)\n(*$I SOURCE:FIRST.TEXT*)\n{$I APPLE1:SECOND.TEXT}\n(*$I CODE:THIRD.TEXT  *)\n");
+        PascalTextFile.Read(PascalVolume.Read(boot, proDosOrder: false).ReadFile("SECOND.TEXT")).TrimEnd().Should().Be(part.TrimEnd());
+        PascalTextFile.Read(PascalVolume.Read(codes, proDosOrder: false).ReadFile("THIRD.TEXT")).TrimEnd().Should().Be(part.TrimEnd());
+    }
+
     // A source of procedures of 50 lines each, as long as their number makes it.
     private static string LongSource(int procedures)
     {

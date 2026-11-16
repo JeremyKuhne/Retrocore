@@ -80,6 +80,8 @@ public sealed partial class PascalDecompiler
             string key = $"SYSTEM@{global.Offset}";
             if (Given(key) is { } given && Safe(given, key, Program, global, out string? name)) { global.Name = name; }
         }
+
+        RenameSystemProcedures();
     }
 
     // A name the hints give, by key, its word in hexadecimal too: SEGMENT.N@1038, or @$40E.

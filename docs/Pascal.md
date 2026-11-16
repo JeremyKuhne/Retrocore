@@ -135,7 +135,9 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
 - `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit NAME.CODE]...` compiles a
   source with Apple Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`.
-  Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find;
+  Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find. With
+  `--includes folder`, the source is a main file that includes the folder's files by name, `(*$I NAME.TEXT*)`, each
+  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below);
 - `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
@@ -214,6 +216,13 @@ and `values` which keys take them (`"PASCALCO.1@15": "SYMBOL"`, `"T6.T6F1": "STR
 lists are declared as `CONST`s in the program's block, and a constant compared with, stored in, passed for or a
 `CASE` label or set member of one of those is written by its name: a constant loads as the number it is, so the
 code is the same. Each name must be unlike every other in the source, or its list is left out, with a warning.
+A value read through another view of a word takes a list too, keyed by the view: `"T35.F2.I": "VACCESS"` names what
+`ACCESS` holds where the source reads it as `CVAL.I`. A system procedure the code calls (`CXP 0,n`), written
+`SYSTEMn`, is named by `SYSTEM.n` (`"SYSTEM.2": "EXECERROR"`), and its parameters by `SYSTEM.n@1` and on, and the
+views of a word a record keeps as integer, pointer or bytes (`.I`, `.P`, `.B`) by `T4.I` and the like. The labels
+of a variant record's variants, by which `NEW` makes one as short as its variant, are named by `T2:104`, declared as
+`CONST`s above the types and written in the record's `CASE` and in `NEW(P, LABEL)`; the padding fields a variant
+keeps (`X4N`) are named as other fields are.
 Apple Pascal 1.3's Compiler, named and commented so, is kept outside this repository.
 
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
@@ -267,7 +276,9 @@ Compiler's, is cut before procedures of the outer block into pieces of about 40K
 file would not fit: the main file keeps every other piece and includes each of the others where it was (`(*$I
 SOURCE:INC1.TEXT*)`; the Compiler includes no file from an included one), each on SOURCE: while it fits, then on the
 boot disk, then on CODE:, which keeps room for the code file. The code file is read back without the empty blocks
-after its code, which it keeps of the room CODE: had and the Linker cannot copy.
+after its code, which it keeps of the room CODE: had and the Linker cannot copy. A source already kept as a main file
+and the files it includes, one level deep as the Compiler allows, is compiled with `--includes`: each file goes
+where it fits in the same way.
 
 ### Rebuilding a linked program
 

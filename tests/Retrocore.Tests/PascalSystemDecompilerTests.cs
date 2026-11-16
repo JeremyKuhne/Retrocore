@@ -94,6 +94,30 @@ public class PascalSystemDecompilerTests
         source.Should().Contain("SYSTEM43(").And.Contain("[0] := CHR(");
     }
 
+    /// <summary>
+    ///  Hints name the system's procedures and their parameters, by number (SYSTEM.43, SYSTEM.43@1): the headings and
+    ///  the calls take the names, and the source still compiles to the same code.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameTheSystemsProcedures()
+    {
+        PascalDecompilerOptions options = new()
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["SYSTEM.2"] = "EXECERROR",
+                ["SYSTEM.43"] = "FIXNAME",
+                ["SYSTEM.43@1"] = "TITLE",
+                ["SYSTEM.42"] = "EXECERRORS"
+            }
+        };
+
+        string source = RoundTrip(s_systemCallSource, options, out IReadOnlyList<string> warnings);
+        source.Should().Contain("PROCEDURE EXECERROR; FORWARD;\n").And.Contain("PROCEDURE FIXNAME(VAR TITLE: ");
+        source.Should().Contain("FIXNAME(").And.NotContain("SYSTEM43");
+        warnings.Should().Contain(warning => warning.Contains("EXECERRORS for SYSTEM.42 would clash", StringComparison.Ordinal));
+    }
+
     // The Compiler's own IDSEARCH and TREESEARCH, CSP IDS and CSP TRS.
     private const string SearchSource = """
         PROGRAM SEARCH;
@@ -226,6 +250,30 @@ public class PascalSystemDecompilerTests
         string source = RoundTrip(NewVariantSource);
         source.Should().Contain("; 103: (X3N: ARRAY[1..3] OF INTEGER); 104: (X4N: ARRAY[1..4] OF INTEGER) END;");
         source.Should().Contain("NEW(G3, 104);").And.Contain("NEW(G3, 103);");
+    }
+
+    /// <summary>
+    ///  Hints name a record's variants' labels (T2:104), declared as constants, which NEW of the variant takes too,
+    ///  and their padding (T2.X4N), and the source still compiles to the same code.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameVariantsAndTheirPadding()
+    {
+        PascalDecompilerOptions options = new()
+        {
+            Names = new Dictionary<string, string>
+            {
+                ["T2:104"] = "ASIZE",
+                ["T2:103"] = "CSIZE",
+                ["T2:0"] = "WHOLE",
+                ["T2.X4N"] = "AWORDS"
+            }
+        };
+
+        string source = RoundTrip(NewVariantSource, options, out _);
+        source.Should().Contain("CONST\n  (* T2's variants *)\n  WHOLE = 0;\n  CSIZE = 103;\n  ASIZE = 104;\nTYPE");
+        source.Should().Contain("WHOLE: (F0: INTEGER;").And.Contain("ASIZE: (AWORDS: ARRAY[1..4] OF INTEGER)\n");
+        source.Should().Contain("NEW(G3, ASIZE);").And.Contain("NEW(G3, CSIZE);");
     }
 
     /// <summary>

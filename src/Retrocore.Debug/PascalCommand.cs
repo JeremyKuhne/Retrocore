@@ -48,6 +48,7 @@ internal static partial class PascalCommand
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
+               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--iie]
                --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
@@ -503,12 +504,48 @@ internal static partial class PascalCommand
             rest.RemoveRange(at, 2);
         }
 
+        int includes = rest.IndexOf("--includes");
+        if (includes >= 0)
+        {
+            if (includes + 1 >= rest.Count) { return Fail(Usage, code: 2); }
+            string folder = rest[includes + 1];
+            rest.RemoveRange(includes, 2);
+            return rest is [string main, string bootDisk, string compilerDisk, string written]
+                ? CompileFiles(main, folder, bootDisk, compilerDisk, written, model)
+                : Fail(Usage, code: 2);
+        }
+
         return rest switch
         {
             [string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null, units, model),
             [string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing, units, model),
             _ => Fail(Usage, code: 2)
         };
+    }
+
+    // Compiles a main file and the files a folder holds, which it includes by name: each goes on a volume with room.
+    private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model)
+    {
+        Dictionary<string, string> included = new(StringComparer.OrdinalIgnoreCase);
+        EnumerationOptions texts = new() { MatchCasing = MatchCasing.CaseInsensitive };
+        foreach (string path in Directory.EnumerateFiles(folder, "*.text", texts))
+        {
+            if (Path.GetFullPath(path) != Path.GetFullPath(main))
+            {
+                included[Path.GetFileName(path)] = File.ReadAllText(path);
+            }
+        }
+
+        (byte[]? code, string screen) = EmulatedPascalCompiler.CompileFiles(File.ReadAllText(main), included, boot, compiler, roms: null, model);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Compiler stopped with an error.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes, from {main} and {included.Count} included files.");
+        return 0;
     }
 
     private static int Compile(string source, string boot, string compiler, string output, string? listing, Dictionary<string, byte[]> units, Apple2Model model)

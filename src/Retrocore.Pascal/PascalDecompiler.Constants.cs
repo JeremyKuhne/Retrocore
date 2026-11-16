@@ -76,6 +76,21 @@ public sealed partial class PascalDecompiler
     // the elements of a set type.
     private TypeNode? Valued(string key, Dictionary<string, TypeNode> byName)
     {
+        // A field's integer view, T35.F2.I: a type of its own, for the uses of that word only.
+        Match view = ViewHint().Match(key);
+        if (view.Success)
+        {
+            if (!byName.TryGetValue(view.Groups["type"].Value, out TypeNode? holder)
+                || FieldOffset(holder, view.Groups["field"].Value) is not { } viewed)
+            {
+                return null;
+            }
+
+            TypeNode integer = TypeNode.Scalar(ScalarKind.Integer);
+            _viewValues[(holder.Find(), viewed)] = integer;
+            return integer;
+        }
+
         if (FieldKey(key) is ({ } typeName, { } field))
         {
             return byName.TryGetValue(typeName, out TypeNode? record) ? FieldType(record, field) : null;
@@ -126,6 +141,48 @@ public sealed partial class PascalDecompiler
         return null;
     }
 
+    // The integer views of words used both ways whose values are named, by the record and the word they are at
+    // (T35.F2.I, an ATTR's CVAL read as its ACCESS): each is a type of its own, which _valueNames names.
+    private readonly Dictionary<(TypeNode Record, int Offset), TypeNode> _viewValues = [];
+
+    // While a constant set is written, the type its members are written as: the elements of the set it is compared
+    // with, joined with or passed for, whose values are named.
+    private TypeNode? _elementOverride;
+
+    // Whether a type's values are named.
+    private bool ValueNamed(TypeNode? type) => type is not null && _valueNames.ContainsKey(type.Find());
+
+    // The type of a word's integer view whose values are named, where an expression loads one.
+    private TypeNode? ViewValued(Expr expression) =>
+        expression is Load { Designator: var designator } && IsPunned(designator.Type) ? ViewValued(designator) : null;
+
+    private TypeNode? ViewValued(Designator designator) => designator switch
+    {
+        FieldDesignator field => _viewValues.GetValueOrDefault((field.Record.Type.Find(), field.Offset)),
+        VariableDesignator { Variable: { Container: { } container } word } =>
+            _viewValues.GetValueOrDefault((container.Type.Find(), word.FieldOffset)),
+        _ => null
+    };
+
+    // A record's field's word, by the field's name as the decompiler gives it.
+    private int? FieldOffset(TypeNode record, string field)
+    {
+        TypeNode root = record.Find();
+        IEnumerable<int> offsets = (root.Fields?.Keys ?? Enumerable.Empty<int>()).Union(root.Variants?.Keys ?? Enumerable.Empty<int>());
+        foreach (int offset in offsets)
+        {
+            for (int index = 0; index < root.Alternatives(offset).Count; index++)
+            {
+                if (string.Equals(OwnFieldName(root, offset, index), field, StringComparison.OrdinalIgnoreCase))
+                {
+                    return offset;
+                }
+            }
+        }
+
+        return null;
+    }
+
     // A value's name, where its type's values are named.
     private string? ValueName(int value, TypeNode? type) =>
         type is not null && _valueNames.TryGetValue(type.Find(), out IReadOnlyList<string>? names) && value >= 0 && value < names.Count && names[value].Length > 0
@@ -155,8 +212,46 @@ public sealed partial class PascalDecompiler
             if (line.Length > 0) { lines.Add($"  {line}"); }
         }
 
+        foreach (IGrouping<string, KeyValuePair<(string Type, int Label), string>> type in _labelNames.GroupBy(label => label.Key.Type))
+        {
+            lines.Add($"  (* {_types.FirstOrDefault(named => _typeKeys.GetValueOrDefault(named) == type.Key)?.Name ?? type.Key}'s variants *)");
+            lines.AddRange(type.OrderBy(label => label.Key.Label).Select(label => $"  {label.Value} = {label.Key.Label.ToString(CultureInfo.InvariantCulture)};"));
+        }
+
         return string.Concat(lines.Select(line => $"{line}\n"));
     }
+
+    // The names the hints give records' variants' labels, by the decompiler's names for their types and the labels:
+    // T2:109 (NEW's variant 9 words long).
+    private readonly SortedDictionary<(string Type, int Label), string> _labelNames = [];
+
+    // Names the labels of records' variants as the hints do, each a constant unlike every other name the source has.
+    private void NameVariantLabels(HashSet<string> taken)
+    {
+        foreach ((string key, string given) in _options.Names)
+        {
+            Match match = LabelHint().Match(key);
+            if (!match.Success || !_typeKeys.ContainsValue(match.Groups["type"].Value.ToUpperInvariant())) { continue; }
+
+            int label = int.Parse(match.Groups["label"].Value, CultureInfo.InvariantCulture);
+            if (Unique(given, key, taken, out string name))
+            {
+                _labelNames[(match.Groups["type"].Value.ToUpperInvariant(), label)] = name;
+            }
+        }
+    }
+
+    // A variant's label, by its name where the hints give one.
+    private string VariantLabel(TypeNode record, int label) =>
+        _typeKeys.TryGetValue(record.Find(), out string? type) && _labelNames.TryGetValue((type, label), out string? name)
+            ? name
+            : label.ToString(CultureInfo.InvariantCulture);
+
+    [GeneratedRegex("^(?<type>T[0-9]+)\\.(?<field>[A-Za-z][A-Za-z0-9]*)\\.(?<view>[A-Za-z][A-Za-z0-9]*)$", RegexOptions.IgnoreCase)]
+    private static partial Regex ViewHint();
+
+    [GeneratedRegex("^(?<type>T[0-9]+):(?<label>[0-9]+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex LabelHint();
 
     // A variable's hint key: its procedure's key, or SYSTEM, an at sign, and its word.
     [GeneratedRegex("^(?<owner>.+)@(?<word>\\$[0-9A-Fa-f]+|[0-9]+)$")]

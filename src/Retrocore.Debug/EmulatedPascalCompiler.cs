@@ -162,6 +162,14 @@ internal static partial class EmulatedPascalCompiler
         // Apple Pascal 1.0's APPLE1 comes with a workfile, which C(ompile) would take without asking.
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
         (byte[] sources, byte[] codes) = Volumes(source, boot);
+        byte[]? code = CompileFromVolumes(sources, codes, boot, compilerDisk, roms, model, out screen);
+        if (code is not null) { RestoreAlignment(code, source); }
+        return code;
+    }
+
+    // Compiles SOURCE:PROGRAM to CODE:PROGRAM, SOURCE: and CODE: in a second Disk II in slot 5.
+    private static byte[]? CompileFromVolumes(byte[] sources, byte[] codes, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
+    {
         EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
         system.Type("C");
         if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
@@ -185,9 +193,7 @@ internal static partial class EmulatedPascalCompiler
         PascalVolume volume = system.EjectSlot5(drive: 2);
         if (!volume.Files.Any(file => file.Name == "PROGRAM.CODE")) { return null; }
 
-        byte[] code = Trimmed(volume.ReadFile("PROGRAM.CODE"));
-        RestoreAlignment(code, source);
-        return code;
+        return Trimmed(volume.ReadFile("PROGRAM.CODE"));
     }
 
     // A code file without the blocks of zeros after what the Compiler wrote: the file keeps as many blocks as the

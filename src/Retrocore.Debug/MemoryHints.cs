@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -116,12 +117,22 @@ internal sealed class MemoryHints
     /// <param name="kind">
     ///  <c>code</c>, which starts code at <paramref name="start"/>; <c>data</c>; or <c>clear</c>.
     /// </param>
-    internal void Mark(string space, int start, int length, string kind)
+    /// <param name="size">
+    ///  The bytes of the instruction at an address, so code marked takes its whole instruction out of the data, and
+    ///  data marked takes out each instruction marked to start that would run into it.
+    /// </param>
+    internal void Mark(string space, int start, int length, string kind, Func<int, int> size)
     {
-        MemoryHintSpace marks = In(space);
-        int end = start + length;
+        if (kind is not ("code" or "data" or "clear"))
+        {
+            throw new ArgumentException("A mark is code, data or clear.", nameof(kind));
+        }
 
-        // A mark replaces what the range had: its data, and the code that starts in it.
+        MemoryHintSpace marks = In(space);
+        int end = kind == "code" ? Math.Min(0x10000, start + Math.Max(1, size(start))) : start + length;
+
+        // A mark replaces what the range had: its data, and the code whose instruction is in it.
+        marks.Code.RemoveWhere(address => address < end && address + Math.Max(1, size(address)) > start);
         List<(int Start, int Length)> kept = [];
         foreach ((int from, int count) in marks.Data)
         {
@@ -131,10 +142,8 @@ internal sealed class MemoryHints
 
         marks.Data.Clear();
         marks.Data.AddRange(kept);
-        marks.Code.RemoveWhere(address => address >= start && address < end);
         if (kind == "code") { marks.Code.Add(start); }
         else if (kind == "data") { marks.Data.Add((start, length)); }
-        else if (kind != "clear") { throw new ArgumentException("A mark is code, data or clear.", nameof(kind)); }
 
         // Data next to data is one range.
         marks.Data.Sort();
@@ -156,10 +165,31 @@ internal sealed class MemoryHints
     /// <param name="space">The bank's name, or empty for memory as the CPU maps it.</param>
     /// <param name="address">The address.</param>
     /// <param name="name">The name, or empty to take it away.</param>
+    /// <exception cref="ArgumentException">
+    ///  The name is not one the disassembler takes, a plain native identifier, or another address in the space has it.
+    /// </exception>
     internal void Name(string space, int address, string name)
     {
-        if (name.Length == 0) { In(space).Names.Remove(address); }
-        else { In(space).Names[address] = name; }
+        if (name.Length == 0)
+        {
+            In(space).Names.Remove(address);
+            return;
+        }
+
+        if (!Disassembler.IsSymbolName(name))
+        {
+            throw new ArgumentException($"{name} is not a name the disassembler takes; use a native identifier, such as MYTABLE.", nameof(name));
+        }
+
+        foreach ((int other, string taken) in In(space).Names)
+        {
+            if (other != address && string.Equals(taken, name, StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"${other:X4} is already named {name}.", nameof(name));
+            }
+        }
+
+        In(space).Names[address] = name;
     }
 
     /// <summary>

@@ -326,7 +326,23 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 }
                                 args[naming ? "name" : "comment"] = text;
                             }
-                            await reply(await session.customRequest("retro/memory/mark", args));
+                            let marked = await session.customRequest("retro/memory/mark", args) as { needsFile?: boolean; path?: string };
+                            if (marked.needsFile) {
+                                // A launch with no program or source to keep marks beside asks where, once.
+                                const chosen = await vscode.window.showSaveDialog({
+                                    title: "Keep marks, names and comments in",
+                                    filters: { "Hints": ["json"] },
+                                    saveLabel: "Keep here"
+                                });
+                                if (chosen === undefined) {
+                                    await reply({ cancelled: true });
+                                    break;
+                                }
+                                marked = await session.customRequest("retro/memory/mark", { ...args, hints: chosen.fsPath }) as { path?: string };
+                            }
+                            await reply(marked);
+                            // Other editors on the same space show the same labels and listing.
+                            others(editor, { type: "marked" });
                             break;
                         }
                         case "open": {

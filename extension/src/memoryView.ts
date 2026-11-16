@@ -677,19 +677,29 @@ function selectLine(address, size) {
     moveTo(address, true, false);
 }
 
-// The comment the listing shows at an address, or none.
+// The comment the hints file gives an address, as the listing line holding it says, or none.
 function commentAt(address) {
-    const line = listingLines.find(item => item.address === address);
-    return line && line.comment ? line.comment : "";
+    const line = listingLines.find(item => address >= item.address && address < item.address + item.size);
+    const found = line && line.comments ? line.comments.find(item => item.address === address) : undefined;
+    return found ? found.text : "";
 }
 
-// Marks the selection as code or data, or names or comments on its first byte, in the hints file: the extension
-// asks for a name's or comment's text, and the labels and listing are read again.
+// Marks the selection as data or neither, or starts code, names or comments at the cursor, in the hints file: the
+// extension asks for a name's or comment's text, and the labels and listing are read again.
 async function mark(fields) {
-    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
+    const ranged = fields.kind === "data" || fields.kind === "clear";
+    const low = ranged ? Math.min(cursor, anchor) : cursor, high = ranged ? Math.max(cursor, anchor) : cursor;
     try {
         const result = await request({ type: "mark", address: low, count: high - low + 1, ...fields });
         if (result && result.cancelled) return;
+        if (ranged) {
+            // Decode from here's starts give way to the mark, as the hints file's do: one in the range, or whose
+            // instruction runs into it.
+            for (const start of Array.from(forcedStarts)) {
+                const line = listingLines.find(item => item.address === start);
+                if (start <= high && (start >= low || (line !== undefined && start + line.size > low))) forcedStarts.delete(start);
+            }
+        }
         marks++;
         await loadExtras();
         render();
@@ -1237,8 +1247,8 @@ side.addEventListener("click", event => {
             case "markCode": void mark({ kind: "code" }); break;
             case "markData": void mark({ kind: "data" }); break;
             case "unmark": void mark({ kind: "clear" }); break;
-            case "name": void mark({ what: "name", value: labelAt.get(Math.min(cursor, anchor)) ?? "" }); break;
-            case "comment": void mark({ what: "comment", value: commentAt(Math.min(cursor, anchor)) }); break;
+            case "name": void mark({ what: "name", value: labelAt.get(cursor) ?? "" }); break;
+            case "comment": void mark({ what: "comment", value: commentAt(cursor) }); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1495,6 +1505,10 @@ window.addEventListener("message", event => {
         generation++;
         pages.fill(0);
         render();
+    } else if (message.type === "marked") {
+        // Another editor on this space marked, named or commented on memory.
+        marks++;
+        void loadExtras().then(() => render());
     } else if (message.type === "frozen") {
         // Another editor on this space froze or thawed bytes.
         frozen = new Map(message.frozen.map(item => [item.address, item.value]));

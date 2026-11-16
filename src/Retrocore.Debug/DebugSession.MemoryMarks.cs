@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
+using Retrocore.Isa;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -10,7 +12,7 @@ namespace Retrocore.Debug;
 internal sealed partial class DebugSession
 {
     // The hints file marks are kept in, or null where the launch names none and has no program or source to put one
-    // beside; and what it holds.
+    // beside, until the first mark chooses one; and what it holds.
     private string? _hintsPath;
     private MemoryHints _hints = MemoryHints.Empty;
 
@@ -24,25 +26,40 @@ internal sealed partial class DebugSession
         string? path = args.String("hints") ?? (beside is null ? null : Path.ChangeExtension(beside, ".hints.json"));
         _hintsPath = path is null ? null : Path.GetFullPath(path);
         _hints = MemoryHints.Empty;
-        if (_hintsPath is null || !File.Exists(_hintsPath)) { return; }
+        if (_hintsPath is null) { return; }
         try
         {
-            _hints = MemoryHints.Read(_hintsPath);
+            _hints = ReadHints(_hintsPath);
         }
-        catch (InvalidDataException exception) { Unreadable(exception); }
-        catch (System.Text.Json.JsonException exception) { Unreadable(exception); }
-        catch (IOException exception) { Unreadable(exception); }
-        catch (InvalidOperationException exception) { Unreadable(exception); }
-        catch (FormatException exception) { Unreadable(exception); }
-        catch (OverflowException exception) { Unreadable(exception); }
+        catch (InvalidDataException exception)
+        {
+            Notify("output", new JsonObject
+            {
+                ["category"] = "console",
+                ["output"] = exception.Message + " Marks are left out until it is fixed.\n"
+            });
+        }
     }
 
-    // Says why the hints file could not be read; marks then start a new one there.
-    private void Unreadable(Exception exception) => Notify("output", new JsonObject
+    // Reads a hints file, or nothing where there is none yet.
+    private static MemoryHints ReadHints(string path)
     {
-        ["category"] = "console",
-        ["output"] = $"The hints file {_hintsPath} could not be read, so it starts empty: {exception.Message}\n"
-    });
+        if (!File.Exists(path)) { return MemoryHints.Empty; }
+        try
+        {
+            return MemoryHints.Read(path);
+        }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException
+            or IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or FormatException
+            or OverflowException
+            or InvalidDataException)
+        {
+            throw new InvalidDataException($"The hints file {path} could not be read: {exception.Message}", exception);
+        }
+    }
 
     /// <summary>
     ///  Answers retro/memory/mark: marks a range as code, data or neither, or names or comments on an address, and
@@ -51,8 +68,14 @@ internal sealed partial class DebugSession
     /// <remarks>
     ///  <para>
     ///   One of <c>kind</c> (<c>code</c>, <c>data</c> or <c>clear</c>, for <c>count</c> bytes from <c>address</c>),
-    ///   <c>name</c> or <c>comment</c>; an empty name or comment takes it away. The answer gives the file's
-    ///   <c>path</c>.
+    ///   <c>name</c> or <c>comment</c>; an empty name or comment takes it away. Code marked takes its instruction's
+    ///   bytes out of data, and data marked takes out code whose instruction runs into it.
+    ///  </para>
+    ///  <para>
+    ///   The mark is made to the file as it is now, so marks made elsewhere, or edits to it, are kept; a file that
+    ///   cannot be read is left alone, and the mark fails. A launch with no file to keep marks in answers
+    ///   <c>needsFile</c> and marks nothing until a request gives one as <c>hints</c>. Otherwise the answer gives
+    ///   the file's <c>path</c>.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryMark(JsonObject args)
@@ -65,16 +88,48 @@ internal sealed partial class DebugSession
             throw new ArgumentOutOfRangeException(nameof(args), "A mark covers 1 or more bytes in $0000-$FFFF.");
         }
 
-        string path = _hintsPath ?? throw new InvalidOperationException(
-            "This launch has no program or source to keep marks beside; name a file with the launch's hints setting.");
+        string? path = _hintsPath ?? (args.String("hints") is { Length: > 0 } chosen ? Path.GetFullPath(chosen) : null);
+        if (path is null) { return new JsonObject { ["needsFile"] = true }; }
 
+        // The edit is made to a fresh copy and kept only once it is written.
+        MemoryHints hints = ReadHints(path);
         string space = HintSpace(bank);
-        if (args.String("kind") is { } kind) { _hints.Mark(space, address, count, kind); }
-        else if (args["name"] is not null) { _hints.Name(space, address, (args.String("name") ?? "").Trim()); }
-        else if (args["comment"] is not null) { _hints.Comment(space, address, (args.String("comment") ?? "").Trim()); }
-        else { throw new ArgumentException("A mark gives kind, name or comment."); }
+        if (args.String("kind") is { } kind)
+        {
+            hints.Mark(space, address, count, kind, at => InstructionSize(bank, at));
+        }
+        else if (args["name"] is not null)
+        {
+            hints.Name(space, address, (args.String("name") ?? "").Trim());
+        }
+        else if (args["comment"] is not null)
+        {
+            hints.Comment(space, address, (args.String("comment") ?? "").Trim());
+        }
+        else
+        {
+            throw new ArgumentException("A mark gives kind, name or comment.");
+        }
 
-        _hints.Write(path);
+        hints.Write(path);
+        _hintsPath = path;
+        _hints = hints;
         return new JsonObject { ["path"] = path };
+    }
+
+    // The bytes of the instruction at an address of a space, or 1 where none decodes.
+    private int InstructionSize(DebugMemoryBank? bank, int address)
+    {
+        InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
+        Span<byte> bytes = stackalloc byte[LongestInstruction];
+        int available = 0;
+        while (available < Math.Min(LongestInstruction, 0x10000 - address) && MemoryByte(bank, address + available) is { } value)
+        {
+            bytes[available++] = value;
+        }
+
+        return Disassembler.TryDecode(bytes[..available], (ushort)address, set, out DisassembledInstruction instruction)
+            ? instruction.Size
+            : 1;
     }
 }

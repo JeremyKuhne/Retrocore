@@ -462,6 +462,29 @@ try {
     const hints = JSON.parse(readFileSync(hintsFile, "utf8"));
     assert.deepEqual(hints.names, { "$6500": "MYTABLE", "$FDED": "MYCOUT", "aux:$0400": "AUXTEXT" });
     assert.deepEqual([hints.entries, hints.data, hints.comments], [["$6503"], [{ start: "$6500", length: 3 }], { "$6503": "Marked as code" }]);
+    // A comment inside a data line starts one, and one inside an instruction shows on it.
+    await mark({ address: 0x6501, comment: "Inside" });
+    lines = await listing(0x6500, 3);
+    assert.deepEqual(lines.map(line => [line.address, line.size, line.comment]), [[0x6500, 1, null], [0x6501, 2, "Inside"]], JSON.stringify(lines));
+    await mark({ address: 0x6501, comment: "" });
+    // Data marked wins over a source's instruction.
+    await mark({ address: 0x0300, count: 3, kind: "data" });
+    lines = await listing(0x0300, 3);
+    assert.deepEqual([lines[0].kind, lines[0].guess, lines[0].text.startsWith(".byte")], ["data", false, true], JSON.stringify(lines));
+    await mark({ address: 0x0300, count: 3, kind: "clear" });
+    // A name the disassembler would refuse is refused, as is one another address has.
+    await rejects(mark({ address: 0x6600, name: "my table" }), /not a name/);
+    await rejects(mark({ address: 0x6600, name: "MYTABLE" }), /already named/);
+    // A mark is made to the file as it is now, keeping what was put there since.
+    writeFileSync(hintsFile, JSON.stringify({ ...JSON.parse(readFileSync(hintsFile, "utf8")), noReturn: ["$6600"] }));
+    await mark({ address: 0x6600, name: "LATER" });
+    assert.deepEqual(JSON.parse(readFileSync(hintsFile, "utf8")).noReturn, ["$6600"]);
+    // A file that cannot be read is left alone.
+    const kept = readFileSync(hintsFile, "utf8");
+    writeFileSync(hintsFile, "{ not json");
+    await rejects(mark({ address: 0x6601, name: "BROKEN" }), /could not be read/);
+    assert.equal(readFileSync(hintsFile, "utf8"), "{ not json");
+    writeFileSync(hintsFile, kept);
     // Unmarking and an empty name take them away.
     await mark({ address: 0x6500, count: 4, kind: "clear" });
     await mark({ address: 0xFDED, name: "" });

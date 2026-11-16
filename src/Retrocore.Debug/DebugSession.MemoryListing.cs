@@ -38,8 +38,9 @@ internal sealed partial class DebugSession
     ///  <para>
     ///   Each line has its <c>address</c>, <c>size</c> and <c>text</c>, its <c>kind</c> (<c>code</c> or <c>data</c>
     ///   from the sources, <c>unknown</c> where none describes it), the <c>label</c> at its address, the
-    ///   <c>target</c> an operand names, which the text gives by label where it has one, and the source
-    ///   <c>path</c> and <c>line</c>.
+    ///   <c>target</c> an operand names, which the text gives by label where it has one, the source
+    ///   <c>path</c> and <c>line</c>, and the hints file's <c>comment</c> on its bytes, with <c>comments</c> giving
+    ///   each one's address. Data marked in the hints file lists as data over anything the sources say.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryListing(JsonObject args)
@@ -96,10 +97,15 @@ internal sealed partial class DebugSession
         IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
         bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
 
+        // A comment starts a data line, so each shows on the line it is about; one inside an instruction shows on it.
+        IReadOnlyDictionary<int, string> comments = _hints.Comments(space);
+
         GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
         bool Boundary(int address)
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
+            // Marked data starts a line of its own, so no instruction before it runs into it.
+            if (Marked(address) && (address == 0 || !Marked(address - 1))) { return true; }
             DebugPosition? position = Position(address);
             // Where analysis guessed an instruction starts, or its guessed data does, as a pointer's first byte.
             if (position is null)
@@ -171,7 +177,25 @@ internal sealed partial class DebugSession
             int? target = null;
             int start = position?.Data == true ? position.Start ?? -1 : -1;
             int length = position?.Size ?? 0;
-            if (guess == GuessKind.Data && !forced.Contains(address))
+            if (Marked(address) && !forced.Contains(address))
+            {
+                // Data marked in the hints file is data whatever the sources or analysis say, eight bytes a line.
+                kind = "data";
+                guessed = false;
+                size = 1;
+                while (size < DataPerLine
+                    && address + size <= 0xFFFF
+                    && Marked(address + size)
+                    && memory.Readable(address + size)
+                    && !comments.ContainsKey(address + size)
+                    && !Boundary(address + size))
+                {
+                    size++;
+                }
+
+                text = DataText(memory, address, size);
+            }
+            else if (guess == GuessKind.Data && !forced.Contains(address))
             {
                 // Data analysis guessed lists eight bytes a line, a line ending where the guess or the bytes do.
                 size = 1;
@@ -179,6 +203,7 @@ internal sealed partial class DebugSession
                     && address + size <= 0xFFFF
                     && Guessed(address + size) == GuessKind.Data
                     && memory.Readable(address + size)
+                    && !comments.ContainsKey(address + size)
                     && !Boundary(address + size))
                 {
                     size++;
@@ -193,7 +218,7 @@ internal sealed partial class DebugSession
                 size = Math.Min(DataPerLine, Math.Min(start + length, 0x10000) - address);
                 for (int index = 1; index < size; index++)
                 {
-                    if (!memory.Readable(address + index) || Boundary(address + index))
+                    if (!memory.Readable(address + index) || comments.ContainsKey(address + index) || Boundary(address + index))
                     {
                         size = index;
                         break;
@@ -242,8 +267,9 @@ internal sealed partial class DebugSession
                 ["size"] = size,
                 ["text"] = text,
                 ["kind"] = kind,
-                ["guess"] = guessed && position is null && !forced.Contains(address) && !Marked(address),
-                ["comment"] = _hints.Comments(space).TryGetValue(address, out string? comment) ? comment : null,
+                ["guess"] = guessed && position is null && !forced.Contains(address),
+                ["comment"] = LineComment(comments, address, size),
+                ["comments"] = LineComments(comments, address, size),
                 ["label"] = names.TryGetValue(address, out string? label) ? label : null,
                 ["target"] = target,
                 ["path"] = source?.Path,
@@ -254,6 +280,37 @@ internal sealed partial class DebugSession
         }
 
         return new JsonObject { ["lines"] = lines.ToJsonArray() };
+    }
+
+    // The comments on a line's bytes, in order, or null where it has none.
+    private static string? LineComment(IReadOnlyDictionary<int, string> comments, int address, int size)
+    {
+        if (comments.Count == 0) { return null; }
+        List<string> found = [];
+        for (int index = 0; index < size; index++)
+        {
+            if (comments.TryGetValue(address + index, out string? comment)) { found.Add(comment); }
+        }
+
+        return found.Count == 0 ? null : string.Join(" ", found);
+    }
+
+    // Each comment on a line's bytes, as its address and text, so one inside an instruction can be edited; null where
+    // the line has none.
+    private static JsonArray? LineComments(IReadOnlyDictionary<int, string> comments, int address, int size)
+    {
+        if (comments.Count == 0) { return null; }
+        JsonArray? found = null;
+        for (int index = 0; index < size; index++)
+        {
+            if (comments.TryGetValue(address + index, out string? comment))
+            {
+                found ??= [];
+                found.Add((JsonNode)new JsonObject { ["address"] = address + index, ["text"] = comment });
+            }
+        }
+
+        return found;
     }
 
     // Whether an instruction would run over a later boundary, which must start a line of its own.

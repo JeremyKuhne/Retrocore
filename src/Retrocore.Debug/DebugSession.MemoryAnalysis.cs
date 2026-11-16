@@ -66,7 +66,7 @@ internal sealed partial class DebugSession
 
         int[] starts = [.. forced.Where(start => memory.Readable(start)).Order()];
         List<AnalysisRegion> startRegions = StartRegions(image, set, starts, out List<int> after);
-        List<AnalysisRegion> dataRegions = SourceData(position, startRegions, marked);
+        List<AnalysisRegion> dataRegions = SourceData(position, startRegions, marked, memory.Readable);
         int[] data = [.. dataRegions.SelectMany(region => new[] { (int)region.Address, region.Length })];
         int[] ordered =
         [
@@ -245,7 +245,8 @@ internal sealed partial class DebugSession
     private List<AnalysisRegion> SourceData(
         Func<int, DebugPosition?> position,
         List<AnalysisRegion> startRegions,
-        IReadOnlyList<(int Start, int Length)> marked)
+        IReadOnlyList<(int Start, int Length)> marked,
+        Func<int, bool> readable)
     {
         List<AnalysisRegion> regions = [];
         IEnumerable<int> candidates = _debug.Modules.SelectMany(module => module.DataStatements).Select(start => (int)start);
@@ -262,20 +263,24 @@ internal sealed partial class DebugSession
             claimed = end;
         }
 
-        // Data marked in the hints file, where neither a start's instruction nor the sources' data already is.
+        // Data marked in the hints file, where neither a start's instruction nor the sources' data already is, in
+        // pieces where bytes cannot be read, as each readable run is analyzed alone.
         foreach ((int start, int length) in marked)
         {
             int end = Math.Min(0x10000, start + length);
             for (int at = start; at < end;)
             {
-                if (startRegions.Any(region => Overlaps(region, at, 1)) || Inside(regions, at))
+                if (!readable(at) || startRegions.Any(region => Overlaps(region, at, 1)) || Inside(regions, at))
                 {
                     at++;
                     continue;
                 }
 
                 int stop = at;
-                while (stop < end && !startRegions.Any(region => Overlaps(region, stop, 1)) && !Inside(regions, stop))
+                while (stop < end
+                    && readable(stop)
+                    && !startRegions.Any(region => Overlaps(region, stop, 1))
+                    && !Inside(regions, stop))
                 {
                     stop++;
                 }

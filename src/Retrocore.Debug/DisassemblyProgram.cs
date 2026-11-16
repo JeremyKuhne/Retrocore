@@ -31,20 +31,40 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
     internal AnalysisProject Project(IReadOnlyDictionary<ushort, string> machine)
     {
         AnalysisProject project = new(Image, Origin, Cpu);
-        foreach (ushort entry in Hints.Entries.Where(entry => !project.EntryPoints.Contains(entry)))
-        {
-            project.EntryPoints.Add(entry);
-        }
 
+        // Marks made while debugging can be anywhere in memory, such as on a ROM routine the program calls; only
+        // what falls in the image is the disassembler's.
         foreach ((ushort start, int length) in Hints.Data)
         {
-            project.Regions.Add(new AnalysisRegion(start, length, AnalysisRegionKind.Data));
+            int from = Math.Max(start, Origin);
+            int to = Math.Min(start + length, Origin + Image.Length);
+            if (from < to)
+            {
+                project.Regions.Add(new AnalysisRegion((ushort)from, to - from, AnalysisRegionKind.Data));
+            }
+        }
+
+        // An origin marked as data is not where code starts.
+        if (InData(project, (ushort)Origin)) { project.EntryPoints.Remove((ushort)Origin); }
+
+        IEnumerable<ushort> entries = Hints.Entries.Where(entry => Contains(entry) && !InData(project, entry));
+        foreach (ushort entry in entries.Where(entry => !project.EntryPoints.Contains(entry)))
+        {
+            project.EntryPoints.Add(entry);
         }
 
         foreach ((ushort address, AnalysisCall call) in Hints.Calls) { project.Calls[address] = call; }
         foreach ((ushort address, string name) in machine) { project.Symbols[address] = name; }
         foreach ((ushort address, string name) in Hints.Names) { project.Symbols[address] = name; }
-        foreach ((ushort address, string comment) in Hints.Comments) { project.Comments[address] = comment; }
+        foreach ((ushort address, string comment) in Hints.Comments.Where(pair => Contains(pair.Key)))
+        {
+            project.Comments[address] = comment;
+        }
+
         return project;
     }
+
+    // Whether the project's pinned data holds an address.
+    private static bool InData(AnalysisProject project, ushort address) => project.Regions.Any(region =>
+        region.Kind == AnalysisRegionKind.Data && address >= region.Address && address < region.Address + region.Length);
 }

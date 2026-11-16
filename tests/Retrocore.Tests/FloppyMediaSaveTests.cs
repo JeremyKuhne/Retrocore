@@ -154,6 +154,15 @@ public sealed class FloppyMediaSaveTests
 
         Action write = () => Jv1Format.Write(disk);
         write.Should().Throw<InvalidOperationException>().WithMessage("JV1 cannot hold all of the disk: *");
+
+        // A last track that ends early, as an image may, saves as long as it was, its sectors all there.
+        byte[] partial = image[..(12 * 256)];
+        FloppyDisk brief = Jv1Format.Read(partial);
+        brief.Write(brief.Track(1, 0)[1], Filled(256, 7), 0xFB);
+        EncodedImage trimmed = Jv1Format.Encode(brief);
+        trimmed.IsLossless.Should().BeTrue();
+        trimmed.Bytes.Length.Should().Be(partial.Length);
+        trimmed.Bytes.AsSpan(11 * 256, 256).ToArray().Should().AllBeEquivalentTo((byte)7);
     }
 
     /// <summary>

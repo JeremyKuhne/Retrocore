@@ -73,6 +73,7 @@ public static class Jv1Format
         FloppyLosses losses = new();
         int cylinders = Math.Max(1, disk.Cylinders);
         byte[] image = new byte[cylinders * TrackSize];
+        int length = image.Length;
         for (int cylinder = 0; cylinder < cylinders; cylinder++)
         {
             if (disk.Track(cylinder, 1).Count != 0) { losses.Add("Side 1's sectors", cylinder); }
@@ -107,10 +108,21 @@ public static class Jv1Format
                 sector.Data.CopyTo(image.AsSpan((cylinder * TrackSize) + (sector.Sector * SectorSize)));
             }
 
-            if (seen.Contains(value: false)) { losses.Add("Sectors 0-9 missing, which JV1 writes as zeros", cylinder); }
+            // The last track ends after its last sector, as a JV1 image may.
+            int end = SectorsPerTrack;
+            if (cylinder == cylinders - 1)
+            {
+                end = Math.Max(1, Array.LastIndexOf(seen, value: true) + 1);
+                length = (cylinder * TrackSize) + (end * SectorSize);
+            }
+
+            if (seen.AsSpan(0, end).Contains(value: false))
+            {
+                losses.Add("Sectors 0-9 missing, which JV1 writes as zeros", cylinder);
+            }
         }
 
-        return new(image, losses.ToList());
+        return new(image[..length], losses.ToList());
     }
 
     /// <summary>

@@ -201,13 +201,19 @@ public sealed partial class PascalDecompiler
         {
             List<Statement> statements = [];
             int at = from;
+            int begun = from;
             while (at < to)
             {
                 PcodeInstruction instruction = _code[at];
                 if (stack.Count == 0)
                 {
+                    begun = at;
                     _boundaries.TryAdd(instruction.Offset, (statements, statements.Count));
-                    if (Loop(ref at, to, statements)) { continue; }
+                    if (Loop(ref at, to, statements))
+                    {
+                        Span(statements, begun, at);
+                        continue;
+                    }
                 }
 
                 int count = statements.Count;
@@ -231,9 +237,24 @@ public sealed partial class PascalDecompiler
                 {
                     if (statements[index].Offset == 0) { statements[index].Offset = instruction.Offset; }
                 }
+
+                Span(statements, begun, at);
             }
 
             return statements;
+        }
+
+        // The statements just made span the p-code from where the stack was last empty to the last one read.
+        private void Span(List<Statement> statements, int begun, int at)
+        {
+            for (int index = statements.Count - 1; index >= 0; index--)
+            {
+                Statement statement = statements[index];
+                if (statement.Start is not null && statement.End is not null) { break; }
+
+                statement.Start ??= _code[begun].Offset;
+                statement.End ??= _code[at - 1].Offset;
+            }
         }
 
         // A loop whose head is here: REPEAT, WHILE or FOR.
@@ -328,7 +349,8 @@ public sealed partial class PascalDecompiler
             body.RemoveAt(body.Count - 1);
             return new ForStatement(control, startAssignment.Value, limitAssignment.Value, down, body)
             {
-                Offset = startAssignment.Offset
+                Offset = startAssignment.Offset,
+                Start = startAssignment.Start
             };
         }
 

@@ -15,5 +15,15 @@ public sealed partial class PascalDecompiler
         ///  Gets or sets the offset of its first p-code.
         /// </summary>
         public int Offset { get; set; }
+
+        /// <summary>
+        ///  Gets or sets the offset of the first p-code of the code it was decompiled from, or null where unknown.
+        /// </summary>
+        public int? Start { get; set; }
+
+        /// <summary>
+        ///  Gets or sets the offset of the last p-code of the code it was decompiled from, or null where unknown.
+        /// </summary>
+        public int? End { get; set; }
     }
 }

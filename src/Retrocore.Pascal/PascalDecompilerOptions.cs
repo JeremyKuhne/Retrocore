@@ -51,4 +51,11 @@ public sealed record PascalDecompilerOptions
     ///  field, <c>Tn</c> for a type, or a set type's elements.
     /// </summary>
     public IReadOnlyDictionary<string, string> Values { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    ///  Gets a value indicating whether each statement is written below the p-code it was decompiled from, in a
+    ///  <c>{...}</c> comment: an IF's or a loop's test above it, and what the code has after its statements, such as a
+    ///  REPEAT's test or a loop's jump back, below them.
+    /// </summary>
+    public bool PcodeComments { get; init; }
 }

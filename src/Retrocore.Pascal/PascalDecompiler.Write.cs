@@ -92,7 +92,9 @@ public sealed partial class PascalDecompiler
             Declarations(Program);
             Nested(Program);
             Line("BEGIN");
+            _pcodeNext = 0;
             Statements(Program, Program.Body);
+            PcodeTail(Program);
             Line("END.");
         }
 
@@ -162,7 +164,9 @@ public sealed partial class PascalDecompiler
         Nested(Program);
         _indent--;
         Line("BEGIN");
+        _pcodeNext = 0;
         Statements(Program, Program.Body);
+        PcodeTail(Program);
         Line("END;");
         Line("BEGIN");
         Line("END.");
@@ -362,7 +366,9 @@ public sealed partial class PascalDecompiler
         // Each segment in an R option of its own: Apple III Pascal 1.0's Compiler takes only the first of a list.
         IEnumerable<string> resident = procedure.Resident.Select(number => $"(*$R {ResidentName(procedure, number)}*)");
         Line(procedure.Resident.Count == 0 ? "BEGIN" : $"BEGIN {string.Concat(resident)}");
+        _pcodeNext = 0;
         Statements(procedure, procedure.Body);
+        PcodeTail(procedure);
         Line("END;");
     }
 
@@ -1383,6 +1389,7 @@ public sealed partial class PascalDecompiler
                 Separate(lines, first);
                 Check(io.Checked, lines);
                 if (RangeChecked(statement) is { } ioRange) { CheckRange(ioRange, lines); }
+                PcodeLines(procedure, statements[end].End, lines);
                 lines.Add(Io(name, io.Arguments[0], arguments));
                 index = end;
                 continue;
@@ -1491,7 +1498,7 @@ public sealed partial class PascalDecompiler
         for (int index = lines.Count - 1; index >= first; index--)
         {
             string line = lines[index].TrimEnd('\n');
-            if (line.TrimStart().StartsWith("(*$", StringComparison.Ordinal)) { continue; }
+            if (line.TrimStart().StartsWith("(*$", StringComparison.Ordinal) || IsPcodeComment(line)) { continue; }
             if (!line.EndsWith(':') && !line.EndsWith(';')) { lines[index] = line + ";\n"; }
             return;
         }
@@ -1543,6 +1550,13 @@ public sealed partial class PascalDecompiler
     private string Indented(string text) => new string(' ', _indent * 2) + text + "\n";
 
     private void WriteStatement(Procedure procedure, Statement statement, List<string> lines)
+    {
+        PcodeLines(procedure, PcodeHead(statement), lines);
+        WriteStatementText(procedure, statement, lines);
+        if (statement is not (LabelStatement or OptionStatement)) { PcodeLines(procedure, statement.End, lines); }
+    }
+
+    private void WriteStatementText(Procedure procedure, Statement statement, List<string> lines)
     {
         switch (statement)
         {
@@ -1639,6 +1653,9 @@ public sealed partial class PascalDecompiler
             case RepeatStatement loop:
                 lines.Add(Indented("REPEAT"));
                 Inner(procedure, loop.Body, lines);
+                _indent++;
+                PcodeLines(procedure, loop.End, lines);
+                _indent--;
                 lines.Add(Indented($"UNTIL {Condition(loop.Condition)}"));
                 break;
             case ForStatement loop:

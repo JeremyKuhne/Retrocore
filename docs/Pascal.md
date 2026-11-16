@@ -130,7 +130,7 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   whole code file as source that assembles back to the same bytes, and checks it does (below); `--pascal assemble source.asm output.code` assembles such a source;
 - `--pascal sos output NAME [--boot disk] --from disk FILE...` builds a SOS volume from other SOS disks' files, as
   above.
-- `--pascal decompile code [--library library] [--listing listing] [--hints hints.json] [output.text]` decompiles a
+- `--pascal decompile code [--library library] [--listing listing] [--hints hints.json] [--pcode] [output.text]` decompiles a
   program back to Pascal (below);
 - `--pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit NAME.CODE]...` compiles a
   source with Apple Pascal's own Compiler, on an emulated Apple II, and writes the listing the source asks for with
@@ -223,6 +223,10 @@ views of a word a record keeps as integer, pointer or bytes (`.I`, `.P`, `.B`) b
 of a variant record's variants, by which `NEW` makes one as short as its variant, are named by `T2:104`, declared as
 `CONST`s above the types and written in the record's `CASE` and in `NEW(P, LABEL)`; the padding fields a variant
 keeps (`X4N`) are named as other fields are.
+With `--pcode`, each statement is written below the p-code it was decompiled from, in a brace comment (`{SLDO4;
+SLDC 10; LESI; FJP $0019}` above a `WHILE`): a compound statement's own code (an IF's or a loop's test, a CASE's
+selector) above it, and what follows its statements (a loop's jump back, a REPEAT's test) below them. Comments
+compile to nothing, so the source still compiles to the same code.
 Apple Pascal 1.3's Compiler, named and commented so, is kept outside this repository.
 
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or

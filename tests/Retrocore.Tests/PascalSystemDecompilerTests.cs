@@ -253,6 +253,43 @@ public class PascalSystemDecompilerTests
     }
 
     /// <summary>
+    ///  With <see cref="PascalDecompilerOptions.PcodeComments"/>, each statement is written below its p-code in a
+    ///  brace comment, a loop's test above it and its jump back below its body, and the source compiles the same.
+    /// </summary>
+    [TestMethod]
+    public void StatementsAreWrittenBelowTheirPcode()
+    {
+        const string Probe = """
+            PROGRAM PC;
+            VAR I, J: INTEGER;
+            BEGIN
+              I := 1;
+              J := 0;
+              WHILE I < 10 DO
+                BEGIN
+                  J := J + I;
+                  I := I + 1
+                END;
+              REPEAT
+                I := I - 1
+              UNTIL I = 0;
+              WRITELN('A, B', J)
+            END.
+            """;
+
+        string source = RoundTrip(Probe, new PascalDecompilerOptions { PcodeComments = true }, out _);
+        string[] lines = [.. source.Split('\n').Select(line => line.Trim())];
+        int loop = Array.FindIndex(lines, line => line.StartsWith("WHILE ", StringComparison.Ordinal));
+        loop.Should().BePositive(source);
+        lines[loop - 1].Should().MatchRegex(@"^\{.*LESI; FJP \$[0-9A-F]{4}\}$", source);
+        lines.Should().Contain("{UJP $0008}", source);
+        int until = Array.FindIndex(lines, line => line.StartsWith("UNTIL ", StringComparison.Ordinal));
+        lines[until - 1].Should().MatchRegex(@"^\{.*EQUI; FJP \$[0-9A-F]{4}\}$", source);
+        source.Should().Contain("LSA 'A, B'", source);
+        lines[^3].Should().EndWith("RBP 0}", source);
+    }
+
+    /// <summary>
     ///  Hints name a record's variants' labels (T2:104), declared as constants, which NEW of the variant takes too,
     ///  and their padding (T2.X4N), and the source still compiles to the same code.
     /// </summary>

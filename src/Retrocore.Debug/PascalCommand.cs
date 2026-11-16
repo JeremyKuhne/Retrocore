@@ -46,7 +46,7 @@ internal static partial class PascalCommand
                --pascal disassemble (file.code | disk NAME) [--library L] [--listing L] [--hints file.json] output.asm
                --pascal assemble source.asm output.code
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
-               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [output.text]
+               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [--pcode] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
                --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--iie]
                --pascal assembly (file.code | disk NAME) output.text
@@ -352,6 +352,7 @@ internal static partial class PascalCommand
         byte[]? library = Option(rest, "--library");
         byte[]? listing = Option(rest, "--listing");
         byte[]? hints = Option(rest, "--hints");
+        bool pcode = rest.Remove("--pcode");
 
         if (rest.Count == 0) { return Fail(Usage, code: 2); }
         bool onDisk = IsDisk(rest[0]);
@@ -371,7 +372,8 @@ internal static partial class PascalCommand
         PascalDecompilerOptions options = new()
         {
             Library = library is null ? null : PascalLibrary.Read(library),
-            Listing = listing is null ? null : PascalListing.Parse(Text(listing))
+            Listing = listing is null ? null : PascalListing.Parse(Text(listing)),
+            PcodeComments = pcode
         };
 
         if (hints is not null)

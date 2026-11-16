@@ -140,10 +140,21 @@ public sealed class ProFileDrive : IBlockStorage, IMediumSlot
     /// <inheritdoc/>
     public MediaState? Media => _image is null
         ? null
-        : new(_label, _format, _image.IsReadOnly, _image is MemoryBlockDevice memory ? memory.IsDirty : _changed);
+        : new(_label, _format, _image.IsReadOnly, _image switch
+        {
+            MemoryBlockDevice memory => memory.IsDirty,
+            Disk35Disk disk => disk.IsDirty,
+            _ => _changed,
+        });
 
     /// <inheritdoc/>
-    public IMedium? Medium => _image as IMedium;
+    /// <remarks>
+    ///  <para>
+    ///   The image is a medium a host saves when it is one of the block media, a <see cref="MemoryBlockDevice"/> or a
+    ///   <see cref="Disk35Disk"/>; any other block device is not.
+    ///  </para>
+    /// </remarks>
+    public IMedium? Medium => _image is MemoryBlockDevice or Disk35Disk ? (IMedium)_image : null;
 
     /// <inheritdoc/>
     public int MountGeneration { get; private set; } = MountGenerations.Next();
@@ -235,14 +246,22 @@ public sealed class ProFileDrive : IBlockStorage, IMediumSlot
     /// <inheritdoc/>
     public void Saved(string label, string format, bool whole = true)
     {
-        MemoryBlockDevice image = _image as MemoryBlockDevice ?? throw new InvalidOperationException($"{Info.Name} is empty.");
-        if (whole)
+        switch (_image)
         {
-            image.MarkSaved();
-        }
-        else
-        {
-            image.MarkChanged();
+            case MemoryBlockDevice memory when whole:
+                memory.MarkSaved();
+                break;
+            case MemoryBlockDevice memory:
+                memory.MarkChanged();
+                break;
+            case Disk35Disk disk when whole:
+                disk.MarkSaved();
+                break;
+            case Disk35Disk disk:
+                disk.MarkChanged();
+                break;
+            default:
+                throw new InvalidOperationException(_image is null ? $"{Info.Name} is empty." : $"{Info.Name}'s image cannot be saved.");
         }
 
         _label = label;

@@ -290,6 +290,54 @@ public sealed class BlockMediaSaveTests
         drive.Media?.Label.Should().Be(path);
     }
 
+    /// <summary>
+    ///  A ProFile holding a 3.5-inch disk saves it as it saves its own images, and the disk is unchanged after.
+    /// </summary>
+    [TestMethod]
+    public void ProFileSavesA35Disk()
+    {
+        string path = Path.Join(s_root, $"profile35-{Guid.NewGuid():N}.2mg");
+        File.WriteAllBytes(path, TwoImg(blocks: 1600, locked: false, out _));
+        Disk35Disk disk = Disk35Disk.Load(File.ReadAllBytes(path));
+        ProFileDrive drive = ProFile();
+        drive.Insert(disk, path, "2MG");
+        MediaActions.Register(disk, path, BlockImageCodec.For(".2mg"), File.ReadAllBytes(path));
+        drive.Medium.Should().BeSameAs(disk);
+
+        Write(disk, block: 12, 0x5C);
+        drive.Media?.Changed.Should().BeTrue();
+        string copy = Path.Join(s_root, $"profile35-{Guid.NewGuid():N}.po");
+        JsonObject saveAs = Speaking();
+        saveAs["path"] = copy;
+        MediaActions.Save(drive, saveAs).String("outcome").Should().Be("saved");
+        drive.Media?.Changed.Should().BeFalse();
+        drive.Media?.Label.Should().Be(copy);
+        File.ReadAllBytes(copy).AsSpan(12 * 512, 512).ToArray().Should().AllBeEquivalentTo((byte)0x5C);
+    }
+
+    /// <summary>
+    ///  Slot 7's image moves with a Save As, and the machine built again takes the launch with it there: no insert
+    ///  puts it back.
+    /// </summary>
+    [TestMethod]
+    public void Slot7SaveAsMovesItsLaunch()
+    {
+        (string path, _) = Image("launch.po", blocks: 280);
+        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
+        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
+        JsonObject launch = new() { ["machine"] = "apple2", ["diskImage"] = path };
+        LaunchMedia.Current([storage], launch).Should().BeSameAs(launch, "slot 7 is where the launch put it");
+
+        string copy = Path.Join(s_root, $"moved-{Guid.NewGuid():N}.2mg");
+        JsonObject saveAs = Speaking();
+        saveAs["path"] = copy;
+        MediaActions.Save(storage, saveAs).String("outcome").Should().Be("saved");
+        JsonObject moved = LaunchMedia.Current([storage], launch);
+        moved.String("diskImage").Should().Be(copy);
+        moved.String("machine").Should().Be("apple2");
+        launch.String("diskImage").Should().Be(path, "the launch it came from is not changed");
+    }
+
     // A ProFile on no card, with a clock that never moves.
     private static ProFileDrive ProFile() => new("slot4profile", ".PROFILE", "ProFile card", () => 0, activityTime: 1);
 

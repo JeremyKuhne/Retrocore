@@ -46,6 +46,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\JsonArgs.cs" Link="JsonArgs.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\FileRevision.cs" Link="FileRevision.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\LocalData.cs" Link="LocalData.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\LaunchMedia.cs" Link="LaunchMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ImageWrite.cs" Link="ImageWrite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Overwrite.cs" Link="Overwrite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ImageWriter.cs" Link="ImageWriter.cs" />

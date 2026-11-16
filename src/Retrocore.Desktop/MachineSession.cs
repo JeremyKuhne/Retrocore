@@ -93,7 +93,7 @@ internal sealed class MachineSession : DisposableBase
         if (!Host.Running) { return; }
         Host.SaveRecordings();
         JsonObject saved = Host.Capture();
-        Replace(Configuration, saved);
+        Replace(Host.CurrentConfiguration(), saved);
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ internal sealed class MachineSession : DisposableBase
         }
 
         JsonObject saved = Host.Capture();
-        JsonObject next = MachineCatalog.WithSetting(Configuration, choice, value);
+        JsonObject next = MachineCatalog.WithSetting(Host.CurrentConfiguration(), choice, value);
         JsonObject changes;
         using (MachineHost plain = new(Configuration))
         {
@@ -188,7 +188,7 @@ internal sealed class MachineSession : DisposableBase
     internal void Keep()
     {
         if (!_keep) { return; }
-        _settings.Machine = (JsonObject)Configuration.DeepClone();
+        _settings.Machine = (JsonObject)Host.CurrentConfiguration().DeepClone();
         _settings.MachineState = Host.Capture();
         _settings.Save();
     }

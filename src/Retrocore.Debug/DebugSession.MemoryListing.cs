@@ -353,7 +353,7 @@ internal sealed partial class DebugSession
 
     // The ids of the breakpoints that could stop the listing's code at an address, as Hit decides without conditions or
     // hit counts: a bank's own, matched by name, as a card change makes the target's banks again while the bound sites
-    // keep the old ones; a module's where it describes the listing's memory; and the machine CPU's plain addresses in
+    // keep the old ones; a module's where it describes the listing's memory and still has a position there, so not over code written since; and the machine CPU's plain addresses in
     // code the machine's CPU runs, not a coprocessor's.
     private JsonArray? BreakpointsAt(DebugMemoryBank? bank, IDebugMemory memory, InstructionSet set, int address)
     {
@@ -362,7 +362,8 @@ internal sealed partial class DebugSession
         bool Stops(BreakpointSite site) => site switch
         {
             { Bank: { } banked } => bank is not null && string.Equals(banked.Name, bank.Name, StringComparison.Ordinal),
-            { Module: { } module } => DebugInfo.Active(module, memory, (ushort)address),
+            { Module: { } module } => DebugInfo.Active(module, memory, (ushort)address)
+                && module.Position(memory, (ushort)address) is not null,
             _ => machineCode
         };
 

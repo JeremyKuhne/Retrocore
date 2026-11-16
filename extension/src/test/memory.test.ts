@@ -895,7 +895,7 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     // A comment follows its line.
     assert.match(html, /<span class="t">RTS<\/span><span class="cm">; Returns<\/span>/);
     // Analysis's guesses say so.
-    assert.match(html, /class="ln code guess" role="listitem" title="A guess: no source describes these bytes, and analysis takes them for code"/);
+    assert.match(html, /class="ln code guess" role="listitem" aria-keyshortcuts="F9" title="A guess: no source describes these bytes, and analysis takes them for code"/);
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
     assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);
@@ -905,12 +905,12 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*display:grid;align-content:start/);
     assert.match(memoryEditorHtml("NONCE"), /#listing \.src\{flex:none/);
     assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
-    assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");
+    assert.match(html, /^<div class="ln code" role="listitem" aria-keyshortcuts="F9" tabindex="0"/, "the first line, when the cursor is in none");
 
     // A line selects its bytes, the cursor on the first.
     state = await drive(page, [{ listingLine: 1 }], () => 0, lists);
     assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16) + 2, parseInt(top, 16) + 4]);
-    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" tabindex="0" data-a="[0-9]+" data-s="3"/);
+    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" aria-keyshortcuts="F9" tabindex="0" data-a="[0-9]+" data-s="3"/);
 
     // Enter on a line does what a click does.
     const lineElement = { dataset: { a: String(parseInt(top, 16)), s: "2" }, querySelectorAll: () => [] };
@@ -956,7 +956,8 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     // A line where a breakpoint stops has its dot filled.
     assert.deepEqual(state.breakpoints, [top + 7]);
     const html = page.elements.get("listing")!.innerHTML;
-    assert.ok(html.includes(`<span class="bp on" data-bp="1" aria-hidden="true" title="Take the breakpoint at $${hex(top + 7, 4)} away (F9)">`), html);
+    assert.ok(html.includes(`<span class="bp on" data-bp="1" aria-hidden="true" title="Take the breakpoint at $${hex(top + 7, 4)} away (F9)">&#9679;</span><span class="sr">Breakpoint, </span>`), html);
+    assert.ok(html.includes('role="listitem" aria-keyshortcuts="F9"'), html);
     assert.ok(html.includes(`<span class="bp" data-bp="1" aria-hidden="true" title="Stop at $${hex(top, 4)} (F9)">`), html);
 
     // F9 sets one at the cursor's line.

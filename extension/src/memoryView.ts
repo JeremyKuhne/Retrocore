@@ -85,6 +85,7 @@ button:disabled{opacity:.5;cursor:default}
 #listing .bp{width:1.5ch;flex:none;margin-left:-4px;text-align:center;color:transparent;cursor:default}
 #listing .ln:hover .bp{color:var(--vscode-debugIcon-breakpointDisabledForeground,var(--vscode-disabledForeground))}
 #listing .ln .bp.on{color:var(--vscode-debugIcon-breakpointForeground,#e51400)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #listing .l{width:10ch;flex:none;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
 #listing .unknown .t{opacity:.7}
 #listing .guess .t{font-style:italic}
@@ -640,7 +641,7 @@ function showListingLines() {
             : '<a class="src" role="link" tabindex="-1" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
-        html += '<div class="' + classes + '" role="listitem"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '">' + breakpointHtml(line) + '<span class="a">' + hex(line.address, 4) + "</span>"
+        html += '<div class="' + classes + '" role="listitem" aria-keyshortcuts="F9"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '">' + breakpointHtml(line) + '<span class="a">' + hex(line.address, 4) + "</span>"
             + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>"
             + (line.comment ? '<span class="cm">; ' + escapeText(line.comment) + "</span>" : "") + source + "</div>";
     }
@@ -679,8 +680,10 @@ function focusedListing() {
 // The gutter's breakpoint dot, filled where one stops at the line's address; clicking it, or F9, sets or takes it away.
 function breakpointHtml(line) {
     const on = Array.isArray(line.breakpoints) && line.breakpoints.length > 0;
+    // The dot is hidden from screen readers, which hear "Breakpoint" at the line's start instead, and F9 as its shortcut.
     return '<span class="bp' + (on ? " on" : "") + '" data-bp="1" aria-hidden="true" title="'
-        + (on ? "Take the breakpoint at " + where(line.address) + " away" : "Stop at " + where(line.address)) + ' (F9)">&#9679;</span>';
+        + (on ? "Take the breakpoint at " + where(line.address) + " away" : "Stop at " + where(line.address)) + ' (F9)">&#9679;</span>'
+        + (on ? '<span class="sr">Breakpoint, </span>' : "");
 }
 
 // Sets or takes away a breakpoint at a listing line's address: a function breakpoint VS Code keeps, named by the

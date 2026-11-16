@@ -68,7 +68,8 @@ internal sealed partial class DebugSession
         return new JsonObject { ["address"] = null };
     }
 
-    // A find pattern as a regular expression over normalized text: ? any one character, * any run.
+    // A find pattern as a regular expression over normalized text: ? any one character, * any run. It never
+    // backtracks, as many runs against a long label would take exponential time while the machine waits.
     private static Regex InstructionPattern(string pattern)
     {
         string normal = Normalized(pattern);
@@ -80,7 +81,7 @@ internal sealed partial class DebugSession
             _ => Regex.Escape(character.ToString())
         }));
 
-        return new Regex($"^{expression}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return new Regex($"^{expression}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     }
 
     // Text with runs of spaces made one and none around commas, so LD A, B is LD A,B.

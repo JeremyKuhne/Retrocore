@@ -286,7 +286,7 @@ internal sealed partial class DebugSession
                 ["target"] = target,
                 ["path"] = source?.Path,
                 ["line"] = source?.Line,
-                ["breakpoints"] = BreakpointsAt(bank, address)
+                ["breakpoints"] = BreakpointsAt(bank, memory, set, address)
             });
 
             address += size;
@@ -351,14 +351,24 @@ internal sealed partial class DebugSession
         return page is { } value ? (int)(value & 0xFF) : -1;
     }
 
-    // The ids of the breakpoints that stop at an address of a space: those for any code there, and a bank's own. Banks
-    // are matched by name, as a card change makes the target's banks again while the bound sites keep the old ones.
-    private JsonArray? BreakpointsAt(DebugMemoryBank? bank, int address)
+    // The ids of the breakpoints that could stop the listing's code at an address, as Hit decides without conditions or
+    // hit counts: a bank's own, matched by name, as a card change makes the target's banks again while the bound sites
+    // keep the old ones; a module's where it describes the listing's memory; and the machine CPU's plain addresses in
+    // code the machine's CPU runs, not a coprocessor's.
+    private JsonArray? BreakpointsAt(DebugMemoryBank? bank, IDebugMemory memory, InstructionSet set, int address)
     {
         if (!_breakpoints.TryGetValue((ushort)address, out List<BreakpointSite>? sites)) { return null; }
+        bool machineCode = ReferenceEquals(set.Description, Target.InstructionSet.Description);
+        bool Stops(BreakpointSite site) => site switch
+        {
+            { Bank: { } banked } => bank is not null && string.Equals(banked.Name, bank.Name, StringComparison.Ordinal),
+            { Module: { } module } => DebugInfo.Active(module, memory, (ushort)address),
+            _ => machineCode
+        };
+
         JsonArray ids = [];
         foreach (int id in sites
-            .Where(site => site.Bank is null || (bank is not null && string.Equals(site.Bank.Name, bank.Name, StringComparison.Ordinal)))
+            .Where(Stops)
             .Select(site => site.Breakpoint.Id)
             .Distinct())
         {

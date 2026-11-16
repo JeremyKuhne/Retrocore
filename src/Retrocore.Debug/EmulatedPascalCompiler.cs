@@ -162,15 +162,16 @@ internal static partial class EmulatedPascalCompiler
         // Apple Pascal 1.0's APPLE1 comes with a workfile, which C(ompile) would take without asking.
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
         (byte[] sources, byte[] codes) = Volumes(source, boot);
-        byte[]? code = CompileFromVolumes(sources, codes, boot, compilerDisk, roms, model, out screen);
+        byte[]? code = CompileFromVolumes([sources, codes], boot, DiskImageFile.Sectors(compilerDisk), roms, model, out screen);
         if (code is not null) { RestoreAlignment(code, source); }
         return code;
     }
 
     // Compiles SOURCE:PROGRAM to CODE:PROGRAM, SOURCE: and CODE: in a second Disk II in slot 5.
-    private static byte[]? CompileFromVolumes(byte[] sources, byte[] codes, byte[] boot, string compilerDisk, string? roms, Apple2Model model, out string screen)
+    // Compiles SOURCE:PROGRAM to CODE:PROGRAM: the volumes are SOURCE: and CODE:, in slot 5, then any in slot 4.
+    private static byte[]? CompileFromVolumes(IReadOnlyList<byte[]> volumes, byte[] boot, byte[] tools, string? roms, Apple2Model model, out string screen)
     {
-        EmulatedPascalSystem system = new(boot, compilerDisk, roms, [sources, codes], model);
+        EmulatedPascalSystem system = new(boot, tools, roms, volumes, model);
         system.Type("C");
         if (system.WaitFor(["COMPILE WHAT TEXT"], seconds: 30) is null)
         {

@@ -706,12 +706,47 @@ public class PascalDecompilerTests
 
         string main = "(*$I-*)\n(*$I FIRST.TEXT*)\n{$I SECOND.TEXT}\n(*$I THIRD*)\nEND.\n";
         byte[] boot = EmptyVolume("APPLE1");
-        (byte[] sources, byte[] codes) = EmulatedPascalCompiler.FileVolumes(main, included, boot);
+        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = EmulatedPascalCompiler.FileVolumes(main, included, boot);
+        more.Should().BeEmpty();
 
         string written = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT"));
         written.Should().StartWith("(*$I-*)\n(*$I SOURCE:FIRST.TEXT*)\n{$I APPLE1:SECOND.TEXT}\n(*$I CODE:THIRD.TEXT  *)\n");
         PascalTextFile.Read(PascalVolume.Read(boot, proDosOrder: false).ReadFile("SECOND.TEXT")).TrimEnd().Should().Be(part.TrimEnd());
         PascalTextFile.Read(PascalVolume.Read(codes, proDosOrder: false).ReadFile("THIRD.TEXT")).TrimEnd().Should().Be(part.TrimEnd());
+    }
+
+    /// <summary>
+    ///  Included files that SOURCE:, the boot disk, APPLE2 and CODE: have no room for go on MORE1: and MORE2:, the
+    ///  drives of a card in slot 4, and CODE: keeps room for the code file.
+    /// </summary>
+    [TestMethod]
+    public void IncludedFilesWithNoRoomGoOnMoreVolumes()
+    {
+        string part = LongSource(25);
+        Dictionary<string, string> included = [];
+        string main = "";
+        foreach (string name in new[] { "A", "B", "C", "D", "E", "F" })
+        {
+            included[$"{name}.TEXT"] = part;
+            main += $"(*$I {name}.TEXT*)\n";
+        }
+
+        main += "END.\n";
+        byte[] boot = EmptyVolume("APPLE1");
+        byte[] tools = EmptyVolume("APPLE2");
+        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = EmulatedPascalCompiler.FileVolumes(main + "\n", included, boot, tools);
+
+        string written = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT"));
+        string[] lines = written.Split('\n');
+        lines[0].Should().Be("(*$I SOURCE:A.TEXT*)");
+        lines[1].Should().Be("(*$I APPLE1:B.TEXT*)");
+        lines[2].Should().Be("(*$I APPLE2:C.TEXT*)");
+        lines[3].Should().Be("(*$I CODE:D.TEXT  *)");
+        lines[4].Should().Be("(*$I MORE1:E.TEXT *)");
+        lines[5].Should().Be("(*$I MORE2:F.TEXT *)");
+        more.Should().HaveCount(2);
+        PascalVolume.Read(more[1], proDosOrder: false).Name.Should().Be("MORE2");
+        PascalVolume.Read(codes, proDosOrder: false).Files.Should().ContainSingle(file => file.Name == "D.TEXT");
     }
 
     // A source of procedures of 50 lines each, as long as their number makes it.

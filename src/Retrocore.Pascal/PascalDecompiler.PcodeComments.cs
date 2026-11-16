@@ -21,20 +21,30 @@ public sealed partial class PascalDecompiler
     {
         if (statement is LabelStatement or OptionStatement) { return null; }
 
-        IEnumerable<Statement> inner = statement switch
-        {
-            IfStatement branch => branch.Else is null ? branch.Then : [.. branch.Then, .. branch.Else],
-            WhileStatement loop => loop.Body,
-            RepeatStatement loop => loop.Body,
-            ForStatement loop => loop.Body,
-            WithStatement with => with.Body,
-            CaseStatement choice => choice.Arms.SelectMany(arm => arm.Body),
-            _ => []
-        };
-
-        int? first = inner.Where(nested => nested.Start is not null).Select(nested => nested.Start).Min();
-        return first is { } start ? start - 1 : statement.End;
+        int? first = Nested(statement).Select(FirstPcode).Min();
+        return first is { } start ? start - 1 : LastPcode(statement);
     }
+
+    // The statements a statement holds.
+    private static IEnumerable<Statement> Nested(Statement statement) => statement switch
+    {
+        IfStatement branch => branch.Else is null ? branch.Then : [.. branch.Then, .. branch.Else],
+        WhileStatement loop => loop.Body,
+        RepeatStatement loop => loop.Body,
+        ForStatement loop => loop.Body,
+        WithStatement with => with.Body,
+        CaseStatement choice => choice.Arms.SelectMany(arm => arm.Body),
+        _ => []
+    };
+
+    // The first p-code of a statement's code, or of the statements it holds where it has no span of its own, as a
+    // WITH, which the decoder makes from the statements in it.
+    private static int? FirstPcode(Statement statement) =>
+        statement.Start ?? Nested(statement).Select(FirstPcode).Min();
+
+    // The last p-code of a statement's code, or of the statements it holds.
+    private static int? LastPcode(Statement statement) =>
+        statement.End ?? Nested(statement).Select(LastPcode).Max();
 
     // Writes the procedure's p-code up to an offset that no comment has had yet, as {...} comments.
     private void PcodeLines(Procedure procedure, int? upTo, List<string> lines)

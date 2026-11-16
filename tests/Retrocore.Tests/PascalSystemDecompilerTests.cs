@@ -254,15 +254,23 @@ public class PascalSystemDecompilerTests
 
     /// <summary>
     ///  With <see cref="PascalDecompilerOptions.PcodeComments"/>, each statement is written below its p-code in a
-    ///  brace comment, a loop's test above it and its jump back below its body, and the source compiles the same.
+    ///  brace comment, a loop's test above it and its jump back below its body, a WITH's statements each below their
+    ///  own, and the source compiles the same.
     /// </summary>
     [TestMethod]
     public void StatementsAreWrittenBelowTheirPcode()
     {
         const string Probe = """
             PROGRAM PC;
-            VAR I, J: INTEGER;
+            TYPE R = RECORD A, B: INTEGER END;
+            VAR I, J: INTEGER; X: ARRAY[1..3] OF R;
             BEGIN
+              FOR I := 1 TO 3 DO
+                WITH X[I] DO
+                  BEGIN
+                    A := I;
+                    B := J
+                  END;
               I := 1;
               J := 0;
               WHILE I < 10 DO
@@ -282,7 +290,14 @@ public class PascalSystemDecompilerTests
         int loop = Array.FindIndex(lines, line => line.StartsWith("WHILE ", StringComparison.Ordinal));
         loop.Should().BePositive(source);
         lines[loop - 1].Should().MatchRegex(@"^\{.*LESI; FJP \$[0-9A-F]{4}\}$", source);
-        lines.Should().Contain("{UJP $0008}", source);
+        lines.Should().Contain(line => line.StartsWith("{UJP $", StringComparison.Ordinal), source);
+
+        // A WITH's statements are each below their own p-code, not all of it above the FOR.
+        int with = Array.FindIndex(lines, line => line.StartsWith("WITH ", StringComparison.Ordinal));
+        lines[with + 1].Should().Be("BEGIN", source);
+        lines[with + 2].Should().StartWith("{", source);
+        lines[with + 3].Should().Contain(":=", source);
+        lines[with + 4].Should().StartWith("{", source);
         int until = Array.FindIndex(lines, line => line.StartsWith("UNTIL ", StringComparison.Ordinal));
         lines[until - 1].Should().MatchRegex(@"^\{.*EQUI; FJP \$[0-9A-F]{4}\}$", source);
         source.Should().Contain("LSA 'A, B'", source);

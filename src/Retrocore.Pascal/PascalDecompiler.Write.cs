@@ -1553,7 +1553,10 @@ public sealed partial class PascalDecompiler
     {
         PcodeLines(procedure, PcodeHead(statement), lines);
         WriteStatementText(procedure, statement, lines);
-        if (statement is not (LabelStatement or OptionStatement)) { PcodeLines(procedure, statement.End, lines); }
+        if (statement is not (LabelStatement or OptionStatement))
+        {
+            PcodeLines(procedure, LastPcode(statement), lines);
+        }
     }
 
     private void WriteStatementText(Procedure procedure, Statement statement, List<string> lines)

@@ -24,7 +24,8 @@ internal sealed class EmulatedPascalSystem
     /// <param name="toolsDisk">APPLE2's image.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
     /// <param name="more">
-    ///  Images for the drives of a second Disk II card, in slot 5, Pascal's units 11 and 12; null or empty for none.
+    ///  Images for the drives of a second Disk II card, in slot 5, Pascal's units 11 and 12, and then of a third, in
+    ///  slot 4, units 9 and 10; null or empty for none.
     /// </param>
     /// <param name="model">
     ///  The machine: a 64K II Plus with the language card, or a 128K IIe, whose auxiliary memory Apple Pascal 1.2 keeps
@@ -32,21 +33,41 @@ internal sealed class EmulatedPascalSystem
     /// </param>
     /// <exception cref="TimeoutException">The system never booted.</exception>
     public EmulatedPascalSystem(byte[] boot, string toolsDisk, string? roms, IReadOnlyList<byte[]>? more = null, Apple2Model model = Apple2Model.IIPlus)
+        : this(boot, DiskImageFile.Sectors(toolsDisk), roms, more, model)
+    {
+    }
+
+    /// <summary>
+    ///  Boots Pascal, to its command line, with APPLE2's image as it is given.
+    /// </summary>
+    /// <param name="boot">APPLE1's image, as a 140K <c>.dsk</c>, with the files the work needs written onto it.</param>
+    /// <param name="toolsImage">APPLE2's image, as a 140K <c>.dsk</c>'s sectors.</param>
+    /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="more">
+    ///  Images for the drives of a second Disk II card, in slot 5, Pascal's units 11 and 12, and then of a third, in
+    ///  slot 4, units 9 and 10; null or empty for none.
+    /// </param>
+    /// <param name="model">The machine: a 64K II Plus with the language card, or a 128K IIe.</param>
+    /// <exception cref="TimeoutException">The system never booted.</exception>
+    public EmulatedPascalSystem(byte[] boot, byte[] toolsImage, string? roms, IReadOnlyList<byte[]>? more, Apple2Model model)
     {
         _machine = new(model, SdkModules.BuildRoms(model, roms, autostart: true));
         _machine.Bus.InstallDiskII(slot: 6, SdkModules.BuildDiskII(16, roms));
         if (more is { Count: > 0 }) { _machine.Bus.InstallDiskII(slot: 5, SdkModules.BuildDiskII(16, roms)); }
+        if (more is { Count: > 2 }) { _machine.Bus.InstallDiskII(slot: 4, SdkModules.BuildDiskII(16, roms)); }
         if (!model.IsIIe()) { _machine.Bus.InstallLanguageCard(); }
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
         _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
         // APPLE2 is written too, by 1.3's Assembler, whose temporary file goes on its own disk: a copy takes it.
-        WozDisk tools = SectorDiskConverter.Convert(DiskImageFile.Sectors(toolsDisk), proDosOrder: false);
+        WozDisk tools = SectorDiskConverter.Convert(toolsImage, proDosOrder: false);
         _machine.Drives[1].Insert(WozDisk.Load(tools.Export(), writable: true), "APPLE2", "DSK");
         IReadOnlyList<byte[]> extras = more ?? [];
-        for (int drive = 0; drive < Math.Min(2, extras.Count); drive++)
+        for (int index = 0; index < Math.Min(4, extras.Count); index++)
         {
-            WozDisk extra = SectorDiskConverter.Convert(extras[drive], proDosOrder: false);
-            _machine.DrivesIn(5)[drive].Insert(WozDisk.Load(extra.Export(), writable: true), $"SLOT5D{drive + 1}", "DSK");
+            int slot = index < 2 ? 5 : 4;
+            int drive = index % 2;
+            WozDisk extra = SectorDiskConverter.Convert(extras[index], proDosOrder: false);
+            _machine.DrivesIn(slot)[drive].Insert(WozDisk.Load(extra.Export(), writable: true), $"SLOT{slot}D{drive + 1}", "DSK");
         }
 
         _machine.Bus.ResetSwitches();

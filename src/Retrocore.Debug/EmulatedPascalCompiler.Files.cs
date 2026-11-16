@@ -16,9 +16,12 @@ internal static partial class EmulatedPascalCompiler
     /// <remarks>
     ///  <para>
     ///   The main file's <c>(*$I NAME.TEXT*)</c> and <c>{$I NAME.TEXT}</c> directives name the included files without a
-    ///   volume; each file goes on the first volume with room for it, SOURCE:, the boot disk, or CODE:, which keeps
-    ///   room for the code file, and its directive is given that volume's name. The main file goes on SOURCE:. The
-    ///   Compiler includes no file from an included one, so only the main file's directives are read.
+    ///   volume; each file goes on the first volume with room for it, SOURCE:, the boot disk, APPLE2 (without the
+    ///   Assembler, the Linker and the other tools a compile does not run), CODE:, which keeps room for the code
+    ///   file, or MORE1: and MORE2:, the drives of a third Disk II card, in slot 4 (Pascal's units
+    ///   9 and 10), which is there only where they are needed; and its directive is given that volume's name. The
+    ///   main file goes on SOURCE:. The Compiler includes no file from an included one, so only the main file's
+    ///   directives are read.
     ///  </para>
     /// </remarks>
     /// <param name="main">The main file's text.</param>
@@ -39,8 +42,13 @@ internal static partial class EmulatedPascalCompiler
     {
         byte[] boot = DiskImageFile.Sectors(bootDisk);
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
-        (byte[] sources, byte[] codes) = FileVolumes(main, included, boot);
-        byte[]? code = CompileFromVolumes(sources, codes, boot, compilerDisk, roms, model, out string screen);
+
+        // APPLE2 takes files too, without the tools a compile does not run.
+        byte[] tools = DiskImageFile.Sectors(compilerDisk);
+        foreach (string unused in s_notCompiling) { _ = PascalVolume.DeleteFile(tools, proDosOrder: false, unused); }
+
+        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = FileVolumes(main, included, boot, tools);
+        byte[]? code = CompileFromVolumes([sources, codes, .. more], boot, tools, roms, model, out string screen);
         if (code is not null) { RestoreAlignment(code, main + string.Concat(included.Values)); }
         return (code, screen);
     }
@@ -50,16 +58,22 @@ internal static partial class EmulatedPascalCompiler
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   Each included file goes on SOURCE:, the boot disk or CODE:, whichever has room first, and the main file's
-    ///   directive for it names where it is.
+    ///   Each included file goes on SOURCE:, the boot disk, the Compiler's disk, CODE: (while it keeps room for the
+    ///   code file), MORE1: or MORE2:, whichever has room first, and the main file's directive for it names where it
+    ///   is.
     ///  </para>
     /// </remarks>
     /// <param name="main">The main file's text.</param>
     /// <param name="included">The included files' texts, by name.</param>
     /// <param name="boot">The boot disk's image, which included files may go on, or null for none.</param>
-    /// <returns>SOURCE:'s and CODE:'s images.</returns>
+    /// <param name="tools">The Compiler's disk's image, which included files may go on after the boot disk.</param>
+    /// <returns>SOURCE:'s and CODE:'s images, and MORE1:'s and MORE2:'s where files went on them.</returns>
     /// <exception cref="IOException">The files do not fit, or a directive names no file given.</exception>
-    internal static (byte[] Sources, byte[] Codes) FileVolumes(string main, IReadOnlyDictionary<string, string> included, byte[]? boot = null)
+    internal static (byte[] Sources, byte[] Codes, IReadOnlyList<byte[]> More) FileVolumes(
+        string main,
+        IReadOnlyDictionary<string, string> included,
+        byte[]? boot = null,
+        byte[]? tools = null)
     {
         Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase);
         foreach ((string name, string text) in included) { files[Normalized(name)] = text; }
@@ -68,7 +82,11 @@ internal static partial class EmulatedPascalCompiler
         byte[] codes = PascalVolume.Format("CODE", proDosOrder: false);
         List<(string Name, byte[] Image)> volumes = [("SOURCE", sources)];
         if (boot is not null) { volumes.Add((PascalVolume.Read(boot, proDosOrder: false).Name, boot)); }
+        if (tools is not null) { volumes.Add((PascalVolume.Read(tools, proDosOrder: false).Name, tools)); }
         volumes.Add(("CODE", codes));
+        int code = volumes.Count - 1;
+        volumes.Add(("MORE1", PascalVolume.Format("MORE1", proDosOrder: false)));
+        volumes.Add(("MORE2", PascalVolume.Format("MORE2", proDosOrder: false)));
         int longest = volumes.Max(volume => volume.Name.Length);
 
         List<Match> directives = [.. IncludeDirective().Matches(main).Where(match => !match.Groups["name"].Value.Contains(':', StringComparison.Ordinal))];
@@ -98,6 +116,7 @@ internal static partial class EmulatedPascalCompiler
 
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
 
+        int used = code;
         foreach (string name in placed.Keys.ToList())
         {
             byte[] text = PascalTextFile.Write(files[name]);
@@ -106,7 +125,14 @@ internal static partial class EmulatedPascalCompiler
                 try
                 {
                     PascalVolume.WriteFile(volumes[on].Image, proDosOrder: false, name, PascalFileKind.Text, text);
+                    if (on == code && !HasRoomForCode(codes))
+                    {
+                        _ = PascalVolume.DeleteFile(codes, proDosOrder: false, name);
+                        continue;
+                    }
+
                     placed[name] = volumes[on].Name;
+                    used = Math.Max(used, on);
                     break;
                 }
                 catch (IOException) when (on < volumes.Count - 1)
@@ -115,13 +141,28 @@ internal static partial class EmulatedPascalCompiler
             }
         }
 
-        // The code file needs its room after the included files.
-        PascalVolume.WriteFile((byte[])codes.Clone(), proDosOrder: false, "ROOM.CODE", PascalFileKind.Code, new byte[CodeBlocks * 512]);
-
         _ = PascalVolume.DeleteFile(sources, proDosOrder: false, "PROGRAM.TEXT");
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
-        return (sources, codes);
+        return (sources, codes, [.. volumes[(code + 1)..(used + 1)].Select(volume => volume.Image)]);
     }
+
+    // Whether CODE: still has room for the code file after the included files on it.
+    private static bool HasRoomForCode(byte[] codes)
+    {
+        try
+        {
+            PascalVolume.WriteFile((byte[])codes.Clone(), proDosOrder: false, "ROOM.CODE", PascalFileKind.Code, new byte[CodeBlocks * 512]);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    // APPLE2's files that compiling does not need: its other tools.
+    private static readonly string[] s_notCompiling =
+        ["SYSTEM.ASSMBLER", "SYSTEM.LINKER", "LIBRARY.CODE", "LIBMAP.CODE", "6502.OPCODES", "6502.ERRORS"];
 
     // A file's name on a volume: in capitals, with .TEXT.
     private static string Normalized(string name)

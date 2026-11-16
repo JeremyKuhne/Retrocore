@@ -282,7 +282,9 @@ SOURCE:INC1.TEXT*)`; the Compiler includes no file from an included one), each o
 boot disk, then on CODE:, which keeps room for the code file. The code file is read back without the empty blocks
 after its code, which it keeps of the room CODE: had and the Linker cannot copy. A source already kept as a main file
 and the files it includes, one level deep as the Compiler allows, is compiled with `--includes`: each file goes
-where it fits in the same way.
+where it fits in the same way, on APPLE2 too (without the Assembler, the Linker and the other tools a compile does
+not run), and then on MORE1: and MORE2:, the drives of a third Disk II card, in slot 4 (Pascal's units 9 and 10),
+which is there only when they are needed. Six drives hold about 1,300 blocks of text.
 
 ### Rebuilding a linked program
 

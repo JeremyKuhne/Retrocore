@@ -41,9 +41,15 @@ internal struct ProcessorExecutionState
     internal ProcessorSequence Sequence;
 
     /// <summary>
-    ///  Current sequence phase; zero denotes an instruction boundary.
+    ///  Current non-memory sequence phase; zero denotes an instruction boundary. Direct memory
+    ///  continuations keep it nonzero until completion or entry into a data tail.
     /// </summary>
     internal byte Phase;
+
+    /// <summary>
+    ///  The next microstep, including opcode fetch and system sequences.
+    /// </summary>
+    internal ProcessorContinuation Continuation;
 
     /// <summary>
     ///  The decoded instruction.

@@ -408,6 +408,122 @@ public class ProcessorTests
     }
 
     /// <summary>
+    ///  Verifies snapshots and RDY resume indexed memory accesses, page-crossing reads and data tails exactly.
+    /// </summary>
+    /// <param name="variant">The CPU variant.</param>
+    /// <param name="opcode">An indexed load, increment or decimal add.</param>
+    /// <param name="cycles">The instruction's complete cycle count.</param>
+    [TestMethod]
+    [DataRow(ProcessorVariant.Mos6502, 0xBD, 5)]
+    [DataRow(ProcessorVariant.Wdc65C02, 0xBD, 5)]
+    [DataRow(ProcessorVariant.Rockwell65C02, 0xBD, 5)]
+    [DataRow(ProcessorVariant.Mos6502, 0xFE, 7)]
+    [DataRow(ProcessorVariant.Wdc65C02, 0xFE, 7)]
+    [DataRow(ProcessorVariant.Rockwell65C02, 0xFE, 7)]
+    [DataRow(ProcessorVariant.Mos6502, 0x7D, 5)]
+    [DataRow(ProcessorVariant.Wdc65C02, 0x7D, 6)]
+    [DataRow(ProcessorVariant.Rockwell65C02, 0x7D, 6)]
+    public void MemorySnapshotsAndHeldCyclesResumeAtEveryMicrostep(ProcessorVariant variant, int opcode, int cycles)
+    {
+        for (int phase = 1; phase < cycles; phase++)
+        {
+            RecordingBus bus = new();
+            bus.Memory[0x200] = (byte)opcode;
+            bus.Memory[0x201] = 0xFF;
+            bus.Memory[0x202] = 0x30;
+            bus.Memory[0x3100] = 0x12;
+            Processor<RecordingBus> cpu = Create(bus, variant);
+            ProcessorRegisters registers = cpu.Registers;
+            registers.X = 1;
+            registers.Accumulator = 0x23;
+            registers.Status |= StatusRegister.DecimalMode;
+            cpu.Registers = registers;
+            cpu.Run((ulong)phase);
+            ProcessorSnapshot snapshot = cpu.CaptureState();
+            byte[] memory = (byte[])bus.Memory.Clone();
+            bus.Accesses.Clear();
+            cpu.StepInstruction().Cycles.Should().Be((ulong)(cycles - phase));
+            ProcessorRegisters completed = cpu.Registers;
+            byte[] completedMemory = (byte[])bus.Memory.Clone();
+            (ushort Address, byte Value, BusOperation Operation)[] trace = [.. bus.Accesses];
+            bus.Accesses.Clear();
+            memory.CopyTo(bus.Memory, index: 0);
+            cpu.RestoreState(snapshot);
+            cpu.IsInstructionBoundary.Should().BeFalse();
+
+            bool held = trace[0].Operation == BusOperation.Read || variant != ProcessorVariant.Mos6502;
+            if (held)
+            {
+                cpu.Signals = ProcessorSignals.ReadStall;
+                for (int i = 0; i < 3; i++)
+                {
+                    cpu.NextCycle().IsStalled.Should().BeTrue();
+                    cpu.IsInstructionBoundary.Should().BeFalse();
+                    bus.Accesses[^1].Should().Be(trace[0]);
+                }
+
+                cpu.Signals = ProcessorSignals.None;
+            }
+
+            cpu.StepInstruction().Cycles.Should().Be((ulong)(cycles - phase));
+            bus.Accesses.Skip(held ? 3 : 0).Should().Equal(trace);
+            cpu.Registers.Should().Be(completed);
+            bus.Memory.Should().Equal(completedMemory);
+            cpu.CycleCount.Should().Be((ulong)(cycles + (held ? 3 : 0)));
+            cpu.IsInstructionBoundary.Should().BeTrue();
+        }
+    }
+
+    /// <summary>
+    ///  Verifies both reset entry points abandon every active indexed-memory continuation.
+    /// </summary>
+    /// <param name="variant">The CPU variant.</param>
+    [TestMethod]
+    [DataRow(ProcessorVariant.Mos6502)]
+    [DataRow(ProcessorVariant.Wdc65C02)]
+    [DataRow(ProcessorVariant.Rockwell65C02)]
+    public void ResetAbandonsEveryMemoryContinuation(ProcessorVariant variant)
+    {
+        foreach (bool signal in new[] { false, true })
+        {
+            for (int phase = 1; phase < 5; phase++)
+            {
+                RecordingBus bus = new();
+                bus.Memory[0x200] = 0xBD;
+                bus.Memory[0x201] = 0xFF;
+                bus.Memory[0x202] = 0x30;
+                bus.Memory[0xFFFC] = 0;
+                bus.Memory[0xFFFD] = 0x40;
+                bus.Memory[0x4000] = 0xA9;
+                bus.Memory[0x4001] = 0x42;
+                Processor<RecordingBus> cpu = Create(bus, variant);
+                ProcessorRegisters registers = cpu.Registers;
+                registers.X = 1;
+                cpu.Registers = registers;
+                cpu.Run((ulong)phase);
+                if (signal)
+                {
+                    cpu.Signals = ProcessorSignals.Reset;
+                    cpu.StepCycle();
+                    cpu.Signals = ProcessorSignals.None;
+                    cpu.Run(cycleBudget: 6);
+                }
+                else
+                {
+                    cpu.Reset();
+                    cpu.Run(cycleBudget: 7);
+                }
+
+                cpu.CycleCount.Should().Be((ulong)(phase + 7));
+                cpu.Registers.ProgramCounter.Should().Be(0x4000);
+                cpu.IsInstructionBoundary.Should().BeTrue();
+                cpu.StepInstruction().Cycles.Should().Be(2);
+                cpu.Registers.Accumulator.Should().Be(0x42);
+            }
+        }
+    }
+
+    /// <summary>
     ///  Verifies held reads retain microstate while bus side effects and cycle counting remain observable.
     /// </summary>
     [TestMethod]

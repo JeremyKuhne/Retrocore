@@ -42,7 +42,39 @@ internal static class MediaActions
     /// <param name="codec">The codec that writes the image back, or null for one that can only be read.</param>
     /// <param name="bytes">The image's bytes, as read.</param>
     internal static void Register(IMedium medium, string path, IImageCodec? codec, ReadOnlySpan<byte> bytes) =>
-        s_sources.AddOrUpdate(medium, new DiskSource(Guid.NewGuid(), path, codec, FileRevision.Of(path, bytes)));
+        Keep(medium, new DiskSource(Guid.NewGuid(), path, codec, FileRevision.Of(path, bytes)));
+
+    /// <summary>
+    ///  Occurs when an image a disk came from changes on disk, or is marked read-only or writable, as the device list
+    ///  then shows; raised off the machine's thread.
+    /// </summary>
+    internal static event Action? SourcesChanged;
+
+    /// <summary>
+    ///  Checks an image as it is now, for each disk read from it, and says so when any of them sees it differently.
+    /// </summary>
+    /// <param name="path">The image's full path.</param>
+    internal static void Recheck(string path)
+    {
+        List<DiskSource> sources = [.. s_sources.Select(pair => pair.Value).Where(source => SameFile(path, source.Path))];
+        if (sources.Count == 0 || ImageCheck.Of(path) is not { } check) { return; }
+        bool changed = false;
+        foreach (DiskSource source in sources)
+        {
+            if (source.Check == check) { continue; }
+            source.Check = check;
+            changed = true;
+        }
+
+        if (changed) { SourcesChanged?.Invoke(); }
+    }
+
+    // Keeps where a disk came from, and watches its image.
+    private static void Keep(IMedium medium, DiskSource source)
+    {
+        s_sources.AddOrUpdate(medium, source);
+        ImageWatcher.Watch(source.Path, path => s_sources.Any(pair => SameFile(path, pair.Value.Path)), Recheck);
+    }
 
     /// <summary>
     ///  Gets where a disk came from, or null for one no image gave, as a disk a launch built.
@@ -231,7 +263,7 @@ internal static class MediaActions
         DiskSource saved = new(source?.Id ?? Guid.NewGuid(), path, codec, written.Revision ?? FileRevision.Of(path, encoded.Bytes));
         if (ReferenceEquals(drive.Medium, disk) && drive.MountGeneration == generation)
         {
-            s_sources.AddOrUpdate(disk, saved);
+            Keep(disk, saved);
             drive.Saved(path, codec.Format, encoded.IsLossless);
         }
 

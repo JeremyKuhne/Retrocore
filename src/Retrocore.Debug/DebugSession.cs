@@ -121,6 +121,9 @@ internal sealed partial class DebugSession
     internal void Register(DapTransport transport, Action disconnect)
     {
         _transport = transport;
+
+        // An image changed on disk shows in its drive, even while the machine is stopped.
+        MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
         transport.On("launch", args => Reply(() => Launch(args)));
         transport.On("setBreakpoints", args => Reply(() => Breakpoints(args)));
@@ -548,7 +551,16 @@ internal sealed partial class DebugSession
             ReleaseTarget();
             _ended = true;
         }
+
+        MediaActions.SourcesChanged -= SourcesChanged;
     }
+
+    // Sends the devices again when an image a disk came from changed on disk.
+    private void SourcesChanged() => Reply(() =>
+    {
+        if (_target is not null && !_ended) { NotifyDevices(); }
+        return [];
+    });
 
     // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
     // happens only once: if it fails, the target is left as it was.

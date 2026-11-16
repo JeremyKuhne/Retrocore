@@ -191,7 +191,7 @@ function draw(frame){
     if(frame.disk){
         document.getElementById('disk').textContent=frame.disk.drives.map(drive=>'D'+drive.drive
             +': track '+drive.track.toFixed(2)+' · bit '+drive.bitPosition+'/'+drive.bitCount
-            +' · motor '+(drive.motor?'on':'off')+(drive.writeProtected?' · protected':'')
+            +' · motor '+(drive.motor?'on':'off')+(drive.writeProtected?' · locked':' · unlocked')
             +(drive.dirty?' · changed':'')).join(' | ');
     }
 }

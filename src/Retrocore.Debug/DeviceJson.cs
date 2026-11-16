@@ -116,11 +116,18 @@ internal static class DeviceJson
             if (MediaActions.Source(medium) is { } source)
             {
                 json["medium"] = source.MediumId;
+                // Read-only: format for an image that can only be read, file for a file marked read-only. Stale: the
+                // file changed or went since the disk matched it, with the revision it matched and the one there now.
+                bool stale = source.IsStale;
                 json["source"] = new JsonObject
                 {
                     ["kind"] = "image",
                     ["path"] = source.Path,
                     ["saves"] = source.Codec is not null,
+                    ["readOnly"] = source.Codec is null ? "format" : source.Check.ReadOnly ? "file" : null,
+                    ["stale"] = stale,
+                    ["baseline"] = stale ? source.Baseline.ToJson() : null,
+                    ["current"] = stale ? source.Check.Current?.ToJson() : null,
                 };
             }
             else

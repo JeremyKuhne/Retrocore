@@ -181,8 +181,11 @@ mount now is refused, and `discards` lets go only of the mounts it lists, so a q
 went in never saves or lets go of the new one. A client that does not send `supportsRetrocoreMedia` has a changed disk's
 eject, insert or card removal refused with a message, as the safe default, and a save that did not save (`losses`,
 `conflict` or `readOnly`) is an error with what to send instead; `discard: true` lets every changed disk the action
-takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and `source` (`kind` `image`
-with its `path`, or `built`, and whether it `saves`).
+takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and `source`: `kind`
+`image` with its `path`, or `built`; whether it `saves`; `readOnly`, `format` for an image that can only be read or
+`file` for a file marked read-only, else null; and `stale`, true once the file changed or went since the disk matched
+it, with its `baseline` revision and the `current` one (null for no file). The host watches each image a disk came
+from, and sends `retro/devices` when one changes, even while the machine is stopped.
 
 ## A machine that is off
 
@@ -237,14 +240,24 @@ launch option installs it.
 
 The **Drives** view lists each card or option that has drives, with its drives under it: Slot 6's Disk II drives
 under Slot 6, the Model I's drives under its disk controller. Each drive shows its media, its head or tape
-position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is green while it
-reads, red while it writes, yellow while it seeks and dimmed while it is empty. Expanding a drive lists its state
-and metadata, and hovering it shows them all. The view's badge counts the disks changed and not yet saved to
-their images.
+position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`, and its image's state: `read-only
+image`, `image changed on disk` or `image deleted`. Its icon is its own kind of drive (a 5.25-inch or 3.5-inch floppy,
+a hard disk or a tape) with a padlock badge, closed or open, in green while it reads, red while it writes and yellow
+while it seeks; a tape's whole icon takes the colour, and an empty drive is dimmed. At the row's end, as Git marks a
+file, `●` is a disk changed and not saved, and `⚠` an image changed on disk since the disk matched it. Expanding a
+drive lists its state and metadata; hovering it says the image, whether it changed, when the image changed and when
+it was read, the lock and where the head is. The view's badge counts the disks changed and not yet saved to their
+images.
 
-A drive's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
-protect or unprotect a disk, and save a changed disk to its image (**Save to Its Image**, which asks first; **Save Disk
-As...** in its menu saves to another), each as the drive allows. A slot's inline buttons in the Machine view add or
+A drive's inline buttons, icons with tooltips, insert media (an open dialog filtered to its formats) or record to a
+new tape in an empty drive; in a full one, the lock toggle, which shows the lock as it is ("Locked: click to let the
+machine write it"), **Save** for a changed disk, and eject. Its menu has **Save**, **Save As...**, **Insert...**,
+**Eject**, and **Lock** or **Unlock**. Save writes the disk's own image at once and says so in the status bar for five
+seconds, and asks only when something is off: a format that cannot hold all of the disk lists what it would lose and
+offers **Save as WOZ...** (DMK, 2MG) or **Save Anyway**; an image changed on disk since the disk was read says when, and
+offers **Overwrite**, keeping the file's changes as a backup, or **Save As...** (the row's button says it will ask); a
+read-only file offers **Save As...** or **Make Writable and Save**; an image that can only be read, or a disk a launch
+built, offers **Save As...**, which is then the row's button. A slot's inline buttons in the Machine view add or
 remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
 and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
 Machine...**). The views redraw at most ten times a second.

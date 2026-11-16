@@ -20,4 +20,14 @@ internal sealed record DiskSource(Guid Id, string Path, IImageCodec? Codec, File
     ///  Gets the medium id as the protocol gives it, such as <c>m-3f9c…</c>.
     /// </summary>
     internal string MediumId => $"m-{Id:N}";
+
+    /// <summary>
+    ///  Gets or sets the image as the host last found it, which watching the file keeps up to date.
+    /// </summary>
+    internal ImageCheck Check { get; set; } = new(Baseline, ImageCheck.IsReadOnly(Path));
+
+    /// <summary>
+    ///  Gets whether the file no longer matches the baseline: changed or deleted since the disk was read or saved.
+    /// </summary>
+    internal bool IsStale => !Baseline.SameAs(Check.Current);
 }

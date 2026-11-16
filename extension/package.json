@@ -23,7 +23,7 @@
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -588,7 +588,7 @@
         },
         {
           "command": "retrocore.device.insert",
-          "when": "view == retrocore.drives && viewItem =~ /\\binsert\\b/",
+          "when": "view == retrocore.drives && viewItem =~ /\\bempty\\b/ && viewItem =~ /\\binsert\\b/",
           "group": "inline@1"
         },
         {
@@ -597,29 +597,64 @@
           "group": "inline@2"
         },
         {
-          "command": "retrocore.device.eject",
-          "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
+          "command": "retrocore.device.locked",
+          "when": "view == retrocore.drives && viewItem =~ /\\blocked\\b/",
           "group": "inline@3"
         },
         {
-          "command": "retrocore.device.protect",
-          "when": "view == retrocore.drives && viewItem =~ /\\bprotect\\b/",
-          "group": "inline@4"
-        },
-        {
-          "command": "retrocore.device.unprotect",
-          "when": "view == retrocore.drives && viewItem =~ /\\bunprotect\\b/",
-          "group": "inline@4"
+          "command": "retrocore.device.unlocked",
+          "when": "view == retrocore.drives && viewItem =~ /\\bunlocked\\b/",
+          "group": "inline@3"
         },
         {
           "command": "retrocore.device.save",
           "when": "view == retrocore.drives && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.saveStale",
+          "when": "view == retrocore.drives && viewItem =~ /\\bchangedStale\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.drives && viewItem =~ /\\bchangedReadOnly\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
           "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.drives && viewItem =~ /\\b(changed|changedStale)\\b/",
+          "group": "1_save@1"
         },
         {
           "command": "retrocore.device.saveAs",
           "when": "view == retrocore.drives && viewItem =~ /\\bsave\\b/",
-          "group": "1_save"
+          "group": "1_save@2"
+        },
+        {
+          "command": "retrocore.device.insert",
+          "when": "view == retrocore.drives && viewItem =~ /\\binsert\\b/",
+          "group": "2_media@1"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
+          "group": "2_media@2"
+        },
+        {
+          "command": "retrocore.device.protect",
+          "when": "view == retrocore.drives && viewItem =~ /\\bunlocked\\b/",
+          "group": "2_media@3"
+        },
+        {
+          "command": "retrocore.device.unprotect",
+          "when": "view == retrocore.drives && viewItem =~ /\\blocked\\b/",
+          "group": "2_media@3"
         },
         {
           "command": "retrocore.favorite.start",
@@ -724,6 +759,18 @@
         },
         {
           "command": "retrocore.device.save",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.saveStale",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.locked",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.unlocked",
           "when": "false"
         },
         {
@@ -960,22 +1007,38 @@
       },
       {
         "command": "retrocore.device.protect",
-        "title": "Write Protect",
+        "title": "Lock",
         "icon": "$(lock)"
       },
       {
         "command": "retrocore.device.unprotect",
-        "title": "Allow Writes",
+        "title": "Unlock",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.locked",
+        "title": "Locked: click to let the machine write it",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "retrocore.device.unlocked",
+        "title": "Unlocked: click to lock it",
         "icon": "$(unlock)"
       },
       {
         "command": "retrocore.device.save",
-        "title": "Save to Its Image",
+        "title": "Save",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveStale",
+        "title": "Save... (the image changed on disk)",
         "icon": "$(save)"
       },
       {
         "command": "retrocore.device.saveAs",
-        "title": "Save Disk As..."
+        "title": "Save As...",
+        "icon": "$(save-as)"
       },
       {
         "command": "retrocore.device.refresh",

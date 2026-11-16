@@ -5,6 +5,7 @@
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -117,6 +118,37 @@ public sealed class MediaSaveTests
         saved.String("outcome").Should().Be("saved");
         File.ReadAllBytes(saved.String("backup") ?? "").Should().Equal(outside, "the backup holds what was replaced");
         drive.Media?.Changed.Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The host watches each image a disk came from: a write by something else marks the source stale, with the
+    ///  revision the disk matches and the one there now, and marking the file read-only shows as a read-only image,
+    ///  each sent to the device list as it happens; a save over the file makes it current again.
+    /// </summary>
+    [TestMethod]
+    public void ImageChangedOnDiskShowsInItsDrive()
+    {
+        (string image, _) = Image("watched.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        Source(drive)?.Bool("stale").Should().BeFalse();
+        Source(drive)?["readOnly"].Should().BeNull();
+
+        byte[] outside = new byte[35 * 4096];
+        outside[0] = 0x55;
+        Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
+        JsonObject stale = Source(drive) ?? throw new InvalidOperationException("No source.");
+        stale["baseline"]?["sha256"]?.GetValue<string>().Should().NotBe(stale["current"]?["sha256"]?.GetValue<string>());
+        stale["current"]?["length"]?.GetValue<long>().Should().Be(outside.Length);
+
+        Until(() => File.SetAttributes(image, FileAttributes.ReadOnly), () => Source(drive)?.String("readOnly") == "file");
+        Until(() => File.SetAttributes(image, FileAttributes.Normal), () => Source(drive)?["readOnly"] is null);
+
+        Change(drive);
+        JsonObject authorized = Speaking();
+        authorized["overwrite"] = new JsonObject { ["sha256"] = stale["current"]?["sha256"]?.GetValue<string>() };
+        MediaActions.Save(drive, authorized).String("outcome").Should().Be("saved");
+        Source(drive)?.Bool("stale").Should().BeFalse("the disk now matches the file it wrote");
+        Source(drive)?["baseline"].Should().BeNull();
     }
 
     /// <summary>
@@ -416,6 +448,33 @@ public sealed class MediaSaveTests
         disk.IsWriteProtected = false;
         DiskTrack track = disk.Track(5 * 4) ?? throw new InvalidOperationException("Track 5 is not formatted.");
         disk.WriteBit(quarterTrack: 5 * 4, position: 4000, transition: track.ReadBit(4000));
+    }
+
+    // The drive's media source as the device list gives it.
+    private static JsonObject? Source(Apple2FloppyDrive drive) => DeviceJson.Write(drive)["media"]?["source"]?.AsObject();
+
+    // Does something to an image and waits for the host to see it, as its watcher tells the device list.
+    private static void Until(Action act, Func<bool> seen)
+    {
+        using ManualResetEventSlim changed = new();
+        void Changed() => changed.Set();
+        MediaActions.SourcesChanged += Changed;
+        try
+        {
+            act();
+            Stopwatch clock = Stopwatch.StartNew();
+            while (!seen() && clock.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                changed.Wait(TimeSpan.FromMilliseconds(100));
+                changed.Reset();
+            }
+
+            seen().Should().BeTrue("the host's watcher sees the change");
+        }
+        finally
+        {
+            MediaActions.SourcesChanged -= Changed;
+        }
     }
 
     // Arguments from a client that speaks media's answers.

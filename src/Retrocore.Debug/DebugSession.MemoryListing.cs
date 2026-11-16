@@ -78,10 +78,28 @@ internal sealed partial class DebugSession
 
         InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
         (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
+        // Analysis guesses at the bytes no source describes, from the PC, the starts and the sources' code.
+        MemoryGuesses guesses = Guess(
+            bank,
+            memory,
+            set,
+            GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
+            forced,
+            Position);
+
+        GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
         bool Boundary(int address)
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
-            return Position(address) is { Start: { } start } && start == address;
+            DebugPosition? position = Position(address);
+            // Where analysis guessed an instruction starts, or its guessed data does, as a pointer's first byte.
+            if (position is null)
+            {
+                GuessKind kind = guesses.Kinds[address];
+                return kind == GuessKind.Start || (kind == GuessKind.Data && (address == 0 || Guessed(address - 1) != GuessKind.Data));
+            }
+
+            return position is { Start: { } start } && start == address;
         }
 
         // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the
@@ -130,13 +148,36 @@ internal sealed partial class DebugSession
             }
 
             DebugPosition? position = Position(address);
-            string kind = position is null ? "unknown" : "code";
+            GuessKind guess = position is null ? guesses.Kinds[address] : GuessKind.Unknown;
+            bool guessed = guess is GuessKind.Start or GuessKind.Data;
+            string kind = position is null ? guess switch
+            {
+                GuessKind.Start => "code",
+                GuessKind.Data => "data",
+                _ => "unknown"
+            } : "code";
+
             int size;
             string text;
             int? target = null;
             int start = position?.Data == true ? position.Start ?? -1 : -1;
             int length = position?.Size ?? 0;
-            if (start >= 0 && address < start + length && !forced.Contains(address))
+            if (guess == GuessKind.Data && !forced.Contains(address))
+            {
+                // Data analysis guessed lists eight bytes a line, a line ending where the guess or the bytes do.
+                size = 1;
+                while (size < DataPerLine
+                    && address + size <= 0xFFFF
+                    && Guessed(address + size) == GuessKind.Data
+                    && memory.Readable(address + size)
+                    && !Boundary(address + size))
+                {
+                    size++;
+                }
+
+                text = DataText(memory, address, size);
+            }
+            else if (start >= 0 && address < start + length && !forced.Contains(address))
             {
                 // A data statement lists eight bytes a line, a line ending early where a later boundary starts.
                 kind = "data";
@@ -192,6 +233,7 @@ internal sealed partial class DebugSession
                 ["size"] = size,
                 ["text"] = text,
                 ["kind"] = kind,
+                ["guess"] = guessed && position is null && !forced.Contains(address),
                 ["label"] = names.TryGetValue(address, out string? label) ? label : null,
                 ["target"] = target,
                 ["path"] = source?.Path,

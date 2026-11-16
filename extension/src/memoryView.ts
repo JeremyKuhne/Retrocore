@@ -84,6 +84,7 @@ button:disabled{opacity:.5;cursor:default}
 #listing .a{color:var(--vscode-editorLineNumber-foreground)}
 #listing .l{width:10ch;flex:none;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
 #listing .unknown .t{opacity:.7}
+#listing .guess .t{font-style:italic}
 #listing .data .t{color:var(--vscode-debugTokenExpression-number,var(--vscode-editor-foreground))}
 #listing a{color:var(--vscode-textLink-foreground);text-decoration:none;cursor:pointer}
 #listing a:hover{text-decoration:underline}
@@ -616,7 +617,7 @@ function showListingLines() {
     let html = "";
     for (const [index, line] of listingLines.entries()) {
         const last = line.address + line.size - 1;
-        let classes = "ln " + line.kind;
+        let classes = "ln " + line.kind + (line.guess ? " guess" : "");
         if (high > low && line.address <= high && last >= low) classes += " sel";
         if (cursor >= line.address && cursor <= last) classes += " cur";
         const space = line.text.indexOf(" ");
@@ -631,7 +632,7 @@ function showListingLines() {
             : '<a class="src" role="link" tabindex="-1" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
-        html += '<div class="' + classes + '" role="listitem" tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
+        html += '<div class="' + classes + '" role="listitem"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
             + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>" + source + "</div>";
     }
     listingPanel.innerHTML = html;

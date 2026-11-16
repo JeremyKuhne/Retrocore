@@ -426,7 +426,8 @@ function answer(
                     lines: at >= 0xE000 ? [] : [
                         { address: at, size: 2, text: "LDA #$C1", kind: "code", label: "START", target: null, path: "C:/src/hello.s", line: 3 },
                         { address: at + 2, size: 3, text: "JMP START", kind: "code", label: null, target: at, path: "C:/src/hello.s", line: 4 },
-                        { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null }
+                        { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null },
+                        { address: at + 7, size: 1, text: "RTS", kind: "code", guess: true, label: null, target: null, path: null, line: null }
                     ]
                 }
             });
@@ -866,7 +867,9 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     let state = await drive(page, [{ goto: 0x0300 }], () => 0, lists);
     const html = page.elements.get("listing")!.innerHTML;
     const top = (state.listing as string[])[0].substring(0, 4);
-    assert.deepEqual((state.listing as string[]).map(line => line.substring(5)), ["LDA #$C1", "JMP START", ".byte $01, $02"]);
+    assert.deepEqual((state.listing as string[]).map(line => line.substring(5)), ["LDA #$C1", "JMP START", ".byte $01, $02", "RTS"]);
+    // Analysis's guesses say so.
+    assert.match(html, /class="ln code guess" role="listitem" title="A guess: no source describes these bytes, and analysis takes them for code"/);
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
     assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);

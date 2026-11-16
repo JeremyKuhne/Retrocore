@@ -371,6 +371,78 @@ try {
     assert.equal((await listing(0x6030, 6))[0].address, 0x6030, "nothing known starts an instruction near $6030");
     lines = await listing(0x6030, 6, [0x6001]);
     assert.deepEqual([lines[0].address, lines[0].size], [0x602E, 3], JSON.stringify(lines));
+    // Analysis guesses at what no source describes, from a start: JSR $6110 and RTS, and at the subroutine it calls,
+    // LDA #$01 and RTS, are code; the text between, which nothing reaches, is not guessed.
+    at = "guessing at code no source describes";
+    await write("0x6100", [0x20, 0x10, 0x61, 0x60, 0xC8, 0xC5, 0xCC, 0xCC, 0xCF, 0, 0, 0, 0, 0, 0, 0, 0xA9, 0x01, 0x60]);
+    lines = await listing(0x6100, 0x13, [0x6100]);
+    const at6 = address => lines.find(line => line.address === address);
+    assert.deepEqual([at6(0x6100).text, at6(0x6100).guess], ["JSR $6110", false], "a start from Decode from here is the user's, not a guess");
+    assert.deepEqual([at6(0x6103).text, at6(0x6103).kind, at6(0x6103).guess], ["RTS", "code", true]);
+    assert.deepEqual([at6(0x6104).kind, at6(0x6104).guess], ["unknown", false]);
+    assert.deepEqual([at6(0x6110).text, at6(0x6110).kind, at6(0x6110).guess], ["LDA #$01", "code", true], JSON.stringify(lines));
+    // JMP ($6150) makes its pointer data and where it points code.
+    await write("0x6140", [0x6C, 0x50, 0x61]);
+    await write("0x6150", [0x60, 0x61]);
+    await write("0x6160", [0x60]);
+    lines = await listing(0x6140, 0x21, [0x6140]);
+    assert.deepEqual([at6(0x6150).text, at6(0x6150).kind, at6(0x6150).guess], [".byte $60, $61", "data", true], JSON.stringify(lines));
+    assert.deepEqual([at6(0x6160).text, at6(0x6160).kind, at6(0x6160).guess], ["RTS", "code", true]);
+    // A start is the user's: a jump analysis follows into its instruction does not split it.
+    await write("0x6200", [0xA9, 0x60, 0x60]);
+    await write("0x6210", [0x4C, 0x01, 0x62]);
+    lines = await listing(0x6200, 0x13, [0x6200, 0x6210]);
+    assert.deepEqual([at6(0x6200).text, at6(0x6200).size], ["LDA #$60", 2], JSON.stringify(lines));
+    // Analysis keeps out of what the sources make data: a jump into TABLE does not run through it as code, so the
+    // bytes after it are not guessed.
+    const tableStart = table.address, tableEnd = table.address + 11;
+    await write("0x6220", [0x4C, tableStart & 0xFF, tableStart >> 8]);
+    lines = await listing(tableEnd, 4, [0x6220]);
+    assert.ok(lines.every(line => !line.guess), JSON.stringify(lines));
+    // A pointer that cannot be read is not followed: main RAM has no $C100, so JMP ($C100) there guesses nothing at
+    // $0000, where unreadable bytes read as zero would point.
+    await write("main:0x6230", [0x6C, 0x00, 0xC1]);
+    lines = (await request("retro/memory/listing", { memoryReference: "main:0x0000", address: 0x0000, count: 4, starts: [0x6230] })).lines;
+    assert.ok(lines.every(line => !line.guess), JSON.stringify(lines));
+    const mainListing = async (address, count, starts) =>
+        (await request("retro/memory/listing", { memoryReference: "main:0x0000", address, count, starts })).lines;
+    // A call across main RAM's gap at $C000 still reaches what it calls: JSR $D100 from $6300 guesses $D100.
+    await write("main:0x6300", [0x20, 0x00, 0xD1, 0x60]);
+    await write("main:0xD100", [0xA9, 0x05, 0x60]);
+    lines = await mainListing(0xD100, 3, [0x6300]);
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].guess], ["LDA #$05", "code", true], JSON.stringify(lines));
+    // A bank of RAM still follows an indirect jump's pointer, though it holds no CPU vectors.
+    await write("main:0x6340", [0x6C, 0x50, 0x63]);
+    await write("main:0x6350", [0x60, 0x63]);
+    await write("main:0x6360", [0x60]);
+    lines = await mainListing(0x6340, 0x21, [0x6340]);
+    assert.deepEqual([at6(0x6350).kind, at6(0x6350).guess, at6(0x6360).text, at6(0x6360).guess], ["data", true, "RTS", true], JSON.stringify(lines));
+    // A jump through a pointer across the gap is followed: JMP ($D200) from $6380, which points at $6390.
+    await write("main:0x6380", [0x6C, 0x00, 0xD2]);
+    await write("main:0xD200", [0x90, 0x63]);
+    await write("main:0x6390", [0x60]);
+    lines = await mainListing(0x6390, 1, [0x6380]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["RTS", true], JSON.stringify(lines));
+    lines = await mainListing(0xD200, 2, [0x6380]);
+    assert.deepEqual([lines[0].kind, lines[0].guess, lines[0].size], ["data", true, 2], JSON.stringify(lines));
+    // An entry that the pointer then makes data, such as the next instruction after a NOP at $D1FF, is dropped
+    // rather than failing the whole run: the call from $6300 still guesses $D100 there.
+    await write("main:0xD1FF", [0xEA]);
+    lines = await mainListing(0xD100, 2, [0x6300, 0x6380, 0xD1FF]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$05", true], JSON.stringify(lines));
+    // A pointer the sources already make data is read: JMP (TABLE) from $D300 goes where TABLE's $01, $02 point.
+    await write("main:0xD300", [0x6C, table.address & 0xFF, table.address >> 8]);
+    lines = await mainListing(0x0201, 1, [0xD300]);
+    assert.deepEqual([lines[0].address, lines[0].kind, lines[0].guess], [0x0201, "code", true], JSON.stringify(lines));
+    // Guessed data starts a line, so a byte before it does not decode through it: $AD would be LDA $6420.
+    await write("main:0x6400", [0x6C, 0x10, 0x64]);
+    await write("main:0x640F", [0xAD, 0x20, 0x64]);
+    await write("main:0x6420", [0x60]);
+    lines = await mainListing(0x640F, 3, [0x6400]);
+    assert.deepEqual(lines.map(line => [line.address, line.kind]), [[0x640F, "unknown"], [0x6410, "data"]], JSON.stringify(lines));
+    // A start whose instruction falls into the sources' data stops there, and the rest of the analysis still runs.
+    lines = await listing(0x6110, 3, [table.address - 1, 0x6100]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$01", true], JSON.stringify(lines));
     // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
     const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
     await write("bank1:0xDFFF", [0xAD]);

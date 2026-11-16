@@ -74,9 +74,11 @@ export function breakpointName(bank: string | null, address: number): string {
 
 /**
  * Whether a function breakpoint's name is the address of a view's bank the listing's gutter sets: $0300, 0x0300 or
- * cpu:$0300 in the CPU's view, aux:$0400 in aux's, whatever the case.
+ * cpu:$0300 in the CPU's view, aux:$0400 in aux's, whatever the case. Only a name written in hex counts: bare digits
+ * are decimal in an expression, so 1024 stops at $0400, not $1024.
  */
 export function breakpointAt(name: string, bank: string | null, address: number): boolean {
+    if (!/^\s*(?:[a-z][a-z0-9]*:)?\s*(?:\$|0x)/i.test(name)) return false;
     const parsed = parseReference(name.trim().replace(/(^|:)\s*\$/, (_, before: string) => `${before}0x`));
     return parsed !== undefined && parsed.bank === bank && parsed.address === address;
 }

@@ -508,6 +508,9 @@ try {
     assert.equal((await request("evaluate", { expression: "aux:AUXTEXT", context: "retrocore" })).memoryReference, "aux:0x0400");
     assert.equal((await request("evaluate", { expression: "[aux:AUXTEXT]" })).result, (await request("evaluate", { expression: "[aux:$0400]" })).result);
     await rejects(request("evaluate", { expression: "AUXTEXT" }), /Unknown label/);
+    await mark({ address: 0x6502, name: "CAFÉ" });
+    assert.equal((await request("evaluate", { expression: "CAFÉ", context: "retrocore" })).memoryReference, "0x6502");
+    await mark({ address: 0x6502, name: "" });
     // Find by instruction: ? is any character and * any run, and an operand matches by number or by label.
     at = "finding an instruction";
     await write("0x6510", [0x20, 0x01, 0x65]);

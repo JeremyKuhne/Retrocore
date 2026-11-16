@@ -227,6 +227,14 @@ export function registerMemory(context: vscode.ExtensionContext): void {
 
                     if (!("event" in sent)) return;
 
+                    // The debugger moves or binds breakpoints itself too, as when a module loads.
+                    if (sent.event === "breakpoint") {
+                        for (const editor of editors) {
+                            if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "breakpoints" });
+                        }
+                        return;
+                    }
+
                     // A stop is when changes are counted from, and when labels and the character set may change.
                     if (sent.event === "stopped") {
                         for (const editor of editors) {

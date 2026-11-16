@@ -246,6 +246,6 @@ internal sealed partial class ExpressionEvaluator
     [GeneratedRegex(@"^\s*([a-zA-Z][a-zA-Z0-9]*):(?!:)(.*)$", RegexOptions.Singleline)]
     private static partial Regex BankReference();
 
-    [GeneratedRegex("""\s*(\$[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+|[a-zA-Z][a-zA-Z0-9]*:(?!:)|[a-zA-Z_@][a-zA-Z_0-9@]*(?:::[a-zA-Z_@][a-zA-Z_0-9@]*)*|\.w|==|!=|<=|>=|&&|\|\||<<|>>|[+\-*/%&|^!~()<>\[\]])""")]
+    [GeneratedRegex("""\s*(\$[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+|[a-zA-Z][a-zA-Z0-9]*:(?!:)|[a-zA-Z_@][\w@]*(?:::[a-zA-Z_@][\w@]*)*|\.w|==|!=|<=|>=|&&|\|\||<<|>>|[+\-*/%&|^!~()<>\[\]])""")]
     private static partial Regex ExpressionTokens();
 }

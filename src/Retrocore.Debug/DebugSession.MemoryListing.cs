@@ -351,13 +351,14 @@ internal sealed partial class DebugSession
         return page is { } value ? (int)(value & 0xFF) : -1;
     }
 
-    // The ids of the breakpoints that stop at an address of a space: those for any code there, and a bank's own.
+    // The ids of the breakpoints that stop at an address of a space: those for any code there, and a bank's own. Banks
+    // are matched by name, as a card change makes the target's banks again while the bound sites keep the old ones.
     private JsonArray? BreakpointsAt(DebugMemoryBank? bank, int address)
     {
         if (!_breakpoints.TryGetValue((ushort)address, out List<BreakpointSite>? sites)) { return null; }
         JsonArray ids = [];
         foreach (int id in sites
-            .Where(site => site.Bank is null || ReferenceEquals(site.Bank, bank))
+            .Where(site => site.Bank is null || (bank is not null && string.Equals(site.Bank.Name, bank.Name, StringComparison.Ordinal)))
             .Select(site => site.Breakpoint.Id)
             .Distinct())
         {

@@ -999,6 +999,9 @@ test("the gutter's breakpoints are function breakpoints named by address", () =>
     assert.ok(!breakpointAt("aux:$0400", null, 0x0400));
     assert.ok(!breakpointAt("$0301", null, 0x0300));
     assert.ok(!breakpointAt("START", null, 0x0300));
+    // Bare digits are decimal in an expression, so 768 is $0300 and 0300 is not this address's name.
+    assert.ok(!breakpointAt("0300", null, 0x0300));
+    assert.ok(!breakpointAt("aux:0400", "aux", 0x0400));
 });
 
 test("a read-only bank refuses typing before writing", async () => {

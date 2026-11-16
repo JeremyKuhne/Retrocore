@@ -72,6 +72,32 @@ public class PascalCompilerRoundTripTests
     }
 
     /// <summary>
+    ///  Apple Pascal 1.3's Compiler's identifier record, T2, keeps the pointers its variants hold at its eighth word: a
+    ///  pointer at a record's address the code shows more words of does not size the record, as a scalar there does.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   When a pointer lent its words, the record took five and lost both views, and the types after it were
+    ///   numbered anew, so hints written for the Compiler's types no longer named them.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    public void ApplePascal13CompilersIdentifiersKeepTheirPointerViews()
+    {
+        string apple2 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.3_APPLE2.woz");
+        if (!File.Exists(apple2))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.3's WOZ images.");
+        }
+
+        byte[] original = PascalVolume.Read(Sectors(apple2), proDosOrder: false).ReadFile("SYSTEM.COMPILER");
+        string source = PascalDecompiler.Decompile(PascalCodeFile.Read(original)).Source;
+        string identifier = source.Split('\n').Single(line => line.StartsWith("  T2 = RECORD", StringComparison.Ordinal));
+
+        identifier.Should().Contain("T2F7V1: T").And.Contain("T2F7V2: T");
+    }
+
+    /// <summary>
     ///  Apple Pascal 1.0's Compiler, decompiled and compiled with itself on Apple III Pascal 1.1, has the same segments
     ///  as Apple's.
     /// </summary>

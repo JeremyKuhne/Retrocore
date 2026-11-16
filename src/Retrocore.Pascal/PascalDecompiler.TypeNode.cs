@@ -852,7 +852,8 @@ public sealed partial class PascalDecompiler
         // The words a scalar at a record's address was shown to have are the record's.
         private static void Lend(TypeNode record, TypeNode first)
         {
-            if (first.Kind is not (TypeKind.Scalar or TypeKind.Pointer) || first.Words <= 1) { return; }
+            // A pointer is one word, whatever the words its Words gives are.
+            if (first.Kind != TypeKind.Scalar || first.Words <= 1) { return; }
 
             record.Words = Math.Max(record.Words, first.Words);
             first.Words = 0;
@@ -898,7 +899,7 @@ public sealed partial class PascalDecompiler
             Bytes = Punned = false;
 
             // The words a scalar was shown to have at its address are the record's, which starts with it.
-            bool scalar = first.Kind is TypeKind.Scalar or TypeKind.Pointer;
+            bool scalar = first.Kind == TypeKind.Scalar;
             Words = scalar ? first.Words : 0;
             if (scalar) { first.Words = 0; }
             Fields = new SortedDictionary<int, TypeNode> { [0] = first };

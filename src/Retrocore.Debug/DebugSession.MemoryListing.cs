@@ -140,7 +140,7 @@ internal sealed partial class DebugSession
             }
 
             DebugPosition? position = Position(address);
-            GuessKind guess = Guessed(address);
+            GuessKind guess = position is null ? guesses.Kinds[address] : GuessKind.Unknown;
             bool guessed = guess is GuessKind.Start or GuessKind.Data;
             string kind = position is null ? guess switch
             {

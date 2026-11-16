@@ -16,10 +16,15 @@ internal sealed partial class DebugSession
     // The last analysis, kept while its space's bytes and entry points stay the same, as they do while scrolling.
     private MemoryGuesses? _guesses;
 
+    // Where each request reads the space to compare with the last analysis's bytes; it becomes those bytes when they
+    // differ, so a request where nothing changed allocates nothing.
+    private byte[] _guessScratch = new byte[0x10000];
+
     // Analyzes a space from its entry points, or gives the last analysis where nothing it used has changed.
     private MemoryGuesses Guess(DebugMemoryBank? bank, ListingMemory memory, InstructionSet set, IEnumerable<int> entries)
     {
-        byte[] image = new byte[0x10000];
+        byte[] image = _guessScratch;
+        image.AsSpan().Clear();
         List<AnalysisRegion> unreadable = [];
         int run = -1;
         for (int address = 0; address <= 0x10000; address++)
@@ -73,6 +78,8 @@ internal sealed partial class DebugSession
             kinds.AsSpan(region.Address, region.Length).Clear();
         }
 
+        // The bytes read become the analysis's, and the last analysis's bytes the next request's scratch.
+        _guessScratch = _guesses?.Image ?? new byte[0x10000];
         _guesses = new MemoryGuesses(space, image, ordered, kinds);
         return _guesses;
     }

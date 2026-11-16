@@ -423,7 +423,14 @@ public sealed partial class PascalDecompiler
 
             // A WITH inside it starts in its body.
             With(body, temporaries);
-            statements.Insert(index, new WithStatement(record, temporary, body) { Offset = assignment.Offset });
+            // Its code starts with the temporary's assignment, which it takes the place of.
+            WithStatement with = new(record, temporary, body)
+            {
+                Offset = assignment.Offset,
+                Start = assignment.Start
+            };
+
+            statements.Insert(index, with);
         }
     }
 

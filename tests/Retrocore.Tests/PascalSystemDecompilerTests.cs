@@ -294,6 +294,8 @@ public class PascalSystemDecompilerTests
 
         // A WITH's statements are each below their own p-code, not all of it above the FOR.
         int with = Array.FindIndex(lines, line => line.StartsWith("WITH ", StringComparison.Ordinal));
+        lines[with - 1].Should().MatchRegex(@"^\{.*IXA.*\}$", source);
+        lines[with - 2].Should().StartWith("FOR ", source);
         lines[with + 1].Should().Be("BEGIN", source);
         lines[with + 2].Should().StartWith("{", source);
         lines[with + 3].Should().Contain(":=", source);

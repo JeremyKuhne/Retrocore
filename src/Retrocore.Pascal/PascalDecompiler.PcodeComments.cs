@@ -37,12 +37,12 @@ public sealed partial class PascalDecompiler
         _ => []
     };
 
-    // The first p-code of a statement's code, or of the statements it holds where it has no span of its own, as a
-    // WITH, which the decoder makes from the statements in it.
+    // The first p-code of a statement's code, or of the statements it holds where it has no start of its own.
     private static int? FirstPcode(Statement statement) =>
         statement.Start ?? Nested(statement).Select(FirstPcode).Min();
 
-    // The last p-code of a statement's code, or of the statements it holds.
+    // The last p-code of a statement's code, or of the statements it holds where it has no end of its own, as a
+    // WITH, made from its temporary's assignment and the statements after it.
     private static int? LastPcode(Statement statement) =>
         statement.End ?? Nested(statement).Select(LastPcode).Max();
 

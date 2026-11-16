@@ -161,7 +161,14 @@ What the decompiler does not decompile yet, found by decompiling every code file
   set members the code pushes as ORD or CHR of them, which the Compiler does not fold; CASE with OTHERWISE; and, in
   the tools, a source too long for /WORK split past halfway with the rest on /OUT, no Filer prefix without units
   (1.0's Filer is damaged), 1.2's listing prompt after its banner, and the 64 bits of intrinsic units Apple III
-  code files keep. **Next:** Apple Pascal 1.2's Compiler.
+  code files keep. **Done as far as it can be (2026-11-16): Apple Pascal 1.2's Compiler**
+  (`ApplePascal12CompilerRebuildsItselfButForOneJumpTableEntry`, about three minutes): decompiled and compiled with
+  itself, `(*$S++*)`, on a 128K IIe with 1.2's 128K system, every procedure's p-code is Apple's, but PASCALCO is a
+  word shorter: in Apple's INSYMBOL (PASCALCO.6) the big CASE's out-of-range jump and its arms' 21 jumps to its end
+  go through two words of the jump table, both $0760, a label of its own for the out-of-range jump as 1.3's and the
+  Apple III's Compilers give it (they have OTHERWISE); 1.2's own Compiler gives them one. No Compiler at hand builds
+  Apple's: 1.3's rejects IDSEARCH and TREESEARCH, and the Apple III's lay files out larger. So Apple built 1.2's
+  system programs with a Compiler of its own (its Assembler shows the same CASE), likely 1.3's forerunner.
 - **A user program: Wizardry.** **Done (2026-11-15): Wizardry I v2.1 (Sir-Tech, Apple Pascal 1.1) decompiles to the
   same segments**, both code files on its boot disk (`PascalWizardryTests`): SYSTEM.STARTUP (USES CHAINSTUFF from the
   disk's library) compiles with the 1.1 Compiler on a 64K Apple II with `(*$S+*)`; WIZARDRY.CODE, whose declarations

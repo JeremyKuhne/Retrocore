@@ -21,7 +21,8 @@ namespace Retrocore.Tests;
 ///  </para>
 ///  <para>
 ///   Apple Pascal 1.0's Compiler, from <c>UCSD Pascal 1.0_2.DSK</c>, compiles with itself on Apple III Pascal 1.1,
-///   whose system disk, <c>Apple3Pascal1.1Disk1.dsk</c>, is in <c>RETROCORE_APPLE3_DISKS</c>.
+///   whose system disk, <c>Apple3Pascal1.1Disk1.dsk</c>, is in <c>RETROCORE_APPLE3_DISKS</c>. Apple Pascal 1.2's,
+///   from <c>UCSD Pascal 1.2_2.DSK</c>, compiles with itself to Apple's p-code but for one jump table's word.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -115,6 +116,121 @@ public class PascalCompilerRoundTripTests
         }
     }
 
+    /// <summary>
+    ///  Apple Pascal 1.2's Compiler, decompiled and compiled with itself, has Apple's p-code in every procedure, but for
+    ///  one entry of a jump table, which only the Compiler Apple built it with could have written.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   It compiles with <c>(*$S++*)</c> on a 128K IIe booted from APPLE1 (<c>UCSD Pascal 1.2_1.DSK</c>) with APPLE3's
+    ///   128K system (<c>1.2_3.DSK</c>) in place of the 64K one, which runs out of room in COMPINIT. It takes about five
+    ///   minutes.
+    ///  </para>
+    ///  <para>
+    ///   A jump farther than a byte reaches goes through its procedure's jump table, words at the procedure's end each
+    ///   holding the distance back to a target. In Apple's PASCALCO.6, INSYMBOL, the big CASE's out-of-range jump goes
+    ///   through one word for the CASE's end and its arms' 21 jumps to the end through another: a label of its own for
+    ///   the out-of-range jump, as 1.3's Compiler and the Apple III's give it, which have OTHERWISE. 1.2's Compiler
+    ///   gives both the CASE's one end label, one word, so its PASCALCO is a word, 2 bytes, shorter: the same jumps to
+    ///   the same places. No Compiler on the disks at hand builds Apple's: 1.3's rejects IDSEARCH and TREESEARCH, the
+    ///   Apple III's lay files out larger.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    public void ApplePascal12CompilerRebuildsItselfButForOneJumpTableEntry()
+    {
+        string apple1 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.2_1.DSK");
+        string apple2 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.2_2.DSK");
+        string apple3 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.2_3.DSK");
+        if (!File.Exists(apple1) || !File.Exists(apple2) || !File.Exists(apple3))
+        {
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.2's disks.");
+        }
+
+        byte[] original = PascalVolume.Read(Sectors(apple2), proDosOrder: false).ReadFile("SYSTEM.COMPILER");
+        PascalDecompilation decompiled = PascalDecompiler.Decompile(PascalCodeFile.Read(original));
+        decompiled.Warnings.Should().BeEmpty();
+
+        string boot = Path.Join(Path.GetTempPath(), $"Retrocore-{Guid.NewGuid():N}-APPLE1-128K.dsk");
+        byte[]? compiled;
+        try
+        {
+            File.WriteAllBytes(boot, Boot128K(apple1, apple3));
+            string source = $"(*$S++*)\n{decompiled.Source}";
+            (compiled, string screen, _) = EmulatedPascalCompiler.CompileWithListing(source, boot, apple2, listing: null, s_inputs, files: null, Apple2Model.IIeEnhanced);
+            if (compiled is null) { Assert.Fail($"The Compiler stopped:\n{screen}"); }
+        }
+        finally
+        {
+            File.Delete(boot);
+        }
+
+        PascalCodeFile apples = PascalCodeFile.Read(original);
+        PascalCodeFile rebuilt = PascalCodeFile.Read(compiled);
+
+        // The one difference: PASCALCO a word shorter, from the jump through the CASE's end's second word.
+        IReadOnlyList<string> differences = PascalCodeComparison.Compare(apples, rebuilt);
+        differences.Should().Equal(
+            "PASCALCO: its length is 4614, not 4616.",
+            "PASCALCO: the code differs from $051D in PASCALCO.6:",
+            "  expected $051C: UJP $0760",
+            "  actual   $051C: UJP $0760");
+
+        // Every procedure's p-code is Apple's: each instruction, its operands, and where it jumps, from its procedure's
+        // entry; a jump's operand, which of the table's words it goes through, apart.
+        foreach (PascalSegment segment in apples.Segments.Where(segment => segment.Procedures.Count > 0))
+        {
+            PascalSegment other = rebuilt.Segments.Single(found => found.Name == segment.Name && found.Procedures.Count > 0);
+            foreach (PascalProcedure procedure in segment.Procedures.Where(procedure => !procedure.IsNative))
+            {
+                PascalProcedure same = other.Procedures.Single(found => found.Index == procedure.Index);
+                Shapes(other, same).Should().Equal(Shapes(segment, procedure), $"{segment.Name.Trim()}.{procedure.Index}");
+            }
+        }
+
+        // The words of PASCALCO.6's jump table that go to the CASE's end: two in Apple's, one in the rebuilt.
+        CaseEndWords(apples).Should().Be(2, Describe(apples));
+        CaseEndWords(rebuilt).Should().Be(1, Describe(rebuilt));
+    }
+
+    // A procedure's p-code, each instruction's opcode, operands and data, and its jumps' targets from its entry; a
+    // jump's own operand, which word of the jump table it takes, is not its shape.
+    private static List<string> Shapes(PascalSegment segment, PascalProcedure procedure) =>
+        [.. PcodeDisassembler.Disassemble(segment, procedure).Select(instruction => Shape(instruction, procedure.Entry))];
+
+    private static string Shape(PcodeInstruction instruction, int entry)
+    {
+        string operands = instruction.Targets.Count > 0 ? "" : string.Join(",", instruction.Operands);
+        string targets = string.Join(",", instruction.Targets.Select(target => target < 0 ? target : target - entry));
+        return $"{instruction.Opcode.Code} {operands} {Convert.ToHexString(instruction.Data)} {targets}";
+    }
+
+    // How many words of PASCALCO.6's jump table, below its attributes' five words, go to the CASE's end: where its
+    // biggest XJP goes out of its range.
+    private static int CaseEndWords(PascalCodeFile file)
+    {
+        PascalSegment segment = file.Segments.Single(found => found.Name.Trim() == "PASCALCO" && found.Procedures.Count > 0);
+        PascalProcedure procedure = segment.Procedures.Single(found => found.Index == 6);
+        List<PcodeInstruction> tables = [.. PcodeDisassembler.Disassemble(segment, procedure).Where(instruction => instruction.Opcode.Code == Pcode.Xjp)];
+        tables.Should().NotBeEmpty("PASCALCO.6 has its CASE");
+        int end = tables.OrderByDescending(instruction => instruction.Targets.Count).First().Targets[0];
+        byte[] code = segment.Code;
+        int words = 0;
+        for (int at = procedure.Attributes - 10; at > procedure.Exit; at -= 2)
+        {
+            if (at - (code[at] | (code[at + 1] << 8)) == end) { words++; }
+        }
+
+        return words;
+    }
+
+    private static string Describe(PascalCodeFile file)
+    {
+        PascalSegment segment = file.Segments.Single(found => found.Name.Trim() == "PASCALCO" && found.Procedures.Count > 0);
+        PascalProcedure procedure = segment.Procedures.Single(found => found.Index == 6);
+        return $"PASCALCO.6: entry ${procedure.Entry:X4}, exit ${procedure.Exit:X4}, attributes ${procedure.Attributes:X4}";
+    }
+
     // A code file with each segment's version, bits 13 to 15 of its information word, 4, Apple III Pascal's.
     private static byte[] AsVersion4(byte[] code)
     {
@@ -149,5 +265,8 @@ public class PascalCompilerRoundTripTests
         return boot;
     }
 
-    private static byte[] Sectors(string path) => SectorDiskReader.Read(WozDisk.Load(File.ReadAllBytes(path)), proDosOrder: false);
+    // An image's sectors, a WOZ image's read back from its tracks.
+    private static byte[] Sectors(string path) => path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase)
+        ? SectorDiskReader.Read(WozDisk.Load(File.ReadAllBytes(path)), proDosOrder: false)
+        : File.ReadAllBytes(path);
 }

@@ -171,4 +171,26 @@ public sealed class MemoryHintsTests
         hints.Name("AUX", 0x0400, "AuxText");
         hints.Names("aux").Should().ContainKey(0x0400);
     }
+
+    /// <summary>
+    ///  Analysis goes on after a marked call as its subroutine's hint says: past inline bytes, or not at all.
+    /// </summary>
+    [TestMethod]
+    public void MarkedCallsFollowCallHints()
+    {
+        string path = Path.Join(Path.GetTempPath(), $"{Guid.NewGuid():N}.hints.json");
+        File.WriteAllText(path, """{ "entries": ["$0801", "$0806"], "inline": { "$0900": 1 }, "noReturn": ["$0A00"] }""");
+        try
+        {
+            // $0800 BRK, $0801 JSR $0900 .byte 1, $0805 NOP, $0806 JSR $0A00, $0809 .byte $FF
+            byte[] image = [0x00, 0x20, 0x00, 0x09, 0x01, 0xEA, 0x20, 0x00, 0x0A, 0xFF];
+            DisassemblyProgram program = new(image, 0x0800, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
+            AnalysisProject project = program.Project(new Dictionary<ushort, string>());
+            project.EntryPoints.Should().Contain((ushort)0x0805).And.NotContain((ushort)0x0804).And.NotContain((ushort)0x0809);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

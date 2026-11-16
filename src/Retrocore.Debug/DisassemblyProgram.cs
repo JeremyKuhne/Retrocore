@@ -65,9 +65,9 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
 
             claimed = entry + instruction.Size;
             project.Regions.Add(new AnalysisRegion(entry, instruction.Size, AnalysisRegionKind.Code));
-            if (GoesOn(instruction.Flow) && Contains((ushort)claimed) && !InData(project, (ushort)claimed))
+            foreach (int next in Continuations(instruction, claimed))
             {
-                after.Add((ushort)claimed);
+                if (Contains((ushort)next) && !InData(project, (ushort)next)) { after.Add((ushort)next); }
             }
         }
 
@@ -87,9 +87,40 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
         return project;
     }
 
+    // Where analysis goes on after an instruction pinned as code, which it does not follow itself: the next, unless a
+    // call's subroutine never returns or returns past inline bytes, as the hints say and the analysis would take them;
+    // a conditional call goes on to both.
+    private List<int> Continuations(DisassembledInstruction instruction, int next)
+    {
+        if (!GoesOn(instruction.Flow)) { return []; }
+        if (instruction.Flow != DisassemblyFlow.Call
+            || instruction.DirectTarget is not { } callee
+            || !Hints.Calls.TryGetValue(callee, out AnalysisCall? call))
+        {
+            return [next];
+        }
+
+        List<int> found = instruction.Encoding.IsConditional ? [next] : [];
+        if (call.Kind != AnalysisCallKind.NoReturn && InlineLength(call, next) is >= 0 and var inline)
+        {
+            found.Add(next + inline);
+        }
+
+        return found;
+    }
+
     // Whether an instruction goes on to the next.
     private static bool GoesOn(DisassemblyFlow flow) =>
         flow is DisassemblyFlow.Next or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Call or DisassemblyFlow.Wait;
+
+    // The inline bytes a hinted subroutine reads after its call, or -1 where a zero-terminated run has no end.
+    private int InlineLength(AnalysisCall call, int next)
+    {
+        if (call.Kind == AnalysisCallKind.InlineBytes) { return call.InlineLength; }
+        int offset = next - Origin;
+        int terminator = offset < Image.Length ? Image.AsSpan(offset).IndexOf((byte)0) : -1;
+        return terminator < 0 ? -1 : terminator + 1;
+    }
 
     // Whether the project's pinned data holds an address.
     private static bool InData(AnalysisProject project, ushort address) => project.Regions.Any(region =>

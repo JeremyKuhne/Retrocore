@@ -121,13 +121,13 @@ internal sealed partial class DebugSession
         return new JsonObject { ["path"] = path, ["address"] = address, ["count"] = count };
     }
 
-    // Refuses a name a source's label or the machine's constant has at another address in the space, which would make
-    // two addresses' operands read alike.
+    // Refuses a name any source's label or the machine's constant gives another address in the space, shown or not,
+    // which would make two addresses' operands read alike; the hints file's own names are checked as it is now.
     private void NameUnused(DebugMemoryBank? bank, int address, string name)
     {
         if (name.Length == 0) { return; }
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
-        foreach ((int other, string taken) in LabelsAndNames(bank, memory).Names)
+        foreach ((int other, string taken, bool _) in SourceNames(bank, memory, SourceNameKinds.All, _ => false))
         {
             if (other != address && string.Equals(taken, name, StringComparison.Ordinal))
             {

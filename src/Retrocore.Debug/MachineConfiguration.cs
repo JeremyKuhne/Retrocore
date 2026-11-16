@@ -155,7 +155,14 @@ internal static class MachineConfiguration
         bool writeProtected = saved?.Bool("writeProtected") ?? false;
         if (device.Info.Operations.HasFlag(MediaOperations.WriteProtect) && device.Media?.WriteProtected != writeProtected)
         {
-            target.DeviceAction(device, "writeProtect", new JsonObject { ["writeProtected"] = writeProtected });
+            // A saved machine is restored before it runs, so the lock is the one it starts with: slot 7's ROM says so.
+            JsonObject lockArgs = new()
+            {
+                ["writeProtected"] = writeProtected,
+                ["powerOn"] = true,
+            };
+
+            target.DeviceAction(device, "writeProtect", lockArgs);
         }
     }
 

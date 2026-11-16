@@ -133,6 +133,7 @@ try {
     writeFileSync(slot7, image);
     await session({ diskImage: slot7 }, async () => {
         await waitFor(6, 0x2B, "the locked write");
+        assert.equal(await zeroPage(0xC7FE) & 0x04, 0, "slot 7's ROM says the locked device does not write");
         const drive = await device("slot7");
         assert.equal(drive.media.writeProtected, true);
         assert.equal(drive.media.changed, false);
@@ -146,11 +147,16 @@ try {
         assert.equal(machineState.media.slot7.path, moved, "the saved machine keeps where slot 7 now is");
     });
 
-    // The launch with that saved machine takes slot 7's image from it, as no insert can.
+    // The launch with that saved machine takes slot 7's image from it, as no insert can, unlocked as it was saved, and
+    // the boot block's write goes through the first time.
     await session({ diskImage: slot7, machineState }, async () => {
+        await waitFor(7, 0xA5, "the restored write");
+        assert.equal(await zeroPage(6), 0, "the first write succeeded");
+        assert.equal(await zeroPage(0xC7FE) & 0x04, 0x04, "slot 7's ROM says the restored device writes");
         const drive = await device("slot7");
         assert.equal(drive.media.label, moved);
         assert.equal(drive.media.format, "2MG");
+        assert.equal(drive.media.writeProtected, false);
     });
 
     // A 3.5 drive's 2MG saves unchanged as the file it read, and as bare blocks.

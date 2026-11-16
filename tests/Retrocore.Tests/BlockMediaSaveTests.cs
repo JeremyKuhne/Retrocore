@@ -211,6 +211,10 @@ public sealed class BlockMediaSaveTests
         storage.WritesAnnounced.Should().BeFalse("ProDOS read the ROM as it started");
         machine.Reset();
         storage.WritesAnnounced.Should().BeTrue();
+        storage.SetWriteProtected(writeProtected: true, powerOn: true);
+        storage.WritesAnnounced.Should().BeFalse("a lock the machine starts with is in the ROM at once");
+        storage.SetWriteProtected(writeProtected: false, powerOn: true);
+        storage.WritesAnnounced.Should().BeTrue();
 
         Write(machine.Bus.BlockDevice, block: 9, 0x42);
         storage.Media?.Changed.Should().BeTrue();

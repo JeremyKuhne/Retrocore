@@ -1199,7 +1199,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             case (Apple2BlockStorage storage, "writeProtect"):
-                storage.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                bool locked = args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required.");
+                storage.SetWriteProtected(locked, powerOn: args.Bool("powerOn") ?? false);
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");

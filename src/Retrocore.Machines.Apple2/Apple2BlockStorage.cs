@@ -98,14 +98,19 @@ public sealed class Apple2BlockStorage : IBlockStorage, IMediumSlot
     public long? LastBlock => _bus.LastBlockAccess.Block;
 
     /// <summary>
-    ///  Locks or unlocks the image: writes are refused or allowed at once, and the ROM says so from the next reset.
+    ///  Locks or unlocks the image: writes are refused or allowed at once, and the ROM says so from the next reset, or
+    ///  at once for a lock set as the machine is set up, before it runs.
     /// </summary>
     /// <param name="writeProtected">Whether the image is locked.</param>
+    /// <param name="powerOn">
+    ///  Whether the lock is the one the machine starts with, as a saved machine restores it, so the ROM says so now.
+    /// </param>
     /// <exception cref="InvalidOperationException">The image cannot be unlocked.</exception>
-    public void SetWriteProtected(bool writeProtected)
+    public void SetWriteProtected(bool writeProtected, bool powerOn = false)
     {
         IMedium medium = Medium ?? throw new InvalidOperationException($"{Info.Name}'s image cannot be unlocked.");
         medium.IsWriteProtected = writeProtected;
+        if (powerOn) { _bus.RefreshSlot7Rom(); }
     }
 
     /// <inheritdoc/>

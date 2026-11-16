@@ -7,7 +7,8 @@
 // fails; the saved image is pinned by digest, so it is the same image whichever drive wrote it:
 // - a ProFile in slot 7 saves to its .po, keeping a backup, then as a 2MG, which boots again and saves again;
 // - slot 7's own block device loads locked, so the guest's writes fail as write-protected ($2B) and nothing changes,
-//   until the drive is unlocked, when the write goes through and the image saves;
+//   until the drive is unlocked, when the write goes through and the image saves; saved as a 2MG, the saved machine
+//   keeps it, and the next launch with that saved machine boots the 2MG;
 // - a 3.5 drive's 2MG saves unchanged as the file it read, and as bare blocks.
 // The ROMs are assembled from the SDK's sources, so no dumps are needed.
 
@@ -127,6 +128,8 @@ try {
     // Slot 7's block device loads locked: the guest's write fails as write-protected and changes nothing, until the
     // drive is unlocked; then it saves.
     const slot7 = join(folder, "slot7.po");
+    const moved = join(folder, "slot7.2mg");
+    let machineState;
     writeFileSync(slot7, image);
     await session({ diskImage: slot7 }, async () => {
         await waitFor(6, 0x2B, "the locked write");
@@ -138,6 +141,16 @@ try {
         assert.equal((await device("slot7")).media.changed, true);
         await save("slot7");
         assert.equal(sha256(readFileSync(slot7)), pinned);
+        await save("slot7", { path: moved });
+        machineState = (await request("retro/devices")).configuration;
+        assert.equal(machineState.media.slot7.path, moved, "the saved machine keeps where slot 7 now is");
+    });
+
+    // The launch with that saved machine takes slot 7's image from it, as no insert can.
+    await session({ diskImage: slot7, machineState }, async () => {
+        const drive = await device("slot7");
+        assert.equal(drive.media.label, moved);
+        assert.equal(drive.media.format, "2MG");
     });
 
     // A 3.5 drive's 2MG saves unchanged as the file it read, and as bare blocks.

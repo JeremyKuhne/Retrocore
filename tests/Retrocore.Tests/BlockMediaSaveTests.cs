@@ -316,26 +316,36 @@ public sealed class BlockMediaSaveTests
     }
 
     /// <summary>
-    ///  Slot 7's image moves with a Save As, and the machine built again takes the launch with it there: no insert
-    ///  puts it back.
+    ///  A saved machine whose slot 7 a Save As moved gives the launch that image, as no insert can; one that did not
+    ///  move it, a Disk II launch, and an image no longer there leave the launch as it is.
     /// </summary>
     [TestMethod]
     public void Slot7SaveAsMovesItsLaunch()
     {
         (string path, _) = Image("launch.po", blocks: 280);
-        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
-        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
-        JsonObject launch = new() { ["machine"] = "apple2", ["diskImage"] = path };
-        LaunchMedia.Current([storage], launch).Should().BeSameAs(launch, "slot 7 is where the launch put it");
-
         string copy = Path.Join(s_root, $"moved-{Guid.NewGuid():N}.2mg");
-        JsonObject saveAs = Speaking();
-        saveAs["path"] = copy;
-        MediaActions.Save(storage, saveAs).String("outcome").Should().Be("saved");
-        JsonObject moved = LaunchMedia.Current([storage], launch);
+        File.WriteAllBytes(copy, TwoImg(blocks: 280, locked: false, out _));
+        JsonObject launch = new() { ["machine"] = "apple2", ["diskImage"] = path };
+        static JsonObject Saved(string image) => new()
+        {
+            ["media"] = new JsonObject { ["slot7"] = new JsonObject { ["path"] = image } },
+        };
+
+        LaunchMedia.WithSaved(launch, saved: null).Should().BeSameAs(launch);
+        LaunchMedia.WithSaved(launch, Saved(path)).Should().BeSameAs(launch, "slot 7 is where the launch put it");
+        JsonObject moved = LaunchMedia.WithSaved(launch, Saved(copy));
         moved.String("diskImage").Should().Be(copy);
         moved.String("machine").Should().Be("apple2");
         launch.String("diskImage").Should().Be(path, "the launch it came from is not changed");
+
+        JsonObject diskII = new() { ["machine"] = "apple2", ["diskImage"] = path, ["diskController"] = "diskII" };
+        LaunchMedia.WithSaved(diskII, Saved(copy)).Should().BeSameAs(diskII, "the Disk II has no slot 7 device");
+        LaunchMedia.WithSaved(launch, Saved(Path.Join(s_root, "gone.po"))).Should().BeSameAs(launch);
+
+        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
+        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
+        LaunchMedia.FromLaunch(storage).Should().BeTrue("a saved machine keeps slot 7's image");
+        LaunchMedia.FromLaunch(ProFile()).Should().BeFalse();
     }
 
     // A ProFile on no card, with a clock that never moves.

@@ -243,7 +243,10 @@ try {
     await request("configurationDone");
     assert.equal((await event("stopped")).reason, "entry");
     await request("continue", { threadId: 1 });
-    assert.equal((await event("stopped")).reason, "breakpoint");
+    // A launch above can tell of its stop on entry after its events were cleared; such a late stop is not this one.
+    let sourceStop = await event("stopped");
+    while (sourceStop.reason === "entry") sourceStop = await event("stopped");
+    assert.equal(sourceStop.reason, "breakpoint");
     const sourceStack = await request("stackTrace", { threadId: 1 });
     assert.equal(sourceStack.stackFrames[0].line, 14);
     assert.equal((await request("evaluate", { expression: "counter" })).result, "$6016 (24598)");

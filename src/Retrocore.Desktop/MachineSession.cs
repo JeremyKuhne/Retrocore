@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Debug;
 using System.Text.Json.Nodes;
 using Touki;
 
@@ -93,7 +94,7 @@ internal sealed class MachineSession : DisposableBase
         if (!Host.Running) { return; }
         Host.SaveRecordings();
         JsonObject saved = Host.Capture();
-        Replace(Host.CurrentConfiguration(), saved);
+        Replace(Configuration, saved);
     }
 
     /// <summary>
@@ -132,7 +133,7 @@ internal sealed class MachineSession : DisposableBase
         }
 
         JsonObject saved = Host.Capture();
-        JsonObject next = MachineCatalog.WithSetting(Host.CurrentConfiguration(), choice, value);
+        JsonObject next = MachineCatalog.WithSetting(Configuration, choice, value);
         JsonObject changes;
         using (MachineHost plain = new(Configuration))
         {
@@ -188,7 +189,7 @@ internal sealed class MachineSession : DisposableBase
     internal void Keep()
     {
         if (!_keep) { return; }
-        _settings.Machine = (JsonObject)Host.CurrentConfiguration().DeepClone();
+        _settings.Machine = (JsonObject)Configuration.DeepClone();
         _settings.MachineState = Host.Capture();
         _settings.Save();
     }
@@ -221,7 +222,8 @@ internal sealed class MachineSession : DisposableBase
 
     private MachineHost Build(JsonObject configuration, JsonObject? saved)
     {
-        MachineHost host = new(configuration);
+        // Slot 7's image comes from the launch, so a saved machine that moved it gives the launch its image.
+        MachineHost host = new(LaunchMedia.WithSaved(configuration, saved));
         Problems = saved is null ? [] : host.Restore(saved);
         return host;
     }

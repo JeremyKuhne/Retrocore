@@ -656,6 +656,7 @@ internal sealed partial class DebugSession
     private JsonObject Launch(JsonObject args)
     {
         _run?.Cancel();
+        args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
         string? program = args.String("program");

@@ -16,7 +16,8 @@ namespace Retrocore.Debug;
 ///   The configuration is <c>{ "cards": { "4": "mockingboard", "5": "diskII16", ... }, "media": { "disk1":
 ///   { "path": "...", "writeProtected": false }, "disk2": null } }</c>. A drive given as null is empty. Media the
 ///   host cannot insert again, such as a disk a DOS launch built or a tape being recorded, is left out, so the
-///   launch's own stays.
+///   launch's own stays. Slot 7's image, which comes from the launch, is kept too; the launch takes it from there
+///   (<see cref="LaunchMedia"/>), and only its lock is restored here.
 ///  </para>
 ///  <para>
 ///   Hardware with switches adds <c>"settings": { "slot4": { "translation": true, "refresh": false } }</c>, by
@@ -35,7 +36,8 @@ internal static class MachineConfiguration
         JsonObject media = [];
         foreach (IDevice device in target.Devices)
         {
-            if (!device.Info.Operations.HasFlag(MediaOperations.Insert)) { continue; }
+            bool kept = device.Info.Operations.HasFlag(MediaOperations.Insert) || LaunchMedia.FromLaunch(device);
+            if (!kept) { continue; }
             if (device.Media is not { } state)
             {
                 media[device.Id] = null;
@@ -141,7 +143,11 @@ internal static class MachineConfiguration
         }
 
         if (!File.Exists(path)) { throw new IOException($"{path} no longer exists."); }
-        if (!string.Equals(device.Media?.Label, path, StringComparison.OrdinalIgnoreCase))
+        bool same = string.Equals(device.Media?.Label, path, LaunchMedia.PathComparison);
+
+        // Media from the launch cannot be inserted; their lock is theirs only while they are the saved ones.
+        if (LaunchMedia.FromLaunch(device) && !same) { return; }
+        if (!same)
         {
             target.DeviceAction(device, "insert", new JsonObject { ["path"] = path });
         }

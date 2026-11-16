@@ -74,6 +74,7 @@ internal static class OffMachine
     private static JsonObject With(JsonObject parameters, Action<IDebugTarget> act)
     {
         JsonObject configuration = parameters["configuration"] as JsonObject ?? throw new ArgumentException("configuration is required: the machine's launch arguments.");
+        configuration = LaunchMedia.WithSaved(configuration, parameters["machineState"]);
 
         lock (s_gate)
         {

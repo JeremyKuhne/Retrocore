@@ -556,16 +556,6 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
-    ///  Gets the configuration that builds this machine again with its media where they now are: slot 7's image, which
-    ///  no insert changes, as a Save As moved it.
-    /// </summary>
-    /// <returns>The configuration, or a copy with the media moved.</returns>
-    internal JsonObject CurrentConfiguration()
-    {
-        using (Gate()) { return LaunchMedia.Current(_target.Devices, Configuration); }
-    }
-
-    /// <summary>
     ///  Restores cards and media a saved machine kept.
     /// </summary>
     /// <param name="saved">The saved machine.</param>

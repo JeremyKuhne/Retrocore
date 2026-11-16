@@ -874,7 +874,8 @@ After the reviews:
    self-hosted extension. It lands in two parts:
    - **The drive rows and Save in each state (built).** The host watches each image a disk came from
      (`ImageWatcher`, a `FileSystemWatcher` per image and its link's target, kept whole by a sweep every two seconds,
-     checked a moment after its events settle and off the machine's thread), and a drive's `source` gives `stale`, with the `baseline` revision and the `current` one, and
+     checked a moment after its events settle and off the machine's thread), and a drive's `source` gives `stale`,
+     with the `baseline` revision and the `current` one, and
      `readOnly` (`format` or `file`); a change sends `retro/devices` even while the machine is stopped. In the Drives
      view ([drives.ts](../../extension/src/drives.ts)) each drive is its own picture (5.25-inch, 3.5-inch, hard disk,
      tape) with a padlock badge in its activity's colour, drawn as SVGs written to the extension's storage; the

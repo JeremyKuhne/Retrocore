@@ -152,8 +152,9 @@ public sealed class CocoDiskController
         Name = $"Drive {drive}",
         Description = "5¼-inch floppy drive",
         Controller = "WD1793 in the disk controller cartridge",
-        Formats = ["dsk", "jvc"],
-        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+        Formats = ["dsk", "jvc", "dmk"],
+        SaveFormats = ["dsk", "jvc", "dmk"],
+        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
 
         // Drive 3's select line is the other drives' side select, so drive 3 is single-sided.

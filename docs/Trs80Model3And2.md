@@ -101,7 +101,8 @@ The new machines, and now the Model I too, read four formats, by extension or, f
 | DMK | Raw tracks with their ID marks' offsets, single and double density. |
 | IMD | ImageDisk, the usual format for Model II disks: FM and MFM, compressed, deleted and bad sectors. |
 
-Writing changed disks back to their image files is not emulated yet, as on the Model I.
+A changed disk saves to its image, or as JV3 or DMK, and on the Model III and 4 as JV1 (`.dsk`, `.jv1`) where it
+fits ([Devices.md](Devices.md#the-debug-protocol)). A disk read from IMD saves as another format.
 
 ## DOSes
 

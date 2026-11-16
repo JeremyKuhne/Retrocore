@@ -58,7 +58,8 @@ public sealed class Trs80Model2Machine : IMachine
             : "8-inch floppy drive",
         Controller = "FD1791 with the Z80 DMA, selected at port $EF",
         Formats = ["imd", "dmk", "jv3", "dsk"],
-        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+        SaveFormats = ["dmk", "jv3"],
+        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 77,
         Sides = 2
     };

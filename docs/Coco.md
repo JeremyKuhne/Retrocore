@@ -52,9 +52,11 @@ CM-8 RGB monitor (`RgbMonitor`).
 
 The disk controller cartridge (`CocoDiskController`) holds Disk Extended Color BASIC 1.0 or 1.1 in its ROM, a
 WD1793 and four drives. `$FF40` selects the drive, side, motor and density, and lets the WD1793's INTRQ drive
-NMI and its DRQ release HALT, which Disk BASIC uses to move each sector's bytes. Disks are JVC images (`.dsk`):
-35 tracks of 18 256-byte sectors, with an optional header for other geometries. The WD1793 is the Model I's
-controller, shared with the TRS-80's code.
+NMI and its DRQ release HALT, which Disk BASIC uses to move each sector's bytes. Disks are JVC images (`.dsk`,
+`.jvc`): 35 tracks of 18 256-byte sectors, with an optional header for other geometries; or DMK images (`.dmk`, or a
+`.dsk` whose DMK header gives its length). A changed disk saves to its image, keeping a JVC's header, or as `.dsk`,
+`.jvc` or `.dmk` ([Devices.md](Devices.md#the-debug-protocol)). The WD1793 is the Model I's controller, shared with the
+TRS-80's code.
 
 ## ROMs
 
@@ -123,7 +125,7 @@ The options are:
 - `monitor`: `composite` (the default) or `rgb` on a CoCo 3;
 - `cartridge` and `autostart`: a ROM pack image, which takes the slot from the disk controller;
 - `diskController` (on by default when disks are given), `diskBasic` (`1.0` or `1.1`, `1.1` by default; without
-  dumps, built from the source) and `disks`, JVC images for drives 0-3;
+  dumps, built from the source) and `disks`, JVC or DMK images for drives 0-3;
 - `cassette` and `fastCassette` (on by default);
 - `sound`: `speaker` (the default) or `off`;
 - `speed`: `1` (the default) runs at 0.895 MHz, `2`, `4` or `8` that many times as fast, and `"max"` as fast as
@@ -161,6 +163,7 @@ RETURN returns through. The CoCo 3's BASIC has no BASIC thread yet.
 | `CocoVideoTests`, `Coco3VideoTests` | The VDG's and GIME's modes, pixel by pixel. |
 | `CocoPeripheralTests` | A cassette round trip, joysticks, sound and a ROM pack. |
 | `CocoDiskTests` | DSKINI, SAVE, DIR and LOAD on a CoCo 2 and 3, and JVC images. |
+| `FloppyMediaSaveTests` | Floppy writes counted; DMK holding every kind of sector; what JV1, JV3 and JVC list as lost; a JVC header kept; saving through the host; and Disk BASIC's SAVE saved as JVC and DMK, pinned by digest, loading and running again. |
 | `BasicConformanceTests`, `BasicTokenizerTests` | Color BASIC lines typed on a CoCo 2 from the SDK's sources are stored as the library tokenizes them, with and without Disk BASIC; the keyword tables match the three ROMs'. |
 | `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources and the CoCo 3's ROM, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk, and the CoCo 3 drawing on its hi-res screen. |
 | `CocoOracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua): screens and programs on the CoCo 2, 2B and 3, and a Disk BASIC SAVE's disk image byte for byte. |

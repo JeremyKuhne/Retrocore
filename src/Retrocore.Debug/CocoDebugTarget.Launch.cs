@@ -223,6 +223,8 @@ internal sealed partial class CocoDebugTarget
         if (device == "disk")
         {
             if (drive < 0 || drive >= drives.Count) { throw new ArgumentException($"There is no drive {drive}."); }
+            // A changed disk is held back, as from retro/device, so an older client cannot lose it.
+            if (MediaActions.Device(drives[drive], action, args) is { } answer) { return answer; }
             DeviceAction(drives[drive], action, args);
         }
         else if (device == "cassette")
@@ -261,8 +263,7 @@ internal sealed partial class CocoDebugTarget
             throw new ArgumentException($"There is no drive {drive}; disks need the disk controller.");
         }
 
-        string full = Path.GetFullPath(path);
-        Drives[drive].Insert(JvcFormat.Read(File.ReadAllBytes(full)), full, "JVC");
+        FloppyMedia.Insert(Drives[drive], path, coco: true);
     }
 
     private JsonObject MediaState() => new JsonObject

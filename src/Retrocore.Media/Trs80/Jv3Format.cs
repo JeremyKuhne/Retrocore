@@ -14,6 +14,12 @@ namespace Retrocore.Media.Trs80;
 ///   the side, bit 3 a CRC error, and bits 1-0 the size (0 is 256 bytes, 1 is 128, 2 is 1024, 3 is 512).
 ///   A track of <c>$FF</c> marks a free entry. A track's sectors pass the head in table order.
 ///  </para>
+///  <para>
+///   An entry's track and side are both where the sector lies and what its ID says, so a sector whose ID names
+///   another track or side, as copy protection writes, cannot be held; nor can a double-density mark other than
+///   <c>$FB</c> and <c>$F8</c>, or more sectors than two tables list, as other emulators read no more. The writer
+///   packs the tables, so a changed disk saves to the same sectors, not the same bytes.
+///  </para>
 /// </remarks>
 public static class Jv3Format
 {
@@ -21,6 +27,11 @@ public static class Jv3Format
     ///  The entries in one table.
     /// </summary>
     public const int EntriesPerTable = 2901;
+
+    /// <summary>
+    ///  The most sectors an image holds: two tables' worth.
+    /// </summary>
+    public const int MaximumSectors = EntriesPerTable * 2;
 
     private const int TableSize = (EntriesPerTable * 3) + 1;
     private const byte Free = 0xFF;
@@ -63,7 +74,7 @@ public static class Jv3Format
     public static FloppyDisk Read(ReadOnlySpan<byte> image)
     {
         if (image.Length < TableSize) { throw new InvalidDataException("A JV3 image starts with a sector table."); }
-        FloppyDisk disk = new() { WriteProtected = image[TableSize - 1] == 0 };
+        FloppyDisk disk = new() { IsWriteProtected = image[TableSize - 1] == 0 };
         int offset = 0;
         while (offset + TableSize <= image.Length)
         {
@@ -87,7 +98,7 @@ public static class Jv3Format
                     track,
                     (byte)side,
                     table[(entry * 3) + 1],
-                    image.Slice(offset, size).ToArray(),
+                    image.Slice(offset, size),
                     (flags & DoubleDensityFlag) != 0,
                     Mark(flags))
                 {
@@ -106,19 +117,59 @@ public static class Jv3Format
     }
 
     /// <summary>
-    ///  Writes a disk as JV3.
+    ///  Writes a disk as JV3, listing what JV3 cannot hold of it.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <returns>The image and its losses.</returns>
+    public static EncodedImage Encode(FloppyDisk disk)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        FloppyLosses losses = new();
+        List<(int Cylinder, int Side, FloppySector Sector)> sectors = [];
+        foreach ((int cylinder, int side, IReadOnlyList<FloppySector> track) in disk.Tracks())
+        {
+            foreach (FloppySector sector in track)
+            {
+                if (sector.Track != cylinder || sector.Side != side)
+                {
+                    losses.Add("Sector IDs naming another track or side", cylinder);
+                }
+
+                if (sector.DoubleDensity && sector.DataAddressMark is not (0xFB or 0xF8))
+                {
+                    losses.Add("Double-density data address marks other than $FB and $F8", cylinder);
+                }
+
+                if (sectors.Count == MaximumSectors)
+                {
+                    losses.Add($"Sectors past the {MaximumSectors} that two JV3 tables list.");
+                    continue;
+                }
+
+                sectors.Add((cylinder, side, sector));
+            }
+        }
+
+        return new(Tables(sectors, disk.IsWriteProtected), losses.ToList());
+    }
+
+    /// <summary>
+    ///  Writes a disk as JV3, which must hold all of it.
     /// </summary>
     /// <param name="disk">The disk.</param>
     /// <returns>The file's bytes.</returns>
+    /// <exception cref="InvalidOperationException">JV3 cannot hold all of the disk.</exception>
     public static byte[] Write(FloppyDisk disk)
     {
-        ArgumentNullException.ThrowIfNull(disk);
-        List<(int Cylinder, FloppySector Sector)> sectors = [];
-        foreach ((int cylinder, _, IReadOnlyList<FloppySector> track) in disk.Tracks())
-        {
-            foreach (FloppySector sector in track) { sectors.Add((cylinder, sector)); }
-        }
+        EncodedImage encoded = Encode(disk);
+        return encoded.IsLossless
+            ? encoded.Bytes
+            : throw new InvalidOperationException($"JV3 cannot hold all of the disk: {string.Join(" ", encoded.Losses)}");
+    }
 
+    // The tables and their sectors' data, each entry where its sector lies.
+    private static byte[] Tables(List<(int Cylinder, int Side, FloppySector Sector)> sectors, bool writeProtected)
+    {
         using MemoryStream output = new();
         int written = 0;
         do
@@ -128,13 +179,13 @@ public static class Jv3Format
             Array.Fill(table, Free);
             for (int entry = 0; entry < count; entry++)
             {
-                (int cylinder, FloppySector sector) = sectors[written + entry];
+                (int cylinder, int side, FloppySector sector) = sectors[written + entry];
                 table[entry * 3] = (byte)cylinder;
                 table[(entry * 3) + 1] = sector.Sector;
-                table[(entry * 3) + 2] = Flags(sector);
+                table[(entry * 3) + 2] = Flags(sector, side);
             }
 
-            table[TableSize - 1] = disk.WriteProtected ? (byte)0 : (byte)0xFF;
+            table[TableSize - 1] = writeProtected ? (byte)0 : (byte)0xFF;
             output.Write(table);
             for (int entry = 0; entry < count; entry++) { output.Write(sectors[written + entry].Sector.Data); }
             written += count;
@@ -151,12 +202,12 @@ public static class Jv3Format
         return (flags & DoubleDensityFlag) == 0 ? (byte)(0xFB - mark) : mark == 0 ? (byte)0xFB : (byte)0xF8;
     }
 
-    private static byte Flags(FloppySector sector)
+    private static byte Flags(FloppySector sector, int side)
     {
         int mark = sector.DoubleDensity ? (sector.DataAddressMark == 0xFB ? 0 : 1) : 0xFB - sector.DataAddressMark;
         int flags = (sector.DoubleDensity ? DoubleDensityFlag : 0)
             | (mark << 5)
-            | (sector.Side != 0 ? SideFlag : 0)
+            | (side != 0 ? SideFlag : 0)
             | (sector.CrcError ? ErrorFlag : 0)
             | Array.IndexOf(s_sizes, sector.Data.Length);
 

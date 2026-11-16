@@ -85,6 +85,7 @@ const stopped = async reason => assert.equal((await event("stopped")).reason, re
 // A disk as Disk BASIC's DSKINI leaves it: 35 tracks of 18 256-byte sectors, every byte $FF.
 const disk = join(tmpdir(), `retrocore-coco-${process.pid}.dsk`);
 writeFileSync(disk, Buffer.alloc(35 * 18 * 256, 0xFF));
+const dmk = join(tmpdir(), `retrocore-coco-${process.pid}.dmk`);
 
 // A Color BASIC program for the BASIC thread.
 const programLines = ["10 A=1:B$=\"HI\"", "20 FOR I=1 TO 3:GOSUB 100:NEXT I", "30 STOP", "40 PRINT A;B$", "100 A=A+I", "110 RETURN"];
@@ -333,10 +334,32 @@ try {
     await type("DIR\r");
     await screen(text => /HELLO\s+BAS/.test(text), "the directory");
 
+    // The disk is changed: an older client's eject is refused, and a save writes it back to its JVC image, whose
+    // directory then lists the program, and then saves it as DMK, which it comes from after.
+    let drive = (await request("retro/devices")).devices.find(device => device.id === "disk0");
+    assert.deepEqual(drive.saveFormats, ["dsk", "jvc", "dmk"]);
+    assert.equal(drive.media.format, "JVC");
+    assert.equal(drive.media.changed, true);
+    await assert.rejects(request("retro/media", { device: "disk", action: "eject", drive: 0 }), /changes not saved/);
+    let saved = await request("retro/device", { id: "disk0", action: "save", supportsRetrocoreMedia: true });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    drive = saved.devices.find(device => device.id === "disk0");
+    assert.equal(drive.media.changed, false);
+    const directory = readFileSync(disk).subarray(((17 * 18) + 2) * 256, ((17 * 18) + 3) * 256);
+    assert.equal(directory.subarray(0, 8).toString("latin1"), "HELLO   ");
+    saved = await request("retro/device", { id: "disk0", action: "save", path: dmk, supportsRetrocoreMedia: true });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    drive = saved.devices.find(device => device.id === "disk0");
+    assert.equal(drive.media.format, "DMK");
+    assert.equal(drive.media.label.toLowerCase(), dmk.toLowerCase());
+
     // A stop sends the whole picture.
     await request("pause", { threadId: 1 });
     await event("stopped");
-    const paused = await event("retro/frame");
+
+    // Frames sent while it ran, as the saves above went on, come first.
+    let paused = await event("retro/frame");
+    while (paused.running) paused = await event("retro/frame");
     assert.equal(paused.running, false);
     assert.equal(Buffer.from(paused.video.pixels, "base64").length, paused.video.width * paused.video.height * 4);
     assert.equal((await request("evaluate", { expression: "DP" })).result.startsWith("$"), true);
@@ -395,12 +418,13 @@ try {
 
     await request("disconnect");
     console.log("Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and "
-        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk, a breakpoint in the sample "
+        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that saves to its image and as DMK, a breakpoint in the sample "
         + `with its call stack and step out, and a CoCo 3 at 80 columns, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
     if (existsSync(disk)) unlinkSync(disk);
+    if (existsSync(dmk)) unlinkSync(dmk);
     if (existsSync(program)) unlinkSync(program);
     if (existsSync(branches)) unlinkSync(branches);
 }

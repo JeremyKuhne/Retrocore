@@ -43,7 +43,6 @@ public sealed partial class Trs80DiskController
 
     private readonly FloppyDisk?[] _disks = new FloppyDisk?[DriveCount];
     private readonly int[] _cylinders = new int[DriveCount];
-    private readonly bool[] _changed = new bool[DriveCount];
     private readonly Trs80Doubler _doubler;
     private readonly int _clockHertz;
     private readonly bool _wd179x;
@@ -69,6 +68,9 @@ public sealed partial class Trs80DiskController
     private int _indexPulses;
     private bool _wasIndex;
     private FloppySector? _sector;
+
+    // The disk the sector was found on, which a write goes to only while that disk is still under the head.
+    private FloppyDisk? _sectorDisk;
     private byte[] _buffer = [];
     private int _position;
     private int _steps;
@@ -157,15 +159,7 @@ public sealed partial class Trs80DiskController
         ArgumentOutOfRangeException.ThrowIfNegative(drive);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(drive, DriveCount);
         _disks[drive] = disk;
-        _changed[drive] = false;
     }
-
-    /// <summary>
-    ///  Gets whether the controller has written to a drive's disk since it was inserted.
-    /// </summary>
-    /// <param name="drive">The drive, 0-3.</param>
-    /// <returns>Whether the disk has changed.</returns>
-    public bool Changed(int drive) => _changed[drive];
 
     /// <summary>
     ///  Gets whether the drives' motors are turning; the Expansion Interface runs them together.
@@ -366,7 +360,7 @@ public sealed partial class Trs80DiskController
         byte status = (byte)(_status & (Busy | CrcError | SeekError | HeadLoaded));
         if (Ready && _rotation < _indexPulseCycles) { status |= IndexOrRequest; }
         if (_selected >= 0 && _cylinders[_selected] == 0) { status |= TrackZeroOrLost; }
-        if (Current?.WriteProtected == true) { status |= WriteProtect; }
+        if (Current?.IsWriteProtected == true) { status |= WriteProtect; }
         if (!Ready) { status |= NotReady; }
         return status;
     }

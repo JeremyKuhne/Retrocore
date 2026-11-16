@@ -111,7 +111,7 @@ internal sealed partial class DebugSession
             return long.Parse(hex.Groups["digits"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         }
 
-        return new ExpressionEvaluator(Target, _debug, address).Evaluate();
+        return new ExpressionEvaluator(Target, _debug, address, bank: bank).Evaluate();
     }
 
     // The reference that names an address, in a bank or as the CPU maps it.
@@ -267,7 +267,7 @@ internal sealed partial class DebugSession
         SortedDictionary<int, string> labels = [];
 
         // The names marked in Retrocore Memory come first, as they do when disassembling.
-        foreach ((int marked, string name) in _hints.Names(HintSpace(bank)))
+        foreach ((int marked, string name) in MarkHints.Names(HintSpace(bank)))
         {
             if (bank is null || bank.AreaOf((ushort)marked) is not null) { labels[marked] = name; }
         }

@@ -71,6 +71,12 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   typing or undo. It takes one tab stop: **Up** and **Down** move between lines, **Left** and **Right** to a line's
   operand and source, **Enter** does what a click does, and **Escape** goes back to the bytes. **Listing** in the
   toolbar hides it; each editor remembers the choice, and a narrow editor leaves it out.
+- **Breakpoints from the listing.** A dot in the listing's gutter shows where a breakpoint stops, set from any
+  source, the Breakpoints view or the Disassembly view. Clicking the gutter, or **F9** on a line or in the bytes,
+  sets a function breakpoint named by the address, such as `$6000` or, in a bank's editor, `aux:$0400`, which
+  stops only while the CPU runs that bank's code there; it shows in the Breakpoints view and stays between
+  sessions. Clicking a dot takes away the breakpoints that stop there, except the Disassembly view's, which are
+  taken away there.
 - **Marks, names and comments.** **Mark code** in the inspector starts an instruction at the cursor, **Mark data**
   makes the selection data, even over a source's instructions, and **Unmark** takes either off; analysis and the
   listing take them as given, a marked instruction listing as one line whatever label or statement
@@ -78,6 +84,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   **Name** labels the cursor's address with a name the disassembler takes, unique among its space's names and labels, winning over the
   sources' labels in the gutter, the inspector and the listing's operands, and **Comment** puts a comment after its
   line in the listing; an empty one takes it away.
+  A name is a symbol in expressions too, in Watch, Go to, conditions and function breakpoints, winning over the
+  sources' labels; a bank's names are in that bank only, so `aux:AUXTEXT` and `[aux:AUXTEXT]` read auxiliary RAM.
   All of them are kept in the launch's hints file, the disassembler's (`--hints`), so what you learn while
   debugging leads straight to `--disassemble`: the launch's `hints` setting names it, and without one it is
   `<name>.hints.json` beside the source, program or debug file, made at the first mark; a launch with none of
@@ -102,10 +110,13 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   frame is focused, and `SP` in a caller's frame is the caller's; an address that frame puts in another bank, such
   as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's, as an address does while
   a BASIC frame is focused. Opening a label or a Watch expression does the same.
-- **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`, or text in quotes, such as
+- **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`; text in quotes, such as
   `"HELLO"`, which matches each character in any of the machine's codes for it (or, without the machine's
-  characters, with bit 7 clear or set). **Enter** or **F3** finds the next, with **Shift** the one before,
-  wrapping around.
+  characters, with bit 7 clear or set); or an instruction, as the listing shows it, with `?` for any character and
+  `*` for any run, such as `STA $C0??`, `JSR COUT` or `LD A,(*)`. An instruction's operand matches as a number or
+  as its label, ignoring case and the spaces around commas, and every byte is tried as an instruction's start;
+  text that reads as hex bytes, such as `ADDA`, is found as bytes. **Enter** or **F3** finds the next, with
+  **Shift** the one before, wrapping around.
 - **The inspector** beside the bytes shows the address with the label it is in, such as `COUT+3`, the byte at
   the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
   Its **Watch** and **Freeze** buttons act on the selection.
@@ -213,10 +224,11 @@ Retrocore Memory uses five more requests:
 | --- | --- |
 | `retro/memory/read` | For a `memoryReference`, `offset` and `count`, all `count` bytes in `data`, reading past unreadable bytes, which read as zero. `unreadable` lists their runs as `{ offset, count }`, so a bank shows where it is inside the CPU's 64K, and `readOnly` the runs a write cannot reach now. Memory events track its reads as they do `readMemory`'s. |
 | `retro/memory/labels` | For a `memoryReference`, the labels in its space as `{ address, name }`, from the debug modules that apply at each address now, then the equates its CPU's instructions address memory through, from the modules whose code is installed: in the bank its area is in, so a ROM's while RAM is mapped over it, but not a card's firmware without the card. |
-| `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), whether that kind is analysis's `guess` where no source describes the bytes, `label`, the `target` its operand names (a restart's implied address; for a 6809 direct-page operand, in the page DP holds at the stop, and none in another CPU's memory), the source `path` and `line`, and the hints file's `comment` on the line's bytes, with `comments` giving each one's `address` and `text` (a comment starts a data line). |
+| `retro/memory/listing` | For a `memoryReference`, `address` and `count` of bytes, the `lines` of instructions and data from the nearest known instruction start at or before `address`, which `starts` adds to (a start in `starts` or a label up to 4096 bytes back still counts, and a start in `starts` decodes an instruction even in data): each line's `address`, `size`, `text`, `kind` (`code`, `data` or `unknown`), whether that kind is analysis's `guess` where no source describes the bytes, `label`, the `target` its operand names (a restart's implied address; for a 6809 direct-page operand, in the page DP holds at the stop, and none in another CPU's memory), the source `path` and `line`, the hints file's `comment` on the line's bytes, with `comments` giving each one's `address` and `text` (a comment starts a data line), and the ids of the `breakpoints` that stop at its address, a bank's only in that bank's listing, or null. |
 | `retro/memory/mark` | For a `memoryReference` and `address`, one of `kind` (`code`, `data` or `clear`, for `count` bytes), `name` or `comment`, an empty one taking it away; writes the launch's hints file as it is now and answers its `path`, or, where the launch has no file, `needsFile` until a request names one as `hints`; it also answers the `address` and `count` of the bytes the mark covers, a code mark's being its instruction's. The file is written beside the old and then takes its place, and one whose parts are not the shapes the disassembler takes is refused. |
 | `retro/memory/note` | For a `memoryReference` and `address`, the `name` and `comment` the hints file gives it now, or null. |
 | `retro/memory/starts` | For a `memoryReference`, a mark's `address` and `count`, and an editor's Decode from here `starts`, the `starts` left: each whose instruction is in those bytes or runs into them goes, except `keep`, a code mark's own. |
+| `retro/memory/find` | For a `memoryReference` and an instruction `pattern` (`?` any character, `*` any run; case and the spaces around commas ignored), the nearest instruction from `from`, or back from it with `backward`, wrapping once, whose text matches with its operand as a number or as its label: its `address`, `size` and `text`, or a null `address`. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
@@ -241,4 +253,5 @@ breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the 
 expressions, disassembly and data, function and instruction breakpoints. The extension's editor test opens the
 Model I's video memory in Retrocore Memory and types, undoes and inspects bytes there, with their labels, characters and read-only ROM.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
-banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing.
+banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
+breakpoints and finding instructions.

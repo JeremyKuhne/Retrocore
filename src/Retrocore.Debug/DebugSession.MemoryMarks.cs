@@ -14,7 +14,12 @@ internal sealed partial class DebugSession
     // The hints file marks are kept in, or null where the launch names none and has no program or source to put one
     // beside, until the first mark chooses one; and what it holds.
     private string? _hintsPath;
-    private MemoryHints _hints = MemoryHints.Empty;
+
+    private MemoryHints MarkHints
+    {
+        get => _debug.Hints;
+        set => _debug.Hints = value;
+    }
 
     // The space a memory view's marks are kept under: its bank's name, or empty for memory as the CPU maps it.
     private static string HintSpace(DebugMemoryBank? bank) => bank?.Name ?? "";
@@ -25,11 +30,11 @@ internal sealed partial class DebugSession
         string? beside = sourceFile ?? program ?? args.String("debugFile");
         string? path = args.String("hints") ?? (beside is null ? null : Path.ChangeExtension(beside, ".hints.json"));
         _hintsPath = path is null ? null : Path.GetFullPath(path);
-        _hints = MemoryHints.Empty;
+        MarkHints = MemoryHints.Empty;
         if (_hintsPath is null) { return; }
         try
         {
-            _hints = ReadHints(_hintsPath);
+            MarkHints = ReadHints(_hintsPath);
         }
         catch (InvalidDataException exception)
         {
@@ -117,7 +122,7 @@ internal sealed partial class DebugSession
 
         hints.Write(path);
         _hintsPath = path;
-        _hints = hints;
+        MarkHints = hints;
         return new JsonObject { ["path"] = path, ["address"] = address, ["count"] = count };
     }
 
@@ -144,7 +149,7 @@ internal sealed partial class DebugSession
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
         int address = args.Int("address") ?? throw new ArgumentException("address is required.");
         string space = HintSpace(bank);
-        MemoryHints hints = _hintsPath is null ? _hints : ReadHints(_hintsPath);
+        MemoryHints hints = _hintsPath is null ? MarkHints : ReadHints(_hintsPath);
         return new JsonObject
         {
             ["name"] = hints.Names(space).TryGetValue(address, out string? name) ? name : null,

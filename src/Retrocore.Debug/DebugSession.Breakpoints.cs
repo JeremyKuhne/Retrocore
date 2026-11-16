@@ -353,7 +353,8 @@ internal sealed partial class DebugSession
                 // A name such as bank1:$D000 stops only while the CPU runs that bank's code there.
                 try
                 {
-                    address = checked((ushort)Evaluate(ExpressionEvaluator.SplitBank(Target, name.Trim(), out bank)));
+                    string rest = ExpressionEvaluator.SplitBank(Target, name.Trim(), out bank);
+                    address = checked((ushort)new ExpressionEvaluator(Target, _debug, rest, bank: bank).Evaluate());
                     if (bank is not null && bank.Peek(address.Value) is null)
                     {
                         state.Problem = $"{bank.Label} has no byte at ${address:X4}.";

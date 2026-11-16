@@ -19,6 +19,9 @@ internal sealed partial class ExpressionEvaluator
     private readonly string[] _tokens;
     private int _position;
 
+    // The hints file's space names are looked for in: the bank a reference or brackets name, else the frame's own.
+    private string _space;
+
     /// <summary>
     ///  Creates an evaluator.
     /// </summary>
@@ -26,11 +29,18 @@ internal sealed partial class ExpressionEvaluator
     /// <param name="symbols">The session's debug modules, for labels.</param>
     /// <param name="expression">The expression.</param>
     /// <param name="registers">Optional suspended caller registers.</param>
-    internal ExpressionEvaluator(IDebugTarget target, DebugInfo symbols, string expression, DebugFrame? registers = null)
+    /// <param name="bank">The bank a reference named before the expression, whose hint names it reads first.</param>
+    internal ExpressionEvaluator(
+        IDebugTarget target,
+        DebugInfo symbols,
+        string expression,
+        DebugFrame? registers = null,
+        DebugMemoryBank? bank = null)
     {
         _target = target;
         _symbols = symbols;
         _registers = registers ?? target.Frame;
+        _space = bank?.Name ?? OwnSpace(target);
         List<string> tokens = [];
         int consumed = 0;
         foreach (Match match in ExpressionTokens().Matches(expression))
@@ -83,8 +93,14 @@ internal sealed partial class ExpressionEvaluator
     internal long EvaluateReference(out DebugMemoryBank? bank, out bool cpu)
     {
         bank = BankPrefix(out cpu);
+        _space = Space(bank, cpu, _space);
         return Evaluate();
     }
+
+    // A coprocessor's memory is its bank's space in the hints file; the machine CPU's is the empty one.
+    private static string OwnSpace(IDebugTarget target) => target is SoftCardDebugTarget softCard ? softCard.Bank.Name : "";
+
+    private static string Space(DebugMemoryBank? bank, bool cpu, string outer) => bank?.Name ?? (cpu ? "" : outer);
 
     /// <summary>
     ///  Splits a bank prefix from a memory reference, such as <c>aux</c> from <c>aux:$0400</c>.
@@ -174,7 +190,10 @@ internal sealed partial class ExpressionEvaluator
         if (token == "[")
         {
             DebugMemoryBank? bank = BankPrefix(out bool cpu);
+            string outer = _space;
+            _space = Space(bank, cpu, outer);
             ushort address = checked((ushort)Parse(minimum: 0));
+            _space = outer;
             Expect("]");
             long value = Peek(bank, cpu, address);
             if (_position < _tokens.Length && _tokens[_position] == ".w")
@@ -206,7 +225,7 @@ internal sealed partial class ExpressionEvaluator
         }
 
         if (char.IsDigit(token[0])) { return long.Parse(token, CultureInfo.InvariantCulture); }
-        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token, _target);
+        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token, _target, _space);
     }
 
     private void Expect(string token)

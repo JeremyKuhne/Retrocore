@@ -9,7 +9,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, cpuWatches, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
+import { addressAt, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -155,6 +155,37 @@ const blankPage = (text: string) => `<!doctype html><html><head><meta charset="u
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"></head>
 <body style="font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:12px">${text}</body></html>`;
 
+/** The requests whose responses change where breakpoints stop, after which the listings show them again. */
+const breakpointCommands = new Set(["setBreakpoints", "setFunctionBreakpoints", "setInstructionBreakpoints"]);
+
+/**
+ * Toggles a breakpoint at an address of a view's bank from the listing's gutter: takes away the function breakpoint
+ * it set there and any other the debugger says stops there (ids), or, with none, sets one. Returns what it did.
+ */
+async function toggleBreakpoint(session: vscode.DebugSession, bank: string | null, address: number, ids: number[]): Promise<string> {
+    const found: vscode.Breakpoint[] = [];
+    for (const breakpoint of vscode.debug.breakpoints) {
+        if (breakpoint instanceof vscode.FunctionBreakpoint && breakpointAt(breakpoint.functionName, bank, address)) {
+            found.push(breakpoint);
+            continue;
+        }
+        if (ids.length === 0) continue;
+        const known = await session.getDebugProtocolBreakpoint(breakpoint);
+        if (known !== undefined && "id" in known && typeof known.id === "number" && ids.includes(known.id)) found.push(breakpoint);
+    }
+
+    const name = breakpointName(bank, address);
+    if (found.length > 0) {
+        vscode.debug.removeBreakpoints(found);
+        return `Took the breakpoint at ${name} away.`;
+    }
+
+    // One VS Code has no breakpoint for, as the Disassembly view's are, is taken away where it was set.
+    if (ids.length > 0) throw new Error(`The breakpoint at ${name} was set in the Disassembly view; take it away there.`);
+    vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint(name)]);
+    return `Breakpoint at ${name}.`;
+}
+
 /** Registers Retrocore Memory and the commands that open it. */
 export function registerMemory(context: vscode.ExtensionContext): void {
     // Sessions by id, since a memory URI names its session and VS Code lists only the active one.
@@ -183,7 +214,18 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             sessions.set(session.id, session);
             return {
                 onDidSendMessage(sent: unknown) {
-                    if (typeof sent !== "object" || sent === null || !("event" in sent)) return;
+                    if (typeof sent !== "object" || sent === null) return;
+
+                    // Breakpoints set anywhere, from a source's gutter, the Breakpoints view, the Disassembly view or
+                    // a listing's, show in the listings once the debugger has them.
+                    if ("command" in sent && typeof sent.command === "string" && breakpointCommands.has(sent.command)) {
+                        for (const editor of editors) {
+                            if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "breakpoints" });
+                        }
+                        return;
+                    }
+
+                    if (!("event" in sent)) return;
 
                     // A stop is when changes are counted from, and when labels and the character set may change.
                     if (sent.event === "stopped") {
@@ -307,6 +349,18 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 count: received.count,
                                 starts: received.starts
                             }));
+                            break;
+                        case "find":
+                            // An instruction such as STA $C0??, which the debugger decodes.
+                            await reply(await session.customRequest("retro/memory/find", {
+                                memoryReference: base,
+                                pattern: received.pattern,
+                                from: received.from,
+                                backward: received.backward
+                            }));
+                            break;
+                        case "breakpoint":
+                            await reply({ status: await toggleBreakpoint(session, start.bank, Number(received.address), (received.ids as number[] | null) ?? []) });
                             break;
                         case "starts":
                             // The Decode from here starts a mark leaves.

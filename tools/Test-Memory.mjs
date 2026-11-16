@@ -501,6 +501,34 @@ try {
     await mark({ address: 0x6501, name: "INSIDE" });
     lines = await listing(0x6501, 1);
     assert.deepEqual([lines[0].address, lines[0].text], [0x6500, "LDA #$01"], JSON.stringify(lines));
+    // The hints file's names are symbols in expressions, a bank's in that bank.
+    at = "hint names in expressions";
+    assert.equal((await request("evaluate", { expression: "INSIDE", context: "retrocore" })).memoryReference, "0x6501");
+    assert.equal((await request("evaluate", { expression: "INSIDE+1" })).result.startsWith("$6502"), true);
+    assert.equal((await request("evaluate", { expression: "aux:AUXTEXT", context: "retrocore" })).memoryReference, "aux:0x0400");
+    assert.equal((await request("evaluate", { expression: "[aux:AUXTEXT]" })).result, (await request("evaluate", { expression: "[aux:$0400]" })).result);
+    await rejects(request("evaluate", { expression: "AUXTEXT" }), /Unknown label/);
+    // Find by instruction: ? is any character and * any run, and an operand matches by number or by label.
+    at = "finding an instruction";
+    await write("0x6510", [0x20, 0x01, 0x65]);
+    const findFrom = (pattern, from, backward = false) =>
+        request("retro/memory/find", { memoryReference: "0x0000", pattern, from, backward });
+    assert.deepEqual(await findFrom("lda  #$0?", 0x6500), { address: 0x6500, size: 2, text: "LDA #$01" });
+    assert.deepEqual(await findFrom("JSR INSIDE", 0x6500), { address: 0x6510, size: 3, text: "JSR INSIDE" });
+    assert.equal((await findFrom("JSR $65*", 0x6500)).address, 0x6510);
+    assert.equal((await findFrom("LDA #$01", 0x650F, true)).address, 0x6500);
+    await rejects(findFrom("  ", 0), /instruction/);
+    // A listing line gives the breakpoints that stop at its address, a bank's only in that bank's listing.
+    at = "breakpoints in the listing";
+    const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
+    lines = await listing(0x6500, 2);
+    assert.deepEqual(lines[0].breakpoints, [gutter[0].id], JSON.stringify(lines));
+    lines = (await request("retro/memory/listing", { memoryReference: "aux:0x0000", address: 0x6510, count: 1 })).lines;
+    assert.deepEqual(lines[0].breakpoints, [gutter[1].id], JSON.stringify(lines));
+    assert.equal((await listing(0x6510, 1))[0].breakpoints, null);
+    await request("setFunctionBreakpoints", { breakpoints: [] });
+    assert.equal((await listing(0x6500, 2))[0].breakpoints, null);
+    at = "marking memory";
     await mark({ address: 0x6500, count: 2, kind: "clear" });
     await mark({ address: 0x6501, name: "" });
     // A name a source's label has elsewhere is refused.

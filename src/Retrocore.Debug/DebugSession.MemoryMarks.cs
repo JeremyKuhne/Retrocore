@@ -102,7 +102,9 @@ internal sealed partial class DebugSession
         }
         else if (args["name"] is not null)
         {
-            hints.Name(space, address, (args.String("name") ?? "").Trim());
+            string name = (args.String("name") ?? "").Trim();
+            NameUnused(bank, address, name);
+            hints.Name(space, address, name);
         }
         else if (args["comment"] is not null)
         {
@@ -119,18 +121,34 @@ internal sealed partial class DebugSession
         return new JsonObject { ["path"] = path, ["address"] = address, ["count"] = count };
     }
 
+    // Refuses a name a source's label or the machine's constant has at another address in the space, which would make
+    // two addresses' operands read alike.
+    private void NameUnused(DebugMemoryBank? bank, int address, string name)
+    {
+        if (name.Length == 0) { return; }
+        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        foreach ((int other, string taken) in LabelsAndNames(bank, memory).Names)
+        {
+            if (other != address && string.Equals(taken, name, StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"${other:X4} is already named {name}.", nameof(name));
+            }
+        }
+    }
+
     /// <summary>
-    ///  Answers retro/memory/note: the <c>name</c> and <c>comment</c> the hints file gives an address, or null.
+    ///  Answers retro/memory/note: the <c>name</c> and <c>comment</c> the hints file gives an address now, or null.
     /// </summary>
     private JsonObject MemoryNote(JsonObject args)
     {
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
         int address = args.Int("address") ?? throw new ArgumentException("address is required.");
         string space = HintSpace(bank);
+        MemoryHints hints = _hintsPath is null ? _hints : ReadHints(_hintsPath);
         return new JsonObject
         {
-            ["name"] = _hints.Names(space).TryGetValue(address, out string? name) ? name : null,
-            ["comment"] = _hints.Comments(space).TryGetValue(address, out string? comment) ? comment : null
+            ["name"] = hints.Names(space).TryGetValue(address, out string? name) ? name : null,
+            ["comment"] = hints.Comments(space).TryGetValue(address, out string? comment) ? comment : null
         };
     }
 

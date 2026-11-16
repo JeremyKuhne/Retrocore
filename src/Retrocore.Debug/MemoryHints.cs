@@ -27,7 +27,8 @@ internal sealed class MemoryHints
     private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
 
     private readonly JsonObject _root;
-    private readonly Dictionary<string, MemoryHintSpace> _spaces = [];
+    // Banks are named without regard to case, as memory references name them.
+    private readonly Dictionary<string, MemoryHintSpace> _spaces = [with(StringComparer.OrdinalIgnoreCase)];
 
     private MemoryHints(JsonObject root) => _root = root;
 

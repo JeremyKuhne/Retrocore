@@ -47,8 +47,31 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
         // An origin marked as data is not where code starts.
         if (InData(project, (ushort)Origin)) { project.EntryPoints.Remove((ushort)Origin); }
 
-        IEnumerable<ushort> entries = Hints.Entries.Where(entry => Contains(entry) && !InData(project, entry));
-        foreach (ushort entry in entries.Where(entry => !project.EntryPoints.Contains(entry)))
+        // Code marked is one instruction pinned as code, so nothing found automatically, such as a CPU vector, claims
+        // its bytes; analysis goes on from where the instruction does.
+        List<ushort> entries = [.. Hints.Entries.Where(entry => Contains(entry) && !InData(project, entry)).Distinct().Order()];
+        List<ushort> after = [];
+        int claimed = -1;
+        foreach (ushort entry in entries)
+        {
+            if (entry < claimed) { continue; }
+            int offset = entry - Origin;
+            if (!Disassembler.TryDecode(Image.AsSpan(offset), entry, Cpu, out DisassembledInstruction instruction)
+                || offset + instruction.Size > Image.Length
+                || Enumerable.Range(entry, instruction.Size).Any(address => InData(project, (ushort)address)))
+            {
+                continue;
+            }
+
+            claimed = entry + instruction.Size;
+            project.Regions.Add(new AnalysisRegion(entry, instruction.Size, AnalysisRegionKind.Code));
+            if (GoesOn(instruction.Flow) && Contains((ushort)claimed) && !InData(project, (ushort)claimed))
+            {
+                after.Add((ushort)claimed);
+            }
+        }
+
+        foreach (ushort entry in entries.Concat(after).Where(entry => !project.EntryPoints.Contains(entry)))
         {
             project.EntryPoints.Add(entry);
         }
@@ -63,6 +86,10 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
 
         return project;
     }
+
+    // Whether an instruction goes on to the next.
+    private static bool GoesOn(DisassemblyFlow flow) =>
+        flow is DisassemblyFlow.Next or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Call or DisassemblyFlow.Wait;
 
     // Whether the project's pinned data holds an address.
     private static bool InData(AnalysisProject project, ushort address) => project.Regions.Any(region =>

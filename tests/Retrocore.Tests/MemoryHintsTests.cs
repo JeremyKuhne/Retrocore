@@ -95,9 +95,9 @@ public sealed class MemoryHintsTests
         {
             DisassemblyProgram program = new(new byte[16], 0x0800, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
             AnalysisProject project = program.Project(new Dictionary<ushort, string>());
-            AnalysisRegion region = project.Regions.Should().ContainSingle().Which;
+            AnalysisRegion region = project.Regions.Where(region => region.Kind == AnalysisRegionKind.Data).Should().ContainSingle().Which;
             (region.Address, region.Length, region.Kind).Should().Be(((ushort)0x0800, 2, AnalysisRegionKind.Data));
-            project.EntryPoints.Should().Equal((ushort)0x0802);
+            project.EntryPoints.Should().StartWith((ushort)0x0802);
             project.Comments.Keys.Should().Equal((ushort)0x0803);
             Disassembler.Analyze(project).Diagnostics.Should().NotContain(diagnostic => diagnostic.IsError);
         }
@@ -135,5 +135,40 @@ public sealed class MemoryHintsTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  Code marked at a CPU vector's bytes disassembles as the instruction, not the vector.
+    /// </summary>
+    [TestMethod]
+    public void CodeMarksWinOverVectors()
+    {
+        string path = Path.Join(Path.GetTempPath(), $"{Guid.NewGuid():N}.hints.json");
+        File.WriteAllText(path, """{ "entries": ["$FFFA"] }""");
+        try
+        {
+            byte[] image = new byte[6];
+            image[0] = 0xEA;
+            image[1] = 0xEA;
+            DisassemblyProgram program = new(image, 0xFFFA, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
+            DisassemblyResult result = Disassembler.Analyze(program.Project(new Dictionary<ushort, string>()));
+            result.Diagnostics.Should().NotContain(diagnostic => diagnostic.IsError);
+            result.Instructions.Select(instruction => (int)instruction.Address).Should().Contain([0xFFFA, 0xFFFB]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    ///  Banks are named without regard to case.
+    /// </summary>
+    [TestMethod]
+    public void SpacesIgnoreCase()
+    {
+        MemoryHints hints = MemoryHints.Empty;
+        hints.Name("AUX", 0x0400, "AuxText");
+        hints.Names("aux").Should().ContainKey(0x0400);
     }
 }

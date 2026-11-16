@@ -685,7 +685,7 @@ async function mark(fields) {
     try {
         const result = await request({ type: "mark", address: low, count: high - low + 1, ...fields });
         if (result && result.cancelled) return;
-        if (fields.kind !== undefined) await reconcile(result.address, result.count, fields.kind === "code" ? cursor : undefined);
+        if (fields.kind !== undefined) await reconcile(result.address, result.count, fields.kind === "code" ? result.address : undefined);
         marks++;
         await loadExtras();
         render();
@@ -696,12 +696,14 @@ async function mark(fields) {
 }
 
 // Decode from here's starts give way to a code or data mark, as the hints file's do: each whose instruction is in
-// the marked bytes or runs into them goes, except a code mark's own.
+// the marked bytes or runs into them goes, except a code mark's own. Only the starts asked about can go, so one
+// added while the request was out stays.
 async function reconcile(address, count, keep) {
     if (forcedStarts.size === 0) return;
-    const result = await request({ type: "starts", address, count, starts: Array.from(forcedStarts), keep });
-    forcedStarts.clear();
-    for (const start of result.starts) forcedStarts.add(start);
+    const sent = Array.from(forcedStarts);
+    const result = await request({ type: "starts", address, count, starts: sent, keep });
+    const left = new Set(result.starts);
+    for (const start of sent) if (!left.has(start)) forcedStarts.delete(start);
 }
 
 // Starts an instruction at the cursor, where the listing decoded from the wrong byte.

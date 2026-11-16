@@ -67,10 +67,16 @@ internal sealed partial class DebugSession
         string space = HintSpace(bank);
         IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
         bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
+        // Its instruction is one line whatever source statement or label starts inside it.
+        Dictionary<int, int> markedCode = [];
         foreach (int code in _hints.Code(space))
         {
             int size = InstructionSize(bank, code);
-            if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked)) { forced.Add(code); }
+            if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked))
+            {
+                forced.Add(code);
+                markedCode[code] = size;
+            }
         }
 
         // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
@@ -121,6 +127,9 @@ internal sealed partial class DebugSession
             return position is { Start: { } start } && start == address;
         }
 
+        // What ends a marked instruction early: another start, or data marked, not a source's statement or a label.
+        bool MarkedCodeBoundary(int address) => forced.Contains(address) || (Marked(address) && !Marked(address - 1));
+
         // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the
         // page is known for the CPU's own memory, from its registers at the stop, and not for another CPU's.
         int? directPage = null;
@@ -145,6 +154,12 @@ internal sealed partial class DebugSession
                 first = Math.Max(first, back);
                 break;
             }
+        }
+
+        // A marked instruction that holds the first address starts the listing, whatever starts inside it.
+        foreach ((int code, int size) in markedCode)
+        {
+            if (code <= from && code + size > from) { first = code; }
         }
 
         if (first < 0)
@@ -242,7 +257,7 @@ internal sealed partial class DebugSession
                 }
 
                 if (Disassembler.TryDecode(bytes[..available], (ushort)address, set, out DisassembledInstruction instruction)
-                    && !RunsOver(address, instruction.Size, Boundary))
+                    && !RunsOver(address, instruction.Size, markedCode.ContainsKey(address) ? MarkedCodeBoundary : Boundary))
                 {
                     size = instruction.Size;
                     (target, int? shown) = ListingOperands.OperandAddress(instruction, directPage);

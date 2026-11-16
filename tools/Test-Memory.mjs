@@ -495,6 +495,16 @@ try {
     await mark({ address: 0xFDED, name: "" });
     const cleared = JSON.parse(readFileSync(hintsFile, "utf8"));
     assert.deepEqual([cleared.entries, cleared.data, cleared.names["$FDED"]], [undefined, undefined, undefined]);
+    // A marked instruction is one line whatever label starts inside it, even listing from there.
+    await write("0x6500", [0xA9, 0x01]);
+    await mark({ address: 0x6500, kind: "code" });
+    await mark({ address: 0x6501, name: "INSIDE" });
+    lines = await listing(0x6501, 1);
+    assert.deepEqual([lines[0].address, lines[0].text], [0x6500, "LDA #$01"], JSON.stringify(lines));
+    await mark({ address: 0x6500, count: 2, kind: "clear" });
+    await mark({ address: 0x6501, name: "" });
+    // A name a source's label has elsewhere is refused.
+    await rejects(mark({ address: 0x6600, name: "BANK2" }), /already named BANK2/);
 
     // A start whose instruction falls into the sources' data stops there, and the rest of the analysis still runs.
     lines = await listing(0x6110, 3, [table.address - 1, 0x6100]);

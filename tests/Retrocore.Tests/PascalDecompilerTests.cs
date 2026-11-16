@@ -749,6 +749,45 @@ public class PascalDecompilerTests
         PascalVolume.Read(codes, proDosOrder: false).Files.Should().ContainSingle(file => file.Name == "D.TEXT");
     }
 
+    /// <summary>
+    ///  The longest included files are placed first: in the directives' order, the short first file would leave
+    ///  SOURCE: without room for a long one, and the last would fit nowhere.
+    /// </summary>
+    [TestMethod]
+    public void TheLongestIncludedFilesArePlacedFirst()
+    {
+        string longer = LongSource(36);
+        Dictionary<string, string> included = new()
+        {
+            ["A.TEXT"] = LongSource(10),
+            ["B.TEXT"] = longer,
+            ["C.TEXT"] = longer,
+            ["D.TEXT"] = longer
+        };
+
+        string main = "(*$I A.TEXT*)\n(*$I B.TEXT*)\n(*$I C.TEXT*)\n(*$I D.TEXT*)\nEND.\n";
+        (byte[] sources, _, IReadOnlyList<byte[]> more) = EmulatedPascalCompiler.FileVolumes(main, included);
+
+        string[] lines = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT")).Split('\n');
+        lines[0].Should().Be("(*$I CODE:A.TEXT  *)");
+        lines[1].Should().Be("(*$I SOURCE:B.TEXT*)");
+        lines[2].Should().Be("(*$I MORE1:C.TEXT *)");
+        lines[3].Should().Be("(*$I MORE2:D.TEXT *)");
+        more.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    ///  A source uses units where USES is in its code, not in a comment or a string.
+    /// </summary>
+    [TestMethod]
+    public void UsesUnitsReadsTheCodeAlone()
+    {
+        EmulatedPascalCompiler.UsesUnits("PROGRAM P; USES TURTLEGRAPHICS; BEGIN END.").Should().BeTrue();
+        EmulatedPascalCompiler.UsesUnits("PROGRAM P;\n  uses\n APPLESTUFF;\nBEGIN END.").Should().BeTrue();
+        EmulatedPascalCompiler.UsesUnits("(* USES X *) {USES Y} PROGRAM P; BEGIN WRITE('USES') END.").Should().BeFalse();
+        EmulatedPascalCompiler.UsesUnits("PROGRAM P; VAR USESSY: INTEGER; BEGIN END.").Should().BeFalse();
+    }
+
     // A source of procedures of 50 lines each, as long as their number makes it.
     private static string LongSource(int procedures)
     {

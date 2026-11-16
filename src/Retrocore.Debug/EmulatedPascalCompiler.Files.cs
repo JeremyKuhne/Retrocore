@@ -16,7 +16,8 @@ internal static partial class EmulatedPascalCompiler
     /// <remarks>
     ///  <para>
     ///   The main file's <c>(*$I NAME.TEXT*)</c> and <c>{$I NAME.TEXT}</c> directives name the included files without a
-    ///   volume; each file goes on the first volume with room for it, SOURCE:, the boot disk, APPLE2 (without the
+    ///   volume; each file goes on the first volume with room for it, SOURCE:, the boot disk (without the Filer, and
+    ///   without the library where the source uses no units), APPLE2 (without the
     ///   Assembler, the Linker and the other tools a compile does not run), CODE:, which keeps room for the code
     ///   file, or MORE1: and MORE2:, the drives of a third Disk II card, in slot 4 (Pascal's units
     ///   9 and 10), which is there only where they are needed; and its directive is given that volume's name. The
@@ -43,6 +44,14 @@ internal static partial class EmulatedPascalCompiler
         byte[] boot = DiskImageFile.Sectors(bootDisk);
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
 
+        // The boot disk takes files too, without the Filer, which a compile does not run, and without the library
+        // where the source uses no units.
+        _ = PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.FILER");
+        if (!UsesUnits(main + string.Concat(included.Values)))
+        {
+            _ = PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.LIBRARY");
+        }
+
         // APPLE2 takes files too, without the tools a compile does not run.
         byte[] tools = DiskImageFile.Sectors(compilerDisk);
         foreach (string unused in s_notCompiling) { _ = PascalVolume.DeleteFile(tools, proDosOrder: false, unused); }
@@ -59,8 +68,8 @@ internal static partial class EmulatedPascalCompiler
     /// <remarks>
     ///  <para>
     ///   Each included file goes on SOURCE:, the boot disk, the Compiler's disk, CODE: (while it keeps room for the
-    ///   code file), MORE1: or MORE2:, whichever has room first, and the main file's directive for it names where it
-    ///   is.
+    ///   code file), MORE1: or MORE2:, whichever has room first, the longest files first, and the main file's
+    ///   directive for it names where it is.
     ///  </para>
     /// </remarks>
     /// <param name="main">The main file's text.</param>
@@ -116,8 +125,9 @@ internal static partial class EmulatedPascalCompiler
 
         PascalVolume.WriteFile(sources, proDosOrder: false, "PROGRAM.TEXT", PascalFileKind.Text, PascalTextFile.Write(Main(placed)));
 
+        // The longest first, which leaves the shorter to fill the room the longer leave.
         int used = code;
-        foreach (string name in placed.Keys.ToList())
+        foreach (string name in placed.Keys.OrderByDescending(name => files[name].Length).ToList())
         {
             byte[] text = PascalTextFile.Write(files[name]);
             for (int on = 0; ; on++)
@@ -159,6 +169,21 @@ internal static partial class EmulatedPascalCompiler
             return false;
         }
     }
+
+    /// <summary>
+    ///  Whether a source uses units: has USES outside its comments and strings.
+    /// </summary>
+    /// <param name="source">The source.</param>
+    /// <returns>Whether it does.</returns>
+    internal static bool UsesUnits(string source) =>
+        UsesWord().IsMatch(CommentOrString().Replace(source, " "));
+
+    // A comment, (*...*) or {...}, or a string.
+    [GeneratedRegex(@"\(\*.*?\*\)|\{[^}]*\}|'[^'\n]*'", RegexOptions.Singleline)]
+    private static partial Regex CommentOrString();
+
+    [GeneratedRegex(@"\bUSES\b", RegexOptions.IgnoreCase)]
+    private static partial Regex UsesWord();
 
     // APPLE2's files that compiling does not need: its other tools.
     private static readonly string[] s_notCompiling =

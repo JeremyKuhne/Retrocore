@@ -18,6 +18,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
 
     // The variant's opcode table, resolved once rather than on every fetch.
     private readonly OpCode[] _opcodes;
+    private readonly ProcessorContinuation[] _continuations;
     private TBus _bus;
     private ProcessorExecutionState _state;
 
@@ -38,6 +39,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         _opcodeFetchBus = typeof(TBus).IsValueType ? null : bus as IOpcodeFetchBus;
         Variant = variant;
         _opcodes = OpcodeTable.Get(variant).ToArray();
+        _continuations = _opcodes.Select(GetContinuation).ToArray();
         _state.Registers.StackPointer = 0xFD;
         _state.Registers.Status = StatusRegister.Unused | StatusRegister.IRQBDisable;
     }
@@ -133,6 +135,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
     /// </summary>
     public void Reset()
     {
+        _state.Continuation = ProcessorContinuation.None;
         _state.Sequence = ProcessorSequence.Reset;
         _state.Phase = 1;
         _state.Status = ProcessorExecutionStatus.Running;
@@ -184,7 +187,14 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         ProcessorExecutionState before = mayStall ? _state : default;
         _state.CycleCount++;
         _state.LastCycle = new() { Number = _state.CycleCount };
-        Advance();
+        if (_state.Continuation != ProcessorContinuation.None)
+        {
+            AdvanceContinuation();
+        }
+        else
+        {
+            Advance();
+        }
 
         if (_state.LastCycle.IsStalled)
         {
@@ -340,6 +350,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
             }
 
             _state.Instruction = GetOpCode(opcode);
+            _state.Continuation = _continuations[opcode];
             _state.InterruptMasked = (_state.Registers.Status & StatusRegister.IRQBDisable) != 0;
             _state.Registers.ProgramCounter++;
             _state.Phase = 1;
@@ -355,7 +366,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
             return;
         }
 
-        AdvanceInstruction();
+        throw new InvalidOperationException("Invalid CPU execution sequence.");
     }
 
     private void AdvanceReset()
@@ -431,80 +442,31 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         }
     }
 
-    private void AdvanceInstruction()
+    private void AdvancePush()
     {
-        Instruction instruction = _state.Instruction.Instruction;
-        if (_state.Phase >= 240)
-        {
-            AdvanceData();
-            return;
-        }
-
-        AddressMode mode = _state.Instruction.AddressMode;
-        if (mode == AddressMode.ProgramCounterRelative || mode == AddressMode.ZeroPageRelative)
-        {
-            AdvanceBranch();
-            return;
-        }
-
-        if (instruction is not (Instruction.JMP or Instruction.JSR)
-            && mode is not (AddressMode.Implied or AddressMode.Accumulator or AddressMode.Stack))
-        {
-            AdvanceMemory();
-            return;
-        }
-
-        if (mode == AddressMode.Accumulator && instruction is Instruction.ASL or Instruction.ROL or Instruction.LSR or Instruction.ROR)
+        if (_state.Phase++ == 1)
         {
             Read(_state.Registers.ProgramCounter);
-            _state.Registers.Accumulator = Modify(_state.Registers.Accumulator);
-            Complete();
-            return;
         }
+        else
+        {
+            Push(_state.Instruction.Instruction switch
+            {
+                Instruction.PHA => _state.Registers.Accumulator,
+                Instruction.PHX => _state.Registers.X,
+                Instruction.PHY => _state.Registers.Y,
+                _ => (byte)(_state.Registers.Status | StatusRegister.Unused | StatusRegister.BRKCommand)
+            });
 
+            Complete();
+        }
+    }
+
+    private void AdvanceHalt()
+    {
+        Instruction instruction = _state.Instruction.Instruction;
         switch (instruction)
         {
-            case Instruction.JMP:
-                AdvanceJump();
-                return;
-            case Instruction.JSR:
-                AdvanceJsr();
-                return;
-            case Instruction.RTS:
-            case Instruction.RTI:
-                AdvanceReturn(instruction == Instruction.RTI);
-                return;
-            case Instruction.BRK:
-                AdvanceBrk();
-                return;
-            case Instruction.PHA:
-            case Instruction.PHP:
-            case Instruction.PHX:
-            case Instruction.PHY:
-                if (_state.Phase++ == 1)
-                {
-                    Read(_state.Registers.ProgramCounter);
-                }
-                else
-                {
-                    Push(instruction switch
-                    {
-                        Instruction.PHA => _state.Registers.Accumulator,
-                        Instruction.PHX => _state.Registers.X,
-                        Instruction.PHY => _state.Registers.Y,
-                        _ => (byte)(_state.Registers.Status | StatusRegister.Unused | StatusRegister.BRKCommand)
-                    });
-
-                    Complete();
-                }
-
-                return;
-            case Instruction.PLA:
-            case Instruction.PLP:
-            case Instruction.PLX:
-            case Instruction.PLY:
-                AdvancePull(instruction);
-                return;
             case Instruction.WAI:
             case Instruction.STP:
                 Read(_state.Registers.ProgramCounter);
@@ -520,13 +482,11 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
             case Instruction.JAM:
                 Read(_state.Registers.ProgramCounter);
                 _state.Phase = 2;
+                _state.Continuation = ProcessorContinuation.None;
                 _state.Status = ProcessorExecutionStatus.Jammed;
                 return;
             default:
-                Read(_state.Registers.ProgramCounter);
-                ExecuteImplied(instruction);
-                Complete();
-                return;
+                throw new InvalidOperationException("Invalid halt instruction.");
         }
     }
 
@@ -809,6 +769,7 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
         _state.IrqPending = (_state.PreviousSignals & ProcessorSignals.InterruptRequest) != 0 && !masked;
         _state.IrqPolled = true;
         _state.Phase = 0;
+        _state.Continuation = ProcessorContinuation.None;
         _state.Sequence = ProcessorSequence.Instruction;
     }
 

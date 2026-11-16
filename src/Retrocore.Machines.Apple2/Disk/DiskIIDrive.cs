@@ -88,6 +88,7 @@ internal sealed class DiskIIDrive
     /// <param name="writing">Whether the controller is writing.</param>
     /// <param name="transition">A write-head level transition during this half clock.</param>
     /// <returns>A MC3470 read pulse.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool Tick(bool writing, bool transition)
     {
         _writeFlux |= writing && transition;
@@ -97,6 +98,11 @@ internal sealed class DiskIIDrive
         // be lost, where a real drive records them a little closer together.
         ulong interval = (ulong)(Media?.OptimalBitTiming ?? 32) * (writing ? 250_000_000UL : 125UL * 2_041_000);
         _fraction += 1_000_000_000;
+        return _fraction >= interval && AdvanceBits(writing, interval);
+    }
+
+    private bool AdvanceBits(bool writing, ulong interval)
+    {
         bool pulse = false;
         while (_fraction >= interval)
         {

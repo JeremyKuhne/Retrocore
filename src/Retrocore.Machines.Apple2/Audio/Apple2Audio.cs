@@ -20,6 +20,7 @@ public sealed class Apple2Audio
     private readonly float _highPass;
     private IAudioSink? _sink;
     private int _count;
+    private int _silentCycles;
     private double _leftIntegral;
     private double _rightIntegral;
     private float _previousLeft;
@@ -63,6 +64,8 @@ public sealed class Apple2Audio
                 return;
             }
 
+            _clock.Advance(_silentCycles);
+            _silentCycles = 0;
             _sink = value;
             ClearSignal();
         }
@@ -78,7 +81,7 @@ public sealed class Apple2Audio
     {
         if (_sink is null)
         {
-            _clock.Tick();
+            AdvanceSilentClock();
             return;
         }
 
@@ -99,13 +102,14 @@ public sealed class Apple2Audio
     /// <param name="right">Right AY level.</param>
     public void Tick(bool speaker, float left, float right)
     {
-        int phase = _clock.Phase;
-        bool sampleReady = _clock.Tick();
         if (_sink is null)
         {
+            AdvanceSilentClock();
             return;
         }
 
+        int phase = _clock.Phase;
+        bool sampleReady = _clock.Tick();
         float speakerLevel = speaker ? 0.5f : -0.5f;
         left = speakerLevel + (left * 0.5f);
         right = speakerLevel + (right * 0.5f);
@@ -152,7 +156,14 @@ public sealed class Apple2Audio
     public void Reset()
     {
         _clock.Reset();
+        _silentCycles = 0;
         ClearSignal();
+    }
+
+    private void AdvanceSilentClock()
+    {
+        // Whole CPU-clock periods do not change the fractional PCM phase.
+        if (++_silentCycles == AudioSampleClock.ClockRate) { _silentCycles = 0; }
     }
 
     private void ClearSignal()

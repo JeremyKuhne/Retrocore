@@ -165,6 +165,121 @@ public class DiskControllerTests
         invalid.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    ///  Checks stopped fixed points against uncached half clocks through control, input and clock changes.
+    /// </summary>
+    /// <param name="operation">The toy sequencer command.</param>
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(8)]
+    [DataRow(9)]
+    [DataRow(10)]
+    [DataRow(11)]
+    [DataRow(13)]
+    [DataRow(14)]
+    [DataRow(15)]
+    public void IdleTicksMatchUncachedHalfClocksAcrossControlChanges(int operation)
+    {
+        DiskIIController controller = Controller((byte)operation);
+        DiskIIController reference = Controller((byte)operation);
+        WozDisk disk = WozDisk.CreateBlank();
+        WozDisk referenceDisk = WozDisk.CreateBlank();
+        controller.Mount(drive: 1, disk);
+        reference.Mount(drive: 1, referenceDisk);
+        Random random = new(Seed: 6502);
+        for (int cycle = 0; cycle < 2048; cycle++)
+        {
+            if (cycle % 127 == 0)
+            {
+                byte offset = (byte)((cycle / 127) & 15);
+                byte value = (byte)random.Next(256);
+                controller.Write(offset, value);
+                reference.Write(offset, value);
+            }
+
+            if (cycle == 700) { disk.IsWriteProtected = referenceDisk.IsWriteProtected = true; }
+            if (cycle == 1000)
+            {
+                controller.Reset();
+                reference.Reset();
+            }
+
+            if (cycle % 31 == 0)
+            {
+                controller.HalfTick();
+                reference.HalfTick();
+            }
+
+            controller.Tick();
+            reference.HalfTick();
+            reference.HalfTick();
+            controller.DataLatch.Should().Be(reference.DataLatch);
+            controller.State(drive: 1).Should().Be(reference.State(drive: 1));
+            controller.State(drive: 2).Should().Be(reference.State(drive: 2));
+        }
+
+        disk.Export().Should().Equal(referenceDisk.Export());
+    }
+
+    /// <summary>
+    ///  Checks a stopped controller keeps sampling externally changed write protection after its latch settles.
+    /// </summary>
+    [TestMethod]
+    public void IdleSequencerObservesUnlatchedWriteProtection()
+    {
+        DiskIIController controller = Controller(operation: 10);
+        WozDisk disk = WozDisk.CreateBlank();
+        controller.Mount(drive: 1, disk);
+        for (int clock = 0; clock < 16; clock++) { controller.Tick(); }
+        controller.DataLatch.Should().Be(0);
+        disk.IsWriteProtected = true;
+        controller.Tick();
+        controller.DataLatch.Should().Be(0xC0);
+        disk.IsWriteProtected = false;
+        for (int clock = 0; clock < 16; clock++) { controller.Tick(); }
+        controller.DataLatch.Should().Be(0);
+        controller.Read(offset: 3, floatingBus: 0);
+        controller.Tick();
+        controller.DataLatch.Should().Be(0xC0);
+    }
+
+    /// <summary>
+    ///  Checks fractional rotation, non-byte-aligned wrapping and multiple bit cells in a single half clock.
+    /// </summary>
+    /// <param name="timing">The media's bit-cell duration in 125 ns units.</param>
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(16)]
+    [DataRow(32)]
+    [DataRow(64)]
+    [DataRow(255)]
+    public void DriveClockAccountsForEveryFractionalBitCell(int timing)
+    {
+        byte[] image = WozDisk.CreateBlank().Export();
+        image[59] = (byte)timing;
+        image.AsSpan(8, 4).Clear();
+        WozDisk disk = WozDisk.Load(image, writable: true);
+        disk.SetTrack(quarterTrack: 0, new byte[17], bitCount: 131);
+        DiskIIDrive drive = new();
+        drive.SetMedia(disk);
+        ulong fraction = 0;
+        int position = 0;
+        for (int cycle = 0; cycle < 8192; cycle++)
+        {
+            bool writing = (cycle & 256) != 0;
+            ulong interval = (ulong)timing * (writing ? 250_000_000UL : 125UL * 2_041_000);
+            fraction += 1_000_000_000;
+            while (fraction >= interval)
+            {
+                fraction -= interval;
+                position = (position + 1) % 131;
+            }
+
+            drive.Tick(writing, transition: (cycle & 4) != 0);
+            drive.BitPosition.Should().Be(position);
+        }
+    }
+
     private static DiskIIController Controller(byte operation)
     {
         byte[] boot = new byte[256];

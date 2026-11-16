@@ -50,6 +50,16 @@ internal sealed class AudioSampleClock
     }
 
     /// <summary>
+    ///  Advances discarded cycles while retaining their exact fractional phase.
+    /// </summary>
+    /// <param name="cycles">The number of CPU cycles.</param>
+    internal void Advance(int cycles)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(cycles);
+        _phase = (int)((_phase + ((long)cycles * _sampleRate)) % ClockRate);
+    }
+
+    /// <summary>
     ///  Restarts the fractional clock.
     /// </summary>
     internal void Reset() => _phase = 0;

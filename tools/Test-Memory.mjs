@@ -425,6 +425,15 @@ try {
     assert.deepEqual([lines[0].text, lines[0].guess], ["RTS", true], JSON.stringify(lines));
     lines = await mainListing(0xD200, 2, [0x6380]);
     assert.deepEqual([lines[0].kind, lines[0].guess, lines[0].size], ["data", true, 2], JSON.stringify(lines));
+    // An entry that the pointer then makes data, such as the next instruction after a NOP at $D1FF, is dropped
+    // rather than failing the whole run: the call from $6300 still guesses $D100 there.
+    await write("main:0xD1FF", [0xEA]);
+    lines = await mainListing(0xD100, 2, [0x6300, 0x6380, 0xD1FF]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$05", true], JSON.stringify(lines));
+    // A pointer the sources already make data is read: JMP (TABLE) from $D300 goes where TABLE's $01, $02 point.
+    await write("main:0xD300", [0x6C, table.address & 0xFF, table.address >> 8]);
+    lines = await mainListing(0x0201, 1, [0xD300]);
+    assert.deepEqual([lines[0].address, lines[0].kind, lines[0].guess], [0x0201, "code", true], JSON.stringify(lines));
     // Guessed data starts a line, so a byte before it does not decode through it: $AD would be LDA $6420.
     await write("main:0x6400", [0x6C, 0x10, 0x64]);
     await write("main:0x640F", [0xAD, 0x20, 0x64]);

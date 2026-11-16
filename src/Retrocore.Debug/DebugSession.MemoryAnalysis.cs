@@ -107,12 +107,19 @@ internal sealed partial class DebugSession
                 {
                     // A jump through a pointer in another run, which this run's analysis cannot read, is followed
                     // here: the pointer is data in its run, and where it points an entry in that one's.
+                    // Pointer bytes already data, as a source's .word is, are read as they are; bytes that are code
+                    // make the pointer no pointer.
                     if (reference.Kind == DisassemblyReferenceKind.IndirectJump
                         && Pointer(image, runs, set, reference, index) is { } pointer
-                        && !regions.Any(region => Overlaps(region, pointer.Low, 1) || Overlaps(region, pointer.High, 1)))
+                        && !IsCode(regions, pointer.Low)
+                        && !IsCode(regions, pointer.High))
                     {
-                        regions.Add(new AnalysisRegion(pointer.Low, 1, AnalysisRegionKind.Data));
-                        regions.Add(new AnalysisRegion(pointer.High, 1, AnalysisRegionKind.Data));
+                        foreach (int at in (int[])[pointer.Low, pointer.High])
+                        {
+                            if (Inside(regions, at)) { continue; }
+                            regions.Add(new AnalysisRegion(at, 1, AnalysisRegionKind.Data));
+                        }
+
                         next.Add(RunOf(runs, pointer.Low));
                         next.Add(RunOf(runs, pointer.High));
                         int pointed = RunOf(runs, pointer.Target);
@@ -173,10 +180,13 @@ internal sealed partial class DebugSession
             CpuVectors = bank is null || bank.InstructionSet is not null
         };
 
+        // An entry in data pinned since the entries were chosen, such as a pointer found in another run, would fail
+        // the whole run's analysis, so it is left out.
         project.EntryPoints.Clear();
         foreach (int entry in entries.Concat(starts).Distinct())
         {
-            if (entry >= start && entry < end) { project.EntryPoints.Add((ushort)entry); }
+            bool data = regions.Any(region => region.Kind == AnalysisRegionKind.Data && Overlaps(region, entry, 1));
+            if (entry >= start && entry < end && !data) { project.EntryPoints.Add((ushort)entry); }
         }
 
         foreach (AnalysisRegion region in regions)
@@ -278,6 +288,10 @@ internal sealed partial class DebugSession
     // Whether a region overlaps a range.
     private static bool Overlaps(AnalysisRegion region, int start, int length) =>
         region.Address < start + length && region.Address + region.Length > start;
+
+    // Whether an address is in one of the code regions.
+    private static bool IsCode(List<AnalysisRegion> regions, int address) =>
+        regions.Any(region => region.Kind == AnalysisRegionKind.Code && Overlaps(region, address, 1));
 
     // Whether an address is in one of the regions.
     private static bool Inside(List<AnalysisRegion> regions, int address) =>

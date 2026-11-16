@@ -21,7 +21,7 @@ public sealed class MediaSaveTests
     private static string s_root = "";
 
     /// <summary>
-    ///  Points local data, where backups and locks go, at a folder of the tests' own.
+    ///  Makes the tests' folder; local data, where backups and locks go, is the run's (<see cref="TestLocalData"/>).
     /// </summary>
     /// <param name="context">The test context.</param>
     [ClassInitialize]
@@ -29,7 +29,6 @@ public sealed class MediaSaveTests
     {
         s_root = Path.Join(Path.GetTempPath(), $"retrocore-media-{Environment.ProcessId}");
         Directory.CreateDirectory(s_root);
-        Environment.SetEnvironmentVariable("RETROCORE_LOCAL_DATA", Path.Join(s_root, "local"));
     }
 
     /// <summary>
@@ -63,7 +62,7 @@ public sealed class MediaSaveTests
         drive.Media?.Changed.Should().BeFalse();
         answer.String("backup").Should().NotBeNull("a changed disk is written, keeping what it replaced");
         File.ReadAllBytes(answer.String("backup") ?? "").Should().Equal(original);
-        Directory.EnumerateFiles(Path.GetDirectoryName(image) ?? "", "*.saving").Should().BeEmpty();
+        Directory.EnumerateFiles(Path.GetDirectoryName(image) ?? "", $".{Path.GetFileName(image)}.*.saving").Should().BeEmpty();
 
         // The saved image reads back as the disk the machine wrote.
         WozDisk saved = DiskIIImage.Load(File.ReadAllBytes(image), "dsk").Disk;

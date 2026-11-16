@@ -231,7 +231,7 @@ public class DeviceModelTests
         storage.BlockCount.Should().Be(280);
         storage.LastBlock.Should().BeNull();
         storage.Activity.Should().Be(DeviceActivity.Idle);
-        storage.Info.Operations.Should().Be(MediaOperations.None);
+        storage.Info.Operations.Should().Be(MediaOperations.WriteProtect | MediaOperations.Save, "its image stays, and saves");
 
         machine.Drives.Select(drive => drive.Info.Name).Should().Equal("Drive 1", "Drive 2");
         machine.Drives[0].Media.Should().BeNull();

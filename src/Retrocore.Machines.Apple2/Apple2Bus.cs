@@ -658,6 +658,10 @@ public sealed class Apple2Bus : IProcessorBus
         Mouse.Reset();
         Disk35.Reset();
         foreach (Apple2ProFileCard? card in _proFiles) { card?.Reset(); }
+
+        // The slot 7 ROM says whether its device writes as the machine starts, from its lock then: a running ProDOS has
+        // already read it, so a lock changed since shows there from the next reset.
+        if (_disk is not null) { CreateSlot7Rom(); }
         Audio.Reset();
         Speaker = false;
     }
@@ -1285,6 +1289,20 @@ public sealed class Apple2Bus : IProcessorBus
     ///  Gets whether a block command has written to the slot 7 device.
     /// </summary>
     internal bool BlockWritten => _blockWritten;
+
+    /// <summary>
+    ///  Gets whether the slot 7 ROM says its device writes, as it said when the machine last started or reset.
+    /// </summary>
+    internal bool BlockWritesAnnounced =>
+        (_slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] & Slot7Rom.WriteCapabilityMask) != 0;
+
+    /// <summary>
+    ///  Builds the slot 7 ROM again for the device as it is now, as power-on builds it.
+    /// </summary>
+    internal void RefreshSlot7Rom()
+    {
+        if (_disk is not null) { CreateSlot7Rom(); }
+    }
 
     // The block count the slot 7 device reports: ProDOS counts blocks in 16 bits, so a 32 MiB image's 65536 is
     // 65535, its last block unused, as on real 32 MiB hard disks.

@@ -77,7 +77,8 @@ internal static class OffMachine
 
         lock (s_gate)
         {
-            IDebugTarget target = Build(configuration);
+            // Slot 7's image comes from the launch: one the saved machine moved builds it, while the launch stays its own.
+            IDebugTarget target = Build(LaunchMedia.WithSaved(configuration, parameters["machineState"]));
             try
             {
                 List<string> problems = parameters["machineState"] is JsonObject saved

@@ -221,7 +221,7 @@ internal sealed class MachineSession : DisposableBase
 
     private MachineHost Build(JsonObject configuration, JsonObject? saved)
     {
-        MachineHost host = new(configuration);
+        MachineHost host = new(configuration, saved);
         Problems = saved is null ? [] : host.Restore(saved);
         return host;
     }

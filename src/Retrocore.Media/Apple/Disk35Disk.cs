@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Buffers.Binary;
-
 namespace Retrocore.Media;
 
 /// <summary>
@@ -16,19 +14,25 @@ namespace Retrocore.Media;
 ///   hold them, or a 2MG file of ProDOS-ordered blocks, whose locked flag write-protects the disk. The size says the
 ///   kind of disk. Writes change the copy here, never the image the disk was loaded from.
 ///  </para>
+///  <para>
+///   Its snapshot is a 2MG file of its blocks, which holds its lock and, for a disk read from a 2MG, that file's
+///   header, comment and creator data, so a save rewraps them.
+///  </para>
 /// </remarks>
-public sealed class Disk35Disk : IBlockDevice
+public sealed class Disk35Disk : IBlockDevice, IMedium
 {
     private const int BlockSize = 512;
-    private static ReadOnlySpan<byte> TwoImgMagic => "2IMG"u8;
 
     private readonly byte[] _blocks;
+    private readonly TwoImgContainer _container;
+    private bool _writeProtected;
 
-    private Disk35Disk(byte[] blocks, Disk35Format format, bool writeProtected)
+    private Disk35Disk(byte[] blocks, Disk35Format format, bool writeProtected, TwoImgContainer? container)
     {
         _blocks = blocks;
         Format = format;
-        IsReadOnly = writeProtected;
+        _writeProtected = writeProtected;
+        _container = container ?? TwoImgContainer.Create((uint)(blocks.Length / BlockSize));
     }
 
     /// <summary>
@@ -42,15 +46,31 @@ public sealed class Disk35Disk : IBlockDevice
     /// <summary>
     ///  Gets or sets whether the disk is write-protected, as its tab is.
     /// </summary>
-    public bool IsReadOnly { get; set; }
+    public bool IsReadOnly
+    {
+        get => _writeProtected;
+        set => IsWriteProtected = value;
+    }
+
+    /// <inheritdoc/>
+    public bool IsWriteProtected
+    {
+        get => _writeProtected;
+        set
+        {
+            if (value == _writeProtected) { return; }
+            _writeProtected = value;
+            Version++;
+        }
+    }
 
     /// <summary>
-    ///  Gets whether writes have changed the disk since it was loaded.
+    ///  Gets whether writes have changed the disk since it was loaded or last saved.
     /// </summary>
     public bool IsDirty { get; private set; }
 
     /// <summary>
-    ///  Gets a count that changes whenever the disk changes.
+    ///  Gets a count that changes whenever the disk or its lock changes.
     /// </summary>
     public long Version { get; private set; }
 
@@ -83,32 +103,17 @@ public sealed class Disk35Disk : IBlockDevice
     /// <exception cref="InvalidDataException">The image is not a 400K, 800K, 720K or 1440K disk.</exception>
     public static Disk35Disk Load(ReadOnlySpan<byte> image, bool writeProtected = false)
     {
-        if (image.Length >= 64 && image[..4].SequenceEqual(TwoImgMagic))
+        TwoImgContainer? container = null;
+        if (TwoImgContainer.IsTwoImg(image))
         {
-            int headerLength = BinaryPrimitives.ReadUInt16LittleEndian(image[8..]);
-            uint order = BinaryPrimitives.ReadUInt32LittleEndian(image[12..]);
-            uint flags = BinaryPrimitives.ReadUInt32LittleEndian(image[16..]);
-            uint offset = BinaryPrimitives.ReadUInt32LittleEndian(image[24..]);
-            uint length = BinaryPrimitives.ReadUInt32LittleEndian(image[28..]);
-            if (order != 1)
-            {
-                throw new InvalidDataException("A 3.5-inch 2MG image must hold its blocks in ProDOS order.");
-            }
-
-            if (offset == 0) { offset = (uint)headerLength; }
-            if (offset > image.Length || length > image.Length - offset)
-            {
-                throw new InvalidDataException("The 2MG image's data runs past the end of the file.");
-            }
-
-            writeProtected |= (flags & 0x8000_0000) != 0;
-            image = image.Slice((int)offset, (int)length);
+            container = TwoImgContainer.Read(image, out image, out bool locked);
+            writeProtected |= locked;
         }
 
         Disk35Format format = FormatOf(image.Length) ?? throw new InvalidDataException(
             $"A 3.5-inch disk image holds 400K, 800K, 720K or 1440K; this one has {image.Length} bytes.");
 
-        return new(image.ToArray(), format, writeProtected);
+        return new(image.ToArray(), format, writeProtected, container);
     }
 
     /// <summary>
@@ -116,7 +121,8 @@ public sealed class Disk35Disk : IBlockDevice
     /// </summary>
     /// <param name="format">The kind of disk.</param>
     /// <returns>The disk.</returns>
-    public static Disk35Disk Blank(Disk35Format format) => new(new byte[BlocksOf(format) * BlockSize], format, writeProtected: false);
+    public static Disk35Disk Blank(Disk35Format format) =>
+        new(new byte[BlocksOf(format) * BlockSize], format, writeProtected: false, container: null);
 
     /// <summary>
     ///  Gets the number of blocks on a kind of disk.
@@ -185,7 +191,7 @@ public sealed class Disk35Disk : IBlockDevice
     public void WriteBlock(uint block, ReadOnlySpan<byte> source)
     {
         Check(block, source.Length);
-        if (IsReadOnly) { throw new InvalidOperationException("The disk is write-protected."); }
+        if (_writeProtected) { throw new InvalidOperationException("The disk is write-protected."); }
         source.CopyTo(_blocks.AsSpan((int)block * BlockSize, BlockSize));
         IsDirty = true;
         Version++;
@@ -197,7 +203,7 @@ public sealed class Disk35Disk : IBlockDevice
     /// <exception cref="InvalidOperationException">The disk is write-protected.</exception>
     public void Erase()
     {
-        if (IsReadOnly) { throw new InvalidOperationException("The disk is write-protected."); }
+        if (_writeProtected) { throw new InvalidOperationException("The disk is write-protected."); }
         Array.Clear(_blocks);
         IsDirty = true;
         Version++;
@@ -208,6 +214,20 @@ public sealed class Disk35Disk : IBlockDevice
     /// </summary>
     /// <returns>A copy of the blocks.</returns>
     public byte[] ToImage() => (byte[])_blocks.Clone();
+
+    /// <inheritdoc/>
+    public MediumSnapshot Snapshot() =>
+        new(TwoImgContainer.SnapshotKind, Version, _writeProtected, _container.Wrap(_blocks, _writeProtected));
+
+    /// <summary>
+    ///  Records that the disk was saved to an image that holds it.
+    /// </summary>
+    public void MarkSaved() => IsDirty = false;
+
+    /// <summary>
+    ///  Records that the disk differs from its image, as after a save that could not hold all of it.
+    /// </summary>
+    public void MarkChanged() => IsDirty = true;
 
     private void Check(uint block, int length)
     {

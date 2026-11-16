@@ -30,6 +30,12 @@ public sealed record DeviceInfo
     public IReadOnlyList<string> Formats { get; init; } = [];
 
     /// <summary>
+    ///  Gets the image file extensions the host can save the device's media as, without dots; empty when it saves
+    ///  none.
+    /// </summary>
+    public IReadOnlyList<string> SaveFormats { get; init; } = [];
+
+    /// <summary>
     ///  Gets what the host can do to the device's media.
     /// </summary>
     public MediaOperations Operations { get; init; }

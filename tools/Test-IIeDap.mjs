@@ -221,7 +221,7 @@ try {
             assert.deepEqual(slotRow(devices, slot).devices, ["disk35d1", "disk35d2"]);
             const drive = devices.devices.find(device => device.id === "disk35d1");
             assert.equal(drive.media?.label, disk35, `the disk stays in from slot ${launch} to ${slot}`);
-            assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect"]);
+            assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect", "save"]);
             assert.equal(devices.configuration.cards[slot.slice(4)], "disk35");
         }
     } finally {
@@ -243,7 +243,10 @@ try {
     await request("configurationDone");
     assert.equal((await event("stopped")).reason, "entry");
     await request("continue", { threadId: 1 });
-    assert.equal((await event("stopped")).reason, "breakpoint");
+    // A launch above can tell of its stop on entry after its events were cleared; such a late stop is not this one.
+    let sourceStop = await event("stopped");
+    while (sourceStop.reason === "entry") sourceStop = await event("stopped");
+    assert.equal(sourceStop.reason, "breakpoint");
     const sourceStack = await request("stackTrace", { threadId: 1 });
     assert.equal(sourceStack.stackFrames[0].line, 14);
     assert.equal((await request("evaluate", { expression: "counter" })).result, "$6016 (24598)");

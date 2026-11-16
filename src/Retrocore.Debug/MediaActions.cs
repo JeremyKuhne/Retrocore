@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using System.Runtime.CompilerServices;
@@ -82,7 +81,11 @@ internal static class MediaActions
                 $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
         }
 
-        if (action == "save" && device is Apple2FloppyDrive drive) { return Unspoken(drive, Save(drive, args), args); }
+        if (action == "save" && device.Info.Operations.HasFlag(MediaOperations.Save) && device is IMediumSlot)
+        {
+            return Unspoken(device, Save(device, args), args);
+        }
+
         return action == "eject" || (action == "insert" && device.Media is not null)
             ? Detach([device], args, action == "eject" ? "eject it" : "insert another disk")
             : null;
@@ -151,8 +154,8 @@ internal static class MediaActions
     }
 
     /// <summary>
-    ///  Saves a Disk II disk: to its own image, in the format and order it was read in, or to <c>path</c> as its
-    ///  extension says, taking the save step by step.
+    ///  Saves a drive's medium, such as a Disk II disk or a ProFile's image: to its own image, in the format (and for a
+    ///  sector image, the order) it was read in, or to <c>path</c> as its extension says, taking the save step by step.
     /// </summary>
     /// <remarks>
     ///  <para>
@@ -162,7 +165,7 @@ internal static class MediaActions
     ///   byte for byte the one it read.
     ///  </para>
     /// </remarks>
-    /// <param name="drive">The drive.</param>
+    /// <param name="device">The drive, an <see cref="IMediumSlot"/>.</param>
     /// <param name="args">
     ///  <c>path</c>, <c>acceptLosses</c> to save though the format cannot hold all of the disk, and <c>overwrite</c>'s
     ///  <c>sha256</c>, the revision of the file there the user agreed to replace (null for none). Save As to a file
@@ -170,27 +173,29 @@ internal static class MediaActions
     /// </param>
     /// <returns>The answer: <c>saved</c>, <c>losses</c>, <c>conflict</c> or <c>readOnly</c>.</returns>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
-    /// <exception cref="ArgumentException">The path's format cannot hold a Disk II disk.</exception>
-    internal static JsonObject Save(Apple2FloppyDrive drive, JsonObject args)
+    /// <exception cref="ArgumentException">The path's format cannot hold the drive's medium.</exception>
+    internal static JsonObject Save(IDevice device, JsonObject args)
     {
-        WozDisk disk = drive.Disk ?? throw new InvalidOperationException($"{drive.Info.Name} is empty.");
+        IMediumSlot drive = device as IMediumSlot ?? throw new ArgumentException($"{device.Info.Name} holds no medium to save.");
+        IMedium disk = drive.Medium ?? throw new InvalidOperationException($"{device.Info.Name} is empty.");
         DiskSource? source = Source(disk);
-        if ((args.String("path") ?? source?.Path) is not { } asked) { return ReadOnly(drive, "noImage"); }
+        if ((args.String("path") ?? source?.Path) is not { } asked) { return ReadOnly(device, "noImage"); }
 
         string path = Path.GetFullPath(asked);
         DiskSource? mine = source is not null && SameFile(path, source.Path) ? source : null;
-        IImageCodec? codec = mine is not null ? mine.Codec : DiskIIImage.CodecFor(Path.GetExtension(path));
+        IImageCodec? codec = mine is not null ? mine.Codec : CodecFor(device, disk, Path.GetExtension(path));
         if (codec is null)
         {
+            string formats = string.Join(", ", device.Info.SaveFormats.Select(format => "." + format));
             return mine is not null
-                ? ReadOnly(drive, "format")
-                : throw new ArgumentException($"{Path.GetFileName(path)} is not a .woz, .dsk, .do or .po image; save it as .woz.");
+                ? ReadOnly(device, "format")
+                : throw new ArgumentException($"{Path.GetFileName(path)} is not an image {device.Info.Name} saves; save it as {formats}.");
         }
 
         // An unchanged disk saved to its own image as it was read writes nothing.
-        if (mine is not null && drive.Media?.Changed != true && mine.Baseline.SameAs(FileRevision.Read(path)))
+        if (mine is not null && device.Media?.Changed != true && mine.Baseline.SameAs(FileRevision.Read(path)))
         {
-            return Answer(drive, "saved", mine);
+            return Answer(device, "saved", mine);
         }
 
         // 1. The snapshot, under the machine's lock, which the caller holds; 2. its encoding.
@@ -198,7 +203,7 @@ internal static class MediaActions
         EncodedImage encoded = codec.Encode(disk.Snapshot());
         if (!encoded.IsLossless && args.Bool("acceptLosses") != true)
         {
-            JsonObject losses = Answer(drive, "losses", source);
+            JsonObject losses = Answer(device, "losses", source);
             losses["format"] = codec.Format;
             losses["losses"] = encoded.Losses.ToJsonArray();
             return losses;
@@ -211,25 +216,25 @@ internal static class MediaActions
         switch (written.Outcome)
         {
             case "conflict":
-                JsonObject conflict = Answer(drive, "conflict", source);
+                JsonObject conflict = Answer(device, "conflict", source);
                 conflict["path"] = path;
                 conflict["baseline"] = mine?.Baseline.ToJson();
                 conflict["current"] = written.Revision?.ToJson();
                 return conflict;
             case "readOnly":
-                return ReadOnly(drive, written.Reason ?? "file");
+                return ReadOnly(device, written.Reason ?? "file");
         }
 
         // 4. Complete, only for the disk the snapshot was taken of: it now comes from the image just written, which a
         // lossy save leaves it changed against.
         DiskSource saved = new(source?.Id ?? Guid.NewGuid(), path, codec, written.Revision ?? FileRevision.Of(path, encoded.Bytes));
-        if (ReferenceEquals(drive.Disk, disk) && drive.MountGeneration == generation)
+        if (ReferenceEquals(drive.Medium, disk) && drive.MountGeneration == generation)
         {
             s_sources.AddOrUpdate(disk, saved);
             drive.Saved(path, codec.Format, encoded.IsLossless);
         }
 
-        JsonObject answer = Answer(drive, "saved", saved);
+        JsonObject answer = Answer(device, "saved", saved);
         if (encoded.Notes.Count != 0) { answer["notes"] = encoded.Notes.ToJsonArray(); }
         if (!encoded.IsLossless) { answer["losses"] = encoded.Losses.ToJsonArray(); }
         if (written.Backup is not null) { answer["backup"] = written.Backup; }
@@ -238,36 +243,45 @@ internal static class MediaActions
 
     // A save that did not save is an error for a client that does not speak the answers, which would otherwise take
     // the answer for a save; one that does hears the answer.
-    private static JsonObject Unspoken(Apple2FloppyDrive drive, JsonObject answer, JsonObject args)
+    private static JsonObject Unspoken(IDevice device, JsonObject answer, JsonObject args)
     {
         string? outcome = answer.String("outcome");
         if (args["supportsRetrocoreMedia"] is not null || outcome == "saved") { return answer; }
-        string name = drive.Info.Name;
+        string name = device.Info.Name;
         throw new InvalidOperationException(outcome switch
         {
             "losses" => $"{answer.String("format")} cannot hold all of the disk in {name}, so it was not saved: "
                 + $"{string.Join(" ", (answer.Array("losses") ?? []).Select(loss => loss?.GetValue<string>()))} "
-                + "Save it with acceptLosses: true, or as .woz.",
+                + "Save it with acceptLosses: true, or in a format that holds it all.",
             "conflict" => $"The image of the disk in {name} is not the one it was read from, so it was not saved. "
                 + "Save it with overwrite's sha256 set to the image's now, or with another path.",
             _ => $"The disk in {name} cannot be saved to its image ({answer.String("reason")}). Save it with another path.",
         });
     }
 
+    // The codec that writes a drive's medium as an extension says, among the formats the drive saves: a Disk II disk
+    // as WOZ or sectors, a block device as bare blocks or 2MG.
+    private static IImageCodec? CodecFor(IDevice device, IMedium medium, string extension)
+    {
+        bool saves = device.Info.SaveFormats.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);
+        if (!saves) { return null; }
+        return medium is WozDisk ? DiskIIImage.CodecFor(extension) : BlockImageCodec.For(extension);
+    }
+
     // An answer about a drive's disk, and the mount it is about.
-    private static JsonObject Answer(Apple2FloppyDrive drive, string outcome, DiskSource? source) => new()
+    private static JsonObject Answer(IDevice device, string outcome, DiskSource? source) => new()
     {
         ["outcome"] = outcome,
-        ["device"] = drive.Id,
+        ["device"] = device.Id,
         ["medium"] = source?.MediumId,
-        ["generation"] = drive.MountGeneration,
+        ["generation"] = (device as IMediumSlot)?.MountGeneration,
     };
 
     // The disk cannot be saved where it is asked to be: noImage (a disk no image gave), format (an image that can only
     // be read), file (a read-only file) or access (where it cannot be written). Save as can.
-    private static JsonObject ReadOnly(Apple2FloppyDrive drive, string reason)
+    private static JsonObject ReadOnly(IDevice device, string reason)
     {
-        JsonObject answer = Answer(drive, "readOnly", drive.Disk is { } disk ? Source(disk) : null);
+        JsonObject answer = Answer(device, "readOnly", (device as IMediumSlot)?.Medium is { } disk ? Source(disk) : null);
         answer["reason"] = reason;
         return answer;
     }

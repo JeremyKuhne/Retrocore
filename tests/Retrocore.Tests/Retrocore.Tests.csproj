@@ -46,11 +46,14 @@
     <Compile Include="..\..\src\Retrocore.Debug\JsonArgs.cs" Link="JsonArgs.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\FileRevision.cs" Link="FileRevision.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\LocalData.cs" Link="LocalData.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\LaunchMedia.cs" Link="LaunchMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ImageWrite.cs" Link="ImageWrite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Overwrite.cs" Link="Overwrite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ImageWriter.cs" Link="ImageWriter.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DiskSource.cs" Link="DiskSource.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.cs" Link="MediaActions.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ListingOperands.cs" Link="ListingOperands.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\JsonNodes.cs" Link="JsonNodes.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />

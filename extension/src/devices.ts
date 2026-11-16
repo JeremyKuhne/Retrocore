@@ -10,7 +10,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { chmod, readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
@@ -727,14 +727,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                 }
                 case "readOnly": {
                     const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason));
-                    if (choice === "Make Writable and Save" && target) {
-                        try {
-                            await chmod(target, (await stat(target)).mode | 0o200);
-                        } catch (error) {
-                            void vscode.window.showErrorMessage(`Retrocore: ${file} could not be made writable: ${error instanceof Error ? error.message : String(error)}`);
-                            return false;
-                        }
-                        current = { ...current, generation };
+                    // The host makes the file writable as it saves, for this mount and only over the revision the
+                    // save may replace, so an answer left open while the disk or file changed alters nothing.
+                    if (choice === "Make Writable and Save") {
+                        current = { ...current, makeWritable: true, generation };
                         continue;
                     }
                     return choice === "Save As..." && await saveAsNew(session, id, generation);

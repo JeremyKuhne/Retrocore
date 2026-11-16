@@ -161,13 +161,13 @@ public sealed class MediaSaveTests
         File.WriteAllBytes(image, new byte[35 * 4096]);
         Apple2FloppyDrive drive = Drive(path: null);
         LoadedDisk loaded = DiskIIImage.Load(read, ".dsk");
-        Until(
-            () =>
-            {
-                MediaActions.Register(loaded.Disk, image, loaded.Codec, read);
-                drive.Insert(loaded.Disk, image, "DSK");
-            },
-            () => Source(drive)?.Bool("stale") == true);
+        void Insert()
+        {
+            MediaActions.Register(loaded.Disk, image, loaded.Codec, read);
+            drive.Insert(loaded.Disk, image, "DSK");
+        }
+
+        Until(Insert, () => Source(drive)?.Bool("stale") == true);
     }
 
     /// <summary>
@@ -194,6 +194,51 @@ public sealed class MediaSaveTests
         byte[] outside = new byte[35 * 4096];
         outside[0] = 0x55;
         Until(() => File.WriteAllBytes(target, outside), () => Source(drive)?.Bool("stale") == true);
+
+        // A link on the way pointed at another file: the next sweep finds the disk's path leads elsewhere.
+        string middle = Path.Join(folder, "middle.dsk");
+        (string other, _) = Image("other.dsk");
+        File.CreateSymbolicLink(middle, target);
+        string through = Path.Join(folder, "through.dsk");
+        File.CreateSymbolicLink(through, middle);
+        File.WriteAllBytes(target, File.ReadAllBytes(other));
+        Apple2FloppyDrive chained = Drive(through);
+        Source(chained)?.Bool("stale").Should().BeFalse();
+        void Repoint()
+        {
+            File.Delete(middle);
+            File.CreateSymbolicLink(middle, Image("third.dsk").Path);
+        }
+
+        Until(Repoint, () => Source(chained)?.Bool("stale") == true);
+    }
+
+    /// <summary>
+    ///  An image whose folder is deleted and made again is still watched: the sweep makes the watch again and finds the
+    ///  file the disk was read from is not the one there now.
+    /// </summary>
+    [TestMethod]
+    public void ImageWhoseFolderIsMadeAgainIsStillWatched()
+    {
+        string folder = Path.Join(s_root, $"again-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        string image = Path.Join(folder, "work.dsk");
+        byte[] read = new byte[35 * 4096];
+        new Random(5).NextBytes(read);
+        File.WriteAllBytes(image, read);
+        Apple2FloppyDrive drive = Drive(image);
+        Until(() => Directory.Delete(folder, recursive: true), () => Source(drive)?.Bool("stale") == true);
+
+        // Made again with the file as it was: the same file, so the disk matches it again.
+        void MakeAgain()
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(image, read);
+        }
+
+        Until(MakeAgain, () => Source(drive)?.Bool("stale") == false);
+        byte[] outside = new byte[35 * 4096];
+        Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
     }
 
     /// <summary>
@@ -236,7 +281,13 @@ public sealed class MediaSaveTests
         Change(drive);
         File.SetAttributes(image, FileAttributes.ReadOnly);
         MediaActions.Save(drive, Speaking()).String("reason").Should().Be("file");
-        File.SetAttributes(image, FileAttributes.Normal);
+
+        // Agreed to, the file is made writable and saved over.
+        JsonObject writable = Speaking();
+        writable["makeWritable"] = true;
+        MediaActions.Save(drive, writable).String("outcome").Should().Be("saved");
+        File.GetAttributes(image).HasFlag(FileAttributes.ReadOnly).Should().BeFalse();
+        drive.Media?.Changed.Should().BeFalse();
 
         Apple2FloppyDrive built = Drive(path: null);
         built.Insert(SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false), "DOS 3.3 disk with HELLO", "DSK");

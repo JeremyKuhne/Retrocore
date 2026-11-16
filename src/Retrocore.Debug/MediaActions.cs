@@ -217,6 +217,7 @@ internal static class MediaActions
     ///  <c>path</c>, <c>acceptLosses</c> to save though the format cannot hold all of the disk, and <c>overwrite</c>'s
     ///  <c>sha256</c>, the revision of the file there the user agreed to replace (null for none). Save As to a file
     ///  that is there needs it, as the file the person chose; without it, Save As writes only where there is no file.
+    ///  <c>makeWritable</c> makes a read-only file writable to save over it, once the revision checks pass.
     /// </param>
     /// <returns>The answer: <c>saved</c>, <c>losses</c>, <c>conflict</c> or <c>readOnly</c>.</returns>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
@@ -259,7 +260,7 @@ internal static class MediaActions
         // 3. The commit, over the revision the disk matches (for a new image, no file at all) or the one the user agreed
         // to replace.
         Overwrite? authorized = args.Object("overwrite") is { } overwrite ? new(overwrite.String("sha256")) : null;
-        ImageWrite written = ImageWriter.Write(path, encoded.Bytes, mine?.Baseline, authorized);
+        ImageWrite written = ImageWriter.Write(path, encoded.Bytes, mine?.Baseline, authorized, args.Bool("makeWritable") == true);
         switch (written.Outcome)
         {
             case "conflict":

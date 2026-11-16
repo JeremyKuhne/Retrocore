@@ -122,9 +122,11 @@ internal sealed partial class DebugSession
 
         hints.Write(path);
         _hintsPath = path;
+        // A name is a symbol in function breakpoints, so they bind again to where the names are now: those the mark
+        // gives, and those edited in the file since it was read, which every mark reads again.
+        bool renamed = !MarkHints.SameNames(hints);
         MarkHints = hints;
-        // A name is a symbol in function breakpoints, so they bind again to where the names are now.
-        if (args["name"] is not null) { RebindFunctionBreakpoints(); }
+        if (renamed) { RebindFunctionBreakpoints(); }
         return new JsonObject { ["path"] = path, ["address"] = address, ["count"] = count };
     }
 

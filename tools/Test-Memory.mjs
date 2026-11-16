@@ -537,8 +537,13 @@ try {
     let changed = queued("breakpoint").map(body => body.breakpoint).filter(breakpoint => breakpoint.id === moving.id);
     assert.equal(changed.at(-1)?.verified, true, JSON.stringify(changed));
     assert.deepEqual((await listing(0x6520, 1))[0].breakpoints, [moving.id]);
-    await mark({ address: 0x6520, name: "" });
-    await mark({ address: 0x6530, name: "MOVING" });
+    // A name moved in the file by hand moves its breakpoint at the next mark of any kind, which reads the file again.
+    const edited = JSON.parse(readFileSync(hintsFile, "utf8"));
+    delete edited.names["$6520"];
+    edited.names["$6530"] = "MOVING";
+    writeFileSync(hintsFile, JSON.stringify(edited, null, 2));
+    await mark({ address: 0x6540, comment: "Moved by hand" });
+    await mark({ address: 0x6540, comment: "" });
     assert.equal((await listing(0x6520, 1))[0].breakpoints, null);
     assert.deepEqual((await listing(0x6530, 1))[0].breakpoints, [moving.id]);
     await mark({ address: 0x6530, name: "" });

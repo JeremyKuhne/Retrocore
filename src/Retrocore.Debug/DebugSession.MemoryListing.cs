@@ -61,6 +61,10 @@ internal sealed partial class DebugSession
             }
         }
 
+        // Code marked in the hints file starts instructions, as Decode from here's starts do.
+        string space = HintSpace(bank);
+        forced.UnionWith(_hints.Code(space));
+
         // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
         // be checked against memory again at every byte of it.
         ListingMemory memory = new(bank is null ? Target : new BankMemory(bank), address => MemoryByte(bank, address));
@@ -85,7 +89,12 @@ internal sealed partial class DebugSession
             set,
             GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
             forced,
-            Position);
+            Position,
+            _hints.Data(space));
+
+        // Data marked in the hints file, which analysis keeps as it is, so the listing's data there is no guess.
+        IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
+        bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
 
         GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
         bool Boundary(int address)
@@ -233,7 +242,8 @@ internal sealed partial class DebugSession
                 ["size"] = size,
                 ["text"] = text,
                 ["kind"] = kind,
-                ["guess"] = guessed && position is null && !forced.Contains(address),
+                ["guess"] = guessed && position is null && !forced.Contains(address) && !Marked(address),
+                ["comment"] = _hints.Comments(space).TryGetValue(address, out string? comment) ? comment : null,
                 ["label"] = names.TryGetValue(address, out string? label) ? label : null,
                 ["target"] = target,
                 ["path"] = source?.Path,

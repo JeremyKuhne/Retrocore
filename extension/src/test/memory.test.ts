@@ -393,6 +393,9 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
 });
 
 // Answers the page's reads with a byte everywhere, or by offset, and its other requests with what they name.
+// The marks the page sent.
+const marksSent: Record<string, unknown>[] = [];
+
 // The starts each listing request the page sent asked for.
 const listingStarts: number[][] = [];
 
@@ -427,10 +430,13 @@ function answer(
                         { address: at, size: 2, text: "LDA #$C1", kind: "code", label: "START", target: null, path: "C:/src/hello.s", line: 3 },
                         { address: at + 2, size: 3, text: "JMP START", kind: "code", label: null, target: at, path: "C:/src/hello.s", line: 4 },
                         { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null },
-                        { address: at + 7, size: 1, text: "RTS", kind: "code", guess: true, label: null, target: null, path: null, line: null }
+                        { address: at + 7, size: 1, text: "RTS", kind: "code", guess: true, label: null, target: null, path: null, line: null, comment: "Returns" }
                     ]
                 }
             });
+        } else if (sent.type === "mark") {
+            marksSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: { path: "C:/src/hello.hints.json" } });
         } else if (sent.type === "banks") {
             page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
         } else if (sent.type === "readOther") {
@@ -868,6 +874,8 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     const html = page.elements.get("listing")!.innerHTML;
     const top = (state.listing as string[])[0].substring(0, 4);
     assert.deepEqual((state.listing as string[]).map(line => line.substring(5)), ["LDA #$C1", "JMP START", ".byte $01, $02", "RTS"]);
+    // A comment follows its line.
+    assert.match(html, /<span class="t">RTS<\/span><span class="cm">; Returns<\/span>/);
     // Analysis's guesses say so.
     assert.match(html, /class="ln code guess" role="listitem" title="A guess: no source describes these bytes, and analysis takes them for code"/);
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
@@ -904,6 +912,15 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.ok(listingStarts.some(starts => starts.includes(0x0301)), JSON.stringify(listingStarts));
     assert.equal(state.status, "The listing decodes an instruction from $0301.");
     assert.match(page.elements.get("inspector")!.innerHTML, /data-act="decode"/);
+
+    // Marking the selection as data keeps it in the hints file, and reads the labels and listing again.
+    marksSent.length = 0;
+    listingStarts.length = 0;
+    state = await drive(page, [{ goto: 0x0300 }, { mark: { kind: "data" } }], () => 0, lists);
+    assert.deepEqual(marksSent.map(sent => [sent.address, sent.count, sent.kind]), [[0x0300, 1, "data"]]);
+    assert.equal(state.status, "Kept in hello.hints.json.");
+    assert.ok(listingStarts.length > 0, "the listing is asked for again");
+    assert.match(page.elements.get("inspector")!.innerHTML, /data-act="markData"/);
 
     // Where nothing lists, the old lines go.
     await drive(page, [{ goto: 0xE100 }], () => 0, lists);

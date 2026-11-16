@@ -89,6 +89,8 @@
     <Compile Include="..\..\src\Retrocore.Debug\MachineSymbols.cs" Link="MachineSymbols.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DisassembleCommand.cs" Link="DisassembleCommand.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DisassemblyHints.cs" Link="DisassemblyHints.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MemoryHints.cs" Link="MemoryHints.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MemoryHintSpace.cs" Link="MemoryHintSpace.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DisassemblyProgram.cs" Link="DisassemblyProgram.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />

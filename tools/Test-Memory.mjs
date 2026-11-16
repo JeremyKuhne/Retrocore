@@ -10,7 +10,7 @@
 // external; the IIe part runs when RETROCORE_IIE_ROMS names the IIe ROMs.
 
 import { resolve, join } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -316,6 +316,8 @@ try {
         "    .byte $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $0B",
     ];
     writeFileSync(switching, program.join("\n") + "\n");
+    const hintsFile = join(root, "artifacts", "memory-tests", "language-card.hints.json");
+    rmSync(hintsFile, { force: true });
     await request("launch", { machine: "apple2", model: "iie-enhanced", source: switching, loadAddress: 0x0300, stopOnEntry: true, speed: "max" });
     await request("setBreakpoints", { source: { path: switching }, breakpoints: [{ line: program.indexOf("FROZEN:") + 2 }] });
     await request("configurationDone");
@@ -440,6 +442,32 @@ try {
     await write("main:0x6420", [0x60]);
     lines = await mainListing(0x640F, 3, [0x6400]);
     assert.deepEqual(lines.map(line => [line.address, line.kind]), [[0x640F, "unknown"], [0x6410, "data"]], JSON.stringify(lines));
+    // Marks, names and comments go in the hints file beside the source, and show at once: a name wins over the
+    // sources' labels, data marked lists as data, code marked starts an instruction, and a comment follows its line.
+    at = "marking memory";
+    const mark = args => request("retro/memory/mark", { memoryReference: "0x0000", ...args });
+    assert.equal((await mark({ address: 0x6500, name: "MYTABLE" })).path, hintsFile);
+    await mark({ address: 0xFDED, name: "MYCOUT" });
+    await write("0x6500", [0xA9, 0x01, 0x60, 0xEA]);
+    await mark({ address: 0x6500, count: 3, kind: "data" });
+    await mark({ address: 0x6503, kind: "code" });
+    await mark({ address: 0x6503, comment: "Marked as code" });
+    const marked = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.address, label.name]));
+    assert.deepEqual([marked.get(0x6500), marked.get(0xFDED)], ["MYTABLE", "MYCOUT"]);
+    lines = await listing(0x6500, 4);
+    assert.deepEqual(lines.map(line => [line.address, line.kind, line.guess, line.label, line.comment]),
+        [[0x6500, "data", false, "MYTABLE", null], [0x6503, "code", false, null, "Marked as code"]], JSON.stringify(lines));
+    // A bank's marks keep its name.
+    await request("retro/memory/mark", { memoryReference: "aux:0x0000", address: 0x0400, name: "AUXTEXT" });
+    const hints = JSON.parse(readFileSync(hintsFile, "utf8"));
+    assert.deepEqual(hints.names, { "$6500": "MYTABLE", "$FDED": "MYCOUT", "aux:$0400": "AUXTEXT" });
+    assert.deepEqual([hints.entries, hints.data, hints.comments], [["$6503"], [{ start: "$6500", length: 3 }], { "$6503": "Marked as code" }]);
+    // Unmarking and an empty name take them away.
+    await mark({ address: 0x6500, count: 4, kind: "clear" });
+    await mark({ address: 0xFDED, name: "" });
+    const cleared = JSON.parse(readFileSync(hintsFile, "utf8"));
+    assert.deepEqual([cleared.entries, cleared.data, cleared.names["$FDED"]], [undefined, undefined, undefined]);
+
     // A start whose instruction falls into the sources' data stops there, and the rest of the analysis still runs.
     lines = await listing(0x6110, 3, [table.address - 1, 0x6100]);
     assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$01", true], JSON.stringify(lines));

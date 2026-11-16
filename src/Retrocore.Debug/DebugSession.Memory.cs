@@ -265,6 +265,13 @@ internal sealed partial class DebugSession
         bool constants = true)
     {
         SortedDictionary<int, string> labels = [];
+
+        // The names marked in Retrocore Memory come first, as they do when disassembling.
+        foreach ((int marked, string name) in _hints.Names(HintSpace(bank)))
+        {
+            if (bank is null || bank.AreaOf((ushort)marked) is not null) { labels[marked] = name; }
+        }
+
         foreach (IDebugModule module in _debug.Modules)
         {
             foreach ((string name, long value) in module.Labels)

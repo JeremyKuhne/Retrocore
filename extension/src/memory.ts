@@ -308,6 +308,27 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 starts: received.starts
                             }));
                             break;
+                        case "mark": {
+                            // Mark as code or data, or a name or comment, which asks for its text, kept in the hints file.
+                            const args: Record<string, unknown> = { memoryReference: base, address: received.address, count: received.count };
+                            if (received.kind !== undefined) {
+                                args.kind = received.kind;
+                            } else {
+                                const naming = received.what === "name";
+                                const text = await vscode.window.showInputBox({
+                                    title: (naming ? "Name " : "Comment on ") + "$" + Number(received.address).toString(16).toUpperCase().padStart(4, "0"),
+                                    prompt: naming ? "A label for this address; empty takes the name away." : "A comment for this address; empty takes it away.",
+                                    value: String(received.value ?? "")
+                                });
+                                if (text === undefined) {
+                                    await reply({ cancelled: true });
+                                    break;
+                                }
+                                args[naming ? "name" : "comment"] = text;
+                            }
+                            await reply(await session.customRequest("retro/memory/mark", args));
+                            break;
+                        }
                         case "open": {
                             // A listing line's source, beside the editor, at its line.
                             const line = Math.max(0, Number(received.line) - 1);

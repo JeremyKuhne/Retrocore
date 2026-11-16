@@ -85,6 +85,7 @@ button:disabled{opacity:.5;cursor:default}
 #listing .l{width:10ch;flex:none;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
 #listing .unknown .t{opacity:.7}
 #listing .guess .t{font-style:italic}
+#listing .cm{color:var(--vscode-descriptionForeground);font-style:italic}
 #listing .data .t{color:var(--vscode-debugTokenExpression-number,var(--vscode-editor-foreground))}
 #listing a{color:var(--vscode-textLink-foreground);text-decoration:none;cursor:pointer}
 #listing a:hover{text-decoration:underline}
@@ -148,6 +149,8 @@ let aligned = false, rowStarts = null;
 let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
 // The writes the page made, which change what the listing shows, and the cursor the listing last scrolled to.
 let writes = 0, listingCursor = -1;
+// The marks, names and comments made, which change what the listing shows.
+let marks = 0;
 // Why the last listing request failed, which shows in place of lines; empty when it did not.
 let listingError = "";
 const forcedStarts = new Set();
@@ -574,7 +577,7 @@ function wantListing() {
     if (!showListing || ended || narrow === true) return;
     const top = Math.min(Math.floor(grid.scrollTop / LINE), rowCount() - 1);
     const start = rowStart(top), end = rowEnd(Math.min(rowCount() - 1, top + visibleRows() + 1));
-    const key = start + ":" + end + ":" + generation + ":" + writes + ":" + labels.length + ":" + forcedStarts.size;
+    const key = start + ":" + end + ":" + generation + ":" + writes + ":" + marks + ":" + labels.length + ":" + forcedStarts.size;
     if (key === listingKey) return;
     listingKey = key;
     void loadListing(start, Math.min(0x1000, end - start + 1), key);
@@ -633,7 +636,8 @@ function showListingLines() {
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
         html += '<div class="' + classes + '" role="listitem"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
-            + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>" + source + "</div>";
+            + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>"
+            + (line.comment ? '<span class="cm">; ' + escapeText(line.comment) + "</span>" : "") + source + "</div>";
     }
     listingPanel.innerHTML = html;
     if (!listingPanel.querySelector) return;
@@ -671,6 +675,28 @@ function focusedListing() {
 function selectLine(address, size) {
     moveTo(address + size - 1, false, false);
     moveTo(address, true, false);
+}
+
+// The comment the listing shows at an address, or none.
+function commentAt(address) {
+    const line = listingLines.find(item => item.address === address);
+    return line && line.comment ? line.comment : "";
+}
+
+// Marks the selection as code or data, or names or comments on its first byte, in the hints file: the extension
+// asks for a name's or comment's text, and the labels and listing are read again.
+async function mark(fields) {
+    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
+    try {
+        const result = await request({ type: "mark", address: low, count: high - low + 1, ...fields });
+        if (result && result.cancelled) return;
+        marks++;
+        await loadExtras();
+        render();
+        status("Kept in " + fileName(String(result.path)) + ".");
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
 }
 
 // Starts an instruction at the cursor, where the listing decoded from the wrong byte.
@@ -817,7 +843,12 @@ function showInspector() {
     const watchTitle = "Add to VS Code's Watch view as " + watchExpressions(low, high).join(", ");
     let html = '<div class="acts"><button data-act="watch" title="' + escapeText(watchTitle) + '">' + (high === low + 1 ? "Watch word" : "Watch" + count) + "</button>"
         + '<button data-act="freeze" title="' + (allFrozen ? freezeTitle.thaw : freezeTitle.freeze) + '">' + (allFrozen ? "Thaw" : "Freeze") + count + "</button>"
-        + (showListing ? '<button data-act="decode" title="Start an instruction at the cursor in the listing, where it decodes from the wrong byte (Ctrl+D)">Decode from here</button>' : "") + "</div>";
+        + (showListing ? '<button data-act="decode" title="Start an instruction at the cursor in the listing, where it decodes from the wrong byte (Ctrl+D)">Decode from here</button>' : "") + "</div>"
+        + '<div class="acts"><button data-act="markCode" title="Mark code as starting here, kept in the hints file">Mark code</button>'
+        + '<button data-act="markData" title="Mark the selection as data, kept in the hints file">Mark data' + count + "</button>"
+        + '<button data-act="unmark" title="Take the code and data marks off the selection">Unmark</button>'
+        + '<button data-act="name" title="Name this address, kept in the hints file">Name</button>'
+        + '<button data-act="comment" title="Comment on this address, kept in the hints file">Comment</button></div>';
     html += '<div class="where">' + where(cursor);
     const name = labelOf(labels, cursor);
     if (name !== undefined) html += " · " + escapeText(name);
@@ -1203,6 +1234,11 @@ side.addEventListener("click", event => {
             case "watch": queue(watchSelection); break;
             case "freeze": queue(toggleFreeze); break;
             case "decode": decodeHere(); break;
+            case "markCode": void mark({ kind: "code" }); break;
+            case "markData": void mark({ kind: "data" }); break;
+            case "unmark": void mark({ kind: "clear" }); break;
+            case "name": void mark({ what: "name", value: labelAt.get(Math.min(cursor, anchor)) ?? "" }); break;
+            case "comment": void mark({ what: "comment", value: commentAt(Math.min(cursor, anchor)) }); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1410,6 +1446,7 @@ async function test(actions) {
             render();
         }
         if (action.decode) decodeHere();
+        if (action.mark !== undefined) await mark(action.mark);
         if (action.listingLine !== undefined) selectLine(listingLines[action.listingLine].address, listingLines[action.listingLine].size);
         if (action.machineText !== undefined) {
             machineText = action.machineText;

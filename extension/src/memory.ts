@@ -308,6 +308,56 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 starts: received.starts
                             }));
                             break;
+                        case "starts":
+                            // The Decode from here starts a mark leaves.
+                            await reply(await session.customRequest("retro/memory/starts", {
+                                memoryReference: base,
+                                address: received.address,
+                                count: received.count,
+                                starts: received.starts,
+                                keep: received.keep
+                            }));
+                            break;
+                        case "mark": {
+                            // Mark as code or data, or a name or comment, which asks for its text, kept in the hints file.
+                            const args: Record<string, unknown> = { memoryReference: base, address: received.address, count: received.count };
+                            if (received.kind !== undefined) {
+                                args.kind = received.kind;
+                            } else {
+                                const naming = received.what === "name";
+                                // What the hints file has now, whatever the page has listed.
+                                const note = await session.customRequest("retro/memory/note", { memoryReference: base, address: received.address }) as { name: string | null; comment: string | null };
+                                const text = await vscode.window.showInputBox({
+                                    title: (naming ? "Name " : "Comment on ") + "$" + Number(received.address).toString(16).toUpperCase().padStart(4, "0"),
+                                    prompt: naming ? "A label for this address; empty takes the name away." : "A comment for this address; empty takes it away.",
+                                    value: (naming ? note.name : note.comment) ?? ""
+                                });
+                                if (text === undefined) {
+                                    await reply({ cancelled: true });
+                                    break;
+                                }
+                                args[naming ? "name" : "comment"] = text;
+                            }
+                            type Marked = { needsFile?: boolean; path?: string; address?: number; count?: number };
+                            let marked = await session.customRequest("retro/memory/mark", args) as Marked;
+                            if (marked.needsFile) {
+                                // A launch with no program or source to keep marks beside asks where, once.
+                                const chosen = await vscode.window.showSaveDialog({
+                                    title: "Keep marks, names and comments in",
+                                    filters: { "Hints": ["json"] },
+                                    saveLabel: "Keep here"
+                                });
+                                if (chosen === undefined) {
+                                    await reply({ cancelled: true });
+                                    break;
+                                }
+                                marked = await session.customRequest("retro/memory/mark", { ...args, hints: chosen.fsPath }) as Marked;
+                            }
+                            await reply(marked);
+                            // Other editors on the same space show the same labels and listing.
+                            others(editor, { type: "marked", kind: received.kind, address: marked.address, count: marked.count });
+                            break;
+                        }
                         case "open": {
                             // A listing line's source, beside the editor, at its line.
                             const line = Math.max(0, Number(received.line) - 1);

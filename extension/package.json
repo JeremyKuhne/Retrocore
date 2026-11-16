@@ -1660,6 +1660,10 @@
                 "type": "string",
                 "description": "ld65-style linker configuration for source."
               },
+              "hints": {
+                "type": "string",
+                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file."
+              },
               "basic": {
                 "type": "string",
                 "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."

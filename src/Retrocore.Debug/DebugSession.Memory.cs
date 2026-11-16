@@ -265,18 +265,17 @@ internal sealed partial class DebugSession
         bool constants = true)
     {
         SortedDictionary<int, string> labels = [];
-        foreach (IDebugModule module in _debug.Modules)
+
+        // The names marked in Retrocore Memory come first, as they do when disassembling.
+        foreach ((int marked, string name) in _hints.Names(HintSpace(bank)))
         {
-            foreach ((string name, long value) in module.Labels)
-            {
-                if (value is < 0 or > 0xFFFF || labels.ContainsKey((int)value)) { continue; }
-                ushort address = (ushort)value;
-                if (bank is not null && bank.AreaOf(address) is null) { continue; }
-                if (DebugInfo.Active(module, memory, address) && module.LabelApplies(memory, address))
-                {
-                    labels[address] = name;
-                }
-            }
+            if (bank is null || bank.AreaOf((ushort)marked) is not null) { labels[marked] = name; }
+        }
+
+        // Each address's first label wins, as each is skipped once named.
+        foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Labels, labels.ContainsKey))
+        {
+            labels[address] = name;
         }
 
         // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
@@ -285,23 +284,49 @@ internal sealed partial class DebugSession
         if (!constants) { return (labels, labels); }
         SortedDictionary<int, string> names = [];
         foreach ((int address, string name) in labels) { names.Add(address, name); }
+        foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Constants, names.ContainsKey))
+        {
+            names[address] = name;
+        }
+
+        return (labels, names);
+    }
+
+    // Each label the sources give an address in a space that applies now, and each constant the space's CPU addresses
+    // memory through, as kinds asks, in the modules' order, leaving out addresses skip says are already named.
+    private IEnumerable<(int Address, string Name, bool Constant)> SourceNames(
+        DebugMemoryBank? bank,
+        IDebugMemory memory,
+        SourceNameKinds kinds,
+        Func<int, bool> skip)
+    {
+        IEnumerable<IDebugModule> labelled = kinds.HasFlag(SourceNameKinds.Labels) ? _debug.Modules : [];
+        foreach (IDebugModule module in labelled)
+        {
+            foreach ((string name, long value) in module.Labels)
+            {
+                if (value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                ushort address = (ushort)value;
+                if (bank is not null && bank.AreaOf(address) is null) { continue; }
+                if (DebugInfo.Active(module, memory, address) && module.LabelApplies(memory, address))
+                {
+                    yield return (address, name, false);
+                }
+            }
+        }
+
+        if (!kinds.HasFlag(SourceNameKinds.Constants)) { yield break; }
         IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
         foreach (IDebugModule module in _debug.Modules)
         {
             if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
             foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
             {
-                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || names.ContainsKey((int)value))
-                {
-                    continue;
-                }
-
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
                 if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
-                names[(int)value] = name;
+                yield return ((int)value, name, true);
             }
         }
-
-        return (labels, names);
     }
 
     /// <summary>

@@ -92,7 +92,13 @@ internal sealed partial class DebugSession
         {
             if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
             DebugPosition? position = Position(address);
-            if (position is null) { return guesses.Kinds[address] == GuessKind.Start; }
+            // Where analysis guessed an instruction starts, or its guessed data does, as a pointer's first byte.
+            if (position is null)
+            {
+                GuessKind kind = guesses.Kinds[address];
+                return kind == GuessKind.Start || (kind == GuessKind.Data && (address == 0 || Guessed(address - 1) != GuessKind.Data));
+            }
+
             return position is { Start: { } start } && start == address;
         }
 

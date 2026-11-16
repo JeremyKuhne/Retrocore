@@ -417,6 +417,20 @@ try {
     await write("main:0x6360", [0x60]);
     lines = await mainListing(0x6340, 0x21, [0x6340]);
     assert.deepEqual([at6(0x6350).kind, at6(0x6350).guess, at6(0x6360).text, at6(0x6360).guess], ["data", true, "RTS", true], JSON.stringify(lines));
+    // A jump through a pointer across the gap is followed: JMP ($D200) from $6380, which points at $6390.
+    await write("main:0x6380", [0x6C, 0x00, 0xD2]);
+    await write("main:0xD200", [0x90, 0x63]);
+    await write("main:0x6390", [0x60]);
+    lines = await mainListing(0x6390, 1, [0x6380]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["RTS", true], JSON.stringify(lines));
+    lines = await mainListing(0xD200, 2, [0x6380]);
+    assert.deepEqual([lines[0].kind, lines[0].guess, lines[0].size], ["data", true, 2], JSON.stringify(lines));
+    // Guessed data starts a line, so a byte before it does not decode through it: $AD would be LDA $6420.
+    await write("main:0x6400", [0x6C, 0x10, 0x64]);
+    await write("main:0x640F", [0xAD, 0x20, 0x64]);
+    await write("main:0x6420", [0x60]);
+    lines = await mainListing(0x640F, 3, [0x6400]);
+    assert.deepEqual(lines.map(line => [line.address, line.kind]), [[0x640F, "unknown"], [0x6410, "data"]], JSON.stringify(lines));
     // A start whose instruction falls into the sources' data stops there, and the rest of the analysis still runs.
     lines = await listing(0x6110, 3, [table.address - 1, 0x6100]);
     assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$01", true], JSON.stringify(lines));

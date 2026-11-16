@@ -105,6 +105,25 @@ internal sealed partial class DebugSession
                 DisassemblyResult result = AnalyzeRun(image, start, length, set, bank, inRun, starts, regions, kinds);
                 foreach (DisassemblyReference reference in result.References)
                 {
+                    // A jump through a pointer in another run, which this run's analysis cannot read, is followed
+                    // here: the pointer is data in its run, and where it points an entry in that one's.
+                    if (reference.Kind == DisassemblyReferenceKind.IndirectJump
+                        && Pointer(image, runs, set, reference, index) is { } pointer
+                        && !regions.Any(region => Overlaps(region, pointer.Low, 1) || Overlaps(region, pointer.High, 1)))
+                    {
+                        regions.Add(new AnalysisRegion(pointer.Low, 1, AnalysisRegionKind.Data));
+                        regions.Add(new AnalysisRegion(pointer.High, 1, AnalysisRegionKind.Data));
+                        next.Add(RunOf(runs, pointer.Low));
+                        next.Add(RunOf(runs, pointer.High));
+                        int pointed = RunOf(runs, pointer.Target);
+                        if (pointed >= 0 && !Inside(regions, pointer.Target) && found[pointed].Add(pointer.Target))
+                        {
+                            next.Add(pointed);
+                        }
+
+                        continue;
+                    }
+
                     if (reference.Kind is not (DisassemblyReferenceKind.Branch
                         or DisassemblyReferenceKind.Jump
                         or DisassemblyReferenceKind.Call
@@ -231,6 +250,34 @@ internal sealed partial class DebugSession
 
         return regions;
     }
+
+    // The pointer of a plain indirect jump, such as JMP ($C100), when its bytes are readable but outside the jump's
+    // own run; null for a jump through a register or an indexed table, or a pointer the run could read itself.
+    private static (int Low, int High, int Target)? Pointer(
+        byte[] image,
+        List<int> runs,
+        InstructionSet set,
+        DisassemblyReference reference,
+        int run)
+    {
+        ReadOnlySpan<byte> bytes = image.AsSpan(reference.Source, Math.Min(LongestInstruction, 0x10000 - reference.Source));
+        bool decoded = Disassembler.TryDecode(bytes, reference.Source, set, out DisassembledInstruction jump);
+        OperandForm form = jump.Form;
+        bool plain = decoded && jump.Flow == DisassemblyFlow.IndirectJump && !form.IsIndexed && !form.HasPostbyte;
+        if (!plain) { return null; }
+
+        int first = reference.Target;
+        int second = (first + 1) & 0xFFFF;
+        if (set.IndirectPageWrap && (first & 0xFF) == 0xFF) { second = first & 0xFF00; }
+        int lowRun = RunOf(runs, first), highRun = RunOf(runs, second);
+        if (lowRun < 0 || highRun < 0 || (lowRun == run && highRun == run)) { return null; }
+        (int low, int high) = set.Endianness == Endianness.Big ? (second, first) : (first, second);
+        return (low, high, image[low] | (image[high] << 8));
+    }
+
+    // Whether a region overlaps a range.
+    private static bool Overlaps(AnalysisRegion region, int start, int length) =>
+        region.Address < start + length && region.Address + region.Length > start;
 
     // Whether an address is in one of the regions.
     private static bool Inside(List<AnalysisRegion> regions, int address) =>

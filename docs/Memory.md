@@ -85,7 +85,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   sources' labels in the gutter, the inspector and the listing's operands, and **Comment** puts a comment after its
   line in the listing; an empty one takes it away.
   A name is a symbol in expressions too, in Watch, Go to, conditions and function breakpoints, winning over the
-  sources' labels; a bank's names are in that bank only, so `aux:AUXTEXT` and `[aux:AUXTEXT]` read auxiliary RAM.
+  sources' labels; a bank's names are in that bank only, so `aux:AUXTEXT` and `[aux:AUXTEXT]` read auxiliary RAM. Function breakpoints bind again when a name
+  changes, so one on a name moves with it.
   All of them are kept in the launch's hints file, the disassembler's (`--hints`), so what you learn while
   debugging leads straight to `--disassemble`: the launch's `hints` setting names it, and without one it is
   `<name>.hints.json` beside the source, program or debug file, made at the first mark; a launch with none of

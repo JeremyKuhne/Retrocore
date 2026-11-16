@@ -226,6 +226,22 @@ internal sealed partial class DebugSession
         }
     }
 
+    // Binds the function breakpoints again, as when the hints file's names change, and updates each binding the
+    // editor shows.
+    private void RebindFunctionBreakpoints()
+    {
+        if (_functionRequest is not { } functions) { return; }
+        JsonObject response = FunctionBreakpoints(functions);
+        foreach (JsonObject breakpoint in (response["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            Notify("breakpoint", new JsonObject
+            {
+                ["reason"] = "changed",
+                ["breakpoint"] = breakpoint.DeepClone()
+            });
+        }
+    }
+
     // Binds every breakpoint again for a new launch, with no hits.
     private void RebindBreakpoints()
     {

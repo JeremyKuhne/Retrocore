@@ -529,6 +529,21 @@ try {
     lines = (await request("retro/memory/listing", { memoryReference: "aux:0x0000", address: 0x6510, count: 1 })).lines;
     assert.deepEqual(lines[0].breakpoints, [gutter[1].id], JSON.stringify(lines));
     assert.equal((await listing(0x6510, 1))[0].breakpoints, null);
+    // Naming an address binds the function breakpoints that use the name, and renaming moves them.
+    drop("breakpoint");
+    const [moving] = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "MOVING" }] })).breakpoints;
+    assert.equal(moving.verified, false);
+    await mark({ address: 0x6520, name: "MOVING" });
+    let changed = queued("breakpoint").map(body => body.breakpoint).filter(breakpoint => breakpoint.id === moving.id);
+    assert.equal(changed.at(-1)?.verified, true, JSON.stringify(changed));
+    assert.deepEqual((await listing(0x6520, 1))[0].breakpoints, [moving.id]);
+    await mark({ address: 0x6520, name: "" });
+    await mark({ address: 0x6530, name: "MOVING" });
+    assert.equal((await listing(0x6520, 1))[0].breakpoints, null);
+    assert.deepEqual((await listing(0x6530, 1))[0].breakpoints, [moving.id]);
+    await mark({ address: 0x6530, name: "" });
+    changed = queued("breakpoint").map(body => body.breakpoint).filter(breakpoint => breakpoint.id === moving.id);
+    assert.equal(changed.at(-1)?.verified, false, JSON.stringify(changed));
     await request("setFunctionBreakpoints", { breakpoints: [] });
     assert.equal((await listing(0x6500, 2))[0].breakpoints, null);
     at = "marking memory";

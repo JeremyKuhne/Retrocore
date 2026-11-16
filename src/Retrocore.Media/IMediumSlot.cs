@@ -22,7 +22,8 @@ public interface IMediumSlot
     IMedium? Medium { get; }
 
     /// <summary>
-    ///  Gets the mount generation, which changes each time a medium goes in or comes out.
+    ///  Gets the mount generation, which changes each time a medium goes in or comes out and is never reused in the
+    ///  process, even by a drive built again, so with the drive's id it names one mount.
     /// </summary>
     int MountGeneration { get; }
 }

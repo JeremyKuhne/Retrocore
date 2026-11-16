@@ -348,9 +348,11 @@ internal sealed partial class DebugSession
             IDevice device = Target.Devices.FirstOrDefault(device => device.Id == id)
                 ?? throw new ArgumentException($"There is no device '{id}'.");
 
-            Target.DeviceAction(device, action, args);
+            // The host saves disks, and holds back a changed disk that would leave its drive; the machine does the rest.
+            JsonObject? answer = MediaActions.Device(device, action, args);
+            if (answer is null) { Target.DeviceAction(device, action, args); }
             NotifyDevices();
-            return DevicesBody();
+            return WithAnswer(DevicesBody(), answer);
         }));
 
         // retro/speed: the speed running keeps to, from now on: 1, 2, 4 or 8 times the machine's clock, or "max".
@@ -369,6 +371,14 @@ internal sealed partial class DebugSession
             string id = args.String("id") ?? throw new ArgumentException("id is required.");
             string action = args.String("action") ?? throw new ArgumentException("action is required.");
             bool hadCoprocessor = Target.Coprocessor is not null;
+
+            // A card with a changed disk in a drive stays in until the disk is saved or let go.
+            string[]? ids = Target.Hardware().FirstOrDefault(row => row.Id == id)?.Devices;
+            if (MediaActions.Hardware(ids, Target.Devices, action, args) is { } held)
+            {
+                return WithAnswer(DevicesBody(), held);
+            }
+
             Target.HardwareAction(id, action, args);
             Invalidate();
 
@@ -478,6 +488,19 @@ internal sealed partial class DebugSession
         }));
     }
 
+    // The devices with media's answer, if there is one, beside them: { "outcome": "changed", "device": ..., "devices": ... }.
+    private static JsonObject WithAnswer(JsonObject body, JsonObject? answer)
+    {
+        if (answer is null) { return body; }
+        foreach ((string key, JsonNode? value) in answer.ToList())
+        {
+            answer.Remove(key);
+            body[key] = value;
+        }
+
+        return body;
+    }
+
     // The display as the panel draws it, while running or stopped.
     private JsonObject DisplayNow() => Target.DisplayFrame(running: _run is { IsCancellationRequested: false });
 
@@ -560,6 +583,10 @@ internal sealed partial class DebugSession
     private static JsonObject Capabilities() => new JsonObject
     {
         ["supportsConfigurationDoneRequest"] = true,
+
+        // retro/device and retro/hardware answer media's outcomes (saved, changed, conflict, losses, readOnly) to a
+        // client that sends supportsRetrocoreMedia, as the media persistence plan has them.
+        ["supportsRetrocoreMedia"] = 1,
         ["supportsConditionalBreakpoints"] = true,
         ["supportsHitConditionalBreakpoints"] = true,
         ["supportsLogPoints"] = true,

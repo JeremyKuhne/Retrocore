@@ -31,6 +31,12 @@ internal sealed class MainWindow : Window
     private readonly DesktopSettings _settings;
     private readonly ScreenView _screen;
     private readonly MachinePane _machinePane;
+
+    // Whether the window may close: set once its changed disks are saved or let go.
+    private bool _mayClose;
+
+    // Whether a close is asking about changed disks, so another close request waits on it rather than asking again.
+    private bool _closing;
     private readonly Grid _body = new();
     private readonly Border _pane = new()
     {
@@ -733,6 +739,47 @@ internal sealed class MainWindow : Window
         }
 
         _status.Text = string.Join(" · ", parts);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The machine holds still first, so it cannot change a disk as the window closes. A disk with changes not
+    ///   saved to its image then asks, as closing would lose them; the window closes once each is saved or let go.
+    ///   One close asks at a time, and not while Stop, Restart or another change asks: a close request then waits on
+    ///   its answer.
+    ///  </para>
+    /// </remarks>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_mayClose) { return; }
+        if (_closing || _machinePane.Busy)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        _machinePane.Hold();
+        if (_machinePane.Unsaved.Count == 0) { return; }
+        e.Cancel = true;
+        _ = CloseAfterAsking();
+    }
+
+    private async Task CloseAfterAsking()
+    {
+        _closing = true;
+        try
+        {
+            if (!await _machinePane.ReleaseMedia("closing")) { return; }
+            _mayClose = true;
+        }
+        finally
+        {
+            _closing = false;
+        }
+
+        Close();
     }
 
     /// <inheritdoc/>

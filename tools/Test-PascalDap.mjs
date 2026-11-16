@@ -187,6 +187,11 @@ async function sourceBreakpoints(machine) {
         const disk2 = () => request("retro/devices").then(body => body.devices.find(device => device.id === "disk2"));
         assert.equal((await disk2()).media.changed, true);
         assert.ok((await disk2()).operations.includes("save"));
+        // A changed disk does not leave its drive unsaved: a client that speaks media's answers hears changed, and an
+        // older one is refused.
+        const held = await request("retro/device", { id: "disk2", action: "eject", supportsRetrocoreMedia: 1 });
+        assert.deepEqual([held.outcome, held.device, (await disk2()).media.changed], ["changed", "disk2", true]);
+        await assert.rejects(request("retro/device", { id: "disk2", action: "eject" }), /not saved/);
         const woz = join(folder, "PASCAL2.woz");
         const sectors = join(folder, "PASCAL2.dsk");
         await request("retro/device", { id: "disk2", action: "save", path: woz });
@@ -194,6 +199,11 @@ async function sourceBreakpoints(machine) {
         const saved = await disk2();
         assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
         assert.equal(statSync(sectors).size, 143360);
+        // An image that cannot be read leaves the disk in the drive where it was.
+        const broken = join(folder, "BROKEN.dsk");
+        writeFileSync(broken, Buffer.alloc(100));
+        await assert.rejects(request("retro/device", { id: "disk2", action: "insert", path: broken, supportsRetrocoreMedia: 1 }), /4096-byte tracks/);
+        assert.equal((await disk2()).media?.label, sectors, "a failed insert leaves the old disk");
         // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
         const native = process.env.RETROCORE_DAP_HOST;
         const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
@@ -285,7 +295,8 @@ async function compiledOnIIe(machine, compiler) {
 
 const passed = [];
 try {
-    await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    const capabilities = await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    assert.equal(capabilities.supportsRetrocoreMedia, 1, "the host speaks media's answers");
     for (const machine of machines) {
         if (!machine.disks.every(disk => existsSync(disk))) {
             console.log(`Skipped ${machine.name}: ${machine.disks.join(" or ")} is missing.`);

@@ -70,6 +70,7 @@ public static class SectorDiskReader
 
         List<string> unreadable = [];
         List<string> losses = [];
+        List<string> notes = [];
         SortedSet<int> volumes = [];
         byte[] image = new byte[tracks * TrackSize];
         for (int track = 0; track < tracks; track++)
@@ -80,7 +81,7 @@ public static class SectorDiskReader
                 continue;
             }
 
-            ReadTrack(bits, track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder, volumes, unreadable, losses);
+            ReadTrack(bits, track, values, image.AsSpan(track * TrackSize, TrackSize), proDosOrder, volumes, unreadable, losses, notes);
         }
 
         losses.InsertRange(0, unreadable);
@@ -110,7 +111,7 @@ public static class SectorDiskReader
             losses.Add($"The disk's volume is {string.Join(", ", volumes)}; a sector image is read back as volume {StandardVolume}.");
         }
 
-        return new(image, tracks, losses, unreadable);
+        return new(image, tracks, losses, unreadable) { Notes = notes };
     }
 
     // The track's nibbles three times around, and the ones that start in the second time around: the first only
@@ -155,7 +156,8 @@ public static class SectorDiskReader
         bool proDosOrder,
         SortedSet<int> volumes,
         List<string> unreadable,
-        List<string> losses)
+        List<string> losses,
+        List<string> notes)
     {
         List<byte> nibbles = Nibbles(bits, out int windowStart, out int windowEnd);
         int found = 0;
@@ -228,6 +230,13 @@ public static class SectorDiskReader
             if (missing.Count != 0) { parts.Add($"no readable sector {string.Join(", ", missing)}"); }
             if (failed.Count != 0) { parts.Add($"a bad checksum in sector {string.Join(", ", failed)}"); }
             unreadable.Add($"Track {track} has {string.Join(" and ", parts)}.");
+        }
+
+        // A sector that read from one copy though another had a bad checksum loses nothing, but says so.
+        List<int> recovered = [.. Enumerable.Range(0, 16).Where(physical => (found & bad & (1 << physical)) != 0)];
+        if (recovered.Count != 0)
+        {
+            notes.Add($"Track {track}, sector {string.Join(", ", recovered)}: a copy had a bad checksum, and another copy read.");
         }
 
         for (int physical = 0; physical < 16; physical++)

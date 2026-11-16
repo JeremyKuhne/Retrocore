@@ -3,8 +3,8 @@
 How disks, tapes and other media the machines change get back to image files, on every machine and in every format,
 without losing what the machine wrote.
 
-**Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1's media layer is built
-([phases](#phases)); the host's save steps, detach paths and protocol answers are next. The
+**Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1 is built for the Disk II
+([phases](#phases)); phase 2, every drive saving, is next. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -813,8 +813,28 @@ After the reviews:
      catalog, ProDOS's directory or Apple Pascal's volume header. The debug host's `save` uses them: a lossy save
      fails with its losses unless `acceptLosses` is given, and then leaves the disk changed. A WOZ disk has 160
      quarter tracks, so no track lies past the 40th. Tests: `DiskIIImageTests`.
-   - **The host (next).** The save steps, prepare to detach, the protocol's outcomes, and the clients' prompts: a
-     minimal Save, Discard or Cancel in the extension and Retrocore Desktop until phase 3's UI.
+   - **The host (built).** `MediaActions` in the debug host keeps each disk's source (medium id, image, codec and
+     baseline revision), saves step by step (snapshot, encode, commit over the baseline or the revision `overwrite`
+     names, and complete only for the same disk and mount generation), and holds back a changed disk that an
+     `eject`, an `insert` over it or **Remove Card** would take out; an insert reads and checks its image before the
+     disk in the drive comes out, so a bad image leaves that disk. `ImageWriter` writes the temporary file and
+     replaces the image (`File.Replace` on Windows, a rename elsewhere), follows links, retries sharing violations
+     for two seconds, takes each image's lock in local data, and keeps one backup there. The answers are `saved`,
+     `changed`, `conflict`, `losses` and `readOnly`, to a client that sends `supportsRetrocoreMedia`; an older one
+     is refused with a message. Each answer holds only for the mount it is about: a follow-up carries its
+     `generation` or lists the mount in `discards`, so each of a card's changed disks is asked about, and a disk
+     that went in while a question was open is never saved or let go by it. Save As replaces only the revision of
+     the file the person chose, and an image deleted since is written again only once agreed. The extension's
+     Drives view and Retrocore Desktop answer with modal prompts, and drop an answer for a session no longer
+     active. The desktop also asks before Stop, Restart, switching machines, resetting and closing would lose a
+     changed disk, holding the machine still from the first question, and asks again about a disk a lossy save
+     left changed. A sector read from its second copy, after the first had a bad checksum, is a note. Tests:
+     `MediaSaveTests`, and the Pascal debug adapter test's eject of its changed disk.
+   - **Left for later phases.** Changing the lock alone does not yet count as a change to save: with every Disk II
+     disk loading locked, unlocking one would mark it changed, so the lock joins `changed` with phase 4's default
+     lock. A relaunch over a session and the session's end lose changed disks until phase 4's journal keeps them;
+     saving runs on the request's thread, which is quick for a Disk II disk, until the costs are measured with the
+     larger drives of phase 2. Staleness (`source.stale`) and `differences` come with phase 3's UI.
 2. **Every drive saves.** The 3.5 drive with its 2MG header; the ProFile; slot 7 with a writable device and its
    lock at power-on; `FloppyDisk` writes counted; JV1, JV3 and JVC fixed; a DMK writer, and DMK on the CoCo. Done when
    each drive saves to each format it offers, reports losses, and boots again from the saved image, pinned by

@@ -193,7 +193,7 @@ internal sealed class MachinePane : ScrollViewer
                 State = TreeState.Expanded,
                 Children = children,
                 Inline = running
-                    ? [new("debug-restart", "Restart", () => Try(_session.Restart)), new("debug-stop", "Stop", () => Try(_session.Stop))]
+                    ? [new("debug-restart", "Restart", () => _ = Release("Restart", _session.Restart)), new("debug-stop", "Stop", () => _ = Release("Stop", _session.Stop))]
                     : [new("arrow-swap", "Switch Machine...", () => _ = SwitchMachine()), new("play", "Start This Machine", () => Try(_session.Start))],
             },
         ];
@@ -402,7 +402,221 @@ internal sealed class MachinePane : ScrollViewer
         Refresh();
     }
 
-    private void Act(DeviceState device, string action, JsonObject? args = null) => Try(() => _session.Device(device.Id, action, args));
+    private void Act(DeviceState device, string action, JsonObject? args = null) =>
+        _ = Send(answer => _session.Device(device.Id, action, answer), args ?? []);
+
+    /// <summary>
+    ///  Gets the devices with disks whose changes are not saved to their images.
+    /// </summary>
+    internal IReadOnlyList<DeviceState> Unsaved => [.. _session.Host.DeviceStates().Where(device => device.Media?.Changed == true && device.Can(MediaOperations.Save))];
+
+    /// <summary>
+    ///  Asks about each disk whose changes are not saved before something that sets the machine up again would lose
+    ///  them: save it, or let the changes go.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The machine holds still from the first question, so it cannot change a disk after its question or one it was
+    ///   not asked about; it stays held for what follows, which builds it again, and runs on if the person cancels.
+    ///   Each disk is asked about until it is saved or let go: one whose save could not keep all of it, as a lossy
+    ///   format's, is asked about again, and goes only if it is let go.
+    ///  </para>
+    /// </remarks>
+    /// <param name="what">What would lose them, such as <c>Stop</c>, for the question.</param>
+    /// <returns>
+    ///  True when every disk was saved or let go, with the machine held; false when the person cancelled or a save
+    ///  failed, with the machine running on.
+    /// </returns>
+    internal async Task<bool> ReleaseMedia(string what)
+    {
+        // One at a time: Stop, Restart, switching, starting, resetting and closing each hold the machine for their
+        // questions, so one asking while another is would let go of the other's hold.
+        if (Busy)
+        {
+            _window.Notify("Retrocore: answer the open question about the disks first.", "info");
+            return false;
+        }
+
+        Busy = true;
+        MachineHost held = _session.Host;
+        held.Pause();
+        bool released = false;
+        try
+        {
+            released = await AskAboutUnsaved(what);
+            return released;
+        }
+        finally
+        {
+            Busy = false;
+            if (!released) { held.Resume(); }
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether something that sets the machine up again is asking about its changed disks, holding it still.
+    /// </summary>
+    internal bool Busy { get; private set; }
+
+    /// <summary>
+    ///  Holds the machine still, as before something that sets it up again: the window closing holds it, and asks
+    ///  only when a disk has changes not saved.
+    /// </summary>
+    internal void Hold() => _session.Host.Pause();
+
+    // Asks about each changed disk until it is saved or let go; says whether all were, or false when one was not.
+    private async Task<bool> AskAboutUnsaved(string what)
+    {
+        HashSet<(string Id, int? Generation)> discarded = [];
+        HashSet<(string Id, int? Generation)> saved = [];
+        while (Unsaved.FirstOrDefault(device => !discarded.Contains((device.Id, device.Generation))) is { } device)
+        {
+            (string Id, int? Generation) mount = (device.Id, device.Generation);
+            string file = Path.GetFileName(device.Media?.Label) ?? "its image";
+            string? answer = saved.Contains(mount)
+                ? await _window.Ask(
+                    $"{file} cannot hold all of the disk in {device.Info.Name}, so it still has changes. Let them go before {what}?",
+                    ["Discard"])
+                : await _window.Ask($"The disk in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
+
+            if (answer == "Discard")
+            {
+                discarded.Add(mount);
+                continue;
+            }
+
+            saved.Add(mount);
+            JsonObject save = new() { ["generation"] = device.Generation };
+            if (answer is null || !await Send(args => _session.Device(device.Id, "save", args), save)) { return false; }
+        }
+
+        return true;
+    }
+
+    // Lets changed disks go, then acts, as Stop, Restart, switching, starting another machine and resetting do. The
+    // machine held for the questions runs on if the action left it in place, as when Stop could not write a recording
+    // or the new machine could not be built.
+    private async Task Release(string what, Action action)
+    {
+        MachineHost held = _session.Host;
+        if (!await ReleaseMedia(what)) { return; }
+        Try(action);
+        if (ReferenceEquals(_session.Host, held)) { held.Resume(); }
+    }
+
+    // Sends a media action and answers what comes back, as the extension does: a changed disk that would leave its
+    // drive is saved or let go, a changed image is replaced or the disk saved as a new one, a lossy save is accepted
+    // or saved as a new image, and a read-only image is saved as a new one. Says whether the action went through.
+    // Each answer goes back for the disk it was about (its mount's generation, or the mount in discards), so a disk
+    // that went in while a question was open is never saved or let go by it.
+    private async Task<bool> Send(Func<JsonObject, JsonObject?> send, JsonObject args)
+    {
+        args["supportsRetrocoreMedia"] = 1;
+        while (true)
+        {
+            JsonObject? answer = null;
+            bool failed = false;
+            Try(() =>
+            {
+                failed = true;
+                answer = send((JsonObject)args.DeepClone());
+                failed = false;
+            });
+
+            if (failed) { return false; }
+            string device = answer?["device"]?.GetValue<string>() ?? "";
+            JsonNode? generation = answer?["generation"]?.DeepClone();
+            string name = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device)?.Info.Name ?? device;
+            string file = Path.GetFileName(answer?["label"]?.GetValue<string>() ?? "");
+            string label = file.Length != 0 ? file : "its image";
+            switch (answer?["outcome"]?.GetValue<string>())
+            {
+                case null:
+                    return true;
+                case "saved":
+                    Said(answer, name);
+                    return true;
+                case "changed":
+                    string? choice = await _window.Ask($"The disk in {name} has changes not saved to {label}.", ["Save", "Discard"]);
+                    if (choice is null) { return false; }
+                    if (choice == "Discard")
+                    {
+                        JsonArray discards = args["discards"] as JsonArray ?? [];
+                        discards.Add((JsonNode)new JsonObject { ["device"] = device, ["generation"] = generation });
+                        args["discards"] = discards;
+                    }
+                    else if (!await Send(saveArgs => _session.Device(device, "save", saveArgs), SaveOf(generation)))
+                    {
+                        return false;
+                    }
+
+                    continue;
+                case "conflict":
+                    string image = Path.GetFileName(answer["path"]?.GetValue<string>()) ?? "The image";
+                    string? replace = await _window.Ask(
+                        answer["current"] is null
+                            ? $"{image} was deleted since the disk in {name} was read from it. Save the disk there again?"
+                            : answer["baseline"] is null
+                                ? $"{image} changed since you chose it. Replace it with the disk in {name}?"
+                                : $"{image} changed since the disk in {name} was read from it. Replace it with the disk?",
+                        ["Replace", "Save As..."]);
+
+                    if (replace == "Replace")
+                    {
+                        args["overwrite"] = new JsonObject { ["sha256"] = answer["current"]?["sha256"]?.DeepClone() };
+                        args["generation"] = generation;
+                        continue;
+                    }
+
+                    return replace == "Save As..." && await SaveAsNew(device, generation);
+                case "losses":
+                    string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
+                    string? accept = await _window.Ask(
+                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the disk in {name}: {losses}",
+                        ["Save Anyway", "Save As..."]);
+
+                    if (accept == "Save Anyway")
+                    {
+                        args["acceptLosses"] = true;
+                        args["generation"] = generation;
+                        continue;
+                    }
+
+                    return accept == "Save As..." && await SaveAsNew(device, generation);
+                case "readOnly":
+                    string why = answer["reason"]?.GetValue<string>() switch
+                    {
+                        "noImage" => $"The disk in {name} has no image of its own.",
+                        "format" => $"The disk in {name} came from an image that can only be read.",
+                        "file" => $"The image of the disk in {name} is read-only.",
+                        _ => $"The image of the disk in {name} cannot be written.",
+                    };
+
+                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation);
+                default:
+                    return true;
+            }
+        }
+    }
+
+    // What a save says beside saving: a WOZ1 image now WOZ2, a sector that read from a second copy, what was lost.
+    private void Said(JsonObject answer, string name)
+    {
+        IEnumerable<string?> said = (answer["notes"]?.AsArray() ?? []).Concat(answer["losses"]?.AsArray() ?? [])
+            .Select(node => node?.GetValue<string>());
+
+        string text = string.Join(" ", said.Where(line => line is not null));
+        if (text.Length != 0) { _window.Notify($"Saved the disk in {name}. {text}", "info"); }
+    }
+
+    // A save's arguments for the mount an answer was about.
+    private static JsonObject SaveOf(JsonNode? generation) => new() { ["generation"] = generation?.DeepClone() };
+
+    // Save As for a device by its id, as the answers offer it.
+    // It carries the mount the answer was about, so a disk that went in since is not the one saved.
+    private async Task<bool> SaveAsNew(string id, JsonNode? generation) =>
+        _session.Host.DeviceStates().FirstOrDefault(state => state.Id == id) is { } device
+            && await SaveAs(device, generation?.GetValue<int>());
 
     private async Task SwitchMachine()
     {
@@ -420,7 +634,7 @@ internal sealed class MachinePane : ScrollViewer
 
         QuickPickItem<CatalogMachine>? picked = await _window.Pick(items, "Switch Machine", "Which machine to set up?");
         if (picked?.Value is not { } chosen) { return; }
-        Try(() => _session.Switch(MachineCatalog.Configuration(chosen), saved: null));
+        await Release("switching machines", () => _session.Switch(MachineCatalog.Configuration(chosen), saved: null));
     }
 
     private async Task StartMachine()
@@ -434,7 +648,7 @@ internal sealed class MachinePane : ScrollViewer
             "Which machine to start?");
 
         if (picked?.Value is not { } chosen) { return; }
-        Try(() =>
+        await Release("starting another machine", () =>
         {
             _session.Switch(MachineCatalog.Configuration(chosen), saved: null);
             _session.Start();
@@ -444,7 +658,7 @@ internal sealed class MachinePane : ScrollViewer
     private async Task ResetSaved()
     {
         string? answer = await _window.Ask($"Forget the cards and media kept for {_session.Name}, and set it up as it comes?", ["Reset"]);
-        if (answer == "Reset") { Try(_session.ResetSaved); }
+        if (answer == "Reset") { await Release("resetting the machine", _session.ResetSaved); }
     }
 
     private async Task ChangeSetting(MachineChoice choice)
@@ -482,7 +696,7 @@ internal sealed class MachinePane : ScrollViewer
             $"Add a card to {row.Name}",
             "");
 
-        if (picked?.Value is { } card) { Try(() => _session.Hardware(row.Id, card.Args())); }
+        if (picked?.Value is { } card) { _ = Send(args => _session.Hardware(row.Id, args), card.Args()); }
     }
 
     // Taking out a card with disks in it ejects them, so it asks first.
@@ -494,7 +708,7 @@ internal sealed class MachinePane : ScrollViewer
             if (answer != "Remove Card") { return; }
         }
 
-        Try(() => _session.Hardware(row.Id, new JsonObject { ["action"] = "removeCard" }));
+        _ = Send(args => _session.Hardware(row.Id, args), new JsonObject { ["action"] = "removeCard" });
     }
 
     private async Task Insert(DeviceState device)
@@ -531,9 +745,10 @@ internal sealed class MachinePane : ScrollViewer
         if (answer == "Save") { Act(device, "save"); }
     }
 
-    private async Task SaveAs(DeviceState device)
+    // Saves a disk to an image the person picks; says whether it was saved.
+    private async Task<bool> SaveAs(DeviceState device, int? generation = null)
     {
-        if (device.Media is not { } media) { return; }
+        if (device.Media is not { } media) { return false; }
         IStorageFolder? folder = Path.GetDirectoryName(media.Label) is { Length: > 0 } directory
             ? await _window.StorageProvider.TryGetFolderFromPathAsync(directory)
             : null;
@@ -546,7 +761,14 @@ internal sealed class MachinePane : ScrollViewer
             FileTypeChoices = Filters("Disk images", [.. device.Info.Formats.Where(format => format is "woz" or "dsk" or "do" or "po")]),
         });
 
-        if (file?.TryGetLocalPath() is { } path) { Act(device, "save", new JsonObject { ["path"] = path }); }
+        if (file?.TryGetLocalPath() is not { } path) { return false; }
+
+        // The person chose the file as it is now, so the save may replace that and nothing that comes after it.
+        JsonObject args = new() { ["path"] = path, ["generation"] = generation ?? device.Generation };
+        FileRevision? chosen = null;
+        Try(() => chosen = FileRevision.Read(path));
+        if (chosen is not null) { args["overwrite"] = new JsonObject { ["sha256"] = chosen.Sha256 }; }
+        return await Send(saveArgs => _session.Device(device.Id, "save", saveArgs), args);
     }
 
     private static List<FilePickerFileType> Filters(string name, IReadOnlyList<string> formats) =>

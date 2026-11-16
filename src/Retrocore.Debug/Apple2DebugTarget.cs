@@ -1171,7 +1171,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         {
             case (Apple2Disk35Drive drive, "insert"):
                 string image = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
-                drive.Eject();
                 Apple2Loader.Insert(drive, image);
                 break;
             case (Apple2Disk35Drive drive, "eject"):
@@ -1182,7 +1181,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
-                drive.Eject();
                 Apple2Loader.Insert(drive, path);
                 break;
             case (Apple2FloppyDrive drive, "eject"):
@@ -1190,9 +1188,6 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 break;
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
-                break;
-            case (Apple2FloppyDrive drive, "save"):
-                Apple2Loader.Save(drive, args.String("path"), args.Bool("acceptLosses") ?? false);
                 break;
             case (ProFileDrive drive, "insert"):
                 ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));

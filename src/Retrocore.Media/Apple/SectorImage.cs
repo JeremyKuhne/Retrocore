@@ -11,4 +11,11 @@ namespace Retrocore.Media;
 /// <param name="Tracks">Its tracks, 35 to 40.</param>
 /// <param name="Losses">Everything of the disk the image lost, the tracks that did not read among them.</param>
 /// <param name="Unreadable">The tracks that did not read as 16 sectors.</param>
-public sealed record SectorImage(byte[] Bytes, int Tracks, IReadOnlyList<string> Losses, IReadOnlyList<string> Unreadable);
+public sealed record SectorImage(byte[] Bytes, int Tracks, IReadOnlyList<string> Losses, IReadOnlyList<string> Unreadable)
+{
+    /// <summary>
+    ///  Gets what the read should say though nothing is lost: a sector whose copy had a bad checksum where another
+    ///  copy of it read.
+    /// </summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+}

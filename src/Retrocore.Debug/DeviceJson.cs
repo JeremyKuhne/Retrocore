@@ -55,7 +55,7 @@ internal static class DeviceJson
             ["operations"] = Operations(info.Operations),
             ["tracks"] = info.Tracks,
             ["sides"] = info.Sides,
-            ["media"] = device.Media is { } media ? Media(media) : null,
+            ["media"] = device.Media is { } media ? Media(device, media) : null,
             ["activity"] = Camel(device.Activity.ToString())
         };
 
@@ -97,13 +97,39 @@ internal static class DeviceJson
         return result;
     }
 
-    private static JsonObject Media(MediaState media) => new()
+    // The media, and for a drive whose medium the host knows, its medium id, mount generation and source.
+    private static JsonObject Media(IDevice device, MediaState media)
     {
-        ["label"] = media.Label,
-        ["format"] = media.Format,
-        ["writeProtected"] = media.WriteProtected,
-        ["changed"] = media.Changed
-    };
+        JsonObject json = new()
+        {
+            ["label"] = media.Label,
+            ["format"] = media.Format,
+            ["writeProtected"] = media.WriteProtected,
+            ["changed"] = media.Changed
+        };
+
+        if (device is Retrocore.Media.IMediumSlot { Medium: { } medium } slot)
+        {
+            json["generation"] = slot.MountGeneration;
+            json["version"] = medium.Version;
+            if (MediaActions.Source(medium) is { } source)
+            {
+                json["medium"] = source.MediumId;
+                json["source"] = new JsonObject
+                {
+                    ["kind"] = "image",
+                    ["path"] = source.Path,
+                    ["saves"] = source.Codec is not null,
+                };
+            }
+            else
+            {
+                json["source"] = new JsonObject { ["kind"] = "built", ["saves"] = false };
+            }
+        }
+
+        return json;
+    }
 
     private static JsonArray Operations(MediaOperations operations)
     {

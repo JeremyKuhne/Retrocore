@@ -147,11 +147,15 @@ internal sealed class MachineSession : DisposableBase
     /// </summary>
     /// <param name="id">The hardware row's id.</param>
     /// <param name="args">The arguments, with the action.</param>
-    internal void Hardware(string id, JsonObject args)
+    /// <returns>
+    ///  Media's answer, such as <c>changed</c> for a card with a changed disk; null when the machine acted.
+    /// </returns>
+    internal JsonObject? Hardware(string id, JsonObject args)
     {
-        Host.HardwareAction(id, args["action"]?.GetValue<string>() ?? throw new ArgumentException("action is required."), args);
+        JsonObject? answer = Host.HardwareAction(id, args["action"]?.GetValue<string>() ?? throw new ArgumentException("action is required."), args);
         Keep();
         OnChanged();
+        return answer;
     }
 
     /// <summary>
@@ -160,11 +164,13 @@ internal sealed class MachineSession : DisposableBase
     /// <param name="id">The device's id.</param>
     /// <param name="action">The action.</param>
     /// <param name="args">Its arguments.</param>
-    internal void Device(string id, string action, JsonObject? args = null)
+    /// <returns>Media's answer, such as <c>saved</c> or <c>changed</c>; null when the machine simply acted.</returns>
+    internal JsonObject? Device(string id, string action, JsonObject? args = null)
     {
-        Host.DeviceAction(id, action, args ?? []);
+        JsonObject? answer = Host.DeviceAction(id, action, args ?? []);
         Keep();
         OnChanged();
+        return answer;
     }
 
     /// <summary>

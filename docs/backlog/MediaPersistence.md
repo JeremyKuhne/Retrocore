@@ -816,7 +816,8 @@ After the reviews:
    - **The host (built).** `MediaActions` in the debug host keeps each disk's source (medium id, image, codec and
      baseline revision), saves step by step (snapshot, encode, commit over the baseline or the revision `overwrite`
      names, and complete only for the same disk and mount generation), and holds back a changed disk that an
-     `eject`, an `insert` over it or **Remove Card** would take out. `ImageWriter` writes the temporary file and
+     `eject`, an `insert` over it or **Remove Card** would take out; an insert reads and checks its image before the
+     disk in the drive comes out, so a bad image leaves that disk. `ImageWriter` writes the temporary file and
      replaces the image (`File.Replace` on Windows, a rename elsewhere), follows links, retries sharing violations
      for two seconds, takes each image's lock in local data, and keeps one backup there. The answers are `saved`,
      `changed`, `conflict`, `losses` and `readOnly`, to a client that sends `supportsRetrocoreMedia`; an older one

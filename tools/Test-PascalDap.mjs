@@ -199,6 +199,11 @@ async function sourceBreakpoints(machine) {
         const saved = await disk2();
         assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
         assert.equal(statSync(sectors).size, 143360);
+        // An image that cannot be read leaves the disk in the drive where it was.
+        const broken = join(folder, "BROKEN.dsk");
+        writeFileSync(broken, Buffer.alloc(100));
+        await assert.rejects(request("retro/device", { id: "disk2", action: "insert", path: broken, supportsRetrocoreMedia: 1 }), /4096-byte tracks/);
+        assert.equal((await disk2()).media?.label, sectors, "a failed insert leaves the old disk");
         // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
         const native = process.env.RETROCORE_DAP_HOST;
         const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");

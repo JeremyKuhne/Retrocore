@@ -468,7 +468,6 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         {
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
-                drive.Eject();
                 Apple2Loader.Insert(drive, path);
                 break;
             case (Apple2FloppyDrive drive, "eject"):

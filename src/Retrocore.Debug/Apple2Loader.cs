@@ -47,27 +47,35 @@ internal static class Apple2Loader
 
     /// <summary>
     ///  Inserts a WOZ image, or a DOS- or ProDOS-order or 13-sector (<c>.d13</c>) sector image converted to a WOZ
-    ///  disk, in a Disk II drive.
+    ///  disk, in a Disk II drive, in place of any disk there.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The image is read and checked before the disk in the drive comes out, so one that cannot be read leaves that
+    ///   disk where it was.
+    ///  </para>
+    /// </remarks>
     /// <param name="drive">The drive.</param>
     /// <param name="path">The image's full path.</param>
     internal static void Insert(Apple2FloppyDrive drive, string path)
     {
         byte[] bytes = File.ReadAllBytes(path);
         LoadedDisk loaded = DiskIIImage.Load(bytes, Path.GetExtension(path));
+        drive.Eject();
         MediaActions.Register(loaded.Disk, path, loaded.Codec, bytes);
         drive.Insert(loaded.Disk, path, loaded.Codec?.Format ?? "D13");
     }
 
     /// <summary>
     ///  Inserts a 3.5-inch disk image (<c>.po</c>, <c>.2mg</c>, <c>.hdv</c>, <c>.img</c> or <c>.dsk</c>) in a 3.5
-    ///  drive.
+    ///  drive, in place of any disk there; as for a Disk II, the image is read and checked before that disk comes out.
     /// </summary>
     /// <param name="drive">The drive.</param>
     /// <param name="path">The image's full path.</param>
     internal static void Insert(Apple2Disk35Drive drive, string path)
     {
         Disk35Disk disk = Disk35Disk.Load(File.ReadAllBytes(path));
+        drive.Eject();
         string extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
         drive.Insert(disk, path, extension.Length == 0 ? "PO" : extension);
     }

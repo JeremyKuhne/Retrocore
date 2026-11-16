@@ -72,8 +72,8 @@ public sealed partial class PascalDecompiler
         }
     }
 
-    // The type a key's values are of: a variable's or parameter's (what a VAR one points to), a field's, a type's, or
-    // the elements of a set type.
+    // The type a key's values are of: a variable's or parameter's (what a VAR one points to), a field's or a type's,
+    // or, for an array or a set, its elements'.
     private TypeNode? Valued(string key, Dictionary<string, TypeNode> byName)
     {
         // A field's integer view, T35.F2.I: a type of its own, for the uses of that word only.
@@ -93,14 +93,10 @@ public sealed partial class PascalDecompiler
 
         if (FieldKey(key) is ({ } typeName, { } field))
         {
-            return byName.TryGetValue(typeName, out TypeNode? record) ? FieldType(record, field) : null;
+            return byName.TryGetValue(typeName, out TypeNode? record) && FieldType(record, field) is { } fieldType ? Elements(fieldType) : null;
         }
 
-        if (byName.TryGetValue(key, out TypeNode? named))
-        {
-            TypeNode root = named.Find();
-            return root.Kind == TypeKind.Set ? root.Element : root;
-        }
+        if (byName.TryGetValue(key, out TypeNode? named)) { return Elements(named); }
 
         Match match = VariableHint().Match(key);
         if (!match.Success) { return null; }
@@ -118,7 +114,16 @@ public sealed partial class PascalDecompiler
                 .SelectMany(procedure => _parameters[procedure].Concat(_declared[procedure.Frame]));
 
         Variable? variable = variables.FirstOrDefault(variable => variable.Offset == offset);
-        return variable is null ? null : variable.IsReference ? variable.Type.Target() : variable.Type;
+        return variable is null ? null : Elements(variable.IsReference ? variable.Type.Target() : variable.Type);
+    }
+
+    // The type whose values a type's are named by: an array's (an array of arrays') elements', a set's members'; else
+    // its own.
+    private static TypeNode Elements(TypeNode type)
+    {
+        TypeNode root = type.Find();
+        while (root.Kind == TypeKind.Array && root.Element is { } element) { root = element.Find(); }
+        return root.Kind == TypeKind.Set && root.Element is { } member ? member.Find() : root;
     }
 
     // A record's field's type, by the field's name as the decompiler gives it.

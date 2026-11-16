@@ -31,6 +31,7 @@ internal static partial class EmulatedPascalCompiler
     /// <param name="compilerDisk">APPLE2's image, with <c>SYSTEM.COMPILER</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
     /// <param name="model">The machine.</param>
+    /// <param name="codeBlocks">The blocks CODE: keeps for the code file, or null for 1.3's Compiler's.</param>
     /// <returns>The code file, or null on an error; and the screen when it finished.</returns>
     /// <exception cref="IOException">The files do not fit on the volumes.</exception>
     internal static (byte[]? Code, string Screen) CompileFiles(
@@ -39,7 +40,8 @@ internal static partial class EmulatedPascalCompiler
         string bootDisk,
         string compilerDisk,
         string? roms = null,
-        Apple2Model model = Apple2Model.IIPlus)
+        Apple2Model model = Apple2Model.IIPlus,
+        int? codeBlocks = null)
     {
         byte[] boot = DiskImageFile.Sectors(bootDisk);
         PascalVolume.DeleteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT");
@@ -56,7 +58,7 @@ internal static partial class EmulatedPascalCompiler
         byte[] tools = DiskImageFile.Sectors(compilerDisk);
         foreach (string unused in s_notCompiling) { _ = PascalVolume.DeleteFile(tools, proDosOrder: false, unused); }
 
-        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = FileVolumes(main, included, boot, tools);
+        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = FileVolumes(main, included, boot, tools, codeBlocks);
         byte[]? code = CompileFromVolumes([sources, codes, .. more], boot, tools, roms, model, out string screen);
         if (code is not null) { RestoreAlignment(code, main + string.Concat(included.Values)); }
         return (code, screen);
@@ -76,13 +78,15 @@ internal static partial class EmulatedPascalCompiler
     /// <param name="included">The included files' texts, by name.</param>
     /// <param name="boot">The boot disk's image, which included files may go on, or null for none.</param>
     /// <param name="tools">The Compiler's disk's image, which included files may go on after the boot disk.</param>
+    /// <param name="codeBlocks">The blocks CODE: keeps for the code file, or null for 1.3's Compiler's.</param>
     /// <returns>SOURCE:'s and CODE:'s images, and MORE1:'s and MORE2:'s where files went on them.</returns>
     /// <exception cref="IOException">The files do not fit, or a directive names no file given.</exception>
     internal static (byte[] Sources, byte[] Codes, IReadOnlyList<byte[]> More) FileVolumes(
         string main,
         IReadOnlyDictionary<string, string> included,
         byte[]? boot = null,
-        byte[]? tools = null)
+        byte[]? tools = null,
+        int? codeBlocks = null)
     {
         Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase);
         foreach ((string name, string text) in included) { files[Normalized(name)] = text; }
@@ -135,7 +139,7 @@ internal static partial class EmulatedPascalCompiler
                 try
                 {
                     PascalVolume.WriteFile(volumes[on].Image, proDosOrder: false, name, PascalFileKind.Text, text);
-                    if (on == code && !HasRoomForCode(codes))
+                    if (on == code && !HasRoomForCode(codes, codeBlocks ?? CodeBlocks))
                     {
                         _ = PascalVolume.DeleteFile(codes, proDosOrder: false, name);
                         continue;
@@ -156,12 +160,12 @@ internal static partial class EmulatedPascalCompiler
         return (sources, codes, [.. volumes[(code + 1)..(used + 1)].Select(volume => volume.Image)]);
     }
 
-    // Whether CODE: still has room for the code file after the included files on it.
-    private static bool HasRoomForCode(byte[] codes)
+    // Whether CODE: still has room for the code file, of so many blocks, after the included files on it.
+    private static bool HasRoomForCode(byte[] codes, int blocks)
     {
         try
         {
-            PascalVolume.WriteFile((byte[])codes.Clone(), proDosOrder: false, "ROOM.CODE", PascalFileKind.Code, new byte[CodeBlocks * 512]);
+            PascalVolume.WriteFile((byte[])codes.Clone(), proDosOrder: false, "ROOM.CODE", PascalFileKind.Code, new byte[blocks * 512]);
             return true;
         }
         catch (IOException)

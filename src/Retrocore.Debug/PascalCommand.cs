@@ -48,7 +48,7 @@ internal static partial class PascalCommand
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [--pcode] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
-               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--iie]
+               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--code-room blocks] [--iie]
                --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
@@ -506,6 +506,20 @@ internal static partial class PascalCommand
             rest.RemoveRange(at, 2);
         }
 
+        // The blocks CODE: keeps for the code file, where included files go on it: a large program's code needs more.
+        int? codeRoom = null;
+        int room = rest.IndexOf("--code-room");
+        if (room >= 0)
+        {
+            if (room + 1 >= rest.Count || !int.TryParse(rest[room + 1], CultureInfo.InvariantCulture, out int blocks) || blocks <= 0)
+            {
+                return Fail(Usage, code: 2);
+            }
+
+            codeRoom = blocks;
+            rest.RemoveRange(room, 2);
+        }
+
         int includes = rest.IndexOf("--includes");
         if (includes >= 0)
         {
@@ -513,9 +527,11 @@ internal static partial class PascalCommand
             string folder = rest[includes + 1];
             rest.RemoveRange(includes, 2);
             return rest is [string main, string bootDisk, string compilerDisk, string written]
-                ? CompileFiles(main, folder, bootDisk, compilerDisk, written, model)
+                ? CompileFiles(main, folder, bootDisk, compilerDisk, written, model, codeRoom)
                 : Fail(Usage, code: 2);
         }
+
+        if (codeRoom is not null) { return Fail(Usage, code: 2); }
 
         return rest switch
         {
@@ -526,7 +542,7 @@ internal static partial class PascalCommand
     }
 
     // Compiles a main file and the files a folder holds, which it includes by name: each goes on a volume with room.
-    private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model)
+    private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model, int? codeRoom)
     {
         Dictionary<string, string> included = new(StringComparer.OrdinalIgnoreCase);
         EnumerationOptions texts = new() { MatchCasing = MatchCasing.CaseInsensitive };
@@ -538,7 +554,7 @@ internal static partial class PascalCommand
             }
         }
 
-        (byte[]? code, string screen) = EmulatedPascalCompiler.CompileFiles(File.ReadAllText(main), included, boot, compiler, roms: null, model);
+        (byte[]? code, string screen) = EmulatedPascalCompiler.CompileFiles(File.ReadAllText(main), included, boot, compiler, roms: null, model, codeRoom);
         if (code is null)
         {
             Console.Error.WriteLine(screen);

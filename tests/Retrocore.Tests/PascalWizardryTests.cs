@@ -116,6 +116,56 @@ public class PascalWizardryTests
         PascalSystemDecompilerTests.RoundTrip(DirectorySource).Should().Contain("X2B4: 0..4095; F3: STRING[16] END;");
     }
 
+    /// <summary>
+    ///  A hint names a packed record's string where it is declared, as where the code uses it.
+    /// </summary>
+    [TestMethod]
+    public void HintsNamePackedRecordsStrings()
+    {
+        PascalDecompilerOptions options = new()
+        {
+            Names = new Dictionary<string, string> { ["T2"] = "ENTRY", ["T2.F3"] = "TITLE", ["T2.F2B0"] = "KIND" }
+        };
+
+        string source = PascalSystemDecompilerTests.RoundTrip(DirectorySource, options, out IReadOnlyList<string> warnings);
+        warnings.Should().BeEmpty(source);
+        source.Should().Contain("ENTRY = PACKED RECORD F0: INTEGER; F1: INTEGER; KIND: 0..15; X2B4: 0..4095; TITLE: STRING[16] END;");
+        source.Should().Contain("IF G3[G51].TITLE = A3 THEN");
+    }
+
+    // A level's squares' kinds, an array of packed arrays of bits.
+    private const string SquaresSource = """
+        PROGRAM P;
+        TYPE K = PACKED ARRAY[0..15] OF 0..15;
+        VAR M: ARRAY[0..1] OF K; I: INTEGER;
+        BEGIN
+          CASE M[1, I] OF 1: I := 2; 5: I := 3 END;
+          IF M[0, I] = 5 THEN M[1, I] := 1
+        END.
+        """;
+
+    /// <summary>
+    ///  Hints name the values of an array's elements, by the array's key, an array of arrays' too; the elements'
+    ///  bounds, which only one name is given for, stay numbers.
+    /// </summary>
+    [TestMethod]
+    public void HintsNameArraysElementsValues()
+    {
+        PascalDecompilerOptions options = new()
+        {
+            Constants = new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["SQUARE"] = ["NORMAL", "STAIRS", "", "", "", "DARK"]
+            },
+            Values = new Dictionary<string, string> { ["T1"] = "SQUARE" }
+        };
+
+        string source = PascalSystemDecompilerTests.RoundTrip(SquaresSource, options, out IReadOnlyList<string> warnings);
+        warnings.Should().BeEmpty(source);
+        source.Should().Contain("  NORMAL = 0; STAIRS = 1; DARK = 5;\n").And.Contain("T2 = PACKED ARRAY[0..15] OF 0..15;");
+        source.Should().Contain("    STAIRS:\n").And.Contain("    DARK:\n").And.Contain("IF G3[0, G11] = DARK THEN\n    G3[1, G11] := STAIRS");
+    }
+
     // A word of a record read only to compare as equal or not, before words the code never names.
     private const string ComparedSource = """
         (*$V-*)

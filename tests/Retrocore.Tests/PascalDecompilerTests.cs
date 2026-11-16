@@ -750,6 +750,27 @@ public class PascalDecompilerTests
     }
 
     /// <summary>
+    ///  CODE: keeps the room asked for a large program's code file: a file that would fit beside 1.3's Compiler's
+    ///  code goes on MORE1: instead.
+    /// </summary>
+    [TestMethod]
+    public void CodeKeepsTheRoomAskedForTheCodeFile()
+    {
+        Dictionary<string, string> included = new() { ["A.TEXT"] = LongSource(25), ["B.TEXT"] = LongSource(24) };
+        string main = "(*$I A.TEXT*)\n(*$I B.TEXT*)\nEND.\n";
+
+        (byte[] sources, byte[] codes, IReadOnlyList<byte[]> more) = EmulatedPascalCompiler.FileVolumes(main, included);
+        more.Should().BeEmpty();
+        PascalVolume.Read(codes, proDosOrder: false).Files.Should().ContainSingle(file => file.Name == "B.TEXT");
+
+        (sources, codes, more) = EmulatedPascalCompiler.FileVolumes(main, included, codeBlocks: 200);
+        string[] lines = PascalTextFile.Read(PascalVolume.Read(sources, proDosOrder: false).ReadFile("PROGRAM.TEXT")).Split('\n');
+        lines[1].Should().Be("(*$I MORE1:B.TEXT *)");
+        more.Should().ContainSingle();
+        PascalVolume.Read(codes, proDosOrder: false).Files.Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  The longest included files are placed first: in the directives' order, the short first file would leave
     ///  SOURCE: without room for a long one, and the last would fit nowhere.
     /// </summary>

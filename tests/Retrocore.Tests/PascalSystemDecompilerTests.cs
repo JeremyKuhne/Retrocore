@@ -1178,7 +1178,16 @@ public class PascalSystemDecompilerTests
     internal static string RoundTrip(string probe, string version = "1.1") =>
         RoundTrip(probe, new PascalDecompilerOptions(), out _, version);
 
-    private static string RoundTrip(string probe, PascalDecompilerOptions options, out IReadOnlyList<string> warnings, string version = "1.1")
+    /// <summary>
+    ///  Compiles a probe with Apple Pascal 1.1's Compiler, or 1.0's, decompiles it with options, and checks the
+    ///  decompiled source compiles to the same segments.
+    /// </summary>
+    /// <param name="probe">The probe's source.</param>
+    /// <param name="options">The decompiler's options, such as hints.</param>
+    /// <param name="warnings">The decompiler's warnings.</param>
+    /// <param name="version">The Compiler's version, 1.1 or 1.0, whose disks are named in capitals.</param>
+    /// <returns>The decompiled source.</returns>
+    internal static string RoundTrip(string probe, PascalDecompilerOptions options, out IReadOnlyList<string> warnings, string version = "1.1")
     {
         string extension = version == "1.0" ? "DSK" : "dsk";
         string boot = Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_1.{extension}");

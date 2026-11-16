@@ -892,7 +892,16 @@ public sealed partial class PascalDecompiler
         switch (root.Kind)
         {
             case TypeKind.Scalar when root.Low is { } low && root.High is { } high:
-                return $"{Value(low, root)}..{Value(high, root)}";
+                {
+                    // Bounds by their names only where both have them: bits that hold 0 to 15 are 0..15, not NORMAL..15.
+                    string? first = ValueName(low, root);
+                    string? last = ValueName(high, root);
+                    if (first is not null && last is not null) { return $"{first}..{last}"; }
+                    return ValueNamed(root)
+                        ? string.Create(CultureInfo.InvariantCulture, $"{low}..{high}")
+                        : $"{ConstantText(low, root)}..{ConstantText(high, root)}";
+                }
+
             case TypeKind.String:
                 return root.MaxLength is 80 or 0 ? "STRING" : $"STRING[{root.MaxLength}]";
             case TypeKind.Pointer when root.Punned && root.Views is { Count: > 0 } views:
@@ -1170,9 +1179,9 @@ public sealed partial class PascalDecompiler
 
             if (large is not null && size > 1)
             {
-                string field = $"F{word}: {TypeName(large, parameter: false)}";
+                string field = $"{HintedField(root, $"F{word}")}: {TypeName(large, parameter: false)}";
                 if (both) { wholes.Add(field); }
-                parts.Add(both ? $"X{word}V1: ARRAY[1..{size}] OF INTEGER" : field);
+                parts.Add(both ? $"{HintedField(root, $"X{word}V1")}: ARRAY[1..{size}] OF INTEGER" : field);
                 word += size - 1;
                 continue;
             }

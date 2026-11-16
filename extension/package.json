@@ -628,7 +628,7 @@
         },
         {
           "command": "retrocore.device.save",
-          "when": "view == retrocore.drives && viewItem =~ /\\b(changed|changedStale)\\b/",
+          "when": "view == retrocore.drives && viewItem =~ /\\b(changed|changedStale|changedReadOnly)\\b/",
           "group": "1_save@1"
         },
         {

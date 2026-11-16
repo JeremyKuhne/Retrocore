@@ -34,6 +34,9 @@ internal static class MediaActions
     // Where each disk read from an image came from, by the disk itself, so it goes when the disk does.
     private static readonly ConditionalWeakTable<IMedium, DiskSource> s_sources = [];
 
+    // Held while an image is checked, so checks run one at a time.
+    private static readonly Lock s_rechecking = new();
+
     /// <summary>
     ///  Records where a disk read from an image came from, as it goes in a drive.
     /// </summary>
@@ -54,26 +57,37 @@ internal static class MediaActions
     ///  Checks an image as it is now, for each disk read from it, and says so when any of them sees it differently.
     /// </summary>
     /// <param name="path">The image's full path.</param>
+    /// <remarks>
+    ///  <para>
+    ///   Checks run one at a time, so each reads the file after the one before it, and the last to finish has the file
+    ///   as it is now; an older check never lands over a newer one.
+    ///  </para>
+    /// </remarks>
     internal static void Recheck(string path)
     {
-        List<DiskSource> sources = [.. s_sources.Select(pair => pair.Value).Where(source => SameFile(path, source.Path))];
-        if (sources.Count == 0 || ImageCheck.Of(path) is not { } check) { return; }
         bool changed = false;
-        foreach (DiskSource source in sources)
+        lock (s_rechecking)
         {
-            if (source.Check == check) { continue; }
-            source.Check = check;
-            changed = true;
+            List<DiskSource> sources = [.. s_sources.Select(pair => pair.Value).Where(source => SameFile(path, source.Path))];
+            if (sources.Count == 0 || ImageCheck.Of(path) is not { } check) { return; }
+            foreach (DiskSource source in sources)
+            {
+                if (source.Check == check) { continue; }
+                source.Check = check;
+                changed = true;
+            }
         }
 
         if (changed) { SourcesChanged?.Invoke(); }
     }
 
-    // Keeps where a disk came from, and watches its image.
+    // Keeps where a disk came from, watches its image, and checks it once off the machine's thread, as the file may
+    // have changed between being read and being watched.
     private static void Keep(IMedium medium, DiskSource source)
     {
         s_sources.AddOrUpdate(medium, source);
         ImageWatcher.Watch(source.Path, path => s_sources.Any(pair => SameFile(path, pair.Value.Path)), Recheck);
+        ThreadPool.QueueUserWorkItem(path => Recheck(path), source.Path, preferLocal: false);
     }
 
     /// <summary>

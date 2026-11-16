@@ -3,13 +3,17 @@
 // See LICENSE file in the project root for full license information
 
 import * as assert from "node:assert/strict";
+import * as path from "node:path";
 import { test } from "node:test";
 import {
     conflictQuestion, contextWords, form, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
 
-const revision = (written: string, sha256 = "a"): { length: number; written: string; sha256: string } => ({ length: 143360, written, sha256 });
+// The image's path as this system writes one.
+const image = path.resolve(path.sep, "disks", "work.woz");
+
+const revision =(written: string, sha256 = "a"): { length: number; written: string; sha256: string } => ({ length: 143360, written, sha256 });
 
 // A Disk II drive with work.woz in it, changed or not, and its image as the host found it.
 function drive(changed: boolean, source: Partial<MediaSource> = {}, writeProtected = false): Device {
@@ -18,8 +22,8 @@ function drive(changed: boolean, source: Partial<MediaSource> = {}, writeProtect
         formats: ["woz", "dsk", "do", "po", "d13"], saveFormats: ["woz", "dsk", "do", "po"],
         operations: ["insert", "eject", "writeProtect", "save"], tracks: 35, sides: 1,
         media: {
-            label: "C:\\disks\\work.woz", format: "WOZ", writeProtected, changed, generation: 3,
-            source: { kind: "image", path: "C:\\disks\\work.woz", saves: true, readOnly: null, stale: false, ...source }
+            label: image, format: "WOZ", writeProtected, changed, generation: 3,
+            source: { kind: "image", path: image, saves: true, readOnly: null, stale: false, ...source }
         },
         activity: "writing", head: { motor: true, selected: true, track: 17, side: 0, sector: 4 }
     };
@@ -66,7 +70,7 @@ test("the tooltip names the image, whether the disk changed, when the image chan
     const read = new Date(2026, 10, 14, 10, 2).toISOString();
     const changed = new Date(2026, 10, 14, 10, 52).toISOString();
     const lines = tooltipLines(drive(true, { stale: true, baseline: revision(read), current: revision(changed, "b") }), now);
-    assert.equal(lines[0], "work.woz (WOZ), C:\\disks\\work.woz");
+    assert.equal(lines[0], `work.woz (WOZ), ${image}`);
     assert.equal(lines[1], "Changed: not saved to the image");
     assert.match(lines[2], /^Image changed on disk: .*10:52.* today; it was .*10:02.* today when read$/);
     assert.equal(lines[3], "Unlocked: the machine can write it");
@@ -80,6 +84,8 @@ test("the menus offer Save for a changed disk, a Save that will ask for a change
     assert.deepEqual(contextWords(drive(false), true), ["device", "loaded", "insert", "eject", "unlocked", "save"]);
     assert.ok(contextWords(drive(true), true).includes("changed"));
     assert.ok(contextWords(drive(true, { stale: true }), true).includes("changedStale"));
+    assert.ok(contextWords(drive(false, { stale: true }), true).includes("changedStale"), "a disk whose image changed saves over it");
+    assert.ok(contextWords(drive(false, { stale: true, current: null }), true).includes("changedStale"), "or writes it again");
     assert.ok(contextWords(drive(true, { readOnly: "file" }), true).includes("changedReadOnly"));
     assert.ok(contextWords(drive(true, { kind: "built", saves: false }), true).includes("changedReadOnly"), "a built disk saves as");
     assert.ok(contextWords(drive(true, {}, true), true).includes("locked"));

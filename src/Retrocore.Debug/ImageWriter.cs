@@ -115,9 +115,14 @@ internal static class ImageWriter
         }
     }
 
-    // The file a path names, with every link on the way followed, to the file and to the folders it is in: so a link
-    // into a repository stays a link, and two paths to one image are the same file for its lock and its backup.
-    private static string Resolve(string path)
+    /// <summary>
+    ///  Gets the file a path names, with every link on the way followed, to the file and to the folders it is in: so a
+    ///  link into a repository stays a link, and two paths to one image are the same file for its lock and its backup.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The file's full path.</returns>
+    /// <exception cref="IOException">The path goes through too many links.</exception>
+    internal static string Resolve(string path)
     {
         string current = Path.GetFullPath(path);
         for (int links = 0; links < MaximumLinks; links++)

@@ -152,6 +152,51 @@ public sealed class MediaSaveTests
     }
 
     /// <summary>
+    ///  An image changed between being read and being watched is found stale by the check that follows its watch.
+    /// </summary>
+    [TestMethod]
+    public void ImageChangedBeforeItIsWatchedShowsStale()
+    {
+        (string image, byte[] read) = Image("early.dsk");
+        File.WriteAllBytes(image, new byte[35 * 4096]);
+        Apple2FloppyDrive drive = Drive(path: null);
+        LoadedDisk loaded = DiskIIImage.Load(read, ".dsk");
+        Until(
+            () =>
+            {
+                MediaActions.Register(loaded.Disk, image, loaded.Codec, read);
+                drive.Insert(loaded.Disk, image, "DSK");
+            },
+            () => Source(drive)?.Bool("stale") == true);
+    }
+
+    /// <summary>
+    ///  An image read through a link is watched where the link leads, as a save writes there.
+    /// </summary>
+    [TestMethod]
+    public void ImageThroughALinkIsWatchedWhereItLeads()
+    {
+        (string target, _) = Image("target.dsk");
+        string folder = Path.Join(s_root, $"links-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        string link = Path.Join(folder, "link.dsk");
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Assert.Inconclusive($"Symbolic links cannot be made here: {exception.Message}");
+        }
+
+        Apple2FloppyDrive drive = Drive(link);
+        Source(drive)?.Bool("stale").Should().BeFalse();
+        byte[] outside = new byte[35 * 4096];
+        outside[0] = 0x55;
+        Until(() => File.WriteAllBytes(target, outside), () => Source(drive)?.Bool("stale") == true);
+    }
+
+    /// <summary>
     ///  A format that cannot hold all of the disk answers with what it would lose and writes nothing; accepted, it
     ///  saves and the disk stays changed.
     /// </summary>

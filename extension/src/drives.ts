@@ -192,9 +192,11 @@ export function contextWords(device: Device, running: boolean): string[] {
     if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "locked" : "unlocked");
     if (running && saves(device)) {
         words.push("save");
-        // Save writes the disk's own image at once; for a read-only image it saves as another, and for a changed
-        // image it says first that it will ask.
-        if (device.media?.changed) words.push(isReadOnlyImage(device) ? "changedReadOnly" : isStale(device) ? "changedStale" : "changed");
+        // Save writes the disk's own image at once; for a read-only image it saves as another, and for an image changed
+        // on disk, as a disk the same as its image may have, it says first that it will ask.
+        if (device.media?.changed || isStale(device)) {
+            words.push(isReadOnlyImage(device) ? "changedReadOnly" : isStale(device) ? "changedStale" : "changed");
+        }
     }
     return words;
 }

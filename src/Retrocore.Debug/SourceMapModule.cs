@@ -161,6 +161,10 @@ internal sealed partial class SourceMapModule : IDebugModule
     public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
 
     /// <inheritdoc/>
+    public IEnumerable<ushort> DataStatements =>
+        _statements.Where(statement => statement.Data).Select(statement => statement.Address);
+
+    /// <inheritdoc/>
     /// <remarks>
     ///  <para>
     ///   At least half its instructions are in memory; data, such as a buffer of zeros, matches empty RAM too.

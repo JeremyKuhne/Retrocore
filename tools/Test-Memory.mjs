@@ -404,6 +404,22 @@ try {
     await write("main:0x6230", [0x6C, 0x00, 0xC1]);
     lines = (await request("retro/memory/listing", { memoryReference: "main:0x0000", address: 0x0000, count: 4, starts: [0x6230] })).lines;
     assert.ok(lines.every(line => !line.guess), JSON.stringify(lines));
+    const mainListing = async (address, count, starts) =>
+        (await request("retro/memory/listing", { memoryReference: "main:0x0000", address, count, starts })).lines;
+    // A call across main RAM's gap at $C000 still reaches what it calls: JSR $D100 from $6300 guesses $D100.
+    await write("main:0x6300", [0x20, 0x00, 0xD1, 0x60]);
+    await write("main:0xD100", [0xA9, 0x05, 0x60]);
+    lines = await mainListing(0xD100, 3, [0x6300]);
+    assert.deepEqual([lines[0].text, lines[0].kind, lines[0].guess], ["LDA #$05", "code", true], JSON.stringify(lines));
+    // A bank of RAM still follows an indirect jump's pointer, though it holds no CPU vectors.
+    await write("main:0x6340", [0x6C, 0x50, 0x63]);
+    await write("main:0x6350", [0x60, 0x63]);
+    await write("main:0x6360", [0x60]);
+    lines = await mainListing(0x6340, 0x21, [0x6340]);
+    assert.deepEqual([at6(0x6350).kind, at6(0x6350).guess, at6(0x6360).text, at6(0x6360).guess], ["data", true, "RTS", true], JSON.stringify(lines));
+    // A start whose instruction falls into the sources' data stops there, and the rest of the analysis still runs.
+    lines = await listing(0x6110, 3, [table.address - 1, 0x6100]);
+    assert.deepEqual([lines[0].text, lines[0].guess], ["LDA #$01", true], JSON.stringify(lines));
     // A bank's listing stops where the bank does: LDA's opcode in bank 1's last byte has no operand past $DFFF.
     const lastByte = (await read("bank1:0x0000", 1, 0xDFFF)).bytes[0];
     await write("bank1:0xDFFF", [0xAD]);

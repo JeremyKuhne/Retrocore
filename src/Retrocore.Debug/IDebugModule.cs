@@ -68,6 +68,11 @@ internal interface IDebugModule
     bool InMemory(IDebugMemory memory) => true;
 
     /// <summary>
+    ///  Gets where the statements the module makes data, such as <c>.byte</c>, start, which positions describe.
+    /// </summary>
+    IEnumerable<ushort> DataStatements => [];
+
+    /// <summary>
     ///  Gets whether the module's label for an address applies to memory now, where the module itself does.
     /// </summary>
     /// <remarks>

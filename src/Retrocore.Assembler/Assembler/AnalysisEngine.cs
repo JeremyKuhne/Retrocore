@@ -106,7 +106,7 @@ internal sealed class AnalysisEngine
                     // Caller code regions win over vectors, so vectors are pinned only after those traces claim bytes.
                     // The CPU's vectors, such as the 6502's NMI, RESET and IRQ, and its fixed entry points, such
                     // as the Z80's restarts.
-                    if (_project.FollowVectors)
+                    if (_project.FollowVectors && _project.CpuVectors)
                     {
                         bool littleEndian = _set.Endianness == Endianness.Little;
                         foreach (ushort vector in _set.Description.Vectors)

@@ -93,6 +93,19 @@ public sealed class AnalysisProject
     public bool FollowVectors { get; set; } = true;
 
     /// <summary>
+    ///  Gets or sets whether following vectors starts from the CPU's own: its NMI, RESET and IRQ vectors and its
+    ///  fixed entry points, such as the Z80's restarts.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   False analyzes memory the CPU does not run as it stands, such as a bank of RAM that holds the addresses
+    ///   of its vectors, while still following the pointers of its indirect jumps when <see cref="FollowVectors"/>
+    ///   is true.
+    ///  </para>
+    /// </remarks>
+    public bool CpuVectors { get; set; } = true;
+
+    /// <summary>
     ///  Gets subroutine hints by entry address, including subroutines outside the image.
     /// </summary>
     public IDictionary<ushort, AnalysisCall> Calls { get; } = new Dictionary<ushort, AnalysisCall>();

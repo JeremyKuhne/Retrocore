@@ -13,6 +13,9 @@ internal sealed partial class DebugSession
     // The register that holds where the CPU runs, the analysis's first entry point.
     private const string ProgramCounter = "PC";
 
+    // How many times targets found in one readable run send analysis back to another before it stops.
+    private const int GuessRounds = 8;
+
     // The last analysis, kept while its space's bytes and entry points stay the same, as they do while scrolling.
     private MemoryGuesses? _guesses;
 
@@ -25,10 +28,11 @@ internal sealed partial class DebugSession
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   Each run of readable bytes is analyzed alone, so a pointer is never read from bytes that cannot be read.
+    ///   Each run of readable bytes is analyzed alone, so a pointer is never read from bytes that cannot be read;
+    ///   a call or jump from one run to another starts analysis there, again until no run gains an entry point.
     ///   A Decode from here start is the user's: it is an instruction before anything is inferred, so no inferred
-    ///   instruction can claim its bytes. A statement the sources make data stays data, so analysis does not run
-    ///   through it as code, unless a Decode from here start is in it.
+    ///   instruction can claim its bytes. A statement the sources make data, as it applies now, stays data, so
+    ///   analysis does not run through it as code, unless a Decode from here start's instruction is in it.
     ///  </para>
     /// </remarks>
     private MemoryGuesses Guess(
@@ -59,44 +63,82 @@ internal sealed partial class DebugSession
             }
         }
 
-        int[] ordered = [.. entries.Where(entry => entry is >= 0 and <= 0xFFFF && memory.Readable(entry)).Distinct().Order()];
         int[] starts = [.. forced.Where(start => memory.Readable(start)).Order()];
+        List<AnalysisRegion> startRegions = StartRegions(image, set, starts, out List<int> after);
+        List<AnalysisRegion> dataRegions = SourceData(position, startRegions);
+        int[] data = [.. dataRegions.SelectMany(region => new[] { (int)region.Address, region.Length })];
+        int[] ordered =
+        [
+            .. entries.Concat(after)
+                .Where(entry => entry is >= 0 and <= 0xFFFF && memory.Readable(entry) && !Inside(dataRegions, entry))
+                .Distinct()
+                .Order()
+        ];
+
         string space = bank?.Name ?? "";
-        int modules = _debug.Modules.Count();
         if (_guesses is { } last
+            && ReferenceEquals(last.Target, Target)
+            && ReferenceEquals(last.Set, set)
             && last.Space == space
-            && last.Modules == modules
             && last.Entries.AsSpan().SequenceEqual(ordered)
             && last.Starts.AsSpan().SequenceEqual(starts)
+            && last.Data.AsSpan().SequenceEqual(data)
             && last.Runs.AsSpan().SequenceEqual(runs.ToArray())
             && last.Image.AsSpan().SequenceEqual(image))
         {
             return last;
         }
 
-        List<int> after = [];
-        List<AnalysisRegion> regions = [.. StartRegions(image, set, starts, after), .. SourceData(position, starts)];
-        int[] inferred = [.. ordered.Concat(after).Distinct()];
+        List<AnalysisRegion> regions = [.. startRegions, .. dataRegions];
         GuessKind[] kinds = new GuessKind[0x10000];
-        for (int index = 0; index < runs.Count; index += 2)
+
+        // Targets one run's analysis finds in another start that one's, until no run gains any.
+        List<HashSet<int>> found = [.. Enumerable.Range(0, runs.Count / 2).Select(_ => new HashSet<int>())];
+        HashSet<int> pending = [.. Enumerable.Range(0, runs.Count / 2)];
+        for (int round = 0; round < GuessRounds && pending.Count > 0; round++)
         {
-            AnalyzeRun(image, runs[index], runs[index + 1], set, bank, inferred, starts, regions, kinds);
+            HashSet<int> next = [];
+            foreach (int index in pending.Order())
+            {
+                int start = runs[index * 2], length = runs[(index * 2) + 1];
+                IEnumerable<int> inRun = ordered.Concat(found[index]);
+                DisassemblyResult result = AnalyzeRun(image, start, length, set, bank, inRun, starts, regions, kinds);
+                foreach (DisassemblyReference reference in result.References)
+                {
+                    if (reference.Kind is not (DisassemblyReferenceKind.Branch
+                        or DisassemblyReferenceKind.Jump
+                        or DisassemblyReferenceKind.Call
+                        or DisassemblyReferenceKind.Vector))
+                    {
+                        continue;
+                    }
+
+                    int target = reference.Target;
+                    int other = RunOf(runs, target);
+                    if (other >= 0 && other != index && !Inside(dataRegions, target) && found[other].Add(target))
+                    {
+                        next.Add(other);
+                    }
+                }
+            }
+
+            pending = next;
         }
 
         // The bytes read become the analysis's, and the last analysis's bytes the next request's scratch.
         _guessScratch = _guesses?.Image ?? new byte[0x10000];
-        _guesses = new MemoryGuesses(space, image, [.. runs], ordered, starts, modules, kinds);
+        _guesses = new MemoryGuesses(Target, set, space, image, [.. runs], ordered, starts, data, kinds);
         return _guesses;
     }
 
     // Analyzes one readable run, marking what it finds in kinds.
-    private static void AnalyzeRun(
+    private static DisassemblyResult AnalyzeRun(
         byte[] image,
         int start,
         int length,
         InstructionSet set,
         DebugMemoryBank? bank,
-        int[] entries,
+        IEnumerable<int> entries,
         int[] starts,
         List<AnalysisRegion> regions,
         GuessKind[] kinds)
@@ -104,15 +146,16 @@ internal sealed partial class DebugSession
         int end = start + length;
 
         // The CPU's vectors, such as the 6502's at $FFFA, are its own only where it runs: in memory as it maps it,
-        // or a coprocessor's space; a bank of RAM that holds those addresses holds no vectors.
+        // or a coprocessor's space; a bank of RAM that holds those addresses holds no vectors, though an indirect
+        // jump's pointer is followed anywhere.
         AnalysisProject project = new(image.AsSpan(start, length), start, set)
         {
             GenerateLabels = false,
-            FollowVectors = bank is null || bank.InstructionSet is not null
+            CpuVectors = bank is null || bank.InstructionSet is not null
         };
 
         project.EntryPoints.Clear();
-        foreach (int entry in entries.Concat(starts))
+        foreach (int entry in entries.Concat(starts).Distinct())
         {
             if (entry >= start && entry < end) { project.EntryPoints.Add((ushort)entry); }
         }
@@ -123,6 +166,7 @@ internal sealed partial class DebugSession
         }
 
         DisassemblyResult result = Disassembler.Analyze(project);
+        kinds.AsSpan(start, length).Clear();
         foreach (AnalysisRegion region in result.Regions)
         {
             if (region.Kind != AnalysisRegionKind.Data) { continue; }
@@ -138,14 +182,17 @@ internal sealed partial class DebugSession
                 kinds[address + index] = GuessKind.Operand;
             }
         }
+
+        return result;
     }
 
     // Each Decode from here start as code one instruction long, which the analysis takes before inferring anything,
-    // adding to after where the instruction goes on to the next, which an explicit region does not follow; a start
+    // with after where the instruction goes on to the next, which an explicit region does not follow; a start
     // inside an earlier one's instruction, or that decodes to nothing, is left to the listing.
-    private static List<AnalysisRegion> StartRegions(byte[] image, InstructionSet set, int[] starts, List<int> after)
+    private static List<AnalysisRegion> StartRegions(byte[] image, InstructionSet set, int[] starts, out List<int> after)
     {
         List<AnalysisRegion> regions = [];
+        after = [];
         int claimed = -1;
         foreach (int start in starts)
         {
@@ -155,37 +202,49 @@ internal sealed partial class DebugSession
             if (!decoded) { continue; }
             claimed = start + instruction.Size;
             regions.Add(new AnalysisRegion(start, instruction.Size, AnalysisRegionKind.Code));
-            bool goesOn = instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Call;
+            DisassemblyFlow flow = instruction.Flow;
+            bool goesOn = flow is DisassemblyFlow.Next or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Call or DisassemblyFlow.Wait;
             if (goesOn && claimed <= 0xFFFF) { after.Add(claimed); }
         }
 
         return regions;
     }
 
-    // The statements the sources make data, which the analysis keeps out of, except one a Decode from here start is in.
-    private static List<AnalysisRegion> SourceData(Func<int, DebugPosition?> position, int[] starts)
+    // The statements the sources make data, as they apply now, which the analysis keeps out of: not one a Decode
+    // from here start's instruction overlaps, nor one overlapping another taken first.
+    private List<AnalysisRegion> SourceData(Func<int, DebugPosition?> position, List<AnalysisRegion> startRegions)
     {
         List<AnalysisRegion> regions = [];
-        int address = 0;
-        while (address <= 0xFFFF)
+        IEnumerable<int> candidates = _debug.Modules.SelectMany(module => module.DataStatements).Select(start => (int)start);
+        int claimed = -1;
+        foreach (int start in candidates.Distinct().Order())
         {
-            if (position(address) is not { Start: { } start, Size: > 0 } statement || start != address)
-            {
-                address++;
-                continue;
-            }
-
-            int end = Math.Min(0x10000, start + statement.Size);
-            bool started = starts.Any(at => at >= start && at < end);
-            if (statement.Data && !started)
-            {
-                regions.Add(new AnalysisRegion(start, end - start, AnalysisRegionKind.Data));
-            }
-
-            address = end;
+            DebugPosition? statement = start < claimed ? null : position(start);
+            int size = statement is not null && statement.Data && statement.Start == start ? statement.Size : 0;
+            if (size <= 0) { continue; }
+            int end = Math.Min(0x10000, start + size);
+            bool overlapped = startRegions.Any(region => region.Address < end && region.Address + region.Length > start);
+            if (overlapped) { continue; }
+            regions.Add(new AnalysisRegion(start, end - start, AnalysisRegionKind.Data));
+            claimed = end;
         }
 
         return regions;
+    }
+
+    // Whether an address is in one of the regions.
+    private static bool Inside(List<AnalysisRegion> regions, int address) =>
+        regions.Any(region => address >= region.Address && address < region.Address + region.Length);
+
+    // The index of the readable run an address is in, or -1.
+    private static int RunOf(List<int> runs, int address)
+    {
+        for (int index = 0; index < runs.Count; index += 2)
+        {
+            if (address >= runs[index] && address < runs[index] + runs[index + 1]) { return index / 2; }
+        }
+
+        return -1;
     }
 
     // Where the analysis starts inferring: the PC of the CPU that runs the space, the machine's for memory as it maps

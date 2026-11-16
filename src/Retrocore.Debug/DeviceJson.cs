@@ -52,6 +52,7 @@ internal static class DeviceJson
             ["description"] = info.Description,
             ["controller"] = info.Controller,
             ["formats"] = info.Formats.ToJsonArray(),
+            ["saveFormats"] = info.SaveFormats.ToJsonArray(),
             ["operations"] = Operations(info.Operations),
             ["tracks"] = info.Tracks,
             ["sides"] = info.Sides,

@@ -502,12 +502,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
             : null;
     }
 
-    // A Disk II in slot six reads a floppy image; a .po image goes to the slot seven block device unless the
-    // launch asks for the Disk II. Its ROMs are the given dumps, or the SDK's 16- or 13-sector sources.
+    // A Disk II in slot six reads a floppy image; a .po, .hdv or .2mg image goes to the slot seven block device unless
+    // the launch asks for the Disk II. Its ROMs are the given dumps, or the SDK's 16- or 13-sector sources.
     private static DiskIIFirmware? DiskFirmware(JsonObject args, string? diskImage, string? sdk)
     {
         bool blockImage = diskImage is not null
-            && Path.GetExtension(diskImage).Equals(".po", StringComparison.OrdinalIgnoreCase);
+            && Path.GetExtension(diskImage).ToLowerInvariant() is ".po" or ".hdv" or ".2mg";
 
         string? p5 = args.String("diskBootRom");
         string? p6 = args.String("diskSequencerRom");
@@ -524,7 +524,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         {
             return blockImage || diskImage is null
                 ? null
-                : throw new ArgumentException("The slot seven block device takes a ProDOS-order .po image.");
+                : throw new ArgumentException("The slot seven block device takes a ProDOS-order .po, .hdv or .2mg image.");
         }
 
         if (p5 is not null)
@@ -1194,6 +1194,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 break;
             case (ProFileDrive drive, "eject"):
                 drive.Eject();
+                break;
+            case (ProFileDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
+            case (Apple2BlockStorage storage, "writeProtect"):
+                storage.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");

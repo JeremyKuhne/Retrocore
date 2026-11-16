@@ -26,4 +26,16 @@ public interface IMediumSlot
     ///  process, even by a drive built again, so with the drive's id it names one mount.
     /// </summary>
     int MountGeneration { get; }
+
+    /// <summary>
+    ///  Records that the medium was saved to an image, which it now comes from.
+    /// </summary>
+    /// <param name="label">What the host calls the image, such as its path.</param>
+    /// <param name="format">Its image format, such as <c>WOZ</c>.</param>
+    /// <param name="whole">
+    ///  Whether the image holds all of the medium; a lossy save leaves it changed, as reloading the image would not
+    ///  give it back.
+    /// </param>
+    /// <exception cref="InvalidOperationException">The drive is empty.</exception>
+    void Saved(string label, string format, bool whole);
 }

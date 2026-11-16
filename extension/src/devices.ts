@@ -43,6 +43,7 @@ export interface Device {
     description: string;
     controller: string;
     formats: string[];
+    saveFormats?: string[];
     operations: ("insert" | "eject" | "record" | "writeProtect" | "save")[];
     tracks: number;
     sides: number;
@@ -756,7 +757,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const file = await vscode.window.showSaveDialog({
             title: `Save the disk in ${device.name} as`,
             defaultUri: vscode.Uri.file(device.media.label),
-            filters: { "Disk images": device.formats.filter(format => ["woz", "dsk", "do", "po"].includes(format)) }
+            filters: { "Disk images": device.saveFormats ?? [] }
         });
         if (file === undefined || (session !== undefined && !still(session))) return false;
         const chosen = await readFile(file.fsPath).then(bytes => createHash("sha256").update(bytes).digest("hex"), () => undefined);

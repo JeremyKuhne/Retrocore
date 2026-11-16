@@ -58,6 +58,7 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
             Description = description,
             Controller = controllerName,
             Formats = ["woz", "dsk", "do", "po"],
+            SaveFormats = ["woz", "dsk", "do", "po"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 35,
             Sides = 1

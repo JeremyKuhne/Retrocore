@@ -63,7 +63,7 @@ public sealed class MediaSaveTests
         drive.Media?.Changed.Should().BeFalse();
         answer.String("backup").Should().NotBeNull("a changed disk is written, keeping what it replaced");
         File.ReadAllBytes(answer.String("backup") ?? "").Should().Equal(original);
-        Directory.EnumerateFiles(Path.GetDirectoryName(image) ?? "", "*.saving").Should().BeEmpty();
+        Directory.EnumerateFiles(Path.GetDirectoryName(image) ?? "", $".{Path.GetFileName(image)}.*.saving").Should().BeEmpty();
 
         // The saved image reads back as the disk the machine wrote.
         WozDisk saved = DiskIIImage.Load(File.ReadAllBytes(image), "dsk").Disk;

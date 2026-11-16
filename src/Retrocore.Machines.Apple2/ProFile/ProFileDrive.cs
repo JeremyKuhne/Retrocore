@@ -29,15 +29,16 @@ namespace Retrocore.Machines.Apple2;
 ///  <para>
 ///   Any other command byte, such as the $FF that Apple's SOS driver sends after its last block, ends the exchange
 ///   with no response. Block $FFFFFF is the ProFile's own identification block: its name, type, firmware revision,
-///   size and spares. The status bytes are all zero for success; a block past the end, or a write to a read-only
-///   image, sets bit 0 of the first ("operation unsuccessful").
+///   size and spares. The status bytes are all zero for success; a block past the end, or a write to a locked image,
+///   sets bit 0 of the first ("operation unsuccessful"), which is all a ProFile can say: Apple II ProDOS hears an I/O
+///   error ($27) and SOS an I/O error, as neither can be told the disk is write-protected.
 ///  </para>
 ///  <para>
 ///   The drive answers at once, with no seek or rotation time, and keeps no tags: they read as zeros. With no image
 ///   it is not connected, which the card reports.
 ///  </para>
 /// </remarks>
-public sealed class ProFileDrive : IBlockStorage
+public sealed class ProFileDrive : IBlockStorage, IMediumSlot
 {
     /// <summary>
     ///  The response to a handshake while idle: ready for a command.
@@ -121,8 +122,9 @@ public sealed class ProFileDrive : IBlockStorage
             Name = name,
             Description = "ProFile 5 MB hard disk",
             Controller = controller,
-            Formats = ["po", "hdv"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject
+            Formats = ["po", "hdv", "2mg"],
+            SaveFormats = ["po", "hdv", "2mg"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save
         };
     }
 
@@ -136,7 +138,15 @@ public sealed class ProFileDrive : IBlockStorage
     public DeviceInfo Info { get; }
 
     /// <inheritdoc/>
-    public MediaState? Media => _image is null ? null : new(_label, _format, _image.IsReadOnly, _changed);
+    public MediaState? Media => _image is null
+        ? null
+        : new(_label, _format, _image.IsReadOnly, _image is MemoryBlockDevice memory ? memory.IsDirty : _changed);
+
+    /// <inheritdoc/>
+    public IMedium? Medium => _image as IMedium;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
 
     /// <inheritdoc/>
     public DeviceActivity Activity => _lastBlock is null || _clock() - _lastTime > _activityTime
@@ -185,6 +195,7 @@ public sealed class ProFileDrive : IBlockStorage
         }
 
         _image = image;
+        MountGeneration = MountGenerations.Next();
         _label = label ?? "";
         _format = format ?? "";
         _changed = false;
@@ -197,11 +208,45 @@ public sealed class ProFileDrive : IBlockStorage
     /// </summary>
     public void Eject()
     {
+        if (_image is not null) { MountGeneration = MountGenerations.Next(); }
         _image = null;
         _label = _format = "";
         _changed = false;
         _lastBlock = null;
         Reset();
+    }
+
+    /// <summary>
+    ///  Locks or unlocks the image, as a switch that refuses writes would: a ProFile has no write-protect tab, so a
+    ///  write to a locked image fails as a failed write does.
+    /// </summary>
+    /// <param name="writeProtected">Whether the image is locked.</param>
+    /// <exception cref="InvalidOperationException">The drive is empty, or its image cannot be unlocked.</exception>
+    public void SetWriteProtected(bool writeProtected)
+    {
+        if (_image is not IMedium medium)
+        {
+            throw new InvalidOperationException(_image is null ? $"{Info.Name} is empty." : $"{Info.Name}'s image cannot be unlocked.");
+        }
+
+        medium.IsWriteProtected = writeProtected;
+    }
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole = true)
+    {
+        MemoryBlockDevice image = _image as MemoryBlockDevice ?? throw new InvalidOperationException($"{Info.Name} is empty.");
+        if (whole)
+        {
+            image.MarkSaved();
+        }
+        else
+        {
+            image.MarkChanged();
+        }
+
+        _label = label;
+        _format = format;
     }
 
     /// <summary>

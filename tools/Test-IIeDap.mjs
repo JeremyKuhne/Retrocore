@@ -221,7 +221,7 @@ try {
             assert.deepEqual(slotRow(devices, slot).devices, ["disk35d1", "disk35d2"]);
             const drive = devices.devices.find(device => device.id === "disk35d1");
             assert.equal(drive.media?.label, disk35, `the disk stays in from slot ${launch} to ${slot}`);
-            assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect"]);
+            assert.deepEqual(drive.operations, ["insert", "eject", "writeProtect", "save"]);
             assert.equal(devices.configuration.cards[slot.slice(4)], "disk35");
         }
     } finally {

@@ -31,9 +31,9 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Model I | Cassette | `cassette` | Plays and records CAS images. A playing tape shows as write-protected, and a recording as changed once it holds a byte. |
 | Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1 and JV3 images; write protection can be changed. Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
 | Apple II | Drive 1-2 | `disk1`, `disk2` (slot 6); `slotNdisk1`, `slotNdisk2` (other slots) | Present for each installed Disk II card: slot 6 from a floppy `diskImage`, `dos` or `diskController: "diskII"`, and any free slot via **Add Card**. Its ROMs are the SDK's 16- or 13-sector builds ([DiskII.md](DiskII.md)), or dumps given for slot 6 as `diskBootRom` and `diskSequencerRom`. Takes WOZ images, and DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or 13-sector (`.d13`) sector images converted to WOZ. A disk loads write-protected; taking the protection off lets the machine write it, in memory. The head reads while the motor turns and writes in the card's write mode; the track counts quarter tracks. |
-| Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
-| Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`) of up to 65535 blocks, which the machine can write; inserting and ejecting are allowed. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
-| Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed; a block command shows as reading or writing for a thirtieth of a second. |
+| Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed, and a changed disk saves to its image (a 2MG keeps its header, comment and creator data, and its locked flag is the lock) or as `.po`, `.2mg`, `.hdv` or `.img`. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
+| Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`, or a `.2mg` of them) of up to 65535 blocks, which the machine can write unless locked; inserting, ejecting, locking and saving (to its image, or as `.po`, `.hdv` or `.2mg`) are allowed. A ProFile has no write-protect tab, so a write to a locked image fails as a failed write does: an I/O error to ProDOS and SOS, which cannot be told why. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
+| Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po`, `.hdv` or `.2mg` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed and loads locked, as it always has; unlocked, the machine writes it and it saves (to its image, or as `.po`, `.hdv` or `.2mg`). The lock refuses writes at once (ProDOS's write-protected error, $2B); the slot's ROM, which ProDOS reads as it starts, says whether the device writes from the next reset. A block command shows as reading or writing for a thirtieth of a second. |
 
 ## The debug protocol
 
@@ -131,6 +131,7 @@ exists is reported in the Debug Console and skipped.
 { "id": "disk2", "action": "save", "path": "copy.woz" }
 { "id": "disk2", "action": "save", "path": "copy.dsk", "acceptLosses": true }
 { "id": "disk2", "action": "save", "overwrite": { "sha256": "…" }, "generation": 3 }
+{ "id": "slot5profile", "action": "save", "path": "hard.2mg" }
 { "id": "disk2", "action": "eject", "discards": [{ "device": "disk2", "generation": 3 }] }
 { "id": "disk2", "action": "eject", "discard": true }
 ```
@@ -142,7 +143,11 @@ the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads
 sectors, in DOS's order for `.dsk` and `.do` and ProDOS's for `.po`. A `.dsk` is read in the order its file system
 reads whole in (DOS 3.3's catalog, ProDOS's volume directory or Apple Pascal's), else DOS's, and saved back in it. A
 sector image cannot hold a track that no longer reads as 16 sectors, data on a quarter or half track of its own,
-another track's sector, or a volume other than 254. The disk then comes from that image. Other drives don't save yet.
+another track's sector, or a volume other than 254. The Apple II's block drives (a 3.5 drive, a ProFile and slot 7)
+save the same way: their blocks to bare `.po`, `.hdv` or `.img` images, which keep no lock, or to a 2MG, which keeps
+the header, comment and creator data of the 2MG the disk was read from (a save to bare blocks says it drops them) and
+writes the lock as its locked flag. The disk then comes from that image. A drive's `saveFormats` lists what it saves
+as. Other drives don't save yet.
 
 A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
 the image and replaces the image with it, follows a link to its target, retries a file another program holds for a

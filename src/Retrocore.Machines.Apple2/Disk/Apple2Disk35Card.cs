@@ -353,7 +353,6 @@ public sealed class Apple2Disk35Card
         {
             ReadMemory(buffer, bytes);
             disk.WriteBlock(block, bytes);
-            drive.Changed = true;
         }
         else
         {
@@ -388,7 +387,6 @@ public sealed class Apple2Disk35Card
         {
             ReadMemory(call.Buffer, bytes);
             disk.WriteBlock(block, bytes[12..]);
-            drive.Changed = true;
         }
         else
         {
@@ -430,7 +428,6 @@ public sealed class Apple2Disk35Card
         if (disk.IsReadOnly) { return NoWrite; }
         drive.Touch(0, write: true);
         disk.Erase();
-        drive.Changed = true;
         return NoError;
     }
 

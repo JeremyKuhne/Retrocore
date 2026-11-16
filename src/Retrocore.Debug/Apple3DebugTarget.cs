@@ -482,6 +482,9 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             case (ProFileDrive drive, "eject"):
                 drive.Eject();
                 break;
+            case (ProFileDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }

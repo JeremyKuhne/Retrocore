@@ -4,7 +4,7 @@ How disks, tapes and other media the machines change get back to image files, on
 without losing what the machine wrote.
 
 **Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1 is built for the Disk II
-([phases](#phases)); phase 2, every drive saving, is next. The
+([phases](#phases)); phase 2, every drive saving, is under way: the Apple II's block drives save. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -838,7 +838,22 @@ After the reviews:
 2. **Every drive saves.** The 3.5 drive with its 2MG header; the ProFile; slot 7 with a writable device and its
    lock at power-on; `FloppyDisk` writes counted; JV1, JV3 and JVC fixed; a DMK writer, and DMK on the CoCo. Done when
    each drive saves to each format it offers, reports losses, and boots again from the saved image, pinned by
-   digest.
+   digest. It lands in two parts:
+   - **The Apple II's block drives (built).** `Disk35Disk` and `MemoryBlockDevice` are media: their lock counts as a
+     change to their version, and their snapshot is a 2MG of their blocks (`TwoImgContainer`), which keeps a 2MG's
+     header, comment, creator data and any other bytes, so an unchanged disk wraps back to the file it read.
+     `BlockImageCodec` writes bare blocks (`.po`, `.hdv`, `.img`, 3.5-inch `.dsk`) or the 2MG, with its locked flag
+     as the lock, and notes a 2MG's comment and creator data dropped by a save to bare blocks. The 3.5 drive, the
+     ProFile and slot 7 are `IMediumSlot`s with mount generations from `MountGenerations`, shared with the Disk II,
+     and `Saved` is part of the slot; `MediaActions` saves any of them, choosing the codec from the drive's
+     `SaveFormats`, which the device list gives as `saveFormats` for the clients' Save As. The ProFile and slot 7
+     read 2MG too. A locked ProFile fails writes as the drive does, and slot 7 gets a writable device that loads
+     locked, as today, whose ROM says it writes from the next reset after it is unlocked: the machine has no power
+     cycle short of a new session. As for the Disk II, changing the lock alone is not yet a change to save.
+     Tests: `BlockMediaSaveTests`, and `Test-BlockMediaDap.mjs`, where a boot block in slot 7 writes itself to a
+     ProFile and to slot 7's device, which save and boot again, the image pinned by digest.
+   - **The TRS-80 and CoCo floppies (next).** `FloppyDisk` writes counted; JV1, JV3 and JVC fixed; a DMK writer,
+     and DMK on the CoCo.
 3. **The UI.** The badged icons, the states, the prompts, Revert with Undo, the eject prompt, host-side watching, and
    the off machine's saves. Done when every row of [saving in each state](#saving-in-each-state) works in the
    self-hosted extension.

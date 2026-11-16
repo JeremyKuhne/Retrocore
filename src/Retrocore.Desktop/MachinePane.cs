@@ -758,7 +758,7 @@ internal sealed class MachinePane : ScrollViewer
             Title = $"Save the disk in {device.Info.Name} as",
             SuggestedFileName = Path.GetFileName(media.Label),
             SuggestedStartLocation = folder,
-            FileTypeChoices = Filters("Disk images", [.. device.Info.Formats.Where(format => format is "woz" or "dsk" or "do" or "po")]),
+            FileTypeChoices = Filters("Disk images", device.Info.SaveFormats),
         });
 
         if (file?.TryGetLocalPath() is not { } path) { return false; }

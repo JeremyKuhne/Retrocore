@@ -20,8 +20,10 @@ internal static class ProFileMedia
     internal const int MaximumBlocks = 65535;
 
     /// <summary>
-    ///  Puts an image in a ProFile: a ProDOS-order image (<c>.po</c> or <c>.hdv</c>), its 512-byte blocks in order
-    ///  with no header, which the machine can write. Changes stay in memory; the file is not written.
+    ///  Puts an image in a ProFile, in place of any there: a ProDOS-order image (<c>.po</c> or <c>.hdv</c>), its
+    ///  512-byte blocks in order with no header, or a 2MG of them, which the machine can write unless a 2MG locks it.
+    ///  Changes stay in memory until the host saves them. The image is read and checked before the one in the drive
+    ///  comes out, so one that cannot be read leaves that one.
     /// </summary>
     /// <param name="drive">The ProFile.</param>
     /// <param name="path">The image's path.</param>
@@ -29,15 +31,18 @@ internal static class ProFileMedia
     internal static void Insert(ProFileDrive drive, string path)
     {
         path = Path.GetFullPath(path);
-        long length = new FileInfo(path).Length;
-        if (length == 0 || length % 512 != 0 || length / 512 > MaximumBlocks)
+        byte[] bytes = File.ReadAllBytes(path);
+        MemoryBlockDevice image = MemoryBlockDevice.Load(bytes);
+        if (image.BlockCount > MaximumBlocks)
         {
             throw new InvalidDataException(
                 $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
         }
 
-        string format = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
-        drive.Insert(new MemoryBlockDevice(File.ReadAllBytes(path), isReadOnly: false), path, format.Length == 0 ? "PO" : format);
+        BlockImageCodec? codec = BlockImageCodec.For(Path.GetExtension(path));
+        drive.Eject();
+        MediaActions.Register(image, path, codec, bytes);
+        drive.Insert(image, path, codec?.Format ?? "PO");
     }
 
     /// <summary>

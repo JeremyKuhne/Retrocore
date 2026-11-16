@@ -68,6 +68,9 @@ public sealed partial class Trs80DiskController
     private int _indexPulses;
     private bool _wasIndex;
     private FloppySector? _sector;
+
+    // The disk the sector was found on, which a write goes to only while that disk is still under the head.
+    private FloppyDisk? _sectorDisk;
     private byte[] _buffer = [];
     private int _position;
     private int _steps;

@@ -103,6 +103,7 @@ public static class JvcFormat
     /// </summary>
     /// <param name="disk">The disk.</param>
     /// <returns>The image and its losses.</returns>
+    /// <exception cref="InvalidOperationException">The sectors do not fill whole 256-byte blocks.</exception>
     public static EncodedImage Encode(FloppyDisk disk)
     {
         ArgumentNullException.ThrowIfNull(disk);
@@ -129,6 +130,10 @@ public static class JvcFormat
     /// <param name="header">The header, as <see cref="Header"/> gives it; empty for none.</param>
     /// <returns>The image and its losses.</returns>
     /// <exception cref="ArgumentException">The header is not one <see cref="Read"/> takes.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  The sectors do not fill whole 256-byte blocks, which an odd number of 128-byte sectors leaves the image's length
+    ///  unable to give its header's.
+    /// </exception>
     public static EncodedImage Encode(FloppyDisk disk, ReadOnlySpan<byte> header)
     {
         ArgumentNullException.ThrowIfNull(disk);
@@ -147,9 +152,18 @@ public static class JvcFormat
         byte[] written = sides == fields[1] || header.Length >= 2 ? header.ToArray() : fields[..2];
         if (sides != fields[1]) { written[1] = (byte)sides; }
 
-        FloppyLosses losses = new();
+        // The header's length is the image's past whole 256-byte blocks, so the sectors must fill whole blocks.
         int cylinders = Math.Max(1, disk.Cylinders);
-        byte[] image = new byte[written.Length + (cylinders * sides * sectors * size)];
+        int body = cylinders * sides * sectors * size;
+        if (body % 256 != 0)
+        {
+            throw new InvalidOperationException(
+                $"JVC cannot hold {cylinders * sides * sectors} sectors of {size} bytes, which do not fill whole "
+                    + "256-byte blocks; save it as DMK.");
+        }
+
+        FloppyLosses losses = new();
+        byte[] image = new byte[written.Length + body];
         written.CopyTo(image, 0);
         for (int cylinder = 0; cylinder < cylinders; cylinder++)
         {
@@ -184,10 +198,11 @@ public static class JvcFormat
         bool[] seen = new bool[sectors];
         foreach (FloppySector sector in disk.Track(cylinder, side))
         {
-            int index = sector.Sector - firstSector;
-            if (index < 0 || index >= sectors || seen[index])
+            // Sector numbers wrap past 255, as Read numbers them.
+            int index = (byte)(sector.Sector - firstSector);
+            if (index >= sectors || seen[index])
             {
-                losses.Add($"Sectors other than {firstSector}-{firstSector + sectors - 1}, or repeated", cylinder);
+                losses.Add($"Sectors other than {Numbers(firstSector, sectors)}, or repeated", cylinder);
                 continue;
             }
 
@@ -211,9 +226,12 @@ public static class JvcFormat
 
         if (seen.Contains(value: false))
         {
-            losses.Add($"Sectors {firstSector}-{firstSector + sectors - 1} missing, which JVC writes as zeros", cylinder);
+            losses.Add($"Sectors {Numbers(firstSector, sectors)} missing, which JVC writes as zeros", cylinder);
         }
     }
+
+    // A track's sector numbers, from the first, wrapping past 255.
+    private static string Numbers(int firstSector, int sectors) => $"{firstSector}-{(byte)(firstSector + sectors - 1)}";
 
     /// <summary>
     ///  Creates a disk formatted as Disk BASIC's DSKINI leaves it: every byte <c>$FF</c>, which on track 17 is a

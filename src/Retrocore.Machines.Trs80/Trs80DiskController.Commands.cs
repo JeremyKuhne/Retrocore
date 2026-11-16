@@ -210,6 +210,7 @@ public sealed partial class Trs80DiskController
         if (!address && (sector.Track != Track || sector.Sector != Sector)) { return; }
 
         _sector = sector;
+        _sectorDisk = disk;
         _position = 0;
         if (address)
         {
@@ -290,7 +291,8 @@ public sealed partial class Trs80DiskController
             return;
         }
 
-        if (_sector is { } sector && Current is { } disk)
+        // A drive selected or a disk changed during the write leaves the sector's disk out from under the head, unwritten.
+        if (_sector is { } sector && _sectorDisk is { } disk && ReferenceEquals(disk, Current))
         {
             // The FD1771 writes the mark its a1 a0 bits select; the WD1791's a0 selects $F8.
             byte mark = Is179x
@@ -321,6 +323,7 @@ public sealed partial class Trs80DiskController
         {
             _buffer = RawTrack();
             _sector = null;
+            _sectorDisk = null;
             _wait = ByteCycles;
             _phase = Phase.Reading;
             return;

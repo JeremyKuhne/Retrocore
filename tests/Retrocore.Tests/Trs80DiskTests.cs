@@ -96,6 +96,34 @@ public class Trs80DiskTests
     }
 
     /// <summary>
+    ///  A disk changed during a write sector leaves both disks unwritten: the sector found is no longer under the head,
+    ///  and the new disk's was never found.
+    /// </summary>
+    [TestMethod]
+    public void WriteEndsUnwrittenWhenTheDiskChanges()
+    {
+        FloppyDisk disk = Jv1(35);
+        FloppyDisk other = Jv1(35);
+        Trs80Bus bus = Bus(disk);
+        bus.Write(SectorRegister, 7);
+        Issue(bus, 0xA8);
+        int written = 0;
+        for (int cycle = 0; cycle < 10 * Trs80Timing.ClockHertz && bus.Disks.IsBusy; cycle++)
+        {
+            bus.Tick();
+            if ((bus.Disks.Peek(0) & 0x02) == 0) { continue; }
+            bus.Write(DataRegister, 0x55);
+            if (++written == 16) { bus.Disks.Insert(0, other); }
+        }
+
+        written.Should().Be(256);
+        disk.IsDirty.Should().BeFalse();
+        other.IsDirty.Should().BeFalse();
+        disk.Track(0, 0).Single(candidate => candidate.Sector == 7).Data.ToArray().Should().Equal(Pattern(0, 7));
+        other.Track(0, 0).Single(candidate => candidate.Sector == 7).Data.ToArray().Should().Equal(Pattern(0, 7));
+    }
+
+    /// <summary>
     ///  Read address returns the next ID field and copies its track into the sector register.
     /// </summary>
     [TestMethod]

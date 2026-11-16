@@ -225,6 +225,20 @@ public sealed class FloppyMediaSaveTests
             "Sectors other than 1-18, or repeated, on track 4.",
             "Single-density sectors, on track 4.",
         ]);
+
+        // Sector numbers wrap past 255, as the reader numbers them: 254, 255, 0 and 1.
+        byte[] wrapped = [4, 1, 0, 254, .. body.AsSpan(0, 2 * 4 * 128)];
+        FloppyDisk wraps = JvcFormat.Read(wrapped);
+        wraps.Track(0, 0).Select(sector => sector.Sector).Should().Equal([254, 255, 0, 1]);
+        EncodedImage again = JvcFormat.Encode(wraps, JvcFormat.Header(wrapped));
+        again.IsLossless.Should().BeTrue();
+        again.Bytes.Should().Equal(wrapped);
+
+        // An odd number of 128-byte sectors cannot fill whole 256-byte blocks, which the header's length needs.
+        FloppyDisk odd = new();
+        odd.Add(0, 0, Sector(0, 0, 1, size: 128, doubleDensity: true));
+        Action unframed = () => JvcFormat.Encode(odd);
+        unframed.Should().Throw<InvalidOperationException>().WithMessage("*save it as DMK*");
     }
 
     /// <summary>

@@ -640,6 +640,47 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Zero page", 0, 256);
 
     /// <inheritdoc/>
+    public IReadOnlyList<DebugRegion> Regions => _machine.Bus.MockingboardInstalled ? s_mockingboardRegions : s_regions;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The Mockingboard's page in slot 4 is its VIAs, which the bus calls the slot's ROM.
+    ///  </para>
+    /// </remarks>
+    public string? KindAt(ushort address) =>
+        address >> 8 == 0xC4 && _machine.Bus.MockingboardInstalled && ReadArea(address) is Apple2MemoryArea.Slot4Rom ? "io" : null;
+
+    private static readonly DebugRegion[] s_regions = AppleRegions();
+
+    private static readonly DebugRegion[] s_mockingboardRegions = [.. s_regions.Select(Mockingboard)];
+
+    // Slot 4's page as the Mockingboard's VIAs.
+    private static DebugRegion Mockingboard(DebugRegion region) => region.Start switch
+    {
+        0xC400 => region with { Name = "Slot 4, the Mockingboard's VIAs", Kind = "io" },
+        _ => region
+    };
+
+    // The II family's map, as the firmware and DOS use it.
+    private static DebugRegion[] AppleRegions() =>
+    [
+        new("Zero page", 0x0000, 0x100, "ram"),
+        new("Stack", 0x0100, 0x100, "ram"),
+        new("Input buffer", 0x0200, 0x100, "ram"),
+        new("Page 3, with DOS's and the Monitor's vectors", 0x0300, 0x100, "ram"),
+        new("Text page 1", 0x0400, 0x400, "video", DebugRegion.AppleText),
+        new("Text page 2", 0x0800, 0x400, "video", DebugRegion.AppleText),
+        new("Hi-res page 1", 0x2000, 0x2000, "video", DebugRegion.AppleHires),
+        new("Hi-res page 2", 0x4000, 0x2000, "video", DebugRegion.AppleHires),
+        new("I/O and soft switches", 0xC000, 0x100, "io"),
+        .. Enumerable.Range(1, 7).Select(slot => new DebugRegion($"Slot {slot} ROM", (ushort)(0xC000 + (slot << 8)), 0x100, "rom")),
+        new("Expansion ROM", 0xC800, 0x800, "rom"),
+        new("BASIC ROM, or the language card", 0xD000, 0x2800, "rom"),
+        new("Monitor ROM, or the language card", 0xF800, 0x800, "rom")
+    ];
+
+    /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
 
     /// <inheritdoc/>

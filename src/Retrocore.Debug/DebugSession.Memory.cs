@@ -544,7 +544,7 @@ internal sealed partial class DebugSession
             for (int address = start; address <= start + length; address++)
             {
                 bool mapped = address < start + length
-                    && bank.Areas.Contains(write ? Target.WriteArea((ushort)address) : Target.ReadArea((ushort)address));
+                    && (write ? bank.Areas.Contains(Target.WriteArea((ushort)address)) : bank.ReadBy(Target, (ushort)address));
 
                 if (mapped)
                 {

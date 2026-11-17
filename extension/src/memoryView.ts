@@ -74,6 +74,9 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
+#inspector .doc{margin:2px 0 6px;color:var(--vscode-descriptionForeground)}
+#inspector button.link{background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);font:inherit;cursor:pointer}
+#inspector button.link:focus-visible{outline:1px solid var(--vscode-focusBorder)}
 #listing{flex:none;width:46ch;overflow:auto;display:grid;align-content:start;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing[hidden]{display:none}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
@@ -103,6 +106,17 @@ body.narrow #inspector{display:flex;flex-wrap:wrap;gap:2px 24px;align-items:base
 body.narrow #inspector .acts{margin:0}
 body.narrow #inspector .where{margin:0;padding:2px 0}
 body.narrow .item .k{width:auto}
+#map{position:relative;height:10px;margin:2px 10px 6px;cursor:pointer;background:var(--vscode-editorWidget-background,transparent);outline:1px solid var(--vscode-panel-border)}
+#map[hidden]{display:none}
+#map .seg{position:absolute;top:0;bottom:0}
+#map .ram{background:var(--vscode-charts-blue,#3794ff)}
+#map .rom{background:var(--vscode-charts-purple,#b180d7)}
+#map .io{background:var(--vscode-charts-orange,#d18616)}
+#map .video{background:var(--vscode-charts-green,#89d185)}
+#map .none{background:transparent}
+#map .off{opacity:.3}
+#map .edge{position:absolute;top:0;bottom:0;width:1px;background:var(--vscode-editor-background)}
+#mapView{position:absolute;top:-3px;bottom:-3px;min-width:2px;box-sizing:border-box;border:1px solid var(--vscode-focusBorder);pointer-events:none}
 #status{padding:3px 10px;border-top:1px solid var(--vscode-panel-border);font-size:12px;color:var(--vscode-descriptionForeground);min-height:16px}
 #status.error{color:var(--vscode-errorForeground)}
 .ended{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--vscode-editor-background) 80%,transparent);font-size:14px}
@@ -117,6 +131,7 @@ body.narrow .item .k{width:auto}
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
 <label title="Hex bytes with ?? for any byte, such as A9 ?? 20; text in quotes; or an instruction, with ? for any character and * for any run, such as STA $C0?? or JSR COUT. Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20, &quot;TEXT&quot; or STA $C0??"></label>
 </div>
+<div id="map" hidden aria-hidden="true"></div>
 <div class="main"><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div>
 <div id="listing" role="list" aria-label="Listing"></div>
 <div id="side"><div class="tabs" role="tablist"><button role="tab" data-tab="inspector" class="on">Inspector</button><button role="tab" data-tab="search">RAM search</button><button role="tab" data-tab="frozen" id="frozenTab">Frozen</button></div>
@@ -380,6 +395,7 @@ function compare(offset, count) {
 
 // Asks for the labels and the character set, which can change at each stop as banks switch.
 async function loadExtras() {
+    void loadMap();
     try {
         const result = await request({ type: "labels" });
         labels = result.labels;
@@ -402,6 +418,69 @@ async function loadExtras() {
         // And the frozen bytes.
     }
 }
+
+// The bar across the top: the whole space, colored by what memory reads there now, dimmed where a bank is not what
+// the CPU reads, with a line where each of the machine's regions starts and a box around the bytes in view. Hovering
+// names the address under the pointer, and a click goes there. The keyboard has Go to instead, so it is hidden from
+// screen readers.
+let map = null;
+const mapBar = document.getElementById("map");
+
+// Read at the start and at each stop, apart from the other extras, which do not wait for it.
+async function loadMap() {
+    try {
+        map = await request({ type: "map" });
+    } catch {
+        // The bytes show without it.
+        map = null;
+    }
+    showMap();
+}
+
+function percent(address) { return (address / SIZE * 100) + "%"; }
+
+function showMap() {
+    const areas = map === null ? [] : map.areas;
+    mapBar.hidden = areas.length === 0;
+    let html = "";
+    for (const area of areas) {
+        html += '<div class="seg ' + area.kind + (area.mapped ? "" : " off") + '" style="left:' + percent(area.start) + ";width:" + percent(area.length) + '"></div>';
+    }
+    for (const region of map === null ? [] : map.regions) {
+        if (region.start > 0) html += '<div class="edge" style="left:' + percent(region.start) + '"></div>';
+    }
+    mapBar.innerHTML = html + '<div id="mapView"></div>';
+    showMapView();
+}
+
+function showMapView() {
+    const view = document.getElementById("mapView");
+    if (view === null || mapBar.hidden) return;
+    const top = Math.floor(grid.scrollTop / LINE);
+    const start = rowStart(Math.min(top, rowCount() - 1)), end = rowEnd(Math.min(rowCount() - 1, top + visibleRows() - 1));
+    view.style.left = percent(start);
+    view.style.width = percent(end - start + 1);
+}
+
+// The address under a point on the bar.
+function mapAddress(event) {
+    const box = mapBar.getBoundingClientRect();
+    return Math.min(SIZE - 1, Math.max(0, Math.floor((event.clientX - box.left) / Math.max(1, box.width) * SIZE)));
+}
+
+// What the bar says of an address: its region and what memory reads there.
+function mapTitle(address) {
+    if (map === null) return where(address);
+    const region = map.regions.filter(item => address >= item.start && address < item.start + item.length).sort((a, b) => a.length - b.length)[0];
+    const area = map.areas.find(item => address >= item.start && address < item.start + item.length);
+    return [where(address), region?.name, area?.name].filter(Boolean).join(" · ");
+}
+
+mapBar.addEventListener("mousemove", event => { mapBar.title = mapTitle(mapAddress(event)); });
+mapBar.addEventListener("click", event => {
+    moveTo(mapAddress(event), false, true);
+    grid.focus();
+});
 
 // The glyphs' height in the text column; their width keeps the machine's proportions.
 const GLYPH = 16;
@@ -574,7 +653,9 @@ function render() {
     if (layout()) { render(); return; }
     ensure(top - count, top + 2 * count);
     showInspector();
+    showMapView();
     wantListing();
+    wantInspection();
     showListingLines();
     if (tab === "frozen") showFrozen();
 }
@@ -919,7 +1000,9 @@ function showInspector() {
     if (name !== undefined) html += " · " + escapeText(name);
     if (high > low) html += " · " + (high - low + 1) + " bytes, " + where(low) + "-$" + hex(high, 4);
     html += "</div>";
+    html += inspectionHtml();
     const rows = inspect(bytes, readable, cursor, charset === null ? undefined : charset.text);
+    if (inspected !== null && inspected.address === cursor) rows.push(...(inspected.values ?? []));
     if (comparison !== "" && differs(cursor)) rows.push({ label: comparison === "snapshot" ? "In the snapshot" : "In " + comparedName(), value: "$" + hex(compared().bytes[cursor], 2) });
     else if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
     if (frozen.has(cursor)) rows.push({ label: "Frozen at", value: "$" + hex(frozen.get(cursor), 2) });
@@ -928,6 +1011,47 @@ function showInspector() {
         html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
     }
     inspector.innerHTML = html;
+}
+
+// What the debugger says about the cursor's address: its region and where in it, what the memory map does with it,
+// the label it is in with its documentation, and its source line. Asked for again when the cursor, memory, the
+// marks or the stop change.
+let inspected = null, inspectKey = "";
+
+function wantInspection() {
+    if (ended) return;
+    const key = cursor + ":" + generation + ":" + writes + ":" + marks;
+    if (key === inspectKey) return;
+    inspectKey = key;
+    void loadInspection(cursor, key);
+}
+
+async function loadInspection(address, key) {
+    let result = null;
+    try {
+        result = await request({ type: "inspect", address });
+    } catch {
+        // The inspector shows what the page knows without it.
+    }
+    if (key !== inspectKey) return;
+    inspected = result;
+    showInspector();
+}
+
+function inspectionHtml() {
+    const known = inspected !== null && inspected.address === cursor ? inspected : null;
+    if (known === null) return "";
+    const row = (label, value) => '<div class="item"><span class="k">' + label + '</span><span class="v">' + value + "</span></div>";
+    let html = "";
+    if (known.region) html += row("Region", escapeText(known.region + (known.detail ? ", " + known.detail : "")));
+    if (known.mapped) html += row("Map", escapeText(known.mapped));
+    if (known.label && known.offset > 0) html += row("In", escapeText(known.label + "+" + known.offset));
+    if (known.summary) html += '<div class="doc">' + escapeText((known.offset > 0 ? known.label + ": " : "") + known.summary) + "</div>";
+    if (known.path) {
+        html += row("Source", '<button class="link" data-src="' + escapeText(known.path) + '" data-line="' + known.line + '" title="Open ' + escapeText(known.path) + ", line " + known.line + '">'
+            + escapeText(fileName(known.path) + ":" + known.line) + "</button>");
+    }
+    return html;
 }
 
 // The narrowest the inspector gets beside the bytes; narrower than that, it moves under them.
@@ -1311,6 +1435,11 @@ side.addEventListener("click", event => {
             case "watchHit": void watch([action.dataset.w ?? "[" + where(offset) + "]"]); break;
             case "thaw": void freeze([], [offset]).catch(error => status(String(error.message || error), true)); break;
         }
+        return;
+    }
+    const source = target.closest ? target.closest("[data-src]") : null;
+    if (source !== null) {
+        void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
         return;
     }
     const hit = target.closest ? target.closest("[data-go]") : null;

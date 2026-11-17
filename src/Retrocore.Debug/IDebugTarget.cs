@@ -148,6 +148,20 @@ internal interface IDebugTarget : IDebugMemory
     (string Name, ushort Start, int Length) MemoryScope { get; }
 
     /// <summary>
+    ///  Gets the named parts of the address space, such as the zero page, the text pages and the I/O space, which
+    ///  Retrocore Memory's inspector names; the memory scope alone on a machine that names no others.
+    /// </summary>
+    IReadOnlyList<DebugRegion> Regions => [new(MemoryScope.Name, MemoryScope.Start, MemoryScope.Length, "ram")];
+
+    /// <summary>
+    ///  Gets what an address holds now where its area's name says otherwise, such as a card's I/O registers in its
+    ///  slot's ROM page; null to go by the area.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns><c>ram</c>, <c>rom</c>, <c>io</c>, <c>video</c> or <c>none</c>, or null.</returns>
+    string? KindAt(ushort address) => null;
+
+    /// <summary>
     ///  Gets the storage memory references can name directly, whatever the memory map, such as the IIe's
     ///  auxiliary RAM; none on a machine whose addresses each have one home.
     /// </summary>

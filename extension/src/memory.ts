@@ -350,6 +350,12 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "labels":
                             await reply(await session.customRequest("retro/memory/labels", { memoryReference: base }));
                             break;
+                        case "map":
+                            await reply(await session.customRequest("retro/memory/map", { memoryReference: base }));
+                            break;
+                        case "inspect":
+                            await reply(await session.customRequest("retro/memory/inspect", { memoryReference: base, address: received.address }));
+                            break;
                         case "listing":
                             await reply(await session.customRequest("retro/memory/listing", {
                                 memoryReference: base,

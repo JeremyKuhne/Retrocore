@@ -34,6 +34,9 @@ internal static class MediaActions
     // Where each disk read from an image came from, by the disk itself, so it goes when the disk does.
     private static readonly ConditionalWeakTable<IMedium, DiskSource> s_sources = [];
 
+    // Held while an image is checked, so checks run one at a time.
+    private static readonly Lock s_rechecking = new();
+
     /// <summary>
     ///  Records where a disk read from an image came from, as it goes in a drive.
     /// </summary>
@@ -42,7 +45,52 @@ internal static class MediaActions
     /// <param name="codec">The codec that writes the image back, or null for one that can only be read.</param>
     /// <param name="bytes">The image's bytes, as read.</param>
     internal static void Register(IMedium medium, string path, IImageCodec? codec, ReadOnlySpan<byte> bytes) =>
-        s_sources.AddOrUpdate(medium, new DiskSource(Guid.NewGuid(), path, codec, FileRevision.Of(path, bytes)));
+        Keep(medium, new DiskSource(Guid.NewGuid(), path, codec, FileRevision.Of(path, bytes)));
+
+    /// <summary>
+    ///  Occurs when an image a disk came from changes on disk, or is marked read-only or writable, as the device list
+    ///  then shows; raised off the machine's thread.
+    /// </summary>
+    internal static event Action? SourcesChanged;
+
+    /// <summary>
+    ///  Checks an image as it is now, for each disk read from it, and says so when any of them sees it differently.
+    /// </summary>
+    /// <param name="path">The image's full path.</param>
+    /// <returns>False when the file could not be read, so the check should be tried again.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   Checks run one at a time, so each reads the file after the one before it, and the last to finish has the file
+    ///   as it is now; an older check never lands over a newer one.
+    ///  </para>
+    /// </remarks>
+    internal static bool Recheck(string path)
+    {
+        bool changed = false;
+        lock (s_rechecking)
+        {
+            List<DiskSource> sources = [.. s_sources.Select(pair => pair.Value).Where(source => SameFile(path, source.Path))];
+            if (sources.Count == 0) { return true; }
+            if (ImageCheck.Of(path) is not { } check) { return false; }
+            foreach (DiskSource source in sources)
+            {
+                if (source.Check == check) { continue; }
+                source.Check = check;
+                changed = true;
+            }
+        }
+
+        if (changed) { SourcesChanged?.Invoke(); }
+        return true;
+    }
+
+    // Keeps where a disk came from, and watches its image, which is checked once its watch settles, as the file may
+    // have changed between being read and being watched; a check that cannot read it is tried again.
+    private static void Keep(IMedium medium, DiskSource source)
+    {
+        s_sources.AddOrUpdate(medium, source);
+        ImageWatcher.Watch(source.Path, path => s_sources.Any(pair => SameFile(path, pair.Value.Path)), Recheck);
+    }
 
     /// <summary>
     ///  Gets where a disk came from, or null for one no image gave, as a disk a launch built.
@@ -171,6 +219,7 @@ internal static class MediaActions
     ///  <c>path</c>, <c>acceptLosses</c> to save though the format cannot hold all of the disk, and <c>overwrite</c>'s
     ///  <c>sha256</c>, the revision of the file there the user agreed to replace (null for none). Save As to a file
     ///  that is there needs it, as the file the person chose; without it, Save As writes only where there is no file.
+    ///  <c>makeWritable</c> makes a read-only file writable to save over it, once the revision checks pass.
     /// </param>
     /// <returns>The answer: <c>saved</c>, <c>losses</c>, <c>conflict</c> or <c>readOnly</c>.</returns>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
@@ -213,7 +262,7 @@ internal static class MediaActions
         // 3. The commit, over the revision the disk matches (for a new image, no file at all) or the one the user agreed
         // to replace.
         Overwrite? authorized = args.Object("overwrite") is { } overwrite ? new(overwrite.String("sha256")) : null;
-        ImageWrite written = ImageWriter.Write(path, encoded.Bytes, mine?.Baseline, authorized);
+        ImageWrite written = ImageWriter.Write(path, encoded.Bytes, mine?.Baseline, authorized, args.Bool("makeWritable") == true);
         switch (written.Outcome)
         {
             case "conflict":
@@ -231,7 +280,7 @@ internal static class MediaActions
         DiskSource saved = new(source?.Id ?? Guid.NewGuid(), path, codec, written.Revision ?? FileRevision.Of(path, encoded.Bytes));
         if (ReferenceEquals(drive.Medium, disk) && drive.MountGeneration == generation)
         {
-            s_sources.AddOrUpdate(disk, saved);
+            Keep(disk, saved);
             drive.Saved(path, codec.Format, encoded.IsLossless);
         }
 

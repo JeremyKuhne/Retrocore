@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
 import { catalogMachine, settingValue, type MachineChoice } from "./machines";
@@ -18,8 +19,11 @@ import { favoriteChoices, type Favorites } from "./favorites";
 import type { OffMachine, OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
 import { bankDetail, type MemoryBank } from "./memory";
+import {
+    conflictQuestion, contextWords, iconName, iconSvg, lockState, lossless, lossyQuestion, mark, readOnlyQuestion,
+    savedMessage, summary, tooltipLines, type Device, type Question
+} from "./drives";
 
-/** A device as the debug host's retro/devices describes it. */
 /** What retro/device and retro/hardware say back about media, beside the devices, to a client that speaks it. */
 interface MediaAnswer {
     outcome?: "saved" | "changed" | "conflict" | "losses" | "readOnly";
@@ -30,28 +34,11 @@ interface MediaAnswer {
     format?: string;
     losses?: string[];
     notes?: string[];
+    backup?: string;
     reason?: "noImage" | "format" | "file" | "access";
     path?: string;
     baseline?: { length: number; written: string; sha256: string } | null;
     current?: { length: number; written: string; sha256: string } | null;
-}
-
-export interface Device {
-    id: string;
-    kind: "floppyDrive" | "tapeDrive" | "blockStorage";
-    name: string;
-    description: string;
-    controller: string;
-    formats: string[];
-    saveFormats?: string[];
-    operations: ("insert" | "eject" | "record" | "writeProtect" | "save")[];
-    tracks: number;
-    sides: number;
-    media: { label: string; format: string; writeProtected: boolean; changed: boolean; generation?: number } | null;
-    activity: "idle" | "seeking" | "reading" | "writing";
-    head?: { motor: boolean; selected: boolean; track: number; side: number; sector: number | null };
-    transport?: { motor: boolean; mode: "stopped" | "playing" | "recording"; position: number; length: number };
-    blocks?: { count: number; last: number | null };
 }
 
 /** The retro/devices body. */
@@ -89,23 +76,6 @@ export function basicDescription(summary: BasicSummary): string {
     return `${summary.displayName} · ${summary.lines === 0 ? "no program" : summary.lines === 1 ? "1 line" : `${summary.lines} lines`}`;
 }
 
-/** The one-line summary after a device's name: its media, where it is and what it is doing. */
-export function summary(device: Device): string {
-    const parts: string[] = [device.media ? path.basename(device.media.label) || device.media.format : "empty"];
-    if (device.head) {
-        const track = Number.isInteger(device.head.track) ? String(device.head.track) : device.head.track.toFixed(2);
-        parts.push(`track ${track}` + (device.sides > 1 ? ` side ${device.head.side}` : "")
-            + (device.head.sector !== null ? ` sector ${device.head.sector}` : ""));
-    }
-    if (device.transport && device.media) parts.push(`${device.transport.position.toLocaleString()} of ${device.transport.length.toLocaleString()} bytes`);
-    if (device.blocks?.last !== null && device.blocks?.last !== undefined) parts.push(`block ${device.blocks.last}`);
-    if (device.media?.writeProtected) parts.push("read-only");
-    if (device.media?.changed) parts.push("changed");
-    if (device.activity !== "idle") parts.push(device.activity);
-    else if (device.head?.motor || device.transport?.motor) parts.push("motor on");
-    return parts.join(" · ");
-}
-
 /** The detail rows under a device. */
 export function details(device: Device): [string, string][] {
     const rows: [string, string][] = [
@@ -113,8 +83,12 @@ export function details(device: Device): [string, string][] {
         ["Activity", device.activity]
     ];
     if (device.media) {
-        rows.push(["Write protected", device.media.writeProtected ? "yes" : "no"]);
-        rows.push(["Changed", device.media.changed ? "yes, not saved to the image" : "no"]);
+        rows.push(["Lock", lockState(device.media).toLowerCase()]);
+        if (device.operations.includes("save")) rows.push(["Changed", device.media.changed ? "yes, not saved to the image" : "no"]);
+        const source = device.media.source;
+        if (source?.stale) rows.push(["Image", source.current === null ? "deleted since it was read" : "changed on disk since it was read"]);
+        else if (source?.readOnly === "file") rows.push(["Image", "a read-only file"]);
+        else if (source?.readOnly === "format") rows.push(["Image", `${device.media.format}, which can only be read`]);
     }
     if (device.head) {
         rows.push(["Motor", device.head.motor ? "on" : "off"]);
@@ -392,7 +366,7 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
     private readonly changed = new vscode.EventEmitter<Node | undefined>();
     readonly onDidChangeTreeData = this.changed.event;
 
-    constructor(private readonly state: MachineState) {
+    constructor(private readonly state: MachineState, private readonly icons: (name: string) => { light: vscode.Uri; dark: vscode.Uri }) {
         state.onDidChange(() => this.changed.fire(undefined));
     }
 
@@ -430,34 +404,70 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
         }
         if (!("device" in node)) return new vscode.TreeItem("");
 
+        // The drive's own picture with its lock as a badge, in the colour of what it is doing; the mark at the row's
+        // end, from the drive decorations, says whether the disk changed and whether its image did.
         const device = node.device;
         const item = new vscode.TreeItem(device.name, vscode.TreeItemCollapsibleState.Collapsed);
         item.id = device.id;
         item.description = summary(device);
-        item.iconPath = new vscode.ThemeIcon(
-            device.kind === "tapeDrive" ? "record-keys" : device.kind === "blockStorage" ? "database" : "save",
-            device.activity === "writing" ? new vscode.ThemeColor("charts.red")
-                : device.activity === "reading" ? new vscode.ThemeColor("charts.green")
-                : device.activity === "seeking" ? new vscode.ThemeColor("charts.yellow")
-                : device.media === null ? new vscode.ThemeColor("disabledForeground")
-                : undefined);
+        item.iconPath = this.icons(iconName(device));
+        item.resourceUri = driveUri(device);
         const tooltip = new vscode.MarkdownString(`**${escape(device.name)}**: ${escape(device.description)}\n\n`);
-        for (const [detail, value] of details(device)) tooltip.appendMarkdown(`- ${detail}: ${escape(value)}\n`);
+        tooltip.appendMarkdown(tooltipLines(device).map(line => escape(line)).join("  \n"));
         item.tooltip = tooltip;
-
-        // Menus pick their actions by these words. While the machine is off, a tape cannot record and nothing has
-        // changed a disk to save.
-        const running = this.state.session !== undefined;
-        const words = ["device", device.media ? "loaded" : "empty"];
-        if (device.operations.includes("insert")) words.push("insert");
-        if (running && device.operations.includes("record")) words.push("record");
-        if (device.media && device.operations.includes("eject")) words.push("eject");
-        if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "unprotect" : "protect");
-        if (running && device.media && device.operations.includes("save")) words.push("save");
-        if (running && device.media?.changed && device.operations.includes("save")) words.push("changed");
-        item.contextValue = words.join(" ");
+        item.contextValue = contextWords(device, this.state.session !== undefined).join(" ");
         return item;
     }
+}
+
+/** The scheme of the drives' rows, which the drive decorations mark. */
+const driveScheme = "retrocore-drive";
+
+/** A drive row's resource, whose query is the mark it gets: changed, stale, conflict or none. */
+const driveUri = (device: Device): vscode.Uri => vscode.Uri.from({ scheme: driveScheme, path: `/${device.id}`, query: mark(device) ?? "" });
+
+/** The marks at the end of the drive rows, as Git marks a changed file: ● changed, ⚠ an image changed on disk. */
+class DriveDecorations implements vscode.FileDecorationProvider {
+    provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+        if (uri.scheme !== driveScheme) return undefined;
+        switch (uri.query) {
+            case "changed":
+                return { badge: "●", tooltip: "Changed, not saved to its image", color: new vscode.ThemeColor("gitDecoration.modifiedResourceForeground") };
+            case "stale":
+                return { badge: "⚠", tooltip: "Its image changed on disk", color: new vscode.ThemeColor("list.warningForeground") };
+            case "conflict":
+                return { badge: "⚠", tooltip: "Changed, and its image changed on disk too", color: new vscode.ThemeColor("list.warningForeground") };
+            default:
+                return undefined;
+        }
+    }
+}
+
+/**
+ * The drives' icons, written once to the extension's storage, as a tree row's icon must be a file: each name's light
+ * and dark SVGs, under a name that changes with the drawing so a new one is not taken from the cache.
+ */
+function driveIcons(storage: vscode.Uri): (name: string) => { light: vscode.Uri; dark: vscode.Uri } {
+    const folder = vscode.Uri.joinPath(storage, "drive-icons");
+    const written = new Map<string, { light: vscode.Uri; dark: vscode.Uri }>();
+    return name => {
+        const known = written.get(name);
+        if (known !== undefined) return known;
+        const uris = { light: icon(folder, name, false), dark: icon(folder, name, true) };
+        written.set(name, uris);
+        return uris;
+    };
+}
+
+/** Writes one icon, if it is not there already, and gives its file. */
+function icon(folder: vscode.Uri, name: string, dark: boolean): vscode.Uri {
+    const svg = iconSvg(name, dark);
+    const file = vscode.Uri.joinPath(folder, `${name}-${dark ? "dark" : "light"}-${createHash("sha256").update(svg).digest("hex").slice(0, 8)}.svg`);
+    try {
+        mkdirSync(folder.fsPath, { recursive: true });
+        writeFileSync(file.fsPath, svg, { flag: "wx" });
+    } catch { /* Written already, or by another window. */ }
+    return file;
 }
 
 /** The requests that set a stopped machine running again. */
@@ -537,8 +547,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(favorites.onDidChange(() => tree.redraw()));
 
     const machineView = vscode.window.createTreeView("retrocore.machine", { treeDataProvider: new MachineTree(tree, context.extensionUri, favorites) });
-    const drivesView = vscode.window.createTreeView("retrocore.drives", { treeDataProvider: new DriveTree(tree) });
-    context.subscriptions.push(machineView, drivesView);
+    const drives = new DriveTree(tree, driveIcons(context.globalStorageUri));
+    const drivesView = vscode.window.createTreeView("retrocore.drives", { treeDataProvider: drives });
+    context.subscriptions.push(machineView, drivesView, vscode.window.registerFileDecorationProvider(new DriveDecorations()));
 
     // VS Code opens Run and Debug as a session starts and when it breaks (its debug.openDebug setting). When that
     // takes the sidebar from the Retrocore views, they come back, without taking the keyboard from the display panel
@@ -652,12 +663,15 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // Whether a question about a session's machine still stands: the views follow the active session, so one that
     // stopped being active while a question was open has its answer dropped rather than sent to another machine.
     const still = (session: vscode.DebugSession): boolean => vscode.debug.activeDebugSession?.id === session.id;
-    // Sends a change to the running machine and answers what media says back, as the media persistence plan has it:
-    // a changed disk that would leave its drive is saved or let go, a changed image is replaced or the disk saved as a
-    // new one, a lossy save is accepted or saved as a new image, and a read-only image is saved as a new one. Says
+    // Asks a question a save raises, modally, and gives the button chosen.
+    const ask = (question: Question): Thenable<string | undefined> =>
+        vscode.window.showWarningMessage(question.message, { modal: true, detail: question.detail }, ...question.buttons);
+    // Sends a change to the running machine and answers what media says back, as the media persistence plan's "saving
+    // in each state" has it: a save that asks nothing says so in the status bar; a lossy format offers the format that
+    // holds it all or saves anyway; a changed image is overwritten or the disk saved as a new one; a read-only file is
+    // made writable or the disk saved as a new one; a changed disk that would leave its drive is saved or let go. Says
     // whether the change went through. Each answer goes back for the disk it was about (its mount's generation, or the
-    // mount in discards), so a disk that went in while a question was open is never saved or let go by it. (The
-    // fuller prompts, badges and Undo come with the plan's third phase.)
+    // mount in discards), so a disk that went in while a question was open is never saved or let go by it.
     const answer = async (session: vscode.DebugSession, request: "hardware" | "device", args: Record<string, unknown>): Promise<boolean> => {
         let current: Record<string, unknown> = { ...args, supportsRetrocoreMedia: 1 };
         for (;;) {
@@ -667,17 +681,22 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             show(body);
             const id = body.device ?? "";
             const generation = body.generation;
-            const name = tree.devices.find(device => device.id === id)?.name ?? id;
-            const label = body.label ? path.basename(body.label) : "its image";
+            const device = body.devices?.find(candidate => candidate.id === id) ?? tree.devices.find(candidate => candidate.id === id);
+            const name = device?.name ?? id;
+            // The file the save was for: the one chosen in Save As, or the disk's own image.
+            const target = typeof current.path === "string" ? current.path : device?.media?.source?.path ?? device?.media?.label;
+            const file = target ? path.basename(target) : "its image";
             switch (body.outcome) {
                 case undefined:
                     return true;
                 case "saved": {
                     const said = [...body.notes ?? [], ...body.losses ?? []];
-                    if (said.length !== 0) void vscode.window.showInformationMessage(`Retrocore: saved the disk in ${name}. ${said.join(" ")}`);
+                    if (said.length !== 0) void vscode.window.showInformationMessage(`Retrocore: saved the disk in ${name} to ${file}. ${said.join(" ")}`);
+                    else vscode.window.setStatusBarMessage(savedMessage(file, name, body.backup !== undefined), 5000);
                     return true;
                 }
                 case "changed": {
+                    const label = body.label ? path.basename(body.label) : "its image";
                     const choice = await vscode.window.showWarningMessage(
                         `The disk in ${name} has changes not saved to ${label}.`, { modal: true }, "Save", "Discard");
                     if (choice === "Discard") {
@@ -687,33 +706,33 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     continue;
                 }
                 case "conflict": {
-                    const image = body.path ? path.basename(body.path) : "The image";
-                    const question = !body.current ? `${image} was deleted since the disk in ${name} was read from it. Save the disk there again?`
-                        : !body.baseline ? `${image} changed since you chose it. Replace it with the disk in ${name}?`
-                        : `${image} changed since the disk in ${name} was read from it. Replace it with the disk?`;
-                    const choice = await vscode.window.showWarningMessage(question, { modal: true }, "Replace", "Save As...");
-                    if (choice === "Replace") {
+                    const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current);
+                    const choice = await ask(question);
+                    if (choice !== undefined && choice === question.buttons[0]) {
                         current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null }, generation };
                         continue;
                     }
                     return choice === "Save As..." && await saveAsNew(session, id, generation);
                 }
                 case "losses": {
-                    const choice = await vscode.window.showWarningMessage(
-                        `${body.format} cannot hold all of the disk in ${name}: ${(body.losses ?? []).join(" ")}`,
-                        { modal: true }, "Save Anyway", "Save As...");
+                    // The format that holds it all, unless that is the one that cannot.
+                    const keeps = lossless(device);
+                    const offered = keeps === undefined || keeps === body.format?.toLowerCase() ? undefined : keeps;
+                    const choice = await ask(lossyQuestion(file, name, body.format ?? "The format", body.losses ?? [], offered));
                     if (choice === "Save Anyway") {
                         current = { ...current, acceptLosses: true, generation };
                         continue;
                     }
-                    return choice === "Save As..." && await saveAsNew(session, id, generation);
+                    return offered !== undefined && choice === `Save as ${offered.toUpperCase()}...` && await saveAsNew(session, id, generation, offered);
                 }
                 case "readOnly": {
-                    const why = body.reason === "noImage" ? `The disk in ${name} has no image of its own.`
-                        : body.reason === "format" ? `The disk in ${name} came from an image that can only be read.`
-                        : body.reason === "file" ? `The image of the disk in ${name} is read-only.`
-                        : `The image of the disk in ${name} cannot be written.`;
-                    const choice = await vscode.window.showWarningMessage(`${why} Save the disk as a new image?`, { modal: true }, "Save As...");
+                    const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason));
+                    // The host makes the file writable as it saves, for this mount and only over the revision the
+                    // save may replace, so an answer left open while the disk or file changed alters nothing.
+                    if (choice === "Make Writable and Save") {
+                        current = { ...current, makeWritable: true, generation };
+                        continue;
+                    }
                     return choice === "Save As..." && await saveAsNew(session, id, generation);
                 }
                 default:
@@ -737,26 +756,28 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         if (file) await act(node, "record", { path: file.fsPath });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.eject", (node?: Node) => act(node, "eject")));
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.protect",
-        (node?: Node) => act(node, "writeProtect", { writeProtected: true })));
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.unprotect",
-        (node?: Node) => act(node, "writeProtect", { writeProtected: false })));
-    // Saving over the disk's own image replaces the file it was loaded from, so it asks first.
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.save", async (node?: Node) => {
-        if (node === undefined || !("device" in node) || !node.device.media) return;
-        const save = "Save";
-        const answer = await vscode.window.showWarningMessage(
-            `Replace ${node.device.media.label} with the disk in ${node.device.name}?`, { modal: true }, save);
-        if (answer === save) await act(node, "save");
-    }));
+    // The lock: Lock and Unlock in the menu, and the row's toggle, which shows the lock as it is.
+    const lock = (node?: Node): Promise<void> => act(node, "writeProtect", { writeProtected: true });
+    const unlock = (node?: Node): Promise<void> => act(node, "writeProtect", { writeProtected: false });
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.protect", lock));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.unprotect", unlock));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.locked", unlock));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.unlocked", lock));
+    // Save writes the disk's own image at once, and asks only when something is off: a lossy format, an image changed
+    // on disk, or a read-only file. The row's button for a changed image says it will ask.
+    const save = (node?: Node): Promise<void> => act(node, "save");
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.save", save));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveStale", save));
     // Save As asks where, and saves the disk there, in the machine of the session it was asked for; says whether it
     // was saved. The person chose the file as it was then, so the save may replace that revision and no later one.
     // An answer's Save As carries the mount it was about, so a disk that went in since is not the one saved.
-    const saveAs = async (session: vscode.DebugSession | undefined, device: Device, generation?: number): Promise<boolean> => {
+    // A format given, as a lossy save's offer of the format that holds it all, names the file with its extension.
+    const saveAs = async (session: vscode.DebugSession | undefined, device: Device, generation?: number, format?: string): Promise<boolean> => {
         if (!device.media) return false;
+        const own = device.media.source?.path ?? device.media.label;
         const file = await vscode.window.showSaveDialog({
             title: `Save the disk in ${device.name} as`,
-            defaultUri: vscode.Uri.file(device.media.label),
+            defaultUri: vscode.Uri.file(format === undefined ? own : path.join(path.dirname(own), `${path.parse(own).name}.${format}`)),
             filters: { "Disk images": device.saveFormats ?? [] }
         });
         if (file === undefined || (session !== undefined && !still(session))) return false;
@@ -765,9 +786,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const saving = chosen === undefined ? args : { ...args, overwrite: { sha256: chosen } };
         return session === undefined ? send("device", saving) : sendTo(session, "device", saving);
     };
-    const saveAsNew = async (session: vscode.DebugSession, id: string, generation: number | undefined): Promise<boolean> => {
+    const saveAsNew = async (session: vscode.DebugSession, id: string, generation: number | undefined, format?: string): Promise<boolean> => {
         const device = still(session) ? tree.devices.find(candidate => candidate.id === id) : undefined;
-        return device !== undefined && await saveAs(session, device, generation);
+        return device !== undefined && await saveAs(session, device, generation, format);
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveAs", async (node?: Node) => {
         const session = vscode.debug.activeDebugSession;
@@ -849,6 +870,20 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.off", () => tree.off?.name));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.list", () => tree.devices));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.hardware", () => tree.hardware));
+    // The drive rows as the Drives view draws them, for the tests: each drive's name, summary, menu words, icon file,
+    // the mark at its end and its tooltip.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.driveRows", () =>
+        drives.getChildren().flatMap(node => "controller" in node ? drives.getChildren(node) : [node])
+            .filter(node => "device" in node)
+            .map(node => {
+                const item = drives.getTreeItem(node);
+                const icon = item.iconPath as { light: vscode.Uri } | undefined;
+                return {
+                    id: item.id, label: item.label, description: item.description, contextValue: item.contextValue,
+                    icon: icon?.light.fsPath, mark: item.resourceUri?.query ?? "",
+                    tooltip: item.tooltip instanceof vscode.MarkdownString ? item.tooltip.value : item.tooltip
+                };
+            })));
     // The Memory rows' labels, descriptions and the references they open, for the tests.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.memoryRows", () => {
         const provider = new MachineTree(tree, context.extensionUri, favorites);

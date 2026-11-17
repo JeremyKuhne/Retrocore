@@ -51,6 +51,10 @@
     <Compile Include="..\..\src\Retrocore.Debug\Overwrite.cs" Link="Overwrite.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ImageWriter.cs" Link="ImageWriter.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DiskSource.cs" Link="DiskSource.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\ImageCheck.cs" Link="ImageCheck.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\ImageWatcher.cs" Link="ImageWatcher.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\ImageWatch.cs" Link="ImageWatch.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DeviceJson.cs" Link="DeviceJson.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.cs" Link="MediaActions.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />

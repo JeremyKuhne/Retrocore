@@ -41,9 +41,13 @@ internal static class ImageWriter
     ///  A revision the user saw and agreed to replace, though it is not <paramref name="expected"/>, or null. Its
     ///  null SHA-256 agrees to write where there is no file, as over an image deleted since.
     /// </param>
+    /// <param name="makeWritable">
+    ///  Whether the user agreed to make a read-only file writable to save over it; only the revision the save may
+    ///  replace is made writable.
+    /// </param>
     /// <returns>What came of it.</returns>
     /// <exception cref="IOException">The file could not be written for a reason no one can act on here.</exception>
-    internal static ImageWrite Write(string path, byte[] bytes, FileRevision? expected, Overwrite? authorized = null)
+    internal static ImageWrite Write(string path, byte[] bytes, FileRevision? expected, Overwrite? authorized = null, bool makeWritable = false)
     {
         string target = Resolve(path);
         using FileStream held = Lock(target);
@@ -57,9 +61,10 @@ internal static class ImageWriter
             return new("conflict", current);
         }
 
-        if (current is not null && File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly))
+        if (current is not null && File.GetAttributes(target) is { } attributes && attributes.HasFlag(FileAttributes.ReadOnly))
         {
-            return new("readOnly", current, Reason: "file");
+            if (!makeWritable) { return new("readOnly", current, Reason: "file"); }
+            File.SetAttributes(target, attributes & ~FileAttributes.ReadOnly);
         }
 
         string folder = Path.GetDirectoryName(target) ?? throw new ArgumentException($"{target} is not a file.", nameof(path));
@@ -115,9 +120,14 @@ internal static class ImageWriter
         }
     }
 
-    // The file a path names, with every link on the way followed, to the file and to the folders it is in: so a link
-    // into a repository stays a link, and two paths to one image are the same file for its lock and its backup.
-    private static string Resolve(string path)
+    /// <summary>
+    ///  Gets the file a path names, with every link on the way followed, to the file and to the folders it is in: so a
+    ///  link into a repository stays a link, and two paths to one image are the same file for its lock and its backup.
+    /// </summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The file's full path.</returns>
+    /// <exception cref="IOException">The path goes through too many links.</exception>
+    internal static string Resolve(string path)
     {
         string current = Path.GetFullPath(path);
         for (int links = 0; links < MaximumLinks; links++)

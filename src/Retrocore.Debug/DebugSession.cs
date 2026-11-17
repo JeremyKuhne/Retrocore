@@ -121,6 +121,9 @@ internal sealed partial class DebugSession
     internal void Register(DapTransport transport, Action disconnect)
     {
         _transport = transport;
+
+        // An image changed on disk shows in its drive, even while the machine is stopped.
+        MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
         transport.On("launch", args => Reply(() => Launch(args)));
         transport.On("setBreakpoints", args => Reply(() => Breakpoints(args)));
@@ -548,6 +551,27 @@ internal sealed partial class DebugSession
             _run?.Cancel();
             ReleaseTarget();
             _ended = true;
+        }
+
+        MediaActions.SourcesChanged -= SourcesChanged;
+    }
+
+    // Sends the devices again when an image a disk came from changed on disk. It runs on a watcher's timer, where an
+    // exception would end the process, so a session whose client has gone, or that is between machines, lets it pass:
+    // the next devices the client asks for show the image as it is.
+    private void SourcesChanged()
+    {
+        try
+        {
+            Reply(() =>
+            {
+                if (_target is not null && !_ended) { NotifyDevices(); }
+                return [];
+            });
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The client went away or the machine is changing; nothing is lost, as the watch keeps the image's state.
         }
     }
 

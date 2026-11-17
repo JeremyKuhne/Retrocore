@@ -5,7 +5,7 @@ without losing what the machine wrote.
 
 **Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1 is built for the Disk II
 ([phases](#phases)); phase 2, every drive saving, is built: the Apple II's block drives and the TRS-80's and Color
-Computer's floppies save. The
+Computer's floppies save. Phase 3, the UI, is under way: the Drives view's rows and Save in each state are built. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -871,7 +871,30 @@ After the reviews:
      the protocol.
 3. **The UI.** The badged icons, the states, the prompts, Revert with Undo, the eject prompt, host-side watching, and
    the off machine's saves. Done when every row of [saving in each state](#saving-in-each-state) works in the
-   self-hosted extension.
+   self-hosted extension. It lands in two parts:
+   - **The drive rows and Save in each state (built).** The host watches each image a disk came from
+     (`ImageWatcher`, a `FileSystemWatcher` per image and its link's target, kept whole by a sweep every two seconds,
+     checked a moment after its events settle and off the machine's thread), and a drive's `source` gives `stale`,
+     with the `baseline` revision and the `current` one, and
+     `readOnly` (`format` or `file`); a change sends `retro/devices` even while the machine is stopped. In the Drives
+     view ([drives.ts](../../extension/src/drives.ts)) each drive is its own picture (5.25-inch, 3.5-inch, hard disk,
+     tape) with a padlock badge in its activity's colour, drawn as SVGs written to the extension's storage; the
+     row's end carries `●` changed and `⚠` stale or a conflict, as decorations; the summary says `read-only image`,
+     `image changed on disk` or `image deleted`; and the tooltip names the image, whether it changed, when the file
+     changed and when it was read, the lock and the head. The inline buttons are icons: the lock toggle, which shows
+     the lock as it is, **Save** (which says it will ask when the image changed), **Save As...** for a read-only image,
+     and eject; the menu has Save, Save As..., Insert..., Eject, and Lock or Unlock. Save asks nothing for a changed
+     disk whose image is as read, and says so in the status bar for five seconds; it asks, as the plan draws, for a
+     lossy format (**Save as WOZ / DMK / 2MG...**, **Save Anyway**), a stale image or a conflict (**Overwrite** or
+     **Save As...**; a deleted image, **Save There Again**), and a read-only file (**Save As...**, **Make Writable and
+     Save**). The display panel's drive line says `locked` or `unlocked`. Tests: `MediaSaveTests`' watcher test,
+     `drives.test.ts`, and the isolated VS Code suite's `drivesView.ts`, where a Color Computer's drive row shows its
+     image changed on disk and read-only as the host sees them.
+   - **Revert, discard, eject and stop (next).** **Revert to Image** and **Discard** with **Undo** (the dropped disk
+     kept by the host until the journal and history keep it), and Revert in the stale prompt; the eject prompt with
+     **Save As...**; `differences` (the sectors or blocks changed, which the prompts and tooltip then name); disks the
+     machine ejected listed under their drive; and the stop notification and the off machine's kept disks, which
+     need the journal's clean stop or a host-side hold until it comes.
 4. **The recovery journal.** Medium ids, checkpoints at idle moments, the machine's eject, clean stop, crash
    discovery and recovery, built disks rebuilt, recordings as changed tapes, the stop and crash notifications, and
    then the source-aware default lock. Done when every case in *Crash and failure*, *Detach*, *Built disks* and *Tapes*

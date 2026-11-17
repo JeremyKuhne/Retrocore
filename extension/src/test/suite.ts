@@ -17,6 +17,7 @@ import { testMachineMenu } from "./machineMenu";
 import { testOffMachine } from "./offMachine";
 import { testFavorites } from "./favorites";
 import { testProgramBreakpoints } from "./basicBreakpoints";
+import { testDrivesView } from "./drivesView";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
@@ -32,6 +33,7 @@ export async function run(): Promise<void> {
     await testOffMachine(workspace);
     await testFavorites(workspace);
     await testProgramBreakpoints(workspace);
+    await testDrivesView(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
     const root = workspace.uri.fsPath;

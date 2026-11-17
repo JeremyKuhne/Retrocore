@@ -5,6 +5,7 @@
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -120,6 +121,136 @@ public sealed class MediaSaveTests
     }
 
     /// <summary>
+    ///  The host watches each image a disk came from: a write by something else marks the source stale, with the
+    ///  revision the disk matches and the one there now, and marking the file read-only shows as a read-only image,
+    ///  each sent to the device list as it happens; a save over the file makes it current again.
+    /// </summary>
+    [TestMethod]
+    public void ImageChangedOnDiskShowsInItsDrive()
+    {
+        (string image, _) = Image("watched.dsk");
+        Apple2FloppyDrive drive = Drive(image);
+        Source(drive)?.Bool("stale").Should().BeFalse();
+        Source(drive)?["readOnly"].Should().BeNull();
+
+        byte[] outside = new byte[35 * 4096];
+        outside[0] = 0x55;
+        Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
+        JsonObject stale = Source(drive) ?? throw new InvalidOperationException("No source.");
+        stale["baseline"]?["sha256"]?.GetValue<string>().Should().NotBe(stale["current"]?["sha256"]?.GetValue<string>());
+        stale["current"]?["length"]?.GetValue<long>().Should().Be(outside.Length);
+
+        Until(() => File.SetAttributes(image, FileAttributes.ReadOnly), () => Source(drive)?.String("readOnly") == "file");
+        Until(() => File.SetAttributes(image, FileAttributes.Normal), () => Source(drive)?["readOnly"] is null);
+
+        Change(drive);
+        JsonObject authorized = Speaking();
+        authorized["overwrite"] = new JsonObject { ["sha256"] = stale["current"]?["sha256"]?.GetValue<string>() };
+        MediaActions.Save(drive, authorized).String("outcome").Should().Be("saved");
+        Source(drive)?.Bool("stale").Should().BeFalse("the disk now matches the file it wrote");
+        Source(drive)?["baseline"].Should().BeNull();
+    }
+
+    /// <summary>
+    ///  An image changed between being read and being watched is found stale by the check that follows its watch.
+    /// </summary>
+    [TestMethod]
+    public void ImageChangedBeforeItIsWatchedShowsStale()
+    {
+        (string image, byte[] read) = Image("early.dsk");
+        File.WriteAllBytes(image, new byte[35 * 4096]);
+        Apple2FloppyDrive drive = Drive(path: null);
+        LoadedDisk loaded = DiskIIImage.Load(read, ".dsk");
+        void Insert()
+        {
+            MediaActions.Register(loaded.Disk, image, loaded.Codec, read);
+            drive.Insert(loaded.Disk, image, "DSK");
+        }
+
+        Until(Insert, () => Source(drive)?.Bool("stale") == true);
+    }
+
+    /// <summary>
+    ///  An image read through a link is watched where the link leads, as a save writes there.
+    /// </summary>
+    [TestMethod]
+    public void ImageThroughALinkIsWatchedWhereItLeads()
+    {
+        (string target, _) = Image("target.dsk");
+        string folder = Path.Join(s_root, $"links-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        string link = Path.Join(folder, "link.dsk");
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Assert.Inconclusive($"Symbolic links cannot be made here: {exception.Message}");
+        }
+
+        Apple2FloppyDrive drive = Drive(link);
+        Source(drive)?.Bool("stale").Should().BeFalse();
+        byte[] outside = new byte[35 * 4096];
+        outside[0] = 0x55;
+        Until(() => File.WriteAllBytes(target, outside), () => Source(drive)?.Bool("stale") == true);
+
+        // The file the link leads to marked read-only is a read-only image, as a save would find it.
+        Until(() => File.SetAttributes(target, FileAttributes.ReadOnly), () => Source(drive)?.String("readOnly") == "file");
+        File.SetAttributes(target, FileAttributes.Normal);
+
+        // A link on the way pointed at another file: the next sweep finds the disk's path leads elsewhere.
+        string middle = Path.Join(folder, "middle.dsk");
+        (string other, _) = Image("other.dsk");
+        File.CreateSymbolicLink(middle, target);
+        string through = Path.Join(folder, "through.dsk");
+        File.CreateSymbolicLink(through, middle);
+        File.WriteAllBytes(target, File.ReadAllBytes(other));
+        Apple2FloppyDrive chained = Drive(through);
+        Source(chained)?.Bool("stale").Should().BeFalse();
+        // The file the link now leads to holds other bytes than the one the disk was read from.
+        string third = Path.Join(folder, "third.dsk");
+        byte[] elsewhere = new byte[35 * 4096];
+        elsewhere[1] = 0x77;
+        File.WriteAllBytes(third, elsewhere);
+        void Repoint()
+        {
+            File.Delete(middle);
+            File.CreateSymbolicLink(middle, third);
+        }
+
+        Until(Repoint, () => Source(chained)?.Bool("stale") == true);
+    }
+
+    /// <summary>
+    ///  An image whose folder is deleted and made again is still watched: the sweep makes the watch again and finds the
+    ///  file the disk was read from is not the one there now.
+    /// </summary>
+    [TestMethod]
+    public void ImageWhoseFolderIsMadeAgainIsStillWatched()
+    {
+        string folder = Path.Join(s_root, $"again-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        string image = Path.Join(folder, "work.dsk");
+        byte[] read = new byte[35 * 4096];
+        new Random(5).NextBytes(read);
+        File.WriteAllBytes(image, read);
+        Apple2FloppyDrive drive = Drive(image);
+        Until(() => Directory.Delete(folder, recursive: true), () => Source(drive)?.Bool("stale") == true);
+
+        // Made again with the file as it was: the same file, so the disk matches it again.
+        void MakeAgain()
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(image, read);
+        }
+
+        Until(MakeAgain, () => Source(drive)?.Bool("stale") == false);
+        byte[] outside = new byte[35 * 4096];
+        Until(() => File.WriteAllBytes(image, outside), () => Source(drive)?.Bool("stale") == true);
+    }
+
+    /// <summary>
     ///  A format that cannot hold all of the disk answers with what it would lose and writes nothing; accepted, it
     ///  saves and the disk stays changed.
     /// </summary>
@@ -159,7 +290,13 @@ public sealed class MediaSaveTests
         Change(drive);
         File.SetAttributes(image, FileAttributes.ReadOnly);
         MediaActions.Save(drive, Speaking()).String("reason").Should().Be("file");
-        File.SetAttributes(image, FileAttributes.Normal);
+
+        // Agreed to, the file is made writable and saved over.
+        JsonObject writable = Speaking();
+        writable["makeWritable"] = true;
+        MediaActions.Save(drive, writable).String("outcome").Should().Be("saved");
+        File.GetAttributes(image).HasFlag(FileAttributes.ReadOnly).Should().BeFalse();
+        drive.Media?.Changed.Should().BeFalse();
 
         Apple2FloppyDrive built = Drive(path: null);
         built.Insert(SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false), "DOS 3.3 disk with HELLO", "DSK");
@@ -416,6 +553,46 @@ public sealed class MediaSaveTests
         disk.IsWriteProtected = false;
         DiskTrack track = disk.Track(5 * 4) ?? throw new InvalidOperationException("Track 5 is not formatted.");
         disk.WriteBit(quarterTrack: 5 * 4, position: 4000, transition: track.ReadBit(4000));
+    }
+
+    // The drive's media source as the device list gives it.
+    private static JsonObject? Source(Apple2FloppyDrive drive) => DeviceJson.Write(drive)["media"]?["source"]?.AsObject();
+
+    // Does something to an image and waits for the host to see it, as its watcher tells the device list.
+    private static void Until(Action act, Func<bool> seen)
+    {
+        using ManualResetEventSlim changed = new();
+
+        // A watcher's timer may raise the event it took before the handler was removed, after the wait is disposed.
+        void Changed()
+        {
+            try
+            {
+                changed.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+                // This wait is over.
+            }
+        }
+
+        MediaActions.SourcesChanged += Changed;
+        try
+        {
+            act();
+            Stopwatch clock = Stopwatch.StartNew();
+            while (!seen() && clock.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                changed.Wait(TimeSpan.FromMilliseconds(100));
+                changed.Reset();
+            }
+
+            seen().Should().BeTrue("the host's watcher sees the change");
+        }
+        finally
+        {
+            MediaActions.SourcesChanged -= Changed;
+        }
     }
 
     // Arguments from a client that speaks media's answers.

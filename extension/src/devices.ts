@@ -752,13 +752,15 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     const label = body.label ? path.basename(body.label) : "its image";
                     const changes = changeWords(await differencesOf(session, id));
                     const choice = await ask(leaveQuestion(label, name, leaving(current, name), changes));
+                    // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
+                    const ejected = body.ejected === undefined ? {} : { ejected: body.ejected };
                     if (choice === "Discard") {
                         const discards = Array.isArray(current.discards) ? current.discards : [];
-                        current = { ...current, discards: [...discards, { device: id, generation }] };
+                        current = { ...current, discards: [...discards, { device: id, generation, ...ejected }] };
                         labels.set(id, label);
                     } else if (choice === "Save As...") {
-                        if (!await saveAsNew(session, id, generation, {})) return false;
-                    } else if (choice !== "Save" || !await answer(session, "device", { id, action: "save", generation })) return false;
+                        if (!await saveAsNew(session, id, generation, ejected)) return false;
+                    } else if (choice !== "Save" || !await answer(session, "device", { id, action: "save", generation, ...ejected })) return false;
                     continue;
                 }
                 case "conflict": {
@@ -842,6 +844,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         try {
             if (!still(session)) return false;
             const body = await session.customRequest("retro/device", { id, action: "revert", generation, supportsRetrocoreMedia: 1 }) as Devices & MediaAnswer;
+            // Another session that became active meanwhile keeps its own rows.
+            if (!still(session)) return true;
             show(body);
             const name = device?.name ?? id;
             if (body.undo) offerUndo(session, id, body.undo, revertedMessage(name, file, differences));

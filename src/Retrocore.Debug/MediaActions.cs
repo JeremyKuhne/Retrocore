@@ -176,24 +176,22 @@ internal static partial class MediaActions
     /// <param name="action">The action, such as <c>removeCard</c>.</param>
     /// <param name="args">Its arguments: <c>discards</c> or <c>discard</c> lets the changed disks go.</param>
     /// <returns>The answer when the card must not come out yet, or null for the machine to act.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   A changed disk the machine ejected from one of the card's drives goes with it, so it is asked about too, as
+    ///   <c>changed</c> with its <c>ejected</c> id: saved with that id, or let go by listing
+    ///   <c>{ device, ejected }</c> in <c>discards</c>.
+    ///  </para>
+    /// </remarks>
     /// <exception cref="InvalidOperationException">
-    ///  A changed disk would leave its drive and the client does not speak the answers, or a drive on the card holds
-    ///  a changed disk the machine ejected, which goes with it unless <c>discard</c> lets it.
+    ///  A changed disk would leave its drive and the client does not speak the answers.
     /// </exception>
     internal static JsonObject? Hardware(IReadOnlyCollection<string>? ids, IEnumerable<IDevice> devices, string action, JsonObject args)
     {
         if (action != "removeCard" || ids is null) { return null; }
         List<IDevice> card = [.. devices.Where(device => ids.Contains(device.Id))];
 
-        // A disk the machine ejected goes with its drive, so it is saved or let go from its row first.
-        if (args.Bool("discard") != true
-            && card.FirstOrDefault(device => Ejected(device).Any(kept => kept.Medium.IsDirty)) is { } ejecting)
-        {
-            throw new InvalidOperationException(
-                $"The machine ejected a disk from {ejecting.Info.Name} with changes not saved. Save it or discard it first.");
-        }
-
-        return Detach(card, args, "remove its card");
+        return Detach(card, args, "remove its card") ?? HoldEjected(card, args);
     }
 
     /// <summary>

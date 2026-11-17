@@ -72,6 +72,37 @@ internal static partial class MediaActions
         return answer;
     }
 
+    // Answers changed for the first changed disk the machine ejected from a card's drives that is not let go, as it
+    // would go with the card; discards lets one go by its drive and ejected id.
+    private static JsonObject? HoldEjected(IEnumerable<IDevice> card, JsonObject args)
+    {
+        if (args.Bool("discard") == true) { return null; }
+        JsonArray discards = args.Array("discards") ?? [];
+        foreach (IDevice device in card)
+        {
+            foreach (KeptDisk kept in Ejected(device).Where(kept => kept.Medium.IsDirty))
+            {
+                if (discards.Any(entry => entry.String("device") == device.Id && entry.String("ejected") == kept.Id))
+                {
+                    continue;
+                }
+
+                if (args["supportsRetrocoreMedia"] is null)
+                {
+                    throw new InvalidOperationException(
+                        $"The machine ejected a disk from {device.Info.Name} with changes not saved. Save it first, or remove its card with discard: true.");
+                }
+
+                JsonObject answer = Answer(device, "changed", Source(kept.Medium));
+                answer["label"] = kept.Label;
+                answer["ejected"] = kept.Id;
+                return answer;
+            }
+        }
+
+        return null;
+    }
+
     // The changed disk in a drive that a person let go of, to keep for Undo once it has left; null for none.
     private static KeptDisk? Outgoing(IDevice device) =>
         device is IMediumSlot { Medium: { } disk } && device.Media is { } media && HasUnsaved(device)

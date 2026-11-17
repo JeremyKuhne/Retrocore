@@ -201,9 +201,18 @@ public sealed class MediaUndoTests
         MediaActions.Device(drive, "undo", args)?.String("outcome").Should().Be("undone");
         MediaActions.Ejected(drive).Single().Medium.Should().BeSameAs(second);
 
-        // A card with a changed ejected disk does not come out until it is saved or let go.
-        Action remove = () => MediaActions.Hardware([drive.Id], [drive], "removeCard", Speaking());
-        remove.Should().Throw<InvalidOperationException>().WithMessage("*ejected a disk*");
+        // A card with a changed ejected disk asks about it, as it would go with the card: let go by its id, the card
+        // comes out. A client that does not speak the answers is refused.
+        KeptDisk held = MediaActions.Ejected(drive).Single();
+        JsonObject asked = MediaActions.Hardware([drive.Id], [drive], "removeCard", Speaking()) ?? throw new InvalidOperationException("No answer.");
+        asked.String("outcome").Should().Be("changed");
+        asked.String("ejected").Should().Be(held.Id);
+        JsonObject release = Speaking();
+        JsonObject entry = new() { ["device"] = drive.Id, ["ejected"] = held.Id };
+        release["discards"] = new JsonArray(entry);
+        MediaActions.Hardware([drive.Id], [drive], "removeCard", release).Should().BeNull();
+        Action unspoken = () => MediaActions.Hardware([drive.Id], [drive], "removeCard", []);
+        unspoken.Should().Throw<InvalidOperationException>().WithMessage("*ejected a disk*");
 
         // Put back while another ejected disk is let go of: that one's Undo stays.
         DeviceAction(drive, image);

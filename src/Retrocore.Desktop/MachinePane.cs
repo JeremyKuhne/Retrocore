@@ -539,15 +539,21 @@ internal sealed class MachinePane : ScrollViewer
                 case "changed":
                     string? choice = await _window.Ask($"The disk in {name} has changes not saved to {label}.", ["Save", "Discard"]);
                     if (choice is null) { return false; }
+                    // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
+                    JsonNode? ejected = answer["ejected"]?.DeepClone();
                     if (choice == "Discard")
                     {
                         JsonArray discards = args["discards"] as JsonArray ?? [];
-                        discards.Add((JsonNode)new JsonObject { ["device"] = device, ["generation"] = generation });
+                        JsonObject discard = new() { ["device"] = device, ["generation"] = generation };
+                        if (ejected is not null) { discard["ejected"] = ejected; }
+                        discards.Add((JsonNode)discard);
                         args["discards"] = discards;
                     }
-                    else if (!await Send(saveArgs => _session.Device(device, "save", saveArgs), SaveOf(generation)))
+                    else
                     {
-                        return false;
+                        JsonObject save = SaveOf(generation);
+                        if (ejected is not null) { save["ejected"] = ejected; }
+                        if (!await Send(saveArgs => _session.Device(device, "save", saveArgs), save)) { return false; }
                     }
 
                     continue;

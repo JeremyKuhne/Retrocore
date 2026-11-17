@@ -145,6 +145,13 @@ public sealed class Trs80FloppyDrive : IDiskDrive, IMediumSlot
         return disk;
     }
 
+    /// <inheritdoc/>
+    public void Mount(IMedium medium, string label, string format) =>
+        Insert(medium as FloppyDisk ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label, format);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
+
     /// <summary>
     ///  Covers or uncovers the disk's write-protect notch.
     /// </summary>

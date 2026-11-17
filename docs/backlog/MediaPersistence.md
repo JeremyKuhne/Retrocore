@@ -5,7 +5,8 @@ without losing what the machine wrote.
 
 **Status:** proposed 2026-11-14 and revised the same day after two reviews. Phase 1 is built for the Disk II
 ([phases](#phases)); phase 2, every drive saving, is built: the Apple II's block drives and the TRS-80's and Color
-Computer's floppies save. Phase 3, the UI, is under way: the Drives view's rows and Save in each state are built. The
+Computer's floppies save. Phase 3, the UI, is built: the Drives view's rows, Save in each state, Revert and Discard
+with Undo, the eject prompt, and the disks the machine ejects. The
 [decisions](#decisions-agreed-2026-11-14) were agreed with the review's findings in mind. Where machines and their
 unsaved disks are kept is [machine files, data folders and libraries](MachineFiles.md).
 
@@ -890,14 +891,28 @@ After the reviews:
      Save**). The display panel's drive line says `locked` or `unlocked`. Tests: `MediaSaveTests`' watcher test,
      `drives.test.ts`, and the isolated VS Code suite's `drivesView.ts`, where a Color Computer's drive row shows its
      image changed on disk and read-only as the host sees them.
-   - **Revert, discard, eject and stop (next).** **Revert to Image** and **Discard** with **Undo** (the dropped disk
-     kept by the host until the journal and history keep it), and Revert in the stale prompt; the eject prompt with
-     **Save As...**; `differences` (the sectors or blocks changed, which the prompts and tooltip then name); disks the
-     machine ejected listed under their drive; and the stop notification and the off machine's kept disks, which
-     need the journal's clean stop or a host-side hold until it comes.
+   - **Revert, discard and eject (built).** `IMedium` gains `IsDirty`, `MarkSaved` and `MarkChanged`, which every
+     medium had, and `IMediumSlot` `Mount` and `Unmount`, so the host can put a disk back in its drive. `revert`
+     reads the disk's image again through the machine's own insert, so a bad image leaves the disk, and a changed
+     disk let go of, by Revert or by an eject or insert's discard, is kept for `undo` (the device list's `undo`, by
+     its id), which puts it back, asking first about a changed disk there. A drive that the machine can eject from
+     itself (`IEjectingSlot`, the 3.5 drive) hands the host each disk it ejected; a changed one is kept in the
+     drive's `ejected` list until it is saved, put back (`insertAgain`) or let go (`discard`, with Undo), and a save
+     works on a disk out of its drive. `differences` says what a disk changed against its image as the file is now,
+     by the image's unit: sectors on tracks for a `.dsk`, JV1 or JVC, blocks for a block image or 2MG; WOZ, DMK and
+     JV3 give none. In the Drives view, **Revert to Image** is in the drive's menu and in the stale prompt, and shows
+     a notification with **Undo** ("Reverted Drive 1 to work.woz; 14 changed sectors were dropped."); the eject,
+     insert and Undo prompts for a changed disk offer **Save**, **Save As...** and **Discard**, saying what changed,
+     and a discard shows **Undo**; a changed disk's tooltip says what changed once the pointer is on it; and the
+     machine's ejected disks are rows under their drive with **Save**, **Insert Again** and **Discard**, counted in
+     the badge. A session that ends with disks not saved says which; until the journal keeps them past the session
+     (phase 4, with **Save All**, **Review** and the off machine's kept disks), their changes are not kept. Tests:
+     `MediaUndoTests`, `drives.test.ts`, `drivesView.ts`'s revert, and `Test-CocoDap.mjs`, where a disk Disk BASIC
+     wrote says it changed sectors on tracks 16-17, reverts and is undone.
 4. **The recovery journal.** Medium ids, checkpoints at idle moments, the machine's eject, clean stop, crash
-   discovery and recovery, built disks rebuilt, recordings as changed tapes, the stop and crash notifications, and
-   then the source-aware default lock. Done when every case in *Crash and failure*, *Detach*, *Built disks* and *Tapes*
+   discovery and recovery, built disks rebuilt, recordings as changed tapes, the stop and crash notifications (with
+   **Save All**, **Review** and **Discard**, and the off machine's saves of the disks kept), and then the
+   source-aware default lock. Done when every case in *Crash and failure*, *Detach*, *Built disks* and *Tapes*
    passes in a fresh process.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.

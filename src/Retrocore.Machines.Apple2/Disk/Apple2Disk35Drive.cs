@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Apple2;
 ///  One of the 3.5 controller's two drives: an Apple SuperDrive, which takes 400K and 800K Apple disks and 720K and
 ///  1440K MFM disks.
 /// </summary>
-public sealed class Apple2Disk35Drive : IDiskDrive, IMediumSlot
+public sealed class Apple2Disk35Drive : IDiskDrive, IEjectingSlot
 {
     // A block shows as read or written for a thirtieth of a second, so a view can see it.
     private const ulong ActivityCycles = 1_020_484 / 30;
@@ -65,6 +65,9 @@ public sealed class Apple2Disk35Drive : IDiskDrive, IMediumSlot
     ///  Gets the disk in the drive, or null when it is empty.
     /// </summary>
     public Disk35Disk? Disk { get; private set; }
+
+    // The disks a program ejected, until the host takes them.
+    private readonly List<EjectedMedium> _ejected = [];
 
     /// <summary>
     ///  Gets whether a program ejected the disk, which the host may want to know to save it.
@@ -145,6 +148,13 @@ public sealed class Apple2Disk35Drive : IDiskDrive, IMediumSlot
     }
 
     /// <inheritdoc/>
+    public void Mount(IMedium medium, string label, string format) =>
+        Insert(medium as Disk35Disk ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label, format);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
+
+    /// <inheritdoc/>
     public void Saved(string label, string format, bool whole = true)
     {
         Disk35Disk disk = Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.");
@@ -175,9 +185,19 @@ public sealed class Apple2Disk35Drive : IDiskDrive, IMediumSlot
     /// </summary>
     internal void EjectByProgram()
     {
-        if (Disk is null) { return; }
+        if (Disk is not { } disk) { return; }
+        _ejected.Add(new(disk, _label, _format));
         Eject();
         EjectedByProgram = true;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<EjectedMedium> TakeEjected()
+    {
+        if (_ejected.Count == 0) { return []; }
+        EjectedMedium[] ejected = [.. _ejected];
+        _ejected.Clear();
+        return ejected;
     }
 
     /// <summary>

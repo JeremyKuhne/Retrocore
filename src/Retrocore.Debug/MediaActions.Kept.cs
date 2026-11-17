@@ -1,0 +1,143 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Machines.Devices;
+using Retrocore.Media;
+using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
+
+namespace Retrocore.Debug;
+
+// The disks the host keeps out of their drives: the last one a person discarded or reverted in each drive, for Undo,
+// and the changed ones the machine ejected, each until it is saved, put back or let go. They live as long as the
+// session's devices do; the recovery journal keeps them past it (the media persistence plan's fourth phase).
+internal static partial class MediaActions
+{
+    // The disk each drive's Undo puts back.
+    private static readonly ConditionalWeakTable<IDevice, KeptDisk> s_undo = [];
+
+    // The changed disks the machine ejected from each drive, oldest first.
+    private static readonly ConditionalWeakTable<IDevice, List<KeptDisk>> s_ejected = [];
+
+    /// <summary>
+    ///  Gets the disk a drive's Undo puts back, if any.
+    /// </summary>
+    /// <param name="device">The drive.</param>
+    /// <returns>The disk, or null.</returns>
+    internal static KeptDisk? Undoable(IDevice device) => s_undo.TryGetValue(device, out KeptDisk? kept) ? kept : null;
+
+    /// <summary>
+    ///  Gets the changed disks the machine ejected from a drive, taking in those it ejected since last asked.
+    /// </summary>
+    /// <param name="device">The drive.</param>
+    /// <returns>The disks, oldest first.</returns>
+    internal static IReadOnlyList<KeptDisk> Ejected(IDevice device)
+    {
+        List<KeptDisk> kept = s_ejected.GetValue(device, _ => []);
+        if (device is IEjectingSlot slot)
+        {
+            foreach (EjectedMedium ejected in slot.TakeEjected())
+            {
+                // An unchanged disk is its image, so nothing is lost when it goes.
+                if (ejected.Medium.IsDirty) { kept.Add(new(ejected.Medium, ejected.Label, ejected.Format, "ejected")); }
+            }
+        }
+
+        return kept;
+    }
+
+    // Reads the drive's image again in place of its disk, through the machine's own insert, and keeps the disk it
+    // replaces for Undo when it had changes. A bad image leaves the disk where it was, as an insert does.
+    private static JsonObject Revert(IDevice device, Action<string, JsonObject> machine)
+    {
+        IMediumSlot drive = device as IMediumSlot ?? throw new ArgumentException($"{device.Info.Name} holds no medium to revert.");
+        IMedium disk = drive.Medium ?? throw new InvalidOperationException($"{device.Info.Name} is empty.");
+        if (Source(disk) is not { } source || device.Media is not { } media)
+        {
+            throw new InvalidOperationException($"The disk in {device.Info.Name} has no image to revert to.");
+        }
+
+        KeptDisk kept = new(disk, media.Label, media.Format, "reverted");
+        machine("insert", new JsonObject { ["path"] = source.Path });
+        if (disk.IsDirty) { s_undo.AddOrUpdate(device, kept); }
+        JsonObject answer = Answer(device, "reverted", Source(drive.Medium ?? disk));
+        answer["undo"] = disk.IsDirty ? kept.Id : null;
+        return answer;
+    }
+
+    // Keeps a changed disk a person let go of, as it leaves its drive, so Undo can put it back.
+    private static void KeepDiscarded(IDevice device)
+    {
+        if (device is IMediumSlot { Medium: { } disk } && device.Media is { } media && HasUnsaved(device))
+        {
+            s_undo.AddOrUpdate(device, new(disk, media.Label, media.Format, "discarded"));
+        }
+    }
+
+    // Puts back the disk the last revert or discard dropped: in the drive, the disk there going as an eject would, or
+    // among the drive's ejected disks for one that was ejected.
+    private static JsonObject Undo(IDevice device, JsonObject args)
+    {
+        if (Undoable(device) is not { } kept || kept.Id != args.String("medium"))
+        {
+            throw new InvalidOperationException($"There is nothing to undo in {device.Info.Name}.");
+        }
+
+        if (kept.Why == "discardedEjected")
+        {
+            s_undo.Remove(device);
+            s_ejected.GetValue(device, _ => []).Add(kept with { Why = "ejected" });
+            return Answer(device, "undone", Source(kept.Medium));
+        }
+
+        if (Detach([device], args, "put the disk back") is { } held) { return held; }
+        IMediumSlot drive = (IMediumSlot)device;
+        drive.Unmount();
+        drive.Mount(kept.Medium, kept.Label, kept.Format);
+        s_undo.Remove(device);
+        return Answer(device, "undone", Source(kept.Medium));
+    }
+
+    // Acts on a disk the machine ejected: saves it, puts it back in its drive (the disk there going as an eject
+    // would), or lets it go, which Undo can put back.
+    private static JsonObject Kept(IDevice device, string id, string action, JsonObject args)
+    {
+        List<KeptDisk> ejected = s_ejected.GetValue(device, _ => []);
+        KeptDisk kept = ejected.FirstOrDefault(candidate => candidate.Id == id)
+            ?? throw new InvalidOperationException($"{device.Info.Name} has no ejected disk {id}; it was put back or let go.");
+
+        JsonObject answer;
+        switch (action)
+        {
+            case "save":
+                answer = Save(device, kept.Medium, args, () => ejected.Contains(kept), (label, format, whole) =>
+                {
+                    kept.Label = label;
+                    kept.Format = format;
+                    if (whole) { ejected.Remove(kept); }
+                });
+
+                break;
+            case "insertAgain":
+                if (Detach([device], args, "put the ejected disk back") is { } held) { return held; }
+                IMediumSlot drive = (IMediumSlot)device;
+                drive.Unmount();
+                drive.Mount(kept.Medium, kept.Label, kept.Format);
+                ejected.Remove(kept);
+                answer = Answer(device, "inserted", Source(kept.Medium));
+                break;
+            case "discard":
+                ejected.Remove(kept);
+                s_undo.AddOrUpdate(device, kept with { Why = "discardedEjected" });
+                answer = Answer(device, "discarded", Source(kept.Medium));
+                answer["undo"] = Undoable(device)?.Id;
+                break;
+            default:
+                throw new ArgumentException($"An ejected disk can be saved, put back or let go, not {action}.");
+        }
+
+        answer["ejected"] = id;
+        return answer;
+    }
+}

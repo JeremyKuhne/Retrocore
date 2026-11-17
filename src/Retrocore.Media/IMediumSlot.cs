@@ -38,4 +38,21 @@ public interface IMediumSlot
     /// </param>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
     void Saved(string label, string format, bool whole);
+
+    /// <summary>
+    ///  Puts a medium in the drive, as a host puts back a disk it kept for Undo, in place of the one there.
+    /// </summary>
+    /// <param name="medium">The medium, of the kind the drive takes.</param>
+    /// <param name="label">What the host calls it, such as its image's path.</param>
+    /// <param name="format">Its image format, such as <c>WOZ</c>.</param>
+    /// <exception cref="ArgumentException">The drive does not take that kind of medium.</exception>
+    /// <exception cref="NotSupportedException">The drive's medium cannot be changed.</exception>
+    void Mount(IMedium medium, string label, string format);
+
+    /// <summary>
+    ///  Takes the medium out of the drive, leaving any unsaved changes to the caller.
+    /// </summary>
+    /// <returns>The medium, or null when the drive was empty.</returns>
+    /// <exception cref="NotSupportedException">The drive's medium cannot be changed.</exception>
+    IMedium? Unmount();
 }

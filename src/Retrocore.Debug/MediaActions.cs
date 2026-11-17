@@ -29,7 +29,7 @@ namespace Retrocore.Debug;
 ///   saves or lets go of the new one.
 ///  </para>
 /// </remarks>
-internal static class MediaActions
+internal static partial class MediaActions
 {
     // Where each disk read from an image came from, by the disk itself, so it goes when the disk does.
     private static readonly ConditionalWeakTable<IMedium, DiskSource> s_sources = [];
@@ -108,21 +108,33 @@ internal static class MediaActions
         device.Media is { Changed: true } && device.Info.Operations.HasFlag(MediaOperations.Save);
 
     /// <summary>
-    ///  Acts on a device's media where the host has a part: saves a disk, and answers <c>changed</c> before a changed
-    ///  disk is ejected or another inserted over it.
+    ///  Acts on a device's media where the host has a part: saves a disk, answers <c>changed</c> before a changed disk
+    ///  is ejected or another inserted over it, reverts a disk to its image, puts back what a revert or discard
+    ///  dropped, and saves, puts back or lets go of a disk the machine ejected.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A changed disk let go of, by an eject or an insert over it, and one a revert replaces, are kept for
+    ///   <c>undo</c>, which names the kept disk by the id the device list gives as its <c>undo</c>. A disk the machine
+    ///   ejected is named by <c>ejected</c>, its id among the drive's <c>ejected</c> disks, with <c>save</c>,
+    ///   <c>insertAgain</c> or <c>discard</c>.
+    ///  </para>
+    /// </remarks>
     /// <param name="device">The device.</param>
-    /// <param name="action">The action, such as <c>save</c> or <c>eject</c>.</param>
-    /// <param name="args">
-    ///  Its arguments: <c>generation</c>, the mount an answer was about, and <c>discards</c> or <c>discard</c>, which
-    ///  let changed disks go.
+    /// <param name="action">
+    ///  The action, such as <c>save</c>, <c>eject</c>, <c>revert</c>, <c>undo</c>, <c>insertAgain</c> or <c>discard</c>.
     /// </param>
+    /// <param name="args">
+    ///  Its arguments: <c>generation</c>, the mount an answer was about; <c>discards</c> or <c>discard</c>, which let
+    ///  changed disks go; <c>medium</c>, the kept disk <c>undo</c> puts back; and <c>ejected</c>, an ejected disk.
+    /// </param>
+    /// <param name="machine">The machine's own action on the device, as a revert's insert of the image.</param>
     /// <returns>The answer when the host acted or the machine must not, or null for the machine to act.</returns>
     /// <exception cref="InvalidOperationException">
-    ///  A changed disk would leave its drive and the client does not speak the answers, or the drive holds another
-    ///  disk than the <c>generation</c> answered about.
+    ///  A changed disk would leave its drive and the client does not speak the answers, the drive holds another disk
+    ///  than the <c>generation</c> answered about, or the disk undone or ejected is no longer kept.
     /// </exception>
-    internal static JsonObject? Device(IDevice device, string action, JsonObject args)
+    internal static JsonObject? Device(IDevice device, string action, JsonObject args, Action<string, JsonObject>? machine = null)
     {
         if (args.Int("generation") is { } generation && device is IMediumSlot slot && slot.MountGeneration != generation)
         {
@@ -130,14 +142,31 @@ internal static class MediaActions
                 $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
         }
 
-        if (action == "save" && device.Info.Operations.HasFlag(MediaOperations.Save) && device is IMediumSlot)
+        if (args.String("ejected") is { } ejected)
         {
-            return Unspoken(device, Save(device, args), args);
+            return Unspoken(device, Kept(device, ejected, action, args), args);
         }
 
-        return action == "eject" || (action == "insert" && device.Media is not null)
-            ? Detach([device], args, action == "eject" ? "eject it" : "insert another disk")
-            : null;
+        switch (action)
+        {
+            case "save" when device.Info.Operations.HasFlag(MediaOperations.Save) && device is IMediumSlot:
+                return Unspoken(device, Save(device, args), args);
+            case "revert":
+                return Revert(device, machine ?? throw new InvalidOperationException("This host cannot revert a disk."));
+            case "undo":
+                return Undo(device, args);
+            case "differences":
+                JsonObject differences = Answer(device, "differences", (device as IMediumSlot)?.Medium is { } disk ? Source(disk) : null);
+                differences["differences"] = Differences(device);
+                return differences;
+            case "eject":
+            case "insert" when device.Media is not null:
+                JsonObject? held = Detach([device], args, action == "eject" ? "eject it" : "insert another disk");
+                if (held is null) { KeepDiscarded(device); }
+                return held;
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -228,6 +257,14 @@ internal static class MediaActions
     {
         IMediumSlot drive = device as IMediumSlot ?? throw new ArgumentException($"{device.Info.Name} holds no medium to save.");
         IMedium disk = drive.Medium ?? throw new InvalidOperationException($"{device.Info.Name} is empty.");
+        int generation = drive.MountGeneration;
+        return Save(device, disk, args, () => ReferenceEquals(drive.Medium, disk) && drive.MountGeneration == generation, drive.Saved);
+    }
+
+    // Saves a disk, in its drive or out of it, completing only while still says the disk is where it was, and then
+    // telling saved what it now comes from.
+    private static JsonObject Save(IDevice device, IMedium disk, JsonObject args, Func<bool> still, Action<string, string, bool> saved)
+    {
         DiskSource? source = Source(disk);
         if ((args.String("path") ?? source?.Path) is not { } asked) { return ReadOnly(device, "noImage"); }
 
@@ -243,13 +280,12 @@ internal static class MediaActions
         }
 
         // An unchanged disk saved to its own image as it was read writes nothing.
-        if (mine is not null && device.Media?.Changed != true && mine.Baseline.SameAs(FileRevision.Read(path)))
+        if (mine is not null && !disk.IsDirty && mine.Baseline.SameAs(FileRevision.Read(path)))
         {
             return Answer(device, "saved", mine);
         }
 
         // 1. The snapshot, under the machine's lock, which the caller holds; 2. its encoding.
-        int generation = drive.MountGeneration;
         EncodedImage encoded = codec.Encode(disk.Snapshot());
         if (!encoded.IsLossless && args.Bool("acceptLosses") != true)
         {
@@ -277,14 +313,14 @@ internal static class MediaActions
 
         // 4. Complete, only for the disk the snapshot was taken of: it now comes from the image just written, which a
         // lossy save leaves it changed against.
-        DiskSource saved = new(source?.Id ?? Guid.NewGuid(), path, codec, written.Revision ?? FileRevision.Of(path, encoded.Bytes));
-        if (ReferenceEquals(drive.Medium, disk) && drive.MountGeneration == generation)
+        DiskSource now = new(source?.Id ?? Guid.NewGuid(), path, codec, written.Revision ?? FileRevision.Of(path, encoded.Bytes));
+        if (still())
         {
-            Keep(disk, saved);
-            drive.Saved(path, codec.Format, encoded.IsLossless);
+            Keep(disk, now);
+            saved(path, codec.Format, encoded.IsLossless);
         }
 
-        JsonObject answer = Answer(device, "saved", saved);
+        JsonObject answer = Answer(device, "saved", now);
         if (encoded.Notes.Count != 0) { answer["notes"] = encoded.Notes.ToJsonArray(); }
         if (!encoded.IsLossless) { answer["losses"] = encoded.Losses.ToJsonArray(); }
         if (written.Backup is not null) { answer["backup"] = written.Backup; }
@@ -296,7 +332,11 @@ internal static class MediaActions
     private static JsonObject Unspoken(IDevice device, JsonObject answer, JsonObject args)
     {
         string? outcome = answer.String("outcome");
-        if (args["supportsRetrocoreMedia"] is not null || outcome == "saved") { return answer; }
+        if (args["supportsRetrocoreMedia"] is not null || outcome is not ("losses" or "conflict" or "readOnly"))
+        {
+            return answer;
+        }
+
         string name = device.Info.Name;
         throw new InvalidOperationException(outcome switch
         {

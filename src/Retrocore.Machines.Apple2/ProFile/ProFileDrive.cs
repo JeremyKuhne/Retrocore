@@ -227,6 +227,18 @@ public sealed class ProFileDrive : IBlockStorage, IMediumSlot
         Reset();
     }
 
+    /// <inheritdoc/>
+    public void Mount(IMedium medium, string label, string format) =>
+        Insert(medium as IBlockDevice ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label, format);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount()
+    {
+        IMedium? medium = Medium;
+        Eject();
+        return medium;
+    }
+
     /// <summary>
     ///  Locks or unlocks the image, as a switch that refuses writes would: a ProFile has no write-protect tab, so a
     ///  write to a locked image fails as a failed write does.

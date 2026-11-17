@@ -341,6 +341,20 @@ try {
     assert.equal(drive.media.format, "JVC");
     assert.equal(drive.media.changed, true);
     await assert.rejects(request("retro/media", { device: "disk", action: "eject", drive: 0 }), /changes not saved/);
+
+    // What changed, by the JVC's sectors: the program's and the directory's, on track 17. Reverted, the disk is its image again and the
+    // changed one is kept for Undo, which puts it back.
+    const differences = await request("retro/device", { id: "disk0", action: "differences", supportsRetrocoreMedia: true });
+    assert.equal(differences.differences.unit, "sector", JSON.stringify(differences.differences));
+    assert.ok(differences.differences.count > 0);
+    assert.match(differences.differences.summary, /\b17\b/);
+    const reverted = await request("retro/device", { id: "disk0", action: "revert", supportsRetrocoreMedia: true });
+    assert.equal(reverted.outcome, "reverted");
+    assert.equal(reverted.devices.find(device => device.id === "disk0").media.changed, false);
+    assert.equal(reverted.devices.find(device => device.id === "disk0").undo.id, reverted.undo);
+    const undone = await request("retro/device", { id: "disk0", action: "undo", medium: reverted.undo, supportsRetrocoreMedia: true });
+    assert.equal(undone.outcome, "undone");
+    assert.equal(undone.devices.find(device => device.id === "disk0").media.changed, true);
     let saved = await request("retro/device", { id: "disk0", action: "save", supportsRetrocoreMedia: true });
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));
     drive = saved.devices.find(device => device.id === "disk0");
@@ -418,7 +432,7 @@ try {
 
     await request("disconnect");
     console.log("Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and "
-        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that saves to its image and as DMK, a breakpoint in the sample "
+        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that says what changed, reverts and undoes, and saves to its image and as DMK, a breakpoint in the sample "
         + `with its call stack and step out, and a CoCo 3 at 80 columns, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);

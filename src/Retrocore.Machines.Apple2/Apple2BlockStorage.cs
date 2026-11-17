@@ -129,4 +129,21 @@ public sealed class Apple2BlockStorage : IBlockStorage, IMediumSlot
         Label = label;
         Format = format;
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Slot 7's device is the machine's, fixed when it is built, so it cannot be changed.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format) =>
+        throw new NotSupportedException($"{Info.Name}'s device is fixed when the machine is built.");
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Slot 7's device is the machine's, fixed when it is built, so it cannot be taken out.
+    ///  </para>
+    /// </remarks>
+    public IMedium? Unmount() => throw new NotSupportedException($"{Info.Name}'s device is fixed when the machine is built.");
 }

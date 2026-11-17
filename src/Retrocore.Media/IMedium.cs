@@ -32,4 +32,19 @@ public interface IMedium
     /// </summary>
     /// <returns>The snapshot.</returns>
     MediumSnapshot Snapshot();
+
+    /// <summary>
+    ///  Gets whether the medium has changes not saved to the image it comes from.
+    /// </summary>
+    bool IsDirty { get; }
+
+    /// <summary>
+    ///  Records that the medium was saved whole to an image, so it has no unsaved changes.
+    /// </summary>
+    void MarkSaved();
+
+    /// <summary>
+    ///  Marks the medium changed though nothing was written, as after a save to an image that could not hold all of it.
+    /// </summary>
+    void MarkChanged();
 }

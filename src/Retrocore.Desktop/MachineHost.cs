@@ -521,7 +521,7 @@ internal sealed class MachineHost : DisposableBase
                 ?? throw new ArgumentException($"There is no device '{id}'.");
 
             // The host saves disks and holds back a changed disk that would leave its drive, as the debug adapter does.
-            JsonObject? answer = MediaActions.Device(device, action, args);
+            JsonObject? answer = MediaActions.Device(device, action, args, (what, with) => _target.DeviceAction(device, what, with));
             if (answer is null) { _target.DeviceAction(device, action, args); }
             return answer;
         }

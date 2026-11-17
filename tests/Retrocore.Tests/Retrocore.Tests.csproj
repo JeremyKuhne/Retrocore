@@ -56,6 +56,9 @@
     <Compile Include="..\..\src\Retrocore.Debug\ImageWatch.cs" Link="ImageWatch.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DeviceJson.cs" Link="DeviceJson.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.cs" Link="MediaActions.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Kept.cs" Link="MediaActions.Kept.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Differences.cs" Link="MediaActions.Differences.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\KeptDisk.cs" Link="KeptDisk.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\FloppyMedia.cs" Link="FloppyMedia.cs" />

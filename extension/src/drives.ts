@@ -56,6 +56,36 @@ export interface Device {
     head?: { motor: boolean; selected: boolean; track: number; side: number; sector: number | null };
     transport?: { motor: boolean; mode: "stopped" | "playing" | "recording"; position: number; length: number };
     blocks?: { count: number; last: number | null };
+    /** The disk the drive's Undo puts back: the last one a revert or discard dropped. */
+    undo?: KeptDisk;
+    /** The changed disks the machine ejected from the drive, which the host keeps until they are saved or let go. */
+    ejected?: KeptDisk[];
+}
+
+/** A disk the host keeps out of its drive, for Undo or because the machine ejected it with changes. */
+export interface KeptDisk {
+    id: string;
+    label: string;
+    format: string;
+    /** How it left the drive: discarded, reverted, ejected, or discardedEjected. */
+    why: "discarded" | "reverted" | "ejected" | "discardedEjected";
+    when: string;
+    changed: boolean;
+}
+
+/** What a disk changed against its image, by the image's unit, as retro/device's differences gives it. */
+export interface Differences { unit: "sector" | "block"; count: number; summary: string }
+
+/** What a disk changed, as a person reads it: 14 sectors on tracks 17-18, or 3 blocks: 7-8, 200. */
+export function changeWords(differences: Differences | null | undefined): string | undefined {
+    if (!differences || differences.count === 0) return undefined;
+    const units = `${differences.count} ${differences.unit}${differences.count === 1 ? "" : "s"}`;
+    return differences.unit === "sector" ? `${units} on ${differences.summary}` : `${units}: ${differences.summary.replace(/^blocks? /, "")}`;
+}
+
+/** A kept disk's row under its drive: its name, when it left and how. */
+export function keptSummary(kept: KeptDisk, now: Date = new Date()): string {
+    return `${path.basename(kept.label) || kept.format} · ${when(kept.when, now)} · ejected by the machine`;
 }
 
 /** The picture a drive is drawn with. */
@@ -157,15 +187,18 @@ function position(device: Device): string | undefined {
     return parts.length === 0 ? undefined : parts.join(", ");
 }
 
-/** The tooltip's lines after the drive's name: the disk and its image, changed, stale, read-only, lock and where. */
-export function tooltipLines(device: Device, now: Date = new Date()): string[] {
+/**
+ * The tooltip's lines after the drive's name: the disk and its image, changed (and what, once the host has said),
+ * stale, read-only, lock and where.
+ */
+export function tooltipLines(device: Device, now: Date = new Date(), changes?: string): string[] {
     const media = device.media;
     if (media === null) return ["Empty"];
     const source = media.source;
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
-            : media.changed ? "Changed: not saved to the image"
+            : media.changed ? `Changed: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
             // A disk the machine did not change is the image as it was read, which is not the file there now.
             : source?.stale ? (source.current === null ? "Not changed by the machine; its image is gone" : "Not changed by the machine, but its image is not the file it was read from")
             : "The same as its image");
@@ -193,6 +226,8 @@ export function contextWords(device: Device, running: boolean): string[] {
     if (running && device.operations.includes("record")) words.push("record");
     if (device.media && device.operations.includes("eject")) words.push("eject");
     if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "locked" : "unlocked");
+    // Revert reads the image again, through the drive's insert.
+    if (running && device.media?.source?.kind === "image" && device.operations.includes("insert")) words.push("revert");
     if (running && saves(device)) {
         words.push("save");
         // Save writes the disk's own image at once; for a read-only image it saves as another, and for an image changed
@@ -278,6 +313,32 @@ export function readOnlyQuestion(file: string | undefined, drive: string, format
                 buttons: ["Save As..."]
             };
     }
+}
+
+/** Asks about a changed disk that would leave its drive: save it, save it as another image, or let its changes go. */
+export function leaveQuestion(file: string, drive: string, what: string, changes: string | undefined): Question {
+    return {
+        message: `Save the changes to ${file} before ${what}?`,
+        detail: changes === undefined ? `The machine changed the disk in ${drive} since it was read.` : `The machine changed ${changes}.`,
+        buttons: ["Save", "Save As...", "Discard"]
+    };
+}
+
+/** Says a revert dropped a disk's changes, which Undo puts back. */
+export function revertedMessage(drive: string, file: string, differences: Differences | null | undefined): string {
+    const dropped = differences && differences.count > 0
+        ? `${differences.count} changed ${differences.unit}${differences.count === 1 ? " was" : "s were"} dropped`
+        : "its changes were dropped";
+    return `Reverted ${drive} to ${file}; ${dropped}.`;
+}
+
+/** Says a disk's changes were let go, which Undo puts back. */
+export const discardedMessage = (drive: string, file: string): string => `Discarded the changes to ${file} from ${drive}.`;
+
+/** Says a session ended with disks not saved, which this version cannot keep past it. */
+export function stoppedMessage(machine: string, files: string[]): string {
+    const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
+    return `${machine} stopped with ${disks} not saved: ${files.join(", ")}. Their changes were not kept.`;
 }
 
 /** What the status bar says for a moment after a save that asked nothing. */

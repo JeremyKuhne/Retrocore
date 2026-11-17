@@ -188,4 +188,11 @@ public sealed class Apple2FloppyDrive : IDiskDrive, IMediumSlot
         _format = "";
         return _controller.Eject(Drive);
     }
+
+    /// <inheritdoc/>
+    public void Mount(IMedium medium, string label, string format) =>
+        Insert(medium as WozDisk ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label, format);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
 }

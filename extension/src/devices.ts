@@ -750,7 +750,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                 case "changed": {
                     // Save goes through the same checks as the Save button; Discard lets the disk go with Undo.
                     const label = body.label ? path.basename(body.label) : "its image";
-                    const changes = changeWords(await differencesOf(session, id));
+                    // What changed is the mounted disk's, so an ejected one's question says none.
+                    const changes = body.ejected === undefined ? changeWords(await differencesOf(session, id)) : undefined;
                     const choice = await ask(leaveQuestion(label, name, leaving(current, name), changes));
                     // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
                     const ejected = body.ejected === undefined ? {} : { ejected: body.ejected };

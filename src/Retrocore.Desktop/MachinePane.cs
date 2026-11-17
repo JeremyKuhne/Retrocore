@@ -574,7 +574,7 @@ internal sealed class MachinePane : ScrollViewer
                         continue;
                     }
 
-                    return replace == "Save As..." && await SaveAsNew(device, generation);
+                    return replace == "Save As..." && await SaveAsNew(device, generation, args);
                 case "losses":
                     string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
                     string? accept = await _window.Ask(
@@ -588,7 +588,7 @@ internal sealed class MachinePane : ScrollViewer
                         continue;
                     }
 
-                    return accept == "Save As..." && await SaveAsNew(device, generation);
+                    return accept == "Save As..." && await SaveAsNew(device, generation, args);
                 case "readOnly":
                     string why = answer["reason"]?.GetValue<string>() switch
                     {
@@ -598,7 +598,7 @@ internal sealed class MachinePane : ScrollViewer
                         _ => $"The image of the disk in {name} cannot be written.",
                     };
 
-                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation);
+                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation, args);
                 default:
                     return true;
             }
@@ -619,10 +619,11 @@ internal sealed class MachinePane : ScrollViewer
     private static JsonObject SaveOf(JsonNode? generation) => new() { ["generation"] = generation?.DeepClone() };
 
     // Save As for a device by its id, as the answers offer it.
-    // It carries the mount the answer was about, so a disk that went in since is not the one saved.
-    private async Task<bool> SaveAsNew(string id, JsonNode? generation) =>
+    // It carries the mount the answer was about, so a disk that went in since is not the one saved, or the disk the
+    // machine ejected that the save was for.
+    private async Task<bool> SaveAsNew(string id, JsonNode? generation, JsonObject args) =>
         _session.Host.DeviceStates().FirstOrDefault(state => state.Id == id) is { } device
-            && await SaveAs(device, generation?.GetValue<int>());
+            && await SaveAs(device, generation?.GetValue<int>(), args["ejected"]?.GetValue<string>());
 
     private async Task SwitchMachine()
     {
@@ -752,17 +753,19 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // Saves a disk to an image the person picks; says whether it was saved.
-    private async Task<bool> SaveAs(DeviceState device, int? generation = null)
+    private async Task<bool> SaveAs(DeviceState device, int? generation = null, string? ejected = null)
     {
-        if (device.Media is not { } media) { return false; }
-        IStorageFolder? folder = Path.GetDirectoryName(media.Label) is { Length: > 0 } directory
+        // A disk the machine ejected is named by its id among the drive's ejected disks, and by its own label.
+        string? label = ejected is null ? device.Media?.Label : _session.Host.EjectedLabel(device.Id, ejected);
+        if (label is null) { return false; }
+        IStorageFolder? folder = Path.GetDirectoryName(label) is { Length: > 0 } directory
             ? await _window.StorageProvider.TryGetFolderFromPathAsync(directory)
             : null;
 
         IStorageFile? file = await _window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = $"Save the disk in {device.Info.Name} as",
-            SuggestedFileName = Path.GetFileName(media.Label),
+            SuggestedFileName = Path.GetFileName(label),
             SuggestedStartLocation = folder,
             FileTypeChoices = Filters("Disk images", device.Info.SaveFormats),
         });
@@ -770,7 +773,16 @@ internal sealed class MachinePane : ScrollViewer
         if (file?.TryGetLocalPath() is not { } path) { return false; }
 
         // The person chose the file as it is now, so the save may replace that and nothing that comes after it.
-        JsonObject args = new() { ["path"] = path, ["generation"] = generation ?? device.Generation };
+        JsonObject args = new() { ["path"] = path };
+        if (ejected is null)
+        {
+            args["generation"] = generation ?? device.Generation;
+        }
+        else
+        {
+            args["ejected"] = ejected;
+        }
+
         FileRevision? chosen = null;
         Try(() => chosen = FileRevision.Read(path));
         if (chosen is not null) { args["overwrite"] = new JsonObject { ["sha256"] = chosen.Sha256 }; }

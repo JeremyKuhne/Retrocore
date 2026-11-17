@@ -93,7 +93,9 @@ internal static partial class MediaActions
                         $"The machine ejected a disk from {device.Info.Name} with changes not saved. Save it first, or remove its card with discard: true.");
                 }
 
+                // No mount generation: an answer about an ejected disk lets go of that disk alone, never the drive's.
                 JsonObject answer = Answer(device, "changed", Source(kept.Medium));
+                answer["generation"] = null;
                 answer["label"] = kept.Label;
                 answer["ejected"] = kept.Id;
                 return answer;

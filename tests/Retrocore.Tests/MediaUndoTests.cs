@@ -207,6 +207,7 @@ public sealed class MediaUndoTests
         JsonObject asked = MediaActions.Hardware([drive.Id], [drive], "removeCard", Speaking()) ?? throw new InvalidOperationException("No answer.");
         asked.String("outcome").Should().Be("changed");
         asked.String("ejected").Should().Be(held.Id);
+        asked["generation"].Should().BeNull("letting go of an ejected disk says nothing about the one in the drive");
         JsonObject release = Speaking();
         JsonObject entry = new() { ["device"] = drive.Id, ["ejected"] = held.Id };
         release["discards"] = new JsonArray(entry);

@@ -551,6 +551,22 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
+    ///  Gets what a drive called a disk the machine ejected from it, which the host keeps until it is saved or let go.
+    /// </summary>
+    /// <param name="id">The drive's id.</param>
+    /// <param name="ejected">The ejected disk's id.</param>
+    /// <returns>Its label, such as its image's path, or null when it is no longer kept.</returns>
+    internal string? EjectedLabel(string id, string ejected)
+    {
+        using (Gate())
+        {
+            return _target.Devices.FirstOrDefault(device => device.Id == id) is { } device
+                ? MediaActions.Ejected(device).FirstOrDefault(kept => kept.Id == ejected)?.Label
+                : null;
+        }
+    }
+
+    /// <summary>
     ///  Captures the machine's cards and media, as a saved machine keeps them.
     /// </summary>
     /// <returns>The saved machine.</returns>

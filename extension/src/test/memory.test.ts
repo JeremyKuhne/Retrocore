@@ -991,6 +991,8 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     page.send({ type: "breakpoints" });
     breakpointsSent.length = 0;
     page.elements.get("listing")!.dispatch("click", { target: dot });
+    // F9 on a listing line waits for it too.
+    page.elements.get("listing")!.dispatch("keydown", { key: "F9", target: { closest: () => ({ ...line, querySelectorAll: () => [] }) }, preventDefault() { } });
     assert.equal(breakpointsSent.length, 0);
     await drive(page, [], () => 0, lists);
     assert.ok(listingStarts.length > 0, "the listing is asked for again");

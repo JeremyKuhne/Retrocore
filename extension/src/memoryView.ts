@@ -803,6 +803,7 @@ listingPanel.addEventListener("keydown", event => {
     if (event.key === "Enter" || event.key === " ") {
         if (!activateListing(target)) return;
     } else if (event.key === "F9") {
+        if (!listingCurrent()) { status("The listing is being read; press F9 again.", true); event.preventDefault(); return; }
         const listed = listingLines.find(item => item.address === Number(line.dataset.a));
         if (listed !== undefined) void toggleBreakpoint(listed);
     } else if (event.key === "ArrowDown") next = line.nextElementSibling;

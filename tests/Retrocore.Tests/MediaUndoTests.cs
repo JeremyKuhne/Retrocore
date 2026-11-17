@@ -4,8 +4,11 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Coco;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80;
 using Retrocore.Media;
+using Retrocore.Media.Trs80;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -276,6 +279,21 @@ public sealed class MediaUndoTests
         sectors.String("unit").Should().Be("sector");
         sectors["count"]?.GetValue<int>().Should().Be(2);
         sectors.String("summary").Should().Be("tracks 17-18");
+
+        // A JVC: the sectors its header gives, and none counted against a file whose header gives another geometry.
+        string jvc = Path.Join(s_root, $"coco-{Guid.NewGuid():N}.dsk");
+        byte[] body = new byte[JvcFormat.Tracks * JvcFormat.SectorsPerTrack * JvcFormat.SectorSize];
+        File.WriteAllBytes(jvc, [18, 1, .. body]);
+        CocoMachine coco = CocoDiskTests.Create(CocoModel.Coco2);
+        Trs80FloppyDrive cocoDrive = coco.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
+        FloppyMedia.Insert(cocoDrive, jvc, coco: true);
+        body[(((5 * JvcFormat.SectorsPerTrack) + 2) * JvcFormat.SectorSize) + 9] = 1;
+        File.WriteAllBytes(jvc, [18, 1, .. body]);
+        JsonObject jvcSectors = Differences(cocoDrive) ?? throw new InvalidOperationException("No differences.");
+        jvcSectors["count"]?.GetValue<int>().Should().Be(1);
+        jvcSectors.String("summary").Should().Be("track 5");
+        File.WriteAllBytes(jvc, [9, 2, .. body]);
+        Differences(cocoDrive).Should().BeNull("the file's sectors are not where the disk's header puts them");
     }
 
     // A 3.5 drive on a IIe with a block image in it, inserted as the debug host inserts one.

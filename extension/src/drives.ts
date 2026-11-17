@@ -336,6 +336,15 @@ export function revertedMessage(drive: string, file: string, differences: Differ
 export const discardedMessage = (drive: string, file: string): string => `Discarded the changes to ${file} from ${drive}.`;
 
 /** Says a session ended with disks not saved, which this version cannot keep past it. */
+/** The disks a machine's devices hold with changes not saved, in drives or ejected from them, by file name. */
+export function unsavedDisks(devices: readonly Device[]): string[] {
+    return devices.flatMap(device => [
+        ...device.media?.changed && device.operations.includes("save") ? [path.basename(device.media.label) || device.media.format] : [],
+        ...(device.ejected ?? []).filter(kept => kept.changed).map(kept => path.basename(kept.label) || kept.format)
+    ]);
+}
+
+/** What a warning says when a machine stops with disks not saved. */
 export function stoppedMessage(machine: string, files: string[]): string {
     const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
     return `${machine} stopped with ${disks} not saved: ${files.join(", ")}. Their changes were not kept.`;

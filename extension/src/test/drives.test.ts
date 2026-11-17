@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, keptSummary, leaveQuestion, revertedMessage, stoppedMessage,
+    changeWords, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
     conflictQuestion, contextWords, form, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
@@ -146,6 +146,12 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
     assert.equal(revertedMessage("Drive 1", "work.woz", undefined), "Reverted Drive 1 to work.woz; its changes were dropped.");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz", "prodos.2mg"]),
         "Apple IIe stopped with 2 disks not saved: work.woz, prodos.2mg. Their changes were not kept.");
+
+    // What a stopping machine takes with it: changed disks in drives that save, and changed disks the machine ejected.
+    const ejected = (label: string, changed: boolean) => ({ id: `k-${label}`, label, format: "2MG", why: "ejected" as const, when: "", changed });
+    assert.deepEqual(unsavedDisks([drive(false), drive(true)]), ["work.woz"]);
+    assert.deepEqual(unsavedDisks([{ ...drive(false), ejected: [ejected(path.resolve(path.sep, "a.2mg"), true), ejected("b.2mg", false)] }]), ["a.2mg"]);
+    assert.deepEqual(unsavedDisks([{ ...drive(true), operations: ["insert", "eject"] }]), [], "a drive that cannot save has nothing to lose to a stop");
 });
 
 test("a disk with an image can be reverted, and one the machine ejected says when it left", () => {

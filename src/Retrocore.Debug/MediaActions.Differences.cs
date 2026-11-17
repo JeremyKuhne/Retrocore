@@ -23,7 +23,8 @@ internal static partial class MediaActions
     /// <param name="device">The drive.</param>
     /// <returns>
     ///  <c>{ unit, count, summary }</c>, such as <c>sector</c>, 14 and <c>tracks 17-18</c>; or null for a disk with no
-    ///  image, an image that cannot be read, or a format with no fixed units (WOZ, DMK, JV3).
+    ///  image, an image that cannot be read, a format with no fixed units (WOZ, DMK, JV3), or a JVC whose header (its
+    ///  geometry) is not the disk's.
     /// </returns>
     internal static JsonObject? Differences(IDevice device)
     {
@@ -64,8 +65,9 @@ internal static partial class MediaActions
 
         if (codec.Format == "JV1") { return ("sector", Jv1Format.SectorSize, Jv1Format.SectorsPerTrack, 0, 0); }
         if (codec.Format != "JVC" || codec is not FloppyImageCodec) { return null; }
+        // The header gives the geometry, so a file whose header is not the disk's has its sectors elsewhere.
         ReadOnlySpan<byte> header = JvcFormat.Header(encoded);
-        if (header.Length != JvcFormat.Header(file).Length) { return null; }
+        if (!header.SequenceEqual(JvcFormat.Header(file))) { return null; }
         int sectors = header.Length > 0 ? header[0] : JvcFormat.SectorsPerTrack;
         int sides = header.Length > 1 ? header[1] : 1;
         int size = 128 << (header.Length > 2 ? header[2] : 1);

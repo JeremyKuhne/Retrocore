@@ -84,13 +84,12 @@ internal static class MediaActions
         return true;
     }
 
-    // Keeps where a disk came from, watches its image, and checks it once off the machine's thread, as the file may
-    // have changed between being read and being watched.
+    // Keeps where a disk came from, and watches its image, which is checked once its watch settles, as the file may
+    // have changed between being read and being watched; a check that cannot read it is tried again.
     private static void Keep(IMedium medium, DiskSource source)
     {
         s_sources.AddOrUpdate(medium, source);
         ImageWatcher.Watch(source.Path, path => s_sources.Any(pair => SameFile(path, pair.Value.Path)), Recheck);
-        ThreadPool.QueueUserWorkItem(path => Recheck(path), source.Path, preferLocal: false);
     }
 
     /// <summary>

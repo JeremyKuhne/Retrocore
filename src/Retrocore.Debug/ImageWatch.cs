@@ -110,7 +110,10 @@ internal sealed class ImageWatch
         lock (_lock) { _signature = null; }
     }
 
-    private void Poke()
+    /// <summary>
+    ///  Checks the image once its events settle, through the same retries as a change seen.
+    /// </summary>
+    internal void Poke()
     {
         try
         {

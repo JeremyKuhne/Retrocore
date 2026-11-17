@@ -31,7 +31,8 @@ internal static class ImageWatcher
     private static Func<string, bool> s_watched = _ => false;
 
     /// <summary>
-    ///  Watches an image, and stops watching images no disk comes from any more.
+    ///  Watches an image, and checks it, as the file may have changed since it was read; and stops watching images no
+    ///  disk comes from any more.
     /// </summary>
     /// <param name="path">The image's full path.</param>
     /// <param name="watched">Whether a disk still comes from an image, by its full path.</param>
@@ -44,7 +45,13 @@ internal static class ImageWatcher
         {
             s_watched = watched;
             Prune();
-            if (!s_watches.ContainsKey(path)) { s_watches[path] = new ImageWatch(path, changed); }
+            if (!s_watches.TryGetValue(path, out ImageWatch? watch))
+            {
+                watch = new ImageWatch(path, changed);
+                s_watches[path] = watch;
+            }
+
+            watch.Poke();
             s_sweep ??= new(_ => Sweep(), state: null, SweepMilliseconds, SweepMilliseconds);
         }
     }

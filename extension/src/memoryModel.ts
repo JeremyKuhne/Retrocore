@@ -380,15 +380,20 @@ export interface ValueForm {
 /**
  * Reads the number Find looks for after its =, such as =1000, =$C000, =%1010 or =-2.5, as the inspector's forms:
  * a byte when it fits one, else a word low first and high first when it fits one. A fraction or exponent has no such
- * forms, only the BASIC's floats, which the debugger encodes. Returns a message for text that is no number.
+ * forms, only the BASIC's floats, which the debugger encodes from the decimal: the text as typed, or a hex or binary
+ * number's value. Returns a message for text that is no number.
  */
 export function valueForms(text: string): { forms: ValueForm[]; decimal: string } | string {
     const trimmed = text.trim();
     let value: number;
+    // Decimal text goes to the debugger as typed, as Level II's double holds more digits than a number here does.
+    let decimal: string | undefined;
     if (/^(\$|0[xX])[0-9A-Fa-f]{1,8}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
     else if (/^%[01]{1,32}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
-    else if (/^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(trimmed)) value = Number(trimmed);
-    else return "Type a number after =, such as =1000, =$C000, =%1010 or =-2.5.";
+    else if (/^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(trimmed)) {
+        value = Number(trimmed);
+        decimal = trimmed;
+    } else return "Type a number after =, such as =1000, =$C000, =%1010 or =-2.5.";
     if (!Number.isFinite(value)) return `${trimmed} is too large.`;
     const forms: ValueForm[] = [];
     if (Number.isInteger(value)) {
@@ -399,7 +404,7 @@ export function valueForms(text: string): { forms: ValueForm[]; decimal: string 
             forms.push({ label: "a word, low first", bytes: [word & 0xFF, word >> 8] }, { label: "a word, high first", bytes: [word >> 8, word & 0xFF] });
         }
     }
-    return { forms, decimal: String(value) };
+    return { forms, decimal: decimal ?? String(value) };
 }
 
 /** The value at an offset: a byte, or with a size of 2 a word in the CPU's byte order. */

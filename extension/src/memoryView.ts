@@ -1713,8 +1713,6 @@ grid.addEventListener("keydown", event => {
         void find(event.shiftKey);
     } else if (key === "F9") {
         void toggleAtCursor();
-    } else if (event.altKey && (key === "ArrowLeft" || key === "ArrowRight")) {
-        goBack(key === "ArrowRight");
     } else if (key === "ArrowLeft") {
         moveTo(cursor - 1, event.shiftKey, false);
     } else if (key === "ArrowRight") {
@@ -1787,6 +1785,15 @@ backButton.addEventListener("click", () => { goBack(false); grid.focus(); });
 forwardButton.addEventListener("click", () => { goBack(true); grid.focus(); });
 document.getElementById("bookmarks").addEventListener("click", () => void pickBookmark());
 followBox.addEventListener("change", () => void useFollow(followBox.checked));
+// Alt+Left and Alt+Right go back and forward wherever focus is, ahead of the boxes and the listing, which use the
+// arrows themselves.
+window.addEventListener("keydown", event => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    goBack(event.key === "ArrowRight");
+}, true);
 // The mouse's back and forward buttons.
 window.addEventListener("mouseup", event => {
     if (event.button !== 3 && event.button !== 4) return;

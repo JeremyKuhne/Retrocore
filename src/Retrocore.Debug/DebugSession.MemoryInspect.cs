@@ -197,7 +197,8 @@ internal sealed partial class DebugSession
     private JsonObject MemoryNumbers(JsonObject args)
     {
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
-        if (!BasicNumbers.TryParse(Required(args, "value"), out double value) || !double.IsFinite(value))
+        string value = Required(args, "value");
+        if (!BasicNumbers.TryParse(value, out double parsed) || !double.IsFinite(parsed))
         {
             throw new ArgumentException("The value is not a number.");
         }
@@ -209,6 +210,7 @@ internal sealed partial class DebugSession
             byte[] bytes;
             try
             {
+                // From the text, so Level II's double keeps the bits a double would lose.
                 bytes = BasicNumbers.WriteFloat(value, length, exponentFirst);
             }
             catch (OverflowException)

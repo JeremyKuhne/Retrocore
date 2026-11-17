@@ -1143,7 +1143,8 @@ test("find by value reads a number as a byte or as words either way round", () =
     });
     assert.deepEqual(valueForms("%101"), { forms: [{ label: "a byte", bytes: [5] }], decimal: "5" });
     assert.deepEqual(valueForms("-2.5"), { forms: [], decimal: "-2.5" }, "a fraction is only the BASIC's floats");
-    assert.deepEqual(valueForms("1E6"), { forms: [], decimal: "1000000" }, "too big for a word");
+    assert.deepEqual(valueForms("1E6"), { forms: [], decimal: "1E6" }, "too big for a word");
+    assert.equal((valueForms("9007199254740993") as { decimal: string }).decimal, "9007199254740993", "every digit goes to the debugger");
     assert.equal(typeof valueForms("HELLO"), "string");
 });
 
@@ -1182,7 +1183,7 @@ test("go-tos go back and forward, and a stop moves a view that follows", async (
     window(page).dispatch("mouseup", { button: 4, preventDefault: () => undefined });
     state = await drive(page, [], () => 0, lists);
     assert.equal(state.cursor, 0x0800);
-    page.key("ArrowLeft", { altKey: true });
+    window(page).dispatch("keydown", { key: "ArrowLeft", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, preventDefault: () => undefined, stopPropagation: () => undefined });
     state = await drive(page, [], () => 0, lists);
     assert.equal(state.cursor, 0x0400);
 

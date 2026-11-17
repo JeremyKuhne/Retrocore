@@ -117,6 +117,9 @@ try {
         { label: "Single, 4 bytes", bytes: [0, 0, 0x7A, 0x8A] },
         { label: "Double, 8 bytes", bytes: [0, 0, 0, 0, 0, 0, 0x7A, 0x8A] }
     ]);
+    // The double's 56 bits hold 2^53 + 1, which the text keeps and a JavaScript or C# double would not.
+    assert.deepEqual((await request("retro/memory/numbers", { memoryReference: "0x0000", value: "9007199254740993" })).formats[1].bytes,
+        [0x04, 0, 0, 0, 0, 0, 0, 0xB6]);
 
     // Labels come from the program and the SDK's ROM source, where their code is in memory now.
     at = "reading memory labels";

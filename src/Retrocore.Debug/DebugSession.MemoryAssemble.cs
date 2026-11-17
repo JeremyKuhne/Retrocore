@@ -190,16 +190,22 @@ internal sealed partial class DebugSession
     private static string? RestartNumber(InstructionSet set, int address, string text, Dictionary<string, long> symbols)
     {
         if (!ReferenceEquals(set.Description, I8080Isa.Description)) { return null; }
-        int space = text.IndexOf(' ', StringComparison.Ordinal);
+        int space = text.IndexOfAny([' ', '\t']);
         if (space < 0 || !string.Equals(text[..space], "RST", StringComparison.OrdinalIgnoreCase)) { return null; }
 
-        // The operand's value, as the assembler reckons it.
-        AssemblyResult value = AssembleText(set, address, ".word " + text[(space + 1)..], symbols);
-        AssemblySection? section = value.Success ? value.Sections.FirstOrDefault(found => found.Size > 0) : null;
-        if (section is null) { return null; }
-        ReadOnlySpan<byte> bytes = section.Bytes.Span;
-        int target = bytes[0] | (bytes[1] << 8);
-        return target % 8 == 0 && target <= 0x38 ? $"RST {target / 8}" : null;
+        // The operand's value, as the assembler reckons it at the address, as an equate, which writes no bytes, so
+        // it fits at $FFFF; more than one operand is no equate.
+        string name = "__RETROCOREVALUE";
+        while (text.Contains(name, StringComparison.Ordinal) || symbols.ContainsKey(name)) { name += "_"; }
+        AssemblyOptions options = new(set.Name, address, Math.Min(AssembleMaximum, 0x10000 - address))
+        {
+            PredefinedSymbols = symbols
+        };
+
+        string equate = $"{name} = {text[(space + 1)..].Trim()}\n";
+        AssemblyResult value = new Assembler.Assembler().Assemble(new AssemblySource(equate, "line"), options);
+        if (!value.Success || !value.Symbols.TryGetValue(name, out long target)) { return null; }
+        return target is >= 0 and <= 0x38 && target % 8 == 0 ? $"RST {target / 8}" : null;
     }
 
     // A name's value from the session, or null where it has none; ::COUT is the outermost scope's COUT, which the

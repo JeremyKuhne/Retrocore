@@ -577,6 +577,16 @@ try {
         .references.filter(reference => reference.address === 0x6530);
     assert.equal((await readers([0x6530])).length, 1);
     assert.equal((await readers([0x6530, 0x6531])).length, 0);
+    // A start the listing keeps that overlaps an earlier one, which analysis skips, still reads what it names.
+    await write("0x6530", [0x4C, 0xAD, 0x00, 0x03]);
+    assert.deepEqual((await readers([0x6530, 0x6531])).length, 0);
+    const overlapped = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x0300, starts: [0x6530, 0x6531] }))
+        .references.filter(reference => reference.address === 0x6531);
+    assert.deepEqual(overlapped.map(reference => [reference.text, reference.kind]), [["LDA BANK2", "reads"]]);
+    // Immediate BIT changes only Z.
+    await write("0x6540", [0x89, 0x80]);
+    assert.equal((await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6540, starts: [0x6540] })).instruction.flags, "Z");
+    await write("0x6530", [0xAD, 0x00, 0x03, 0x00]);
     // A start inside a marked instruction the listing rejects for running over it still shows its own.
     await mark({ address: 0x6530, kind: "code" });
     const inside = await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6531, starts: [0x6531] });

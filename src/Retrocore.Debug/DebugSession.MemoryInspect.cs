@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
+using Retrocore.Isa;
 using System.Numerics;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -205,6 +206,12 @@ internal sealed partial class DebugSession
 
         (int Cycles, int Taken)? cycles = InstructionCycles.Of(instruction);
         (string Summary, string Flags)? brief = InstructionDocs.Brief(instruction.Mnemonic, analysis.Set);
+
+        // The 65C02's BIT #n sets only Z: with no memory operand, N and V stay as they were.
+        bool bit = string.Equals(instruction.Mnemonic, "BIT", StringComparison.OrdinalIgnoreCase);
+        bool m6502 = ReferenceEquals(analysis.Set.Description, M6502Isa.Description);
+        bool immediate = instruction.Form is { Role: OperandRole.None, FieldCount: > 0 };
+        if (bit && m6502 && immediate && brief is { } described) { brief = (described.Summary, "Z"); }
         return new JsonObject
         {
             ["text"] = NamedText(analysis, instruction),
@@ -250,6 +257,17 @@ internal sealed partial class DebugSession
             }
         }
 
+        // A Decode from here start the listing keeps whose instruction analysis skipped, as one overlapping an earlier
+        // start's, still refers to what its operand names.
+        int? directPage = DirectPage(analysis.Set);
+        foreach (int start in analysis.Forced)
+        {
+            if (found.Any(reference => reference.Source == start)) { continue; }
+            if (!Accepted(analysis, start, out DisassembledInstruction instruction)) { continue; }
+            (int? target, _) = ListingOperands.OperandAddress(instruction, directPage);
+            if (target == address) { found.Add((start, ReferenceOf(instruction, target.Value))); }
+        }
+
         count = found.Count;
         JsonArray references = [];
         foreach ((int source, DisassemblyReferenceKind kind) in found.Take(ReferencesShown))
@@ -280,6 +298,29 @@ internal sealed partial class DebugSession
         }
 
         return references;
+    }
+
+    // How an instruction uses the address its operand names, as analysis records it.
+    private static DisassemblyReferenceKind ReferenceOf(in DisassembledInstruction instruction, int target)
+    {
+        if (instruction.DirectTarget == target)
+        {
+            return instruction.Flow switch
+            {
+                DisassemblyFlow.Call => DisassemblyReferenceKind.Call,
+                DisassemblyFlow.Jump => DisassemblyReferenceKind.Jump,
+                _ => DisassemblyReferenceKind.Branch
+            };
+        }
+
+        if (instruction.Flow == DisassemblyFlow.IndirectJump) { return DisassemblyReferenceKind.IndirectJump; }
+        if (instruction.Form.Role == OperandRole.Pointer) { return DisassemblyReferenceKind.Read; }
+        return instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
+        {
+            MemoryAccess.Write => DisassemblyReferenceKind.Write,
+            MemoryAccess.ReadWrite => DisassemblyReferenceKind.ReadWrite,
+            _ => DisassemblyReferenceKind.Read
+        };
     }
 
     // How a reference uses its address, in the inspector's words.

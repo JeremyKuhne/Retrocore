@@ -226,6 +226,22 @@ internal sealed partial class DebugSession
         }
     }
 
+    // Binds the function breakpoints again, as when the hints file's names change, and updates each binding the
+    // editor shows.
+    private void RebindFunctionBreakpoints()
+    {
+        if (_functionRequest is not { } functions) { return; }
+        JsonObject response = FunctionBreakpoints(functions);
+        foreach (JsonObject breakpoint in (response["breakpoints"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            Notify("breakpoint", new JsonObject
+            {
+                ["reason"] = "changed",
+                ["breakpoint"] = breakpoint.DeepClone()
+            });
+        }
+    }
+
     // Binds every breakpoint again for a new launch, with no hits.
     private void RebindBreakpoints()
     {
@@ -353,7 +369,8 @@ internal sealed partial class DebugSession
                 // A name such as bank1:$D000 stops only while the CPU runs that bank's code there.
                 try
                 {
-                    address = checked((ushort)Evaluate(ExpressionEvaluator.SplitBank(Target, name.Trim(), out bank)));
+                    string rest = ExpressionEvaluator.SplitBank(Target, name.Trim(), out bank);
+                    address = checked((ushort)new ExpressionEvaluator(Target, _debug, rest, bank: bank).Evaluate());
                     if (bank is not null && bank.Peek(address.Value) is null)
                     {
                         state.Problem = $"{bank.Label} has no byte at ${address:X4}.";

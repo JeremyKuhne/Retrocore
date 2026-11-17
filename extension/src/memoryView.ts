@@ -82,6 +82,10 @@ button:disabled{opacity:.5;cursor:default}
 #listing .ln.sel{background:var(--vscode-editor-inactiveSelectionBackground)}
 #listing .ln.cur{outline:1px solid var(--vscode-editorCursor-foreground,var(--vscode-focusBorder));outline-offset:-1px}
 #listing .a{color:var(--vscode-editorLineNumber-foreground)}
+#listing .bp{width:1.5ch;flex:none;margin-left:-4px;text-align:center;color:transparent;cursor:default}
+#listing .ln:hover .bp{color:var(--vscode-debugIcon-breakpointDisabledForeground,var(--vscode-disabledForeground))}
+#listing .ln .bp.on{color:var(--vscode-debugIcon-breakpointForeground,#e51400)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #listing .l{width:10ch;flex:none;overflow:hidden;text-overflow:ellipsis;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
 #listing .unknown .t{opacity:.7}
 #listing .guess .t{font-style:italic}
@@ -111,7 +115,7 @@ body.narrow .item .k{width:auto}
 <button id="snapshot" title="Keep a copy of every byte now, to compare with">Snapshot</button>
 <label title="Highlight the bytes that differ from what they held at the stop before, from the snapshot, or from another bank's bytes at the same addresses">Compare with <select id="compareWith" aria-label="Compare with"><option value="">the last stop</option></select></label>
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
-<label title="Hex bytes with ?? for any byte, such as A9 ?? 20, or text in quotes; Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20 or &quot;TEXT&quot;"></label>
+<label title="Hex bytes with ?? for any byte, such as A9 ?? 20; text in quotes; or an instruction, with ? for any character and * for any run, such as STA $C0?? or JSR COUT. Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20, &quot;TEXT&quot; or STA $C0??"></label>
 </div>
 <div class="main"><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div>
 <div id="listing" role="list" aria-label="Listing"></div>
@@ -147,10 +151,14 @@ let aligned = false, rowStarts = null;
 // Whether the listing shows (the page remembers), the lines it shows, which request they answer, its width, and the
 // addresses Decode from here started an instruction at.
 let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
+// The key of the listing the lines are, which is listingKey once the one asked for last has come.
+let listingLoaded = "";
 // The writes the page made, which change what the listing shows, and the cursor the listing last scrolled to.
 let writes = 0, listingCursor = -1;
 // The marks, names and comments made, which change what the listing shows.
 let marks = 0;
+// Breakpoints set or taken away anywhere, which change the listing's gutter.
+let breakpointChanges = 0;
 // Why the last listing request failed, which shows in place of lines; empty when it did not.
 let listingError = "";
 const forcedStarts = new Set();
@@ -577,7 +585,7 @@ function wantListing() {
     if (!showListing || ended || narrow === true) return;
     const top = Math.min(Math.floor(grid.scrollTop / LINE), rowCount() - 1);
     const start = rowStart(top), end = rowEnd(Math.min(rowCount() - 1, top + visibleRows() + 1));
-    const key = start + ":" + end + ":" + generation + ":" + writes + ":" + marks + ":" + labels.length + ":" + forcedStarts.size;
+    const key = start + ":" + end + ":" + generation + ":" + writes + ":" + marks + ":" + breakpointChanges + ":" + labels.length + ":" + forcedStarts.size;
     if (key === listingKey) return;
     listingKey = key;
     void loadListing(start, Math.min(0x1000, end - start + 1), key);
@@ -588,6 +596,7 @@ async function loadListing(start, count, key) {
         const result = await request({ type: "listing", address: start, count, starts: Array.from(forcedStarts) });
         if (key !== listingKey) return;
         listingLines = result.lines;
+        listingLoaded = key;
         listingError = "";
         // New lines can move the cursor's, as when Decode from here or a write changes the instructions' sizes,
         // so its line is brought into view again.
@@ -635,7 +644,7 @@ function showListingLines() {
             : '<a class="src" role="link" tabindex="-1" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
-        html += '<div class="' + classes + '" role="listitem"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '"><span class="a">' + hex(line.address, 4) + "</span>"
+        html += '<div class="' + classes + '" role="listitem" aria-keyshortcuts="F9"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '">' + breakpointHtml(line) + '<span class="a">' + hex(line.address, 4) + "</span>"
             + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>"
             + (line.comment ? '<span class="cm">; ' + escapeText(line.comment) + "</span>" : "") + source + "</div>";
     }
@@ -669,6 +678,43 @@ function focusedListing() {
     const line = active.closest("[data-a]");
     if (line === null) return null;
     return { address: Number(line.dataset.a), link: active === line ? -1 : Array.from(line.querySelectorAll("a")).indexOf(active) };
+}
+
+// The gutter's breakpoint dot, filled where one stops at the line's address; clicking it, or F9, sets or takes it away.
+function breakpointHtml(line) {
+    const on = Array.isArray(line.breakpoints) && line.breakpoints.length > 0;
+    // The dot is hidden from screen readers, which hear "Breakpoint" at the line's start instead, and F9 as its shortcut.
+    return '<span class="bp' + (on ? " on" : "") + '" data-bp="1" aria-hidden="true" title="'
+        + (on ? "Take the breakpoint at " + where(line.address) + " away" : "Stop at " + where(line.address)) + ' (F9)">&#9679;</span>'
+        + (on ? '<span class="sr">Breakpoint, </span>' : "");
+}
+
+// Sets or takes away a breakpoint at a listing line's address: a function breakpoint VS Code keeps, named by the
+// address, such as $0300 or aux:$0400, so it shows in the Breakpoints view.
+async function toggleBreakpoint(line) {
+    try {
+        const result = await request({ type: "breakpoint", address: line.address, ids: line.breakpoints ?? null });
+        status(result.status);
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+// F9 in the bytes: a breakpoint at the line the cursor is in.
+// Only the listing on show, as last asked for, says where a line starts and what stops there: while it is hidden or
+// being read again, its lines may be of other bytes, or name breakpoints that have moved since.
+function listingShown() { return showListing && !ended && narrow !== true; }
+function listingCurrent() { return listingShown() && listingLoaded === listingKey; }
+
+async function toggleAtCursor() {
+    const shown = listingShown();
+    const current = listingCurrent();
+    const line = current ? listingLines.find(item => cursor >= item.address && cursor < item.address + item.size) : undefined;
+    if (line === undefined) {
+        status(!shown ? "Show the listing to set a breakpoint." : !current ? "The listing is being read; press F9 again." : "No listing line is at the cursor.", true);
+        return;
+    }
+    await toggleBreakpoint(line);
 }
 
 // Selects a line's bytes, the cursor on its first.
@@ -735,7 +781,15 @@ function activateListing(target) {
     return true;
 }
 
-listingPanel.addEventListener("click", event => { activateListing(event.target); });
+listingPanel.addEventListener("click", event => {
+    const target = event.target;
+    const dot = target && target.closest ? target.closest("[data-bp]") : null;
+    const line = dot === null ? null : dot.closest("[data-a]");
+    if (line !== null && !listingCurrent()) { status("The listing is being read; click again.", true); return; }
+    const listed = line === null ? undefined : listingLines.find(item => item.address === Number(line.dataset.a));
+    if (listed !== undefined) { void toggleBreakpoint(listed); return; }
+    activateListing(target);
+});
 
 // Up and Down move between lines, Left and Right between a line and its links, Home and End to the first and last
 // line, Enter or Space does what a click does, and Escape goes back to the bytes.
@@ -748,6 +802,10 @@ listingPanel.addEventListener("keydown", event => {
     let next = null;
     if (event.key === "Enter" || event.key === " ") {
         if (!activateListing(target)) return;
+    } else if (event.key === "F9") {
+        if (!listingCurrent()) { status("The listing is being read; press F9 again.", true); event.preventDefault(); return; }
+        const listed = listingLines.find(item => item.address === Number(line.dataset.a));
+        if (listed !== undefined) void toggleBreakpoint(listed);
     } else if (event.key === "ArrowDown") next = line.nextElementSibling;
     else if (event.key === "ArrowUp") next = line.previousElementSibling;
     else if (event.key === "Home") next = listingPanel.firstElementChild;
@@ -1284,19 +1342,42 @@ async function goTo(text) {
 }
 
 async function find(backward) {
-    const pattern = parsePattern(findBox.value, charset === null ? undefined : charset.text);
-    if (typeof pattern === "string") { status(pattern, true); return; }
+    const text = findBox.value;
+    const pattern = parsePattern(text, charset === null ? undefined : charset.text);
+    if (typeof pattern === "string") {
+        // What is neither bytes nor quoted text is an instruction, which the debugger decodes.
+        const trimmed = text.trim();
+        if (trimmed.length === 0 || trimmed.startsWith('"') || trimmed.startsWith("'")) { status(pattern, true); return; }
+        await findInstruction(text, backward);
+        return;
+    }
     await ensureAll();
     const at = findPattern(bytes, readable, pattern, backward ? cursor - 1 : cursor + 1, backward);
     if (at < 0) { status("Not found.", true); return; }
+    found(at, pattern.length, "Found at " + where(at) + ".");
+}
+
+// Finds an instruction such as STA $C0?? from the cursor, as the listing would show it.
+async function findInstruction(text, backward) {
+    try {
+        const result = await request({ type: "find", pattern: text, from: backward ? cursor - 1 : cursor + 1, backward });
+        if (result.address === null || result.address === undefined) { status("No instruction matches " + text.trim() + ".", true); return; }
+        found(result.address, result.size, "Found " + result.text + " at " + where(result.address) + ".");
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+// Selects a match, the cursor on its first byte.
+function found(at, size, message) {
     // A match is a move of the cursor, as an edit waiting on the debugger must know.
     moves++;
-    anchor = at + pattern.length - 1;
+    anchor = at + size - 1;
     cursor = at;
     nibble = null;
     reveal(at, true);
     render();
-    status("Found at " + where(at) + ".");
+    status(message);
 }
 
 // Copies the selection as memory holds it now, reading the bytes out of view first.
@@ -1350,6 +1431,8 @@ grid.addEventListener("keydown", event => {
         findBox.select();
     } else if (key === "F3") {
         void find(event.shiftKey);
+    } else if (key === "F9") {
+        void toggleAtCursor();
     } else if (key === "ArrowLeft") {
         moveTo(cursor - 1, event.shiftKey, false);
     } else if (key === "ArrowRight") {
@@ -1454,6 +1537,7 @@ async function test(actions) {
         }
         if (action.decode) decodeHere();
         if (action.mark !== undefined) await mark(action.mark);
+        if (action.breakpoint) await toggleAtCursor();
         if (action.listingLine !== undefined) selectLine(listingLines[action.listingLine].address, listingLines[action.listingLine].size);
         if (action.machineText !== undefined) {
             machineText = action.machineText;
@@ -1477,7 +1561,8 @@ async function test(actions) {
         inspector: inspect(bytes, readable, cursor, charset === null ? undefined : charset.text),
         hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64),
         row: { start: rowStart(rowOf(cursor)), end: rowEnd(rowOf(cursor)), count: rowCount() },
-        listing: listingLines.map(line => hex(line.address, 4) + " " + line.text)
+        listing: listingLines.map(line => hex(line.address, 4) + " " + line.text),
+        breakpoints: listingLines.filter(line => Array.isArray(line.breakpoints) && line.breakpoints.length > 0).map(line => line.address)
     };
 }
 
@@ -1507,6 +1592,10 @@ window.addEventListener("message", event => {
         marks++;
         const reconciled = message.kind === undefined ? Promise.resolve() : reconcile(message.address, message.count, message.kind === "code" ? message.address : undefined);
         void reconciled.then(loadExtras).then(() => render(), error => status(String(error.message || error), true));
+    } else if (message.type === "breakpoints") {
+        // Breakpoints were set or taken away, here or anywhere else.
+        breakpointChanges++;
+        render();
     } else if (message.type === "frozen") {
         // Another editor on this space froze or thawed bytes.
         frozen = new Map(message.frozen.map(item => [item.address, item.value]));

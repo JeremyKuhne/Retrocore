@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, copyText, cpuWatches, findPattern, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, type PatternByte } from "../memoryModel";
+import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -399,6 +399,10 @@ const marksSent: Record<string, unknown>[] = [];
 // The Decode from here starts the page asked about after a mark.
 const startsSent: Record<string, unknown>[] = [];
 
+// The breakpoints the page set or took away, and the instructions it looked for.
+const breakpointsSent: Record<string, unknown>[] = [];
+const findsSent: Record<string, unknown>[] = [];
+
 // The starts each listing request the page sent asked for.
 const listingStarts: number[][] = [];
 
@@ -433,13 +437,19 @@ function answer(
                         { address: at, size: 2, text: "LDA #$C1", kind: "code", label: "START", target: null, path: "C:/src/hello.s", line: 3 },
                         { address: at + 2, size: 3, text: "JMP START", kind: "code", label: null, target: at, path: "C:/src/hello.s", line: 4 },
                         { address: at + 5, size: 2, text: ".byte $01, $02", kind: "data", label: "TABLE", target: null, path: null, line: null },
-                        { address: at + 7, size: 1, text: "RTS", kind: "code", guess: true, label: null, target: null, path: null, line: null, comment: "Returns" }
+                        { address: at + 7, size: 1, text: "RTS", kind: "code", guess: true, label: null, target: null, path: null, line: null, comment: "Returns", breakpoints: [7] }
                     ]
                 }
             });
         } else if (sent.type === "mark") {
             marksSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { path: "C:/src/hello.hints.json", address: sent.address, count: sent.count } });
+        } else if (sent.type === "breakpoint") {
+            breakpointsSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: { status: `Breakpoint at $${hex(Number(sent.address), 4)}.` } });
+        } else if (sent.type === "find") {
+            findsSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: { address: 0x0310, size: 3, text: "STA SPKR" } });
         } else if (sent.type === "starts") {
             // Each start is one byte here: those in the marked bytes go.
             const address = Number(sent.address), end = address + Number(sent.count);
@@ -885,7 +895,7 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     // A comment follows its line.
     assert.match(html, /<span class="t">RTS<\/span><span class="cm">; Returns<\/span>/);
     // Analysis's guesses say so.
-    assert.match(html, /class="ln code guess" role="listitem" title="A guess: no source describes these bytes, and analysis takes them for code"/);
+    assert.match(html, /class="ln code guess" role="listitem" aria-keyshortcuts="F9" title="A guess: no source describes these bytes, and analysis takes them for code"/);
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
     assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);
@@ -895,12 +905,12 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*display:grid;align-content:start/);
     assert.match(memoryEditorHtml("NONCE"), /#listing \.src\{flex:none/);
     assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
-    assert.match(html, /^<div class="ln code" role="listitem" tabindex="0"/, "the first line, when the cursor is in none");
+    assert.match(html, /^<div class="ln code" role="listitem" aria-keyshortcuts="F9" tabindex="0"/, "the first line, when the cursor is in none");
 
     // A line selects its bytes, the cursor on the first.
     state = await drive(page, [{ listingLine: 1 }], () => 0, lists);
     assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16) + 2, parseInt(top, 16) + 4]);
-    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" tabindex="0" data-a="[0-9]+" data-s="3"/);
+    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" aria-keyshortcuts="F9" tabindex="0" data-a="[0-9]+" data-s="3"/);
 
     // Enter on a line does what a click does.
     const lineElement = { dataset: { a: String(parseInt(top, 16)), s: "2" }, querySelectorAll: () => [] };
@@ -935,6 +945,81 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     // Where nothing lists, the old lines go.
     await drive(page, [{ goto: 0xE100 }], () => 0, lists);
     assert.equal(page.elements.get("listing")!.innerHTML, "");
+});
+
+test("the listing's gutter sets breakpoints, and Find finds instructions", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
+    let state = await drive(page, [{ goto: 0x0300 }], () => 0, lists);
+    const top = parseInt((state.listing as string[])[0].substring(0, 4), 16);
+    // A line where a breakpoint stops has its dot filled.
+    assert.deepEqual(state.breakpoints, [top + 7]);
+    const html = page.elements.get("listing")!.innerHTML;
+    assert.ok(html.includes(`<span class="bp on" data-bp="1" aria-hidden="true" title="Take the breakpoint at $${hex(top + 7, 4)} away (F9)">&#9679;</span><span class="sr">Breakpoint, </span>`), html);
+    assert.ok(html.includes('role="listitem" aria-keyshortcuts="F9"'), html);
+    assert.ok(html.includes(`<span class="bp" data-bp="1" aria-hidden="true" title="Stop at $${hex(top, 4)} (F9)">`), html);
+
+    // F9 sets one at the cursor's line.
+    breakpointsSent.length = 0;
+    state = await drive(page, [{ listingLine: 0 }, { breakpoint: true }], () => 0, lists);
+    assert.deepEqual(breakpointsSent.map(sent => [sent.address, sent.ids]), [[top, null]]);
+    assert.equal(state.status, `Breakpoint at $${hex(top, 4)}.`);
+
+    // While the listing is hidden, its old lines don't say where a line starts, so F9 sets nothing.
+    const box = page.elements.get("listingBox")! as unknown as { checked: boolean; dispatch(name: string, event: object): void };
+    box.checked = false;
+    box.dispatch("change", {});
+    breakpointsSent.length = 0;
+    state = await drive(page, [{ breakpoint: true }], () => 0, lists);
+    assert.deepEqual([breakpointsSent.length, state.status], [0, "Show the listing to set a breakpoint."]);
+    box.checked = true;
+    box.dispatch("change", {});
+    await drive(page, [], () => 0, lists);
+
+    // Clicking a filled dot sends the breakpoints that stop there, to take them away.
+    breakpointsSent.length = 0;
+    const line = { dataset: { a: String(top + 7) } };
+    const dot = { closest: (selector: string) => selector === "[data-bp]" ? { closest: () => line } : null };
+    page.elements.get("listing")!.dispatch("click", { target: dot });
+    await drive(page, [], () => 0, lists);
+    assert.deepEqual(breakpointsSent.map(sent => [sent.address, sent.ids]), [[top + 7, [7]]]);
+
+    // Breakpoints set anywhere ask for the listing again; until it comes, a dot's breakpoints may have moved, so a
+    // click sets or takes away nothing.
+    listingStarts.length = 0;
+    page.send({ type: "breakpoints" });
+    breakpointsSent.length = 0;
+    page.elements.get("listing")!.dispatch("click", { target: dot });
+    // F9 on a listing line waits for it too.
+    page.elements.get("listing")!.dispatch("keydown", { key: "F9", target: { closest: () => ({ ...line, querySelectorAll: () => [] }) }, preventDefault() { } });
+    assert.equal(breakpointsSent.length, 0);
+    await drive(page, [], () => 0, lists);
+    assert.ok(listingStarts.length > 0, "the listing is asked for again");
+
+    // Text that is neither bytes nor quoted text is an instruction, which the debugger finds; its bytes are selected.
+    findsSent.length = 0;
+    state = await drive(page, [{ goto: 0x0300 }, { find: "STA $C0??" }], () => 0, lists);
+    assert.deepEqual(findsSent.map(sent => [sent.pattern, sent.from, sent.backward]), [["STA $C0??", 0x0301, false]]);
+    assert.deepEqual([state.cursor, state.anchor, state.status], [0x0310, 0x0312, "Found STA SPKR at $0310."]);
+    // Bytes and text are found in the page.
+    await drive(page, [{ find: "A9 ??" }, { find: '"HI' }], () => 0, lists);
+    assert.equal(findsSent.length, 1);
+});
+
+test("the gutter's breakpoints are function breakpoints named by address", () => {
+    assert.equal(breakpointName(null, 0x0300), "$0300");
+    assert.equal(breakpointName("aux", 0x0400), "aux:$0400");
+    assert.ok(breakpointAt("$0300", null, 0x0300));
+    assert.ok(breakpointAt(" cpu:$0300 ", null, 0x0300));
+    assert.ok(breakpointAt("0x0300", null, 0x0300));
+    assert.ok(breakpointAt("AUX:$0400", "aux", 0x0400));
+    assert.ok(!breakpointAt("aux:$0400", null, 0x0400));
+    assert.ok(!breakpointAt("$0301", null, 0x0300));
+    assert.ok(!breakpointAt("START", null, 0x0300));
+    // Bare digits are decimal in an expression, so 768 is $0300 and 0300 is not this address's name.
+    assert.ok(!breakpointAt("0300", null, 0x0300));
+    assert.ok(!breakpointAt("aux:0400", "aux", 0x0400));
 });
 
 test("a read-only bank refuses typing before writing", async () => {

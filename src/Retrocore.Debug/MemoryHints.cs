@@ -103,6 +103,18 @@ internal sealed class MemoryHints
         _spaces.TryGetValue(space, out MemoryHintSpace? found) ? found.Names : new Dictionary<int, string>();
 
     /// <summary>
+    ///  Gets whether other hints name the same addresses alike, in every space.
+    /// </summary>
+    /// <param name="other">The other hints.</param>
+    /// <returns>True when every name is the same.</returns>
+    internal bool SameNames(MemoryHints other) => AllNames().SetEquals(other.AllNames());
+
+    private HashSet<(string Space, int Address, string Name)> AllNames() =>
+    [
+        .. _spaces.SelectMany(space => space.Value.Names.Select(name => (space.Key.ToLowerInvariant(), name.Key, name.Value)))
+    ];
+
+    /// <summary>
     ///  Gets a space's comments by address.
     /// </summary>
     /// <param name="space">The bank's name, or empty for memory as the CPU maps it.</param>

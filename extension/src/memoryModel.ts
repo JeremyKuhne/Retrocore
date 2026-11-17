@@ -65,6 +65,25 @@ export function parseReference(reference: string): ParsedReference | undefined {
 }
 
 /**
+ * The function breakpoint the listing's gutter sets at an address of a view's bank, such as $0300 or aux:$0400,
+ * which the debugger stops at as an instruction breakpoint, in that bank's code only.
+ */
+export function breakpointName(bank: string | null, address: number): string {
+    return (bank === null ? "" : `${bank}:`) + "$" + hex(address, 4);
+}
+
+/**
+ * Whether a function breakpoint's name is the address of a view's bank the listing's gutter sets: $0300, 0x0300 or
+ * cpu:$0300 in the CPU's view, aux:$0400 in aux's, whatever the case. Only a name written in hex counts: bare digits
+ * are decimal in an expression, so 1024 stops at $0400, not $1024.
+ */
+export function breakpointAt(name: string, bank: string | null, address: number): boolean {
+    if (!/^\s*(?:[a-z][a-z0-9]*:)?\s*(?:\$|0x)/i.test(name)) return false;
+    const parsed = parseReference(name.trim().replace(/(^|:)\s*\$/, (_, before: string) => `${before}0x`));
+    return parsed !== undefined && parsed.bank === bank && parsed.address === address;
+}
+
+/**
  * Where an address, label or expression points in a view's bank, through the debugger's evaluate, which gives the
  * memory reference an expression names in a frame. It is evaluated in the focused frame first, so a register such as
  * the Z80's PC, or SP in a caller's frame, reads as that frame shows it; when that gives an address in another bank,

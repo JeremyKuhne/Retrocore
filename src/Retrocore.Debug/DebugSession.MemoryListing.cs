@@ -40,7 +40,8 @@ internal sealed partial class DebugSession
     ///   from the sources, <c>unknown</c> where none describes it), the <c>label</c> at its address, the
     ///   <c>target</c> an operand names, which the text gives by label where it has one, the source
     ///   <c>path</c> and <c>line</c>, and the hints file's <c>comment</c> on its bytes, with <c>comments</c> giving
-    ///   each one's address. Data marked in the hints file lists as data over anything the sources say.
+    ///   each one's address, and the ids of the <c>breakpoints</c> that stop at its address, or null. Data marked in
+    ///   the hints file lists as data over anything the sources say.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryListing(JsonObject args)
@@ -65,11 +66,11 @@ internal sealed partial class DebugSession
         // Code marked in the hints file starts instructions, as Decode from here's starts do, unless the bytes have
         // changed since so that its instruction now runs into data marked: the data, also marked, stays data.
         string space = HintSpace(bank);
-        IReadOnlyList<(int Start, int Length)> markedData = _hints.Data(space);
+        IReadOnlyList<(int Start, int Length)> markedData = MarkHints.Data(space);
         bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
         // Its instruction is one line whatever source statement or label starts inside it.
         Dictionary<int, int> markedCode = [];
-        foreach (int code in _hints.Code(space))
+        foreach (int code in MarkHints.Code(space))
         {
             int size = InstructionSize(bank, code);
             if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked))
@@ -108,7 +109,7 @@ internal sealed partial class DebugSession
 
 
         // A comment starts a data line, so each shows on the line it is about; one inside an instruction shows on it.
-        IReadOnlyDictionary<int, string> comments = _hints.Comments(space);
+        IReadOnlyDictionary<int, string> comments = MarkHints.Comments(space);
 
         GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
         bool Boundary(int address)
@@ -130,15 +131,7 @@ internal sealed partial class DebugSession
         // What ends a marked instruction early: another start, or data marked, not a source's statement or a label.
         bool MarkedCodeBoundary(int address) => forced.Contains(address) || (Marked(address) && !Marked(address - 1));
 
-        // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the
-        // page is known for the CPU's own memory, from its registers at the stop, and not for another CPU's.
-        int? directPage = null;
-        if (set.Description.Registers.Any(register => register.Name == DirectPageRegister))
-        {
-            bool own = ReferenceEquals(set.Description, Target.InstructionSet.Description);
-            long? page = own ? Target.Registers.Value(Target.Frame, DirectPageRegister) : null;
-            directPage = page is { } value ? (int)(value & 0xFF) : -1;
-        }
+        int? directPage = DirectPage(set);
 
         int end = Math.Min(0x10000, from + count);
         int first = -1;
@@ -292,7 +285,8 @@ internal sealed partial class DebugSession
                 ["label"] = names.TryGetValue(address, out string? label) ? label : null,
                 ["target"] = target,
                 ["path"] = source?.Path,
-                ["line"] = source?.Line
+                ["line"] = source?.Line,
+                ["breakpoints"] = BreakpointsAt(bank, memory, set, address)
             });
 
             address += size;
@@ -346,4 +340,42 @@ internal sealed partial class DebugSession
     // Bytes as a .byte line.
     private static string DataText(IDebugMemory memory, int address, int size) =>
         ".byte " + string.Join(", ", Enumerable.Range(0, size).Select(index => $"${memory.Peek((ushort)(address + index)):X2}"));
+
+    // A direct-page register makes a one-byte memory operand an offset in its page, as the 6809's DP does; the page is
+    // known for the CPU's own memory, from its registers at the stop, and -1 for another CPU's. Null for a CPU without.
+    private int? DirectPage(InstructionSet set)
+    {
+        if (!set.Description.Registers.Any(register => register.Name == DirectPageRegister)) { return null; }
+        bool own = ReferenceEquals(set.Description, Target.InstructionSet.Description);
+        long? page = own ? Target.Registers.Value(Target.Frame, DirectPageRegister) : null;
+        return page is { } value ? (int)(value & 0xFF) : -1;
+    }
+
+    // The ids of the breakpoints that could stop the listing's code at an address, as Hit decides without conditions or
+    // hit counts: a bank's own, matched by name, as a card change makes the target's banks again while the bound sites
+    // keep the old ones; a module's where it describes the listing's memory and still has a position there, so not over code written since; and the machine CPU's plain addresses in
+    // code the machine's CPU runs, not a coprocessor's.
+    private JsonArray? BreakpointsAt(DebugMemoryBank? bank, IDebugMemory memory, InstructionSet set, int address)
+    {
+        if (!_breakpoints.TryGetValue((ushort)address, out List<BreakpointSite>? sites)) { return null; }
+        bool machineCode = ReferenceEquals(set.Description, Target.InstructionSet.Description);
+        bool Stops(BreakpointSite site) => site switch
+        {
+            { Bank: { } banked } => bank is not null && string.Equals(banked.Name, bank.Name, StringComparison.Ordinal),
+            { Module: { } module } => DebugInfo.Active(module, memory, (ushort)address)
+                && module.Position(memory, (ushort)address) is not null,
+            _ => machineCode
+        };
+
+        JsonArray ids = [];
+        foreach (int id in sites
+            .Where(Stops)
+            .Select(site => site.Breakpoint.Id)
+            .Distinct())
+        {
+            ids.Add((JsonNode)id);
+        }
+
+        return ids.Count == 0 ? null : ids;
+    }
 }

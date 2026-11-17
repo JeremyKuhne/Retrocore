@@ -8,7 +8,7 @@ works the same on the Apple II family, the Apple III and the Model I, in your pr
 | Kind | Set it | Stops when |
 | --- | --- | --- |
 | Source | The editor's gutter (F9), Shift+F9 for a later BASIC statement on a line, or `breakpoints` in a launch configuration | The PC reaches the line's code in a module that applies there (a line in a macro body stops in every expansion), or BASIC starts that statement. |
-| Function | **+** in the Breakpoints view: a label or an address expression, such as `DISPLAY_CHAR`, `$C600` or `COUT+3` | The PC reaches that address, from any code. |
+| Function | **+** in the Breakpoints view: a label or an address expression, such as `DISPLAY_CHAR`, `$C600` or `COUT+3`, which may use a name from the hints file; or the gutter of Retrocore Memory's listing (F9), which names the address, such as `$6000` or `aux:$0400` | The PC reaches that address, from any code, or only while the CPU runs the named bank's code there. |
 | Scanline (Apple II) | The **Video beam reaches a scanline** checkbox in the Breakpoints view, with **Edit Condition** for the positions; or **+** with a name such as `scanline 192:0` | The video beam reaches that scanline and column, between any two cycles. See [Scanline breakpoints](#scanline-breakpoints). |
 | SOS call (Apple III) | **+** with a name such as `sos OPEN`, `sos $C8`, or `sos` for every call | A program is about to make that SOS call. See [SOS call breakpoints](#sos-call-breakpoints). |
 | Pascal (Apple II, Apple III) | **+** with a name such as `pascal HELLO.2`, `pascal HELLO.2+$0D` or `pascal 1.2` | Apple Pascal's interpreter is about to run that p-code of the procedure, on the Pascal thread. See [Pascal breakpoints](Pascal.md#pascal-breakpoints). |

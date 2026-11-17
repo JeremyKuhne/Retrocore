@@ -37,6 +37,9 @@ internal sealed partial class RecoveryJournal
 {
     private const string SessionFile = "session.json";
     private const string LockFile = "journal.lock";
+
+    // A journal being set aside, until all of it is in; one the next open finds was interrupted, and it finishes.
+    private const string PendingAside = "Unreadable-pending";
     private const string JournalFile = "journal.json";
     private const string MediaFolder = "Media";
 
@@ -55,6 +58,10 @@ internal sealed partial class RecoveryJournal
 
     // What the journal held when opened that could not go back in a drive, carried into every commit as it was.
     private readonly List<JsonObject> _unplaced = [];
+
+    // The snapshots a commit may remove once none is named: those this journal wrote, and those of the disks it put
+    // back. Any other file is left alone, as the snapshot of an entry kept as it was, whatever it names.
+    private readonly HashSet<string> _removable = [with(StringComparer.OrdinalIgnoreCase)];
 
     private readonly DateTime _started = DateTime.UtcNow;
 
@@ -129,7 +136,11 @@ internal sealed partial class RecoveryJournal
     {
         List<JsonObject> kept = [];
         string journal = Path.Join(folder, JournalFile);
-        if (File.Exists(journal))
+        if (Directory.Exists(Path.Join(folder, PendingAside)))
+        {
+            problems.Add(SetAside(folder, "setting it aside was interrupted"));
+        }
+        else if (File.Exists(journal))
         {
             try
             {
@@ -147,13 +158,7 @@ internal sealed partial class RecoveryJournal
             }
             catch (JsonException exception)
             {
-                // Set aside with its snapshots, never deleted, so the commits that follow keep their hands off them.
-                string aside = Path.Join(folder, $"Unreadable-{DateTime.UtcNow:yyyyMMddHHmmssfff}");
-                Directory.CreateDirectory(aside);
-                File.Move(journal, Path.Join(aside, JournalFile));
-                Directory.Move(Path.Join(folder, MediaFolder), Path.Join(aside, MediaFolder));
-                Directory.CreateDirectory(Path.Join(folder, MediaFolder));
-                problems.Add($"The recovery journal could not be read ({exception.Message}); it is kept, with its disks, in {aside}.");
+                problems.Add(SetAside(folder, exception.Message));
             }
         }
 
@@ -163,6 +168,27 @@ internal sealed partial class RecoveryJournal
             .Max() + 1;
 
         return new(id, folder, held, kept, next);
+    }
+
+    // Sets an unreadable journal aside with its snapshots, never deleting them: its snapshots first, then the journal,
+    // into a pending folder that takes its final name only once all of it is in. An open that finds the pending
+    // folder finishes it, so an interruption at any step leaves the snapshots with their journal.
+    private static string SetAside(string folder, string why)
+    {
+        string pending = Path.Join(folder, PendingAside);
+        Directory.CreateDirectory(pending);
+        string media = Path.Join(folder, MediaFolder);
+        if (!Directory.Exists(Path.Join(pending, MediaFolder)) && Directory.Exists(media))
+        {
+            Directory.Move(media, Path.Join(pending, MediaFolder));
+        }
+
+        string journal = Path.Join(folder, JournalFile);
+        if (File.Exists(journal)) { File.Move(journal, Path.Join(pending, JournalFile)); }
+        string aside = Path.Join(folder, $"Unreadable-{DateTime.UtcNow:yyyyMMddHHmmssfff}");
+        Directory.Move(pending, aside);
+        Directory.CreateDirectory(media);
+        return $"The recovery journal could not be read ({why}); it is kept, with its disks, in {aside}.";
     }
 
     /// <summary>
@@ -180,8 +206,16 @@ internal sealed partial class RecoveryJournal
     /// <returns>The snapshot's image.</returns>
     /// <exception cref="InvalidDataException">The entry names no snapshot.</exception>
     /// <exception cref="IOException">The snapshot cannot be read.</exception>
-    internal byte[] Image(JsonObject disk) =>
-        File.ReadAllBytes(Path.Join(_folder, MediaFolder, disk.String("file") ?? throw new InvalidDataException("A kept disk names no snapshot.")));
+    internal byte[] Image(JsonObject disk)
+    {
+        string file = disk.String("file") ?? throw new InvalidDataException("A kept disk names no snapshot.");
+        if (Path.GetFileName(file) != file)
+        {
+            throw new InvalidDataException("A kept disk's snapshot is not in the journal.");
+        }
+
+        return File.ReadAllBytes(Path.Join(_folder, MediaFolder, file));
+    }
 
     /// <summary>
     ///  Records that a disk the journal held is back in the machine, as the medium it now is, so the next checkpoint
@@ -190,8 +224,12 @@ internal sealed partial class RecoveryJournal
     /// <param name="disk">The disk, one of <see cref="Kept"/>.</param>
     /// <param name="medium">Its medium id.</param>
     /// <param name="version">The version of the medium it was put back as.</param>
-    internal void Placed(JsonObject disk, Guid medium, long version) =>
-        _written[medium] = new(version, disk.String("file") ?? "", disk.String("kind") ?? "", disk.Bool("writeProtected") == true);
+    internal void Placed(JsonObject disk, Guid medium, long version)
+    {
+        string file = disk.String("file") ?? "";
+        _written[medium] = new(version, file, disk.String("kind") ?? "", disk.Bool("writeProtected") == true);
+        lock (_writing) { _removable.Add(file); }
+    }
 
     /// <summary>
     ///  Records that a disk the journal held could not go back in the machine, so it stays in the journal as it was.
@@ -245,6 +283,7 @@ internal sealed partial class RecoveryJournal
             {
                 string file = $"{disk.Medium:N}-{_next++}.{Extension(snapshot.Kind)}";
                 WriteDurably(Path.Join(_folder, MediaFolder, file), snapshot.Image.Span);
+                _removable.Add(file);
                 written = new(disk.Version, file, snapshot.Kind, snapshot.WriteProtected);
                 _written[disk.Medium] = written;
             }
@@ -271,10 +310,10 @@ internal sealed partial class RecoveryJournal
 
         // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
         // An entry kept as it was may hold anything; only a file name it gives as text keeps a snapshot.
-        HashSet<string> named = [.. entries.OfType<JsonObject>().Select(FileOf)];
-        foreach (string file in Directory.EnumerateFiles(Path.Join(_folder, MediaFolder)))
+        HashSet<string> named = new(entries.OfType<JsonObject>().Select(FileOf), StringComparer.OrdinalIgnoreCase);
+        foreach (string file in _removable.Where(file => !named.Contains(file)).ToList())
         {
-            if (!named.Contains(Path.GetFileName(file))) { TryDelete(file); }
+            if (TryDelete(Path.Join(_folder, MediaFolder, file))) { _removable.Remove(file); }
         }
 
         foreach (Guid gone in _written.Keys.Where(medium => !disks.Any(disk => disk.Medium == medium)).ToList())
@@ -341,15 +380,17 @@ internal sealed partial class RecoveryJournal
         stream.Flush(flushToDisk: true);
     }
 
-    private static void TryDelete(string file)
+    private static bool TryDelete(string file)
     {
         try
         {
             File.Delete(file);
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The next commit removes it.
+            return false;
         }
     }
 }

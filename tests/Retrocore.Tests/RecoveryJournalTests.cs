@@ -202,6 +202,47 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  Setting a journal aside that was interrupted, its snapshots moved and its journal not yet, is finished by the
+    ///  next open, so the two stay together.
+    /// </summary>
+    [TestMethod]
+    public void AnInterruptedSetAsideIsFinished()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("interrupted.po");
+        Write(drive, block: 1, 0x5A);
+        Stop(Open(id), drive);
+        string snapshot = Snapshots(id).Single();
+        string folder = Path.Join(RecoveryJournal.Root, id);
+        File.WriteAllText(Path.Join(folder, "journal.json"), "{ not json");
+        Directory.CreateDirectory(Path.Join(folder, "Unreadable-pending"));
+        Directory.Move(Path.Join(folder, "Media"), Path.Join(folder, "Unreadable-pending", "Media"));
+
+        List<string> problems = [];
+        RecoveryJournal journal = RecoveryJournal.Open(id, problems) ?? throw new InvalidOperationException("The journal is taken.");
+        problems.Should().ContainSingle().Which.Should().Contain("interrupted");
+        Stop(journal);
+        string aside = Directory.EnumerateDirectories(folder, "Unreadable-*").Single();
+        File.Exists(Path.Join(aside, "Media", snapshot)).Should().BeTrue();
+        File.Exists(Path.Join(aside, "journal.json")).Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  A commit removes only snapshots it wrote or put back, never a file no entry it knows names, as the snapshot of
+    ///  an entry kept as it was.
+    /// </summary>
+    [TestMethod]
+    public void ACommitLeavesSnapshotsItDoesNotKnow()
+    {
+        string id = Id();
+        RecoveryJournal journal = Open(id);
+        string stray = Path.Join(RecoveryJournal.Root, id, "Media", "stray.woz");
+        File.WriteAllText(stray, "a disk");
+        Stop(journal);
+        File.Exists(stray).Should().BeTrue();
+    }
+
+    /// <summary>
     ///  A journal that reads as JSON but not as a journal is set aside too, never taken for an empty one.
     /// </summary>
     /// <param name="text">The journal's text.</param>

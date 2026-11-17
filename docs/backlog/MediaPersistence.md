@@ -905,15 +905,41 @@ After the reviews:
      insert and Undo prompts for a changed disk offer **Save**, **Save As...** and **Discard**, saying what changed,
      and a discard shows **Undo**; a changed disk's tooltip says what changed once the pointer is on it; and the
      machine's ejected disks are rows under their drive with **Save**, **Insert Again** and **Discard**, counted in
-     the badge. A session that ends with disks not saved says which; until the journal keeps them past the session
-     (phase 4, with **Save All**, **Review** and the off machine's kept disks), their changes are not kept. Tests:
+     the badge. A session that ends with disks not saved says which; phase 4's journal keeps them for the next launch
+     (with **Save All**, **Review** and the off machine's kept disks to come). Tests:
      `MediaUndoTests`, `drives.test.ts`, `drivesView.ts`'s revert, and `Test-CocoDap.mjs`, where a disk Disk BASIC
      wrote says it changed sectors on tracks 16-17, reverts and is undone.
 4. **The recovery journal.** Medium ids, checkpoints at idle moments, the machine's eject, clean stop, crash
    discovery and recovery, built disks rebuilt, recordings as changed tapes, the stop and crash notifications (with
    **Save All**, **Review** and **Discard**, and the off machine's saves of the disks kept), and then the
    source-aware default lock. Done when every case in *Crash and failure*, *Detach*, *Built disks* and *Tapes*
-   passes in a fresh process.
+   passes in a fresh process. It lands in parts:
+   - **The journal, kept and put back (built).** Until machine files give machines their ids, a launch's
+     `recoveryId` names its journal, and the extension gives each launch configuration one, kept in workspace state.
+     `RecoveryJournal` keeps `Recovery\<id>\` in local data: `session.json` (the process, its start time, and whether
+     the session ended cleanly), numbered snapshots in `Media\` that are never rewritten, and `journal.json`, replaced
+     in one step after the snapshots it names are flushed, so a crash leaves the last commit whole; snapshots no
+     commit names are removed after it. Every 30 seconds the debug host takes each changed disk's snapshot under the
+     machine's lock, only for a disk whose version changed since the last, and commits it off the machine's thread;
+     as the session ends or another launch replaces it, a last checkpoint closes the journal as clean. The machine's
+     ejected disks are kept with their ejected ids. Each entry has the disk's medium id, drive, label and format, its
+     image, the image's baseline, and the codec that writes it back (a `.dsk`'s sector order, a JVC's header). The
+     next launch with that id puts each disk back after the launch and saved machine have set the machine up, as the
+     medium it was (a Disk II disk from WOZ2, a 3.5 disk or block device from 2MG, a floppy from DMK), changed against
+     its image; a saved disk leaves the journal, and one that cannot go back stays in it, said in the Debug Console. A
+     journal is held by one process at a time, through a lock file it keeps open until it closes the journal, so a second
+     session keeps none; one that cannot be read is set aside with its snapshots. One checkpoint runs at a time, from
+     its snapshots to its commit. The stop notice says which disks are kept for the next launch and which are not, as
+     a disk the launch built. Tests: `RecoveryJournalTests`, and `Test-CocoDap.mjs`,
+     where a disk Disk BASIC wrote comes back changed in the relaunched machine, says what changed, lists its
+     directory and saves to its JVC image.
+   - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle
+     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A session that
+     did not end cleanly is put back like one that did, without asking; crash discovery, its notification, the stop
+     notification's **Save All**, **Review** and **Discard**, and the off machine showing its kept disks come next.
+     Then built disks (kept in the history once it is built, with a notice), recordings as changed tapes, slot 7's
+     device (which cannot be mounted again in a running machine), Retrocore Desktop's journal, and the source-aware
+     default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

@@ -198,6 +198,17 @@ the changed ones it ejected as `ejected`, each kept until a `save`, `insertAgain
 the image's unit (`sector` for a `.dsk`, JV1 or JVC, with the tracks they are on; `block` for a block image or 2MG),
 or null for WOZ, DMK and JV3.
 
+A launch's `recoveryId` (letters, digits, `-` and `_`) names the machine's recovery journal, in local data under
+`Recovery\<recoveryId>\`: every 30 seconds, and as the machine stops or another launch replaces it, each changed disk
+that came from an image, in a drive or ejected by the machine, is kept there as a lossless snapshot (WOZ2, 2MG or
+DMK), with its image and the revision of the image it was read from. The next launch with the same `recoveryId` puts
+each one back where it was, after the launch and its `machineState` have set the machine up, still changed against
+its image (and stale or a conflict as the image is now), so a stop or relaunch loses no changes. A disk saved or let
+go leaves the journal; one that cannot go back, as when its drive is gone, stays in it, and the Debug Console says so.
+A second session that launches under a `recoveryId` a running one has keeps no journal. The extension gives each
+launch configuration a `recoveryId` of its own, and `retro/devices` says `recovery: true` for a session that keeps
+one. A disk a launch built, such as a `dos` launch's, is not kept: the next launch builds it again.
+
 ## A machine that is off
 
 The language server, which is the same `Retrocore.Debug.dll`, answers two requests about a machine with no debug
@@ -274,7 +285,7 @@ saying how many sectors or blocks were dropped; ejecting a changed disk, inserti
 **Save**, **Save As...** or **Discard**, saying what the machine changed, and a discard offers **Undo**. A changed
 disk's tooltip says what changed once the pointer is on it. A disk the machine ejected with changes stays under its
 drive as an **Ejected** row, with **Save**, **Insert Again** and **Discard**, until it is saved or let go. A session
-that ends with disks not saved says which; their changes are not kept past it yet. A slot's inline buttons in the
+that ends with disks not saved says which, and that they are kept for the launch configuration's next launch, which puts them back in their drives still changed. A slot's inline buttons in the
 Machine view add or
 remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
 and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved

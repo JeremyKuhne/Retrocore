@@ -52,6 +52,20 @@ internal sealed record FileRevision(long Length, DateTime Written, string Sha256
     internal bool SameAs(FileRevision? other) => other is not null && other.Length == Length && other.Sha256 == Sha256;
 
     /// <summary>
+    ///  Reads a revision as <see cref="ToJson"/> writes it, as the recovery journal keeps a disk's baseline.
+    /// </summary>
+    /// <param name="json"><c>{ length, written, sha256 }</c>.</param>
+    /// <returns>The revision.</returns>
+    /// <exception cref="InvalidDataException">A field is missing.</exception>
+    internal static FileRevision FromJson(JsonObject json) => new(
+        json["length"]?.GetValue<long>() ?? throw new InvalidDataException("A revision needs its length."),
+        DateTime.Parse(
+            json["written"]?.GetValue<string>() ?? throw new InvalidDataException("A revision needs when it was written."),
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind),
+        json["sha256"]?.GetValue<string>() ?? throw new InvalidDataException("A revision needs its SHA-256."));
+
+    /// <summary>
     ///  Writes the revision as the protocol gives it.
     /// </summary>
     /// <returns><c>{ length, written, sha256 }</c>.</returns>

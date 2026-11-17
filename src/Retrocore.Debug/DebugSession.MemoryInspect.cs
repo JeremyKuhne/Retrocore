@@ -105,7 +105,7 @@ internal sealed partial class DebugSession
         }
 
         if (bank.AreaOf(address) is null) { return $"{bank.Label} has no byte here"; }
-        bool reads = bank.Areas.Contains(read), writes = bank.Areas.Contains(write);
+        bool reads = bank.ReadBy(Target, address), writes = bank.Areas.Contains(write);
         return (reads, writes) switch
         {
             (true, true) => "The CPU reads and writes it here now",

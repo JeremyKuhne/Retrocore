@@ -30,6 +30,10 @@ namespace Retrocore.Debug;
 ///  Whether a write reaches an address now, for a bank whose writes can land on ROM or I/O, such as the SoftCard's
 ///  Z80 through its address translation; null when every byte it has can be written.
 /// </param>
+/// <param name="ReadsHere">
+///  Whether the CPU reads the bank's byte at an address now, for a bank its areas do not tell apart from the CPU's
+///  memory, such as an Apple III X-byte's view; null to go by the areas.
+/// </param>
 internal sealed record DebugMemoryBank(
     string Name,
     string Label,
@@ -38,8 +42,20 @@ internal sealed record DebugMemoryBank(
     Func<ushort, byte?> Peek,
     Func<ushort, byte, bool>? Poke,
     Retrocore.Isa.InstructionSet? InstructionSet = null,
-    Func<ushort, bool>? CanPoke = null)
+    Func<ushort, bool>? CanPoke = null,
+    Func<ushort, bool>? ReadsHere = null)
 {
+    /// <summary>
+    ///  Gets whether the CPU reads the bank's byte at an address now: where it reads one of the bank's areas, or, for
+    ///  a bank that is a view of storage the areas do not tell apart, such as the Apple III's X-byte addressing,
+    ///  where it reads the same byte.
+    /// </summary>
+    /// <param name="cpu">The CPU's memory.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>True when the CPU reads the bank's byte there.</returns>
+    internal bool ReadBy(IDebugMemory cpu, ushort address) =>
+        ReadsHere?.Invoke(address) ?? Areas.Contains(cpu.ReadArea(address));
+
     /// <summary>
     ///  Gets whether a write reaches an address of the bank now.
     /// </summary>

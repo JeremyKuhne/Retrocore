@@ -741,7 +741,10 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 {
                     bus.Ram[bus.ExtendedOffset(value, address)] = data;
                     return true;
-                }));
+                },
+                // The CPU reads the X-byte's byte where it reads RAM at the same offset.
+                ReadsHere: address => bus.ReadArea(address) is Apple3MemoryArea.SystemBank or >= Apple3MemoryArea.Bank0
+                    && bus.RamOffset(address) == bus.ExtendedOffset(value, address)));
         }
 
         return banks;

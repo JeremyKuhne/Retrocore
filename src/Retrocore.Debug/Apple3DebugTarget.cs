@@ -688,6 +688,14 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     {
         Apple3Bus bus = _machine.Bus;
         int system = bus.Ram.Length - 0x8000;
+        // The CPU reads a bank's byte where it reads RAM at the same offset: the zero page and stack move, so the
+        // areas alone do not say.
+        bool Reads(ushort address, int offset)
+        {
+            bool ram = bus.ReadArea(address) is Apple3MemoryArea.SystemBank or >= Apple3MemoryArea.Bank0;
+            return ram && bus.RamOffset(address) == offset;
+        }
+
         List<DebugMemoryBank> banks =
         [
             new(
@@ -700,7 +708,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 {
                     bus.Ram[system + (address < 0x2000 ? address : address - 0x8000)] = value;
                     return true;
-                })
+                },
+                ReadsHere: address => Reads(address, system + (address < 0x2000 ? address : address - 0x8000)))
         ];
 
         for (int bank = 0; bank < bus.SwitchableBanks; bank++)
@@ -716,7 +725,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                 {
                     bus.Ram[offset + address - 0x2000] = value;
                     return true;
-                }));
+                },
+                ReadsHere: address => Reads(address, offset + address - 0x2000)));
         }
 
         banks.Add(new(
@@ -742,9 +752,7 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[bus.ExtendedOffset(value, address)] = data;
                     return true;
                 },
-                // The CPU reads the X-byte's byte where it reads RAM at the same offset.
-                ReadsHere: address => bus.ReadArea(address) is Apple3MemoryArea.SystemBank or >= Apple3MemoryArea.Bank0
-                    && bus.RamOffset(address) == bus.ExtendedOffset(value, address)));
+                ReadsHere: address => Reads(address, bus.ExtendedOffset(value, address))));
         }
 
         return banks;

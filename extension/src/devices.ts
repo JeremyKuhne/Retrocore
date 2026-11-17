@@ -929,6 +929,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         format?: string): Promise<boolean> => {
         const device = still(session) ? tree.devices.find(candidate => candidate.id === id) : undefined;
         const kept = typeof args.ejected === "string" ? device?.ejected?.find(candidate => candidate.id === args.ejected) : undefined;
+        // An ejected disk no longer kept, put back or let go meanwhile, is not saved as the disk in the drive instead.
+        if (typeof args.ejected === "string" && kept === undefined) {
+            void vscode.window.showWarningMessage("Retrocore: that ejected disk was put back or let go, so it was not saved.");
+            return false;
+        }
         return device !== undefined && await saveAs(session, device, generation, format, kept);
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.saveAs", async (node?: Node) => {

@@ -682,11 +682,15 @@ internal sealed partial class DebugSession
         _journal = null;
         try
         {
-            journal.Commit(_target is null ? [] : MediaActions.Journal(_target.Devices, journal), close: true);
+            // Every changed disk whole: a checkpoint still being written may drop a snapshot this one would reuse.
+            journal.Commit(_target is null ? [] : MediaActions.Journal(_target.Devices, journal, whole: true), close: true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             Say($"The recovery journal could not be written as the machine stopped; it keeps the disks as of its last checkpoint: {exception.Message}");
+
+            // The client hears that the session's disks were not kept, so its stop notice does not say they were.
+            if (_target is not null) { Notify("retro/devices", DevicesBody()); }
         }
     }
 

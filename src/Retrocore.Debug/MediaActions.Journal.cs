@@ -19,6 +19,9 @@ internal static partial class MediaActions
     /// </summary>
     /// <param name="devices">The machine's devices.</param>
     /// <param name="journal">Its journal, which says which disks it holds as they are already.</param>
+    /// <param name="whole">
+    ///  Whether to take every changed disk's snapshot, as the last checkpoint does, whatever the journal holds already.
+    /// </param>
     /// <returns>
     ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version.
     /// </returns>
@@ -27,7 +30,7 @@ internal static partial class MediaActions
     ///   A disk the launch built, with no image, is not kept: the next launch builds it again.
     ///  </para>
     /// </remarks>
-    internal static List<JournalDisk> Journal(IReadOnlyList<IDevice> devices, RecoveryJournal journal)
+    internal static List<JournalDisk> Journal(IReadOnlyList<IDevice> devices, RecoveryJournal journal, bool whole = false)
     {
         List<JournalDisk> disks = [];
         foreach (IDevice device in devices)
@@ -72,7 +75,7 @@ internal static partial class MediaActions
             }
 
             long version = medium.Version;
-            disks.Add(new(source.Id, medium.GetType().Name, version, journal.Holds(source.Id, version) ? null : medium.Snapshot(), entry));
+            disks.Add(new(source.Id, medium.GetType().Name, version, !whole && journal.Holds(source.Id, version) ? null : medium.Snapshot(), entry));
         }
     }
 
@@ -92,48 +95,62 @@ internal static partial class MediaActions
         HashSet<string> filled = [];
         foreach (JsonObject disk in journal.Kept)
         {
-            string label = disk.String("label") ?? "a disk";
+            string label = "a disk";
             try
             {
+                // Everything the entry says is read and checked before the disk goes anywhere, so a bad entry leaves
+                // the machine as its launch set it up and stays in the journal.
+                label = disk.String("label") ?? label;
                 string drive = disk.String("drive") ?? throw new InvalidDataException("It names no drive.");
                 IDevice device = devices.FirstOrDefault(device => device.Id == drive)
                     ?? throw new InvalidDataException($"The machine has no {drive} now.");
 
                 JsonObject source = disk.Object("source") ?? throw new InvalidDataException("It names no image.");
-                Guid id = Guid.ParseExact(disk.String("medium") ?? "", "N");
-                IMedium medium = Load(disk.String("type"), disk.String("kind"), journal.Image(disk), disk.Bool("writeProtected") == true);
+                DiskSource from = new(
+                    Guid.ParseExact(disk.String("medium") ?? "", "N"),
+                    source.String("path") ?? throw new InvalidDataException("It names no image."),
+                    CodecOf(source.Object("codec")),
+                    FileRevision.FromJson(source.Object("baseline") ?? throw new InvalidDataException("It has no baseline.")));
+
                 string format = disk.String("format") ?? "";
+                KeptDisk? outside = null;
+                IMediumSlot? slot = null;
+                IMedium medium = Load(disk.String("type"), disk.String("kind"), journal.Image(disk), disk.Bool("writeProtected") == true);
                 if (disk.Object("ejected") is { } ejected)
                 {
-                    s_ejected.GetValue(device, _ => []).Add(new KeptDisk(medium, label, format, ejected.String("why") ?? "ejected")
+                    outside = new KeptDisk(medium, label, format, ejected.String("why") ?? "ejected")
                     {
                         Id = ejected.String("id") ?? $"k-{Guid.NewGuid():N}",
                         When = DateTime.Parse(ejected.String("when") ?? "", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                    });
+                    };
                 }
                 else
                 {
-                    IMediumSlot slot = device as IMediumSlot ?? throw new InvalidDataException($"{device.Info.Name} holds no disk.");
-                    if (!filled.Add(drive))
+                    slot = device as IMediumSlot ?? throw new InvalidDataException($"{device.Info.Name} holds no disk.");
+                    if (filled.Contains(drive))
                     {
                         throw new InvalidDataException($"Another disk kept for {device.Info.Name} went back in it.");
                     }
-
-                    slot.Mount(medium, label, format);
                 }
 
                 medium.MarkChanged();
-                Keep(medium, new DiskSource(
-                    id,
-                    source.String("path") ?? throw new InvalidDataException("It names no image."),
-                    CodecOf(source.Object("codec")),
-                    FileRevision.FromJson(source.Object("baseline") ?? throw new InvalidDataException("It has no baseline."))));
+                Keep(medium, from);
+                if (outside is not null)
+                {
+                    s_ejected.GetValue(device, _ => []).Add(outside);
+                }
+                else
+                {
+                    slot?.Mount(medium, label, format);
+                    filled.Add(drive);
+                }
 
-                journal.Placed(disk, id, medium.Version);
+                journal.Placed(disk, from.Id, medium.Version);
             }
             catch (Exception exception) when (exception is IOException
                 or UnauthorizedAccessException
                 or InvalidDataException
+                or InvalidOperationException
                 or FormatException
                 or ArgumentException
                 or NotSupportedException)

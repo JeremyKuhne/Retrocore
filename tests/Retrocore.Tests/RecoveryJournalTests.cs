@@ -173,7 +173,7 @@ public sealed class RecoveryJournalTests
         RecoveryJournal first = Open(id);
         RecoveryJournal.Open(id, []).Should().BeNull();
         first.Commit([], close: true);
-        RecoveryJournal.Open(id, []).Should().NotBeNull();
+        Open(id).Commit([], close: true);
     }
 
     /// <summary>
@@ -250,6 +250,39 @@ public sealed class RecoveryJournalTests
         Stop(journal, next);
         Disks(id).Should().HaveCount(2, "neither disk is dropped");
         Snapshots(id).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    ///  An entry with a field of the wrong type stays in the journal, the disk going nowhere, and the entries after it
+    ///  still go back.
+    /// </summary>
+    [TestMethod]
+    public void ABadEntryStaysAndTheRestGoBack()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("bad.po");
+        Write(drive, block: 1, 0x99);
+        Stop(Open(id), drive);
+        string journalPath = Path.Join(RecoveryJournal.Root, id, "journal.json");
+        JsonObject root = JsonNode.Parse(File.ReadAllText(journalPath))?.AsObject() ?? throw new InvalidOperationException("No journal.");
+        JsonArray disks = root["disks"]?.AsArray() ?? throw new InvalidOperationException("No disks.");
+        JsonObject good = disks[0]?.AsObject() ?? throw new InvalidOperationException("No disk.");
+        JsonObject badLabel = (JsonObject)good.DeepClone();
+        badLabel["label"] = new JsonObject();
+        JsonObject badBaseline = (JsonObject)good.DeepClone();
+        badBaseline["drive"] = "nowhere";
+        (badBaseline["source"]?["baseline"]?.AsObject() ?? throw new InvalidOperationException("No baseline."))["length"] = "long";
+        disks.Insert(0, badLabel);
+        disks.Insert(1, badBaseline);
+        File.WriteAllText(journalPath, root.ToJsonString());
+
+        Apple2Disk35Drive next = Again(image);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().HaveCount(2);
+        next.Media?.Changed.Should().BeTrue("the good entry went back");
+        Stop(journal, next);
+        Disks(id).Should().HaveCount(3, "the bad entries stay as they were");
+        Snapshots(id).Should().NotBeEmpty();
     }
 
     /// <summary>

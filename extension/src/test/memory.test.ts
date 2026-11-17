@@ -1193,6 +1193,12 @@ test("assembling in place types an instruction over a listing line, padding or o
     state = await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
     assert.deepEqual([writesSent.length, state.status], [0, "LDA #$C1 is unchanged."]);
 
+    // An operand spelled in another case is another name, so it writes.
+    writesSent.length = 0;
+    assembleReply = { bytes: [0xA9, 0xC2], text: "LDA #$c1", nop: [0xEA], line: "LDA #$c1" };
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.equal(writesSent.length, 1);
+
     // An instruction of the same size writes without asking.
     writesSent.length = 0;
     confirmsSent.length = 0;

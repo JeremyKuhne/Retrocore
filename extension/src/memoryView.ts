@@ -881,7 +881,11 @@ async function assembleLine(line) {
     if (!result || result.cancelled) return;
     // The line's own text, accepted as it was, leaves its bytes alone: assembled again it may take another
     // encoding, as LDA $0024 written with an absolute address assembles to zero page.
-    const same = text => String(text ?? "").split(" ").join(String.fromCharCode(9)).split(String.fromCharCode(9)).filter(part => part !== "").join(" ").toUpperCase();
+    // The mnemonic in any case, and its spacing, but the operand as spelled, as names are case-sensitive.
+    const same = text => {
+        const parts = String(text ?? "").split(" ").join(String.fromCharCode(9)).split(String.fromCharCode(9)).filter(part => part !== "");
+        return parts.length === 0 ? "" : [parts[0].toUpperCase(), ...parts.slice(1)].join(" ");
+    };
     if (line.kind !== "data" && same(result.line) === same(line.text)) {
         status(line.text + " is unchanged.");
         return;

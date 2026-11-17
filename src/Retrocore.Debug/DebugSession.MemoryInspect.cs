@@ -75,12 +75,20 @@ internal sealed partial class DebugSession
         };
     }
 
-    // The documentation of the name an address has: from the module whose symbol it is there, the one that applies
-    // to the memory when several have it, as a program's own COUT is not the ROM's; a hints file's name has none.
+    // The documentation of the name an address has: from the module whose symbol it is there, chosen as the names
+    // are, so a label from the module whose code is at its address, as a program's own COUT is not the ROM's, and a
+    // constant such as CH from a module whose code is in memory; a hints file's name has none.
     private string? SummaryAt(string name, int value, IDebugMemory memory)
     {
+        ushort address = (ushort)value;
         bool Defines(IDebugModule module) => module.TryResolve(name, out long resolved) && resolved == value;
-        bool Applies(IDebugModule module) => Defines(module) && DebugInfo.Active(module, memory, (ushort)value);
+        bool Applies(IDebugModule module)
+        {
+            if (!Defines(module)) { return false; }
+            if (DebugInfo.Active(module, memory, address) && module.LabelApplies(memory, address)) { return true; }
+            return module.InMemory(memory) && module.AddressConstants.Any(constant => constant.Name == name && constant.Value == value);
+        }
+
         IDebugModule? owner = _debug.Modules.FirstOrDefault(Applies) ?? _debug.Modules.FirstOrDefault(Defines);
         return owner is null ? null : SymbolSummary(owner, name);
     }

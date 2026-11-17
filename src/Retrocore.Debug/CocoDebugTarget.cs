@@ -156,14 +156,17 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// <remarks>
     ///  <para>
     ///   A ROM's addresses are RAM while the map puts RAM there, as a 64K machine's all-RAM map and the CoCo 3's
-    ///   MMU can; the vectors at $FFE0 read the ROM whatever the map.
+    ///   MMU can, and empty with no cartridge in the port; the vectors at $FFE0 read the ROM whatever the map.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<DebugRegion> Regions =>
     [
-        .. s_regions.Select(region => region.Kind == "rom" && region.Start < 0xFF00 && ReadArea(region.Start) is CocoMemoryArea.Ram
-            ? region with { Name = "RAM, which the map puts over the ROM", Kind = "ram" }
-            : region)
+        .. s_regions.Select(region => region.Kind != "rom" || region.Start >= 0xFF00 ? region : ReadArea(region.Start) switch
+        {
+            CocoMemoryArea.Ram => region with { Name = "RAM, which the map puts over the ROM", Kind = "ram" },
+            CocoMemoryArea.None => region with { Name = "Cartridge space, with no cartridge", Kind = "io" },
+            _ => region
+        })
     ];
 
     private static readonly DebugRegion[] s_regions =

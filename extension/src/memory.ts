@@ -10,7 +10,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn, withBookmark, type MemoryBookmark } from "./memoryModel";
+import { addressAt, bookmarkStore, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn, withBookmark, type MemoryBookmark } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -152,7 +152,10 @@ async function goTo(session: vscode.DebugSession, bank: string | null, text: str
     }
 }
 
-/** The workspace state key bookmarks are kept under, by launch configuration name. */
+/**
+ * The workspace state key bookmarks are kept under: pairs of a launch configuration's name and its bookmarks, a list
+ * rather than an object so that any name, such as constructor or __proto__, is only a name.
+ */
 const bookmarksKey = "retrocore.memory.bookmarks";
 
 /** Where a bookmark is, as the page writes addresses: $0400, or aux:$0400 in a bank. */
@@ -211,15 +214,15 @@ export function registerMemory(context: vscode.ExtensionContext): void {
     let lastEditor: MemoryEditor | undefined;
     // The bookmarks of a session's launch configuration, and of one space of them as a page shows them.
     const bookmarks = (session: vscode.DebugSession): MemoryBookmark[] =>
-        context.workspaceState.get<Record<string, MemoryBookmark[]>>(bookmarksKey, {})[session.configuration.name] ?? [];
+        bookmarkStore(context.workspaceState.get<unknown>(bookmarksKey)).get(session.configuration.name) ?? [];
     const bookmarksIn = (session: vscode.DebugSession, reference: string) =>
         bookmarks(session).filter(item => bankBase(item.bank) === reference).map(item => ({ name: item.name, address: item.address }));
     // Keeps a launch configuration's bookmarks and shows them in every editor of its sessions.
     const keepBookmarks = async (session: vscode.DebugSession, list: MemoryBookmark[]): Promise<void> => {
-        const all = { ...context.workspaceState.get<Record<string, MemoryBookmark[]>>(bookmarksKey, {}) };
-        if (list.length === 0) delete all[session.configuration.name];
-        else all[session.configuration.name] = list;
-        await context.workspaceState.update(bookmarksKey, all);
+        const all = bookmarkStore(context.workspaceState.get<unknown>(bookmarksKey));
+        if (list.length === 0) all.delete(session.configuration.name);
+        else all.set(session.configuration.name, list);
+        await context.workspaceState.update(bookmarksKey, [...all]);
         for (const editor of editors) {
             if (editor.session.configuration.name === session.configuration.name) {
                 void editor.panel.webview.postMessage({ type: "bookmarks", bookmarks: bookmarksIn(editor.session, editor.reference) });

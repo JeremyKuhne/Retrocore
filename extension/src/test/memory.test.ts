@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, type PatternByte } from "../memoryModel";
+import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -40,6 +40,11 @@ test("find wraps around, skips unreadable bytes and matches text with bit 7 eith
     assert.equal(findPattern(bytes, readable, text, -1, true), 3, "backward from before the start wraps to the end");
     assert.equal(findPattern(bytes, readable, text, 7, false), 0, "forward from past the end wraps to the start");
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), 6);
+    // A five-byte pattern fits from 0 to 3: from 6 forward wraps to 0, and from 6 backward starts at 3.
+    const zeros = new Uint8Array(8), all = new Uint8Array(8).fill(1);
+    const five = parsePattern("00 00 00 00 00") as PatternByte[];
+    assert.equal(findPattern(zeros, all, five, 6, false), 0, "past the last fit, forward wraps to the start");
+    assert.equal(findPattern(zeros, all, five, 6, true), 3, "past the last fit, backward is the last fit");
     readable[6] = 2;
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), -1);
 });
@@ -1142,6 +1147,15 @@ test("find by value reads a number as a byte or as words either way round", () =
     assert.equal(typeof valueForms("HELLO"), "string");
 });
 
+test("bookmarks are kept by any launch configuration name, and anything else saved is none", () => {
+    assert.equal(bookmarkStore(undefined).size, 0);
+    assert.equal(bookmarkStore({ constructor: [] }).size, 0);
+    assert.equal(bookmarkStore([]).get("constructor"), undefined, "no inherited property is a list");
+    const store = bookmarkStore([["__proto__", [{ name: "Here", bank: null, address: 1 }]]]);
+    assert.deepEqual(store.get("__proto__"), [{ name: "Here", bank: null, address: 1 }]);
+    assert.deepEqual(bookmarkStore(JSON.parse(JSON.stringify([...store]))).get("__proto__")?.[0].name, "Here");
+});
+
 test("bookmarks are one a space and address, renamed in place and removed by an empty name", () => {
     let list = withBookmark([], null, 0x0400, " Screen ");
     list = withBookmark(list, "aux", 0x0400, "Aux screen");
@@ -1217,6 +1231,7 @@ test("find by value finds the nearest form, the BASIC's float included", async (
     state = await drive(page, [{ findValue: "=1000" }], fill, lists);
     assert.equal(state.cursor, 0x2000);
     assert.equal(state.anchor, 0x2001, "the match is selected");
+    assert.deepEqual(state.back, [0x0000, 0x0900, 0x1000], "each match is one Back returns from");
     state = await drive(page, [{ findValue: "=1000", backward: true }], fill, lists);
     assert.equal(state.cursor, 0x1000);
     state = await drive(page, [{ findValue: "=-2.5" }], fill, lists);

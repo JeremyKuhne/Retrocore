@@ -191,8 +191,10 @@ export function findPattern(bytes: Uint8Array, readable: Uint8Array, pattern: Pa
         return true;
     };
     const starts = last + 1;
-    // A start past either end wraps, so Find Next from the last match and Find Previous from the first go on.
-    const first = ((from % starts) + starts) % starts;
+    // A start past where the pattern last fits wraps forward to the start and goes back to that last place, and
+    // one before the start wraps backward to it, so Find Next from the last match and Find Previous from the
+    // first go on, and the nearest match is never skipped.
+    const first = backward ? (from < 0 || from > last ? last : from) : (from < 0 || from > last ? 0 : from);
     for (let step = 0; step < starts; step++) {
         const start = backward ? (first - step + starts) % starts : (first + step) % starts;
         if (matches(start)) return start;
@@ -343,6 +345,19 @@ export interface MemoryBookmark {
     name: string;
     bank: string | null;
     address: number;
+}
+
+/**
+ * The bookmarks kept in the workspace's state, by launch configuration name: pairs of a name and its bookmarks.
+ * Anything else, such as nothing saved yet, is none.
+ */
+export function bookmarkStore(saved: unknown): Map<string, MemoryBookmark[]> {
+    const store = new Map<string, MemoryBookmark[]>();
+    if (!Array.isArray(saved)) return store;
+    for (const entry of saved) {
+        if (Array.isArray(entry) && typeof entry[0] === "string" && Array.isArray(entry[1])) store.set(entry[0], entry[1] as MemoryBookmark[]);
+    }
+    return store;
 }
 
 /**

@@ -1651,12 +1651,9 @@ async function findInstruction(text, backward) {
 
 // Selects a match, the cursor on its first byte.
 function found(at, size, message) {
-    // A match is a move of the cursor, as an edit waiting on the debugger must know.
-    moves++;
+    // A match is a go-to, which Back returns from, and a move of the cursor, as an edit waiting on the debugger must know.
+    jump(at);
     anchor = at + size - 1;
-    cursor = at;
-    nibble = null;
-    reveal(at, true);
     render();
     status(message);
 }

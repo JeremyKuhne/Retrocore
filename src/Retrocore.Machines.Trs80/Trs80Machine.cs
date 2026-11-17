@@ -4,6 +4,7 @@
 
 using Retrocore.Cpu;
 using Retrocore.Cpu.Z80;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Devices;
 
 namespace Retrocore.Machines.Trs80;
@@ -45,16 +46,37 @@ public sealed class Trs80Machine : IMachine
         Bus = new(configuration, roms);
         Processor = new(Bus);
         Cassette = new(Bus.Cassette, configuration.Rom == Trs80Rom.Level1 ? 250 : 500);
-        List<Trs80FloppyDrive> drives = [];
-        for (int drive = 0; Bus.HasDiskController && drive < Trs80DiskController.DriveCount; drive++)
+        List<FloppyDrive> drives = [];
+        for (int drive = 0; Bus.HasDiskController && drive < WesternDigitalFloppyDiskController.DriveCount; drive++)
         {
-            drives.Add(new(Bus.Disks, drive, configuration.Doubler));
+            drives.Add(new(Bus.Disks, drive, DriveInfo(drive, configuration.Doubler)));
         }
 
         Drives = drives;
 
         Devices = [Cassette, .. Drives];
     }
+
+    // The Expansion Interface's drives, by the controller and doubler it has.
+    private static DeviceInfo DriveInfo(int drive, Trs80Doubler doubler) => new()
+    {
+        Name = $"Drive {drive}",
+        Description = "5¼-inch floppy drive",
+        Controller = doubler switch
+        {
+            Trs80Doubler.Percom => "FD1771 with a Percom doubler's WD1791, in the Expansion Interface",
+            Trs80Doubler.Tandy => "FD1771 with the Radio Shack doubler's WD1791, in the Expansion Interface",
+            Trs80Doubler.Both => "FD1771 with a WD1791 doubler (Percom or Radio Shack), in the Expansion Interface",
+            _ => "FD1771 in the Expansion Interface"
+        },
+        Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
+        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
+        Tracks = 40,
+
+        // Drive 3's select line is the other drives' side select, so drive 3 is single-sided.
+        Sides = drive == 3 ? 1 : 2
+    };
 
     /// <summary>
     ///  Gets the cassette recorder.
@@ -64,7 +86,7 @@ public sealed class Trs80Machine : IMachine
     /// <summary>
     ///  Gets the floppy drives, or none without the disk controller.
     /// </summary>
-    public IReadOnlyList<Trs80FloppyDrive> Drives { get; }
+    public IReadOnlyList<FloppyDrive> Drives { get; }
 
     /// <inheritdoc/>
     public IReadOnlyList<IDevice> Devices { get; }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Media.Trs80;
+namespace Retrocore.Media.Floppy;
 
 /// <summary>
 ///  ImageDisk (IMD), Dave Dunfield's format, in which most Model II disks and many Model III and 4 disks are kept:

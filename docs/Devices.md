@@ -21,7 +21,7 @@ without side effects, so a debugger can show it at any time, even mid-instructio
 | `IBlockStorage` | Storage addressed by block, with its `BlockCount` and the `LastBlock` the machine read or wrote. |
 
 Inserting media belongs to the concrete devices, since the image formats are the machine's own:
-`Trs80FloppyDrive.Insert(FloppyDisk, label, format)`, `Trs80CassetteDrive.Play` and `Record`, and
+`FloppyDrive.Insert(FloppyDisk, label, format)`, `Trs80CassetteDrive.Play` and `Record`, and
 `Apple2FloppyDrive.Insert(WozDisk, label, format)`.
 
 ### The machines' devices

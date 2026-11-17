@@ -4,6 +4,7 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Trs80;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Diagnostics;
 using System.Globalization;

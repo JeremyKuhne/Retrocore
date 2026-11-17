@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Coco;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Diagnostics;
 using System.Globalization;

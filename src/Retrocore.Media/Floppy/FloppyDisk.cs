@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Media.Trs80;
+namespace Retrocore.Media.Floppy;
 
 /// <summary>
 ///  A soft-sectored floppy disk as its sectors: each physical track's sectors in the order they pass the head.

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Trs80;
+using Retrocore.Machines.Chips;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Debug;
@@ -21,7 +22,7 @@ internal static class FloppyMedia
     /// <param name="coco">
     ///  Whether the drive is a Color Computer's, which reads JVC and DMK; a TRS-80's reads JV1, JV3, DMK and IMD.
     /// </param>
-    internal static void Insert(Trs80FloppyDrive drive, string path, bool coco)
+    internal static void Insert(FloppyDrive drive, string path, bool coco)
     {
         string full = Path.GetFullPath(path);
         byte[] bytes = File.ReadAllBytes(full);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Trs80.Chips;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  A Z80 SIO's two serial channels with nothing connected: each transmitter is always empty, nothing is received,

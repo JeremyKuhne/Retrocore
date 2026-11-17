@@ -213,13 +213,14 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
 | [`Retrocore.Assembler`](src/Retrocore.Assembler) | Multi-dialect assembler (native, ca65, Merlin, MACRO-10), disassembler, flow analysis, and `;;` documentation parser. |
 | [`Retrocore.Basic`](src/Retrocore.Basic) | AppleSoft, Integer BASIC, and Level II BASIC: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
-| [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, SOS and Apple Pascal volumes and code files, JV1, JV3 and JVC floppies, and CAS tapes. |
+| [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, SOS and Apple Pascal volumes and code files, sector floppies (DMK and IMD in `Floppy`; JV1, JV3 and JVC), and CAS tapes. |
 | [`Retrocore.Pascal`](src/Retrocore.Pascal) | Apple Pascal's p-code and its disassembler, and the p-machine's state as its interpreters keep it on the Apple II and Apple III. |
 | [`Retrocore.Input`](src/Retrocore.Input) | SDL3 game controller discovery and polling, mapped to emulated joysticks and paddles. |
 | [`Retrocore.Machines.Apple1`](src/Retrocore.Machines.Apple1) | The Apple-1: its 6821 PIA, video terminal, keyboard, Apple Cassette Interface, and SDK ROM sources. |
 | [`Retrocore.Machines.Apple2`](src/Retrocore.Machines.Apple2) | The Apple II, II Plus, and IIe (original and enhanced), peripheral cards, and SDK ROM sources. |
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
-| [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface, floppy/doubler hardware, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family with its Z80 CTC, PIO, SIO and DMA. |
+| [`Retrocore.Machines.Chips`](src/Retrocore.Machines.Chips) | Chips more than one machine uses: the Western Digital FD1771 and FD179x floppy disk controller and its drives, and the Z80 PIO, SIO, CTC and DMA. |
+| [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface with its drive select and doublers, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
 | [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--disassemble` CLI, in one host. |
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |

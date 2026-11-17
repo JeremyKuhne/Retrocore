@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Devices;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Trs80;
@@ -85,7 +86,7 @@ internal sealed partial class Trs80Model3DebugTarget
         {
             if (disks.Count > machine.Drives.Count)
             {
-                throw new ArgumentException($"The {target.ModelName} has {Trs80DiskController.DriveCount} drives.");
+                throw new ArgumentException($"The {target.ModelName} has {WesternDigitalFloppyDiskController.DriveCount} drives.");
             }
 
             for (int drive = 0; drive < disks.Count; drive++)
@@ -261,13 +262,13 @@ internal sealed partial class Trs80Model3DebugTarget
             case (Trs80CassetteDrive, "eject"):
                 EjectCassette();
                 break;
-            case (Trs80FloppyDrive drive, "insert"):
+            case (FloppyDrive drive, "insert"):
                 Insert(drive.Drive, path ?? throw new ArgumentException("path is required."));
                 break;
-            case (Trs80FloppyDrive drive, "eject"):
+            case (FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
-            case (Trs80FloppyDrive drive, "writeProtect"):
+            case (FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:

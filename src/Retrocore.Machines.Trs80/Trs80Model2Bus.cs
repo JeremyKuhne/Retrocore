@@ -3,7 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Cpu;
-using Retrocore.Machines.Trs80.Chips;
+using Retrocore.Machines.Chips;
 
 namespace Retrocore.Machines.Trs80;
 
@@ -51,7 +51,7 @@ public sealed class Trs80Model2Bus : IProcessorBus, IIoBus
         _rom = roms.Boot.ToArray();
         _ram = new byte[configuration.RamKilobytes * 1024];
         Video = new(roms.CharacterGenerator);
-        Disks = new(Trs80Doubler.None, Trs80Model2Timing.ClockHertz, wd179x: true, eightInch: true);
+        Disks = new(Trs80Model2Timing.ClockHertz, wd179x: true, eightInch: true);
         Ctc = new();
         Sio = new();
         Pio = new(PortA, () => 0xFF, PrinterOutput.Add);
@@ -72,7 +72,7 @@ public sealed class Trs80Model2Bus : IProcessorBus, IIoBus
     /// <summary>
     ///  Gets the FD1791 and its 8-inch drives.
     /// </summary>
-    public Trs80DiskController Disks { get; }
+    public WesternDigitalFloppyDiskController Disks { get; }
 
     /// <summary>
     ///  Gets the counter/timer.

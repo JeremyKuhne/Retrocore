@@ -3,9 +3,10 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Coco;
-using Retrocore.Machines.Trs80;
 using Retrocore.Media;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
@@ -287,7 +288,7 @@ public sealed class FloppyMediaSaveTests
     public void DriveSavesThroughTheHost()
     {
         CocoDiskController controller = new(new byte[CocoRoms.BasicSize]);
-        Trs80FloppyDrive drive = controller.Drives[0];
+        FloppyDrive drive = controller.Drives[0];
         string path = Path.Join(s_root, $"host-{Guid.NewGuid():N}.dsk");
         File.WriteAllBytes(path, JvcFormat.Write(JvcFormat.Formatted()));
         FloppyMedia.Insert(drive, path, coco: true);
@@ -327,7 +328,7 @@ public sealed class FloppyMediaSaveTests
         File.WriteAllBytes(imd, bytes);
         FloppyDisk read = JvcFormat.Formatted();
         MediaActions.Register(read, imd, codec: null, bytes);
-        Trs80FloppyDrive other = controller.Drives[1];
+        FloppyDrive other = controller.Drives[1];
         other.Insert(read, imd, "IMD");
         read.Write(read.Track(0, 0)[0], Filled(256, 0), 0xFB);
         MediaActions.Save(other, Speaking()).String("reason").Should().Be("format");
@@ -343,7 +344,7 @@ public sealed class FloppyMediaSaveTests
         CocoMachine machine = CocoDiskTests.Create(CocoModel.Coco2);
         string path = Path.Join(s_root, $"basic-{Guid.NewGuid():N}.dsk");
         File.WriteAllBytes(path, JvcFormat.Write(JvcFormat.Formatted()));
-        Trs80FloppyDrive drive = machine.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
+        FloppyDrive drive = machine.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
         FloppyMedia.Insert(drive, path, coco: true);
         CocoMachineTests.Type(machine, "10 print \"saved\";6*7\rsave \"hello\"\r");
         CocoDiskTests.WaitForOk(machine, limit: 10);

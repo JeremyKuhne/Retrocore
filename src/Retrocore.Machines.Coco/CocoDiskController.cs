@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Devices;
-using Retrocore.Machines.Trs80;
 
 namespace Retrocore.Machines.Coco;
 
@@ -47,8 +47,8 @@ public sealed class CocoDiskController
         Rom = new(diskBasic, autostart: false);
 
         // The WD1793 is clocked at 1 MHz; the time units are twice the CPU's slow clock, about 1.79 MHz.
-        Chip = new(Trs80Doubler.None, (int)(2 * CocoTiming.ClockHertz));
-        Trs80FloppyDrive[] drives = new Trs80FloppyDrive[Trs80DiskController.DriveCount];
+        Chip = new((int)(2 * CocoTiming.ClockHertz));
+        FloppyDrive[] drives = new FloppyDrive[WesternDigitalFloppyDiskController.DriveCount];
         for (int drive = 0; drive < drives.Length; drive++) { drives[drive] = new(Chip, drive, Info(drive)); }
         Drives = drives;
         Reset();
@@ -62,12 +62,12 @@ public sealed class CocoDiskController
     /// <summary>
     ///  Gets the WD1793.
     /// </summary>
-    public Trs80DiskController Chip { get; }
+    public WesternDigitalFloppyDiskController Chip { get; }
 
     /// <summary>
     ///  Gets the four drives.
     /// </summary>
-    public IReadOnlyList<Trs80FloppyDrive> Drives { get; }
+    public IReadOnlyList<FloppyDrive> Drives { get; }
 
     /// <summary>
     ///  Gets the drive control register's last value.

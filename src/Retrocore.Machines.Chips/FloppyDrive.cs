@@ -4,22 +4,22 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
-using Retrocore.Media.Trs80;
+using Retrocore.Media.Floppy;
 
-namespace Retrocore.Machines.Trs80;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
-///  One of the four floppy drives on a TRS-80 disk controller: the Model I's Expansion Interface or the Color
-///  Computer's disk controller cartridge.
+///  One of the four floppy drives on a <see cref="WesternDigitalFloppyDiskController"/>.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Its disk is a medium a host saves, to the formats <see cref="DeviceInfo.SaveFormats"/> lists.
+///   Its disk is a medium a host saves, to the formats <see cref="DeviceInfo.SaveFormats"/> lists. The machine
+///   describes the drive: its size, sides, tracks and formats.
 ///  </para>
 /// </remarks>
-public sealed class Trs80FloppyDrive : IDiskDrive, IMediumSlot
+public sealed class FloppyDrive : IDiskDrive, IMediumSlot
 {
-    private readonly Trs80DiskController _controller;
+    private readonly WesternDigitalFloppyDiskController _controller;
     private string _label = "";
     private string _format = "";
 
@@ -28,45 +28,14 @@ public sealed class Trs80FloppyDrive : IDiskDrive, IMediumSlot
     /// </summary>
     /// <param name="controller">The disk controller.</param>
     /// <param name="drive">The drive, 0-3.</param>
-    /// <param name="doubler">The doubler fitted to the controller.</param>
-    internal Trs80FloppyDrive(Trs80DiskController controller, int drive, Trs80Doubler doubler)
-        : this(controller, drive, Model1Info(drive, doubler))
-    {
-    }
-
-    /// <summary>
-    ///  Creates a drive that describes itself.
-    /// </summary>
-    /// <param name="controller">The disk controller.</param>
-    /// <param name="drive">The drive, 0-3.</param>
     /// <param name="info">The drive's description.</param>
-    internal Trs80FloppyDrive(Trs80DiskController controller, int drive, DeviceInfo info)
+    internal FloppyDrive(WesternDigitalFloppyDiskController controller, int drive, DeviceInfo info)
     {
         _controller = controller;
         Drive = drive;
         Id = $"disk{drive}";
         Info = info;
     }
-
-    private static DeviceInfo Model1Info(int drive, Trs80Doubler doubler) => new()
-    {
-        Name = $"Drive {drive}",
-        Description = "5¼-inch floppy drive",
-        Controller = doubler switch
-        {
-            Trs80Doubler.Percom => "FD1771 with a Percom doubler's WD1791, in the Expansion Interface",
-            Trs80Doubler.Tandy => "FD1771 with the Radio Shack doubler's WD1791, in the Expansion Interface",
-            Trs80Doubler.Both => "FD1771 with a WD1791 doubler (Percom or Radio Shack), in the Expansion Interface",
-            _ => "FD1771 in the Expansion Interface"
-        },
-        Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
-        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
-        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
-        Tracks = 40,
-
-        // Drive 3's select line is the other drives' side select, so drive 3 is single-sided.
-        Sides = drive == 3 ? 1 : 2
-    };
 
     /// <summary>
     ///  Gets the drive's number, 0-3.

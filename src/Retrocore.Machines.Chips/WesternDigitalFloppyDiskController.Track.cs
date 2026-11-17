@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Media.Trs80;
+using Retrocore.Media.Floppy;
 
-namespace Retrocore.Machines.Trs80;
+namespace Retrocore.Machines.Chips;
 
-public sealed partial class Trs80DiskController
+public sealed partial class WesternDigitalFloppyDiskController
 {
     private const byte IdMark = 0xFE;
 

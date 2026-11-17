@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Media.Trs80;
+using Retrocore.Media.Floppy;
 
-namespace Retrocore.Machines.Trs80;
+namespace Retrocore.Machines.Chips;
 
-public sealed partial class Trs80DiskController
+public sealed partial class WesternDigitalFloppyDiskController
 {
     private const int MaximumCylinder = 79;
 
@@ -22,13 +22,6 @@ public sealed partial class Trs80DiskController
 
     private void Command(byte value)
     {
-        // A Percom doubler takes $FE and $FF as density selects rather than commands.
-        if ((_doubler & Trs80Doubler.Percom) != 0 && value is 0xFE or 0xFF)
-        {
-            _doubleDensity = value == 0xFF;
-            return;
-        }
-
         if ((value & 0xF0) == 0xD0)
         {
             if (IsBusy)

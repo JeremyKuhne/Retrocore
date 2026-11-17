@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Trs80.Chips;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  A Z80 DMA: moves bytes between two ports, A and B, each memory or I/O, incrementing, decrementing or fixed, when
-///  its RDY input is active, as the Model II's disk controller's DRQ drives it.
+///  its RDY input is active, as the TRS-80 Model II's disk controller's DRQ drives it.
 /// </summary>
 /// <remarks>
 ///  <para>

@@ -4,6 +4,7 @@
 
 using Retrocore.Cpu;
 using Retrocore.Cpu.Z80;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Devices;
 
 namespace Retrocore.Machines.Trs80;
@@ -66,8 +67,8 @@ public sealed class Trs80Model3Machine : IMachine
             devices.Add(Cassette);
         }
 
-        List<Trs80FloppyDrive> drives = [];
-        for (int drive = 0; Bus.HasDiskController && drive < Trs80DiskController.DriveCount; drive++)
+        List<FloppyDrive> drives = [];
+        for (int drive = 0; Bus.HasDiskController && drive < WesternDigitalFloppyDiskController.DriveCount; drive++)
         {
             drives.Add(new(Bus.Disks, drive, DriveInfo(drive)));
         }
@@ -97,7 +98,7 @@ public sealed class Trs80Model3Machine : IMachine
     /// <summary>
     ///  Gets the floppy drives, or none without the disk controller.
     /// </summary>
-    public IReadOnlyList<Trs80FloppyDrive> Drives { get; }
+    public IReadOnlyList<FloppyDrive> Drives { get; }
 
     /// <inheritdoc/>
     public IReadOnlyList<IDevice> Devices { get; }

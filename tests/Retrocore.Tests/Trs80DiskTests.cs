@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Trs80;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Tests;
@@ -227,6 +228,24 @@ public class Trs80DiskTests
         both.Disks.DoubleDensity.Should().BeTrue();
         both.Write(SectorRegister, 0xA0);
         both.Disks.DoubleDensity.Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The controller decodes only the low two address bits, so the doublers see their selects at $37E4-$37E7 too:
+    ///  the Percom's in the command register's mirror and the Radio Shack's in the sector register's.
+    /// </summary>
+    [TestMethod]
+    public void DoublersSelectThroughTheRegistersMirrors()
+    {
+        Trs80Bus percom = Bus(new FloppyDisk(), Trs80Doubler.Percom);
+        percom.Write(0x37E4, 0xFF);
+        percom.Disks.DoubleDensity.Should().BeTrue();
+        percom.Disks.IsBusy.Should().BeFalse("the select is not a write track command");
+
+        Trs80Bus tandy = Bus(new FloppyDisk(), Trs80Doubler.Tandy);
+        tandy.Write(0x37E6, 0x80);
+        tandy.Disks.DoubleDensity.Should().BeTrue();
+        tandy.Disks.Sector.Should().Be(0x80);
     }
 
     /// <summary>

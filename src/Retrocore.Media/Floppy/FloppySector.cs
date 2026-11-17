@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Media.Trs80;
+namespace Retrocore.Media.Floppy;
 
 /// <summary>
 ///  One sector as a floppy controller sees it: its ID field, recording density, data address mark and data.

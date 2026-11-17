@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Media.Trs80;
+namespace Retrocore.Media.Floppy;
 
 /// <summary>
 ///  DMK, David Keil's format: a 16-byte header, then each track's raw bytes as the controller reads them, led by a

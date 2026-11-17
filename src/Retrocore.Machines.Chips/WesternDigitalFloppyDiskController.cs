@@ -3,28 +3,29 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
-using Retrocore.Media.Trs80;
+using Retrocore.Media.Floppy;
 
-namespace Retrocore.Machines.Trs80;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
-///  The Expansion Interface's disk controller: an FD1771 at <c>$37EC</c>-<c>$37EF</c> (command and status,
-///  track, sector, data), four drives selected at <c>$37E1</c>, and optionally a doubler's WD1791.
+///  A Western Digital floppy disk controller, the FD1771 or one of the FD179x and WD179x family, with up to four drives:
+///  four registers (command and status, track, sector, data), and the drive, side, density and motor selects that the
+///  board around it decodes.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The disks turn at 300 rpm. A sector passes the head at its place among the track's sectors after the
-///   index hole, so a read waits for its sector, and data moves one byte per byte time (64 µs in single
-///   density, 32 in double) through DRQ: a byte the program has not taken when the next arrives is lost data.
-///   Steps take the chip's step rate. Selecting a drive starts the motors, which stop 3 seconds after the last
-///   select.
+///   The TRS-80 Model I's Expansion Interface has an FD1771, which a doubler's WD1791 joins for double density; the
+///   Model III, 4 and II and the Color Computer's disk controller cartridge have an FD179x or WD179x.
 ///  </para>
 ///  <para>
-///   The Color Computer's disk controller cartridge uses it as its WD1793, ticked at its own clock, with its drive
-///   control register selecting the drive, side, density and motors through <see cref="Control"/>.
+///   5¼-inch disks turn at 300 rpm. A sector passes the head at its place among the track's sectors after the
+///   index hole, so a read waits for its sector, and data moves one byte per byte time (64 µs in single
+///   density, 32 in double) through DRQ: a byte the program has not taken when the next arrives is lost data.
+///   Steps take the chip's step rate. A board either runs the motors while its control register says
+///   so (<see cref="Control"/>) or starts them for 3 seconds at each select (<see cref="SelectTimed"/>).
 ///  </para>
 /// </remarks>
-public sealed partial class Trs80DiskController
+public sealed partial class WesternDigitalFloppyDiskController
 {
     /// <summary>
     ///  The drives.
@@ -43,7 +44,6 @@ public sealed partial class Trs80DiskController
 
     private readonly FloppyDisk?[] _disks = new FloppyDisk?[DriveCount];
     private readonly int[] _cylinders = new int[DriveCount];
-    private readonly Trs80Doubler _doubler;
     private readonly int _clockHertz;
     private readonly bool _wd179x;
     private readonly bool _eightInch;
@@ -79,22 +79,17 @@ public sealed partial class Trs80DiskController
     /// <summary>
     ///  Creates the controller.
     /// </summary>
-    /// <param name="doubler">The doubler that can select a WD1791 for double density.</param>
-    /// <param name="clockHertz">The rate <see cref="Tick"/> is called at: the Model I's Z80 clock by default.</param>
+    /// <param name="clockHertz">The rate <see cref="Tick"/> is called at.</param>
     /// <param name="wd179x">
-    ///  Whether the controller is a WD179x in both densities, as the Model III, 4 and II have, rather than an FD1771.
+    ///  Whether the controller is an FD179x or WD179x in both densities rather than an FD1771, which behaves as a
+    ///  doubler's WD1791 while double density is selected.
     /// </param>
     /// <param name="eightInch">
-    ///  Whether the drives are 8-inch, as the Model II's are: 360 rpm, twice the data rate, and the controller clocked
-    ///  at 2 MHz, which halves its step rates.
+    ///  Whether the drives are 8-inch, as the TRS-80 Model II's are: 360 rpm, twice the data rate, and the controller
+    ///  clocked at 2 MHz, which halves its step rates.
     /// </param>
-    internal Trs80DiskController(
-        Trs80Doubler doubler,
-        int clockHertz = Trs80Timing.ClockHertz,
-        bool wd179x = false,
-        bool eightInch = false)
+    internal WesternDigitalFloppyDiskController(int clockHertz, bool wd179x = false, bool eightInch = false)
     {
-        _doubler = doubler;
         _clockHertz = clockHertz;
         _wd179x = wd179x;
         _eightInch = eightInch;
@@ -120,7 +115,7 @@ public sealed partial class Trs80DiskController
     public byte Data { get; private set; }
 
     /// <summary>
-    ///  Gets whether the controller requests an interrupt, which the interrupt latch shows in bit 6.
+    ///  Gets whether the controller requests an interrupt (INTRQ).
     /// </summary>
     public bool InterruptRequest { get; private set; }
 
@@ -135,14 +130,20 @@ public sealed partial class Trs80DiskController
     public int SelectedDrive => _selected;
 
     /// <summary>
-    ///  Gets the side the drives' heads read: 1 when the select latch sets bit 3 with drive 0, 1 or 2.
+    ///  Gets the side the selected drive's head reads, 0 or 1.
     /// </summary>
     public int Side { get; private set; }
 
     /// <summary>
-    ///  Gets whether the doubler has selected the WD1791 for double density.
+    ///  Gets whether the controller reads and writes double density (MFM).
     /// </summary>
     public bool DoubleDensity => _doubleDensity;
+
+    /// <summary>
+    ///  Selects single or double density without changing the drive, as a TRS-80 Model I doubler does.
+    /// </summary>
+    /// <param name="doubleDensity">Whether the controller reads and writes MFM.</param>
+    internal void SetDensity(bool doubleDensity) => _doubleDensity = doubleDensity;
 
     /// <summary>
     ///  Gets whether a command is running.
@@ -162,7 +163,7 @@ public sealed partial class Trs80DiskController
     }
 
     /// <summary>
-    ///  Gets whether the drives' motors are turning; the Expansion Interface runs them together.
+    ///  Gets whether the drives' motors are turning; they run together.
     /// </summary>
     public bool MotorOn => _motorCycles > 0;
 
@@ -202,32 +203,9 @@ public sealed partial class Trs80DiskController
     public int Cylinder(int drive) => _cylinders[drive];
 
     /// <summary>
-    ///  Writes the drive select latch: bits 0-3 select drives 0-3 and start the motors.
-    /// </summary>
-    /// <param name="value">The latch value.</param>
-    /// <remarks>
-    ///  Double-sided drives take their side select from bit 3, drive 3's select, so bit 3 with drive 0, 1 or 2
-    ///  selects side 1 of that drive. A Model I with double-sided drives therefore has three drives.
-    /// </remarks>
-    internal void Select(byte value)
-    {
-        Side = (value & 0x07) != 0 && (value & 0x08) != 0 ? 1 : 0;
-        if (Side == 1) { value &= 0xF7; }
-        _selected = (value & 0x0F) switch
-        {
-            0x01 => 0,
-            0x02 => 1,
-            0x04 => 2,
-            0x08 => 3,
-            _ => -1
-        };
-
-        if (_selected >= 0) { _motorCycles = 3000 * _cyclesPerMillisecond; }
-    }
-
-    /// <summary>
     ///  Selects a drive, its side, the motors and the density directly, for controllers with a drive control
-    ///  register such as the Color Computer's: the motors run while <paramref name="motor"/> is set.
+    ///  register such as the Color Computer's and the Model II's: the motors run while <paramref name="motor"/> is
+    ///  set.
     /// </summary>
     /// <param name="drive">The drive, 0-3, or -1 for none.</param>
     /// <param name="side">The side, 0 or 1.</param>
@@ -243,8 +221,8 @@ public sealed partial class Trs80DiskController
     }
 
     /// <summary>
-    ///  Selects a drive, its side and the density, starting the motors for 3 seconds, as the Model III and 4's drive
-    ///  select port does.
+    ///  Selects a drive, its side and the density, starting the motors for 3 seconds, as the TRS-80 Model I's drive
+    ///  select latch and the Model III and 4's drive select port do.
     /// </summary>
     /// <param name="drive">The drive, 0-3, or -1 for none.</param>
     /// <param name="side">The side, 0 or 1.</param>
@@ -314,8 +292,6 @@ public sealed partial class Trs80DiskController
                 if (!IsBusy) { Track = value; }
                 break;
             case 2:
-                // The Radio Shack doubler watches the sector register for its controller selects.
-                if ((_doubler & Trs80Doubler.Tandy) != 0 && value is 0x80 or 0xA0) { _doubleDensity = value == 0x80; }
                 if (!IsBusy) { Sector = value; }
                 break;
             default:
@@ -344,8 +320,8 @@ public sealed partial class Trs80DiskController
 
     private int ByteCycles => (_doubleDensity ? _clockHertz / 31250 : _clockHertz / 15625) / (_eightInch ? 2 : 1);
 
-    // Whether the chip reading now behaves as a WD179x: always for a Model III, 4 or II, and with a doubler's
-    // WD1791 selected on a Model I.
+    // Whether the chip reading now behaves as a WD179x: always for an FD179x or WD179x, and with a doubler's WD1791
+    // selected beside an FD1771.
     private bool Is179x => _wd179x || _doubleDensity;
 
     private byte Status()

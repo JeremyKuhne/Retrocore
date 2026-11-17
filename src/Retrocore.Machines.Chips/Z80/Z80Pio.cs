@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Trs80.Chips;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  A Z80 PIO: two 8-bit ports, A and B, each in output (mode 0), input (1), bidirectional (2) or bit control

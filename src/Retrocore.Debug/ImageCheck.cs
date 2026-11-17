@@ -29,7 +29,7 @@ internal sealed record ImageCheck(FileRevision? Current, bool ReadOnly)
     }
 
     /// <summary>
-    ///  Gets whether a file is marked read-only.
+    ///  Gets whether a file is marked read-only: the file a link leads to, as a save writes there, not the link.
     /// </summary>
     /// <param name="path">The file.</param>
     /// <returns>True when it is there and marked read-only.</returns>
@@ -37,9 +37,10 @@ internal sealed record ImageCheck(FileRevision? Current, bool ReadOnly)
     {
         try
         {
-            return File.Exists(path) && File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly);
+            string target = ImageWriter.Resolve(path);
+            return File.Exists(target) && File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return false;
         }

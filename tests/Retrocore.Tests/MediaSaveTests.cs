@@ -195,6 +195,10 @@ public sealed class MediaSaveTests
         outside[0] = 0x55;
         Until(() => File.WriteAllBytes(target, outside), () => Source(drive)?.Bool("stale") == true);
 
+        // The file the link leads to marked read-only is a read-only image, as a save would find it.
+        Until(() => File.SetAttributes(target, FileAttributes.ReadOnly), () => Source(drive)?.String("readOnly") == "file");
+        File.SetAttributes(target, FileAttributes.Normal);
+
         // A link on the way pointed at another file: the next sweep finds the disk's path leads elsewhere.
         string middle = Path.Join(folder, "middle.dsk");
         (string other, _) = Image("other.dsk");

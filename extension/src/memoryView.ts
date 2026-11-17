@@ -701,11 +701,14 @@ async function toggleBreakpoint(line) {
 }
 
 // F9 in the bytes: a breakpoint at the line the cursor is in.
-// Only the listing on show, as last asked for, says where the cursor's line starts and what stops there: while it is
-// hidden or being read again, its lines may be of other bytes.
+// Only the listing on show, as last asked for, says where a line starts and what stops there: while it is hidden or
+// being read again, its lines may be of other bytes, or name breakpoints that have moved since.
+function listingShown() { return showListing && !ended && narrow !== true; }
+function listingCurrent() { return listingShown() && listingLoaded === listingKey; }
+
 async function toggleAtCursor() {
-    const shown = showListing && !ended && narrow !== true;
-    const current = shown && listingLoaded === listingKey;
+    const shown = listingShown();
+    const current = listingCurrent();
     const line = current ? listingLines.find(item => cursor >= item.address && cursor < item.address + item.size) : undefined;
     if (line === undefined) {
         status(!shown ? "Show the listing to set a breakpoint." : !current ? "The listing is being read; press F9 again." : "No listing line is at the cursor.", true);
@@ -782,6 +785,7 @@ listingPanel.addEventListener("click", event => {
     const target = event.target;
     const dot = target && target.closest ? target.closest("[data-bp]") : null;
     const line = dot === null ? null : dot.closest("[data-a]");
+    if (line !== null && !listingCurrent()) { status("The listing is being read; click again.", true); return; }
     const listed = line === null ? undefined : listingLines.find(item => item.address === Number(line.dataset.a));
     if (listed !== undefined) { void toggleBreakpoint(listed); return; }
     activateListing(target);

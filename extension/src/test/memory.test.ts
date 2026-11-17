@@ -985,9 +985,13 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     await drive(page, [], () => 0, lists);
     assert.deepEqual(breakpointsSent.map(sent => [sent.address, sent.ids]), [[top + 7, [7]]]);
 
-    // Breakpoints set anywhere ask for the listing again.
+    // Breakpoints set anywhere ask for the listing again; until it comes, a dot's breakpoints may have moved, so a
+    // click sets or takes away nothing.
     listingStarts.length = 0;
     page.send({ type: "breakpoints" });
+    breakpointsSent.length = 0;
+    page.elements.get("listing")!.dispatch("click", { target: dot });
+    assert.equal(breakpointsSent.length, 0);
     await drive(page, [], () => 0, lists);
     assert.ok(listingStarts.length > 0, "the listing is asked for again");
 

@@ -272,16 +272,20 @@ public sealed class RecoveryJournalTests
         JsonObject badBaseline = (JsonObject)good.DeepClone();
         badBaseline["drive"] = "nowhere";
         (badBaseline["source"]?["baseline"]?.AsObject() ?? throw new InvalidOperationException("No baseline."))["length"] = "long";
+        // A snapshot named by a number, which no commit can take for a file name.
+        JsonObject badFile = (JsonObject)good.DeepClone();
+        badFile["file"] = 5;
+        disks.Insert(0, badFile);
         disks.Insert(0, badLabel);
         disks.Insert(1, badBaseline);
         File.WriteAllText(journalPath, root.ToJsonString());
 
         Apple2Disk35Drive next = Again(image);
         RecoveryJournal journal = Open(id);
-        MediaActions.Recover([next], journal).Should().HaveCount(2);
+        MediaActions.Recover([next], journal).Should().HaveCount(3);
         next.Media?.Changed.Should().BeTrue("the good entry went back");
         Stop(journal, next);
-        Disks(id).Should().HaveCount(3, "the bad entries stay as they were");
+        Disks(id).Should().HaveCount(4, "the bad entries stay as they were");
         Snapshots(id).Should().NotBeEmpty();
     }
 

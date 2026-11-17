@@ -346,7 +346,8 @@ export function unsavedDisks(devices: readonly Device[], recovery = false): { ke
     for (const device of devices) {
         if (device.media?.changed && device.operations.includes("save")) {
             const name = path.basename(device.media.label) || device.media.format;
-            (recovery && device.media.source?.kind === "image" ? kept : lost).push(name);
+            // The journal keeps a disk from an image in a drive it can go back in, which slot 7's cannot.
+            (recovery && device.media.source?.kind === "image" && device.operations.includes("insert") ? kept : lost).push(name);
         }
         // A disk the machine ejected is one it read from an image.
         for (const ejected of (device.ejected ?? []).filter(disk => disk.changed)) {

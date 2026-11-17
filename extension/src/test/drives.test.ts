@@ -158,6 +158,8 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
     assert.deepEqual(unsavedDisks([drive(true)], true), { kept: ["work.woz"], lost: [] }, "the journal keeps a disk from an image");
     assert.deepEqual(unsavedDisks([drive(true, { kind: "built", saves: false })], true), { kept: [], lost: ["work.woz"] },
         "a disk the launch built is built again, not kept");
+    assert.deepEqual(unsavedDisks([{ ...drive(true), operations: ["writeProtect", "save"] }], true), { kept: [], lost: ["work.woz"] },
+        "a disk only the launch puts in, as slot 7's, cannot go back");
     assert.deepEqual(unsavedDisks([{ ...drive(false), ejected: [ejected(path.resolve(path.sep, "a.2mg"), true), ejected("b.2mg", false)] }]),
         { kept: [], lost: ["a.2mg"] });
     assert.deepEqual(unsavedDisks([{ ...drive(true), operations: ["insert", "eject"] }]), { kept: [], lost: [] },

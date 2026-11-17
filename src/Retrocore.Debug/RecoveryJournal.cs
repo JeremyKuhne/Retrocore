@@ -270,7 +270,8 @@ internal sealed partial class RecoveryJournal
         File.Move(temporary, Path.Join(_folder, JournalFile), overwrite: true);
 
         // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
-        HashSet<string> named = [.. entries.OfType<JsonObject>().Select(entry => entry.String("file") ?? "")];
+        // An entry kept as it was may hold anything; only a file name it gives as text keeps a snapshot.
+        HashSet<string> named = [.. entries.OfType<JsonObject>().Select(FileOf)];
         foreach (string file in Directory.EnumerateFiles(Path.Join(_folder, MediaFolder)))
         {
             if (!named.Contains(Path.GetFileName(file))) { TryDelete(file); }
@@ -298,6 +299,10 @@ internal sealed partial class RecoveryJournal
         WriteDurably(temporary, Utf8(session));
         File.Move(temporary, Path.Join(_folder, SessionFile), overwrite: true);
     }
+
+    // The snapshot an entry names, or nothing for an entry that names none as text.
+    private static string FileOf(JsonObject entry) =>
+        entry["file"] is JsonValue value && value.TryGetValue(out string? file) ? file : "";
 
     // A JSON file as people read it, indented.
     private static byte[] Utf8(JsonObject json)

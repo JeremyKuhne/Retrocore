@@ -35,7 +35,11 @@ internal static partial class MediaActions
         List<JournalDisk> disks = [];
         foreach (IDevice device in devices)
         {
-            if (device is IMediumSlot { Medium: { IsDirty: true } disk } && device.Media is { } media)
+            // A disk only the launch can put in a drive, as slot 7's, cannot go back in a running machine; the next
+            // launch gives the drive its image again.
+            if (device is IMediumSlot { Medium: { IsDirty: true } disk }
+                && device.Media is { } media
+                && device.Info.Operations.HasFlag(MediaOperations.Insert))
             {
                 Add(device, disk, media.Label, media.Format, ejected: null);
             }

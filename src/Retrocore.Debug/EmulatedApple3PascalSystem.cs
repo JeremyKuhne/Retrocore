@@ -54,7 +54,8 @@ internal sealed class EmulatedApple3PascalSystem
         for (int drive = 0; drive < disks.Length; drive++)
         {
             WozDisk media = SectorDiskConverter.Convert(disks[drive], proDosOrder: false);
-            _machine.Drives[drive].Insert(WozDisk.Load(media.Export(), writable: true), $"DISK{drive + 1}", "DSK");
+            media.IsWriteProtected = false;
+            _machine.Drives[drive].Insert(media, $"DISK{drive + 1}", "DSK");
         }
 
         if (WaitFor(["Based on  U.C.S.D. Pascal II.1"], seconds: 120) is null)

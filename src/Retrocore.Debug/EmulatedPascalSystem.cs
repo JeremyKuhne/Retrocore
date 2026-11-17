@@ -57,17 +57,20 @@ internal sealed class EmulatedPascalSystem
         if (more is { Count: > 2 }) { _machine.Bus.InstallDiskII(slot: 4, SdkModules.BuildDiskII(16, roms)); }
         if (!model.IsIIe()) { _machine.Bus.InstallLanguageCard(); }
         WozDisk media = SectorDiskConverter.Convert(boot, proDosOrder: false);
-        _machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), "APPLE1", "DSK");
+        media.IsWriteProtected = false;
+        _machine.Drives[0].Insert(media, "APPLE1", "DSK");
         // APPLE2 is written too, by 1.3's Assembler, whose temporary file goes on its own disk: a copy takes it.
         WozDisk tools = SectorDiskConverter.Convert(toolsImage, proDosOrder: false);
-        _machine.Drives[1].Insert(WozDisk.Load(tools.Export(), writable: true), "APPLE2", "DSK");
+        tools.IsWriteProtected = false;
+        _machine.Drives[1].Insert(tools, "APPLE2", "DSK");
         IReadOnlyList<byte[]> extras = more ?? [];
         for (int index = 0; index < Math.Min(4, extras.Count); index++)
         {
             int slot = index < 2 ? 5 : 4;
             int drive = index % 2;
             WozDisk extra = SectorDiskConverter.Convert(extras[index], proDosOrder: false);
-            _machine.DrivesIn(slot)[drive].Insert(WozDisk.Load(extra.Export(), writable: true), $"SLOT{slot}D{drive + 1}", "DSK");
+            extra.IsWriteProtected = false;
+            _machine.DrivesIn(slot)[drive].Insert(extra, $"SLOT{slot}D{drive + 1}", "DSK");
         }
 
         _machine.Bus.ResetSwitches();

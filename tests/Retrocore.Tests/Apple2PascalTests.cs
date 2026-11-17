@@ -238,12 +238,8 @@ public class Apple2PascalTests
     {
         // Apple Pascal 1.0's and 1.2's images are named in capitals; 1.3's may be WOZ images.
         string extension = version == "1.1" ? "dsk" : "DSK";
-        string path = version == "1.3"
-            ? PascalMediaTests.Apple2Pascal13Disk(1)
-            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_1.{extension}");
-        string tools = version == "1.3"
-            ? PascalMediaTests.Apple2Pascal13Disk(2)
-            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_2.{extension}");
+        string path = Disk(1);
+        string tools = Disk(2);
         string apple1 = Path.GetFileName(path);
         string apple2 = Path.GetFileName(tools);
         if (!File.Exists(path) || !File.Exists(tools))
@@ -262,6 +258,10 @@ public class Apple2PascalTests
         machine.Bus.ResetSwitches();
         machine.Processor.Reset();
         return machine;
+
+        string Disk(int volume) => version == "1.3"
+            ? PascalMediaTests.Apple2Pascal13Disk(volume)
+            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_{volume}.{extension}");
     }
 
     private static void Type(Apple2Machine machine, string keys)

@@ -1001,7 +1001,7 @@ public class PascalDecompilerTests
     // procedures assembled, and all linked.
     private static byte[] BuildWithUnits(string program, IReadOnlyList<(string Name, string Source)> units, string assembly, string boot, string tools)
     {
-        Dictionary<string, byte[]> compiled = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, byte[]> compiled = [with(StringComparer.OrdinalIgnoreCase)];
         foreach ((string name, string source) in units)
         {
             (byte[]? unit, string screen) = EmulatedPascalCompiler.Compile(source, boot, tools, s_inputs);

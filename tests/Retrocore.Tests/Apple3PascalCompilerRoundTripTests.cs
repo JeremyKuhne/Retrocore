@@ -46,7 +46,7 @@ public class Apple3PascalCompilerRoundTripTests
             decompiled.Warnings.Should().BeEmpty();
 
             // The units the decompiler declared from their calls, compiled for their interfaces.
-            Dictionary<string, byte[]> units = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, byte[]> units = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (PascalDecompiledUnit unit in decompiled.Units)
             {
                 unit.Intrinsic.Should().BeTrue();

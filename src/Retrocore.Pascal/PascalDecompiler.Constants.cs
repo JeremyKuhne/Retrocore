@@ -22,10 +22,10 @@ public sealed partial class PascalDecompiler
     {
         if (_options.Values.Count == 0) { return; }
 
-        Dictionary<string, TypeNode> byName = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, TypeNode> byName = [with(StringComparer.OrdinalIgnoreCase)];
         foreach ((TypeNode type, string key) in _typeKeys) { byName[key] = type; }
 
-        Dictionary<string, List<TypeNode>> typed = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<TypeNode>> typed = [with(StringComparer.OrdinalIgnoreCase)];
         foreach ((string key, string list) in _options.Values)
         {
             if (!_options.Constants.ContainsKey(list))

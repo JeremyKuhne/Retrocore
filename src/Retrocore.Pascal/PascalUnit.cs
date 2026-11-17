@@ -53,7 +53,7 @@ public sealed record PascalUnit(
         ArgumentNullException.ThrowIfNull(text);
         List<string> tokens = Tokens(text);
         List<PascalUnitProcedure> procedures = [];
-        Dictionary<string, IReadOnlyList<string>> enumerations = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, IReadOnlyList<string>> enumerations = [with(StringComparer.OrdinalIgnoreCase)];
         int at = 0;
         while (at < tokens.Count)
         {

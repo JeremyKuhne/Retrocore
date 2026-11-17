@@ -15,7 +15,7 @@ public sealed partial class PascalDecompiler
     private readonly Dictionary<(string Type, string Field), string> _fieldNames = [];
 
     // The records whose fields the hints name or comment, which are written a field to a line.
-    private readonly HashSet<string> _hintedRecords = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _hintedRecords = [with(StringComparer.OrdinalIgnoreCase)];
 
     // Names types and their fields as the hints do: a type by the decompiler's name for it, T2, and a field by its
     // type's and its own, T2.F0. Fields go by name alone inside a WITH, where they hide any other name, and a type's
@@ -26,7 +26,7 @@ public sealed partial class PascalDecompiler
         if (_options.Names.Count == 0 && _options.Comments.Count == 0 && _options.Values.Count == 0) { return; }
 
         HashSet<string> taken = Taken();
-        Dictionary<string, TypeNode> byName = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, TypeNode> byName = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (TypeNode type in _types)
         {
             string own = type.Name ?? "";

@@ -13,7 +13,7 @@ public sealed partial class PascalDecompiler
     private readonly HashSet<PascalUnitProcedure> _inferredProcedures = [];
 
     // The set types the inferred units' parameters take, by their names, with their words.
-    private readonly SortedDictionary<string, int> _unitSets = new(StringComparer.Ordinal);
+    private readonly SortedDictionary<string, int> _unitSets = [with(StringComparer.Ordinal)];
 
     // The words of inferred units' data segments the code reaches, by segment, which their interfaces declare.
     private readonly SortedDictionary<int, Frame> _unitData = [];

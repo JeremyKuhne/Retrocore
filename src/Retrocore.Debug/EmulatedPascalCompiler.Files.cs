@@ -88,7 +88,7 @@ internal static partial class EmulatedPascalCompiler
         byte[]? tools = null,
         int? codeBlocks = null)
     {
-        Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> files = [with(StringComparer.OrdinalIgnoreCase)];
         foreach ((string name, string text) in included) { files[Normalized(name)] = text; }
 
         byte[] sources = PascalVolume.Format("SOURCE", proDosOrder: false);
@@ -121,7 +121,7 @@ internal static partial class EmulatedPascalCompiler
             return match.Value.StartsWith('{') ? $"{{$I {volume}:{name}{padding}}}" : $"(*$I {volume}:{name}{padding}*)";
         });
 
-        Dictionary<string, string> placed = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> placed = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (Match directive in directives)
         {
             placed[Normalized(directive.Groups["name"].Value)] = volumes[0].Name;

@@ -74,22 +74,22 @@ public static partial class PascalAssemblyWriter
         /// <summary>
         ///  Gets the names it uses, in the Assembler's eight letters, so a label of its own takes none of them.
         /// </summary>
-        public HashSet<string> Used { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Used { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets the labels it defines for other procedures, <c>.DEF</c>.
         /// </summary>
-        public SortedSet<string> Defined { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> Defined { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets the names it refers to in other procedures, <c>.REF</c>.
         /// </summary>
-        public SortedSet<string> Referred { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> Referred { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets the host's globals it refers to, <c>.PUBLIC</c>.
         /// </summary>
-        public SortedSet<string> Publics { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> Publics { get; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         ///  Gets the expressions its relocated words other than procedure-relative ones are written as, by offset in

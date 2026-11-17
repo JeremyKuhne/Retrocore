@@ -105,7 +105,7 @@ public static partial class PcodeSourceWriter
             definitions.Add($".scope {scope}");
             definitions.Add($"Segment = {segmentNumber}");
             definitions.Add("Initialize = 1");
-            HashSet<string> named = new(StringComparer.OrdinalIgnoreCase) { "Segment", "Initialize" };
+            HashSet<string> named = [with(StringComparer.OrdinalIgnoreCase), "Segment", "Initialize"];
             for (int index = 0; index < unit.Procedures.Count; index++)
             {
                 string name = unit.Procedures[index].Name;

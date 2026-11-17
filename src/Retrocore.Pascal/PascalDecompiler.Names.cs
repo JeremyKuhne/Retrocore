@@ -10,8 +10,9 @@ public sealed partial class PascalDecompiler
 {
     // The identifiers a program cannot take for its own without changing what it compiles to: reserved words, and the
     // names Apple Pascal predeclares that the decompiled code may call or name.
-    private static readonly HashSet<string> s_predeclared = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> s_predeclared =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         "AND", "ARRAY", "BEGIN", "CASE", "CONST", "DIV", "DO", "DOWNTO", "ELSE", "END", "EXTERNAL", "FILE", "FOR",
         "FORWARD", "FUNCTION", "GOTO", "IF", "IMPLEMEN", "IN", "INTERFAC", "LABEL", "MOD", "NIL", "NOT", "OF", "OR",
         "PACKED", "PROCEDUR", "PROGRAM", "RECORD", "REPEAT", "SEGMENT", "SET", "THEN", "TO", "TYPE", "UNIT", "UNTIL",
@@ -24,7 +25,7 @@ public sealed partial class PascalDecompiler
         "READLN", "RELEASE", "RESET", "REWRITE", "ROUND", "SCAN", "SEEK", "SIN", "SIZEOF", "SQR", "SQRT", "STR",
         "SUCC", "TIME", "TREESEAR", "IDSEARCH", "TRUNC", "UNITBUSY", "UNITCLEA", "UNITREAD", "UNITSTAT", "UNITWAIT", "UNITWRIT",
         "WRITE", "WRITELN"
-    };
+    ];
 
     // Gives procedures and variables the names the hints and the listing give them, where they are safe.
     private void Rename()

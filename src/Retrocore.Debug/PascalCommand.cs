@@ -277,7 +277,7 @@ internal static partial class PascalCommand
 
         static Dictionary<string, string> Strings(JsonNode? node)
         {
-            Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> values = [with(StringComparer.OrdinalIgnoreCase)];
             if (node is not JsonObject entries) { return values; }
 
             foreach ((string key, JsonNode? value) in entries)
@@ -294,7 +294,7 @@ internal static partial class PascalCommand
     private static (Dictionary<string, IReadOnlyList<string>> Constants, Dictionary<string, string> Values) Constants(byte[] data)
     {
         JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
-        Dictionary<string, IReadOnlyList<string>> constants = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, IReadOnlyList<string>> constants = [with(StringComparer.OrdinalIgnoreCase)];
         if (root["constants"] is JsonObject lists)
         {
             foreach ((string list, JsonNode? names) in lists)
@@ -305,7 +305,7 @@ internal static partial class PascalCommand
             }
         }
 
-        Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> values = [with(StringComparer.OrdinalIgnoreCase)];
         if (root["values"] is JsonObject entries)
         {
             foreach ((string key, JsonNode? list) in entries)
@@ -498,7 +498,7 @@ internal static partial class PascalCommand
     {
         List<string> rest = [.. args];
         Apple2Model model = rest.Remove("--iie") ? Apple2Model.IIeEnhanced : Apple2Model.IIPlus;
-        Dictionary<string, byte[]> units = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, byte[]> units = [with(StringComparer.OrdinalIgnoreCase)];
         for (int at = rest.IndexOf("--unit"); at >= 0; at = rest.IndexOf("--unit"))
         {
             if (at + 1 >= rest.Count) { return Fail(Usage, code: 2); }
@@ -544,7 +544,7 @@ internal static partial class PascalCommand
     // Compiles a main file and the files a folder holds, which it includes by name: each goes on a volume with room.
     private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model, int? codeRoom)
     {
-        Dictionary<string, string> included = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> included = [with(StringComparer.OrdinalIgnoreCase)];
         EnumerationOptions texts = new() { MatchCasing = MatchCasing.CaseInsensitive };
         foreach (string path in Directory.EnumerateFiles(folder, "*.text", texts))
         {

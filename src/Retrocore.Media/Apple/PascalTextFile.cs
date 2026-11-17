@@ -64,7 +64,7 @@ public static class PascalTextFile
         if (count > 0 && lines[^1].Length == 0) { count--; }
 
         List<byte> file = [.. new byte[PageSize]];
-        List<byte> page = new(PageSize);
+        List<byte> page = [with(capacity: PageSize)];
         for (int index = 0; index < count; index++)
         {
             string line = lines[index].TrimEnd();

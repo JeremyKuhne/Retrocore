@@ -13,12 +13,13 @@ namespace Retrocore.Pascal;
 /// </summary>
 internal sealed class PcodeNaming
 {
-    private static readonly HashSet<string> s_reserved = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> s_reserved =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         "CSP",
         "PASCALSY",
         "PASCALIO"
-    };
+    ];
 
     // The system segment's procedures a program calls, as Pcode.asm's PASCALSY scope names them.
     private static readonly Dictionary<int, string> s_system = new()
@@ -67,7 +68,7 @@ internal sealed class PcodeNaming
             if (!scopes.Add(name)) { name = Unique(scopes, $"{name}{segment.Slot}"); }
             _segments[segment] = name;
 
-            HashSet<string> procedures = new(StringComparer.OrdinalIgnoreCase) { "Entry", "Exit", "Attributes" };
+            HashSet<string> procedures = [with(StringComparer.OrdinalIgnoreCase), "Entry", "Exit", "Attributes"];
             foreach (PascalProcedure procedure in segment.Procedures)
             {
                 int number = procedure.Index;

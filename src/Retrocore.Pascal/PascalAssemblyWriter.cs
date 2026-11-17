@@ -35,13 +35,14 @@ namespace Retrocore.Pascal;
 public static partial class PascalAssemblyWriter
 {
     // Names the Assembler reads as other than a label.
-    private static readonly HashSet<string> s_reserved = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> s_reserved =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         "A", "X", "Y", "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC",
         "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA",
         "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED",
         "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"
-    };
+    ];
 
     // The lists below a procedure's entry pointer, in the order they are read down from it.
     private const int BaseList = 0;

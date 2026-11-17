@@ -542,6 +542,20 @@ try {
     // A bank's gap holds no number, nor does a float that runs into it.
     assert.deepEqual((await inspect(0xC000, "main:0x0000")).values, []);
     assert.deepEqual((await inspect(0xBFFE, "main:0x0000")).values, []);
+    // The map: the regions, and runs of addresses that read the same part of the machine now, covering the space.
+    at = "the memory map";
+    const memoryMap = async memoryReference => request("retro/memory/map", { memoryReference });
+    let mapped = await memoryMap("0x0000");
+    assert.ok(mapped.regions.some(region => region.name === "Text page 1" && region.start === 0x0400 && region.length === 0x400));
+    assert.deepEqual([mapped.areas[0].start, mapped.areas.at(-1).start + mapped.areas.at(-1).length], [0, 0x10000]);
+    mapped.areas.slice(1).forEach((area, index) => assert.equal(area.start, mapped.areas[index].start + mapped.areas[index].length));
+    const areaAt = (areas, address) => areas.find(area => address >= area.start && address < area.start + area.length);
+    assert.deepEqual([areaAt(mapped.areas, 0x0400).name, areaAt(mapped.areas, 0x0400).kind], ["main RAM", "ram"]);
+    assert.equal(areaAt(mapped.areas, 0xC000).kind, "io");
+    // In auxiliary RAM's editor, what the CPU does not read now is dimmed, and the bank's gap is none.
+    mapped = await memoryMap("aux:0x0000");
+    assert.equal(areaAt(mapped.areas, 0x0400).mapped, false);
+    assert.equal(areaAt(mapped.areas, 0xC000).kind, "none");
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

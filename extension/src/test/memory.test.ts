@@ -195,6 +195,7 @@ class Element {
     focus(): void { /* nothing to focus */ }
     select(): void { /* nothing to select */ }
     querySelectorAll(): Element[] { return []; }
+    getBoundingClientRect(): { left: number; width: number } { return { left: 0, width: 256 }; }
 }
 
 /** Runs the page's script with fake elements, recording what it posts to the extension. */
@@ -447,6 +448,17 @@ function answer(
         } else if (sent.type === "breakpoint") {
             breakpointsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { status: `Breakpoint at $${hex(Number(sent.address), 4)}.` } });
+        } else if (sent.type === "map") {
+            page.send({
+                type: "reply", id: sent.id, result: {
+                    regions: [{ start: 0x0000, length: 0x0100, name: "Zero page", kind: "ram" }, { start: 0x0400, length: 0x0400, name: "Text page 1", kind: "video" }],
+                    areas: [
+                        { start: 0x0000, length: 0xC000, name: "main RAM", kind: "ram", mapped: true },
+                        { start: 0xC000, length: 0x1000, name: "I/O", kind: "io", mapped: false },
+                        { start: 0xD000, length: 0x3000, name: "system ROM", kind: "rom", mapped: true }
+                    ]
+                }
+            });
         } else if (sent.type === "inspect") {
             const address = Number(sent.address);
             page.send({
@@ -1012,6 +1024,28 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     // Bytes and text are found in the page.
     await drive(page, [{ find: "A9 ??" }, { find: '"HI' }], () => 0, lists);
     assert.equal(findsSent.length, 1);
+});
+
+test("the map bar shows what memory reads across the space, the bytes in view, and goes where it is clicked", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false } });
+    await drive(page, [{ goto: 0x0000 }], () => 0, lists);
+    const bar = page.elements.get("map")!;
+    assert.equal(bar.hidden, false);
+    assert.ok(bar.innerHTML.includes('<div class="seg ram" style="left:0%;width:75%"></div>'), bar.innerHTML);
+    assert.ok(bar.innerHTML.includes('<div class="seg io off" style="left:75%;width:6.25%"></div>'), bar.innerHTML);
+    assert.ok(bar.innerHTML.includes('<div class="edge" style="left:1.5625%"></div>'), "a line where text page 1 starts");
+    assert.equal(page.elements.get("mapView")!.style.left, "0%");
+
+    // Hovering names the address, its region and what reads there; a click goes there.
+    bar.dispatch("mousemove", { clientX: 4 });
+    assert.equal((bar as unknown as { title: string }).title, "$0400 · Text page 1 · main RAM");
+    const state = await drive(page, [], () => 0, lists);
+    bar.dispatch("click", { clientX: 208 });
+    const moved = await drive(page, [], () => 0, lists);
+    assert.notEqual(state.cursor, moved.cursor);
+    assert.equal(moved.cursor, 0xD000);
 });
 
 test("the inspector says where the cursor's address is, what it is and what the firmware says of it", async () => {

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
-using System.Text.RegularExpressions;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Cpu.M6502;
 using Retrocore.Media;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.DiskTool;
 
@@ -57,11 +57,11 @@ internal static partial class DosDiskBuilder
         byte[] dos = AssembleDos(Path.Join(sources, thirteen ? "Dos32.asm" : "Dos33.asm"), options.Master, options.Year);
         byte[] tracks = thirteen ? DosDisk.Dos32Tracks(dos) : DosDisk.Dos33Tracks(dos);
         byte[] disk = DosDisk.Create(tracks, files, thirteen ? 13 : 16, (byte)options.Volume);
-        if (format != ".woz") { return disk; }
-
-        return thirteen
-            ? SectorDiskConverter.ConvertThirteenSector(disk).Export()
-            : SectorDiskConverter.Convert(disk, proDosOrder: false).Export();
+        return format != ".woz"
+            ? disk
+            : thirteen
+                ? SectorDiskConverter.ConvertThirteenSector(disk).Export()
+                : SectorDiskConverter.Convert(disk, proDosOrder: false).Export();
     }
 
     /// <summary>
@@ -100,8 +100,9 @@ internal static partial class DosDiskBuilder
         [.. Directory.GetFiles(folder).Order(StringComparer.OrdinalIgnoreCase).Select(ReadFile)];
 
     /// <summary>
-    ///  Reads one file: an AppleSoft listing (<c>.bas</c>), a text file (<c>.txt</c>), or a file named in CiderPress
-    ///  II's style, <c>NAME#TTAAAA</c>, with its ProDOS type and auxiliary type in hex.
+    ///  Reads one file: an AppleSoft listing (<c>.bas</c> or <c>.applesoft.bas</c>), a text file (<c>.txt</c>), or a
+    ///  file named in CiderPress II's style, <c>NAME#TTAAAA</c>, with its ProDOS type and auxiliary type in hex.
+    ///  Both extensions of an <c>.applesoft.bas</c> listing are omitted from its DOS file name.
     /// </summary>
     /// <param name="path">The file.</param>
     /// <returns>The DOS file.</returns>
@@ -111,13 +112,22 @@ internal static partial class DosDiskBuilder
         string fileName = Path.GetFileName(path);
         string extension = Path.GetExtension(path).ToLowerInvariant();
         string stem = Path.GetFileNameWithoutExtension(path);
-        if (extension == ".bas") { return DosFile.AppleSoft(stem, Tokenize(File.ReadAllText(path), path)); }
+        if (extension == ".bas")
+        {
+            if (stem.EndsWith(".applesoft", StringComparison.OrdinalIgnoreCase))
+            {
+                stem = Path.GetFileNameWithoutExtension(stem);
+            }
+
+            return DosFile.AppleSoft(stem, Tokenize(File.ReadAllText(path), path));
+        }
+
         if (extension == ".txt") { return DosFile.Text(stem, File.ReadAllText(path)); }
 
         Match match = TypedName().Match(fileName);
         if (!match.Success)
         {
-            throw new ArgumentException($"{fileName}: name a file NAME.bas, NAME.txt or NAME#TTAAAA.");
+            throw new ArgumentException($"{fileName}: name a file NAME.bas, NAME.applesoft.bas, NAME.txt or NAME#TTAAAA.");
         }
 
         string name = match.Groups["name"].Value;

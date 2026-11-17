@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Isa;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -18,6 +19,9 @@ internal sealed partial class ExpressionEvaluator
     private readonly string[] _tokens;
     private int _position;
 
+    // The hints file's space names are looked for in: the bank a reference or brackets name, else the frame's own.
+    private string _space;
+
     /// <summary>
     ///  Creates an evaluator.
     /// </summary>
@@ -25,11 +29,18 @@ internal sealed partial class ExpressionEvaluator
     /// <param name="symbols">The session's debug modules, for labels.</param>
     /// <param name="expression">The expression.</param>
     /// <param name="registers">Optional suspended caller registers.</param>
-    internal ExpressionEvaluator(IDebugTarget target, DebugInfo symbols, string expression, DebugFrame? registers = null)
+    /// <param name="bank">The bank a reference named before the expression, whose hint names it reads first.</param>
+    internal ExpressionEvaluator(
+        IDebugTarget target,
+        DebugInfo symbols,
+        string expression,
+        DebugFrame? registers = null,
+        DebugMemoryBank? bank = null)
     {
         _target = target;
         _symbols = symbols;
         _registers = registers ?? target.Frame;
+        _space = bank?.Name ?? OwnSpace(target);
         List<string> tokens = [];
         int consumed = 0;
         foreach (Match match in ExpressionTokens().Matches(expression))
@@ -58,16 +69,38 @@ internal sealed partial class ExpressionEvaluator
     }
 
     /// <summary>
+    ///  The prefix that names memory as the machine's own CPU maps it now, as no prefix does except in a
+    ///  coprocessor's frame, where no prefix is the coprocessor's memory.
+    /// </summary>
+    internal const string CpuPrefix = "cpu";
+
+    /// <summary>
     ///  Evaluates an address that may name a memory bank first, such as <c>aux:$0400</c>.
     /// </summary>
     /// <param name="bank">The bank it names, or null for memory as the CPU maps it now.</param>
     /// <returns>The address.</returns>
     /// <exception cref="FormatException">The expression or the bank is not valid.</exception>
-    internal long EvaluateReference(out DebugMemoryBank? bank)
+    internal long EvaluateReference(out DebugMemoryBank? bank) => EvaluateReference(out bank, out _);
+
+    /// <summary>
+    ///  Evaluates an address that may name a memory bank first, such as <c>aux:$0400</c>, or the machine's CPU, as
+    ///  <c>cpu:$0400</c> does.
+    /// </summary>
+    /// <param name="bank">The bank it names, or null for memory as a CPU maps it now.</param>
+    /// <param name="cpu">Whether it names the machine's own CPU with <c>cpu:</c>.</param>
+    /// <returns>The address.</returns>
+    /// <exception cref="FormatException">The expression or the bank is not valid.</exception>
+    internal long EvaluateReference(out DebugMemoryBank? bank, out bool cpu)
     {
-        bank = BankPrefix();
+        bank = BankPrefix(out cpu);
+        _space = Space(bank, cpu, _space);
         return Evaluate();
     }
+
+    // A coprocessor's memory is its bank's space in the hints file; the machine CPU's is the empty one.
+    private static string OwnSpace(IDebugTarget target) => target is SoftCardDebugTarget softCard ? softCard.Bank.Name : "";
+
+    private static string Space(DebugMemoryBank? bank, bool cpu, string outer) => bank?.Name ?? (cpu ? "" : outer);
 
     /// <summary>
     ///  Splits a bank prefix from a memory reference, such as <c>aux</c> from <c>aux:$0400</c>.
@@ -82,14 +115,27 @@ internal sealed partial class ExpressionEvaluator
         bank = null;
         Match match = BankReference().Match(reference);
         if (!match.Success) { return reference; }
+
+        // A memory reference with no bank is already the machine's CPU's.
+        if (IsCpu(match.Groups[1].Value)) { return match.Groups[2].Value; }
         bank = FindBank(target, match.Groups[1].Value);
         return match.Groups[2].Value;
     }
 
-    private DebugMemoryBank? BankPrefix()
+    private static bool IsCpu(string name) => string.Equals(name, CpuPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private DebugMemoryBank? BankPrefix(out bool cpu)
     {
+        cpu = false;
         if (_position == _tokens.Length || !_tokens[_position].EndsWith(':')) { return null; }
-        return FindBank(_target, _tokens[_position++][..^1]);
+        string name = _tokens[_position++][..^1];
+        if (IsCpu(name))
+        {
+            cpu = true;
+            return null;
+        }
+
+        return FindBank(_target, name);
     }
 
     private static DebugMemoryBank FindBank(IDebugTarget target, string name) =>
@@ -98,8 +144,8 @@ internal sealed partial class ExpressionEvaluator
                 ? $"This machine has no memory banks; '{name}:' names none."
                 : $"Unknown memory bank '{name}'; this machine has {string.Join(", ", target.Banks.Select(bank => bank.Name))}.");
 
-    private byte Peek(DebugMemoryBank? bank, ushort address) => bank is null
-        ? _target.Peek(address)
+    private byte Peek(DebugMemoryBank? bank, bool cpu, ushort address) => bank is null
+        ? (cpu ? _target.Machine : _target).Peek(address)
         : bank.Peek(address) ?? throw new FormatException($"{bank.Label} has no byte at ${address:X4}.");
 
     private long Parse(int minimum)
@@ -143,14 +189,20 @@ internal sealed partial class ExpressionEvaluator
 
         if (token == "[")
         {
-            DebugMemoryBank? bank = BankPrefix();
+            DebugMemoryBank? bank = BankPrefix(out bool cpu);
+            string outer = _space;
+            _space = Space(bank, cpu, outer);
             ushort address = checked((ushort)Parse(minimum: 0));
+            _space = outer;
             Expect("]");
-            long value = Peek(bank, address);
+            long value = Peek(bank, cpu, address);
             if (_position < _tokens.Length && _tokens[_position] == ".w")
             {
+                // A word in its CPU's byte order: low byte first but on the 6809.
                 _position++;
-                value += (long)Peek(bank, (ushort)(address + 1)) << 8;
+                long next = Peek(bank, cpu, (ushort)(address + 1));
+                InstructionSet isa = bank?.InstructionSet ?? (cpu ? _target.Machine : _target).InstructionSet;
+                value = isa.Endianness == Endianness.Big ? (value << 8) | next : value | (next << 8);
             }
 
             return value;
@@ -173,7 +225,7 @@ internal sealed partial class ExpressionEvaluator
         }
 
         if (char.IsDigit(token[0])) { return long.Parse(token, CultureInfo.InvariantCulture); }
-        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token, _target);
+        return _target.Registers.Value(_registers, token) ?? _symbols.Resolve(token, _target, _space);
     }
 
     private void Expect(string token)
@@ -194,6 +246,6 @@ internal sealed partial class ExpressionEvaluator
     [GeneratedRegex(@"^\s*([a-zA-Z][a-zA-Z0-9]*):(?!:)(.*)$", RegexOptions.Singleline)]
     private static partial Regex BankReference();
 
-    [GeneratedRegex("""\s*(\$[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+|[a-zA-Z][a-zA-Z0-9]*:(?!:)|[a-zA-Z_@][a-zA-Z_0-9@]*(?:::[a-zA-Z_@][a-zA-Z_0-9@]*)*|\.w|==|!=|<=|>=|&&|\|\||<<|>>|[+\-*/%&|^!~()<>\[\]])""")]
+    [GeneratedRegex("""\s*(\$[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+|[a-zA-Z][a-zA-Z0-9]*:(?!:)|[a-zA-Z_@][\w@]*(?:::[a-zA-Z_@][\w@]*)*|\.w|==|!=|<=|>=|&&|\|\||<<|>>|[+\-*/%&|^!~()<>\[\]])""")]
     private static partial Regex ExpressionTokens();
 }

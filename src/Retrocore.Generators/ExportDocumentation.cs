@@ -21,7 +21,7 @@ internal static class ExportDocumentation
     /// <returns>Summaries by export name.</returns>
     internal static Dictionary<string, string> Summaries(string text, string path, AssemblyResult rom)
     {
-        Dictionary<string, string> summaries = new(StringComparer.Ordinal);
+        Dictionary<string, string> summaries = [with(StringComparer.Ordinal)];
         DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, path)], rom);
         foreach (string name in rom.Exports.Keys)
         {

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Collections.Concurrent;
 using Retrocore.Basic;
+using System.Collections.Concurrent;
 
 namespace Retrocore.Debug.Language;
 
@@ -34,6 +34,8 @@ internal sealed class BasicDocuments
         LanguageHost.Level2Id => BasicDialect.Level2,
         LanguageHost.IntegerId => BasicDialect.Integer,
         LanguageHost.BusinessId => BasicDialect.BusinessBasic,
+        LanguageHost.Apple1Id => BasicDialect.Apple1,
+        LanguageHost.ColorBasicId => BasicDialect.ColorBasic,
         _ => null
     };
 

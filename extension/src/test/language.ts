@@ -16,7 +16,7 @@ export async function testAssemblyLanguage(root: string): Promise<void> {
     assert.equal(firmware.languageId, language, "Native ROM sources should be recognized automatically.");
     // Every .asm and .mac is claimed, such as the SDK's sources beside the debug host, which a launch without sdkRoms
     // steps into.
-    const sdk = path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Sdk", "Roms");
+    const sdk = path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Sdk", "Roms");
     const monitor = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(sdk, "System", "Monitor.asm")));
     assert.equal(monitor.languageId, language, "Any .asm file should be recognized.");
     const appleSoft = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(sdk, "AppleSoft", "applesoft.mac")));

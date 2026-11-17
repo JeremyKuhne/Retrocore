@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -20,8 +20,10 @@ internal static class ProFileMedia
     internal const int MaximumBlocks = 65535;
 
     /// <summary>
-    ///  Puts an image in a ProFile: a ProDOS-order image (<c>.po</c> or <c>.hdv</c>), its 512-byte blocks in order
-    ///  with no header, which the machine can write. Changes stay in memory; the file is not written.
+    ///  Puts an image in a ProFile, in place of any there: a ProDOS-order image (<c>.po</c> or <c>.hdv</c>), its
+    ///  512-byte blocks in order with no header, or a 2MG of them, which the machine can write unless a 2MG locks it.
+    ///  Changes stay in memory until the host saves them. The image is read and checked before the one in the drive
+    ///  comes out, so one that cannot be read leaves that one.
     /// </summary>
     /// <param name="drive">The ProFile.</param>
     /// <param name="path">The image's path.</param>
@@ -29,15 +31,39 @@ internal static class ProFileMedia
     internal static void Insert(ProFileDrive drive, string path)
     {
         path = Path.GetFullPath(path);
-        long length = new FileInfo(path).Length;
-        if (length == 0 || length % 512 != 0 || length / 512 > MaximumBlocks)
+        byte[] bytes = ReadImage(path);
+        MemoryBlockDevice image = MemoryBlockDevice.Load(bytes);
+        BlockImageCodec? codec = BlockImageCodec.ForImage(bytes, Path.GetExtension(path));
+        drive.Eject();
+        MediaActions.Register(image, path, codec, bytes);
+        drive.Insert(image, path, codec?.Format ?? "PO");
+    }
+
+    /// <summary>
+    ///  Reads a ProDOS-order image of at most <see cref="MaximumBlocks"/> blocks, checking its size before reading it,
+    ///  so a file too large is refused without being loaded: its length, or for a 2MG the data its header gives.
+    /// </summary>
+    /// <param name="path">The image's path.</param>
+    /// <returns>The file's bytes.</returns>
+    /// <exception cref="InvalidDataException">The image holds more than <see cref="MaximumBlocks"/> blocks.</exception>
+    internal static byte[] ReadImage(string path)
+    {
+        const long MostData = MaximumBlocks * 512L;
+        using (FileStream file = File.OpenRead(path))
         {
-            throw new InvalidDataException(
-                $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
+            Span<byte> header = stackalloc byte[TwoImgContainer.HeaderLength];
+            int read = file.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+            bool twoImg = TwoImgContainer.IsTwoImg(header[..read]);
+
+            // A 2MG's comment and creator data follow its blocks; a megabyte is far more than any writer puts there.
+            if ((twoImg ? TwoImgContainer.DataLength(header) : file.Length) > MostData || file.Length > MostData + (1 << 20))
+            {
+                throw new InvalidDataException(
+                    $"{Path.GetFileName(path)} is not a ProDOS-order block image: it must be 1 to {MaximumBlocks} whole 512-byte blocks.");
+            }
         }
 
-        string format = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
-        drive.Insert(new MemoryBlockDevice(File.ReadAllBytes(path), isReadOnly: false), path, format.Length == 0 ? "PO" : format);
+        return File.ReadAllBytes(path);
     }
 
     /// <summary>

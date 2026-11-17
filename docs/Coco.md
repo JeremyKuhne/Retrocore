@@ -52,9 +52,11 @@ CM-8 RGB monitor (`RgbMonitor`).
 
 The disk controller cartridge (`CocoDiskController`) holds Disk Extended Color BASIC 1.0 or 1.1 in its ROM, a
 WD1793 and four drives. `$FF40` selects the drive, side, motor and density, and lets the WD1793's INTRQ drive
-NMI and its DRQ release HALT, which Disk BASIC uses to move each sector's bytes. Disks are JVC images (`.dsk`):
-35 tracks of 18 256-byte sectors, with an optional header for other geometries. The WD1793 is the Model I's
-controller, shared with the TRS-80's code.
+NMI and its DRQ release HALT, which Disk BASIC uses to move each sector's bytes. Disks are JVC images (`.dsk`,
+`.jvc`): 35 tracks of 18 256-byte sectors, with an optional header for other geometries; or DMK images (`.dmk`, or a
+`.dsk` whose DMK header gives its length). A changed disk saves to its image, keeping a JVC's header, or as `.dsk`,
+`.jvc` or `.dmk` ([Devices.md](Devices.md#the-debug-protocol)). The WD1793 is the Model I's controller, shared with the
+TRS-80's code.
 
 ## ROMs
 
@@ -123,7 +125,7 @@ The options are:
 - `monitor`: `composite` (the default) or `rgb` on a CoCo 3;
 - `cartridge` and `autostart`: a ROM pack image, which takes the slot from the disk controller;
 - `diskController` (on by default when disks are given), `diskBasic` (`1.0` or `1.1`, `1.1` by default; without
-  dumps, built from the source) and `disks`, JVC images for drives 0-3;
+  dumps, built from the source) and `disks`, JVC or DMK images for drives 0-3;
 - `cassette` and `fastCassette` (on by default);
 - `sound`: `speaker` (the default) or `off`;
 - `speed`: `1` (the default) runs at 0.895 MHz, `2`, `4` or `8` that many times as fast, and `"max"` as fast as
@@ -131,7 +133,7 @@ The options are:
 
 The panel's key bar has **Break** (Esc), **Clear** (Home) and **Reset** (Ctrl+F12 or Ctrl+Break), which restarts
 the 6809 through its reset vector; Color BASIC starts again with the program kept. **Machine reset** stops at the
-first instruction after it. The Retro Devices view shows the cassette and the drives, and inserts, records and
+first instruction after it. The Drives view shows the cassette and the drives, and inserts, records and
 ejects media, as on the Model I; `retro/media` takes the same requests.
 
 **What the debugger knows about the 6809.**
@@ -143,8 +145,15 @@ ejects media, as on the Model I; `retro/media` takes the same requests.
 - While the disk controller holds HALT, or the 6809 waits in `SYNC` or `CWAI`, it is between instructions;
   breakpoints are checked when it goes on.
 
-Color BASIC programs debug at the 6809 level; the BASIC thread, the Level II and AppleSoft dialects have, is not
-yet there for Color BASIC.
+On the CoCo 1 and 2, Color BASIC programs have the BASIC thread, the program document and `basic` launches, as
+AppleSoft and Level II do; the [extension's README](../extension/README.md#basic-programs) describes them. Statements
+start at `GONE2`, which Color BASIC's loop calls, and so do the loops Extended BASIC and Disk BASIC 1.1 put in its
+place, so a statement breakpoint there holds whichever BASICs are fitted. IF jumps there too, to run what follows
+THEN, which is part of the IF statement, or ELSE, which starts the statement CRUNCH makes of `:ELSE`; and Extended
+BASIC's loop runs CLOAD and CSAVE without it, so those start at `XVEC20_CLOAD` and `XVEC20_CSAVE`. The program is
+tokenized as the fitted ROMs crunch it: a word only Extended or Disk BASIC knows stays as letters without that ROM. A
+GOSUB takes seven bytes of BASIC's stack: its token, line and text pointer over the statement loop's return, which
+RETURN returns through. The CoCo 3's BASIC has no BASIC thread yet.
 
 ## Testing
 
@@ -154,9 +163,11 @@ yet there for Color BASIC.
 | `CocoVideoTests`, `Coco3VideoTests` | The VDG's and GIME's modes, pixel by pixel. |
 | `CocoPeripheralTests` | A cassette round trip, joysticks, sound and a ROM pack. |
 | `CocoDiskTests` | DSKINI, SAVE, DIR and LOAD on a CoCo 2 and 3, and JVC images. |
+| `FloppyMediaSaveTests` | Floppy writes counted; DMK holding every kind of sector; what JV1, JV3 and JVC list as lost; a JVC header kept; saving through the host; and Disk BASIC's SAVE saved as JVC and DMK, pinned by digest, loading and running again. |
+| `BasicConformanceTests`, `BasicTokenizerTests` | Color BASIC lines typed on a CoCo 2 from the SDK's sources are stored as the library tokenizes them, with and without Disk BASIC; the keyword tables match the three ROMs'. |
 | `CocoRomSourceTests` | The Color, Extended and Disk BASIC sources and the CoCo 3's ROM, by digest for each version and against the dumps, and machines booting from them, saving and loading a program on disk, and the CoCo 3 drawing on its hi-res screen. |
 | `CocoOracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua): screens and programs on the CoCo 2, 2B and 3, and a Disk BASIC SAVE's disk image byte for byte. |
-| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm` and on into a patch in `Coco3.asm`, which then switches to 80 columns; then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns, on the dumps when they are there and otherwise on the sources. |
+| [`tools/Test-CocoDap.mjs`](../tools/Test-CocoDap.mjs) | The debugger end to end: stepping from the sample into `ColorBasic.asm` and through the console out hook into `ExtendedBasic.asm`, or with a disk into `DiskBasic.asm`, and on a CoCo 3 into its `ColorBasic.asm` and on into a patch in `Coco3.asm`, which then switches to 80 columns, and Color BASIC files on the BASIC thread (stepping, a GOSUB's frame, variables and loops, STOP and CONT, the program as text, stepping to an ELSE and Set Next Statement); then Disk BASIC saving and listing a program, a breakpoint in the sample with its call stack and step out, and the CoCo 3 at 80 columns, on the dumps when they are there and otherwise on the sources. |
 
 The machine, disk, video and peripheral tests and the DAP script run on the dumps when they are there and otherwise
 on the ROMs built from the sources, so they need nothing external. Only the comparisons with the dumps and with MAME

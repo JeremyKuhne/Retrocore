@@ -1,0 +1,110 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Isa;
+
+namespace Retrocore.Debug.Language;
+
+internal static partial class InstructionDocs
+{
+    // What each 8080 and 8085 instruction does, and the flags it changes (S Z AC P CY; the 8085's undocumented V
+    // and K follow 8-bit arithmetic).
+    private static readonly Dictionary<string, (string Summary, string Flags)> s_i8080 = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ACI"] = ("Adds an immediate and the carry to A.", "S Z AC P CY"),
+        ["ADC"] = ("Adds a register or M and the carry to A.", "S Z AC P CY"),
+        ["ADD"] = ("Adds a register or M to A.", "S Z AC P CY"),
+        ["ADI"] = ("Adds an immediate to A.", "S Z AC P CY"),
+        ["ANA"] = ("ANDs a register or M into A; clears the carry.", "S Z AC P CY"),
+        ["ANI"] = ("ANDs an immediate into A; clears the carry.", "S Z AC P CY"),
+        ["ARHL"] = ("Shifts HL right arithmetically; bit 0 goes to the carry (8085, undocumented).", "CY"),
+        ["CALL"] = ("Pushes the return address and jumps to a subroutine.", "none"),
+        ["CC"] = ("Calls a subroutine when the carry is set.", "none"),
+        ["CM"] = ("Calls a subroutine when S is set (minus).", "none"),
+        ["CMA"] = ("Complements A.", "none"),
+        ["CMC"] = ("Complements the carry.", "CY"),
+        ["CMP"] = ("Compares A with a register or M (A - operand, result discarded).", "S Z AC P CY"),
+        ["CNC"] = ("Calls a subroutine when the carry is clear.", "none"),
+        ["CNZ"] = ("Calls a subroutine when Z is clear.", "none"),
+        ["CP"] = ("Calls a subroutine when S is clear (plus).", "none"),
+        ["CPE"] = ("Calls a subroutine when parity is even (P set).", "none"),
+        ["CPI"] = ("Compares A with an immediate (A - value, result discarded).", "S Z AC P CY"),
+        ["CPO"] = ("Calls a subroutine when parity is odd (P clear).", "none"),
+        ["CZ"] = ("Calls a subroutine when Z is set.", "none"),
+        ["DAA"] = ("Adjusts A to packed BCD after an addition.", "S Z AC P CY"),
+        ["DAD"] = ("Adds a register pair to HL.", "CY"),
+        ["DCR"] = ("Decrements a register or M.", "S Z AC P"),
+        ["DCX"] = ("Decrements a register pair (the 8085's K flags the wrap to $FFFF).", "none"),
+        ["DI"] = ("Disables maskable interrupts.", "none"),
+        ["DSUB"] = ("Subtracts BC from HL (8085, undocumented).", "S Z AC P CY"),
+        ["EI"] = ("Enables maskable interrupts after the next instruction.", "none"),
+        ["HLT"] = ("Halts until an interrupt or reset.", "none"),
+        ["IN"] = ("Reads an I/O port into A.", "none"),
+        ["INR"] = ("Increments a register or M.", "S Z AC P"),
+        ["INX"] = ("Increments a register pair (the 8085's K flags the wrap to 0).", "none"),
+        ["JC"] = ("Jumps when the carry is set.", "none"),
+        ["JK"] = ("Jumps when K is set (8085, undocumented).", "none"),
+        ["JM"] = ("Jumps when S is set (minus).", "none"),
+        ["JMP"] = ("Jumps to an address.", "none"),
+        ["JNC"] = ("Jumps when the carry is clear.", "none"),
+        ["JNK"] = ("Jumps when K is clear (8085, undocumented).", "none"),
+        ["JNZ"] = ("Jumps when Z is clear.", "none"),
+        ["JP"] = ("Jumps when S is clear (plus).", "none"),
+        ["JPE"] = ("Jumps when parity is even (P set).", "none"),
+        ["JPO"] = ("Jumps when parity is odd (P clear).", "none"),
+        ["JZ"] = ("Jumps when Z is set.", "none"),
+        ["LDA"] = ("Loads A from an address.", "none"),
+        ["LDAX"] = ("Loads A from the address in BC or DE.", "none"),
+        ["LDHI"] = ("Loads DE with HL plus an unsigned byte (8085, undocumented).", "none"),
+        ["LDSI"] = ("Loads DE with SP plus an unsigned byte (8085, undocumented).", "none"),
+        ["LHLD"] = ("Loads L and H from an address and the next.", "none"),
+        ["LHLX"] = ("Loads L and H from the address in DE and the next (8085, undocumented).", "none"),
+        ["LXI"] = ("Loads a register pair with an immediate word.", "none"),
+        ["MOV"] = ("Copies a register or M to a register or M.", "none"),
+        ["MVI"] = ("Loads a register or M with an immediate.", "none"),
+        ["NOP"] = ("Does nothing.", "none"),
+        ["ORA"] = ("ORs a register or M into A; clears the carry.", "S Z AC P CY"),
+        ["ORI"] = ("ORs an immediate into A; clears the carry.", "S Z AC P CY"),
+        ["OUT"] = ("Writes A to an I/O port.", "none"),
+        ["PCHL"] = ("Jumps to the address in HL.", "none"),
+        ["POP"] = ("Pulls a register pair, or A and the flags as PSW, from the stack.", "none (POP PSW: all)"),
+        ["PUSH"] = ("Pushes a register pair, or A and the flags as PSW, onto the stack.", "none"),
+        ["RAL"] = ("Rotates A left through the carry.", "CY"),
+        ["RAR"] = ("Rotates A right through the carry.", "CY"),
+        ["RC"] = ("Returns when the carry is set.", "none"),
+        ["RDEL"] = ("Rotates DE left through the carry (8085, undocumented).", "CY"),
+        ["RET"] = ("Returns from a subroutine.", "none"),
+        ["RIM"] = ("Reads the interrupt masks, pending interrupts, IE and SID into A (8085).", "none"),
+        ["RLC"] = ("Rotates A left; bit 7 goes to the carry and bit 0.", "CY"),
+        ["RM"] = ("Returns when S is set (minus).", "none"),
+        ["RNC"] = ("Returns when the carry is clear.", "none"),
+        ["RNZ"] = ("Returns when Z is clear.", "none"),
+        ["RP"] = ("Returns when S is clear (plus).", "none"),
+        ["RPE"] = ("Returns when parity is even (P set).", "none"),
+        ["RPO"] = ("Returns when parity is odd (P clear).", "none"),
+        ["RRC"] = ("Rotates A right; bit 0 goes to the carry and bit 7.", "CY"),
+        ["RST"] = ("Calls restart 0-7, at eight times its number: $00, $08 ... $38.", "none"),
+        ["RSTV"] = ("Calls $40 when V is set (8085, undocumented).", "none"),
+        ["RZ"] = ("Returns when Z is set.", "none"),
+        ["SBB"] = ("Subtracts a register or M and the borrow (the carry) from A.", "S Z AC P CY"),
+        ["SBI"] = ("Subtracts an immediate and the borrow (the carry) from A.", "S Z AC P CY"),
+        ["SHLD"] = ("Stores L and H at an address and the next.", "none"),
+        ["SHLX"] = ("Stores L and H at the address in DE and the next (8085, undocumented).", "none"),
+        ["SIM"] = ("Sets the RST 5.5, 6.5 and 7.5 masks, clears the RST 7.5 latch or sets SOD, as A's bits enable (8085).", "none"),
+        ["SPHL"] = ("Copies HL to SP.", "none"),
+        ["STA"] = ("Stores A at an address.", "none"),
+        ["STAX"] = ("Stores A at the address in BC or DE.", "none"),
+        ["STC"] = ("Sets the carry.", "CY"),
+        ["SUB"] = ("Subtracts a register or M from A.", "S Z AC P CY"),
+        ["SUI"] = ("Subtracts an immediate from A.", "S Z AC P CY"),
+        ["XCHG"] = ("Exchanges DE and HL.", "none"),
+        ["XRA"] = ("Exclusive-ORs a register or M into A; clears the carry and AC.", "S Z AC P CY"),
+        ["XRI"] = ("Exclusive-ORs an immediate into A; clears the carry and AC.", "S Z AC P CY"),
+        ["XTHL"] = ("Exchanges HL with the word at the top of the stack.", "none")
+    };
+
+    // Lists an 8080 or 8085 mnemonic's canonical encodings: its operands, opcode with its fields, and states.
+    private static string? DescribeI8080(string mnemonic, InstructionSet set) =>
+        DescribeEncoded(s_i8080, mnemonic, set, "States");
+}

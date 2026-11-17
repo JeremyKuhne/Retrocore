@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Apple2;
 ///  One of the 3.5 controller's two drives: an Apple SuperDrive, which takes 400K and 800K Apple disks and 720K and
 ///  1440K MFM disks.
 /// </summary>
-public sealed class Apple2Disk35Drive : IDiskDrive
+public sealed class Apple2Disk35Drive : IDiskDrive, IMediumSlot
 {
     // A block shows as read or written for a thirtieth of a second, so a view can see it.
     private const ulong ActivityCycles = 1_020_484 / 30;
@@ -40,7 +40,8 @@ public sealed class Apple2Disk35Drive : IDiskDrive
             Description = "Apple SuperDrive: 400K and 800K Apple disks, 720K and 1440K MFM disks",
             Controller = "Apple II 3.5 Disk Controller Card",
             Formats = [.. Disk35Disk.Extensions],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+            SaveFormats = ["po", "2mg", "hdv", "img"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 80,
             Sides = 2
         };
@@ -70,13 +71,14 @@ public sealed class Apple2Disk35Drive : IDiskDrive
     /// </summary>
     public bool EjectedByProgram { get; private set; }
 
-    /// <summary>
-    ///  Gets or sets whether the machine has changed the disk since it was inserted.
-    /// </summary>
-    internal bool Changed { get; set; }
+    /// <inheritdoc/>
+    public IMedium? Medium => Disk;
 
     /// <inheritdoc/>
-    public MediaState? Media => Disk is { } disk ? new(_label, _format, disk.IsReadOnly, Changed) : null;
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
+
+    /// <inheritdoc/>
+    public MediaState? Media => Disk is { } disk ? new(_label, _format, disk.IsReadOnly, disk.IsDirty) : null;
 
     /// <inheritdoc/>
     public DeviceActivity Activity
@@ -119,10 +121,10 @@ public sealed class Apple2Disk35Drive : IDiskDrive
     {
         ArgumentNullException.ThrowIfNull(disk);
         Disk = disk;
+        MountGeneration = MountGenerations.Next();
         _label = label;
         _format = format;
         _lastBlock = null;
-        Changed = false;
         EjectedByProgram = false;
         _switched = true;
     }
@@ -134,11 +136,29 @@ public sealed class Apple2Disk35Drive : IDiskDrive
     public Disk35Disk? Eject()
     {
         Disk35Disk? disk = Disk;
+        if (disk is not null) { MountGeneration = MountGenerations.Next(); }
         Disk = null;
         _label = "";
         _format = "";
         _lastBlock = null;
         return disk;
+    }
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole = true)
+    {
+        Disk35Disk disk = Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.");
+        if (whole)
+        {
+            disk.MarkSaved();
+        }
+        else
+        {
+            disk.MarkChanged();
+        }
+
+        _label = label;
+        _format = format;
     }
 
     /// <summary>

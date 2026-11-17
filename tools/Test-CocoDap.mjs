@@ -5,7 +5,8 @@
 // Color Computer DAP integration, with nothing external: runs Color and Extended BASIC built from the SDK's
 // sources, stepping from the 6809 sample into ColorBasic.asm, through the console out hook into ExtendedBasic.asm, and
 // out again; with a disk, into DiskBasic.asm's hook instead; boots a CoCo 3 on its ROM built from the sources,
-// stepping into its ColorBasic.asm, out, and on into a patch in Coco3.asm, and switches it to 80 columns; then boots a
+// stepping into its ColorBasic.asm, out, and on into a patch in Coco3.asm, and switches it to 80 columns; runs a Color
+// BASIC file on the BASIC thread; then boots a
 // CoCo 2 with the disk controller to Disk Extended Color BASIC, saves and lists a program on a disk, stops in the
 // sample with its call stack, and boots a CoCo 3 to its 80-column screen. Those last parts run on the ROM dumps in
 // RETROCORE_COCO_ROMS, or %USERPROFILE%\Retrocore\coco-roms\extract, when they are there, and otherwise on the
@@ -78,9 +79,22 @@ async function launch(args, filters) {
     phase("configured");
 }
 
+const basicFrames = async () => (await request("stackTrace", { threadId: 2 })).stackFrames;
+const stopped = async reason => assert.equal((await event("stopped")).reason, reason);
+
 // A disk as Disk BASIC's DSKINI leaves it: 35 tracks of 18 256-byte sectors, every byte $FF.
 const disk = join(tmpdir(), `retrocore-coco-${process.pid}.dsk`);
 writeFileSync(disk, Buffer.alloc(35 * 18 * 256, 0xFF));
+const dmk = join(tmpdir(), `retrocore-coco-${process.pid}.dmk`);
+
+// A Color BASIC program for the BASIC thread.
+const programLines = ["10 A=1:B$=\"HI\"", "20 FOR I=1 TO 3:GOSUB 100:NEXT I", "30 STOP", "40 PRINT A;B$", "100 A=A+I", "110 RETURN"];
+const program = join(tmpdir(), `retrocore-coco-${process.pid}.colorbasic.bas`);
+writeFileSync(program, `${programLines.join("\n")}\n`);
+
+// One for IF's ELSE, a function's two-byte token before a statement, and a line whose number's low byte is zero.
+const branches = join(tmpdir(), `retrocore-coco-${process.pid}-branches.colorbasic.bas`);
+writeFileSync(branches, "10 IF 0 THEN A=1 ELSE A=2\n20 A=ABS(1):STOP\n30 END\n256 B=1:STOP\n");
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
 
@@ -98,6 +112,10 @@ try {
     assert.equal((await event("stopped")).reason, "entry");
     const sdkHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.equal(sdkHardware.rom.value, "Color BASIC 1.2, Extended Color BASIC 1.1, from the SDK's sources");
+    // Retrocore Memory reads the CoCo 2's text as its MC6847 draws it: uppercase in either style.
+    const cocoCharacters = (await request("retro/memory/characters")).text;
+    assert.equal(cocoCharacters[0x01], "A", "$01 draws an uppercase A, dark on green");
+    assert.equal(cocoCharacters[0x41], "A", "and $41 the same A, light on dark");
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     await request("stepIn", { threadId: 1 });
@@ -206,6 +224,98 @@ try {
     const sdkWide = await screen(text => /^OK/m.test(text) && !text.includes("EXTENDED"), "the 80-column screen from the SDK's ROM");
     assert.equal(sdkWide.columns, 80);
 
+    // A Color BASIC file launched on the BASIC thread: it stops on the first statement, steps through colons, stops in
+    // a GOSUB with the GOSUB's frame below it, shows the variables and the FOR loop, and stops at STOP.
+    events.length = 0;
+    await request("launch", { machine: "coco", model: "coco2", sdkRoms, basic: program, stopOnEntry: true, speed: "max", sound: "off" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("configurationDone");
+    await stopped("entry");
+    assert.equal((await request("threads")).threads[1].name, "BASIC");
+    let top = (await basicFrames())[0];
+    assert.equal(top.name, "10: A=1");
+    assert.equal(top.source.path.toLowerCase(), program.toLowerCase());
+    await request("next", { threadId: 2 });
+    await stopped("step");
+    assert.equal((await basicFrames())[0].name, "10: B$=\"HI\"");
+    await request("next", { threadId: 2 });
+    await stopped("step");
+    assert.equal((await basicFrames())[0].name, "20: FOR I=1 TO 3");
+
+    const set = await request("setBreakpoints", { source: { path: program }, breakpoints: [{ line: 5 }] });
+    assert.equal(set.breakpoints[0].verified, true, JSON.stringify(set.breakpoints[0]));
+    await request("continue", { threadId: 2 });
+    await stopped("breakpoint");
+    const inside = await basicFrames();
+    assert.deepEqual(inside.map(frame => frame.name), ["100: A=A+I", "20: GOSUB 100 (GOSUB)"]);
+    const scopes = Object.fromEntries((await request("scopes", { frameId: inside[0].id })).scopes.map(scope => [scope.name, scope.variablesReference]));
+    const values = Object.fromEntries((await request("variables", { variablesReference: scopes.Variables })).variables.map(item => [item.name, item.value]));
+    assert.deepEqual([values.A, values.B$, values.I], ["1", "\"HI\"", "1"], JSON.stringify(values));
+    const loops = (await request("variables", { variablesReference: scopes.Loops })).variables;
+    assert.equal(loops[0].name, "I");
+    assert.equal(loops[0].value, "1 TO 3 STEP 1 (FOR in line 20)");
+    const evaluate = async expression => (await request("evaluate", { expression, frameId: inside[0].id, context: "watch" })).result;
+    assert.equal(await evaluate("A*10+I"), "11");
+    assert.equal(await evaluate("LEFT$(B$,1)+\"!\""), "\"H!\"");
+    await request("setVariable", { variablesReference: scopes.Variables, name: "B$", value: "\"BYE\"" });
+    assert.equal(await evaluate("B$"), "\"BYE\"");
+    await request("setBreakpoints", { source: { path: program }, breakpoints: [] });
+    await request("stepOut", { threadId: 2 });
+    await stopped("step");
+    assert.equal((await basicFrames())[0].name, "20: NEXT I");
+
+    // STOP stops the program, and CONT resumes at the statement after it.
+    await request("setExceptionBreakpoints", { filters: ["basicStart", "basicStop"] });
+    await request("continue", { threadId: 2 });
+    assert.equal((await event("stopped")).description, "STOP in 30.");
+    const listed = await request("retro/basic/program");
+    assert.equal(listed.dialect, "colorbasic");
+    assert.equal(listed.text, `${programLines.join("\n")}\n`);
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("BREAK IN 30"), "the STOP's BREAK");
+    await type("CONT\r");
+    const resumed = await event("stopped");
+    assert.equal(resumed.description, "CONT resumes at 40.");
+    assert.equal((await basicFrames())[0].name, "40: PRINT A;B$");
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes(" 7 BYE"), "the program's PRINT");
+
+    // Writing text puts a new program in memory.
+    const written = await request("retro/basic/write", { text: "10 PRINT HEX$(255)\n20 GOTO 10\n" });
+    assert.equal(written.success, true, JSON.stringify(written.diagnostics));
+    assert.equal((await request("retro/basic/program")).text, "10 PRINT HEX$(255)\n20 GOTO 10\n");
+
+    // A false IF steps to its ELSE, which IF runs without the statement loop; ABS ($FF $82) is no REM, so STOP is a
+    // statement of its own; and Set Next Statement to line 256, whose number's low byte is zero, runs B=1 first.
+    events.length = 0;
+    await request("launch", { machine: "coco", model: "coco2", sdkRoms, basic: branches, stopOnEntry: true, speed: "max", sound: "off" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("configurationDone");
+    await stopped("entry");
+    assert.match((await basicFrames())[0].name, /^10: IF 0 THEN A=1/);
+    const steps = [];
+    for (let step = 0; step < 3; step++) {
+        await request("next", { threadId: 2 });
+        await stopped("step");
+        steps.push((await basicFrames())[0].name);
+    }
+    assert.match(steps[0], /^10: ELSE A=2/, JSON.stringify(steps));
+    assert.deepEqual(steps.slice(1), ["20: A=ABS(1)", "20: STOP"]);
+    const jump = (await request("gotoTargets", { source: { path: branches }, line: 4 })).targets;
+    assert.equal(jump[0].label, "256: B=1");
+    await request("goto", { threadId: 2, targetId: jump[0].id });
+    await stopped("goto");
+    assert.equal((await basicFrames())[0].name, "256: B=1");
+    await request("next", { threadId: 2 });
+    await stopped("step");
+    assert.equal((await basicFrames())[0].name, "256: STOP");
+    const variables = await request("variables", {
+        variablesReference: Object.fromEntries((await request("scopes", { frameId: (await basicFrames())[0].id })).scopes
+            .map(scope => [scope.name, scope.variablesReference])).Variables
+    });
+    assert.deepEqual(Object.fromEntries(variables.variables.map(item => [item.name, item.value])), { A: "1", B: "1" });
+
     // A CoCo 2 with a disk boots Disk Extended Color BASIC.
     await launch({ model: "coco2", disks: [disk] });
     await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK");
@@ -224,10 +334,32 @@ try {
     await type("DIR\r");
     await screen(text => /HELLO\s+BAS/.test(text), "the directory");
 
+    // The disk is changed: an older client's eject is refused, and a save writes it back to its JVC image, whose
+    // directory then lists the program, and then saves it as DMK, which it comes from after.
+    let drive = (await request("retro/devices")).devices.find(device => device.id === "disk0");
+    assert.deepEqual(drive.saveFormats, ["dsk", "jvc", "dmk"]);
+    assert.equal(drive.media.format, "JVC");
+    assert.equal(drive.media.changed, true);
+    await assert.rejects(request("retro/media", { device: "disk", action: "eject", drive: 0 }), /changes not saved/);
+    let saved = await request("retro/device", { id: "disk0", action: "save", supportsRetrocoreMedia: true });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    drive = saved.devices.find(device => device.id === "disk0");
+    assert.equal(drive.media.changed, false);
+    const directory = readFileSync(disk).subarray(((17 * 18) + 2) * 256, ((17 * 18) + 3) * 256);
+    assert.equal(directory.subarray(0, 8).toString("latin1"), "HELLO   ");
+    saved = await request("retro/device", { id: "disk0", action: "save", path: dmk, supportsRetrocoreMedia: true });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    drive = saved.devices.find(device => device.id === "disk0");
+    assert.equal(drive.media.format, "DMK");
+    assert.equal(drive.media.label.toLowerCase(), dmk.toLowerCase());
+
     // A stop sends the whole picture.
     await request("pause", { threadId: 1 });
     await event("stopped");
-    const paused = await event("retro/frame");
+
+    // Frames sent while it ran, as the saves above went on, come first.
+    let paused = await event("retro/frame");
+    while (paused.running) paused = await event("retro/frame");
     assert.equal(paused.running, false);
     assert.equal(Buffer.from(paused.video.pixels, "base64").length, paused.video.width * paused.video.height * 4);
     assert.equal((await request("evaluate", { expression: "DP" })).result.startsWith("$"), true);
@@ -246,6 +378,23 @@ try {
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     assert.equal((await request("evaluate", { expression: "A" })).result, "$48 (72)");
+    // A word is the 6809's, high byte first, as the reset vector at $FFFE is.
+    const word = (await request("evaluate", { expression: "[$FFFE].w", context: "watch" })).result;
+    assert.equal(word, (await request("evaluate", { expression: "[$FFFE]*256+[$FFFF]", context: "watch" })).result);
+    assert.equal((await request("retro/memoryBanks")).banks[0].bigEndian, true, "the CPU's memory is big-endian");
+    // The listing decodes the 6809's five-byte instructions, as CMPD [$1234] is.
+    // The bytes it borrows are put back after.
+    const borrowed = (await request("readMemory", { memoryReference: "0x3000", count: 5 })).data;
+    await request("writeMemory", { memoryReference: "0x3000", data: Buffer.from([0x10, 0xA3, 0x9F, 0x12, 0x34]).toString("base64") });
+    const cmpd = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 5, starts: [0x3000] })).lines[0];
+    await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
+    assert.deepEqual([cmpd.size, cmpd.text.startsWith("CMPD")], [5, true], JSON.stringify(cmpd));
+    // A direct-page operand is an offset in DP's page, as LDA <$34 is.
+    await request("writeMemory", { memoryReference: "0x3000", data: Buffer.from([0x96, 0x34]).toString("base64") });
+    const direct = (await request("retro/memory/listing", { memoryReference: "0x0000", address: 0x3000, count: 2, starts: [0x3000] })).lines[0];
+    await request("writeMemory", { memoryReference: "0x3000", data: borrowed });
+    const dp = parseInt((await request("evaluate", { expression: "DP" })).result.substring(1), 16);
+    assert.equal(direct.target, dp * 256 + 0x34, JSON.stringify(direct));
     let stack = await request("stackTrace", { threadId: 1 });
     assert.equal(stack.stackFrames[0].line, jsr);
     assert.ok(stack.totalFrames >= 2, "PRINT is on the call stack");
@@ -269,11 +418,14 @@ try {
 
     await request("disconnect");
     console.log("Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and "
-        + "Coco3.asm and out, Disk Extended Color BASIC saving and listing a program on a disk, a breakpoint in the sample "
+        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that saves to its image and as DMK, a breakpoint in the sample "
         + `with its call stack and step out, and a CoCo 3 at 80 columns, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
     if (existsSync(disk)) unlinkSync(disk);
+    if (existsSync(dmk)) unlinkSync(dmk);
+    if (existsSync(program)) unlinkSync(program);
+    if (existsSync(branches)) unlinkSync(branches);
 }
 if (failure()) throw failure();

@@ -5,7 +5,7 @@
 namespace Retrocore.Machines.Trs80;
 
 /// <summary>
-///  A Model I key, numbered by its place in the keyboard matrix: row times eight plus the data bit.
+///  A Model I, III or 4 key, numbered by its place in the keyboard matrix: row times eight plus the data bit.
 /// </summary>
 public enum Trs80Key : byte
 {
@@ -265,7 +265,37 @@ public enum Trs80Key : byte
     Space = 55,
 
     /// <summary>
-    ///  either SHIFT (row 7, bit 0).
+    ///  either SHIFT (row 7, bit 0); on a Model III or 4, the left SHIFT.
     /// </summary>
-    Shift = 56
+    Shift = 56,
+
+    /// <summary>
+    ///  the right SHIFT of a Model III or 4 (row 7, bit 1).
+    /// </summary>
+    RightShift = 57,
+
+    /// <summary>
+    ///  CTRL, on a Model 4 (row 7, bit 2).
+    /// </summary>
+    Control = 58,
+
+    /// <summary>
+    ///  CAPS, on a Model 4 (row 7, bit 3).
+    /// </summary>
+    Caps = 59,
+
+    /// <summary>
+    ///  F1, on a Model 4 (row 7, bit 4).
+    /// </summary>
+    F1 = 60,
+
+    /// <summary>
+    ///  F2, on a Model 4 (row 7, bit 5).
+    /// </summary>
+    F2 = 61,
+
+    /// <summary>
+    ///  F3, on a Model 4 (row 7, bit 6).
+    /// </summary>
+    F3 = 62
 }

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -30,6 +30,10 @@ namespace Retrocore.Debug;
 ///   <c>names</c> inside the program are labels and outside it equates, and win over the sources' names.
 ///   <c>comments</c> go above their address. <c>noReturn</c> subroutines never return to their caller, and
 ///   <c>inline</c> ones are followed by that many bytes, or by a zero-terminated string, before execution goes on.
+///  </para>
+///  <para>
+///   An address with a bank's name before it, such as <c>"aux:$0400"</c>, which Retrocore Memory writes for marks
+///   in a bank, is not the image's, so it is left out.
 ///  </para>
 /// </remarks>
 internal sealed class DisassemblyHints
@@ -73,11 +77,12 @@ internal sealed class DisassemblyHints
         DisassemblyHints hints = new();
         foreach (JsonNode? entry in root["entries"] as JsonArray ?? [])
         {
-            hints.Entries.Add(Address(entry));
+            if (!Banked(entry)) { hints.Entries.Add(Address(entry)); }
         }
 
         foreach (JsonObject range in (root["data"] as JsonArray ?? []).OfType<JsonObject>())
         {
+            if (Banked(range["start"])) { continue; }
             ushort start = Address(range["start"]);
             int length = range["length"] is { } count ? count.GetValue<int>() : Address(range["end"]) - start + 1;
             if (length <= 0) { throw new InvalidDataException($"The data range at ${start:X4} is empty."); }
@@ -86,12 +91,12 @@ internal sealed class DisassemblyHints
 
         foreach ((string key, JsonNode? value) in root["names"] as JsonObject ?? [])
         {
-            hints.Names[Address(key)] = Text(value);
+            if (!key.Contains(':', StringComparison.Ordinal)) { hints.Names[Address(key)] = Text(value); }
         }
 
         foreach ((string key, JsonNode? value) in root["comments"] as JsonObject ?? [])
         {
-            hints.Comments[Address(key)] = Text(value);
+            if (!key.Contains(':', StringComparison.Ordinal)) { hints.Comments[Address(key)] = Text(value); }
         }
 
         foreach (JsonNode? entry in root["noReturn"] as JsonArray ?? [])
@@ -107,6 +112,10 @@ internal sealed class DisassemblyHints
 
         return hints;
     }
+
+    // Whether an address names a bank, as "aux:$0400" does.
+    private static bool Banked(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue(out string? text) && text.Contains(':', StringComparison.Ordinal);
 
     private static string Text(JsonNode? node) =>
         node?.GetValue<string>() ?? throw new InvalidDataException("A name or comment is empty.");

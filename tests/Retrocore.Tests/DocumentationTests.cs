@@ -110,6 +110,29 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A <c>;;</c> block above a definition with its own trailing <c>;;</c> comment is a group's heading written as
+    ///  documentation, an error; as a plain comment it is fine, and the trailing comments still document.
+    /// </summary>
+    [TestMethod]
+    public void HeadingsAboveTrailingCommentsAreChecked()
+    {
+        DocumentationFile file = Parse("""
+            ;; The file.
+
+            ;; Ports.
+            DATA_PORT = $10                     ;; the data
+            STATUS_PORT = $11                   ;; the status
+
+            ; Memory.
+            SCREEN = $3C00                      ;; video RAM
+            """);
+
+        file.Diagnostics.Should().ContainSingle().Which.Line.Should().Be(2);
+        file.Comments.Where(comment => comment.Kind != DocumentationKind.File).Select(comment => comment.Name)
+            .Should().Equal("DATA_PORT", "STATUS_PORT", "SCREEN");
+    }
+
+    /// <summary>
     ///  Each kind of definition is recognized, with members, parameters, trailing comments and stacked labels.
     /// </summary>
     [TestMethod]
@@ -205,6 +228,48 @@ public class DocumentationTests
         topic.SectionsNamed("Keeps").Select(section => section.Condition).Should().Equal("ENHANCED", "not ENHANCED");
         DocumentationResolver.ModelOf("not ENHANCED").Should().Be("Original");
         topic.Value.Should().Be(0x1000);
+    }
+
+    /// <summary>
+    ///  A conditional section applies to a build whose symbol values make its condition hold, as the TRS-80's
+    ///  MODEL, ROMC and VERSION switches select; the IIe's model switch still goes by the launched model, and a
+    ///  condition that cannot be evaluated applies.
+    /// </summary>
+    [TestMethod]
+    public void ConditionsApplyByTheBuildsSymbols()
+    {
+        Dictionary<string, long> model1 = new() { ["MODEL"] = 1, ["REVISION"] = 13 };
+        Dictionary<string, long> model3 = new() { ["MODEL"] = 3, ["ROMC"] = 'B' };
+        long? One(string name) => model1.TryGetValue(name, out long value) ? value : null;
+        long? Three(string name) => model3.TryGetValue(name, out long value) ? value : null;
+
+        DocumentationResolver.Applies(condition: null, "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL = 1", "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies("not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("not MODEL = 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("MODEL != 1", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("REVISION = 13 and not MODEL = 1", "Level2", One).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = 'B'", "Model3", Three).Should().BeTrue();
+        long? Version2(string name) => name == "VERSION" ? 2 : null;
+        long? Version5(string name) => name == "VERSION" ? 5 : null;
+        DocumentationResolver.Applies("VERSION = 1 || VERSION = 2", "Model2", Version2).Should().BeTrue();
+        DocumentationResolver.Applies("VERSION >= 2 && VERSION <= 3", "Model2", Version5).Should().BeFalse();
+        Dictionary<string, long> model3Revision13 = new() { ["MODEL"] = 3, ["REVISION"] = 13 };
+        long? Model3Revision13(string name) => model3Revision13.TryGetValue(name, out long value) ? value : null;
+        const string Grouped = "MODEL = 1 && (REVISION = 12 || REVISION = 13)";
+        DocumentationResolver.Applies(Grouped, "Level2", One).Should().BeTrue();
+        DocumentationResolver.Applies(Grouped, "Model3", Model3Revision13).Should().BeFalse("the || is grouped under the &&");
+        DocumentationResolver.Applies("(MODEL = 3 || MODEL = 4) && ROMC = 'B'", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("((MODEL = 1)) || MODEL = 4", "Model3", Three).Should().BeFalse();
+        DocumentationResolver.Applies("ROMC = ')'", "Model3", Three).Should().BeFalse("a parenthesis literal is a value");
+        DocumentationResolver.Applies("ROMC < '='", "Model3", Three).Should().BeFalse("an operator literal is a value");
+        DocumentationResolver.Applies("(ROMC = '(' || ROMC = 'B')", "Model3", Three).Should().BeTrue();
+        DocumentationResolver.Applies("(MODEL = 1", "Model3", Three).Should().BeTrue("an unbalanced test cannot be read");
+        DocumentationResolver.Applies("MODEL4P", "Model4", name => name == "MODEL4P" ? 0 : null).Should().BeFalse();
+        DocumentationResolver.Applies("UNKNOWN = 2", "Level2", One).Should().BeTrue("a symbol the build lacks cannot rule it out");
+        DocumentationResolver.Applies("defined NAME", "Level2", One).Should().BeTrue("a test it cannot read applies");
+        DocumentationResolver.Applies("not ENHANCED", "Enhanced", One).Should().BeFalse("the IIe's switch goes by model");
+        DocumentationResolver.Applies("MODEL = 1", "Level2").Should().BeTrue("without symbols, conditions apply as before");
     }
 
     /// <summary>
@@ -431,12 +496,15 @@ public class DocumentationTests
     [TestMethod]
     public void FlagsHaveWordsAndDescriptions()
     {
-        foreach (Retrocore.Isa.IsaDescription description in (Retrocore.Isa.IsaDescription[])[
-            Retrocore.Cpu.M6502.M6502Isa.Description,
-            Retrocore.Cpu.Z80.Z80Isa.Description,
-            Retrocore.Cpu.M6809.M6809Isa.Description])
+        // The undocumented flags, the Z80's X and Y and the 8085's K and V, have no words.
+        foreach ((Retrocore.Isa.IsaDescription description, string[] undocumented) in
+            (ValueTuple<Retrocore.Isa.IsaDescription, string[]>[])[
+                (Retrocore.Cpu.M6502.M6502Isa.Description, []),
+                (Retrocore.Cpu.Z80.Z80Isa.Description, ["X", "Y"]),
+                (Retrocore.Cpu.M6809.M6809Isa.Description, []),
+                (Retrocore.Cpu.I8080.I8080Isa.Description, ["K", "V"])])
         {
-            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => flag.Name is not ("X" or "Y")))
+            foreach (Retrocore.Isa.IsaFlag flag in description.Flags.Where(flag => !undocumented.Contains(flag.Name)))
             {
                 flag.Words.Should().NotBeEmpty(flag.Name);
                 flag.Description.Should().NotBeEmpty(flag.Name);

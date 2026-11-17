@@ -66,8 +66,8 @@ internal sealed class AssemblySymbols : IEqualityComparer<ReadOnlyMemory<char>>
     internal AssemblySymbols(int capacity = 0)
     {
         _ids = new(capacity, this);
-        _names = new(capacity);
-        _resolved = new(capacity);
+        _names = [with(capacity)];
+        _resolved = [with(capacity)];
         _values = new long[capacity];
         _known = new bool[capacity];
     }

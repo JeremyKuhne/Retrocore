@@ -16,7 +16,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Native AOT execution failed.' }
 
     $artifacts = Join-Path $repo ("artifacts\m0-benchmarks\" + [Guid]::NewGuid().ToString('N'))
-    dotnet run --project .\tests\Retrocore.Perf\Retrocore.Perf.csproj -c Release -f net10.0 -- --filter '*ProcessorBenchmarks*' --exporters json --artifacts $artifacts
+    dotnet run --project .\tests\Retrocore.Perf\Retrocore.Perf.csproj -c Release -f net11.0 -- --filter '*ProcessorBenchmarks*' --exporters json --artifacts $artifacts
     if ($LASTEXITCODE -ne 0) { throw 'BenchmarkDotNet execution failed.' }
     $path = Join-Path $artifacts 'results\Retrocore.Perf.ProcessorBenchmarks-report-full-compressed.json'
     $report = Get-Content $path -Raw | ConvertFrom-Json

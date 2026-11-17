@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The installed hardware the Retro Devices view lists: each built-in part, slot or option, from retro/devices.
+// The installed hardware the Machine view lists: each built-in part, slot or option, from retro/devices.
 
 /** A row of a machine's installed hardware, as the debug host's retro/devices describes it. */
 export interface HardwareRow {
@@ -13,6 +13,16 @@ export interface HardwareRow {
     devices: string[];
     /** What retro/hardware can do to the row: addCard for a free slot, removeCard for a card that can come out. */
     actions?: string[];
+    /** The switches on it, such as a card's DIP switches, which retro/hardware's setSetting changes. */
+    settings?: HardwareSetting[];
+}
+
+/** A switch on a piece of hardware, shown as a checkbox under its row. */
+export interface HardwareSetting {
+    id: string;
+    label: string;
+    value: boolean;
+    description: string;
 }
 
 /**
@@ -40,6 +50,10 @@ export const cards: Card[] = [
     {
         label: "3.5 disk controller", detail: "Two SuperDrives: 400K and 800K Apple disks, 720K and 1.44 MB MFM disks",
         args: { action: "addDisk35" }
+    },
+    {
+        label: "Z80 SoftCard", detail: "Microsoft's Z80 card, for CP/M; one at a time",
+        args: { action: "addSoftCard" }
     },
     {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
@@ -79,7 +93,8 @@ export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
-    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid"
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "cassetteInterface",
+    "console"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */
@@ -99,4 +114,21 @@ export function fingerprint(configuration: Record<string, unknown>): string {
  */
 export function restorable(saved: SavedMachine | undefined, configuration: Record<string, unknown>): unknown {
     return saved !== undefined && saved.fingerprint === fingerprint(configuration) ? saved.configuration : undefined;
+}
+
+/**
+ * What of a saved machine differs from the machine its launch gives by itself (base, as retrocore/machine/describe
+ * answers with no saved machine): the cards and media someone changed. Saved alone, they go on top of whatever a
+ * change of setting makes the launch give, where the whole saved machine would put back what the setting replaced.
+ */
+export function changesFrom(saved: unknown, base: unknown): Record<string, Record<string, unknown>> {
+    const changes: Record<string, Record<string, unknown>> = {};
+    for (const section of ["cards", "media"]) {
+        const ours = (saved as Record<string, unknown> | undefined)?.[section];
+        if (typeof ours !== "object" || ours === null) continue;
+        const theirs = ((base as Record<string, unknown> | undefined)?.[section] ?? {}) as Record<string, unknown>;
+        changes[section] = Object.fromEntries(Object.entries(ours as Record<string, unknown>)
+            .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(theirs[key])));
+    }
+    return changes;
 }

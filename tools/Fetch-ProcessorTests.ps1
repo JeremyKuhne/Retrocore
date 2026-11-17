@@ -1,12 +1,14 @@
 # Requires PowerShell 7, gh, and git. Downloads approximately 3 GiB into an external, pinned cache.
+# The cache follows the tests' precedence: RETROCORE_TEST_CACHE, then RETROCORE_CACHE\processor-tests, then the
+# user profile's Retrocore\processor-tests.
 param(
-    [string] $Cache = (Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path $env:USERPROFILE 'Retrocore' }) 'processor-tests')
+    [string] $Cache = $(if ($env:RETROCORE_TEST_CACHE) { $env:RETROCORE_TEST_CACHE } else { Join-Path $(if ($env:RETROCORE_CACHE) { $env:RETROCORE_CACHE } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Retrocore' }) 'processor-tests' })
 )
 
 $ErrorActionPreference = 'Stop'
 $Cache = [System.IO.Path]::GetFullPath($Cache)
 $repo = [System.IO.Path]::GetFullPath((Split-Path $PSScriptRoot))
-if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo\", [StringComparison]::OrdinalIgnoreCase)) {
+if ($Cache.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Cache.StartsWith("$repo$([System.IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
     throw 'External GPL fixtures must not be cached in the workspace.'
 }
 $pin = '2f6980a2d95757486c7bee24355c360e40e2a224'
@@ -21,7 +23,7 @@ if ($files.Count -ne 769) { throw "Unexpected fixture manifest: $($files.Count) 
 $files | ForEach-Object -Parallel {
     $ErrorActionPreference = 'Stop'
     $file = $_
-    $path = Join-Path $using:root ($file.path.Replace('/', '\'))
+    $path = Join-Path $using:root ($file.path.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
     New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
     if (-not (Test-Path $path)) {
         $temporary = "$path.download"

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Cpu.M6809;
 using Retrocore.Isa;
 using Retrocore.Machines.Coco;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -222,6 +222,14 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _instruction = false;
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         M6809CallStack.CallAt(this, address, _machine.Processor.Registers.DP);
 
@@ -231,13 +239,19 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) != CocoMemoryArea.Ram)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) == CocoMemoryArea.Ram;
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Bus.VideoOutput as Machines.ICharacterSet;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)
@@ -285,13 +299,19 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         string source = Path.Join(sdk, "ColorBasic.asm");
         if (!coco3 && CocoSdkModules.VersionOf(_machine.Bus.ColorBasicRom) is { } version && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleColorBasic(source, version), CocoMemoryArea.ColorBasic));
+            Assembler.AssemblyResult colorBasic = CocoSdkModules.AssembleColorBasic(source, version);
+            debug.Add(new SourceMapModule(colorBasic, CocoMemoryArea.ColorBasic));
+            _basicRom = ColorBasicRom(colorBasic.Symbols);
         }
 
         source = Path.Join(sdk, "ExtendedBasic.asm");
         if (!coco3 && CocoSdkModules.ExtendedVersionOf(_machine.Bus.ExtendedBasicRom) is { } extended && File.Exists(source))
         {
-            debug.Add(new SourceMapModule(CocoSdkModules.AssembleExtendedBasic(source, extended), CocoMemoryArea.ExtendedBasic));
+            Assembler.AssemblyResult extendedBasic = CocoSdkModules.AssembleExtendedBasic(source, extended);
+            debug.Add(new SourceMapModule(extendedBasic, CocoMemoryArea.ExtendedBasic));
+            string[] cassette = ["XVEC20_CLOAD", "XVEC20_CSAVE"];
+            _cassetteStarts = [.. cassette.Where(extendedBasic.Symbols.ContainsKey).Select(label => (ushort)extendedBasic.Symbols[label])];
+            _cassetteRun = extendedBasic.Symbols.TryGetValue("XVEC20_RUN", out long run) ? (ushort)run : (ushort)0;
         }
 
         // The disk controller's ROM is in the cartridge slot when no cartridge is; a CoCo 3 runs a copy in RAM.

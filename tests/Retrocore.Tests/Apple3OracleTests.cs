@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Apple3;
 using System.Diagnostics;
 using System.Globalization;
-using Retrocore.Machines.Apple3;
-
 // An instruction's address with the registers before it; the B flag is left out, since MAME shows it set.
 using Row = (ushort Pc, byte A, byte X, byte Y, byte P, byte S);
 

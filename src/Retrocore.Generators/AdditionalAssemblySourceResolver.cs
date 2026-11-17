@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Assembler;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Retrocore.Assembler;
 
 namespace Retrocore.Generators;
 
@@ -13,8 +13,8 @@ namespace Retrocore.Generators;
 /// </summary>
 internal sealed class AdditionalAssemblySourceResolver : IAssemblySourceResolver
 {
-    private readonly Dictionary<string, AdditionalText> _files = new(
-        Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly Dictionary<string, AdditionalText> _files = [with(
+        Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)];
     private readonly AnalyzerConfigOptionsProvider _metadata;
     private CancellationToken _cancellation;
 

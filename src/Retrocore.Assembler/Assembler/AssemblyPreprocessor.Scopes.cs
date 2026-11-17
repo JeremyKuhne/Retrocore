@@ -16,7 +16,7 @@ internal sealed partial class AssemblyPreprocessor
     private int _constantContexts;
     private AssemblyDialect? _constantDialect;
     private readonly List<(string Scope, AssemblyStatementKind Kind)> _constantScopes = [];
-    private readonly HashSet<string> _constantNamespaces = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _constantNamespaces = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Mirrors the resolver's scope and cheap-local rules so conditionals see the names emission will use.

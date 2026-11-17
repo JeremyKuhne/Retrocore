@@ -459,7 +459,7 @@ MCUREQUEST1_5:
 ;; so this clears hi-res page 1 but for two marks in its last line, shows it, and watches the video's bytes through
 ;; the PIA's sync latch for the marks; it leaves the display in text, with lo-res, page 1 and no mixing.
 ;; In:    X = $Cn, Y = $n0
-;; Uses:  the II and II Plus's hi-res page 1
+;; Uses:  $2000..$3FFF (the II and II Plus's hi-res page 1)
 INITBANK:
     lda MOUMODE-CN,x
     and #$0F
@@ -624,7 +624,7 @@ INITBANK_TEXT:
 ;; Sends MOUARG's command. For $20 it reads the answer and merges its bits 1-3 into MOUSTAT; for $30 it clears the
 ;; position's holes.
 ;; In:    MOUARG = the command, X = $Cn, Y = $n0
-;; Out:   (to bank 0) carry = clear, or set when $20 finds no interrupt
+;; Out:   carry = clear, or set when $20 finds no interrupt (as it returns to bank 0)
 SENDBANK:
     lda MOUARG-CN,x
     cmp #$20

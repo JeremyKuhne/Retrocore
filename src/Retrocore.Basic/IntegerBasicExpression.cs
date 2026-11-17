@@ -12,9 +12,10 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Integer BASIC works in 16-bit integers from -32767 to 32767: <c>/</c> truncates, <c>MOD</c> keeps the dividend's
-///   sign, a comparison is 1 or 0, and <c>#</c> is the same as <c>&lt;&gt;</c>. <c>A(n)</c> is element n of an
-///   array, counting from 0, and a simple variable is its own element 0. <c>A$(i)</c> is the string from character i
+///   Integer BASIC works in 16-bit integers from -32767 to 32767: <c>/</c> truncates, <c>MOD</c> is the remainder of
+///   the two sizes, negative when the two signs differ (<c>5 MOD -3</c> is -2, <c>-5 MOD -3</c> is 2), a comparison
+///   is 1 or 0, and <c>#</c> is the same as <c>&lt;&gt;</c>. <c>A(n)</c> is element n of an array, counting from 0
+///   (from 1 in Apple-1 BASIC), and a simple variable is its own first element. <c>A$(i)</c> is the string from character i
 ///   and <c>A$(i,j)</c> characters i to j, counting from 1. Functions that read the machine's state or change it,
 ///   <c>RND</c>, <c>PDL</c> and <c>SCRN(</c>, are refused.
 ///  </para>
@@ -141,7 +142,8 @@ internal sealed class IntegerBasicExpression
             {
                 "*" => (long)value * right,
                 "/" => value / right,
-                _ => value % right
+                // The remainder of the sizes, negative when one of the two is: -5 MOD 3 and 5 MOD -3 are -2.
+                _ => (value < 0) != (right < 0) ? -(Math.Abs(value) % Math.Abs(right)) : Math.Abs(value) % Math.Abs(right)
             });
         }
 
@@ -258,7 +260,7 @@ internal sealed class IntegerBasicExpression
         if (second is not null) { throw Syntax("an array has one subscript"); }
         if (_variables.FindArray(name) is { } array)
         {
-            if (first < 0 || first >= array.Count)
+            if (first < array.LowerBound || first >= array.LowerBound + array.Count)
             {
                 throw new FormatException("*** RANGE ERR: the subscript is outside the array.");
             }
@@ -266,7 +268,7 @@ internal sealed class IntegerBasicExpression
             return _variables.Read(array.Kind, array.ElementAddress([first]));
         }
 
-        if (_variables.Find(name) is { } simple && first == 0)
+        if (_variables.Find(name) is { } simple && first == _variables.ArrayBase)
         {
             return _variables.Read(simple.Kind, simple.ValueAddress);
         }

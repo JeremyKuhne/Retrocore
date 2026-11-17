@@ -10,18 +10,17 @@ using Retrocore.Pascal;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Apple Pascal 1.0 and 1.3 (on the II Plus), 1.1 and 1.2 on a 64K Apple II Plus (with the language card) and an enhanced
-///  IIe, from Apple's disks:
+///  Apple Pascal 1.0 (on the II Plus), 1.1 and 1.2 on a 64K Apple II Plus (with the language card) and an enhanced
+///  IIe, and 1.3 on a 128K enhanced IIe, from Apple's disks:
 ///  each boots from APPLE1, its Filer lists the disk, and a program is edited, compiled with a listing, and run.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c>, <c>1.2_1.DSK</c> and 1.3's WOZ image
+///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c>, <c>1.2_1.DSK</c> and <c>1.3_1.DSK</c> or 1.3's WOZ image
 ///   <c>UCSD Pascal 1.3_APPLE1.woz</c>, APPLE1, and the APPLE2 beside each, with the Compiler) are in
-///   <c>RETROCORE_APPLE2_PASCAL_DISKS</c>; the ROMs are the SDK's. 1.3 puts F(ILE first on its command line, asks
-///   the Editor's file and the Compiler's listing by name, and stays in the Editor's quit menu after U(PDATE.
-///   The IIe shows lowercase, so the screen is compared in capitals. The Editor is typed a line at a time: keys queued
-///   faster than a typist can lose some while it scrolls.
+///   <c>RETROCORE_APPLE2_PASCAL_DISKS</c>; the ROMs are the SDK's.
+///   The IIe shows lowercase, so the screen is compared in capitals. The Editor is typed a key at a time, at a typist's
+///   pace: keys queued faster can be lost while it scrolls.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -38,9 +37,9 @@ public class Apple2PascalTests
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
-    [DataRow(Apple2Model.IIPlus, "1.3")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void PascalBootsAndTheFilerListsItsDisk(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -64,9 +63,9 @@ public class Apple2PascalTests
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
-    [DataRow(Apple2Model.IIPlus, "1.3")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void PascalCompilesAndRunsAProgram(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -105,9 +104,9 @@ public class Apple2PascalTests
     [DataRow(Apple2Model.IIPlus, "1.0")]
     [DataRow(Apple2Model.IIPlus, "1.1")]
     [DataRow(Apple2Model.IIPlus, "1.2")]
-    [DataRow(Apple2Model.IIPlus, "1.3")]
     [DataRow(Apple2Model.IIeEnhanced, "1.1")]
     [DataRow(Apple2Model.IIeEnhanced, "1.2")]
+    [DataRow(Apple2Model.IIeEnhanced, "1.3")]
     public void FramesReadFromTheMarkStack(Apple2Model model, string version)
     {
         Apple2Machine machine = Boot(model, version);
@@ -122,17 +121,21 @@ public class Apple2PascalTests
             machine.StepInstruction();
             ushort pc = machine.Processor.Registers.ProgramCounter;
             fetch ??= PascalInterpreter.IsFetch(machine.Bus.Peek, pc) ? pc : null;
-            if (pc == fetch) { top = PascalMachine.Top(memory, new PascalInterpreter("II", pc, 0, Extended: false)); }
+            if (pc == fetch) { top = PascalMachine.Top(memory, Interpreter(machine, pc)); }
         }
 
         fetch.Should().NotBeNull();
         top.Should().NotBeNull();
-        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, new PascalInterpreter("II", fetch.GetValueOrDefault(), 0, Extended: false));
+        IReadOnlyList<PascalFrame> frames = PascalMachine.Frames(memory, Interpreter(machine, fetch.GetValueOrDefault()));
         frames.Select(frame => (frame.SegmentNumber, frame.Procedure)).Should().StartWith([(1, 2), (1, 1)]);
         frames[0].Offset.Should().Be(0);
         PascalMachine.Word(memory, frames[0].Local(1)).Should().Be(1, "N is 1 on the first call");
         frames[^1].SegmentNumber.Should().Be(0);
     }
+
+    // The interpreter at its fetch: 1.3 on a 128K IIe reads its code from the auxiliary 64K there.
+    private static PascalInterpreter Interpreter(Apple2Machine machine, ushort fetch) =>
+        new("II", fetch, 0, Extended: false, CodeBank: (machine.Bus.Switches & Apple2Switches.RamRead) != 0 ? (byte)1 : (byte)0);
 
     // Types HELLO into the Editor, asking for a listing, and keeps it as the workfile, ending at the command line.
     private static void EditHello(Apple2Machine machine, string version)
@@ -152,7 +155,9 @@ public class Apple2PascalTests
         }
 
         Type(machine, "E");
-        RunUntil(machine, "NO WORKFILE IS PRESENT", seconds: 20, orElse: "EDIT WHAT FILE");
+        // 1.3's Editor asks for a file where the others say there is no workfile; RETURN starts a new one either way.
+        RunUntil(machine, "NO WORKFILE IS PRESENT", seconds: 20, orElse: "EDIT WHAT FILE?");
+        machine.Run(cycles: 204_096);
         Type(machine, "\r");
         RunUntil(machine, ">EDIT:", seconds: 10);
         Type(machine, "I");
@@ -167,22 +172,14 @@ public class Apple2PascalTests
         // writes a listing, so 1.0 gets none.
         foreach (string line in version == "1.0" ? lines[1..] : lines)
         {
-            // 1.3's Editor shows a line's start only, past the column its window ends at, and takes keys more slowly,
-            // dropping those that come before it has taken the last: they go one at a time.
-            if (version == "1.3")
+            // A key at a time, at the pace the debugger pastes: 1.3's Editor loses keys queued faster.
+            foreach (char key in line + "\r")
             {
-                foreach (char key in line + "\r")
-                {
-                    Type(machine, key.ToString());
-                    machine.Run(cycles: 51_024);
-                }
-            }
-            else
-            {
-                Type(machine, line + "\r");
+                Type(machine, key.ToString());
+                machine.Run(cycles: 30_000);
             }
 
-            RunUntil(machine, line[..Math.Min(line.Length, 20)], seconds: 10);
+            RunUntil(machine, line, seconds: 10);
             machine.Run(cycles: 204_096);
         }
 
@@ -190,21 +187,22 @@ public class Apple2PascalTests
         Type(machine, "\u0003");
         RunUntil(machine, ">EDIT:", seconds: 10);
         Type(machine, "Q");
-        RunUntil(machine, "U(PDATE", seconds: 10);
+        RunUntil(machine, "U(PDATE ", seconds: 10);
         Type(machine, "U");
 
-        // 1.3's U(pdate) stays in the quit menu, which E(xit) leaves.
+        // 1.3's Editor writes the workfile and stays in its Quit menu, which E(xit) leaves.
         if (version == "1.3")
         {
             RunUntil(machine, "BYTES LONG", seconds: 20);
             Type(machine, "E");
         }
 
-        RunUntil(machine, Command(version), seconds: 20);
+        // 1.3's command line starts with F(ile, the others' with E(dit.
+        RunUntil(machine, "COMMAND: ", seconds: 20);
         machine.Run(cycles: 1_020_480);
     }
 
-    // Runs the workfile: 1.1 and 1.2 compile it first, and 1.0 is told to.
+    // Runs the workfile: 1.1 to 1.3 compile it first, and 1.0 is told to.
     private static void Run(Apple2Machine machine, string version)
     {
         if (version == "1.0")
@@ -223,11 +221,12 @@ public class Apple2PascalTests
 
         Type(machine, "R");
 
-        // 1.3's Compiler asks for a listing file, even of the workfile: RETURN gives none but the one the source names.
+        // 1.3's Compiler asks for a listing even with $L in the program.
         if (version == "1.3")
         {
-            RunUntil(machine, "LISTING FILE", seconds: 60);
-            Type(machine, "\r");
+            RunUntil(machine, "LISTING FILE", seconds: 30);
+            machine.Run(cycles: 204_096);
+            Type(machine, "APPLE1:HELLO.LST.TEXT\r");
         }
     }
 
@@ -237,12 +236,16 @@ public class Apple2PascalTests
 
     private static Apple2Machine Boot(Apple2Model model, string version)
     {
-        // Apple Pascal 1.0's and 1.2's images are named in capitals; 1.3's are WOZ images, named by their volumes.
+        // Apple Pascal 1.0's and 1.2's images are named in capitals; 1.3's may be WOZ images.
         string extension = version == "1.1" ? "dsk" : "DSK";
-        string apple1 = version == "1.3" ? "UCSD Pascal 1.3_APPLE1.woz" : $"UCSD Pascal {version}_1.{extension}";
-        string apple2 = version == "1.3" ? "UCSD Pascal 1.3_APPLE2.woz" : $"UCSD Pascal {version}_2.{extension}";
-        string path = Path.Join(PascalMediaTests.Apple2Disks, apple1);
-        string tools = Path.Join(PascalMediaTests.Apple2Disks, apple2);
+        string path = version == "1.3"
+            ? PascalMediaTests.Apple2Pascal13Disk(1)
+            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_1.{extension}");
+        string tools = version == "1.3"
+            ? PascalMediaTests.Apple2Pascal13Disk(2)
+            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_2.{extension}");
+        string apple1 = Path.GetFileName(path);
+        string apple2 = Path.GetFileName(tools);
         if (!File.Exists(path) || !File.Exists(tools))
         {
             Assert.Inconclusive($"Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with {apple1} and {apple2}.");
@@ -253,22 +256,13 @@ public class Apple2PascalTests
         if (!model.IsIIe()) { machine.Bus.InstallLanguageCard(); }
 
         // A converted image is read-only; a writable copy takes the workfile, the code and the listing.
-        WozDisk media = SectorDiskConverter.Convert(Sectors(path), proDosOrder: false);
-        machine.Drives[0].Insert(WozDisk.Load(media.Export(), writable: true), apple1, "DSK");
-        machine.Drives[1].Insert(SectorDiskConverter.Convert(Sectors(tools), proDosOrder: false), apple2, "DSK");
+        WozDisk media = SectorDiskConverter.Convert(DiskImageFile.Sectors(path), proDosOrder: false);
+        machine.Drives[0].Insert(media.Writable(), apple1, "DSK");
+        machine.Drives[1].Insert(SectorDiskConverter.Convert(DiskImageFile.Sectors(tools), proDosOrder: false), apple2, "DSK");
         machine.Bus.ResetSwitches();
         machine.Processor.Reset();
         return machine;
     }
-
-    // An image's sectors, a WOZ image's read back from its tracks.
-    private static byte[] Sectors(string path) => path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase)
-        ? SectorDiskReader.Read(WozDisk.Load(File.ReadAllBytes(path)), proDosOrder: false)
-        : File.ReadAllBytes(path);
-
-    // The start of the command line: 1.3's has F(ILE first.
-    private static string Command(string version) =>
-        version == "1.3" ? "COMMAND: F(ILE, E(DIT, R(UN" : "COMMAND: E(DIT, R(UN";
 
     private static void Type(Apple2Machine machine, string keys)
     {

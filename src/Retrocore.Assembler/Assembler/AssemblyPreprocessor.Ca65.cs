@@ -14,7 +14,7 @@ internal sealed partial class AssemblyPreprocessor
     ///  Gets ca65's <c>.cpu</c> value for a CPU name: the instruction-set bits its <c>.ifp*</c> tests compare.
     /// </summary>
     /// <param name="name">A native <c>.cpu</c> name, in any case.</param>
-    /// <returns>The value, which is 0 for a CPU outside the 6502 family, such as the Z80.</returns>
+    /// <returns>The value, which is 0 for a CPU outside the 6502 family, such as the Z80 or the 8080.</returns>
     private static int Ca65CpuNumber(string? name) =>
         name switch
         {
@@ -22,6 +22,9 @@ internal sealed partial class AssemblyPreprocessor
             _ when string.Equals(name, "Rockwell65C02", StringComparison.OrdinalIgnoreCase) => 50,
             _ when string.Equals(name, "Wdc65C02", StringComparison.OrdinalIgnoreCase) => 4146,
             _ when string.Equals(name, "Z80", StringComparison.OrdinalIgnoreCase) => 0,
+            _ when string.Equals(name, "M6809", StringComparison.OrdinalIgnoreCase) => 0,
+            _ when string.Equals(name, "I8080", StringComparison.OrdinalIgnoreCase) => 0,
+            _ when string.Equals(name, "I8085", StringComparison.OrdinalIgnoreCase) => 0,
             _ => 2
         };
 

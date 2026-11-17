@@ -69,7 +69,7 @@ public sealed record DosFile(string Name, DosFileType Type, ReadOnlyMemory<byte>
     public static DosFile Text(string name, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        List<byte> contents = new(text.Length);
+        List<byte> contents = [with(text.Length)];
         for (int index = 0; index < text.Length; index++)
         {
             char character = text[index];

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Machines.Devices;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -16,7 +16,12 @@ namespace Retrocore.Debug;
 ///   The configuration is <c>{ "cards": { "4": "mockingboard", "5": "diskII16", ... }, "media": { "disk1":
 ///   { "path": "...", "writeProtected": false }, "disk2": null } }</c>. A drive given as null is empty. Media the
 ///   host cannot insert again, such as a disk a DOS launch built or a tape being recorded, is left out, so the
-///   launch's own stays.
+///   launch's own stays. Slot 7's image, which comes from the launch, is kept too; the launch takes it from there
+///   (<see cref="LaunchMedia"/>), and only its lock is restored here.
+///  </para>
+///  <para>
+///   Hardware with switches adds <c>"settings": { "slot4": { "translation": true, "refresh": false } }</c>, by
+///   row, restored after the cards.
 ///  </para>
 /// </remarks>
 internal static class MachineConfiguration
@@ -31,7 +36,8 @@ internal static class MachineConfiguration
         JsonObject media = [];
         foreach (IDevice device in target.Devices)
         {
-            if (!device.Info.Operations.HasFlag(MediaOperations.Insert)) { continue; }
+            bool kept = device.Info.Operations.HasFlag(MediaOperations.Insert) || LaunchMedia.FromLaunch(device);
+            if (!kept) { continue; }
             if (device.Media is not { } state)
             {
                 media[device.Id] = null;
@@ -45,6 +51,16 @@ internal static class MachineConfiguration
         JsonObject configuration = [];
         if (target.Cards() is { } cards) { configuration["cards"] = cards; }
         configuration["media"] = media;
+        JsonObject settings = [];
+        foreach (HardwareRow row in target.Hardware())
+        {
+            if (row.Settings is not { Length: > 0 } switches) { continue; }
+            JsonObject values = [];
+            foreach (HardwareSetting setting in switches) { values[setting.Id] = setting.Value; }
+            settings[row.Id] = values;
+        }
+
+        if (settings.Count != 0) { configuration["settings"] = settings; }
         return configuration;
     }
 
@@ -58,6 +74,7 @@ internal static class MachineConfiguration
     {
         List<string> problems = [];
         if (saved["cards"] is JsonObject cards) { problems.AddRange(target.RestoreCards(cards)); }
+        if (saved["settings"] is JsonObject settings) { RestoreSettings(target, settings, problems); }
         if (saved["media"] is not JsonObject media) { return problems; }
         foreach ((string id, JsonNode? node) in media)
         {
@@ -80,6 +97,38 @@ internal static class MachineConfiguration
         return problems;
     }
 
+    // Each row's switches, as saved, through setSetting.
+    private static void RestoreSettings(IDebugTarget target, JsonObject settings, List<string> problems)
+    {
+        foreach ((string id, JsonNode? node) in settings)
+        {
+            if (node is not JsonObject values) { continue; }
+            foreach ((string setting, JsonNode? value) in values)
+            {
+                if (value?.GetValueKind() is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                {
+                    problems.Add($"The saved {id} setting '{setting}' is not on or off.");
+                    continue;
+                }
+
+                try
+                {
+                    JsonObject args = new()
+                    {
+                        ["setting"] = setting,
+                        ["value"] = value.GetValue<bool>()
+                    };
+
+                    target.HardwareAction(id, "setSetting", args);
+                }
+                catch (ArgumentException error)
+                {
+                    problems.Add(error.Message);
+                }
+            }
+        }
+    }
+
     private static void Restore(IDebugTarget target, IDevice device, JsonObject? saved)
     {
         string? path = saved?.String("path");
@@ -94,7 +143,11 @@ internal static class MachineConfiguration
         }
 
         if (!File.Exists(path)) { throw new IOException($"{path} no longer exists."); }
-        if (!string.Equals(device.Media?.Label, path, StringComparison.OrdinalIgnoreCase))
+        bool same = string.Equals(device.Media?.Label, path, LaunchMedia.PathComparison);
+
+        // Media from the launch cannot be inserted; their lock is theirs only while they are the saved ones.
+        if (LaunchMedia.FromLaunch(device) && !same) { return; }
+        if (!same)
         {
             target.DeviceAction(device, "insert", new JsonObject { ["path"] = path });
         }
@@ -102,7 +155,14 @@ internal static class MachineConfiguration
         bool writeProtected = saved?.Bool("writeProtected") ?? false;
         if (device.Info.Operations.HasFlag(MediaOperations.WriteProtect) && device.Media?.WriteProtected != writeProtected)
         {
-            target.DeviceAction(device, "writeProtect", new JsonObject { ["writeProtected"] = writeProtected });
+            // A saved machine is restored before it runs, so the lock is the one it starts with: slot 7's ROM says so.
+            JsonObject lockArgs = new()
+            {
+                ["writeProtected"] = writeProtected,
+                ["powerOn"] = true,
+            };
+
+            target.DeviceAction(device, "writeProtect", lockArgs);
         }
     }
 

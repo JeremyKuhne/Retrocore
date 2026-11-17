@@ -178,6 +178,43 @@ public class Apple2AudioTests
     }
 
     /// <summary>
+    ///  Verifies muted cycles, including a complete clock period, preserve exact PCM after sink attachment.
+    /// </summary>
+    /// <param name="rate">The output sample rate.</param>
+    [TestMethod]
+    [DataRow(44100)]
+    [DataRow(48000)]
+    [DataRow(1020500)]
+    public void MutedClockPreservesPcmPhaseWhenAttachingASink(int rate)
+    {
+        Apple2Audio audio = new(rate);
+        Apple2Audio reference = new(rate) { Sink = new RecordingAudioTests() };
+        Mockingboard board = new();
+        for (int cycle = 0; cycle < AudioSampleClock.ClockRate + 113; cycle++)
+        {
+            if ((cycle & 1) == 0) { audio.Tick(speaker: false, board); }
+            else { audio.Tick(speaker: false, left: 0, right: 0); }
+            reference.Tick(speaker: false, left: 0, right: 0);
+        }
+
+        RecordingAudioTests sink = new();
+        RecordingAudioTests expected = new();
+        audio.Sink = sink;
+        reference.Sink = expected;
+        for (int cycle = 0; cycle < 1500; cycle++)
+        {
+            bool speaker = (cycle & 16) != 0;
+            audio.Tick(speaker, left: 0.3f, right: 0.7f);
+            reference.Tick(speaker, left: 0.3f, right: 0.7f);
+        }
+
+        audio.Flush();
+        reference.Flush();
+        sink.Frames.Should().BeGreaterThan(0);
+        sink.Samples.ToArray().Should().Equal(expected.Samples.ToArray());
+    }
+
+    /// <summary>
     ///  Verifies rate bounds protect the accumulator and reject invalid clocks.
     /// </summary>
     /// <param name="rate">The invalid rate.</param>
@@ -210,23 +247,24 @@ public class Apple2AudioTests
             audio.Tick((cycle & 16) != 0, board.Left, board.Right);
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int cycle = 0; cycle < 250000; cycle++)
+        Allocations.During(() =>
         {
-            board.Tick();
-            audio.Tick((cycle & 16) != 0, board.Left, board.Right);
-            if ((cycle & 255) == 0)
+            for (int cycle = 0; cycle < 250000; cycle++)
             {
-                board.Write(4, (byte)cycle);
-                board.Write(5, 0);
-                _ = board.Peek(13);
-                _ = board.Read(4);
+                board.Tick();
+                audio.Tick((cycle & 16) != 0, board.Left, board.Right);
+                if ((cycle & 255) == 0)
+                {
+                    board.Write(4, (byte)cycle);
+                    board.Write(5, 0);
+                    _ = board.Peek(13);
+                    _ = board.Read(4);
+                }
             }
-        }
 
-        audio.Flush();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
+            audio.Flush();
+        }).Should().Be(0);
+
         sink.ValidBlocks.Should().BeTrue();
     }
 }

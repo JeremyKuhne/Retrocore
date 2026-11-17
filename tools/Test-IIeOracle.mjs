@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const image = readFileSync(join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "m1-dependencies", "ProDOS_2_4_3.po"));
 for (const model of ["original", "enhanced"]) {
     const probe = spawnSync("dotnet", [
-        join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll"),
+        join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll"),
         "--boot-state", process.env.RETROCORE_IIE_ROMS,
         join(process.env.RETROCORE_CACHE ?? join(process.env.USERPROFILE ?? "", "Retrocore"), "m1-dependencies", "ProDOS_2_4_3.po"), model
     ], { encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });

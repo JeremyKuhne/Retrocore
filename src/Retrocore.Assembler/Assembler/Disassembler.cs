@@ -239,6 +239,10 @@ public static partial class Disassembler
             case OperandFieldKind.BitNumber:
                 buffer[length++] = (char)('0' + value);
                 break;
+            case OperandFieldKind.RestartNumber:
+                // Intel's RST names the restart by number; the field's value is its address.
+                buffer[length++] = (char)('0' + (value >> 3));
+                break;
             default:
                 AppendHex(buffer, ref length, value, 4);
                 break;

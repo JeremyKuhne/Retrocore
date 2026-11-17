@@ -102,7 +102,7 @@ public class DeviceModelTests
         drive.Media?.Changed.Should().BeTrue();
 
         drive.SetWriteProtected(writeProtected: true);
-        disk.WriteProtected.Should().BeTrue();
+        disk.IsWriteProtected.Should().BeTrue();
         drive.Media?.WriteProtected.Should().BeTrue();
 
         bus.Write(0x37E1, 0x09);
@@ -163,9 +163,55 @@ public class DeviceModelTests
         drive.Media?.WriteProtected.Should().BeTrue("a sector image loads protected");
         drive.SetWriteProtected(writeProtected: false);
         drive.Media?.WriteProtected.Should().BeFalse();
-        drive.Disk?.IsReadOnly.Should().BeFalse();
+        drive.Disk?.IsWriteProtected.Should().BeFalse();
         drive.SetWriteProtected(writeProtected: true);
         drive.Media?.WriteProtected.Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  A Disk II drive's mount generation changes whenever a disk goes in or comes out, through the drive or straight
+    ///  through its controller, so the same disk put back is not the same mount.
+    /// </summary>
+    [TestMethod]
+    public void DiskMountGenerationCountsEveryMount()
+    {
+        DiskIIController controller = new();
+        controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
+        Apple2FloppyDrive drive = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
+        WozDisk disk = SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false);
+        int empty = drive.MountGeneration;
+
+        drive.Insert(disk, "blank.dsk", "DSK");
+        int first = drive.MountGeneration;
+        first.Should().NotBe(empty);
+        drive.Medium.Should().BeSameAs(disk);
+
+        controller.Eject(1);
+        controller.Mount(1, disk);
+        drive.MountGeneration.Should().NotBe(first, "the same disk put back is another mount");
+
+        int again = drive.MountGeneration;
+        controller.RemoveFirmware();
+        drive.MountGeneration.Should().NotBe(again);
+        drive.Medium.Should().BeNull();
+    }
+
+    /// <summary>
+    ///  A save to an image that cannot hold all of a disk leaves it changed, even a disk the machine had not written.
+    /// </summary>
+    [TestMethod]
+    public void LossySaveLeavesTheDiskChanged()
+    {
+        DiskIIController controller = new();
+        controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
+        Apple2FloppyDrive drive = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
+        drive.Insert(SectorDiskConverter.Convert(new byte[35 * 4096], proDosOrder: false, volume: 7), "seven.woz", "WOZ");
+        drive.Media?.Changed.Should().BeFalse();
+
+        drive.Saved("seven.dsk", "DSK", whole: false);
+        drive.Media?.Changed.Should().BeTrue();
+        drive.Saved("seven.woz", "WOZ");
+        drive.Media?.Changed.Should().BeFalse();
     }
 
     /// <summary>
@@ -185,7 +231,7 @@ public class DeviceModelTests
         storage.BlockCount.Should().Be(280);
         storage.LastBlock.Should().BeNull();
         storage.Activity.Should().Be(DeviceActivity.Idle);
-        storage.Info.Operations.Should().Be(MediaOperations.None);
+        storage.Info.Operations.Should().Be(MediaOperations.WriteProtect | MediaOperations.Save, "its image stays, and saves");
 
         machine.Drives.Select(drive => drive.Info.Name).Should().Equal("Drive 1", "Drive 2");
         machine.Drives[0].Media.Should().BeNull();

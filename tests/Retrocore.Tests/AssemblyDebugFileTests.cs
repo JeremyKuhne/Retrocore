@@ -190,6 +190,81 @@ public sealed class AssemblyDebugFileTests
         return result;
     }
 
+    /// <summary>
+    ///  A VICE label file's labels apply wherever the module does, so Retrocore Memory shows them although they
+    ///  have no source lines.
+    /// </summary>
+    [TestMethod]
+    public void ViceLabelsApplyWithoutSourceLines()
+    {
+        string path = Path.Join(Path.GetTempPath(), $"{Guid.NewGuid():N}.lbl");
+        File.WriteAllText(path, "al C:7000 .START");
+        try
+        {
+            SymbolTable symbols = new();
+            symbols.Load(path);
+            IDebugModule module = new DebugFileModule(symbols);
+            DebugTestMemory memory = new();
+            module.Labels.Should().Contain(("START", 0x7000L));
+            module.Position(memory, address: 0x7000).Should().BeNull("a VICE label has no source line");
+            module.LabelApplies(memory, address: 0x7000).Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    ///  A debug file's constants resolve in expressions but are not memory labels, so COUNT = 3 does not name $0003.
+    /// </summary>
+    [TestMethod]
+    public void DebugFileConstantsAreNotLabels()
+    {
+        SymbolTable symbols = new();
+        symbols.LoadDebugInfo(
+            [
+                "sym\tid=0,name=\"COUNT\",addrsize=zeropage,scope=0,def=1,val=0x3,type=equ",
+                "sym\tid=1,name=\"START\",addrsize=absolute,scope=0,def=2,val=0x7000,type=lab"
+            ],
+            Path.GetTempPath());
+
+        DebugFileModule module = new(symbols);
+        module.TryResolve("COUNT", out long count).Should().BeTrue();
+        count.Should().Be(3);
+        module.Labels.Should().ContainSingle().Which.Should().Be(("START", 0x7000L));
+    }
+
+    /// <summary>
+    ///  A debug file's position gives the statement's bytes, the smallest span covering the address, so Retrocore
+    ///  Memory's listing starts instructions where the program's do, not at a macro invocation's first byte.
+    /// </summary>
+    [TestMethod]
+    public void DebugFilePositionsGiveTheStatementsBytes()
+    {
+        SymbolTable symbols = new();
+        symbols.LoadDebugInfo(
+            [
+                "file\tid=0,name=\"main.s\",size=1,mtime=0x0,mod=0",
+                "seg\tid=0,name=\"CODE\",start=0x7000,size=0x6,addrsize=absolute,type=ro",
+                "span\tid=0,seg=0,start=0,size=6",
+                "span\tid=1,seg=0,start=0,size=2",
+                "span\tid=2,seg=0,start=2,size=4",
+                "line\tid=0,file=0,line=3,span=0",
+                "line\tid=1,file=0,line=10,type=2,span=1",
+                "line\tid=2,file=0,line=11,type=2,span=2"
+            ],
+            Path.GetTempPath());
+
+        DebugFileModule module = new(symbols);
+        DebugTestMemory memory = new();
+        DebugPosition? position = module.Position(memory, address: 0x7003);
+        position.Should().NotBeNull();
+        (position?.Start, position?.Size, position?.Chain[^1].Line).Should().Be(((ushort)0x7002, 4, 3));
+        module.Position(memory, address: 0x7001)?.Start.Should().Be(0x7000);
+        module.Position(memory, address: 0x7006).Should().BeNull();
+    }
+
     private static SymbolTable Load(AssemblyResult result, string directory)
     {
         using StringWriter writer = new();

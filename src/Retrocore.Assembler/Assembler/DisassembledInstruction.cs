@@ -162,11 +162,12 @@ public readonly struct DisassembledInstruction
     }
 
     /// <summary>
-    ///  Gets a direct branch, jump or call target; indirect pointers are never resolved.
+    ///  Gets a direct branch, jump or call target, including one the opcode implies, such as the 8085's
+    ///  <c>RSTV</c> to <c>$40</c>; indirect pointers are never resolved.
     /// </summary>
     public ushort? DirectTarget =>
         Flow is DisassemblyFlow.Jump or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch
-            ? RelativeTarget ?? AbsoluteTarget()
+            ? RelativeTarget ?? AbsoluteTarget() ?? Encoding.FixedTarget
             : null;
 
     /// <summary>
@@ -204,7 +205,7 @@ public readonly struct DisassembledInstruction
             OperandFieldKind.Relative16 => unchecked((ushort)(Address + Size + Word(set, offset))),
             OperandFieldKind.Displacement8 => unchecked((ushort)(sbyte)GetByte(offset)),
             OperandFieldKind.BitNumber => (ushort)((LastOpcodeByte(encoding, form) >> 3) & 7),
-            OperandFieldKind.Restart => (ushort)(LastOpcodeByte(encoding, form) & 0x38),
+            OperandFieldKind.Restart or OperandFieldKind.RestartNumber => (ushort)(LastOpcodeByte(encoding, form) & 0x38),
             OperandFieldKind.IndexedPostbyte
                 or OperandFieldKind.RegisterPair
                 or OperandFieldKind.SystemStackMask
@@ -254,7 +255,7 @@ public readonly struct DisassembledInstruction
         if (form.FieldCount != 1) { return null; }
         OperandFieldKind field = form.Field(0);
         bool address = form is { Role: OperandRole.Memory, IsIndexed: false } && field == OperandFieldKind.Word;
-        return address || field == OperandFieldKind.Restart ? Operand : null;
+        return address || field is OperandFieldKind.Restart or OperandFieldKind.RestartNumber ? Operand : null;
     }
 
     /// <summary>

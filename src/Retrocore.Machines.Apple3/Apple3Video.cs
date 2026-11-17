@@ -32,7 +32,7 @@ namespace Retrocore.Machines.Apple3;
 ///   The colors are MAME's, which differ between text and graphics.
 ///  </para>
 /// </remarks>
-public sealed class Apple3Video : IVideoSource
+public sealed class Apple3Video : IVideoSource, ICharacterSet
 {
     private const int Lines = 192;
 
@@ -134,6 +134,39 @@ public sealed class Apple3Video : IVideoSource
                 _characters[(((ram[hole + 0x404 + j] & 0x7F) * 8) + ((i & 3) * 2) + 1) & 0x3FF] = ram[hole + 4 + j];
             }
         }
+    }
+
+    /// <inheritdoc/>
+    int ICharacterSet.CharacterWidth => 7;
+
+    /// <inheritdoc/>
+    int ICharacterSet.CharacterHeight => 8;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   From the character set in RAM as the screen draws it: $00-$7F inverse, or flashing where a glyph row's bit 7
+    ///   is set, with <paramref name="flashed"/> the phase that shows it normal; $80-$FF normal.
+    ///  </para>
+    /// </remarks>
+    bool ICharacterSet.IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        if (line is < 0 or >= 8 || pixel is < 0 or >= 7) { return false; }
+        byte dots = _characters[((code & 0x7F) * 8) + line];
+        bool inverse = (code & 0x80) == 0 && ((dots & 0x80) == 0 || !flashed);
+        return (((dots >> pixel) & 1) != 0) != inverse;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The character set is SOS's, loaded into RAM, which follows ASCII; control codes have no character.
+    ///  </para>
+    /// </remarks>
+    char ICharacterSet.Character(byte code)
+    {
+        char ascii = (char)(code & 0x7F);
+        return ascii is >= ' ' and < (char)0x7F ? ascii : '\0';
     }
 
     private Apple3VideoLine Capture() => new(

@@ -47,6 +47,10 @@ public sealed partial class BasicVariables
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
+    // Color BASIC keeps AppleSoft's layout, but a string's descriptor has a spare byte before its address, and a
+    // string array's elements are five bytes.
+    private bool ColorBasic => _dialect is ColorBasicDialect;
+
     private BasicPointers Pointers => _dialect.Pointers;
 
     /// <summary>
@@ -149,7 +153,7 @@ public sealed partial class BasicVariables
         {
             case BasicVariableKind.String:
                 int length = _memory.Read(address);
-                int text = Word(address + 1);
+                int text = Word(address + (ColorBasic ? 2 : 1));
                 byte[] bytes = new byte[length];
                 for (int index = 0; index < length; index++) { bytes[index] = _memory.Read((text + index) & 0xFFFF); }
                 return BasicValue.Of(bytes);
@@ -286,7 +290,7 @@ public sealed partial class BasicVariables
         int size = LevelTwo ? 3 + ValueSize(kind) : AppleSoftEntry;
         int start = Word(Pointers.Arrays);
         int end = Word(Pointers.FreeStart);
-        int limit = LevelTwo ? Word(LevelTwoStackTop) - StackRoom : Word(Pointers.StringBottom);
+        int limit = LevelTwo ? Word(LevelTwoStackTop) - StackRoom : _dialect.VariableLimit(_memory);
         if (end + size > limit)
         {
             throw new InvalidOperationException("?OUT OF MEMORY: there is no room for another variable.");
@@ -324,8 +328,8 @@ public sealed partial class BasicVariables
         if (IntegerBasic) { return IntegerLoops(); }
         if (BusinessBasic) { return BusinessLoops(stack, forSize, gosubSize); }
         List<BasicLoop> loops = [];
-        int forToken = Token("FOR");
-        int gosubToken = Token("GOSUB");
+        int forToken = _dialect.StackForToken;
+        int gosubToken = _dialect.StackGosubToken;
         for (int at = stack, count = 0; at < 0xFFF0 && count < MaximumEntries; count++)
         {
             int token = _memory.Read(at);
@@ -351,7 +355,7 @@ public sealed partial class BasicVariables
     public int ValueSize(BasicVariableKind kind) => kind switch
     {
         BasicVariableKind.Integer => 2,
-        BasicVariableKind.String => 3,
+        BasicVariableKind.String => ColorBasic ? 5 : 3,
         BasicVariableKind.Single => 4,
         BasicVariableKind.Double or BasicVariableKind.Long => 8,
         BasicVariableKind.Function when BusinessBasic => 6,
@@ -395,8 +399,6 @@ public sealed partial class BasicVariables
         double increment = BasicNumbers.ReadFloat(step, exponentFirst: false);
         return new(variable, increment, BasicNumbers.ReadFloat(limit, exponentFirst: false), line);
     }
-
-    private int Token(string keyword) => BasicDialect.FirstToken + _dialect.Keywords.ToList().IndexOf(keyword);
 
     private static BasicVariableKind? KindOfType(int type) => type switch
     {
@@ -480,11 +482,11 @@ public sealed partial class BasicVariables
         if (text.Length > 0)
         {
             int top = Word(Pointers.StringBottom);
-            int bottom = LevelTwo ? Word(LevelTwoStackTop) : Word(Pointers.FreeStart);
+            int bottom = LevelTwo ? Word(LevelTwoStackTop) : _dialect.StringFloorOf(_memory);
             place = top - text.Length;
             if (place < bottom)
             {
-                throw new InvalidOperationException(LevelTwo
+                throw new InvalidOperationException(LevelTwo || ColorBasic
                     ? "?OS ERROR: out of string space; CLEAR sets aside more."
                     : "?OUT OF MEMORY: string space is full.");
             }
@@ -493,7 +495,9 @@ public sealed partial class BasicVariables
             BasicProgram.WriteWord(_memory, Pointers.StringBottom, place);
         }
 
-        Store(address, [(byte)text.Length, (byte)place, (byte)(place >> 8)]);
+        Store(address, ColorBasic
+            ? [(byte)text.Length, 0, (byte)(place >> 8), (byte)place]
+            : [(byte)text.Length, (byte)place, (byte)(place >> 8)]);
     }
 
     private void Store(int address, ReadOnlySpan<byte> bytes)

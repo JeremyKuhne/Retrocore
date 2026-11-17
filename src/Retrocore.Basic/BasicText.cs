@@ -40,7 +40,7 @@ public static class BasicText
     /// </exception>
     internal static int[] Parse(string text, List<int>? columns = null)
     {
-        List<int> units = new(text.Length);
+        List<int> units = [with(text.Length)];
         for (int index = 0; index < text.Length; index++)
         {
             char character = text[index];

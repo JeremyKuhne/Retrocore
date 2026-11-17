@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -121,6 +121,9 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public InstructionSet InstructionSet => M6502Isa.Get(ProcessorVariant.Mos6502);
 
     /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Video;
+
+    /// <inheritdoc/>
     public DebugRegisters Registers => s_registers;
 
     /// <inheritdoc/>
@@ -221,6 +224,17 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
+        {
+            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
+        }
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         Peek(address) == JsrOpcode ? ((ushort)(Peek((ushort)(address + 1)) | (Peek((ushort)(address + 2)) << 8)), 3) : null;
 
@@ -300,13 +314,16 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public void Poke(ushort address, byte value)
     {
         Apple3Bus bus = _machine.Bus;
-        if (bus.ReadArea(address) is Apple3MemoryArea.Rom or Apple3MemoryArea.Io or Apple3MemoryArea.Vias or Apple3MemoryArea.None)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} reads {bus.ReadArea(address)} now, not RAM.");
         }
 
         bus.Ram[bus.RamOffset(address)] = value;
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.ReadArea(address) is not (Apple3MemoryArea.Rom or Apple3MemoryArea.Io or Apple3MemoryArea.Vias or Apple3MemoryArea.None);
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)
@@ -451,7 +468,6 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         {
             case (Apple2FloppyDrive drive, "insert"):
                 string path = Path.GetFullPath(args.String("path") ?? throw new ArgumentException("path is required."));
-                drive.Eject();
                 Apple2Loader.Insert(drive, path);
                 break;
             case (Apple2FloppyDrive drive, "eject"):
@@ -460,14 +476,14 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             case (Apple2FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
-            case (Apple2FloppyDrive drive, "save"):
-                Apple2Loader.Save(drive, args.String("path"));
-                break;
             case (ProFileDrive drive, "insert"):
                 ProFileMedia.Insert(drive, args.String("path") ?? throw new ArgumentException("path is required."));
                 break;
             case (ProFileDrive drive, "eject"):
                 drive.Eject();
+                break;
+            case (ProFileDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");

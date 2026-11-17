@@ -66,7 +66,7 @@ public sealed partial class Trs80DiskController
         }
 
         bool write = (value & 0xE0) == 0xA0 || (value & 0xF0) == 0xF0;
-        if (write && Current?.WriteProtected == true)
+        if (write && Current?.IsWriteProtected == true)
         {
             _status = WriteProtect;
             Finish();
@@ -110,8 +110,8 @@ public sealed partial class Trs80DiskController
 
     private int StepCycles()
     {
-        int[] rates = _doubleDensity ? s_stepRates1791 : s_stepRates1771;
-        return rates[_command & 3] * _cyclesPerMillisecond;
+        int[] rates = Is179x ? s_stepRates1791 : s_stepRates1771;
+        return rates[_command & 3] * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
     }
 
     private void Run()
@@ -192,7 +192,7 @@ public sealed partial class Trs80DiskController
             return;
         }
 
-        if (_indexPulses >= (_doubleDensity ? 5 : 2))
+        if (_indexPulses >= (Is179x ? 5 : 2))
         {
             _status |= SeekError;
             Finish();
@@ -210,6 +210,7 @@ public sealed partial class Trs80DiskController
         if (!address && (sector.Track != Track || sector.Sector != Sector)) { return; }
 
         _sector = sector;
+        _sectorDisk = disk;
         _position = 0;
         if (address)
         {
@@ -230,7 +231,7 @@ public sealed partial class Trs80DiskController
             return;
         }
 
-        _buffer = sector.Data;
+        _buffer = sector.Data.ToArray();
         _phase = Phase.Reading;
     }
 
@@ -249,7 +250,7 @@ public sealed partial class Trs80DiskController
         bool address = (_command & 0xF0) == 0xC0;
         if (!address && _sector is { } sector)
         {
-            _status |= _doubleDensity
+            _status |= Is179x
                 ? (sector.DataAddressMark == 0xFB ? (byte)0 : HeadLoaded)
                 : (byte)((0xFB - sector.DataAddressMark) << 5);
 
@@ -290,17 +291,15 @@ public sealed partial class Trs80DiskController
             return;
         }
 
-        if (_sector is { } sector)
+        // A drive selected or a disk changed during the write leaves the sector's disk out from under the head, unwritten.
+        if (_sector is { } sector && _sectorDisk is { } disk && ReferenceEquals(disk, Current))
         {
-            _buffer.CopyTo(sector.Data, 0);
-            _changed[_selected] = true;
-
             // The FD1771 writes the mark its a1 a0 bits select; the WD1791's a0 selects $F8.
-            sector.DataAddressMark = _doubleDensity
+            byte mark = Is179x
                 ? ((_command & 1) != 0 ? (byte)0xF8 : (byte)0xFB)
                 : (byte)(0xFB - (_command & 3));
 
-            sector.CrcError = false;
+            disk.Write(sector, _buffer, mark);
         }
 
         if ((_command & 0x10) != 0)
@@ -324,6 +323,7 @@ public sealed partial class Trs80DiskController
         {
             _buffer = RawTrack();
             _sector = null;
+            _sectorDisk = null;
             _wait = ByteCycles;
             _phase = Phase.Reading;
             return;
@@ -342,7 +342,6 @@ public sealed partial class Trs80DiskController
         if (_indexPulses > 0 && _selected >= 0 && Current is { } disk)
         {
             disk.Format(_cylinders[_selected], Side, ParseTrack(_trackBytes, _doubleDensity));
-            _changed[_selected] = true;
             _trackBytes = null;
             Finish();
             return;

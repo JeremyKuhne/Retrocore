@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Documentation;
+using System.Globalization;
 
 namespace Retrocore.Debug;
 
@@ -144,8 +144,16 @@ internal sealed class DebugContracts
     /// <param name="resolver">The module's documentation resolver.</param>
     /// <param name="model">The launched model, such as <c>Enhanced</c>, for model-specific sections.</param>
     /// <param name="registers">The CPU's registers and flags, which a <c>Keeps:</c> item may name.</param>
+    /// <param name="symbol">
+    ///  The module's value of a symbol, or null when it does not define it, for sections under conditions such as
+    ///  <c>MODEL = 1</c>.
+    /// </param>
     /// <returns>Contracts by routine and entry address.</returns>
-    internal static Dictionary<ushort, DebugContract> Build(DocumentationResolver resolver, string model, DebugRegisters registers)
+    internal static Dictionary<ushort, DebugContract> Build(
+        DocumentationResolver resolver,
+        string model,
+        DebugRegisters registers,
+        Func<string, long?>? symbol = null)
     {
         Dictionary<ushort, DebugContract> contracts = [];
         DocumentationSet set = resolver.Current;
@@ -153,8 +161,7 @@ internal sealed class DebugContracts
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value) { continue; }
             DocumentationTopic topic = resolver.Effective(documented);
-            bool Applies(DocumentationSection section) =>
-                section.Condition is null || DocumentationResolver.ModelOf(section.Condition) is not { } only || only == model;
+            bool Applies(DocumentationSection section) => DocumentationResolver.Applies(section.Condition, model, symbol);
 
             List<string> kept = [];
             List<(string, ushort, int)> memory = [];
@@ -175,7 +182,7 @@ internal sealed class DebugContracts
             HashSet<string>? changes = null;
             if (topic.SectionsNamed("Uses").Any(Applies))
             {
-                changes = new(StringComparer.OrdinalIgnoreCase);
+                changes = [with(StringComparer.OrdinalIgnoreCase)];
                 IEnumerable<string> uses = topic.SectionsNamed("Uses").Where(Applies).SelectMany(section => section.Items);
                 changes.UnionWith(uses);
                 foreach (DocumentationEntry entry in topic.SectionsNamed("Out").Where(Applies).SelectMany(section => section.Entries))

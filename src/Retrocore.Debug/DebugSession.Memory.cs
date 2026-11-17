@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Isa;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug;
 
@@ -12,8 +13,72 @@ namespace Retrocore.Debug;
 // open views current.
 internal sealed partial class DebugSession
 {
-    // The variables reference of the Memory scope, which lists the CPU's memory and the machine's banks.
-    private const int BanksScope = 99999;
+    // The menu context of a variable that holds an address, which Open in Retrocore Memory shows on. VS Code's own
+    // memory icon, which opens only the Hex Editor, shows on anything with a memory reference, so the variables and
+    // the watch and hover values VS Code is sent have none: retro/memory/variable and other evaluates give it.
+    private const string MemoryMenu = "memory";
+
+    /// <summary>
+    ///  Takes the memory references out of variables bound for VS Code's views, marking those that had one for
+    ///  Open in Retrocore Memory instead.
+    /// </summary>
+    /// <param name="variables">A variables response.</param>
+    /// <returns>The same response.</returns>
+    private static JsonObject WithoutMemoryReferences(JsonObject variables)
+    {
+        foreach (JsonObject variable in (variables["variables"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            JsonNode? reference = variable["memoryReference"];
+            variable.Remove("memoryReference");
+            if (reference is not null)
+            {
+                variable["__vscodeVariableMenuContext"] = MemoryMenu;
+            }
+        }
+
+        return variables;
+    }
+
+    /// <summary>
+    ///  The evaluate context Retrocore Memory resolves addresses with, which gets memory references.
+    /// </summary>
+    private const string AddressContext = "retrocore";
+
+    /// <summary>
+    ///  An evaluate result, without its memory reference for the Watch view and hovers, which would show VS Code's
+    ///  Hex Editor icon on it; Open in Retrocore Memory evaluates with its own context.
+    /// </summary>
+    /// <param name="args">The evaluate request's arguments.</param>
+    /// <param name="result">The result.</param>
+    /// <returns>The result.</returns>
+    private static JsonObject Evaluated(JsonObject args, JsonObject result)
+    {
+        if (args.String("context") is "watch" or "hover" or "variables")
+        {
+            result.Remove("memoryReference");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/variable: the memory reference of a variable VS Code was sent without one, by the
+    ///  variables reference of its container and its name, for Open in Retrocore Memory.
+    /// </summary>
+    /// <param name="args">The request's arguments.</param>
+    /// <returns>The variable's memory reference.</returns>
+    private JsonObject MemoryVariable(JsonObject args)
+    {
+        string name = Required(args, "name");
+        JsonArray variables = Variables(args.Int("variablesReference") ?? 0)["variables"] as JsonArray ?? [];
+        string? reference = variables.OfType<JsonObject>()
+            .FirstOrDefault(variable => variable["name"]?.GetValue<string>() == name)?["memoryReference"]?.GetValue<string>();
+
+        return new JsonObject
+        {
+            ["memoryReference"] = reference ?? throw new InvalidOperationException($"{name} does not hold an address.")
+        };
+    }
 
     // The most memory references to keep sending memory events for.
     private const int MemoryViewLimit = 32;
@@ -46,10 +111,14 @@ internal sealed partial class DebugSession
             return long.Parse(hex.Groups["digits"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         }
 
-        return new ExpressionEvaluator(Target, _debug, address).Evaluate();
+        return new ExpressionEvaluator(Target, _debug, address, bank: bank).Evaluate();
     }
 
     // The reference that names an address, in a bank or as the CPU maps it.
+    // The prefix an instruction address carries in its own address space: a coprocessor's bank, which has its own
+    // instruction set, such as z80:; none for the machine CPU's, whose banks are views of its own addresses.
+    private static string SpaceOf(DebugMemoryBank? bank) => bank?.InstructionSet is null ? "" : $"{bank.Name}:";
+
     private static string Reference(DebugMemoryBank? bank, int address) =>
         bank is null ? $"0x{address:X4}" : $"{bank.Name}:0x{address:X4}";
 
@@ -91,6 +160,217 @@ internal sealed partial class DebugSession
 
         if (unreadable != 0) { response["unreadableBytes"] = unreadable; }
         return response;
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/read: the bytes of a range with every unreadable run marked, for Retrocore Memory.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Unlike readMemory, which stops at the first unreadable byte, this reads past gaps, so a view of a bank
+    ///   such as bank 1 at $D000-$DFFF shows the bank where it is. Unreadable bytes read as zero. The view is
+    ///   tracked as readMemory's are, so memory events name its reference when its bytes change.
+    ///  </para>
+    /// </remarks>
+    private JsonObject ReadMemoryRange(JsonObject args)
+    {
+        string reference = Required(args, "memoryReference");
+        long address = MemoryReference(reference, out DebugMemoryBank? bank);
+        long offset = args.Long("offset") ?? 0;
+        int count = args.Int("count") ?? 0;
+        if (count is < 0 or > 0x10000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(args), "count must be 0-65536.");
+        }
+
+        byte[] data = new byte[count];
+        MemoryRuns unreadable = new();
+        MemoryRuns readOnly = new();
+        for (int index = 0; index < count; index++)
+        {
+            long at = address + offset + index;
+            byte? value = MemoryByte(bank, at);
+            data[index] = value ?? 0;
+            unreadable.Add(index, value is null);
+            readOnly.Add(index, value is not null && !Writable(bank, (ushort)at));
+        }
+
+        Track(reference, bank, address, offset, count);
+        return new JsonObject
+        {
+            ["address"] = $"0x{address + offset:X4}",
+            ["data"] = Convert.ToBase64String(data),
+            ["unreadable"] = unreadable.End(count),
+            ["readOnly"] = readOnly.End(count)
+        };
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/labels: the labels in a memory view's space, from the debug modules that apply at each
+    ///  address now, for Retrocore Memory's gutter and inspector.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A label counts where its module's code or data is in memory now, as the call stack and disassembly decide,
+    ///   so a ROM's labels go when the language card maps RAM over it. An address takes the first module's label,
+    ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
+    ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
+    ///  </para>
+    /// </remarks>
+    private JsonObject MemoryLabels(JsonObject args)
+    {
+        MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        SortedDictionary<int, string> labels = LabelsIn(bank, constants: true);
+        return new JsonObject
+        {
+            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
+            {
+                ["address"] = pair.Key,
+                ["name"] = pair.Value
+            }).ToJsonArray()
+        };
+    }
+
+    // Whether a module's code is installed: in the bank that holds its area, such as the system ROM while the language
+    // card's RAM is mapped over it, or in memory as the CPU maps it for code in no area; a card's firmware with no
+    // card in its slot has no bank and is not.
+    private bool Installed(IDebugModule module)
+    {
+        if (module.Area is not { } area) { return module.InMemory(Target); }
+        foreach (DebugMemoryBank bank in Target.Banks)
+        {
+            foreach ((ushort start, int _) in bank.Ranges)
+            {
+                if (Equals(bank.AreaOf(start), area)) { return module.InMemory(new BankMemory(bank)); }
+            }
+        }
+
+        return module.InMemory(Target);
+    }
+
+    // The labels in a space, by address, from the debug modules that apply at each address now, and with constants
+    // the equates its CPU's instructions address memory through.
+    private SortedDictionary<int, string> LabelsIn(DebugMemoryBank? bank, bool constants)
+    {
+        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) found = LabelsAndNames(bank, memory, constants);
+        return constants ? found.Names : found.Labels;
+    }
+
+    // The labels in a space, and with constants also the labels and equates together, found in one pass through
+    // the modules, reading memory as given, such as a listing's, which keeps what the modules find.
+    private (SortedDictionary<int, string> Labels, SortedDictionary<int, string> Names) LabelsAndNames(
+        DebugMemoryBank? bank,
+        IDebugMemory memory,
+        bool constants = true)
+    {
+        SortedDictionary<int, string> labels = [];
+
+        // The names marked in Retrocore Memory come first, as they do when disassembling.
+        foreach ((int marked, string name) in MarkHints.Names(HintSpace(bank)))
+        {
+            if (bank is null || bank.AreaOf((ushort)marked) is not null) { labels[marked] = name; }
+        }
+
+        // Each address's first label wins, as each is skipped once named.
+        foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Labels, labels.ContainsKey))
+        {
+            labels[address] = name;
+        }
+
+        // Then the constants the CPU's instructions address memory through, such as the Monitor's CH, which name RAM
+        // rather than code, so they apply whatever is mapped there, while the code that uses them is in memory; a
+        // label at the same address comes first.
+        if (!constants) { return (labels, labels); }
+        SortedDictionary<int, string> names = [];
+        foreach ((int address, string name) in labels) { names.Add(address, name); }
+        foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Constants, names.ContainsKey))
+        {
+            names[address] = name;
+        }
+
+        return (labels, names);
+    }
+
+    // Each label the sources give an address in a space that applies now, and each constant the space's CPU addresses
+    // memory through, as kinds asks, in the modules' order, leaving out addresses skip says are already named.
+    private IEnumerable<(int Address, string Name, bool Constant)> SourceNames(
+        DebugMemoryBank? bank,
+        IDebugMemory memory,
+        SourceNameKinds kinds,
+        Func<int, bool> skip)
+    {
+        IEnumerable<IDebugModule> labelled = kinds.HasFlag(SourceNameKinds.Labels) ? _debug.Modules : [];
+        foreach (IDebugModule module in labelled)
+        {
+            foreach ((string name, long value) in module.Labels)
+            {
+                if (value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                ushort address = (ushort)value;
+                if (bank is not null && bank.AreaOf(address) is null) { continue; }
+                if (DebugInfo.Active(module, memory, address) && module.LabelApplies(memory, address))
+                {
+                    yield return (address, name, false);
+                }
+            }
+        }
+
+        if (!kinds.HasFlag(SourceNameKinds.Constants)) { yield break; }
+        IsaDescription cpu = (bank?.InstructionSet ?? Target.InstructionSet).Description;
+        foreach (IDebugModule module in _debug.Modules)
+        {
+            if (!module.AddressConstants.Any() || !Installed(module)) { continue; }
+            foreach ((string name, long value, IsaDescription constantCpu) in module.AddressConstants)
+            {
+                if (!ReferenceEquals(constantCpu, cpu) || value is < 0 or > 0xFFFF || skip((int)value)) { continue; }
+                if (bank is not null && bank.AreaOf((ushort)value) is null) { continue; }
+                yield return ((int)value, name, true);
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/characters: the machine's character set as its screen shows it now, so Retrocore
+    ///  Memory's text column draws the machine's own characters.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   <c>glyphs</c> holds each code's rows in turn, one byte a row with the leftmost pixel in bit 7, and
+    ///   <c>flashed</c> the same for the other phase of flashing characters, when there are any. <c>text</c> is the
+    ///   character each code shows, NUL for graphics. A machine the debugger cannot draw gives no character set.
+    ///  </para>
+    /// </remarks>
+    private JsonObject MemoryCharacters()
+    {
+        if (Target.CharacterSet is not { } characters) { return []; }
+        int width = Math.Min(characters.CharacterWidth, 8);
+        int height = characters.CharacterHeight;
+        byte[] glyphs = new byte[256 * height];
+        byte[] flashed = new byte[256 * height];
+        char[] text = new char[256];
+        for (int code = 0; code < 256; code++)
+        {
+            text[code] = characters.Character((byte)code);
+            for (int line = 0; line < height; line++)
+            {
+                for (int pixel = 0; pixel < width; pixel++)
+                {
+                    byte bit = (byte)(0x80 >> pixel);
+                    int row = (code * height) + line;
+                    if (characters.IsLit((byte)code, line, pixel, flashed: false)) { glyphs[row] |= bit; }
+                    if (characters.IsLit((byte)code, line, pixel, flashed: true)) { flashed[row] |= bit; }
+                }
+            }
+        }
+
+        return new JsonObject
+        {
+            ["width"] = width,
+            ["height"] = height,
+            ["glyphs"] = Convert.ToBase64String(glyphs),
+            ["flashed"] = glyphs.AsSpan().SequenceEqual(flashed) ? null : Convert.ToBase64String(flashed),
+            ["text"] = new string(text)
+        };
     }
 
     /// <summary>
@@ -236,9 +516,10 @@ internal sealed partial class DebugSession
     ///  Lists the CPU's memory and the machine's banks: each one's memory reference, and where the memory map
     ///  reads and writes it now.
     /// </summary>
-    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes)> MemoryBanks()
+    private IEnumerable<(string? Name, string Label, string Reference, bool ReadOnly, string Reads, string Writes, bool Coprocessor, bool BigEndian)> MemoryBanks()
     {
-        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF");
+        bool big = Target.InstructionSet.Endianness == Endianness.Big;
+        yield return (null, "Memory as the CPU maps it now", Reference(bank: null, 0), false, "$0000-$FFFF", "$0000-$FFFF", false, big);
         foreach (DebugMemoryBank bank in Target.Banks)
         {
             yield return (
@@ -247,7 +528,9 @@ internal sealed partial class DebugSession
                 Reference(bank, bank.Ranges[0].Start),
                 bank.Poke is null,
                 Mapped(bank, write: false),
-                bank.Poke is null ? "" : Mapped(bank, write: true));
+                bank.Poke is null ? "" : Mapped(bank, write: true),
+                bank.InstructionSet is not null,
+                bank.InstructionSet is { } isa ? isa.Endianness == Endianness.Big : big);
         }
     }
 
@@ -278,32 +561,6 @@ internal sealed partial class DebugSession
         return runs.Count == 0 ? "nowhere" : string.Join(", ", runs);
     }
 
-    // The Memory scope: the CPU's memory and each bank, with the memory reference that opens it in a memory view.
-    private JsonObject BankVariables()
-    {
-        List<JsonNode?> variables = [];
-        foreach ((string? name, string label, string reference, bool readOnly, string reads, string writes) in MemoryBanks())
-        {
-            string value = name is null
-                ? $"{label}: $0000-$FFFF"
-                : readOnly ? $"{label}: read at {reads}" : $"{label}: read at {reads}; written at {writes}";
-
-            variables.Add(new JsonObject
-            {
-                ["name"] = name ?? "CPU",
-                ["value"] = value,
-                ["variablesReference"] = 0,
-                ["memoryReference"] = reference,
-                ["presentationHint"] = readOnly ? new JsonObject
-                {
-                    ["attributes"] = new JsonArray("readOnly")
-                } : null
-            });
-        }
-
-        return new JsonObject { ["variables"] = variables.ToJsonArray() };
-    }
-
     // Answers retro/memoryBanks, for the extension's Open Memory command.
     private JsonObject MemoryBankList() => new JsonObject
     {
@@ -314,7 +571,9 @@ internal sealed partial class DebugSession
             ["memoryReference"] = bank.Reference,
             ["readOnly"] = bank.ReadOnly,
             ["reads"] = bank.Reads,
-            ["writes"] = bank.ReadOnly ? null : bank.Writes
+            ["writes"] = bank.ReadOnly ? null : bank.Writes,
+            ["coprocessor"] = bank.Coprocessor,
+            ["bigEndian"] = bank.BigEndian
 }).ToJsonArray()
     };
 

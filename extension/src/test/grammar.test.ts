@@ -374,6 +374,31 @@ test("after .cpu Z80, Z80 mnemonics, registers and conditions are highlighted un
     assert.ok(!scopeAt(lines[7], result[7], "B").includes(scope.register), "6502 operands keep their own rules");
 });
 
+test("after .cpu I8080 or I8085, Intel mnemonics and registers are highlighted until another .cpu", () => {
+    const lines = [
+        ".cpu I8080",
+        "Entry:  INR M",
+        "        LXI SP,$F000",
+        "        PUSH PSW",
+        "        JNZ Entry",
+        ".cpu I8085",
+        "        RIM",
+        "        CC Entry",
+        ".cpu Mos6502",
+        "        LDA M"
+    ];
+    const result = lineTokens(lines);
+    assert.ok(scopeAt(lines[0], result[0], "I8080").includes("constant.language.processor.retrocore"));
+    assert.ok(scopeAt(lines[1], result[1], "INR").includes(scope.opcode));
+    assert.ok(scopeAt(lines[1], result[1], "M").includes(scope.register));
+    assert.ok(scopeAt(lines[2], result[2], "SP").includes(scope.register));
+    assert.ok(scopeAt(lines[3], result[3], "PSW").includes(scope.register));
+    assert.ok(scopeAt(lines[4], result[4], "JNZ").includes(scope.flow));
+    assert.ok(scopeAt(lines[6], result[6], "RIM").includes(scope.opcode));
+    assert.ok(scopeAt(lines[7], result[7], "CC").includes(scope.flow));
+    assert.ok(!scopeAt(lines[9], result[9], "M").includes(scope.register));
+});
+
 test("after .cpu M6809, M6809 mnemonics, aliases and registers are highlighted until another .cpu", () => {
     const lines = [
         ".cpu M6809",

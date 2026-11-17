@@ -32,6 +32,8 @@ public sealed class DiskIIController
     private bool _q6;
     private bool _q7;
     private bool _halfCycle;
+    // Two half clocks leave the stopped controller unchanged, without reading caller-owned media state.
+    private bool _idleStable;
 
     /// <summary>
     ///  Constructs a controller.
@@ -145,6 +147,13 @@ public sealed class DiskIIController
     public WozDisk? MediaIn(int drive) => GetDrive(drive).Media;
 
     /// <summary>
+    ///  Gets a drive's mount generation, which changes each time media goes in or comes out, by any path.
+    /// </summary>
+    /// <param name="drive">The drive, from one.</param>
+    /// <returns>The generation.</returns>
+    public int MountGeneration(int drive) => GetDrive(drive).MountGeneration;
+
+    /// <summary>
     ///  Gets side-effect-free drive telemetry.
     /// </summary>
     /// <param name="drive">The drive, from one.</param>
@@ -159,7 +168,7 @@ public sealed class DiskIIController
             selected.BitCount,
             _motor && _selected == drive - 1,
             selected.Media is not null,
-            selected.Media?.IsReadOnly ?? true,
+            selected.Media?.IsWriteProtected ?? true,
             selected.Media?.IsDirty ?? false);
     }
 
@@ -203,8 +212,15 @@ public sealed class DiskIIController
     public void Tick()
     {
         if (_firmware is not { } firmware) { return; }
-        HalfStep(firmware);
-        HalfStep(firmware);
+        if (!_idleStable)
+        {
+            bool stopped = !_motor && _pulse == 0;
+            byte state = _state;
+            byte latch = _latch;
+            bool independent = HalfStep(firmware) & HalfStep(firmware);
+            _idleStable = stopped && independent && _state == state && _latch == latch && _pulse == 0;
+        }
+
         if (_motorOff > 0 && --_motorOff == 0) { _motor = false; }
     }
 
@@ -214,13 +230,14 @@ public sealed class DiskIIController
     public void HalfTick()
     {
         if (_firmware is not { } firmware) { return; }
+        _idleStable = false;
         HalfStep(firmware);
         _halfCycle = !_halfCycle;
         if (!_halfCycle && _motorOff > 0 && --_motorOff == 0) { _motor = false; }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void HalfStep(DiskIIFirmware firmware)
+    private bool HalfStep(DiskIIFirmware firmware)
     {
         int address = (_state & 240)
             | (_q7 ? 8 : 0)
@@ -241,7 +258,7 @@ public sealed class DiskIIController
                 break;
             case 10:
             case 14:
-                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsReadOnly ?? true);
+                bool protectedMedia = (_magnets & 2) != 0 || (_drives[_selected].Media?.IsWriteProtected ?? true);
                 _latch = (byte)((_latch >> 1) | (protectedMedia ? 128 : 0));
                 break;
             case 11:
@@ -256,6 +273,8 @@ public sealed class DiskIIController
         // but the 13-sector one counts the second clock as another 1.
         if (_pulse != 0) { _pulse--; }
         if (_motor && _drives[_selected].Tick(_q7, transition)) { _pulse = 1; }
+        // Write protection can change without a controller access.
+        return (next & 15) is not (10 or 14);
     }
 
     /// <summary>
@@ -263,6 +282,7 @@ public sealed class DiskIIController
     /// </summary>
     public void Reset()
     {
+        _idleStable = false;
         if (_q7) { _drives[_selected].EndWrite(); }
         _selected = 0;
         _magnets = 0;
@@ -283,6 +303,7 @@ public sealed class DiskIIController
 
     private void Access(byte offset)
     {
+        _idleStable = false;
         if (offset > 15) { throw new ArgumentOutOfRangeException(nameof(offset)); }
         if (offset < 8)
         {

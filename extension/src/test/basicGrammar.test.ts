@@ -19,7 +19,8 @@ before(async () => {
         "source.retrocore-applesoft": "applesoft.tmLanguage.json",
         "source.retrocore-level2": "level2.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
-        "source.retrocore-business": "business.tmLanguage.json"
+        "source.retrocore-business": "business.tmLanguage.json",
+        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -87,6 +88,19 @@ test("Business BASIC finds reserved words only between separators", () => {
     assert.ok(has(scopes("business", "30 X=EXFN.SUM(1)", "EXFN."), "support.function"));
     assert.ok(has(scopes("business", "40 ! A NOTE", "NOTE"), "comment.line"));
     assert.ok(has(scopes("business", "50 REMARK=1", "REMARK"), "variable.other"), "REM needs a separator after it");
+});
+
+test("Color BASIC finds words only in capitals and never inside a name", () => {
+    const line = "120 IFA=BTHEN10";
+    assert.ok(has(scopes("colorbasic", line, "IF"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", line, "A"), "variable.other"));
+    assert.ok(has(scopes("colorbasic", line, "THEN"), "variable.other"), "THEN after B is part of the name BTHEN10");
+    assert.ok(has(scopes("colorbasic", "30 IF SCORE > 5 THEN 100", "OR"), "variable.other"), "OR inside SCORE");
+    assert.ok(!has(scopes("colorbasic", "40 print", "print"), "keyword"), "lowercase is not crunched");
+    assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "GO"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
+    assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
+    assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

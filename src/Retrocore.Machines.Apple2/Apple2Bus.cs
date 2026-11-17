@@ -59,6 +59,8 @@ public sealed class Apple2Bus : IProcessorBus
     // The installed cards other than slot six's, which tick with it every cycle.
     private DiskIIController[] _otherCards = [];
 
+    // The Z80 SoftCard, in any free slot.
+    private SoftCard? _softCard;
     // The ProFile interface card in each slot, by slot number.
     private readonly Apple2ProFileCard?[] _proFiles = new Apple2ProFileCard?[8];
 
@@ -140,7 +142,8 @@ public sealed class Apple2Bus : IProcessorBus
     /// </summary>
     /// <param name="slot">The slot, 1 to 7.</param>
     /// <returns>Whether a card can go in.</returns>
-    public bool IsSlotFree(int slot) => slot != MouseSlot && slot != Disk35Slot && _proFiles[slot & 7] is null && slot switch
+    public bool IsSlotFree(int slot) =>
+        _softCard?.Slot != slot && slot != MouseSlot && slot != Disk35Slot && _proFiles[slot & 7] is null && slot switch
     {
         1 or 2 or 5 or 6 => Card(slot) is null,
         3 => !_iie && Card(3) is null,
@@ -186,6 +189,10 @@ public sealed class Apple2Bus : IProcessorBus
         if (slot != 6) { _diskCards[slot] = null; }
         CardsChanged();
     }
+
+    // The SoftCard when an address is in its $Cn00-$CnFF page and the IIe's firmware is not answering there.
+    private SoftCard? SoftCardPage(ushort address) =>
+        _softCard is { } card && address >> 8 == 0xC0 + card.Slot && !InternalRom(address) ? card : null;
 
     private DiskIIController? Card(int slot) => _diskCards[slot] is { IsInstalled: true } card ? card : null;
 
@@ -284,6 +291,42 @@ public sealed class Apple2Bus : IProcessorBus
         if (!MockingboardInstalled) { throw new InvalidOperationException("Slot 4 has no Mockingboard."); }
         MockingboardInstalled = false;
         Mockingboard.Reset();
+        CardChanges++;
+    }
+
+    /// <summary>
+    ///  Gets the Z80 SoftCard, or null when none is installed.
+    /// </summary>
+    public SoftCard? SoftCard => _softCard;
+
+    /// <summary>
+    ///  Puts a Z80 SoftCard in a free slot, off, with its Z80 to start from zero at the first switch.
+    /// </summary>
+    /// <param name="slot">The slot: 1 to 7, though 3 only on the II Plus.</param>
+    /// <returns>The card.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///  The slot is not free, or a SoftCard is already installed.
+    /// </exception>
+    public SoftCard InstallSoftCard(int slot)
+    {
+        if (_softCard is not null || slot is < 1 or > 7 || !IsSlotFree(slot))
+        {
+            throw new InvalidOperationException($"Slot {slot} is not free for a SoftCard.");
+        }
+
+        _softCard = new(this, slot);
+        CardChanges++;
+        return _softCard;
+    }
+
+    /// <summary>
+    ///  Takes the SoftCard out. The 6502 gets the bus back if the Z80 had it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No SoftCard is installed.</exception>
+    public void RemoveSoftCard()
+    {
+        if (_softCard is null) { throw new InvalidOperationException("No SoftCard is installed."); }
+        _softCard = null;
         CardChanges++;
     }
 
@@ -611,9 +654,14 @@ public sealed class Apple2Bus : IProcessorBus
         DiskII.Reset();
         foreach (DiskIIController card in _otherCards) { card.Reset(); }
         Mockingboard.Reset();
+        _softCard?.Reset();
         Mouse.Reset();
         Disk35.Reset();
         foreach (Apple2ProFileCard? card in _proFiles) { card?.Reset(); }
+
+        // The slot 7 ROM says whether its device writes as the machine starts, from its lock then: a running ProDOS has
+        // already read it, so a lock changed since shows there from the next reset.
+        if (_disk is not null) { CreateSlot7Rom(); }
         Audio.Reset();
         Speaker = false;
     }
@@ -844,6 +892,14 @@ public sealed class Apple2Bus : IProcessorBus
     }
 
     /// <summary>
+    ///  Gets whether a memory area is RAM holding a byte at an address, so <see cref="PokeArea"/> can write it.
+    /// </summary>
+    /// <param name="area">The area.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>Whether the area holds RAM there.</returns>
+    public bool HoldsRam(Apple2MemoryArea area, ushort address) => Storage(area, address) is not null;
+
+    /// <summary>
     ///  Writes physical main or auxiliary RAM, bypassing I/O and ROM mapping.
     /// </summary>
     /// <param name="auxiliary">Whether to write auxiliary RAM.</param>
@@ -906,6 +962,10 @@ public sealed class Apple2Bus : IProcessorBus
         else if (address < 0xC100)
         {
             AccessSwitch(address, write: true);
+        }
+        else if (SoftCardPage(address) is { } softCard)
+        {
+            softCard.Switch();
         }
         else if (address is >= 0xC400 and < 0xC500 && MockingboardInstalled && !InternalRom(address))
         {
@@ -1229,6 +1289,20 @@ public sealed class Apple2Bus : IProcessorBus
     ///  Gets whether a block command has written to the slot 7 device.
     /// </summary>
     internal bool BlockWritten => _blockWritten;
+
+    /// <summary>
+    ///  Gets whether the slot 7 ROM says its device writes, as it said when the machine last started or reset.
+    /// </summary>
+    internal bool BlockWritesAnnounced =>
+        (_slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] & Slot7Rom.WriteCapabilityMask) != 0;
+
+    /// <summary>
+    ///  Builds the slot 7 ROM again for the device as it is now, as power-on builds it.
+    /// </summary>
+    internal void RefreshSlot7Rom()
+    {
+        if (_disk is not null) { CreateSlot7Rom(); }
+    }
 
     // The block count the slot 7 device reports: ProDOS counts blocks in 16 bits, so a 32 MiB image's 65536 is
     // 65535, its last block unused, as on real 32 MiB hard disks.

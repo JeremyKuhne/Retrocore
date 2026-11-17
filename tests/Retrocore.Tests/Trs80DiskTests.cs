@@ -86,13 +86,41 @@ public class Trs80DiskTests
         Issue(bus, 0xA9);
         Transfer(bus, read: false, data).Status.Should().Be(0);
         FloppySector sector = disk.Track(0, 0).Single(candidate => candidate.Sector == 7);
-        sector.Data.Should().Equal(data);
+        sector.Data.ToArray().Should().Equal(data);
         sector.DataAddressMark.Should().Be(0xFA, "a1 a0 = 01");
 
-        disk.WriteProtected = true;
+        disk.IsWriteProtected = true;
         Issue(bus, 0xA8);
         Wait(bus);
         (bus.Read(Command) & 0x40).Should().NotBe(0);
+    }
+
+    /// <summary>
+    ///  A disk changed during a write sector leaves both disks unwritten: the sector found is no longer under the head,
+    ///  and the new disk's was never found.
+    /// </summary>
+    [TestMethod]
+    public void WriteEndsUnwrittenWhenTheDiskChanges()
+    {
+        FloppyDisk disk = Jv1(35);
+        FloppyDisk other = Jv1(35);
+        Trs80Bus bus = Bus(disk);
+        bus.Write(SectorRegister, 7);
+        Issue(bus, 0xA8);
+        int written = 0;
+        for (int cycle = 0; cycle < 10 * Trs80Timing.ClockHertz && bus.Disks.IsBusy; cycle++)
+        {
+            bus.Tick();
+            if ((bus.Disks.Peek(0) & 0x02) == 0) { continue; }
+            bus.Write(DataRegister, 0x55);
+            if (++written == 16) { bus.Disks.Insert(0, other); }
+        }
+
+        written.Should().Be(256);
+        disk.IsDirty.Should().BeFalse();
+        other.IsDirty.Should().BeFalse();
+        disk.Track(0, 0).Single(candidate => candidate.Sector == 7).Data.ToArray().Should().Equal(Pattern(0, 7));
+        other.Track(0, 0).Single(candidate => candidate.Sector == 7).Data.ToArray().Should().Equal(Pattern(0, 7));
     }
 
     /// <summary>
@@ -136,7 +164,7 @@ public class Trs80DiskTests
         Transfer(bus, read: false, [.. stream], padding: 0xFF).Status.Should().Be(0);
         IReadOnlyList<FloppySector> track = disk.Track(0, 0);
         track.Should().HaveCount(5);
-        track[3].Data.Should().AllSatisfy(value => value.Should().Be(0xE3));
+        track[3].Data.ToArray().Should().AllSatisfy(value => value.Should().Be(0xE3));
     }
 
     /// <summary>
@@ -260,14 +288,14 @@ public class Trs80DiskTests
         Jv1Format.Write(Jv1Format.Read(jv1)).Should().Equal(jv1);
         Jv1Format.Read(jv1).Track(17, 0)[0].DataAddressMark.Should().Be(0xFA);
 
-        FloppyDisk disk = new() { WriteProtected = true };
+        FloppyDisk disk = new() { IsWriteProtected = true };
         disk.Add(0, 0, new(0, 0, 1, new byte[256], doubleDensity: false, 0xF8));
         disk.Add(0, 1, new(0, 1, 1, new byte[512], doubleDensity: true, 0xF8) { CrcError = true });
         disk.Add(1, 0, new(1, 0, 1, new byte[128], doubleDensity: false, 0xF9));
         byte[] jv3 = Jv3Format.Write(disk);
         jv3.Should().HaveCount(8704 + 256 + 512 + 128);
         FloppyDisk read = Jv3Format.Read(jv3);
-        read.WriteProtected.Should().BeTrue();
+        read.IsWriteProtected.Should().BeTrue();
         read.Track(0, 0)[0].DataAddressMark.Should().Be(0xF8);
         read.Track(0, 1)[0].DoubleDensity.Should().BeTrue();
         read.Track(0, 1)[0].CrcError.Should().BeTrue();

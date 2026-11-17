@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -28,10 +29,11 @@ internal sealed partial class SourceMapModule : IDebugModule
     // The earlier statements at an address that a later one also covers, as code assembled for where it is copied
     // overlaps code assembled where it is stored; the one whose bytes memory holds applies.
     private readonly Dictionary<ushort, List<int>> _overlapped = [];
-    private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, long> _symbols = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<int, List<ushort>>> _entries = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, long> _symbols = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly (string Name, long Value)[] _labels;
-    private readonly Dictionary<string, string[]> _sourceText = new(StringComparer.OrdinalIgnoreCase);
+    private readonly (string Name, long Value, IsaDescription Cpu)[] _addressConstants;
+    private readonly Dictionary<string, string[]> _sourceText = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly AssemblyResult _result;
     private readonly int _relocation;
     private readonly bool _wholeImage;
@@ -68,8 +70,8 @@ internal sealed partial class SourceMapModule : IDebugModule
         _wholeImage = wholeImage;
 
         // Statements emit in source order, so each invocation's statements are contiguous.
-        List<(ushort Address, byte[] Bytes, List<AssemblyLocation> Levels)> emitted = [];
-        Dictionary<AssemblyLocation, int> invocationSizes = new(ReferenceEqualityComparer.Instance);
+        List<(ushort Address, byte[] Bytes, List<AssemblyLocation> Levels, bool Data)> emitted = [];
+        Dictionary<AssemblyLocation, int> invocationSizes = [with(ReferenceEqualityComparer.Instance)];
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
             if (entry.Size == 0 || entry.Location is not { } location) { continue; }
@@ -81,15 +83,16 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
 
             byte[] bytes = result.Sections[entry.Section].Bytes.Slice(entry.Offset, entry.Size).ToArray();
-            emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels));
+            // A statement with no operand form, such as .byte, is data.
+            emitted.Add((checked((ushort)(entry.Address + relocation)), bytes, levels, string.IsNullOrEmpty(entry.AddressMode)));
         }
 
-        HashSet<AssemblyLocation> started = new(ReferenceEqualityComparer.Instance);
-        HashSet<AssemblyLocation> previous = new(ReferenceEqualityComparer.Instance);
+        HashSet<AssemblyLocation> started = [with(ReferenceEqualityComparer.Instance)];
+        HashSet<AssemblyLocation> previous = [with(ReferenceEqualityComparer.Instance)];
         _statements = new Statement[emitted.Count];
         for (int index = 0; index < emitted.Count; index++)
         {
-            (ushort address, byte[] bytes, List<AssemblyLocation> levels) = emitted[index];
+            (ushort address, byte[] bytes, List<AssemblyLocation> levels, bool data) = emitted[index];
 
             // A single-statement invocation debugs as its call line when collapsing is requested.
             List<AssemblyLocation> kept = [];
@@ -119,7 +122,7 @@ internal sealed partial class SourceMapModule : IDebugModule
 
             previous.Clear();
             previous.UnionWith(kept);
-            _statements[index] = new(address, bytes, chain, entryDepth);
+            _statements[index] = new(address, bytes, chain, entryDepth, data);
             for (int offset = 0; offset < bytes.Length; offset++)
             {
                 ushort at = (ushort)(address + offset);
@@ -133,7 +136,7 @@ internal sealed partial class SourceMapModule : IDebugModule
             }
         }
 
-        Dictionary<string, string> sourceNames = new(StringComparer.Ordinal);
+        Dictionary<string, string> sourceNames = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { sourceNames[alias.Value] = alias.Key; }
 
         List<(string Name, long Value)> labels = [];
@@ -151,6 +154,154 @@ internal sealed partial class SourceMapModule : IDebugModule
         }
 
         _labels = [.. labels.OrderBy(label => label.Value).ThenBy(label => label.Name, StringComparer.Ordinal)];
+        _addressConstants = AddressConstantsOf(result, sourceNames, relocation);
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => _addressConstants;
+
+    /// <inheritdoc/>
+    public IEnumerable<ushort> DataStatements =>
+        _statements.Where(statement => statement.Data).Select(statement => statement.Address);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   At least half its instructions are in memory; data, such as a buffer of zeros, matches empty RAM too.
+    ///  </para>
+    /// </remarks>
+    public bool InMemory(IDebugMemory memory)
+    {
+        int instructions = _statements.Count(statement => !statement.Data);
+        int held = 0, missed = 0;
+        foreach (Statement statement in _statements)
+        {
+            if (statement.Data) { continue; }
+            if (Holds(memory, statement)) { held++; } else { missed++; }
+            if (held * 2 >= instructions) { return instructions > 0; }
+            if (missed * 2 > instructions) { return false; }
+        }
+
+        return false;
+    }
+
+    // The constants an instruction addresses memory through, as STA CH or LDA (BASL),Y do: a constant the operand
+    // names whose value is the address the instruction's bytes encode, its memory operand or pointer, or on the 6809
+    // an indirect or PC-relative postbyte's address. Matching the value leaves out an immediate value, an index's
+    // offset and a term added to another address, and picks the right one of names that differ only in case or scope.
+    private static (string Name, long Value, IsaDescription Cpu)[] AddressConstantsOf(
+        AssemblyResult result,
+        Dictionary<string, string> sourceNames,
+        int relocation)
+    {
+        // Each constant by the names an operand can spell it with: its own, the source's alias, and the last part of
+        // a scoped name.
+        Dictionary<string, List<AssemblySymbol>> byName = [with(StringComparer.OrdinalIgnoreCase)];
+        void Add(string name, AssemblySymbol symbol)
+        {
+            if (!byName.TryGetValue(name, out List<AssemblySymbol>? list)) { byName[name] = list = []; }
+            if (!list.Contains(symbol)) { list.Add(symbol); }
+        }
+
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+        {
+            if (!symbol.IsConstant || symbol.Value is < 0 or > 0xFFFF) { continue; }
+            string display = sourceNames.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
+            if (s_internalMarkers.Any(marker => display.Contains(marker, StringComparison.Ordinal))) { continue; }
+            foreach (string name in (string[])[symbol.Name, display])
+            {
+                Add(name, symbol);
+                int separator = name.LastIndexOf("::", StringComparison.Ordinal);
+                if (separator >= 0) { Add(name[(separator + 2)..], symbol); }
+            }
+        }
+
+        if (byName.Count == 0) { return []; }
+        HashSet<(AssemblySymbol Symbol, IsaDescription Cpu)> found = [];
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            // Data directives, such as .byte $85, CH, have no operand form: their bytes are not an instruction.
+            if (entry.Size == 0 || entry.InstructionSet is not { } isa || string.IsNullOrEmpty(entry.AddressMode))
+            {
+                continue;
+            }
+
+            ReadOnlySpan<byte> bytes = result.Sections[entry.Section].Bytes.Span.Slice(entry.Offset, entry.Size);
+            if (EncodedAddress(bytes, (ushort)(entry.Address + relocation), isa) is not { } address) { continue; }
+            foreach (AssemblySymbol symbol in OperandConstants(entry.Operand, byName))
+            {
+                if (symbol.Value == address) { found.Add((symbol, isa.Description)); }
+            }
+        }
+
+        return [.. found.Select(item => (
+                sourceNames.TryGetValue(item.Symbol.Name, out string? source) ? source : item.Symbol.Name,
+                item.Symbol.Value,
+                item.Cpu))
+            .OrderBy(item => item.Item2)
+            .ThenBy(item => item.Item1, StringComparer.Ordinal)];
+    }
+
+    // The address an instruction's bytes give it to access: a memory or pointer operand, or a postbyte's pointer or
+    // PC-relative target; null for immediate values, registers, offsets from a register and branches.
+    private static ushort? EncodedAddress(ReadOnlySpan<byte> bytes, ushort address, InstructionSet isa)
+    {
+        if (!Disassembler.TryDecode(bytes, address, isa, out DisassembledInstruction instruction)) { return null; }
+        OperandForm form = instruction.Form;
+        if (form.FieldCount == 0) { return null; }
+        if (form.HasPostbyte)
+        {
+            return instruction.PostbyteReference == PostbyteReference.None ? null : instruction.Field(0);
+        }
+
+        return form.Role == OperandRole.None ? null : instruction.Operand;
+    }
+
+    // The constants an operand's names can mean.
+    private static IEnumerable<AssemblySymbol> OperandConstants(
+        string operand,
+        Dictionary<string, List<AssemblySymbol>> byName)
+    {
+        int index = 0;
+        while (index < operand.Length)
+        {
+            char character = operand[index];
+            if (character == ';') { yield break; }
+            if (character is '\'' or '"')
+            {
+                int close = operand.IndexOf(character, index + 1);
+                index = close < 0 ? operand.Length : close + 1;
+                continue;
+            }
+
+            if (!(char.IsAsciiLetter(character) || character is '_' or '.' or '@' or '?'))
+            {
+                // A number's digits, as in $C0E8, are not a name.
+                if (character is '$' or '%' || char.IsAsciiDigit(character))
+                {
+                    index++;
+                    while (index < operand.Length && char.IsAsciiLetterOrDigit(operand[index])) { index++; }
+                }
+                else
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            int start = index;
+            while (index < operand.Length && (char.IsAsciiLetterOrDigit(operand[index]) || operand[index] is '_' or '.' or '@' or '?' or ':'))
+            {
+                index++;
+            }
+
+            // A width override, as in STA z:CH or STA a:CH, is not part of the name; a scope's :: is.
+            bool width = index - start > 2 && operand[start + 1] == ':' && operand[start + 2] != ':';
+            string token = operand[(width ? start + 2 : start)..index];
+            if (!byName.TryGetValue(token, out List<AssemblySymbol>? symbols)) { continue; }
+            foreach (AssemblySymbol symbol in symbols) { yield return symbol; }
+        }
     }
 
     /// <inheritdoc/>
@@ -183,26 +334,45 @@ internal sealed partial class SourceMapModule : IDebugModule
     private bool Applies(IDebugMemory memory, int index)
     {
         if (!Holds(memory, _statements[index])) { return false; }
-        if (_wholeImage)
-        {
-            foreach (Statement other in _statements)
-            {
-                if (!Holds(memory, other)) { return false; }
-            }
-        }
+        if (!_wholeImage) { return true; }
 
-        return true;
+        // Memory that does not change keeps whether the whole image holds, found once.
+        Dictionary<object, bool>? findings = memory.Findings;
+        if (findings is not null && findings.TryGetValue(this, out bool whole)) { return whole; }
+        whole = _statements.All(other => Holds(memory, other));
+        findings?.Add(this, whole);
+        return whole;
     }
 
     // A statement's position, entering its macro levels only at its first byte.
     private DebugPosition At(int index, ushort address)
     {
         Statement statement = _statements[index];
-        return new(statement.Chain, address == statement.Address ? statement.EntryDepth : 0);
+        return new(
+            statement.Chain,
+            address == statement.Address ? statement.EntryDepth : 0,
+            statement.Address,
+            statement.Bytes.Length,
+            statement.Data);
     }
 
-    // Whether memory holds the bytes a statement assembled to, where it runs.
+    // Whether memory holds the bytes a statement assembled to, where it runs; memory that does not change keeps
+    // the answer, so a long statement is compared once, not at each of its bytes.
     private static bool Holds(IDebugMemory memory, Statement statement)
+    {
+        Dictionary<object, bool>? findings = memory.Findings;
+        if (findings is null) { return Compare(memory, statement); }
+        if (!findings.TryGetValue(statement, out bool held))
+        {
+            held = Compare(memory, statement);
+            findings.Add(statement, held);
+        }
+
+        return held;
+    }
+
+    // Compares memory with a statement's bytes.
+    private static bool Compare(IDebugMemory memory, Statement statement)
     {
         for (int offset = 0; offset < statement.Bytes.Length; offset++)
         {
@@ -218,6 +388,9 @@ internal sealed partial class SourceMapModule : IDebugModule
         bool found = _entries.TryGetValue(Path.GetFullPath(path), out Dictionary<int, List<ushort>>? lines);
         return found && lines is not null && lines.TryGetValue(line, out List<ushort>? addresses) ? addresses : [];
     }
+
+    /// <inheritdoc/>
+    public IEnumerable<(string Name, long Value)> Labels => _labels;
 
     /// <inheritdoc/>
     public bool TryResolve(string name, out long value) => _symbols.TryGetValue(name.TrimStart('.'), out value);

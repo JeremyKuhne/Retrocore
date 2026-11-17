@@ -23,6 +23,13 @@ public static partial class Disassembler
     }
 
     /// <summary>
+    ///  Tests whether a name can be one of an analysis project's symbols: a plain native identifier.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether analysis accepts it.</returns>
+    public static bool IsSymbolName(ReadOnlySpan<char> name) => AssemblySyntax.IsPlainIdentifier(name);
+
+    /// <summary>
     ///  Disassembles a complete image linearly, preserving truncated tails as data.
     /// </summary>
     /// <param name="image">The input image.</param>

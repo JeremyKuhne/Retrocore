@@ -14,7 +14,7 @@ public partial class AssemblyPreprocessorTests
     /// </summary>
     private sealed class BinaryResolver : IAssemblySourceResolver, IAssemblyBinaryResolver
     {
-        private readonly Dictionary<string, byte[]> _binaries = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, byte[]> _binaries = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         ///  Registers binary contents without filesystem I/O.

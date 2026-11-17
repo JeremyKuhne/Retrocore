@@ -281,7 +281,7 @@ TIMVAL = $0112
 ; Tokens and error codes
 ; ----------------------------------------------------------------------------------------------------------------
 
-;; Tokens: Extended BASIC's commands follow Color BASIC's, from $B5, in the order of <XCOMWRD>.
+; Tokens: Extended BASIC's commands follow Color BASIC's, from $B5, in the order of <XCOMWRD>.
 TK_DEL = $B5                        ;; DEL
 TK_EDIT = $B6                       ;; EDIT
 TK_TRON = $B7                       ;; TRON
@@ -308,7 +308,7 @@ TK_RENUM = $CB                      ;; RENUM
 TK_FN = $CC                         ;; FN
 TK_USING = $CD                      ;; USING
 
-;; Function tokens: $FF, then Extended BASIC's functions follow Color BASIC's, from $94, in the order of <XFUNWRD>.
+; Function tokens: $FF, then Extended BASIC's functions follow Color BASIC's, from $94, in the order of <XFUNWRD>.
 TK_ATN = $94                        ;; ATN
 TK_COS = $95                        ;; COS
 TK_TAN = $96                        ;; TAN
@@ -324,6 +324,6 @@ TK_TIMER = $9F                      ;; TIMER
 TK_PPOINT = $A0                     ;; PPOINT
 TK_STRING = $A1                     ;; STRING$
 
-;; Error codes: Extended BASIC's follow Color BASIC's, twice the error's place in <XERRTAB>, plus 50.
+; Error codes: Extended BASIC's follow Color BASIC's, twice the error's place in <XERRTAB>, plus 50.
 ERR_UF = 50                         ;; UF: undefined function
 ERR_NE = 52                         ;; NE: file not found, which Disk BASIC raises

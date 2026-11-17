@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Isa;
 using Retrocore.Machines.Apple1;
 using Retrocore.Machines.Devices;
+using System.Text.Json.Nodes;
+using Touki;
 
 namespace Retrocore.Debug;
 
@@ -13,7 +14,7 @@ namespace Retrocore.Debug;
 ///  The Apple-1 as the debugger sees it: a 6502, the Apple-1's memory areas, its 40x24 terminal, keyboard and
 ///  cassette interface.
 /// </summary>
-internal sealed class Apple1DebugTarget : IDebugTarget
+internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -64,6 +65,10 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     ///   assembled from the SDK's sources. The character generator always comes from the SDK, as no dump of the 2513
     ///   is published.
     ///  </para>
+    ///  <para>
+    ///   With the $E000 bank, Apple-1 BASIC is put in it as its tape would load it, unless <c>loadBasic</c> is false:
+    ///   <c>basic.bin</c> from the same directory, or the SDK's build. E000R then starts it.
+    ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
     /// <returns>The target, its 6502 through the reset sequence and at the Monitor's first instruction.</returns>
@@ -89,10 +94,17 @@ internal sealed class Apple1DebugTarget : IDebugTarget
                 ?? Image(Apple1SdkModules.AssembleCassette(Path.Join(sdk, "Aci.asm")));
 
         Apple1Machine machine = new(configuration, new(monitor, characters, cassette));
+        string basicSource = Apple1SdkModules.BasicPath(sdk);
+        Assembler.AssemblyResult? basic = configuration.HighRam && File.Exists(basicSource)
+            ? Apple1SdkModules.AssembleBasic(basicSource)
+            : null;
+
+        if (args.Bool("loadBasic") ?? configuration.HighRam) { LoadBasic(machine, dumps, basic); }
 
         // Power-up's reset sequence takes seven cycles, after which the Monitor's first instruction is next.
         machine.Run(7);
         Apple1DebugTarget target = new(machine) { FastCassette = args.Bool("fastCassette") ?? true };
+        target.SetBasicSymbols(basic?.Symbols);
         if (args.String("cassette") is { } tape)
         {
             if (machine.CassetteDrive is null)
@@ -146,6 +158,9 @@ internal sealed class Apple1DebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public InstructionSet InstructionSet => M6502Isa.Get(ProcessorVariant.Mos6502);
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Terminal;
 
     /// <inheritdoc/>
     public DebugRegisters Registers => s_registers;
@@ -214,7 +229,14 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public byte Peek(ushort address) => _machine.Bus.Peek(address);
 
     /// <inheritdoc/>
-    public Enum ReadArea(ushort address) => _machine.Bus.Area(address);
+    /// <remarks>
+    ///  <para>
+    ///   The $E000 bank is <see cref="Apple1BasicArea.Basic"/> while Apple-1 BASIC is in it.
+    ///  </para>
+    /// </remarks>
+    public Enum ReadArea(ushort address) => address is >= Apple1SdkModules.BasicOrigin and < 0xF000 && BasicActive
+        ? Apple1BasicArea.Basic
+        : _machine.Bus.Area(address);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -242,6 +264,17 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
+        {
+            throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
+        }
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>
         Peek(address) == JsrOpcode ? ((ushort)(Peek((ushort)(address + 1)) | (Peek((ushort)(address + 2)) << 8)), 3) : null;
 
@@ -249,20 +282,29 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public string? Trap(ushort address) => Peek(address) == BrkOpcode ? $"BRK at ${address:X4}." : null;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Apple-1 BASIC counts as ROM while it is in memory, as it does on a machine whose tape loaded it.
+    ///  </para>
+    /// </remarks>
     public bool InRom(ushort address) =>
-        _machine.Bus.Area(address) is Apple1MemoryArea.Monitor or Apple1MemoryArea.CassetteRom;
+        _machine.Bus.Area(address) is Apple1MemoryArea.Monitor or Apple1MemoryArea.CassetteRom
+            || (address is >= Apple1SdkModules.BasicOrigin and < 0xF000 && BasicActive);
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address is not RAM.</exception>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) != Apple1MemoryArea.Ram)
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) == Apple1MemoryArea.Ram;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)
@@ -289,6 +331,14 @@ internal sealed class Apple1DebugTarget : IDebugTarget
         if (_machine.Configuration.CassetteInterface && File.Exists(cassette))
         {
             debug.Add(new SourceMapModule(Apple1SdkModules.AssembleCassette(cassette), Apple1MemoryArea.CassetteRom));
+        }
+
+        string basic = Apple1SdkModules.BasicPath(roms);
+        if (_machine.Configuration.HighRam && File.Exists(basic))
+        {
+            Assembler.AssemblyResult result = Apple1SdkModules.AssembleBasic(basic);
+            debug.Add(new SourceMapModule(result, Apple1BasicArea.Basic));
+            SetBasicSymbols(result.Symbols);
         }
     }
 
@@ -370,8 +420,9 @@ internal sealed class Apple1DebugTarget : IDebugTarget
     public IReadOnlyList<HardwareRow> Hardware()
     {
         Apple1Configuration configuration = _machine.Configuration;
+        string bank = BasicActive ? "4 KB at $E000 with BASIC" : "4 KB at $E000";
         string memory = configuration.HighRam
-            ? $"{configuration.RamKilobytes} KB at $0000, 4 KB at $E000"
+            ? $"{configuration.RamKilobytes} KB at $0000, {bank}"
             : $"{configuration.RamKilobytes} KB at $0000";
 
         return
@@ -381,7 +432,7 @@ internal sealed class Apple1DebugTarget : IDebugTarget
                 "memory",
                 "Memory",
                 memory,
-                "The launch's ramKilobytes (4 or 8) and highRam options; BASIC loads and runs at $E000."),
+                "The launch's ramKilobytes (4 or 8) and highRam options; BASIC loads and runs at $E000, and loadBasic puts it there."),
             new(
                 "terminal",
                 "Terminal",
@@ -406,8 +457,21 @@ internal sealed class Apple1DebugTarget : IDebugTarget
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (Apple1CassetteDrive cassette, "record"):
+                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
+                string full = Path.GetFullPath(
+                    path ?? throw new ArgumentException("path is required, for saving the recording."));
+
+                if (!Directory.Exists(Path.GetDirectoryName(full)))
+                {
+                    throw new ArgumentException($"The folder for {full} does not exist.");
+                }
+
+                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
+                {
+                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
+                }
+
                 EjectCassette();
-                string full = Path.GetFullPath(path ?? throw new ArgumentException("path is required, for saving the recording."));
                 cassette.Record(new Apple1Tape(), full);
                 _recordingPath = full;
                 break;
@@ -441,25 +505,48 @@ internal sealed class Apple1DebugTarget : IDebugTarget
         return MediaState();
     }
 
+    /// <summary>
+    ///  Saves a recording still in the recorder, as ejecting it would, when the session ends or relaunches.
+    /// </summary>
+    /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
+    /// <exception cref="IOException">The recording could not be written.</exception>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) { EjectCassette(); }
+    }
+
+    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
+    // recording is saved first, where it stays in, so a tape reinserted from the recording's own path is the one
+    // just recorded, whatever the file system's case rules.
     private void Insert(string path)
     {
-        EjectCassette();
         string full = Path.GetFullPath(path);
         Apple1CassetteDrive drive = _machine.CassetteDrive
             ?? throw new InvalidOperationException("This Apple-1 has no cassette interface.");
 
-        drive.Play(Apple1Tape.FromWave(File.ReadAllBytes(full)), full);
+        SaveRecording();
+        Apple1Tape tape = Apple1Tape.FromWave(File.ReadAllBytes(full));
+        EjectCassette();
+        drive.Play(tape, full);
+    }
+
+    /// <inheritdoc/>
+    public void SaveRecordings() => SaveRecording();
+
+    // Writes a recording to its path, leaving it in the recorder.
+    private void SaveRecording()
+    {
+        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
+        {
+            File.WriteAllBytes(path, tape.ToWave());
+        }
     }
 
     // A recording is saved to its path when it is ejected.
     private void EjectCassette()
     {
         // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
-        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
-        {
-            File.WriteAllBytes(path, tape.ToWave());
-        }
-
+        SaveRecording();
         _machine.CassetteDrive?.Eject();
         _recordingPath = null;
     }

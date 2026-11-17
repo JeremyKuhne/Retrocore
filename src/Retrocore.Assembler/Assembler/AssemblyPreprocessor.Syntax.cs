@@ -199,7 +199,7 @@ internal sealed partial class AssemblyPreprocessor
                     Error($"A label cannot be on a {closing.ToLowerInvariant()} line.", lines[index].Location);
                 }
 
-                List<Line> body = new(index - start);
+                List<Line> body = [with(index - start)];
                 for (int bodyIndex = start; bodyIndex < index; bodyIndex++) { body.Add(lines[bodyIndex]); }
                 return body;
             }

@@ -138,13 +138,13 @@ public sealed partial class BasicProgram
         foreach (BasicLine line in Lines)
         {
             int next = at + bytes.Count + LineOverhead + line.Tokens.Length;
-            AddWord(bytes, next);
-            AddWord(bytes, line.Number);
+            AddWord(bytes, next, Dialect.BigEndian);
+            AddWord(bytes, line.Number, Dialect.BigEndian);
             bytes.AddRange(line.Tokens.Span);
             bytes.Add(0);
         }
 
-        AddWord(bytes, 0);
+        AddWord(bytes, 0, Dialect.BigEndian);
         return [.. bytes];
     }
 
@@ -219,30 +219,37 @@ public sealed partial class BasicProgram
     }
 
     /// <summary>
-    ///  Reads a two-byte word, low byte first.
+    ///  Reads a two-byte word, in the memory's byte order.
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <param name="address">The word's address.</param>
     /// <returns>The word.</returns>
-    internal static int Word(IBasicMemory memory, int address) => memory.Read(address) | (memory.Read((address + 1) & 0xFFFF) << 8);
+    internal static int Word(IBasicMemory memory, int address) => memory.BigEndian
+        ? (memory.Read(address) << 8) | memory.Read((address + 1) & 0xFFFF)
+        : memory.Read(address) | (memory.Read((address + 1) & 0xFFFF) << 8);
 
     /// <summary>
-    ///  Writes a two-byte word, low byte first.
+    ///  Writes a two-byte word, in the memory's byte order.
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <param name="address">The word's address.</param>
     /// <param name="value">The word.</param>
     internal static void WriteWord(IBasicMemory memory, int address, int value)
     {
-        memory.Write(address, (byte)value);
-        memory.Write((address + 1) & 0xFFFF, (byte)(value >> 8));
+        bool big = memory.BigEndian;
+        memory.Write(address, (byte)(big ? value >> 8 : value));
+        memory.Write((address + 1) & 0xFFFF, (byte)(big ? value : value >> 8));
     }
 
-    private static void AddWord(List<byte> bytes, int value)
+    private static void AddWord(List<byte> bytes, int value, bool bigEndian)
     {
-        bytes.Add((byte)value);
-        bytes.Add((byte)(value >> 8));
+        bytes.Add((byte)(bigEndian ? value >> 8 : value));
+        bytes.Add((byte)(bigEndian ? value : value >> 8));
     }
+
+    private static int ImageWord(ReadOnlySpan<byte> bytes, int offset, bool bigEndian) => bigEndian
+        ? (bytes[offset] << 8) | bytes[offset + 1]
+        : bytes[offset] | (bytes[offset + 1] << 8);
 
     // Reads lines to the zero link, and says whether every link agrees with one load address; null when the bytes
     // end first.
@@ -255,7 +262,7 @@ public sealed partial class BasicProgram
         while (true)
         {
             if (offset + 2 > bytes.Length) { return null; }
-            int link = bytes[offset] | (bytes[offset + 1] << 8);
+            int link = ImageWord(bytes, offset, dialect.BigEndian);
             if (link == 0) { break; }
             if (offset + 4 > bytes.Length) { return null; }
             int end = bytes[(offset + 4)..].IndexOf((byte)0);
@@ -263,7 +270,7 @@ public sealed partial class BasicProgram
             int next = offset + 4 + end + 1;
             origin ??= link - next;
             linked &= link - next == origin;
-            lines.Add(new(bytes[offset + 2] | (bytes[offset + 3] << 8), bytes.Slice(offset + 4, end).ToArray()));
+            lines.Add(new(ImageWord(bytes, offset + 2, dialect.BigEndian), bytes.Slice(offset + 4, end).ToArray()));
             offset = next;
         }
 

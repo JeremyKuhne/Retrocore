@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Isa;
+using Retrocore.Machines;
 using Retrocore.Machines.Devices;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -26,6 +27,23 @@ internal interface IDebugTarget : IDebugMemory
     ///  Gets the name of the debugger's one thread, such as "IIe CPU".
     /// </summary>
     string ThreadName { get; }
+
+    /// <summary>
+    ///  Gets a second CPU's view of the machine, such as the Z80 SoftCard's, shown as its own thread; null when the
+    ///  machine has none. It shares the machine and memory, and runs only while it has the bus.
+    /// </summary>
+    IDebugTarget? Coprocessor => null;
+
+    /// <summary>
+    ///  Gets the machine's own CPU's view, which <c>cpu:</c> names in expressions: this one, except for a
+    ///  coprocessor's, such as the SoftCard's Z80, whose is the machine it sits in.
+    /// </summary>
+    IDebugTarget Machine => this;
+
+    /// <summary>
+    ///  Gets whether <see cref="Coprocessor"/> has the bus now, so its instructions are the ones running.
+    /// </summary>
+    bool CoprocessorActive => false;
 
     /// <summary>
     ///  Gets the CPU's name as <c>.cpu</c> gives it, for assembling a launched source.
@@ -77,6 +95,12 @@ internal interface IDebugTarget : IDebugMemory
     ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
     /// </summary>
     bool IsIdle => false;
+
+    /// <summary>
+    ///  Gets whether a device holds the CPU part way through an instruction, as a Z80's WAIT line does, for as long
+    ///  as the device decides. The instruction finishes once the device lets go.
+    /// </summary>
+    bool IsHeld => false;
 
     /// <summary>
     ///  Gets the cycles run since power-up.
@@ -256,6 +280,23 @@ internal interface IDebugTarget : IDebugMemory
     bool StepCycle();
 
     /// <summary>
+    ///  Runs cycles with nothing tracked for a debugger, for a host that runs the machine with none attached.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The calls and statements <see cref="StepCycle"/> tracks are not followed, and the call stack is cleared
+    ///   after, so a debug session never runs this way: it is a third or more faster than stepping, at the cost
+    ///   of what only a debugger shows.
+    ///  </para>
+    /// </remarks>
+    /// <param name="cycles">The cycles to run.</param>
+    /// <exception cref="InvalidOperationException">The CPU stopped.</exception>
+    void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { StepCycle(); }
+    }
+
+    /// <summary>
     ///  Gets the call an instruction makes, for call cycle counts and contract checks.
     /// </summary>
     /// <param name="address">The instruction's address.</param>
@@ -309,6 +350,20 @@ internal interface IDebugTarget : IDebugMemory
     /// <param name="address">The address.</param>
     /// <param name="value">The value.</param>
     void Poke(ushort address, byte value);
+
+    /// <summary>
+    ///  Gets whether <see cref="Poke"/> can write an address now: whether it reads RAM rather than ROM, I/O or
+    ///  nothing.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>Whether a write would succeed.</returns>
+    bool CanPoke(ushort address);
+
+    /// <summary>
+    ///  Gets the characters the machine's text screen shows for its bytes, for memory views; null when the
+    ///  debugger cannot draw them.
+    /// </summary>
+    ICharacterSet? CharacterSet => null;
 
     /// <summary>
     ///  Reads memory through an Apple III extended address, as an indirect access through zero page with that X-byte

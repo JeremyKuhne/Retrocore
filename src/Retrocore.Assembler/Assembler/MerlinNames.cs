@@ -9,10 +9,10 @@ namespace Retrocore.Assembler;
 /// </summary>
 internal sealed class MerlinNames
 {
-    private readonly Dictionary<string, string> _reverse = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _plain = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _reverse = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _plain = [with(StringComparer.Ordinal)];
     private int _next;
-    private readonly HashSet<string> _localDefinitions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _localDefinitions = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Allocates a duplicate colon definition without retargeting references already bound to the first.
@@ -30,12 +30,12 @@ internal sealed class MerlinNames
     /// <summary>
     ///  Gets aliases from original names, including qualified colon locals, to compiler names.
     /// </summary>
-    internal Dictionary<string, string> Aliases { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> Aliases { get; } = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Gets raw textual equates, collected before processing the file's instructions.
     /// </summary>
-    internal Dictionary<string, string> Equates { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, string> Equates { get; } = [with(StringComparer.Ordinal)];
 
     /// <summary>
     ///  Gets or sets the expression expansion bound.

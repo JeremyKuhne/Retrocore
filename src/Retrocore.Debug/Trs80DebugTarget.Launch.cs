@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Trs80;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -159,6 +159,8 @@ internal sealed partial class Trs80DebugTarget
                 throw new ArgumentException($"There is no drive {drive}.");
             }
 
+            // A changed disk is held back, as from retro/device, so an older client cannot lose it.
+            if (MediaActions.Device(_machine.Drives[drive], action, args) is { } answer) { return answer; }
             DeviceAction(_machine.Drives[drive], action, args);
         }
         else if (device == "cassette")
@@ -230,10 +232,7 @@ internal sealed partial class Trs80DebugTarget
             throw new ArgumentException($"There is no drive {drive}.");
         }
 
-        string full = Path.GetFullPath(path);
-        byte[] image = File.ReadAllBytes(full);
-        bool jv3 = Path.GetExtension(full).Equals(".jv3", StringComparison.OrdinalIgnoreCase);
-        _machine.Drives[drive].Insert(jv3 ? Jv3Format.Read(image) : Jv1Format.Read(image), full, jv3 ? "JV3" : "JV1");
+        FloppyMedia.Insert(_machine.Drives[drive], path, coco: false);
     }
 
     private JsonObject MediaState() => new JsonObject

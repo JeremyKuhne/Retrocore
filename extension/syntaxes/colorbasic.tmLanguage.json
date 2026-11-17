@@ -1,0 +1,525 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Color BASIC",
+  "scopeName": "source.retrocore-colorbasic",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-colorbasic"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-colorbasic"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-colorbasic"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-colorbasic"
+        },
+        {
+          "match": "(?:(FOR)|(GO)|(ELSE)|(IF)|(PRINT)|(ON)|(INPUT)|(END)|(NEXT)|(DIM)|(READ)|(RUN)|(RESTORE)|(RETURN)|(STOP)|(POKE)|(CONT)|(LIST)|(CLEAR)|(NEW)|(CLOAD)|(CSAVE)|(OPEN)|(CLOSE)|(LLIST)|(SET)|(RESET)|(CLS)|(MOTOR)|(SOUND)|(AUDIO)|(EXEC)|(SKIPF)|(TAB\\()|(TO)|(SUB)|(THEN)|(NOT)|(STEP)|(OFF)|(\\+)|(-)|(\\*)|(/)|(\\^)|(AND)|(OR)|(>)|(=)|(<)|(DEL)|(EDIT)|(TRON)|(TROFF)|(DEF)|(LET)|(LINE)|(PCLS)|(PSET)|(PRESET)|(SCREEN)|(PCLEAR)|(COLOR)|(CIRCLE)|(PAINT)|(GET)|(PUT)|(DRAW)|(PCOPY)|(PMODE)|(PLAY)|(DLOAD)|(RENUM)|(FN)|(USING)|(DIR)|(DRIVE)|(FIELD)|(FILES)|(KILL)|(LOAD)|(LSET)|(MERGE)|(RENAME)|(RSET)|(SAVE)|(WRITE)|(VERIFY)|(UNLOAD)|(DSKINI)|(BACKUP)|(COPY)|(DSKI\\$)|(DSKO\\$)|(DOS)|(SGN)|(INT)|(ABS)|(USR)|(RND)|(SIN)|(PEEK)|(LEN)|(STR\\$)|(VAL)|(ASC)|(CHR\\$)|(EOF)|(JOYSTK)|(LEFT\\$)|(RIGHT\\$)|(MID\\$)|(POINT)|(INKEY\\$)|(MEM)|(ATN)|(COS)|(TAN)|(EXP)|(FIX)|(LOG)|(POS)|(SQR)|(HEX\\$)|(VARPTR)|(INSTR)|(TIMER)|(PPOINT)|(STRING\\$)|(CVN)|(FREE)|(LOC)|(LOF)|(MKN\\$)|(AS))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "2": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "3": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "4": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "5": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "6": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "7": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "8": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "9": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "12": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "13": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "14": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "15": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "16": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "17": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "18": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "19": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "20": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "21": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "22": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "23": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "24": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "25": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "26": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "27": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "28": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "29": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "30": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "31": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "32": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "33": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "34": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "35": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "36": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "37": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "38": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "39": {
+              "name": "keyword.control.retrocore-colorbasic"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "41": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "42": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "43": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "44": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "45": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "46": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "47": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "48": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "49": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "50": {
+              "name": "keyword.operator.retrocore-colorbasic"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "52": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "53": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "59": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "60": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "62": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "63": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "64": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "65": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "66": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "68": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "69": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "70": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "71": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "72": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "73": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "74": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "75": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "76": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "77": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "78": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "79": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "80": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "81": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "82": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "83": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "84": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "85": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "86": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "87": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "88": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "89": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "90": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "91": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "92": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "93": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "94": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "95": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "96": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "97": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "98": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "99": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "100": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "101": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "102": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "103": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "104": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "105": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "106": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "107": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "108": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "109": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "110": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "111": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "112": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "113": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "114": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "115": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "116": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "117": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "118": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "119": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "120": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "121": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "122": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "123": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "124": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "125": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "126": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "127": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "128": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "129": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "130": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "131": {
+              "name": "keyword.other.retrocore-colorbasic"
+            },
+            "132": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "133": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "134": {
+              "name": "support.function.retrocore-colorbasic"
+            },
+            "135": {
+              "name": "keyword.other.retrocore-colorbasic"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-colorbasic"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-colorbasic"
+        },
+        {
+          "match": "[A-Z][A-Z0-9]*\\$?",
+          "name": "variable.other.retrocore-colorbasic"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-colorbasic"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-colorbasic"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?:(REM)|(')).*$",
+      "name": "comment.line.retrocore-colorbasic",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-colorbasic"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-colorbasic"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?:(DATA))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-colorbasic"
+        }
+      },
+      "end": "(?=:|$)",
+      "contentName": "string.unquoted.data.retrocore-colorbasic",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-colorbasic",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-colorbasic"
+    }
+  }
+}

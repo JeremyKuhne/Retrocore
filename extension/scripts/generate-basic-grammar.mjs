@@ -24,7 +24,7 @@ function keywords(file, field = "s_keywords") {
 }
 
 const flow = new Set(["END", "FOR", "NEXT", "GOTO", "RUN", "IF", "GOSUB", "RETURN", "STOP", "ON", "THEN", "TO", "STEP",
-    "ELSE", "ONERR", "RESUME", "POP", "CONT", "ERROR"]);
+    "ELSE", "ONERR", "RESUME", "POP", "CONT", "ERROR", "GO", "SUB"]);
 const operators = new Set(["+", "-", "*", "/", "^", "[", "AND", "OR", "NOT", ">", "=", "<", "MOD", "DIV", "#", "<>", ">=",
     "<="]);
 const functions = new Set(["SGN", "INT", "ABS", "USR", "FRE", "PDL", "POS", "SQR", "RND", "LOG", "EXP", "COS", "SIN",
@@ -51,15 +51,16 @@ function separated(word) {
 }
 
 // Integer BASIC's names are any length, letters then letters and digits, and Business BASIC's may also hold dots and
-// end in & for a long integer; the Microsoft BASICs' are read by two.
-function grammar(dialect, name, words, { longNames = false, business = false } = {}) {
+// end in & for a long integer; the Microsoft BASICs' are read by two. Color BASIC finds words only in capitals and
+// never inside a name, which runs from a capital through letters and digits.
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false } = {}) {
+    const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
     const reserved = words.filter(word => word !== "REM" && word !== "'" && word !== "DATA");
-    const variable = business ? "[A-Za-z][A-Za-z0-9.]*[$%&]?" : longNames ? "[A-Za-z][A-Za-z0-9]*\\$?" : "[A-Za-z][0-9]*[$%!#]?";
-    const remark = words.includes("'") ? "(?i:(REM)|(')).*$"
+    const remark = words.includes("'") ? `${matching("(REM)|(')")}.*$`
         : business ? `(?i:${before}(REM)${after}|(!)).*$`
-            : "(?i:(REM)).*$";
+            : `${matching("(REM)")}.*$`;
     const kind = word => flow.has(word) ? "keyword.control"
         : operators.has(word) ? "keyword.operator"
             : functions.has(word) || /[$(]$/.test(word) ? "support.function"
@@ -84,10 +85,10 @@ function grammar(dialect, name, words, { longNames = false, business = false } =
                     { include: "#string" },
                     { include: "#escape" },
                     { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
-                    { match: `(?i:${reserved.map(word => `(${business ? separated(word) : pattern(word)})`).join("|")})`, captures },
+                    { match: matching(reserved.map(word => `(${business ? separated(word) : pattern(word)})`).join("|")), captures },
                     { match: "\\?", name: `keyword.other.${scope}` },
                     { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
-                    { match: variable, name: `variable.other.${scope}` },
+                    { match: names, name: `variable.other.${scope}` },
                     { match: ":", name: `punctuation.separator.statement.${scope}` },
                     { match: "[;,]", name: `punctuation.separator.${scope}` }
                 ]
@@ -98,7 +99,7 @@ function grammar(dialect, name, words, { longNames = false, business = false } =
                 captures: { "1": { name: `keyword.other.remark.${scope}` }, "2": { name: `keyword.other.remark.${scope}` } }
             },
             data: {
-                begin: business ? `(?i:${before}(DATA)${after})` : "(?i:(DATA))",
+                begin: business ? `(?i:${before}(DATA)${after})` : matching("(DATA)"),
                 beginCaptures: { "1": { name: `keyword.other.${scope}` } },
                 end: "(?=:|$)",
                 contentName: `string.unquoted.data.${scope}`,
@@ -119,17 +120,19 @@ const appleSoft = keywords("AppleSoftDialect.cs");
 const level2 = keywords("Level2Dialect.cs");
 const integer = keywords("IntegerBasicDialect.cs");
 const business = [...keywords("BusinessBasicDialect.cs", "s_statements"), ...keywords("BusinessBasicDialect.cs", "s_functions")];
+const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywords("ColorBasicDialect.cs", "s_functions")];
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],
     ["level2.tmLanguage.json", grammar("level2", "Level II BASIC", level2)],
-    ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { longNames: true })],
-    ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { business: true })],
+    ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
+    ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
+    ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {
     const output = resolve(extension, "syntaxes", file);
     writeGenerated(output, JSON.stringify(content, null, 2) + "\n", `${file} is stale. Run npm run generate:grammar.`);
 }
-console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC and `
-    + `${business.length} Business BASIC reserved words.`);
+console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC, `
+    + `${business.length} Business BASIC and ${colorBasic.length} Color BASIC reserved words.`);

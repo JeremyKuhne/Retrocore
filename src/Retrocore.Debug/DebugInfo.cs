@@ -23,6 +23,12 @@ internal sealed class DebugInfo
     internal void Add(IDebugModule module) => _modules.Add(module);
 
     /// <summary>
+    ///  Gets or sets the launch's hints file, whose names win over the modules' in expressions, as they do when
+    ///  disassembling.
+    /// </summary>
+    internal MemoryHints Hints { get; set; } = MemoryHints.Empty;
+
+    /// <summary>
     ///  Tests whether a module describes the memory an address reads under the current memory map.
     /// </summary>
     /// <param name="module">The module.</param>
@@ -60,13 +66,24 @@ internal sealed class DebugInfo
     ///   A card's firmware that works in any slot is a module for each slot, so its routines resolve to the slot the
     ///   card is in.
     ///  </para>
+    ///  <para>
+    ///   A name the hints file gives in the space wins, as its names do over the sources' in the listing.
+    ///  </para>
     /// </remarks>
     /// <param name="name">The name.</param>
     /// <param name="memory">The machine's memory, or null to take the first module that defines the name.</param>
+    /// <param name="space">
+    ///  The hints file's space the name is looked for in first: a bank's name, or empty for memory as the CPU maps it.
+    /// </param>
     /// <returns>The value.</returns>
-    /// <exception cref="FormatException">No module defines the name.</exception>
-    internal long Resolve(string name, IDebugMemory? memory = null)
+    /// <exception cref="FormatException">Neither the hints file nor any module defines the name.</exception>
+    internal long Resolve(string name, IDebugMemory? memory = null, string space = "")
     {
+        foreach ((int address, string named) in Hints.Names(space))
+        {
+            if (string.Equals(named, name, StringComparison.Ordinal)) { return address; }
+        }
+
         long? first = null;
         foreach (IDebugModule module in _modules)
         {

@@ -197,7 +197,7 @@ NOTHING:
 
 ;; Carries a call to the card: finds the slot, passes A and X, runs the command and returns what it gives back.
 ;; In:    A = the command; the stack holds the caller's A
-;; Out:   A, X and carry = as the command returns them
+;; Out:   A/X = as the command returns them, carry = as the command returns it
 ;; Keeps: Y, interrupt
 Common:
     php                             ; the caller's interrupt flag, and the carry slot for the result

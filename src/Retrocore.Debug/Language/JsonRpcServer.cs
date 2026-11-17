@@ -27,8 +27,8 @@ internal sealed class JsonRpcServer(Stream input, Stream output) : ILanguageClie
     private const int MethodNotFound = -32601;
     private const int InternalError = -32603;
     private readonly MessageFraming _wire = new(input, output);
-    private readonly Dictionary<string, Func<JsonObject?, Task<JsonNode?>>> _requests = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Action<JsonObject?>> _notifications = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Func<JsonObject?, Task<JsonNode?>>> _requests = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, Action<JsonObject?>> _notifications = [with(StringComparer.Ordinal)];
     private readonly List<Task> _running = [];
 
     /// <summary>

@@ -56,7 +56,7 @@ internal sealed partial class AssemblyPreprocessor
 
         foreach ((string message, AssemblyLocation location) in expander.Errors) { Error(message, location); }
         if (expander.Aliases.Count == 0) { return; }
-        _macro10Aliases ??= new(StringComparer.Ordinal);
+        _macro10Aliases ??= [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in expander.Aliases) { _macro10Aliases[alias.Key] = alias.Value; }
     }
 
@@ -79,7 +79,7 @@ internal sealed partial class AssemblyPreprocessor
     private void FinishMacro10()
     {
         if (_macro10Aliases is null) { return; }
-        _project.SymbolAliases ??= new(StringComparer.Ordinal);
+        _project.SymbolAliases ??= [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in _macro10Aliases)
         {
             _project.SymbolAliases[alias.Key] = alias.Value;

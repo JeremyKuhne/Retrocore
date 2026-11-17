@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Documentation;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug;
 
@@ -46,6 +47,44 @@ internal interface IDebugModule
     /// <param name="address">The address.</param>
     /// <returns>The label, or null.</returns>
     string? Label(ushort address);
+
+    /// <summary>
+    ///  Gets the module's labels: the names it gives addresses, not its constants.
+    /// </summary>
+    IEnumerable<(string Name, long Value)> Labels { get; }
+
+    /// <summary>
+    ///  Gets the module's constants that its instructions address memory through, such as a zero-page equate that
+    ///  <c>STA CH</c> stores to, with the CPU whose instructions do, so a memory view can name those bytes.
+    /// </summary>
+    IEnumerable<(string Name, long Value, IsaDescription Cpu)> AddressConstants => [];
+
+    /// <summary>
+    ///  Gets whether memory holds the module's code now, so its <see cref="AddressConstants"/> name what it uses: a
+    ///  card's firmware is not there without the card, nor a ROM with RAM mapped over it.
+    /// </summary>
+    /// <param name="memory">The machine's memory.</param>
+    /// <returns>Whether any of its code is in memory.</returns>
+    bool InMemory(IDebugMemory memory) => true;
+
+    /// <summary>
+    ///  Gets where the statements the module makes data, such as <c>.byte</c>, start, which positions describe.
+    /// </summary>
+    IEnumerable<ushort> DataStatements => [];
+
+    /// <summary>
+    ///  Gets whether the module's label for an address applies to memory now, where the module itself does.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   By default a label applies where memory holds the code the module describes, so a program's labels go once
+    ///   other code replaces it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="memory">The machine's memory, for reading the bytes at the address.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>True when the label names what is at the address now.</returns>
+    bool LabelApplies(IDebugMemory memory, ushort address) => Position(memory, address) is not null;
 
     /// <summary>
     ///  Gets the documentation comments of the module's sources, with its symbol values.

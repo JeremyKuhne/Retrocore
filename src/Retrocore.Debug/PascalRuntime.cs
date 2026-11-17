@@ -24,6 +24,7 @@ internal sealed class PascalRuntime
     private readonly (int Start, int End) _range;
     private readonly bool _extended;
     private readonly Func<ushort> _zeroPage;
+    private readonly Func<byte>? _codeBank;
     private readonly Func<IEnumerable<WozDisk>> _disks;
     private readonly Func<ulong> _cycles;
     private readonly PascalCodeLibrary _library = new();
@@ -51,6 +52,10 @@ internal sealed class PascalRuntime
     /// <param name="zeroPage">Gets where zero page is now.</param>
     /// <param name="disks">Gets the disks in the drives.</param>
     /// <param name="cycles">Gets the machine's cycle count.</param>
+    /// <param name="codeBank">
+    ///  Gets where code is read from at a fetch, for a machine whose interpreter can keep code apart from data, as
+    ///  Apple Pascal 1.3 does in the IIe's auxiliary 64K.
+    /// </param>
     internal PascalRuntime(
         string name,
         IPascalMemory memory,
@@ -60,7 +65,8 @@ internal sealed class PascalRuntime
         bool extended,
         Func<ushort> zeroPage,
         Func<IEnumerable<WozDisk>> disks,
-        Func<ulong> cycles)
+        Func<ulong> cycles,
+        Func<byte>? codeBank = null)
     {
         Name = name;
         Memory = memory;
@@ -71,6 +77,7 @@ internal sealed class PascalRuntime
         _zeroPage = zeroPage;
         _disks = disks;
         _cycles = cycles;
+        _codeBank = codeBank;
     }
 
     /// <summary>
@@ -115,7 +122,7 @@ internal sealed class PascalRuntime
         if (_views.Select(view => PascalInterpreter.FindFetch(view, _range.Start, _range.End)).FirstOrDefault(found => found is not null) is { } fetch)
         {
             if (Interpreter?.Fetch != fetch) { Registers = null; }
-            Interpreter = new PascalInterpreter(Name, fetch, Interpreter?.ZeroPage ?? 0, _extended);
+            Interpreter = new PascalInterpreter(Name, fetch, Interpreter?.ZeroPage ?? 0, _extended, Interpreter?.CodeBank ?? 0);
             _missingSince = null;
             return true;
         }
@@ -154,7 +161,12 @@ internal sealed class PascalRuntime
     {
         if (Interpreter is not { } interpreter) { return null; }
         ushort zeroPage = _zeroPage();
-        if (interpreter.ZeroPage != zeroPage) { Interpreter = interpreter = interpreter with { ZeroPage = zeroPage }; }
+        byte codeBank = _codeBank?.Invoke() ?? 0;
+        if (interpreter.ZeroPage != zeroPage || interpreter.CodeBank != codeBank)
+        {
+            Interpreter = interpreter = interpreter with { ZeroPage = zeroPage, CodeBank = codeBank };
+        }
+
         PascalRegisters registers = PascalRegisters.Read(Memory, interpreter);
         Registers = registers;
         _lastFetch = _cycles();
@@ -253,7 +265,8 @@ internal sealed class PascalRuntime
             PcodeInstruction instruction = PcodeDisassembler.Decode(aligned, frame.Offset + skew, frame.JumpTable.Address - frame.Entry.Address + skew);
             return instruction with
             {
-                Offset = instruction.Offset - skew, Targets = [.. instruction.Targets.Select(target => target < 0 ? target : target - skew)]
+                Offset = instruction.Offset - skew,
+                Targets = [.. instruction.Targets.Select(target => target < 0 ? target : target - skew)]
             };
         }
         catch (InvalidDataException)

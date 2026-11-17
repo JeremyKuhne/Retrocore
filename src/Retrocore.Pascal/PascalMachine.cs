@@ -51,8 +51,9 @@ public static class PascalMachine
             if (Frame(memory, segment, table, code, mark) is not { } frame) { break; }
             frames.Add(frame);
 
-            // The caller's code shares an X-byte, which the MSCW keeps beside the 6502 stack pointer.
-            byte bank = interpreter.Extended ? Bank(memory.Read(mark.Plus(11).Address, mark.Bank)) : (byte)0;
+            // The caller's code shares an X-byte, which the MSCW keeps beside the 6502 stack pointer; without X-bytes,
+            // all code is in the code bank.
+            byte bank = interpreter.Extended ? Bank(memory.Read(mark.Plus(11).Address, mark.Bank)) : interpreter.CodeBank;
             table = new PascalPointer(Word(memory, mark.Plus(4)), bank);
             segment = new PascalPointer(Word(memory, mark.Plus(6)), bank);
             code = new PascalPointer(Word(memory, mark.Plus(8)), bank);

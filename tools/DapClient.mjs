@@ -12,13 +12,14 @@ import { join } from "node:path";
  * Starts the Release debug host, or the executable RETROCORE_DAP_HOST names, such as a native build from
  * dotnet publish src/Retrocore.Debug -c Release -r win-x64 -p:RetrocoreAot=true.
  * @param {string} root The repository root.
- * @returns The client: request(command, args), event(name), events (unclaimed), fail(error), close() and failure().
+ * @returns The client: request(command, args), event(name), events (unclaimed), fail(error), close(), endInput()
+ *  and failure().
  */
 export function startDap(root) {
     const host = process.env.RETROCORE_DAP_HOST;
     const child = host
         ? spawn(host, [])
-        : spawn("dotnet", [join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll")]);
+        : spawn("dotnet", [join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")]);
     let buffer = Buffer.alloc(0);
     let sequence = 1;
     const pending = new Map();
@@ -75,5 +76,12 @@ export function startDap(root) {
         if (index >= 0) return Promise.resolve(events.splice(index, 1)[0].body);
         return new Promise((resolve, reject) => listeners.push({ name, resolve, reject }));
     }
-    return { request, event, events, fail, close: () => child.kill(), failure: () => failure };
+    // Closes the adapter's input without a disconnect, as a client that goes away does, and waits for it to exit.
+    function endInput() {
+        return new Promise(resolve => {
+            child.once("exit", resolve);
+            child.stdin.end();
+        });
+    }
+    return { request, event, events, fail, close: () => child.kill(), endInput, failure: () => failure };
 }

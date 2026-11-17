@@ -10,24 +10,38 @@ namespace Retrocore.Basic;
 // string), a display flag below $40, the address of the next variable, and its value. A number's value is 2 bytes,
 // low first; DIM makes an array of 2 bytes an element, element 0 first, or a string of characters with bit 7 set
 // followed by a byte with bit 7 clear. Its FOR loops are columns in page 1, FORNDX of them.
+//
+// Apple-1 BASIC's are the same list, but a name is two bytes: the letter shifted left, and the digit, $40 for a
+// string, or 0. Its FOR stack's columns are 8 bytes apart, from $0120.
 public sealed partial class BasicVariables
 {
-    private const int ForVariableLow = 0x0140;
-    private const int ForVariableHigh = 0x0150;
-    private const int ForStepLow = 0x0160;
-    private const int ForStepHigh = 0x0170;
-    private const int ForLineLow = 0x0180;
-    private const int ForLineHigh = 0x0190;
-    private const int ForLimitLow = 0x01C0;
-    private const int ForLimitHigh = 0x01D0;
+    private const int ForVariable = 0x0140;
+    private const int ForStep = 0x0160;
+    private const int ForLine = 0x0180;
+    private const int ForLimit = 0x01C0;
+    private const int ForColumn = 0x10;
+    private const int Apple1ForVariable = 0x0120;
+    private const int Apple1ForStep = 0x0130;
+    private const int Apple1ForLine = 0x0140;
+    private const int Apple1ForLimit = 0x0160;
+    private const int Apple1ForColumn = 0x08;
     private const byte StringMark = 0x40;
     private const byte StringEnd = 0x1E;
 
-    private bool IntegerBasic => _dialect == BasicDialect.Integer;
+    private bool IntegerBasic => _dialect is IntegerBasicDialect;
+
+    private bool Apple1Basic => _dialect is IntegerBasicDialect { IsApple1: true };
+
+    /// <summary>
+    ///  Gets the subscript of an Integer BASIC array's first element: 0, or 1 in Apple-1 BASIC, whose DIM A(3) makes
+    ///  A(1) to A(3). A simple variable is its own first element.
+    /// </summary>
+    internal int ArrayBase => Apple1Basic ? 1 : 0;
 
     // Each variable in the list: its name, where it starts, where its value starts and how many bytes the value has.
     private List<(string Name, bool Text, int Address, int Value, int Size)> IntegerEntries()
     {
+        if (Apple1Basic) { return Apple1Entries(); }
         List<(string, bool, int, int, int)> entries = [];
         int at = Word(IntegerBasicDialect.LoMem);
         int end = Word(IntegerBasicDialect.Pv);
@@ -59,6 +73,28 @@ public sealed partial class BasicVariables
         return entries;
     }
 
+    // Apple-1 BASIC's list: two name bytes, the next variable's address, then the value.
+    private List<(string Name, bool Text, int Address, int Value, int Size)> Apple1Entries()
+    {
+        List<(string, bool, int, int, int)> entries = [];
+        int at = Word(IntegerBasicDialect.LoMem);
+        int end = Word(IntegerBasicDialect.Pv);
+        while (at + 4 <= end && entries.Count < MaximumEntries)
+        {
+            char letter = (char)(_memory.Read(at) >> 1);
+            byte second = _memory.Read(at + 1);
+            bool text = second == StringMark;
+            int next = Word(at + 2);
+            int value = at + 4;
+            if (!char.IsAsciiLetterUpper(letter) || next < value || next > end) { break; }
+            string name = text ? $"{letter}$" : second >= High ? $"{letter}{(char)(second & 0x7F)}" : $"{letter}";
+            entries.Add((name, text, at, value, next - value));
+            at = next;
+        }
+
+        return entries;
+    }
+
     // The simple variables: numbers of 2 bytes, and every string.
     private List<BasicVariable> IntegerSimple() =>
         [.. IntegerEntries()
@@ -69,7 +105,7 @@ public sealed partial class BasicVariables
                 entry.Address,
                 entry.Value))];
 
-    // The arrays: numbers DIM made more than one element, A(0) to A(n).
+    // The arrays: numbers DIM made more than one element, A(0) to A(n), or A(1) to A(n) in Apple-1 BASIC.
     private List<BasicArray> IntegerArrays() =>
         [.. IntegerEntries()
             .Where(entry => !entry.Text && entry.Size > 2)
@@ -79,7 +115,8 @@ public sealed partial class BasicVariables
                 entry.Address,
                 [entry.Size / 2],
                 entry.Value,
-                ElementSize: 2))];
+                ElementSize: 2,
+                LowerBound: ArrayBase))];
 
     // A number, low byte first, or a string's characters up to the byte with bit 7 clear.
     private BasicValue IntegerRead(BasicVariableKind kind, int address)
@@ -137,6 +174,7 @@ public sealed partial class BasicVariables
             throw new ArgumentException($"'{name}' {BadName}");
         }
 
+        if (Apple1Basic) { return Apple1Create(upper, letters, text); }
         int start = Word(IntegerBasicDialect.Pv);
         List<byte> entry = [.. letters.Select(character => (byte)(character | High))];
         if (text) { entry.Add(StringMark); }
@@ -155,22 +193,52 @@ public sealed partial class BasicVariables
         return new(upper, text ? BasicVariableKind.String : BasicVariableKind.Integer, start, value);
     }
 
+    // Makes a variable as Apple-1 BASIC does: its 6-byte entry at PV, with a value of zero. A name is a letter and a
+    // digit at most.
+    private BasicVariable Apple1Create(string upper, string letters, bool text)
+    {
+        if (letters.Length > 2 || (letters.Length == 2 && !char.IsAsciiDigit(letters[1])) || (text && letters.Length != 1))
+        {
+            throw new ArgumentException($"'{upper}' is not an Apple-1 BASIC name: a letter, then a digit or $.");
+        }
+
+        int start = Word(IntegerBasicDialect.Pv);
+        int value = start + 4;
+        int next = value + 2;
+        byte second = text ? StringMark : letters.Length == 2 ? (byte)(letters[1] | High) : (byte)0;
+        if (next > Word(IntegerBasicDialect.Pp))
+        {
+            throw new InvalidOperationException("*** MEM FULL ERR: there is no room for another variable.");
+        }
+
+        Store(start, [(byte)((letters[0] | High) << 1), second, (byte)next, (byte)(next >> 8), 0, 0]);
+        BasicProgram.WriteWord(_memory, IntegerBasicDialect.Pv, next);
+        return new(upper, text ? BasicVariableKind.String : BasicVariableKind.Integer, start, value);
+    }
+
     // The FOR loops in progress, most recent first, from the columns in page 1.
     private List<BasicLoop> IntegerLoops()
     {
+        bool apple1 = Apple1Basic;
+        int column = apple1 ? Apple1ForColumn : ForColumn;
+        int variableAt = apple1 ? Apple1ForVariable : ForVariable;
+        int stepAt = apple1 ? Apple1ForStep : ForStep;
+        int lineAt = apple1 ? Apple1ForLine : ForLine;
+        int limitAt = apple1 ? Apple1ForLimit : ForLimit;
         List<BasicLoop> loops = [];
-        int count = Math.Min((int)_memory.Read(IntegerBasicDialect.ForIndex), 16);
+        int count = Math.Min((int)_memory.Read(IntegerBasicDialect.ForIndex), column);
         for (int index = count - 1; index >= 0; index--)
         {
-            int variable = Pair(ForVariableLow, ForVariableHigh, index);
-            short step = (short)Pair(ForStepLow, ForStepHigh, index);
-            short limit = (short)Pair(ForLimitLow, ForLimitHigh, index);
-            int line = Word(Pair(ForLineLow, ForLineHigh, index) + 1);
+            int variable = Pair(variableAt, column, index);
+            short step = (short)Pair(stepAt, column, index);
+            short limit = (short)Pair(limitAt, column, index);
+            int line = Word(Pair(lineAt, column, index) + 1);
             loops.Add(new(variable, step, limit, line));
         }
 
         return loops;
     }
 
-    private int Pair(int low, int high, int index) => _memory.Read(low + index) | (_memory.Read(high + index) << 8);
+    // An entry of a page-1 column pair: its low byte at low + index, its high byte a column later.
+    private int Pair(int low, int column, int index) => _memory.Read(low + index) | (_memory.Read(low + column + index) << 8);
 }

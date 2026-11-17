@@ -49,12 +49,12 @@ internal static class BasicCommand
             return 2;
         }
 
-        Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> options = [with(StringComparer.OrdinalIgnoreCase)];
         for (int index = positional; index < args.Length; index += 2) { options[args[index]] = args[index + 1]; }
         BasicDialect? dialect = null;
         if (options.TryGetValue("--dialect", out string? name) && (dialect = BasicDialect.FromName(name)) is null)
         {
-            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, level2 or business.");
+            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, apple1, level2, business or colorbasic.");
             return 2;
         }
 
@@ -85,7 +85,7 @@ internal static class BasicCommand
         }
         else if (dialect is null)
         {
-            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, level2 or business.", 2);
+            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, apple1, level2, business or colorbasic.", 2);
         }
         else
         {

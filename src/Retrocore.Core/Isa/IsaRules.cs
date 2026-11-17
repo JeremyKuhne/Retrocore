@@ -12,7 +12,7 @@ internal sealed class IsaRules
     /// <summary>
     ///  Gets the instructions whose mnemonic ends in the bit number held in opcode bits 4-6.
     /// </summary>
-    internal HashSet<string> BitSuffix { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal HashSet<string> BitSuffix { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Gets the opcodes that win over earlier encodings of their mnemonic and form.
@@ -22,13 +22,13 @@ internal sealed class IsaRules
     /// <summary>
     ///  Gets the flow class of each instruction (<c>JSR</c>), or of one of its forms (<c>JMP:AbsoluteIndirect</c>).
     /// </summary>
-    internal Dictionary<string, InstructionFlow> Flows { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal Dictionary<string, InstructionFlow> Flows { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Gets how each instruction (<c>STA</c>), or one of its forms (<c>LD:StoreA</c>), that does not only read
     ///  accesses its memory operand.
     /// </summary>
-    internal Dictionary<string, MemoryAccess> Access { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal Dictionary<string, MemoryAccess> Access { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Gets whether an opcode line may name a form the <c>[forms]</c> section does not declare, which then
@@ -47,9 +47,25 @@ internal sealed class IsaRules
     internal List<ushort> EntryPoints { get; } = [];
 
     /// <summary>
+    ///  Gets the entry points of one instruction set, by its name, beyond the description's.
+    /// </summary>
+    internal Dictionary<string, List<ushort>> SetEntryPoints { get; } = [with(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>
+    ///  Gets the fixed target of an instruction whose opcode implies it, by <c>Mnemonic</c> or
+    ///  <c>Mnemonic:Form</c>.
+    /// </summary>
+    internal Dictionary<string, ushort> Targets { get; } = [with(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>
+    ///  Gets the instructions, by <c>Mnemonic</c> or <c>Mnemonic:Form</c>, that the <c>conditional</c> line marks.
+    /// </summary>
+    internal HashSet<string> Conditional { get; } = [with(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>
     ///  Gets the instruction sets whose indirect pointers do not carry into the high byte's page.
     /// </summary>
-    internal HashSet<string> IndirectPageWrap { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal HashSet<string> IndirectPageWrap { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Gets whether leading <c>&lt;</c> and <c>&gt;</c> prefixes force narrow and wide addressing, as on Motorola CPUs.
@@ -59,5 +75,5 @@ internal sealed class IsaRules
     /// <summary>
     ///  Gets alternate mnemonic names mapped to their canonical mnemonic, such as <c>LSL</c> for <c>ASL</c>.
     /// </summary>
-    internal Dictionary<string, string> Aliases { get; } = new(StringComparer.OrdinalIgnoreCase);
+    internal Dictionary<string, string> Aliases { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 }

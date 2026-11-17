@@ -48,6 +48,12 @@ public sealed class Apple3Machine : IMachine
     private IDevice[]? _devices;
     private int _deviceChanges;
 
+    // Time owed to the SoftCard ///'s Z80, less than a T-state.
+    private int _z80Time;
+
+    // Whether the SoftCard /// held the 6502 in the last cycle.
+    private bool _held;
+
     /// <summary>
     ///  Constructs a machine at power-on.
     /// </summary>
@@ -134,7 +140,12 @@ public sealed class Apple3Machine : IMachine
     }
 
     /// <inheritdoc/>
-    public ProcessorCycle LastCycle => Processor.LastCycle;
+    /// <remarks>
+    ///  <para>
+    ///   While the SoftCard /// holds the 6502, its last access is marked stalled: the cycle went by without it.
+    ///  </para>
+    /// </remarks>
+    public ProcessorCycle LastCycle => _held ? Processor.LastCycle with { IsStalled = true } : Processor.LastCycle;
 
     /// <summary>
     ///  Presses RESET, alone or with CONTROL. With the environment register's NMI enable set, RESET alone interrupts
@@ -182,15 +193,15 @@ public sealed class Apple3Machine : IMachine
         }
 
         bool slow = Bus.IsSlow || (_drawing && (Bus.Environment & Apple3Bus.VideoEnable) != 0);
-        Processor.StepCycle();
+        int units = slow ? SlowCycle : FastCycle;
+        bool stepped = Bus.SoftCard is { } card ? StepWithSoftCard(card, units) : StepProcessor();
         Bus.TickDisk(slow);
-        if (_nmi)
+        if (_nmi && stepped)
         {
             Processor.Signals &= ~ProcessorSignals.NonMaskableInterrupt;
             _nmi = false;
         }
 
-        int units = slow ? SlowCycle : FastCycle;
         Time += units;
         Bus.Advance(units);
         _lineTime += units;
@@ -233,27 +244,26 @@ public sealed class Apple3Machine : IMachine
     public ProcessorExecutionResult StepInstruction(int maximumCycles = 32)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCycles);
-        ulong start = Processor.CycleCount;
+        // The machine's cycles, which go on while a SoftCard holds the 6502.
+        ulong cycles = 0;
         bool instruction = Processor.CurrentOpCode is not null;
         for (int i = 0; i < maximumCycles; i++)
         {
             StepCycle();
+            cycles++;
             instruction |= Processor.FetchedOpcode;
             if (Processor.Status != ProcessorExecutionStatus.Running)
             {
-                return new() { Status = Processor.Status, Cycles = Processor.CycleCount - start };
+                return new() { Status = Processor.Status, Cycles = cycles };
             }
 
             if (instruction && Processor.IsInstructionBoundary)
             {
-                return new()
-                {
-                    Status = ProcessorExecutionStatus.InstructionComplete, Cycles = Processor.CycleCount - start
-                };
+                return new() { Status = ProcessorExecutionStatus.InstructionComplete, Cycles = cycles };
             }
         }
 
-        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = Processor.CycleCount - start };
+        return new() { Status = ProcessorExecutionStatus.CycleBudgetExhausted, Cycles = cycles };
     }
 
     /// <summary>
@@ -323,6 +333,38 @@ public sealed class Apple3Machine : IMachine
 
     /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.QueueKey(code);
+
+    private bool StepProcessor()
+    {
+        Processor.StepCycle();
+        _held = false;
+        return true;
+    }
+
+    // The SoftCard ///'s Z80 has the bus, or is finishing its last instruction after giving it back. The card holds
+    // the 6502 at its next read, which is its next opcode fetch; until the 6502 gets there, the Z80 waits. After the
+    // Z80 gives the bus back, both run until the Z80's next access, which WAIT holds. The Z80 keeps its own clock,
+    // so it runs the T-states that fit in the cycle's time. Returns whether the 6502 stepped.
+    private bool StepWithSoftCard(SoftCard3 card, int units)
+    {
+        card.Advance(units);
+        bool held = card.OwnsBus && Processor.IsInstructionBoundary;
+        if (!held) { Processor.StepCycle(); }
+        _held = held;
+        if (!card.Running || (card.OwnsBus && !held))
+        {
+            _z80Time = 0;
+            return !held;
+        }
+
+        ushort next = Processor.Registers.ProgramCounter;
+        for (_z80Time += units; _z80Time >= SoftCard3.TState; _z80Time -= SoftCard3.TState)
+        {
+            card.StepTState(next);
+        }
+
+        return !held;
+    }
 
     private void UpdateBeam()
     {

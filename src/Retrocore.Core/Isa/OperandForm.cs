@@ -186,7 +186,7 @@ public sealed class OperandForm
     public static int FieldSize(OperandFieldKind field) => field switch
     {
         OperandFieldKind.Word or OperandFieldKind.Relative16 => 2,
-        OperandFieldKind.BitNumber or OperandFieldKind.Restart => 0,
+        OperandFieldKind.BitNumber or OperandFieldKind.Restart or OperandFieldKind.RestartNumber => 0,
         _ => 1
     };
 
@@ -195,7 +195,8 @@ public sealed class OperandForm
     /// </summary>
     /// <param name="field">The field.</param>
     /// <returns>Whether it is.</returns>
-    public static bool IsOpcodeField(OperandFieldKind field) => field is OperandFieldKind.BitNumber or OperandFieldKind.Restart;
+    public static bool IsOpcodeField(OperandFieldKind field) =>
+        field is OperandFieldKind.BitNumber or OperandFieldKind.Restart or OperandFieldKind.RestartNumber;
 
     /// <summary>
     ///  Gets the index of the field held in the opcode's bits, or -1 when there is none.

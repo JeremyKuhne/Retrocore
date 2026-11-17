@@ -23,7 +23,7 @@ Build once, then run the host:
 
 ```powershell
 dotnet build src/Retrocore.Debug -c Release
-$host = "artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll"
+$host = "artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll"
 ```
 
 | Step | Command |

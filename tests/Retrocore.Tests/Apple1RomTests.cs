@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Security.Cryptography;
 using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
+using System.Security.Cryptography;
 
 namespace Retrocore.Tests;
 
@@ -56,6 +56,25 @@ public sealed class Apple1RomTests
         prom[0x80].Should().Be(0xD0);
         prom[0x81].Should().Be(0xFA);
         CompareWithDump("aci.bin", prom);
+    }
+
+    /// <summary>
+    ///  Apple-1 BASIC builds byte-identically: the cold start's jump at $E000, the warm start at $E2B3, and the
+    ///  display written at $D0F2.
+    /// </summary>
+    [TestMethod]
+    public void BasicMatchesTheTapeVersion()
+    {
+        AssemblyResult result = Apple1SdkModules.AssembleBasic(Apple1SdkModules.BasicPath(Source("")));
+        result.Diagnostics.Should().BeEmpty();
+        byte[] basic = Image(result);
+        basic.Should().HaveCount(4096);
+        Hash(basic).Should().Be("BF80009454610A1066489DA635A8AFB51AD42442D307251896A53BEDBEAADD46");
+
+        basic.AsSpan(0, 3).ToArray().Should().Equal(0x4C, 0xB0, 0xE2);
+        basic.AsSpan(0x2B3, 3).ToArray().Should().Equal(0x20, 0xCD, 0xE3); // the warm start prints a return
+        basic.AsSpan(0x3D6, 2).ToArray().Should().Equal(0xF2, 0xD0);
+        CompareWithDump("basic.bin", basic);
     }
 
     /// <summary>

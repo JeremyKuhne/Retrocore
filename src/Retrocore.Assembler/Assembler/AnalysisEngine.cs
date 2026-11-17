@@ -106,7 +106,7 @@ internal sealed class AnalysisEngine
                     // Caller code regions win over vectors, so vectors are pinned only after those traces claim bytes.
                     // The CPU's vectors, such as the 6502's NMI, RESET and IRQ, and its fixed entry points, such
                     // as the Z80's restarts.
-                    if (_project.FollowVectors)
+                    if (_project.FollowVectors && _project.CpuVectors)
                     {
                         bool littleEndian = _set.Endianness == Endianness.Little;
                         foreach (ushort vector in _set.Description.Vectors)
@@ -116,7 +116,7 @@ internal sealed class AnalysisEngine
                             FollowVector(vector, low, high);
                         }
 
-                        foreach (ushort entry in _set.Description.EntryPoints) { Enqueue(entry, entryPoint: false); }
+                        foreach (ushort entry in _set.EntryPoints) { Enqueue(entry, entryPoint: false); }
                     }
 
                     foreach (ushort entry in _project.EntryPoints) { Enqueue(entry, entryPoint: true); }
@@ -229,7 +229,7 @@ internal sealed class AnalysisEngine
             Error("RCDIS001", _project.Origin, "The analysis mode is invalid.");
         }
 
-        HashSet<string> names = new(StringComparer.Ordinal);
+        HashSet<string> names = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<ushort, string> pair in _project.Symbols)
         {
             if (pair.Value is null || !AssemblySyntax.IsPlainIdentifier(pair.Value) || !names.Add(pair.Value))
@@ -385,25 +385,39 @@ internal sealed class AnalysisEngine
             }
 
             offset += instruction.Size;
+
             if (instruction.Flow == DisassemblyFlow.Call
                 && instruction.DirectTarget is { } callee
                 && _project.Calls.TryGetValue(callee, out AnalysisCall? call))
             {
-                if (call.Kind == AnalysisCallKind.NoReturn)
+                if (instruction.Encoding.IsConditional)
+                {
+                    // A conditional call, such as the 8080's CNZ or the Z80's CALL NZ, continues at the next
+                    // instruction when it is not taken. When it is taken, a subroutine that reads inline bytes returns
+                    // past them, so that path is traced as well; the bytes are not pinned as data, since the other
+                    // path may run them.
+                    if (call.Kind != AnalysisCallKind.NoReturn && InlineLength(call, offset) is > 0 and var skip)
+                    {
+                        Enqueue((ushort)(_project.Origin + offset + skip), entryPoint: false);
+                    }
+                }
+                else if (call.Kind == AnalysisCallKind.NoReturn)
                 {
                     // A linear scan decodes every byte anyway; only inferred flow ends at the call.
                     if (!linear) { return; }
                     continue;
                 }
-
-                int inline = InlineLength(call, offset);
-                if (inline < 0 || !PinData(offset, inline))
+                else
                 {
-                    Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
-                    return;
-                }
+                    int inline = InlineLength(call, offset);
+                    if (inline < 0 || !PinData(offset, inline))
+                    {
+                        Conflict(offset, "Inline subroutine arguments run past the image or overlap an instruction.");
+                        return;
+                    }
 
-                offset += inline;
+                    offset += inline;
+                }
             }
 
             if (!linear && instruction.Flow == DisassemblyFlow.Break && !_project.StopOnBreak)
@@ -686,7 +700,7 @@ internal sealed class AnalysisEngine
     /// <returns>The independent symbol snapshot; generated names are never written back to the project.</returns>
     private Dictionary<ushort, string> Symbols(DisassemblyReference[] references)
     {
-        Dictionary<ushort, string> symbols = new(_project.Symbols.Count + references.Length);
+        Dictionary<ushort, string> symbols = [with(_project.Symbols.Count + references.Length)];
         foreach (KeyValuePair<ushort, string> pair in _project.Symbols) { symbols.Add(pair.Key, pair.Value); }
         if (!_project.GenerateLabels || _diagnostics.Any(diagnostic => diagnostic.IsError)) { return symbols; }
 

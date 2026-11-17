@@ -9,9 +9,20 @@ namespace Retrocore.Tests;
 /// <summary>
 ///  A flat 64K memory for debugger tests, all in one area.
 /// </summary>
-internal sealed class DebugTestMemory : IDebugMemory
+/// <param name="stable">
+///  Whether the memory does not change while it is read, as a listing's, so modules keep what they find about it.
+/// </param>
+internal sealed class DebugTestMemory(bool stable = false) : IDebugMemory
 {
     private readonly byte[] _bytes = new byte[0x10000];
+
+    /// <summary>
+    ///  Gets how many bytes were read.
+    /// </summary>
+    public int Reads { get; private set; }
+
+    /// <inheritdoc/>
+    public Dictionary<object, bool>? Findings { get; } = stable ? new(ReferenceEqualityComparer.Instance) : null;
 
     /// <summary>
     ///  Stores bytes.
@@ -21,7 +32,11 @@ internal sealed class DebugTestMemory : IDebugMemory
     public void Set(ushort address, params byte[] bytes) => bytes.CopyTo(_bytes, address);
 
     /// <inheritdoc/>
-    public byte Peek(ushort address) => _bytes[address];
+    public byte Peek(ushort address)
+    {
+        Reads++;
+        return _bytes[address];
+    }
 
     /// <inheritdoc/>
     public Enum ReadArea(ushort address) => DayOfWeek.Monday;

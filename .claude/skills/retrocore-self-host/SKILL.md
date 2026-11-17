@@ -2,7 +2,7 @@
 name: retrocore-self-host
 description: Self-host Retrocore's VS Code extension, opening the repository in a separate VS Code window that runs the in-repo extension, so its syntax highlighting, IntelliSense (completions, hovers, go to definition, symbols) and debugging can be seen and tried. Use when asked to self host, run or try the extension, see highlighting or IntelliSense, check a change to the grammar, the language server or the extension in a real editor, or install or update the extension in the user's VS Code.
 license: MIT
-compatibility: Windows with PowerShell, the .NET SDK, Node.js and VS Code's code command on PATH. IIe debugging also needs the IIe ROMs, which are never bundled.
+compatibility: Windows with PowerShell, the .NET SDK, Node.js and VS Code's code command on PATH. No ROM dumps are needed: every machine debugs with ROMs built from the SDK's sources.
 metadata:
    portability: repository
    applicability: retrocore
@@ -34,10 +34,10 @@ the first time and prints one line when the window opens.
 | --- | --- |
 | Open other files, such as what the user is working on | `-File sample\iie\main.s, src\Retrocore.Machines.Trs80\Roms\Level2.asm` |
 | Relaunch quickly when nothing needs building | `-SkipBuild` |
-| Let the IIe launch configurations find the ROMs | `-RomDirectory <dir>`, or set `RETROCORE_IIE_ROMS` first |
+| Debug the IIe with ROM dumps rather than the SDK-built ROMs | `-RomDirectory <dir>`, or set `RETROCORE_IIE_ROMS` first |
 
-Highlighting and IntelliSense need no ROMs. Only debugging the IIe needs them; the Model I's ROMs are assembled
-from the SDK's sources, so its launch configurations work without any.
+Nothing needs ROM dumps. Without them every machine's ROMs, the IIe's included, are assembled from the SDK's
+sources, byte-identical to the originals, so every launch configuration works as it is.
 
 Running from inside VS Code, as Copilot does, is fine: the script makes `code` start the separate instance rather
 than hand the request to the current window.

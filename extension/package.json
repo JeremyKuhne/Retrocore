@@ -17,18 +17,13 @@
     "onDebugResolve:retrocore",
     "onDebugDynamicConfigurations:retrocore",
     "onFileSystem:retrocore-basic",
-    "onFileSystem:retrocore-basic-file",
-    "onLanguage:retrocore-applesoft",
-    "onLanguage:retrocore-level2",
-    "onLanguage:retrocore-integer",
-    "onLanguage:retrocore-business",
-    "onLanguage:retrocore-level1",
-    "onLanguage:retrocore-basic"
+    "onFileSystem:retrocore-basic-file"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && tsc -p .",
-    "test:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js",
+    "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:editor": "node out/test/runTest.js",
     "test": "npm run compile && npm run test:grammar && npm run test:editor"
@@ -137,6 +132,21 @@
         }
       },
       {
+        "id": "retrocore-apple1",
+        "aliases": [
+          "Apple-1 BASIC",
+          "apple1"
+        ],
+        "extensions": [
+          ".apple1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-level1",
         "aliases": [
           "Level I BASIC",
@@ -144,6 +154,21 @@
         ],
         "extensions": [
           ".level1.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-colorbasic",
+        "aliases": [
+          "Color BASIC",
+          "colorbasic"
+        ],
+        "extensions": [
+          ".colorbasic.bas"
         ],
         "configuration": "./basic-language-configuration.json",
         "icon": {
@@ -211,6 +236,16 @@
         "path": "./syntaxes/business.tmLanguage.json"
       },
       {
+        "language": "retrocore-apple1",
+        "scopeName": "source.retrocore-integer",
+        "path": "./syntaxes/integer.tmLanguage.json"
+      },
+      {
+        "language": "retrocore-colorbasic",
+        "scopeName": "source.retrocore-colorbasic",
+        "path": "./syntaxes/colorbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -245,7 +280,7 @@
         "retrocore.languageServer.host": {
           "type": "string",
           "default": "",
-          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net10.0."
+          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
         },
         "retrocore.basic.dialect": {
           "type": "string",
@@ -254,7 +289,9 @@
             "applesoft",
             "integer",
             "business",
-            "level2"
+            "apple1",
+            "level2",
+            "colorbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -271,6 +308,91 @@
           ],
           "default": "keep",
           "markdownDescription": "What the machine's display panel does when its debug session ends."
+        },
+        "retrocore.favorites": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Machines kept under a name, listed in the Retrocore activity bar's **Favorites** view and first in **Start Machine** and **Switch Machine**. In user settings a favorite is in every workspace; in the workspace's settings it is shared with the project. Paths inside the workspace are written as `${workspaceFolder}/...`. Add one with **Add to Favorites** on the Machine view.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "machine"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The favorite's name, which also names its launch configuration."
+              },
+              "description": {
+                "type": "string",
+                "description": "What the machine is for."
+              },
+              "machine": {
+                "type": "string",
+                "enum": [
+                  "apple2-iie-enhanced",
+                  "apple2-iie",
+                  "apple2-iiplus",
+                  "apple2-ii",
+                  "apple3",
+                  "trs80-model1-level2",
+                  "trs80-model1-level1",
+                  "trs80-model3",
+                  "trs80-model3-level1",
+                  "trs80-model4",
+                  "trs80-model4p",
+                  "trs80-model2",
+                  "trs80-model12",
+                  "trs80-model16",
+                  "apple1",
+                  "coco1",
+                  "coco2",
+                  "coco3",
+                  "altair"
+                ],
+                "description": "The machine, as Start Machine lists it."
+              },
+              "options": {
+                "type": "object",
+                "description": "The machine's settings that differ from their defaults, by launch option, such as { \"ramKilobytes\": 32 }."
+              },
+              "run": {
+                "type": "object",
+                "description": "What it runs, when not just the machine.",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "source",
+                      "program",
+                      "basic",
+                      "disk",
+                      "tape",
+                      "dosSource"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "basicDisk": {
+                    "type": "string"
+                  },
+                  "dos": {
+                    "type": "string",
+                    "enum": [
+                      "3.2"
+                    ],
+                    "description": "For a source on a fresh DOS disk, DOS 3.2 (13-sector) rather than 3.3."
+                  }
+                }
+              },
+              "machineState": {
+                "type": "object",
+                "description": "Its cards and media, as the debugger saves them: { \"cards\": { \"5\": \"diskII16\" }, \"media\": { \"slot5disk1\": { \"path\": \"...\", \"writeProtected\": false } } }."
+              }
+            }
+          }
         }
       }
     },
@@ -297,47 +419,130 @@
         "language": "retrocore-business"
       },
       {
+        "language": "retrocore-apple1"
+      },
+      {
+        "language": "retrocore-colorbasic"
+      },
+      {
         "language": "retrocore-basic"
       },
       {
         "language": "retrocore-pascal"
       }
     ],
-    "views": {
-      "debug": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "retrocore.devices",
-          "name": "Retro Devices",
-          "when": "debugType == retrocore || !inDebugMode"
+          "id": "retrocore",
+          "title": "Retrocore",
+          "icon": "media/retrocore.svg"
+        }
+      ]
+    },
+    "views": {
+      "retrocore": [
+        {
+          "id": "retrocore.machine",
+          "name": "Machine"
+        },
+        {
+          "id": "retrocore.drives",
+          "name": "Drives"
+        },
+        {
+          "id": "retrocore.favorites",
+          "name": "Favorites"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "retrocore.devices",
-        "contents": "No machine is running.\n[Start Machine](command:retrocore.startMachine)\nOr pick a machine under Retrocore in the Run and Debug dropdown and press F5.",
-        "when": "!inDebugMode"
+        "view": "retrocore.machine",
+        "contents": "No machine is set up yet.\n[Start Machine](command:retrocore.startMachine)\n[Set Up a Machine](command:retrocore.machine.switch)\nSet one up to add cards and insert disks before it starts, or pick a machine under Retrocore in the Run and Debug dropdown and press F5."
+      },
+      {
+        "view": "retrocore.drives",
+        "contents": "The machine's disk, tape and hard disk drives show here, with their media."
+      },
+      {
+        "view": "retrocore.favorites",
+        "contents": "No favorites yet. The heart on the machine in the Machine view saves it here, with its settings, cards and disks: empty when it is not saved, filled when it is, broken when it has changed since.\n[Save the current machine to favorites](command:retrocore.favorite.add)\nFavorites are in your user settings, in every workspace; Share with Workspace puts one in the project's settings."
       },
       {
         "view": "debug",
         "contents": "Start a retro machine without a launch.json: the Apple II family or the TRS-80 Model I.\n[Start Retro Machine](command:retrocore.startMachine)"
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "retrocore.memory",
+        "displayName": "Retrocore Memory",
+        "selector": [
+          {
+            "filenamePattern": "retrocore-memory:/**"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "menus": {
+      "debug/variables/context": [
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && debugProtocolVariableMenuContext == memory",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/",
+          "group": "navigation@10"
+        }
+      ],
+      "debug/watch/context": [
+        {
+          "command": "retrocore.memory.openVariable",
+          "when": "debugType == retrocore && watchItemType == expression",
+          "group": "navigation@1"
+        }
+      ],
       "view/title": [
         {
-          "command": "retrocore.startMachine",
-          "when": "view == retrocore.devices && !inDebugMode",
-          "group": "navigation"
+          "command": "retrocore.machine.switch",
+          "when": "view == retrocore.machine && debugType != retrocore",
+          "group": "navigation@1"
+        },
+        {
+          "command": "retrocore.memory.open",
+          "when": "view == retrocore.machine && debugType == retrocore",
+          "group": "navigation@1"
         },
         {
           "command": "retrocore.device.refresh",
-          "when": "view == retrocore.devices",
-          "group": "navigation"
+          "when": "view =~ /^retrocore\\.(machine|drives)$/ && (debugType == retrocore || retrocore.machineOff)",
+          "group": "navigation@9"
+        },
+        {
+          "command": "retrocore.startMachine",
+          "when": "view == retrocore.machine",
+          "group": "1_start@0"
+        },
+        {
+          "command": "retrocore.startLastMachine",
+          "when": "view == retrocore.machine",
+          "group": "1_start@1"
         },
         {
           "command": "retrocore.resetSavedMachine",
-          "when": "view == retrocore.devices"
+          "when": "view == retrocore.machine",
+          "group": "1_start@2"
         },
         {
           "command": "retrocore.breakpoints.showHits",
@@ -357,54 +562,159 @@
       ],
       "view/item/context": [
         {
+          "command": "retrocore.machine.boot",
+          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/ && viewItem =~ /\\bmachine\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "retrocore.machine.switch",
+          "when": "view == retrocore.machine && viewItem =~ /\\boff\\b/ && viewItem =~ /\\bmachine\\b/",
+          "group": "inline@1"
+        },
+        {
           "command": "retrocore.basic.open",
-          "when": "view == retrocore.devices && viewItem == basicProgram",
+          "when": "view == retrocore.machine && viewItem == basicProgram",
           "group": "inline@1"
         },
         {
           "command": "retrocore.hardware.addCard",
-          "when": "view == retrocore.devices && viewItem =~ /\\baddCard\\b/",
+          "when": "view == retrocore.machine && viewItem =~ /\\baddCard\\b/",
           "group": "inline@1"
         },
         {
           "command": "retrocore.hardware.removeCard",
-          "when": "view == retrocore.devices && viewItem =~ /\\bremoveCard\\b/",
+          "when": "view == retrocore.machine && viewItem =~ /\\bremoveCard\\b/",
           "group": "inline@1"
         },
         {
           "command": "retrocore.device.insert",
-          "when": "view == retrocore.devices && viewItem =~ /\\binsert\\b/",
+          "when": "view == retrocore.drives && viewItem =~ /\\bempty\\b/ && viewItem =~ /\\binsert\\b/",
           "group": "inline@1"
         },
         {
           "command": "retrocore.device.record",
-          "when": "view == retrocore.devices && viewItem =~ /\\brecord\\b/",
+          "when": "view == retrocore.drives && viewItem =~ /\\brecord\\b/",
           "group": "inline@2"
         },
         {
-          "command": "retrocore.device.eject",
-          "when": "view == retrocore.devices && viewItem =~ /\\beject\\b/",
+          "command": "retrocore.device.locked",
+          "when": "view == retrocore.drives && viewItem =~ /\\blocked\\b/",
           "group": "inline@3"
         },
         {
-          "command": "retrocore.device.protect",
-          "when": "view == retrocore.devices && viewItem =~ /\\bprotect\\b/",
-          "group": "inline@4"
-        },
-        {
-          "command": "retrocore.device.unprotect",
-          "when": "view == retrocore.devices && viewItem =~ /\\bunprotect\\b/",
-          "group": "inline@4"
+          "command": "retrocore.device.unlocked",
+          "when": "view == retrocore.drives && viewItem =~ /\\bunlocked\\b/",
+          "group": "inline@3"
         },
         {
           "command": "retrocore.device.save",
-          "when": "view == retrocore.devices && viewItem =~ /\\bchanged\\b/",
-          "group": "inline@5"
+          "when": "view == retrocore.drives && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.saveStale",
+          "when": "view == retrocore.drives && viewItem =~ /\\bchangedStale\\b/",
+          "group": "inline@4"
         },
         {
           "command": "retrocore.device.saveAs",
-          "when": "view == retrocore.devices && viewItem =~ /\\bsave\\b/",
-          "group": "1_save"
+          "when": "view == retrocore.drives && viewItem =~ /\\bchangedReadOnly\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
+          "group": "inline@5"
+        },
+        {
+          "command": "retrocore.device.save",
+          "when": "view == retrocore.drives && viewItem =~ /\\b(changed|changedStale|changedReadOnly)\\b/",
+          "group": "1_save@1"
+        },
+        {
+          "command": "retrocore.device.saveAs",
+          "when": "view == retrocore.drives && viewItem =~ /\\bsave\\b/",
+          "group": "1_save@2"
+        },
+        {
+          "command": "retrocore.device.insert",
+          "when": "view == retrocore.drives && viewItem =~ /\\binsert\\b/",
+          "group": "2_media@1"
+        },
+        {
+          "command": "retrocore.device.eject",
+          "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
+          "group": "2_media@2"
+        },
+        {
+          "command": "retrocore.device.protect",
+          "when": "view == retrocore.drives && viewItem =~ /\\bunlocked\\b/",
+          "group": "2_media@3"
+        },
+        {
+          "command": "retrocore.device.unprotect",
+          "when": "view == retrocore.drives && viewItem =~ /\\blocked\\b/",
+          "group": "2_media@3"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.favorite.load",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "1_use@1"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "1_use@2"
+        },
+        {
+          "command": "retrocore.favorite.editDescription",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "retrocore.favorite.rename",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "retrocore.favorite.update",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "retrocore.favorite.share",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/ && viewItem =~ /\\buser\\b/ && workbenchState != empty",
+          "group": "3_move@1"
+        },
+        {
+          "command": "retrocore.favorite.moveToUser",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/ && viewItem =~ /\\bworkspace\\b/",
+          "group": "3_move@1"
+        },
+        {
+          "command": "retrocore.favorite.remove",
+          "when": "view == retrocore.favorites && viewItem =~ /\\bfavorite\\b/",
+          "group": "4_remove@1"
+        },
+        {
+          "command": "retrocore.favorite.add",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-none\\b/",
+          "group": "inline@0"
+        },
+        {
+          "command": "retrocore.favorite.showShown",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-saved\\b/",
+          "group": "inline@0"
+        },
+        {
+          "command": "retrocore.favorite.updateShown",
+          "when": "view == retrocore.machine && viewItem =~ /\\bmachine\\b/ && viewItem =~ /\\bheart-changed\\b/",
+          "group": "inline@0"
         }
       ],
       "webview/context": [
@@ -452,11 +762,43 @@
           "when": "false"
         },
         {
+          "command": "retrocore.device.saveStale",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.locked",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.unlocked",
+          "when": "false"
+        },
+        {
           "command": "retrocore.device.saveAs",
           "when": "false"
         },
         {
           "command": "retrocore.device.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.boot",
+          "when": "retrocore.machineOff && debugType != retrocore"
+        },
+        {
+          "command": "retrocore.machine.off",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.memoryRows",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.change",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.setting",
           "when": "false"
         },
         {
@@ -480,6 +822,22 @@
           "when": "false"
         },
         {
+          "command": "retrocore.memory.openVariable",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openReference",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.memory.openAtCursor",
+          "when": "debugType == retrocore && editorLangId =~ /^retrocore-(asm|macro10)$/"
+        },
+        {
+          "command": "retrocore.memory.test",
+          "when": "false"
+        },
+        {
           "command": "retrocore.basic.open",
           "when": "debugType == retrocore || resourceScheme == retrocore-basic"
         },
@@ -493,11 +851,59 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
           "when": "resourceScheme == file"
+        },
+        {
+          "command": "retrocore.favorite.load",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.start",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.editDescription",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.rename",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.update",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.share",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.moveToUser",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.remove",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.list",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.showShown",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.updateShown",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.favorite.mark",
+          "when": "false"
         }
       ],
       "editor/title": [
@@ -517,6 +923,13 @@
           "command": "retrocore.basic.openListing",
           "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
           "group": "navigation@9"
+        }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "retrocore.memory.open",
+          "when": "debugType == retrocore",
+          "group": "navigation@100"
         }
       ]
     },
@@ -549,6 +962,25 @@
         "title": "Retrocore: List Memory Banks"
       },
       {
+        "command": "retrocore.memory.openVariable",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openReference",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.openAtCursor",
+        "title": "Open in Retrocore Memory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "retrocore.memory.test",
+        "title": "Retrocore: Drive the Memory Editor"
+      },
+      {
         "command": "retrocore.hardware.addCard",
         "title": "Add Card...",
         "icon": "$(add)"
@@ -575,22 +1007,38 @@
       },
       {
         "command": "retrocore.device.protect",
-        "title": "Write Protect",
+        "title": "Lock",
         "icon": "$(lock)"
       },
       {
         "command": "retrocore.device.unprotect",
-        "title": "Allow Writes",
+        "title": "Unlock",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "retrocore.device.locked",
+        "title": "Locked: click to let the machine write it",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "retrocore.device.unlocked",
+        "title": "Unlocked: click to lock it",
         "icon": "$(unlock)"
       },
       {
         "command": "retrocore.device.save",
-        "title": "Save to Its Image",
+        "title": "Save",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.saveStale",
+        "title": "Save... (the image changed on disk)",
         "icon": "$(save)"
       },
       {
         "command": "retrocore.device.saveAs",
-        "title": "Save Disk As..."
+        "title": "Save As...",
+        "icon": "$(save-as)"
       },
       {
         "command": "retrocore.device.refresh",
@@ -600,6 +1048,32 @@
       {
         "command": "retrocore.device.list",
         "title": "Retrocore: List Devices"
+      },
+      {
+        "command": "retrocore.machine.boot",
+        "title": "Retrocore: Start This Machine",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.machine.switch",
+        "title": "Retrocore: Switch Machine...",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "retrocore.machine.off",
+        "title": "Retrocore: Off Machine"
+      },
+      {
+        "command": "retrocore.machine.memoryRows",
+        "title": "Retrocore: Memory Rows"
+      },
+      {
+        "command": "retrocore.machine.change",
+        "title": "Retrocore: Change Machine"
+      },
+      {
+        "command": "retrocore.machine.setting",
+        "title": "Change Setting..."
       },
       {
         "command": "retrocore.resetSavedMachine",
@@ -665,6 +1139,72 @@
       {
         "command": "retrocore.basic.openListing",
         "title": "Retrocore: Open as BASIC Listing"
+      },
+      {
+        "command": "retrocore.favorite.load",
+        "title": "Set Up This Machine"
+      },
+      {
+        "command": "retrocore.favorite.start",
+        "title": "Start This Favorite",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.favorite.editDescription",
+        "title": "Edit Description..."
+      },
+      {
+        "command": "retrocore.favorite.rename",
+        "title": "Rename..."
+      },
+      {
+        "command": "retrocore.favorite.update",
+        "title": "Update from Machine"
+      },
+      {
+        "command": "retrocore.favorite.share",
+        "title": "Share with Workspace"
+      },
+      {
+        "command": "retrocore.favorite.moveToUser",
+        "title": "Move to User Settings"
+      },
+      {
+        "command": "retrocore.favorite.remove",
+        "title": "Remove"
+      },
+      {
+        "command": "retrocore.favorite.list",
+        "title": "Retrocore: List Favorites"
+      },
+      {
+        "command": "retrocore.favorite.add",
+        "title": "Save the current machine to favorites",
+        "category": "Retrocore",
+        "icon": {
+          "light": "media/heart-light.svg",
+          "dark": "media/heart-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.showShown",
+        "title": "Saved in Favorites (Show It)",
+        "icon": {
+          "light": "media/heart-filled-light.svg",
+          "dark": "media/heart-filled-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.updateShown",
+        "title": "Changed Since Saved (Update the Favorite)",
+        "icon": {
+          "light": "media/heart-broken-light.svg",
+          "dark": "media/heart-broken-dark.svg"
+        }
+      },
+      {
+        "command": "retrocore.favorite.mark",
+        "title": "Retrocore: Favorite Mark"
       }
     ],
     "debuggers": [
@@ -689,24 +1229,32 @@
                   "apple2",
                   "apple3",
                   "trs80-model1",
+                  "trs80-model3",
+                  "trs80-model4",
+                  "trs80-model2",
                   "apple1",
                   "coco",
+                  "altair",
                   "apple2e"
                 ],
                 "enumDescriptions": [
                   "The Apple II family; model says which.",
                   "The Apple III.",
                   "The TRS-80 Model I.",
+                  "The TRS-80 Model III, 4 or 4P; model says which (3 by default).",
+                  "The TRS-80 Model 4: trs80-model3 with model 4 by default.",
+                  "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
+                  "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, apple1 an Apple-1, and coco a TRS-80 Color Computer (model picks 1, 2 or 3)."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -716,7 +1264,12 @@
               "cassetteInterface": {
                 "type": "boolean",
                 "default": true,
-                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R."
+                "description": "Apple-1: the Apple Cassette Interface in the expansion slot, started from the Monitor with C100R. Altair 8800: the 88-ACR cassette interface at ports $06 and $07."
+              },
+              "loadBasic": {
+                "type": "boolean",
+                "default": true,
+                "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
               },
               "rom": {
                 "enum": [
@@ -724,7 +1277,11 @@
                   "level1"
                 ],
                 "default": "level2",
-                "description": "Model I: Level II or Level I BASIC."
+                "description": "Model I and Model III: Level II or Level I BASIC."
+              },
+              "bootRom": {
+                "type": "string",
+                "description": "Model II, 12 and 16: the boot ROM dump's file name in romDirectory; by default the newest of u54.u11, cpu_fc86.u11, cpu_2119.u11, cpu_11be.u11, 8047316.u11 and 8043216.u11 found."
               },
               "revision": {
                 "enum": [
@@ -736,7 +1293,44 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default."
+              },
+              "switches": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 65535,
+                "default": 0,
+                "description": "Altair 8800: the front panel's 16 address/data switches; the high 8 are the sense switches IN $FF reads."
+              },
+              "baudRate": {
+                "type": "number",
+                "enum": [
+                  110,
+                  150,
+                  300,
+                  600,
+                  1200,
+                  2400,
+                  4800,
+                  9600
+                ],
+                "default": 9600,
+                "description": "Altair 8800: the terminal's baud rate, on the 88-2SIO and the 88-SIO, which sets how fast characters reach the terminal and keys reach the program."
+              },
+              "console": {
+                "type": "string",
+                "enum": ["2sio", "sio"],
+                "default": "2sio",
+                "enumDescriptions": [
+                  "Altair 8800: the terminal is on the 88-2SIO's first port, at ports $10 and $11.",
+                  "Altair 8800: the terminal is on the 88-SIO, at ports $00 and $01."
+                ],
+                "description": "Altair 8800: the serial board the terminal is on. Altair BASIC picks its terminal by the sense switches: 4K BASIC 3.2 uses the 88-SIO with them down and the 88-2SIO with A11 up; the 4.0 BASICs use the 88-2SIO with them down and the 88-SIO with A13 up."
+              },
+              "upperCase": {
+                "type": "boolean",
+                "default": false,
+                "description": "Altair 8800: caps lock, so typed letters go out as capitals, as Altair BASIC needs."
               },
               "expansionInterface": {
                 "type": "boolean",
@@ -746,7 +1340,7 @@
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
                   },
                   {
                     "enum": [
@@ -790,12 +1384,12 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I and Color Computer: a .cas tape to play. Apple-1: a .wav tape, which plays from the start of the session."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session."
               },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -803,11 +1397,11 @@
                   "type": "string"
                 },
                 "maxItems": 4,
-                "description": "Model I: JV1 or JV3 (.jv3) images for drives 0-3. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I and 2 on a Color Computer when loading a program."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II: 0 by default."
               },
               "controllers": {
                 "type": "boolean",
@@ -822,7 +1416,7 @@
               "fastDisk": {
                 "type": "boolean",
                 "default": true,
-                "description": "IIe and Apple III: run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
+                "description": "IIe and Apple III (and the Model II while its disk controller works): run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
               },
               "speed": {
                 "enum": [
@@ -860,16 +1454,24 @@
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
               },
+              "softCard": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 7,
+                "description": "Apple II: puts Microsoft's Z80 SoftCard in this slot (1-7; the manual uses 4), so a CP/M diskImage boots. The Z80 shows as its own thread. Not slot 3 on a IIe, nor the Mockingboard's slot 4. None unless given; the Retro Devices view's Add Card puts it in while debugging."
+              },
               "screen": {
                 "type": "string",
                 "enum": [
                   "color",
+                  "rgb",
                   "white",
                   "green",
                   "amber"
                 ],
                 "enumDescriptions": [
                   "A color monitor or television (the default on the Apple II family, the Apple III and the Color Computer).",
+                  "Apple IIe: an RGB card and color monitor, without the composite signal's fringing: white runs stay white to their edges, colored areas are solid, and text is white.",
                   "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
@@ -978,7 +1580,13 @@
                   "original",
                   "coco1",
                   "coco2",
-                  "coco3"
+                  "coco3",
+                  "3",
+                  "4",
+                  "4p",
+                  "2",
+                  "12",
+                  "16"
                 ],
                 "enumDescriptions": [
                   "The enhanced Apple IIe: a 65C02, MouseText and the enhanced firmware.",
@@ -989,10 +1597,16 @@
                   "The older name for iie.",
                   "The Color Computer 1: Color BASIC with Extended Color BASIC, the MC6847 VDG and 16 KB.",
                   "The Color Computer 2: Color BASIC with Extended Color BASIC and 64 KB.",
-                  "The Color Computer 3: Extended Color BASIC 2.0, the GIME and 128 KB."
+                  "The Color Computer 3: Extended Color BASIC 2.0, the GIME and 128 KB.",
+                  "TRS-80 Model III: a 2 MHz Z80, the Model III ROM, 48 KB and 64x16.",
+                  "TRS-80 Model 4: 4 MHz, the Model III ROM, 128 KB, the memory maps and 80x24.",
+                  "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
+                  "TRS-80 Model II: a 4 MHz Z80, 64 KB, 80x24 and 8-inch disks.",
+                  "TRS-80 Model 12: the Model II's successor.",
+                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
               },
               "slot0": {
                 "enum": [
@@ -1109,9 +1723,13 @@
                 "type": "string",
                 "description": "ld65-style linker configuration for source."
               },
+              "hints": {
+                "type": "string",
+                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file."
+              },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .level2.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -1155,7 +1773,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the Model I's (Level2.asm, Level1.asm, CharacterGenerator.asm), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
               },
               "breakpoints": {
                 "type": "array",
@@ -1204,7 +1822,7 @@
             "machine": "apple2",
             "name": "Debug IIe sample",
             "romDirectory": "${env:RETROCORE_IIE_ROMS}",
-            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net11.0\\Retrocore.Debug.dll",
             "program": "${workspaceFolder}\\artifacts\\iie-sample\\main.bin",
             "debugFile": "${workspaceFolder}\\artifacts\\iie-sample\\main.dbg",
             "stopOnEntry": true
@@ -1215,7 +1833,7 @@
             "machine": "apple2",
             "name": "Debug IIe source",
             "romDirectory": "${env:RETROCORE_IIE_ROMS}",
-            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net10.0\\Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}\\artifacts\\AnyCPU\\Release\\Retrocore.Debug\\net11.0\\Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           },
@@ -1224,7 +1842,7 @@
             "request": "launch",
             "machine": "trs80-model1",
             "name": "Boot TRS-80 Model I",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
           {
@@ -1232,7 +1850,7 @@
             "request": "launch",
             "machine": "trs80-model1",
             "name": "Debug Model I Z80 source",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           },
@@ -1242,7 +1860,7 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Boot Color Computer 2",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "stopOnEntry": false
           },
           {
@@ -1251,7 +1869,7 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
-            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net10.0/Retrocore.Debug.dll",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
           }

@@ -18,13 +18,15 @@ namespace Retrocore.Debug;
 ///  What <c>retro/hardware</c> can do to it: <c>addCard</c> for a free slot, <c>removeCard</c> for a card that can
 ///  come out.
 /// </param>
+/// <param name="Settings">The switches on it, which <c>setSetting</c> changes.</param>
 internal sealed record HardwareRow(
     string Id,
     string Name,
     string Value,
     string Description,
     string[]? Devices = null,
-    string[]? Actions = null)
+    string[]? Actions = null,
+    HardwareSetting[]? Settings = null)
 {
     /// <summary>
     ///  Writes the rows for <c>retro/devices</c>.
@@ -39,7 +41,14 @@ internal sealed record HardwareRow(
             ["value"] = row.Value,
             ["description"] = row.Description,
             ["devices"] = (row.Devices ?? []).ToJsonArray(),
-            ["actions"] = (row.Actions ?? []).ToJsonArray()
+            ["actions"] = (row.Actions ?? []).ToJsonArray(),
+            ["settings"] = (row.Settings ?? []).Select(setting => new JsonObject
+            {
+                ["id"] = setting.Id,
+                ["label"] = setting.Label,
+                ["value"] = setting.Value,
+                ["description"] = setting.Description
+            }).ToJsonArray()
         }).ToJsonArray();
 
     /// <summary>

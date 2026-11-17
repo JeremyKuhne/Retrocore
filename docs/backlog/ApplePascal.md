@@ -1,8 +1,8 @@
 # Backlog: Apple Pascal
 
 Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Built
-for both machines, every version at hand: see Built. Writing Pascal (Apple II) volumes is what remains; Apple Pascal
-1.3 boots, edits, compiles and runs from its WOZ images (2026-11-15). [Pascal.md](../Pascal.md) is the user guide.
+for both machines, every version: see Built. Writing Pascal (Apple II) volumes is what remains; Apple Pascal
+1.3 runs from either its DSK images or its WOZ images. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -13,8 +13,8 @@ Both machines share the p-code, the code file format and most of the operating s
 | --- | --- | --- |
 | Interpreter | `SYSTEM.APPLE`, loaded into the language card | `SOS.INTERP`, a SOS interpreter file |
 | Files | Pascal volumes: a flat directory in blocks 2-5 | SOS volumes, through SOS's file calls |
-| Code file version | 2 (II.1) | 4 (1.1) and 6 (1.2) |
-| Memory | 64K: the language card holds the interpreter | Banks; the interpreter sits below `$B800` in the system bank |
+| Code file version | 1 (1.0), 2 (1.1), 5 (1.2) and 6 (1.3) | 3 (1.0), 4 (1.1) and 6 (1.2) |
+| Memory | 64K: the language card holds the interpreter; 1.3 needs 128K and keeps code in the auxiliary 64K | Banks; the interpreter sits below `$B800` in the system bank |
 
 So everything above the interpreter is written once, and each machine supplies its interpreter's addresses and its
 file system.
@@ -31,6 +31,7 @@ file system.
 | `Apple3Pascal1.2UpdateDisk1.dsk`, `…Disk2.dsk` | `05319655…daaf`, `334710c2…2ab9` | 1.2's interpreter, system and tools |
 | `UCSD Pascal 1.1_0.dsk` … `1.1_3.dsk` | `4e6b4792…cf4b`, `d6e7509a…4229`, `88b67683…1adf`, `86141693…3058` | Apple Pascal 1.1: APPLE0-APPLE3, with sample programs as source and code |
 | `UCSD Pascal 1.2_0.DSK` … `1.2_3.DSK` | `6f8fd3bd…16ab`, `25daeefe…1da0`, `6576fccb…9f21`, `488bc4bd…d275` | Apple Pascal 1.2 |
+| `UCSD Pascal 1.3_0.DSK` … `1.3_3.DSK` | `fb72505d…41a8`, `70296fd0…d00b`, `873b9e41…05a9`, `fea7dd59…fac0` | Apple Pascal 1.3, dated 3 September 1985, from the Internet Archive (items `211`-`214_Apple_II_Pascal_1.3_*`, whose labels swap APPLE0 and APPLE1) |
 | `UCSD Pascal 1.3_APPLE0.woz` … `APPLE3.woz` | `f3deb6b3…2be8`, `dd52f6ab…ae93`, `bc96cd93…011c`, `c0458c2c…9044` | Apple Pascal 1.3, WOZ images from archive.org's woz-a-day collection (`wozaday_Apple_Pascal_v13`); its code files are version 6 |
 
 **Already in Retrocore:** `SosVolume` reads SOS volumes, and `SosDriverCodeFile` reads a Pascal code file with one
@@ -111,12 +112,25 @@ Built 2026-11-13, the third round:
 - **Paced pasting:** on the Apple II and III, `retro/type` keys go in a typist's pace apart (30,000 cycles a key and
   300,000 a line on the II, twice that on the III), so the Editor takes a pasted program whole.
 - **`.text` sources** open as Apple Pascal.
-- **Apple Pascal 1.3** (2026-11-15) boots from its WOZ images, its Filer lists APPLE1, and HELLO is edited,
-  compiled (code version 6) and run, with its frames read (`Apple2PascalTests`); `--pascal compile` takes WOZ images
-  and answers 1.3's question for a listing file. SOS trees are written (2026-11-15).
+- **WOZ images and SOS trees** (2026-11-15): `--pascal compile` and the tests take 1.3's WOZ images as well as its
+  DSK images, and answer 1.3's question for a listing file; SOS trees (files over 128K) are written.
 - **Not done:** writing Pascal volumes for the Apple II.
 
-Built 2026-11-13, the fourth round (asked for: "a disassembler for Apple II/III compiled Pascal", then "Decompile to
+Built 2026-11-13, the fourth round:
+
+- **Apple Pascal 1.3** on a 128K IIe boots, its Filer lists APPLE1, it compiles HELLO with a listing (code version
+  6) and runs it, and its frames read (`Apple2PascalTests`); `Test-PascalDap.mjs` stops in its Filer, steps and
+  steps out. Every code file on its disks decodes (`PascalMediaTests`, `PcodeTests`).
+- **Found:**
+  - 1.3 keeps code in the IIe's auxiliary 64K, read with RAMRD on at the fetch, and its mark stack and variables in
+    main memory. `PascalInterpreter.CodeBank` says where SEG, JTAB and IPC point; the debugger sets it from RAMRD at
+    each fetch, and `Apple2PascalMemory` reads bank 1 from auxiliary memory and bank 0 from main.
+  - Its APPLE1 needs 128K, so it doesn't run on the II Plus.
+  - Its Editor loses keys typed faster than a typist, more readily than 1.2's: the test types at the debugger's
+    paste pace. It asks `Edit what file?`, stays in its Quit menu after U(pdate), and its Compiler asks for a
+    listing file whatever the program says.
+
+Built 2026-11-13, the decompiler (asked for: "a disassembler for Apple II/III compiled Pascal", then "Decompile to
 Pascal, ideally to something that can be recompiled into the exact same p-code"):
 
 - **Decompiler:** `PascalDecompiler` and `--pascal decompile`: a code file back to Pascal that the Compiler compiles to
@@ -206,7 +220,7 @@ registers, found by its bytes, as `SosDriverModules` finds a driver.
 - ~~A Pascal language and grammar in the extension~~ and ~~named variables~~: built in the second round.
 - ~~SOS volumes~~, ~~saving a disk~~, ~~paced pasting~~ and ~~Apple III Pascal 1.0~~: built in the third round.
 - Writing Pascal volumes, with the media library ([Media.md](Media.md)).
-- Apple Pascal 1.3.
+- ~~Apple Pascal 1.3~~: built in the fourth round.
 
 ## Order
 

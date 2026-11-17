@@ -235,6 +235,31 @@ public sealed class BasicTokenizerTests
         memory[address + 1] = (byte)(value >> 8);
     }
 
+    /// <summary>
+    ///  Color BASIC's reserved words are Color, Extended and Disk BASIC's tables, in token order, from the SDK's
+    ///  sources: the commands from $80 and the functions from $FF $80.
+    /// </summary>
+    [TestMethod]
+    public void ColorBasicKeywordsMatchTheRoms()
+    {
+        string roms = Path.Join(s_inputs, "Coco");
+        AssemblyResult color = CocoSdkModules.AssembleColorBasic(Path.Join(roms, "ColorBasic.asm"), 12);
+        AssemblyResult extended = CocoSdkModules.AssembleExtendedBasic(Path.Join(roms, "ExtendedBasic.asm"), 11);
+        AssemblyResult disk = CocoSdkModules.AssembleDiskBasic(Path.Join(roms, "DiskBasic.asm"), 11);
+        List<string> commands = [.. Table(color, "COMWRD", 53), .. Table(extended, "XCOMWRD", 25), .. Table(disk, "DCOMWRD", 20)];
+        List<string> functions = [.. Table(color, "FUNWRD", 20), .. Table(extended, "XFUNWRD", 14), .. Table(disk, "DFUNWRD", 6)];
+        commands.Should().Equal(BasicDialect.ColorBasic.Keywords);
+        functions.Should().Equal(BasicDialect.ColorBasic.Functions);
+
+        // A ROM's words, counted: the tables run on into their routines' addresses.
+        static List<string> Table(AssemblyResult rom, string label, int count)
+        {
+            int origin = rom.Sections[0].Origin;
+            List<string> words = RomWords(rom.Sections[0].Bytes.Span[((int)rom.Symbols[label] - origin)..], lastLetterMarked: true);
+            return words[..count];
+        }
+    }
+
     // Reads a ROM's reserved word list: AppleSoft marks each word's last letter, Level II each word's first.
     private static List<string> RomWords(ReadOnlySpan<byte> table, bool lastLetterMarked)
     {

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.RegularExpressions;
 using Retrocore.Basic;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Debug.Language;
 
@@ -45,13 +45,8 @@ internal static partial class BasicFeatures
     }
 
     // The reserved word a keyword site is, as the dialect spells it.
-    // A dialect's reserved words; Business BASIC's second list, after $FF, has THEN, TO and its functions.
-    private static IEnumerable<string> Words(BasicDialect dialect) => dialect == BasicDialect.BusinessBasic
-        ? dialect.Keywords.Concat(BusinessBasicDialect.Functions)
-        : dialect.Keywords;
-
     private static string KeywordOf(BasicDialect dialect, BasicSite site) =>
-        site.Word.Length > 0 ? site.Word : dialect.Keyword(site.Token) ?? site.Text;
+        site.Word.Length > 0 ? site.Word : dialect.Word(site.Token) ?? site.Text;
 
     /// <summary>
     ///  Finds where a line reference or a function is defined: its line, or its DEF FN.
@@ -134,7 +129,7 @@ internal static partial class BasicFeatures
 
         List<CompletionItem> items =
         [
-            .. Words(dialect).Where(keyword => keyword.Length > 0 && char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
+            .. dialect.AllKeywords.Where(keyword => keyword.Length > 0 && char.IsAsciiLetter(keyword[0])).Select(keyword => new CompletionItem
             {
                 Label = keyword,
                 Kind = CompletionItemKind.Keyword,
@@ -228,7 +223,7 @@ internal static partial class BasicFeatures
 
         if (first is null) { return null; }
         BasicSite keyword = first.Value;
-        bool remark = keyword.Kind == BasicSiteKind.Keyword && dialect.Keyword(keyword.Token) is "REM" or "'";
+        bool remark = keyword.Kind == BasicSiteKind.Keyword && dialect.Word(keyword.Token) is "REM" or "'";
         if (!remark) { return null; }
 
         string text = source.Lines[line.Line];

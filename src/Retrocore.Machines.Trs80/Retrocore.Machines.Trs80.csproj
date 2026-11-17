@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The TRS-80 Model I: bus, video, keyboard, cassette, and the Expansion Interface's clock and disks. -->
+  <!-- The TRS-80 Model I with its Expansion Interface, the Model III, 4 and 4P, and the Model II, 12 and 16 (Z80 side). -->
   <PropertyGroup>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>

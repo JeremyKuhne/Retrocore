@@ -15,6 +15,13 @@ namespace Retrocore.Media.Trs80;
 ///   (1) and an attribute byte that marks a sector's data address mark (0). The sectors are double density, as
 ///   Disk Extended Color BASIC formats them: 35 tracks of 18 256-byte sectors on one side is 161,280 bytes.
 ///  </para>
+///  <para>
+///   A disk saves back with the header it was read with, its sides grown to the disk's, so a geometry other than
+///   Disk BASIC's stays. A disk from elsewhere takes its geometry from its first track, with the shortest header
+///   that gives it. Every track must then be sectors of that size, numbered from the first sector on, in double
+///   density with the <c>$FB</c> mark, no CRC errors and IDs naming where they are; anything else is listed as
+///   lost. A track's sector order is not kept, which a program sees only in its timing.
+///  </para>
 /// </remarks>
 public static class JvcFormat
 {
@@ -32,6 +39,9 @@ public static class JvcFormat
     ///  Disk BASIC's tracks.
     /// </summary>
     public const int Tracks = 35;
+
+    // The header's fields and the values a shorter header leaves them.
+    private static readonly byte[] s_defaults = [SectorsPerTrack, 1, 1, 1];
 
     /// <summary>
     ///  Reads an image.
@@ -71,7 +81,7 @@ public static class JvcFormat
             {
                 for (int sector = 0; sector < sectors; sector++)
                 {
-                    byte[] data = body.Slice(offset, size).ToArray();
+                    ReadOnlySpan<byte> data = body.Slice(offset, size);
                     disk.Add(track, side, new((byte)track, (byte)side, (byte)(sector + first), data, doubleDensity: true));
                     offset += size;
                 }
@@ -82,49 +92,146 @@ public static class JvcFormat
     }
 
     /// <summary>
-    ///  Writes a disk of Disk BASIC's geometry as a headerless image, or with a header for two sides.
+    ///  Gets an image's header: its first bytes, as many as its length is past whole 256-byte blocks.
+    /// </summary>
+    /// <param name="image">The file's bytes.</param>
+    /// <returns>The header, empty for a headerless image.</returns>
+    public static ReadOnlySpan<byte> Header(ReadOnlySpan<byte> image) => image[..(image.Length % 256)];
+
+    /// <summary>
+    ///  Writes a disk as JVC in the geometry of its first track, listing what that geometry cannot hold.
     /// </summary>
     /// <param name="disk">The disk.</param>
-    /// <returns>The image.</returns>
-    /// <exception cref="InvalidOperationException">
-    ///  A track does not hold exactly sectors 1-18 of 256 bytes, so the image could not keep all of it.
-    /// </exception>
-    public static byte[] Write(FloppyDisk disk)
+    /// <returns>The image and its losses.</returns>
+    /// <exception cref="InvalidOperationException">The sectors do not fill whole 256-byte blocks.</exception>
+    public static EncodedImage Encode(FloppyDisk disk)
     {
         ArgumentNullException.ThrowIfNull(disk);
-        int sides = disk.Sides;
-        int trackLength = SectorsPerTrack * SectorSize;
-        byte[] header = sides == 1 ? [] : [SectorsPerTrack, 2];
-        byte[] image = new byte[header.Length + (disk.Cylinders * sides * trackLength)];
-        header.CopyTo(image, 0);
-        int offset = header.Length;
-        for (int cylinder = 0; cylinder < disk.Cylinders; cylinder++)
+        IReadOnlyList<FloppySector> first = disk.Track(0, 0);
+        byte[] fields =
+        [
+            first.Count is > 0 and < 256 ? (byte)first.Count : (byte)SectorsPerTrack,
+            1,
+            first.Count > 0 ? first[0].SizeCode : (byte)1,
+            first.Count > 0 ? first.Min(sector => sector.Sector) : (byte)1,
+        ];
+
+        // The shortest header that gives the geometry: none for Disk BASIC's.
+        int length = fields.Length;
+        while (length > 0 && fields[length - 1] == s_defaults[length - 1]) { length--; }
+        return Encode(disk, fields.AsSpan(0, length));
+    }
+
+    /// <summary>
+    ///  Writes a disk as JVC with the header of the image it was read from, its sides grown to the disk's, listing
+    ///  what that geometry cannot hold.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <param name="header">The header, as <see cref="Header"/> gives it; empty for none.</param>
+    /// <returns>The image and its losses.</returns>
+    /// <exception cref="ArgumentException">The header is not one <see cref="Read"/> takes.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  The sectors do not fill whole 256-byte blocks, which an odd number of 128-byte sectors leaves the image's length
+    ///  unable to give its header's.
+    /// </exception>
+    public static EncodedImage Encode(FloppyDisk disk, ReadOnlySpan<byte> header)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        byte[] fields = [.. s_defaults];
+        header[..Math.Min(header.Length, fields.Length)].CopyTo(fields);
+        int sectors = fields[0];
+        int size = 128 << fields[2];
+        int firstSector = fields[3];
+        if (sectors == 0 || fields[1] is not (1 or 2) || fields[2] > 3 || (header.Length > 4 && header[4] != 0))
+        {
+            throw new ArgumentException("The JVC header describes an unsupported geometry.", nameof(header));
+        }
+
+        // A second side the disk gained is written, the header saying so.
+        int sides = Math.Max(fields[1], disk.Sides);
+        byte[] written = sides == fields[1] || header.Length >= 2 ? header.ToArray() : fields[..2];
+        if (sides != fields[1]) { written[1] = (byte)sides; }
+
+        // The header's length is the image's past whole 256-byte blocks, so the sectors must fill whole blocks.
+        int cylinders = Math.Max(1, disk.Cylinders);
+        int body = cylinders * sides * sectors * size;
+        if (body % 256 != 0)
+        {
+            throw new InvalidOperationException(
+                $"JVC cannot hold {cylinders * sides * sectors} sectors of {size} bytes, which do not fill whole "
+                    + "256-byte blocks; save it as DMK.");
+        }
+
+        FloppyLosses losses = new();
+        byte[] image = new byte[written.Length + body];
+        written.CopyTo(image, 0);
+        for (int cylinder = 0; cylinder < cylinders; cylinder++)
         {
             for (int side = 0; side < sides; side++)
             {
-                IReadOnlyList<FloppySector> sectors = disk.Track(cylinder, side);
-                if (sectors.Count != SectorsPerTrack)
-                {
-                    throw new InvalidOperationException(
-                        $"Track {cylinder} side {side} has {sectors.Count} sectors, not a JVC track's {SectorsPerTrack}.");
-                }
-
-                for (int number = 1; number <= SectorsPerTrack; number++)
-                {
-                    FloppySector? sector = sectors.FirstOrDefault(candidate => candidate.Sector == number);
-                    if (sector is null || sector.Data.Length != SectorSize)
-                    {
-                        throw new InvalidOperationException($"Track {cylinder} side {side} is not a JVC track.");
-                    }
-
-                    sector.Data.CopyTo(image, offset);
-                    offset += SectorSize;
-                }
+                int track = written.Length + (((cylinder * sides) + side) * sectors * size);
+                Track(disk, cylinder, side, image.AsSpan(track, sectors * size), size, firstSector, losses);
             }
         }
 
-        return image;
+        return new(image, losses.ToList());
     }
+
+    /// <summary>
+    ///  Writes a disk as JVC in the geometry of its first track, which must hold all of it.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <returns>The image.</returns>
+    /// <exception cref="InvalidOperationException">JVC cannot hold all of the disk.</exception>
+    public static byte[] Write(FloppyDisk disk)
+    {
+        EncodedImage encoded = Encode(disk);
+        return encoded.IsLossless
+            ? encoded.Bytes
+            : throw new InvalidOperationException($"JVC cannot hold all of the disk: {string.Join(" ", encoded.Losses)}");
+    }
+
+    // A track's sectors in order from the first sector's number, each where its number puts it.
+    private static void Track(FloppyDisk disk, int cylinder, int side, Span<byte> track, int size, int firstSector, FloppyLosses losses)
+    {
+        int sectors = track.Length / size;
+        bool[] seen = new bool[sectors];
+        foreach (FloppySector sector in disk.Track(cylinder, side))
+        {
+            // Sector numbers wrap past 255, as Read numbers them.
+            int index = (byte)(sector.Sector - firstSector);
+            if (index >= sectors || seen[index])
+            {
+                losses.Add($"Sectors other than {Numbers(firstSector, sectors)}, or repeated", cylinder);
+                continue;
+            }
+
+            if (sector.Data.Length != size)
+            {
+                losses.Add($"Sectors of other than {size} bytes", cylinder);
+                continue;
+            }
+
+            seen[index] = true;
+            if (!sector.DoubleDensity) { losses.Add("Single-density sectors", cylinder); }
+            if (sector.DataAddressMark != 0xFB) { losses.Add("Data address marks other than $FB", cylinder); }
+            if (sector.CrcError) { losses.Add("Sectors with CRC errors", cylinder); }
+            if (sector.Track != cylinder || sector.Side != side)
+            {
+                losses.Add("Sector IDs naming another track or side", cylinder);
+            }
+
+            sector.Data.CopyTo(track[(index * size)..]);
+        }
+
+        if (seen.Contains(value: false))
+        {
+            losses.Add($"Sectors {Numbers(firstSector, sectors)} missing, which JVC writes as zeros", cylinder);
+        }
+    }
+
+    // A track's sector numbers, from the first, wrapping past 255.
+    private static string Numbers(int firstSector, int sectors) => $"{firstSector}-{(byte)(firstSector + sectors - 1)}";
 
     /// <summary>
     ///  Creates a disk formatted as Disk BASIC's DSKINI leaves it: every byte <c>$FF</c>, which on track 17 is a

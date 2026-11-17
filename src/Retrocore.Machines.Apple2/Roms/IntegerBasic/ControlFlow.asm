@@ -19,9 +19,9 @@ COMMA_PRNUM:
 ;;
 ;; A negative number gets a minus sign and is printed as its negative. The line now owes a return (<CRFLAG>).
 ;; In: X = the noun stack, its top entry the number
+;; Out: X = the noun stack without the number; PRINTACC keeps X
 ;; Errors: >32767 for -32768, after the minus sign
 ;; Uses: A, Y, ACC
-;; Keeps: X
 ;; Entry: PRINTACC = prints the number in ACC
 PRINTNUM:
     jsr GET16BIT                    ; $E7C4
@@ -251,6 +251,8 @@ TRYLINE:
     cpy HIMEM+1                     ; $E89A
     bne GOLINE                      ; $E89C
     ldy #<ErrMsg06                  ; $E89E
+
+TRYLINE_END:
     lsr RUNFLAG                     ; $E8A0 no longer running
 
 JmpERRMESS1:

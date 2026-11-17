@@ -45,7 +45,7 @@ public sealed class PascalVolume
         Name = Encoding.ASCII.GetString(directory, 7, directory[6]);
         Blocks = Word(directory, 14);
         int count = Math.Min(Word(directory, 16), (directory.Length / EntrySize) - 1);
-        List<PascalFileEntry> files = new(count);
+        List<PascalFileEntry> files = [with(count)];
         for (int index = 1; index <= count; index++)
         {
             int offset = index * EntrySize;

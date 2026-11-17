@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
 using Retrocore.Machines.Trs80;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
 
@@ -208,6 +208,18 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
+    public void RunCycles(int cycles)
+    {
+        for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
+        _calls.Reset();
+        _instruction = false;
+        if (_machine.Processor.Status == ProcessorExecutionStatus.Stopped)
+        {
+            throw new InvalidOperationException("CPU stopped.");
+        }
+    }
+
+    /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address)
     {
         byte opcode = Peek(address);
@@ -234,13 +246,19 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void Poke(ushort address, byte value)
     {
-        if (_machine.Bus.Area(address) is not (Trs80MemoryArea.Ram or Trs80MemoryArea.Video))
+        if (!CanPoke(address))
         {
             throw new ArgumentException($"${address:X4} is not RAM or video RAM.");
         }
 
         _machine.Bus.Write(address, value);
     }
+
+    /// <inheritdoc/>
+    public bool CanPoke(ushort address) => _machine.Bus.Area(address) is Trs80MemoryArea.Ram or Trs80MemoryArea.Video;
+
+    /// <inheritdoc/>
+    public Machines.ICharacterSet? CharacterSet => _machine.Bus.Video;
 
     /// <inheritdoc/>
     public void Load(int address, ReadOnlySpan<byte> bytes)

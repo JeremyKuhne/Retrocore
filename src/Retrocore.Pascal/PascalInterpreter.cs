@@ -20,12 +20,20 @@ namespace Retrocore.Pascal;
 ///   The Apple III's interpreter runs with zero page at <c>$1A00</c>, where indirect reads use extended addressing:
 ///   each pointer's X-byte is beside its high byte, at the address XOR <c>$0C00</c>.
 ///  </para>
+///  <para>
+///   Apple Pascal 1.3 on a 128K IIe keeps code in the auxiliary 64K and fetches it with auxiliary reads switched on,
+///   while the mark stack and variables stay in main memory: its SEG, JTAB and IPC point into the code bank.
+///  </para>
 /// </remarks>
 /// <param name="Name">What it is, such as <c>Apple III Pascal (SOS.INTERP)</c>.</param>
 /// <param name="Fetch">The address of the <c>LDA ($58),Y</c> that fetches each opcode.</param>
 /// <param name="ZeroPage">Where its zero page is.</param>
 /// <param name="Extended">Whether its pointers have X-bytes (the Apple III).</param>
-public sealed record PascalInterpreter(string Name, ushort Fetch, ushort ZeroPage, bool Extended)
+/// <param name="CodeBank">
+///  Where the code its SEG, JTAB and IPC point to is, without X-bytes: 0 for the memory the mark stack is in, and on the
+///  Apple II 1 for the auxiliary 64K.
+/// </param>
+public sealed record PascalInterpreter(string Name, ushort Fetch, ushort ZeroPage, bool Extended, byte CodeBank = 0)
 {
     /// <summary>
     ///  The zero-page offset of BASE.
@@ -97,13 +105,16 @@ public sealed record PascalInterpreter(string Name, ushort Fetch, ushort ZeroPag
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <param name="register">The register's zero-page offset, such as <see cref="CodeRegister"/>.</param>
-    /// <returns>Its value, with its X-byte on the Apple III.</returns>
+    /// <returns>
+    ///  Its value, with its X-byte on the Apple III, or the code bank for SEG, JTAB and IPC elsewhere.
+    /// </returns>
     public PascalPointer Register(IPascalMemory memory, int register)
     {
         ArgumentNullException.ThrowIfNull(memory);
         ushort address = (ushort)(ZeroPage + register);
         ushort value = (ushort)(memory.Read(address, 0) | (memory.Read((ushort)(address + 1), 0) << 8));
-        return new PascalPointer(value, Extended ? XByte(memory, (ushort)(address + 1)) : (byte)0);
+        if (Extended) { return new PascalPointer(value, XByte(memory, (ushort)(address + 1))); }
+        return new PascalPointer(value, register is BaseRegister or MarkRegister ? (byte)0 : CodeBank);
     }
 
     /// <summary>

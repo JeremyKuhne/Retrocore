@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1) and a 64K Apple II Plus (Apple Pascal 1.1):
+// Apple Pascal DAP integration, on the Apple III (Apple III Pascal 1.1), a 64K Apple II Plus (Apple Pascal 1.1) and a
+// 128K IIe (Apple Pascal 1.3):
 // boots Pascal, stops on the Pascal thread at a pascal function breakpoint on the Filer's main procedure, reads its
 // frames, scopes and the p-machine's registers, steps over a p-code, and steps out to the system once Q quits the
 // Filer. On the Apple III it then compiles a program with a listing, and stops at a source breakpoint in a copy of
 // its source on the host, reads the program's variable by name, steps by line, and stops there again on the loop's
-// next pass.
+// next pass. On the IIe, with 1.3's Compiler disk, it compiles the same program with its source in another folder, and
+// stops at the same line there, though the Apple III's copy, gone now, had a listing of the same name; there it checks
+// that the memory view finds the program's variable in the bank Apple Pascal 1.3 keeps it in, as the Locals view does.
 // The disks are Apple3Pascal1.1Disk1.dsk and Disk2.dsk in RETROCORE_APPLE3_DISKS (by default <cache>\apple3-disks)
-// and UCSD Pascal 1.1_1.dsk in RETROCORE_APPLE2_PASCAL_DISKS (by default <cache>\apple2-pascal-disks); a machine
-// whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
+// and UCSD Pascal 1.1_1.dsk, 1.3_1.DSK and 1.3_2.DSK (the Compiler) in RETROCORE_APPLE2_PASCAL_DISKS (by default
+// <cache>\apple2-pascal-disks); a machine whose disks are missing is skipped. The ROMs are assembled from the SDK's sources.
 
 import { resolve, join } from "node:path";
 import { existsSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
@@ -46,6 +49,18 @@ const machines = [
         command: "COMMAND: E(DIT, R(UN, F(ILE",
         filer: "FILEHAND",
         prompt: "FILER: G, S, N"
+    },
+    {
+        // 1.3 needs 128K, and keeps its code in the IIe's auxiliary 64K.
+        name: "Apple IIe (Apple Pascal 1.3)",
+        thread: "IIe CPU",
+        disks: [join(apple2Disks, "UCSD Pascal 1.3_1.DSK")],
+        launch: disks => ({ machine: "apple2", model: "enhanced", diskImage: disks[0] }),
+        title: "Welcome APPLE1, to Apple II Pascal 1.3",
+        start: "",
+        command: "Command: F(ile, E(dit, R(un",
+        filer: "FILEHAND",
+        prompt: "Filer: L(dir"
     }
 ];
 
@@ -144,8 +159,11 @@ async function sourceBreakpoints(machine) {
         // The listing names the program's variable, I, in its locals and for evaluating.
         const locals = (await request("scopes", { frameId: frames[0].id })).scopes.find(scope => scope.name === "Locals");
         const named = (await request("variables", { variablesReference: locals.variablesReference })).variables;
-        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0, memoryReference: named.find(variable => variable.name === "I").memoryReference });
+        // The Apple III's locals are through X-bytes, which have no memory reference, so Open in Retrocore Memory is not
+        // offered on I, and evaluating it for the memory view gives no address rather than one in the CPU's memory.
+        assert.deepEqual(named.find(variable => variable.name === "I"), { name: "I", value: "1", type: "INTEGER", variablesReference: 0 });
         assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "hover" })).result, "1");
+        assert.equal((await request("evaluate", { expression: "I", frameId: frames[0].id, context: "retrocore" })).memoryReference ?? null, null);
 
         // Step Over goes by line: the call, which the listing counts in line 10, where the compiler read END.
         await request("next", { threadId: 3 });
@@ -169,6 +187,11 @@ async function sourceBreakpoints(machine) {
         const disk2 = () => request("retro/devices").then(body => body.devices.find(device => device.id === "disk2"));
         assert.equal((await disk2()).media.changed, true);
         assert.ok((await disk2()).operations.includes("save"));
+        // A changed disk does not leave its drive unsaved: a client that speaks media's answers hears changed, and an
+        // older one is refused.
+        const held = await request("retro/device", { id: "disk2", action: "eject", supportsRetrocoreMedia: 1 });
+        assert.deepEqual([held.outcome, held.device, (await disk2()).media.changed], ["changed", "disk2", true]);
+        await assert.rejects(request("retro/device", { id: "disk2", action: "eject" }), /not saved/);
         const woz = join(folder, "PASCAL2.woz");
         const sectors = join(folder, "PASCAL2.dsk");
         await request("retro/device", { id: "disk2", action: "save", path: woz });
@@ -176,9 +199,14 @@ async function sourceBreakpoints(machine) {
         const saved = await disk2();
         assert.deepEqual([saved.media.label, saved.media.format, saved.media.changed], [sectors, "DSK", false]);
         assert.equal(statSync(sectors).size, 143360);
+        // An image that cannot be read leaves the disk in the drive where it was.
+        const broken = join(folder, "BROKEN.dsk");
+        writeFileSync(broken, Buffer.alloc(100));
+        await assert.rejects(request("retro/device", { id: "disk2", action: "insert", path: broken, supportsRetrocoreMedia: 1 }), /4096-byte tracks/);
+        assert.equal((await disk2()).media?.label, sectors, "a failed insert leaves the old disk");
         // The same host the session runs: RETROCORE_DAP_HOST, such as a native build, or the Release build.
         const native = process.env.RETROCORE_DAP_HOST;
-        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net10.0", "Retrocore.Debug.dll");
+        const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
         for (const image of [woz, sectors]) {
             const args = ["--pascal", "catalog", image];
             const catalog = native
@@ -192,9 +220,83 @@ async function sourceBreakpoints(machine) {
     }
 }
 
+// Types keys and waits for the screen to show something, in either case, as Apple Pascal 1.3 on the IIe shows lowercase.
+async function typeAny(text, until) {
+    await new Promise(done => setTimeout(done, 300));
+    await request("retro/type", { text });
+    await screen(screenText => screenText.toUpperCase().includes(until.toUpperCase()), until);
+}
+
+// Compiles HELLO with a listing on a 128K IIe's Apple Pascal 1.3, with the Compiler's APPLE2 in drive 2, then stops at
+// line 9 of the host's copy, SHOW(I), and the frame is there in the source, as on the Apple III. The listing names I,
+// and the memory view finds it in the bank Apple Pascal 1.3 keeps it in, as the Locals view does, rather than in
+// memory as the CPU maps it.
+async function compiledOnIIe(machine, compiler) {
+    const folder = mkdtempSync(join(tmpdir(), "retrocore-pascal-"));
+    const source = join(folder, "hello.pas");
+    writeFileSync(source, hello.join("\n") + "\n");
+    try {
+        events.length = 0;
+        await request("launch", { ...machine.launch(machine.disks), stopOnEntry: false, speed: "max" });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        const drives = (await request("retro/devices")).devices.filter(device => /disk[12]$/.test(device.id)).map(device => device.id).sort();
+        assert.equal(drives.length, 2, `two drives, not ${drives.join(", ")}`);
+        await request("retro/device", { id: drives[0], action: "writeProtect", writeProtected: false });
+        await request("retro/device", { id: drives[1], action: "insert", path: compiler });
+        await screen(text => text.includes(machine.title), "the title");
+        await screen(text => text.includes(machine.command), "the command line");
+        await typeAny("E", "Edit what file?");
+        await typeAny("\r", ">Edit:");
+        await typeAny("I", ">Insert:");
+        await request("retro/type", { text: hello.join("\n") + "\n" });
+        await screen(text => hello.every(line => text.toUpperCase().includes(line.toUpperCase())), "the pasted program");
+        await request("retro/key", { code: 3 });
+        await screen(text => text.toUpperCase().includes(">EDIT:"), "the Editor's prompt");
+        await typeAny("Q", "W(rite to a new file name");
+        await typeAny("W", "Name of output file");
+        await typeAny("APPLE1:HELLO\r", "bytes long");
+        await typeAny("E", "Command:");
+        // 1.3's Compiler asks for a "textfile" and a "codefile", and for a listing.
+        await typeAny("C", "Compile what text");
+        await typeAny("APPLE1:HELLO\r", "codefile");
+        await typeAny("APPLE1:HELLO\r", "Listing");
+        await typeAny("APPLE1:HELLO.LST.TEXT\r", "Command:");
+        await new Promise(done => setTimeout(done, 1000));
+
+        const set = await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: 9 }] });
+        assert.equal(set.breakpoints[0].verified, true, set.breakpoints[0].message);
+        await typeAny("X", "Execute what file");
+        await new Promise(done => setTimeout(done, 300));
+        await request("retro/type", { text: "APPLE1:HELLO\r" });
+        const stopped = await stop();
+        assert.equal(stopped.reason, "breakpoint");
+        const frame = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+        assert.equal(frame.name, "HELLO (HELLO.1+$000D): SLDO3", JSON.stringify(frame));
+        assert.equal(frame.source?.path, source, JSON.stringify(frame));
+        assert.equal(frame.line, 9);
+
+        // The Locals view's I and the memory view's evaluation of I name the same banked word, which holds 1.
+        const locals = (await request("scopes", { frameId: frame.id })).scopes.find(scope => scope.name === "Locals");
+        const named = (await request("variables", { variablesReference: locals.variablesReference })).variables.find(variable => variable.name === "I");
+        assert.equal(named?.__vscodeVariableMenuContext, "memory", JSON.stringify(named));
+        const listed = (await request("retro/memory/variable", { variablesReference: locals.variablesReference, name: "I" })).memoryReference;
+        assert.match(listed, /^(main|aux):0x/);
+        const evaluated = await request("evaluate", { expression: "I", frameId: frame.id, context: "retrocore" });
+        assert.equal(evaluated.result, "1");
+        assert.equal(evaluated.memoryReference, listed, "evaluating I finds the bank the Locals view does");
+        const word = Buffer.from((await request("readMemory", { memoryReference: listed, count: 2 })).data, "base64");
+        assert.equal(word.readUInt16LE(0), 1, `${listed} holds I`);
+        await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
+    } finally {
+        rmSync(folder, { recursive: true, force: true });
+    }
+}
+
 const passed = [];
 try {
-    await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    const capabilities = await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    assert.equal(capabilities.supportsRetrocoreMedia, 1, "the host speaks media's answers");
     for (const machine of machines) {
         if (!machine.disks.every(disk => existsSync(disk))) {
             console.log(`Skipped ${machine.name}: ${machine.disks.join(" or ")} is missing.`);
@@ -242,6 +344,35 @@ try {
         assert.deepEqual(registers.map(register => register.name), ["IPC", "MP", "BASE", "JTAB", "SEG"]);
         assert.match(registers[0].value, /^(x8[0-9A-F]:)?\$[0-9A-F]{4}$/);
 
+        // On the Apple II a local's memory reference reads and writes the word the Locals show, wherever the interpreter
+        // has RAM switched: on the IIe, 1.3 runs with auxiliary reads on. The Apple III's locals are through X-bytes,
+        // which have no reference.
+        if (machine.name !== "Apple III") {
+            const locals = scopes.find(scope => scope.name === "Locals");
+            // VS Code is sent the locals without their references; Open in Retrocore Memory asks for them.
+            const marked = (await request("variables", { variablesReference: locals.variablesReference })).variables
+                .find(variable => variable.__vscodeVariableMenuContext === "memory");
+            assert.ok(marked, "a local has a memory reference");
+            const word = {
+                ...marked,
+                memoryReference: (await request("retro/memory/variable", { variablesReference: locals.variablesReference, name: marked.name })).memoryReference
+            };
+            assert.match(word.memoryReference, /^main:0x/);
+            const bytes = async () => Buffer.from((await request("readMemory", { memoryReference: word.memoryReference, count: 2 })).data, "base64");
+            const original = await bytes();
+            const hex = original.readUInt16LE(0).toString(16).toUpperCase().padStart(4, "0");
+            assert.ok(word.value.endsWith(`($${hex})`), `${word.name} at ${word.memoryReference} shows ${word.value}, reads $${hex}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: Buffer.from([0x34, 0x12]).toString("base64") });
+
+            // Writing memory refreshes the views, so the scopes are read again.
+            const top = (await request("stackTrace", { threadId: 3 })).stackFrames[0];
+            const again = (await request("scopes", { frameId: top.id })).scopes.find(scope => scope.name === "Locals");
+            const written = (await request("variables", { variablesReference: again.variablesReference })).variables
+                .find(variable => variable.name === word.name);
+            assert.ok(written.value.endsWith("($1234)"), `${word.name} after writing its memory shows ${written.value}`);
+            await request("writeMemory", { memoryReference: word.memoryReference, data: original.toString("base64") });
+        }
+
         // Step Over runs one p-code of the procedure.
         await request("next", { threadId: 3 });
         const step = await stop();
@@ -264,11 +395,17 @@ try {
 
     const sources = passed.includes("Apple III");
     if (sources) { await sourceBreakpoints(machines[0]); }
+    const compiler = join(apple2Disks, "UCSD Pascal 1.3_2.DSK");
+    const compiled = passed.includes(machines[2].name) && existsSync(compiler);
+    if (compiled) { await compiledOnIIe(machines[2], compiler); }
+    else if (!passed.includes(machines[2].name)) { console.log(`Skipped compiling on Apple Pascal 1.3: the ${machines[2].name} was skipped.`); }
+    else { console.log(`Skipped compiling on Apple Pascal 1.3: ${compiler} is missing.`); }
 
     await request("disconnect");
-    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.join(" and ")}: the Pascal thread, `
+    console.log(`Apple Pascal DAP passed on ${passed.length === 0 ? "no machine" : passed.length < 3 ? passed.join(" and ") : `${passed.slice(0, -1).join(", ")} and ${passed[passed.length - 1]}`}: the Pascal thread, `
         + "a pascal function breakpoint in the Filer, its frames, scopes and registers, Step Over and Step Out"
-        + (sources ? "; and on the Apple III a source breakpoint through a listing the Compiler wrote, with line steps." : "."));
+        + (sources ? "; and on the Apple III a source breakpoint through a listing the Compiler wrote, with line steps" : "")
+        + (compiled ? "; and on the IIe a source breakpoint in a program Apple Pascal 1.3 compiled, and its variable in the bank 1.3 keeps it in." : "."));
 } finally {
     clearTimeout(timeout);
     close();

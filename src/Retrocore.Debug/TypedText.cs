@@ -29,7 +29,7 @@ internal static class TypedText
     /// <returns>The codes, in order.</returns>
     public static List<int> Codes(string text, out int skipped)
     {
-        List<int> codes = new(text.Length);
+        List<int> codes = [with(text.Length)];
         skipped = 0;
         for (int index = 0; index < text.Length; index++)
         {

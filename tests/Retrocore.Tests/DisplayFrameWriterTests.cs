@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Debug;
 using System.Text;
 using System.Text.Json.Nodes;
-using Retrocore.Debug;
 
 namespace Retrocore.Tests;
 
@@ -83,10 +83,7 @@ public sealed class DisplayFrameWriterTests
         void Send() => transport.SendEvent("retro/frame", writer => DisplayFrameWriter.Write(writer, state, pixels));
         Send();
         Send();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        Send();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().BeLessThan(pixels.Length / 20, "the old path allocated about 13 times the picture's size");
+        Allocations.During(Send).Should().BeLessThan(pixels.Length / 20, "the old path allocated about 13 times the picture's size");
     }
 
     private static JsonObject Video(JsonObject frame) =>

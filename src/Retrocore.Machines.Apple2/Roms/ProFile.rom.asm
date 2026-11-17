@@ -305,8 +305,8 @@ BootRead_Stop:
 
 .assert * <= $C5FC
 .org $C5FC
-;; The ProDOS identification trailer: the block count at $CnFC (0, so ProDOS asks STATUS), the capability byte at
-;; $CnFE and the low byte of <Driver> at $CnFF.
+; The ProDOS identification trailer: the block count at $CnFC (0, so ProDOS asks STATUS), the capability byte at
+; $CnFE and the low byte of Driver at $CnFF.
     .word 0
 DeviceInfo:
     .byte OneVolume | FormatCapabilityMask | WriteCapabilityMask | ReadCapabilityMask | StatusCapabilityMask

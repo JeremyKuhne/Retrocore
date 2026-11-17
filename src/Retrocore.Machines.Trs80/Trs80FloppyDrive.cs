@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Machines.Trs80;
@@ -11,7 +12,12 @@ namespace Retrocore.Machines.Trs80;
 ///  One of the four floppy drives on a TRS-80 disk controller: the Model I's Expansion Interface or the Color
 ///  Computer's disk controller cartridge.
 /// </summary>
-public sealed class Trs80FloppyDrive : IDiskDrive
+/// <remarks>
+///  <para>
+///   Its disk is a medium a host saves, to the formats <see cref="DeviceInfo.SaveFormats"/> lists.
+///  </para>
+/// </remarks>
+public sealed class Trs80FloppyDrive : IDiskDrive, IMediumSlot
 {
     private readonly Trs80DiskController _controller;
     private string _label = "";
@@ -53,8 +59,9 @@ public sealed class Trs80FloppyDrive : IDiskDrive
             Trs80Doubler.Both => "FD1771 with a WD1791 doubler (Percom or Radio Shack), in the Expansion Interface",
             _ => "FD1771 in the Expansion Interface"
         },
-        Formats = ["dsk", "jv1", "jv3"],
-        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect,
+        Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
+        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
 
         // Drive 3's select line is the other drives' side select, so drive 3 is single-sided.
@@ -82,8 +89,14 @@ public sealed class Trs80FloppyDrive : IDiskDrive
 
     /// <inheritdoc/>
     public MediaState? Media => Disk is { } disk
-        ? new(_label, _format, disk.WriteProtected, _controller.Changed(Drive))
+        ? new(_label, _format, disk.IsWriteProtected, disk.IsDirty)
         : null;
+
+    /// <inheritdoc/>
+    public IMedium? Medium => Disk;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
 
     /// <inheritdoc/>
     public DeviceActivity Activity => _controller.Activity(Drive);
@@ -113,17 +126,19 @@ public sealed class Trs80FloppyDrive : IDiskDrive
     {
         ArgumentNullException.ThrowIfNull(disk);
         _controller.Insert(Drive, disk);
+        MountGeneration = MountGenerations.Next();
         _label = label;
         _format = format;
     }
 
     /// <summary>
-    ///  Ejects the disk.
+    ///  Ejects the disk, leaving any unsaved changes to the caller.
     /// </summary>
     /// <returns>The disk, or null when the drive was empty.</returns>
     public FloppyDisk? Eject()
     {
         FloppyDisk? disk = Disk;
+        if (disk is not null) { MountGeneration = MountGenerations.Next(); }
         _controller.Insert(Drive, disk: null);
         _label = "";
         _format = "";
@@ -136,5 +151,22 @@ public sealed class Trs80FloppyDrive : IDiskDrive
     /// <param name="writeProtected">Whether the disk is protected.</param>
     /// <exception cref="InvalidOperationException">The drive is empty.</exception>
     public void SetWriteProtected(bool writeProtected) =>
-        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).WriteProtected = writeProtected;
+        (Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.")).IsWriteProtected = writeProtected;
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole)
+    {
+        FloppyDisk disk = Disk ?? throw new InvalidOperationException($"{Info.Name} is empty.");
+        if (whole)
+        {
+            disk.MarkSaved();
+        }
+        else
+        {
+            disk.MarkChanged();
+        }
+
+        _label = label;
+        _format = format;
+    }
 }

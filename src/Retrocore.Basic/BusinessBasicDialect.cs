@@ -94,10 +94,13 @@ internal sealed partial class BusinessBasicDialect : BasicDialect
     /// </summary>
     internal static BusinessBasicDialect Instance { get; } = new();
 
-    /// <summary>
-    ///  Gets the second list's reserved words, which follow a $FF byte, from token $80.
-    /// </summary>
-    internal static IReadOnlyList<string> Functions => s_functions;
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The second list's reserved words, which follow a $FF byte, from token $80, with the placeholders empty.
+    ///  </para>
+    /// </remarks>
+    public override IReadOnlyList<string> Functions => s_functions;
 
     /// <inheritdoc/>
     public override string Name => "business";
@@ -160,6 +163,9 @@ internal sealed partial class BusinessBasicDialect : BasicDialect
 
     /// <inheritdoc/>
     internal override byte DataToken => Data;
+
+    /// <inheritdoc/>
+    internal override int FunctionPrefix => SecondList;
 
     /// <inheritdoc/>
     /// <remarks>

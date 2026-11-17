@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text;
 using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Trs80;
+using System.Text;
 
 namespace Retrocore.Tests;
 
@@ -109,6 +109,27 @@ public sealed class BasicVariableTests
         ];
 
         screen.Split(' ', StringSplitOptions.RemoveEmptyEntries).Should().ContainInConsecutiveOrder(printed, "the screen is {0}", screen);
+    }
+
+    /// <summary>
+    ///  Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit; AppleSoft takes true as 1 and them
+    ///  as logic.
+    /// </summary>
+    /// <param name="name">The dialect.</param>
+    /// <param name="equal">What 1=1 gives.</param>
+    /// <param name="and">What 2 AND 1 gives.</param>
+    /// <param name="not">What NOT 0 gives.</param>
+    [TestMethod]
+    [DataRow("applesoft", "1", "1", "1")]
+    [DataRow("level2", "-1", "0", "-1")]
+    [DataRow("colorbasic", "-1", "0", "-1")]
+    public void TruthFollowsTheDialect(string name, string equal, string and, string not)
+    {
+        BasicDialect dialect = BasicDialect.FromName(name) ?? throw new AssertFailedException(name);
+        BasicEvaluator evaluator = new(dialect, DelegateBasicMemory.Of(new byte[0x10000]));
+        evaluator.Format(evaluator.Evaluate("1=1")).Should().Be(equal);
+        evaluator.Format(evaluator.Evaluate("2 AND 1")).Should().Be(and);
+        evaluator.Format(evaluator.Evaluate("NOT 0")).Should().Be(not);
     }
 
     // The checks both dialects share, at line 100 in the first pass of the FOR loop.

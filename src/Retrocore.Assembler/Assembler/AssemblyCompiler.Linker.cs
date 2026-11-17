@@ -123,7 +123,7 @@ internal static partial class AssemblyCompiler
             int offset = 0;
             if (memory.File.Length != 0)
             {
-                offsets ??= new(StringComparer.Ordinal);
+                offsets ??= [with(StringComparer.Ordinal)];
                 offsets.TryGetValue(memory.File, out offset);
                 offsets[memory.File] = offset + (memory.Fill ? memory.Size : written);
             }

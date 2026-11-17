@@ -11,8 +11,8 @@ namespace Retrocore.Debug;
 /// </summary>
 internal sealed class DebugRegisters
 {
-    private readonly Dictionary<string, int> _registers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (int Register, int Bit)> _flags = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _registers = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, (int Register, int Bit)> _flags = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<int, int> _flagMasks = [];
 
     /// <summary>

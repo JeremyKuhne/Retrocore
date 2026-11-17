@@ -97,6 +97,11 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
     public bool IsHalted => _state.Halted;
 
     /// <summary>
+    ///  Gets whether WAIT held the last T-state's access.
+    /// </summary>
+    public bool IsWaiting => _state.Activity == StalledActivity;
+
+    /// <summary>
     ///  Gets the elapsed T-states.
     /// </summary>
     public ulong CycleCount => _state.CycleCount;
@@ -168,6 +173,12 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
                 or Z80MachineCycle.NonMaskableFetch);
 
     /// <summary>
+    ///  Gets whether the last T-state put a refresh address on the bus, once in each opcode fetch and interrupt
+    ///  acknowledge. Cheaper than <see cref="LastCycle"/>.
+    /// </summary>
+    public bool IsRefreshing => _state.Activity == BusOperation.Refresh;
+
+    /// <summary>
     ///  Advances one T-state; <see cref="LastCycle"/> then describes its bus activity.
     /// </summary>
     public void StepCycle()
@@ -191,6 +202,8 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
         ulong start = _state.CycleCount;
         for (int index = 0; index < maximumCycles; index++)
         {
+            // An NMI or RESET edge while halted must latch before deciding whether the CPU still waits.
+            if (_state.Halted && _state.Signals != _state.PreviousSignals) { SampleSignals(); }
             if (_state.Halted && IsInstructionBoundary && !InterruptReady())
             {
                 return new() { Status = ProcessorExecutionStatus.Waiting, Cycles = _state.CycleCount - start };

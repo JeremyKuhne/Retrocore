@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Globalization;
 using Retrocore.Isa;
+using System.Globalization;
 
 namespace Retrocore.Assembler;
 
@@ -122,7 +122,7 @@ internal static partial class AssemblyCompiler
         LayoutStatement[] statements = new LayoutStatement[project.Statements.Count];
         int statementCount = 0;
         Dictionary<string, AssemblyStatement> declared = new(symbolCapacity, StringComparer.Ordinal);
-        HashSet<string> exports = new(StringComparer.Ordinal);
+        HashSet<string> exports = [with(StringComparer.Ordinal)];
 
         // .global names are exported only when defined; an undefined one is an unused import in a single object.
         HashSet<string>? optionalExports = null;
@@ -230,7 +230,7 @@ internal static partial class AssemblyCompiler
                         // Repeating .global is harmless, and an .export of a .global name makes it required.
                         if (exports.Add(name))
                         {
-                            if (global) { (optionalExports ??= new(StringComparer.Ordinal)).Add(name); }
+                            if (global) { (optionalExports ??= [with(StringComparer.Ordinal)]).Add(name); }
                         }
                         else if (!global && optionalExports?.Remove(name) != true)
                         {
@@ -323,7 +323,7 @@ internal static partial class AssemblyCompiler
         Dictionary<int, int>? labelSizes = null;
         if (project.LabelSizes is { } sized)
         {
-            labelSizes = new(sized.Count);
+            labelSizes = [with(sized.Count)];
             foreach (KeyValuePair<string, int> pair in sized)
             {
                 labelSizes[pair.Value] = DeclareSectionSymbol(pair.Key, pair.Value, symbols, declared, errors);
@@ -1042,6 +1042,12 @@ internal static partial class AssemblyCompiler
                     : throw new AssemblyError(line, "Restart address must be $00, $08, $10, $18, $20, $28, $30 or $38.");
 
                 return offset;
+            case OperandFieldKind.RestartNumber:
+                image[fields.OpcodeByte] |= value is >= 0 and < InstructionEncoding.BitsPerByte
+                    ? (byte)(value << OpcodeFieldShift)
+                    : throw new AssemblyError(line, "Restart number must be 0-7.");
+
+                return offset;
             default:
                 int word = field == OperandFieldKind.Word ? Word(value, line) : Relative16(value, fields.Next, line);
                 byte low = (byte)word;
@@ -1052,7 +1058,7 @@ internal static partial class AssemblyCompiler
         }
     }
 
-    // A bit number or restart address sits in bits 3-5 of the last opcode byte.
+    // A bit number, restart address or restart number sits in bits 3-5 of the last opcode byte.
     private const int OpcodeFieldShift = 3;
     private const int RestartMask = 0x38;
 

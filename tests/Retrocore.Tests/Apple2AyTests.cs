@@ -114,6 +114,37 @@ public class Apple2AyTests
     }
 
     /// <summary>
+    ///  Repeated output reads retain exact tone edges, same-value envelope restarts, and resets.
+    /// </summary>
+    [TestMethod]
+    public void RepeatedOutputReadsObserveEveryAmplitudeChange()
+    {
+        Ay38910 ay = new();
+        Set(ay, 7, 0x38);
+        Set(ay, 8, 15);
+        for (int clock = 0; clock < 32; clock++)
+        {
+            float expected = (clock / 8 & 1) != 0 ? 1f / 3 : 0;
+            ay.Output.Should().Be(expected);
+            ay.Output.Should().Be(expected);
+            ay.Tick();
+        }
+
+        Set(ay, 7, 0x3F);
+        Set(ay, 8, 16);
+        Set(ay, 13, 12);
+        ay.Output.Should().Be(0);
+        Advance(ay, 8);
+        ay.Output.Should().BeGreaterThan(0);
+        Set(ay, 13, 12);
+        ay.Output.Should().Be(0);
+        Set(ay, 8, 15);
+        ay.Output.Should().Be(1f / 3);
+        ay.Reset();
+        ay.Output.Should().Be(0);
+    }
+
+    /// <summary>
     ///  Verifies the 17-bit polynomial sequence and noise clock divider against a directed vector.
     /// </summary>
     /// <param name="period">The programmed noise period.</param>

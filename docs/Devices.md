@@ -1,7 +1,7 @@
 # Devices
 
 Each machine lists the devices installed in it, such as its floppy and tape drives, with what they are and
-what they are doing. The debugger sends that list to VS Code, whose **Retro Devices** view shows it while a
+what they are doing. The debugger sends that list to VS Code, whose **Machine** and **Drives** views show it while a
 Retrocore session runs, and takes media actions from it.
 
 ## The object model
@@ -29,11 +29,11 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Machine | Device | Id | Notes |
 | --- | --- | --- | --- |
 | Model I | Cassette | `cassette` | Plays and records CAS images. A playing tape shows as write-protected, and a recording as changed once it holds a byte. |
-| Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1 and JV3 images; write protection can be changed. Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
+| Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1, JV3, DMK and IMD images; write protection can be changed, and a changed disk saves to its image or as `.jv3`, `.dmk`, `.dsk` or `.jv1` (the Model III, 4 and II's drives too, the Model II's as `.dmk` or `.jv3`, and the Color Computer's as `.dsk`, `.jvc` or `.dmk`). Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
 | Apple II | Drive 1-2 | `disk1`, `disk2` (slot 6); `slotNdisk1`, `slotNdisk2` (other slots) | Present for each installed Disk II card: slot 6 from a floppy `diskImage`, `dos` or `diskController: "diskII"`, and any free slot via **Add Card**. Its ROMs are the SDK's 16- or 13-sector builds ([DiskII.md](DiskII.md)), or dumps given for slot 6 as `diskBootRom` and `diskSequencerRom`. Takes WOZ images, and DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or 13-sector (`.d13`) sector images converted to WOZ. A disk loads write-protected; taking the protection off lets the machine write it, in memory. The head reads while the motor turns and writes in the card's write mode; the track counts quarter tracks. |
-| Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
-| Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`) of up to 65535 blocks, which the machine can write; inserting and ejecting are allowed. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
-| Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed; a block command shows as reading or writing for a thirtieth of a second. |
+| Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed, and a changed disk saves to its image (a 2MG keeps its header, comment and creator data, and its locked flag is the lock) or as `.po`, `.2mg`, `.hdv` or `.img`. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
+| Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`, or a `.2mg` of them) of up to 65535 blocks, which the machine can write unless locked; inserting, ejecting, locking and saving (to its image, or as `.po`, `.hdv` or `.2mg`) are allowed. A ProFile has no write-protect tab, so a write to a locked image fails as a failed write does: an I/O error to ProDOS and SOS, which cannot be told why. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
+| Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po`, `.hdv` or `.2mg` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed and loads locked, as it always has; unlocked, the machine writes it and it saves (to its image, or as `.po`, `.hdv` or `.2mg`). The lock refuses writes at once (ProDOS's write-protected error, $2B); the slot's ROM, which ProDOS reads as it starts, says whether the device writes from the next reset. A block command shows as reading or writing for a thirtieth of a second. |
 
 ## The debug protocol
 
@@ -66,7 +66,7 @@ option, empty ones included. Each row names the devices on it, by id:
 
 | Machine | Rows |
 | --- | --- |
-| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card or the 3.5 disk controller) |
+| IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card, the 3.5 disk controller or the Z80 SoftCard) |
 | II, II Plus | `model`, `memory`, `builtIn`, `gamePort`, `d0Socket` (the II only: Programmer's Aid #1 or empty, as the launch's `programmersAid` says), `slot0` (the language card, a firmware card with the other BASIC, or empty, as the launch's `slot0` says), `slot1` to `slot7` (as the IIe's, and slot 3 takes a card too) |
 | Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card or empty) |
 | Model I | `model`, `rom`, `memory`, `cassette`, `expansion`, `disk` (the controller and its doubler, with its drives), `lowercase` |
@@ -74,8 +74,8 @@ option, empty ones included. Each row names the devices on it, by id:
 An empty slot's `value` is `empty`, and its `description` says what installs something there. A row's `actions`
 say what `retro/hardware` can do to it: `addCard` on a free IIe slot (1, 2, 4 and 5, 6 without a Disk II, and 7
 without block storage) or II and II Plus slot (those, 3, and an empty 0) or Apple III slot (1 to 4), `removeCard` on a Disk II card, the
-Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, or the language or firmware card in slot 0. A ProFile card goes in any
-of them; the Apple III takes no other card.
+Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, or the language or firmware card in slot 0. A
+ProFile card goes in any of them; the Apple III takes no other card yet.
 
 ```json
 { "id": "slot5", "action": "addDiskII", "sectors": 16 }
@@ -83,10 +83,16 @@ of them; the Apple III takes no other card.
 { "id": "slot2", "action": "addMouse" }
 { "id": "slot5", "action": "addDisk35" }
 { "id": "slot4", "action": "addProFile" }
+{ "id": "slot5", "action": "addSoftCard" }
 { "id": "slot0", "action": "addLanguageCard" }
 { "id": "slot0", "action": "addFirmwareCard" }
 { "id": "slot5", "action": "removeCard" }
+{ "id": "slot4", "action": "setSetting", "setting": "translation", "value": false }
 ```
+
+A row may have `settings`, switches on its hardware, each with an `id`, a `label`, its `value` (on or off) and a
+`description`. `setSetting` changes one. The Z80 SoftCard has two: `translation`, its address translation (DIP switch
+S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default).
 
 `retro/hardware` changes the machine at once, running or stopped, and returns the new `retro/devices` body. A Disk
 II added to a slot answers at $C080 plus 16 times the slot and at its ROM page, $Cn00, with firmware built from the
@@ -98,10 +104,11 @@ for the session; the launch configuration is unchanged. The session sends the sa
 state changes: on each stop, and with the running frames while the machine runs.
 
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
-slot 0 of a II or II Plus, `mockingboard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
+slot 0 of a II or II Plus, `mockingboard`, `softCard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
 that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
-tape being recorded, is left out.
+tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as
+`{ "slot4": { "translation": true, "refresh": false } }`, restored after the cards.
 
 ```json
 { "cards": { "1": "empty", "2": "empty", "4": "mockingboard", "5": "diskII16", "6": "empty", "7": "empty" },
@@ -122,30 +129,161 @@ exists is reported in the Debug Console and skipped.
 { "id": "cassette", "action": "eject" }
 { "id": "disk2", "action": "save" }
 { "id": "disk2", "action": "save", "path": "copy.woz" }
+{ "id": "disk2", "action": "save", "path": "copy.dsk", "acceptLosses": true }
+{ "id": "disk2", "action": "save", "overwrite": { "sha256": "…" }, "generation": 3 }
+{ "id": "slot5profile", "action": "save", "path": "hard.2mg" }
+{ "id": "disk2", "action": "eject", "discards": [{ "device": "disk2", "generation": 3 }] }
+{ "id": "disk2", "action": "eject", "discard": true }
 ```
 
 An action the device does not support is an error. A recording is saved to its path when its tape is ejected.
 Disks the machine changes stay in memory, and `changed` shows that they differ from their images. An Apple drive's
-`save` writes its disk to its own image, or to `path`: a `.woz` keeps the disk's tracks as they are, and a `.dsk`,
-`.do` or `.po` reads them back as sectors, in DOS's or ProDOS's order. The disk then comes from that image. Other
-drives don't save yet.
+`save` writes its disk to its own image, in the format and sector order it was read in, or to `path`: a `.woz` keeps
+the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads them back as 35 to 40 tracks of
+sectors, in DOS's order for `.dsk` and `.do` and ProDOS's for `.po`. A `.dsk` is read in the order its file system
+reads whole in (DOS 3.3's catalog, ProDOS's volume directory or Apple Pascal's), else DOS's, and saved back in it. A
+sector image cannot hold a track that no longer reads as 16 sectors, data on a quarter or half track of its own,
+another track's sector, or a volume other than 254. The Apple II's block drives (a 3.5 drive, a ProFile and slot 7)
+save the same way: their blocks to bare `.po`, `.hdv` or `.img` images, which keep no lock, or to a 2MG, which keeps
+the header, comment and creator data of the 2MG the disk was read from (a save to bare blocks says it drops them) and
+writes the lock as its locked flag. The TRS-80's and the Color Computer's floppies save to JV1, JV3, JVC or DMK:
+DMK holds everything, every ID, mark, density, CRC error and sector order; JV1 holds single-density tracks of
+sectors 0-9 on one side, with `$FA` on track 17 and `$FB` elsewhere; JV3 cannot hold a sector whose ID names another
+track or side, or a double-density mark other than `$FB` and `$F8`; JVC keeps the header it was read with, and holds
+tracks of that geometry in double density with `$FB`. On a TRS-80 `.dsk` saves as JV1, and on the Color Computer as
+JVC. A disk read from IMD saves as another format, as IMD has no writer yet. The disk then comes from that image. A
+drive's `saveFormats` lists what it saves as. Other drives don't save yet.
 
-## The Retro Devices view
+A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
+the image and replaces the image with it, follows a link to its target, retries a file another program holds for a
+moment, follows links to the folders it is in, so every path to one image shares its lock and backup, and keeps the
+revision it replaced as the image's one backup in local data (`%LOCALAPPDATA%\Retrocore\Backups`,
+or `RETROCORE_LOCAL_DATA`). It writes only over the revision of the image the disk was read from, or, for a save to
+another `path`, only where there is no file, unless `overwrite.sha256` names the revision there the person agreed to
+replace (a client sends the hash of the file the person chose in its save dialog; `null` agrees to write where there
+is no file, as over an image deleted since). A file reads past a brief lock, as writes do. An unchanged disk saved to
+its own image writes nothing.
 
-The view is in the **Run and Debug** sidebar whenever no other debugger runs. Before a session starts, its
-welcome text and title-bar **Start Machine** (`▶`) button start a machine without a `launch.json`.
+What a person decides on comes back as an answer beside the devices, not as an error, to a client that sends
+`supportsRetrocoreMedia: 1` (the host says it speaks them with `supportsRetrocoreMedia` in its `initialize` answer):
 
-While a Retrocore session runs, the view lists **BASIC program** first when the machine has a supported BASIC
-(showing the active dialect and line count, and opening **Retrocore: Open BASIC Program** when clicked), then
-the machine's installed hardware slot by slot, with each device under the card or option it sits on: Slot 6's
-Disk II drives under Slot 6, the Model I's drives under its disk controller. Hovering a row says what it does
-and which launch option installs it. Each device shows its media, its
-head or tape position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`; its icon is
-green while it reads, red while it writes and yellow while it seeks. Expanding a device lists its state and
-metadata, and hovering it shows them all.
+| `outcome` | When | What the client does |
+| --- | --- | --- |
+| `saved` | The disk was saved; `notes` and `losses` say what the save should, such as a WOZ1 image written as WOZ2 or a sector read from its second copy | Nothing, or shows the notes |
+| `changed` | An `eject`, an `insert` over a disk, or **Remove Card** would take out a disk with changes not saved (`device`, `label`, `medium`, `generation`) | Saves it (with that `generation`), or sends the action again with the disk's `{ device, generation }` added to `discards`; a card's next changed disk is asked about in turn |
+| `conflict` | The file at `path` is not the revision expected: it changed or went since the disk was read from it, or one is there that the person did not agree to replace (`baseline`, null for a save to another path, and `current`, null for no file: `length`, `written`, `sha256`) | Sends the save again with `overwrite.sha256` set to `current`'s and the `generation`, or saves as a new image |
+| `losses` | The image's `format` cannot hold all of the disk (`losses`) | Sends the save again with `acceptLosses: true` and the `generation`, and the disk stays changed, or saves as a new image |
+| `readOnly` | The image cannot be written: `reason` is `file` (a read-only file), `access`, `noImage` (a disk a launch built) or `format` (an image that can only be read, as `.d13`) | Saves as a new image |
 
-A device's inline buttons insert media (an open dialog filtered to its formats), record to a new tape, eject,
-protect or unprotect a disk, and save a changed disk to its image (**Save to Its Image**, which asks first; **Save Disk
-As...** in its menu saves to another), each as the device allows. A hardware row's inline buttons add or remove cards,
-and the view's title bar refreshes the list or resets a launch configuration's saved cards and media
-(**Retrocore: Reset Saved Machine...**). The view redraws at most ten times a second.
+Every answer gives the mount `generation` it is about (a number no other mount in the host has had, even in a drive
+whose card was put back in), and an answer holds only for that mount: a request whose `generation` is not the drive's
+mount now is refused, and `discards` lets go only of the mounts it lists, so a question left open while another disk
+went in never saves or lets go of the new one. A client that does not send `supportsRetrocoreMedia` has a changed disk's
+eject, insert or card removal refused with a message, as the safe default, and a save that did not save (`losses`,
+`conflict` or `readOnly`) is an error with what to send instead; `discard: true` lets every changed disk the action
+takes out go. A drive's `media` also gives its `medium` id, mount `generation`, `version`, and `source`: `kind`
+`image` with its `path`, or `built`; whether it `saves`; `readOnly`, `format` for an image that can only be read or
+`file` for a file marked read-only, else null; and `stale`, true once the file changed or went since the disk matched
+it, with its `baseline` revision and the `current` one (null for no file). The host watches each image a disk came
+from, and sends `retro/devices` when one changes, even while the machine is stopped.
+
+## A machine that is off
+
+The language server, which is the same `Retrocore.Debug.dll`, answers two requests about a machine with no debug
+session, built as a launch builds it and never run:
+
+- `retrocore/machine/describe` takes `{ "configuration": { launch arguments }, "machineState": { saved } }`, the
+  saved machine being the `configuration` above.
+- `retrocore/machine/change` takes the same, plus `"request": "hardware"` or `"device"` and `"arguments"`, which are
+  what `retro/hardware` or `retro/device` would take, such as `{ "id": "slot5", "action": "addDiskII", "sectors": 16 }`
+  or `{ "id": "slot5disk1", "action": "insert", "path": "games.dsk" }`.
+
+Both answer as `retro/devices` does, with the new saved machine as `configuration`, and add `problems`: what of the
+saved machine could not be restored, such as a disk image that no longer exists. Nothing is kept between requests, so
+the saved machine the editor holds is all of an off machine's state, and launching with it as `machineState` boots
+the machine as it was described. Game controllers are not opened while off; the game port's row says they are read
+while it runs. `tools/Test-OffMachine.mjs` checks that each machine lists the same hardware and devices off as
+launched.
+
+## The Machine and Drives views
+
+Retrocore has its own icon in the activity bar, a small computer, which opens two views.
+
+With no Retrocore session, the views show a machine that is off ([offMachine.ts](../extension/src/offMachine.ts)):
+the one last started, or the one **Switch Machine…** (`⇄` in the Machine view's title bar) picks from Start
+Machine's last setup, the workspace's launch configurations and the catalog's machines. The language server
+describes it ([A machine that is off](#a-machine-that-is-off)) when either view comes into sight, so a closed
+sidebar builds nothing. Its header says `off` with a dark screen, and its cards and media change as a running
+machine's do, except that a tape cannot record and there is no changed disk to save.
+
+Its **Settings**, the first rows under it, are the catalog's choices for the machine
+([machines.ts](../extension/src/machines.ts)), the ones **Start Machine → Options…** offers; a launch.json entry
+that leaves out its model is matched as the host reads it. While off, clicking one picks its value. The change goes
+where the machine came from: Start Machine's setup (which **Start Last Machine** then starts), the launch.json
+configuration (written there, its variables kept), or the configuration itself. Before it, the saved machine is cut
+down to what differs from the machine its old settings give by themselves, so the new setting takes effect while
+the cards and media someone added stay on top of it; what no longer fits is reported. While running, the settings
+show the session's own values and do not change. Each change is saved as its
+launch configuration's saved machine, which its next launch restores; its `▶` starts it as it came (Start Machine's
+setup, the launch.json configuration, or the configuration itself). When a session ends, the views show its machine
+off, with what changed while it ran. A saved disk that can no longer be restored is reported once, and a machine
+that cannot be built says why at the top of the Machine view. Before any machine has started, the Machine view's
+welcome text offers **Start Machine** and **Set Up a Machine**; its **...** menu always has **Start Machine…** and
+**Start Last Machine**.
+
+While a Retrocore session runs, the **Machine** view is headed by the machine itself, such as `Apple IIe` with
+`Enhanced, 65C02 · running`: its screen icon is lit while it runs and dark while it is stopped in the debugger.
+Under it is the installed hardware, slot by slot, empty slots dimmed and a slot with drives saying how many. Below
+the machine is **BASIC program** when the machine has a supported BASIC (showing the active dialect and line
+count, and opening **Retrocore: Open BASIC Program** when clicked). Hovering a row says what it does and which
+launch option installs it.
+
+The **Drives** view lists each card or option that has drives, with its drives under it: Slot 6's Disk II drives
+under Slot 6, the Model I's drives under its disk controller. Each drive shows its media, its head or tape
+position and what it is doing, such as `newdos.dsk · track 17 sector 4 · reading`, and its image's state: `read-only
+image`, `image changed on disk` or `image deleted`. Its icon is its own kind of drive (a 5.25-inch or 3.5-inch floppy,
+a hard disk or a tape) with a padlock badge, closed or open, in green while it reads, red while it writes and yellow
+while it seeks; a tape's whole icon takes the colour, and an empty drive is dimmed. At the row's end, as Git marks a
+file, `●` is a disk changed and not saved, and `⚠` an image changed on disk since the disk matched it. Expanding a
+drive lists its state and metadata; hovering it says the image, whether it changed, when the image changed and when
+it was read, the lock and where the head is. The view's badge counts the disks changed and not yet saved to their
+images.
+
+A drive's inline buttons, icons with tooltips, insert media (an open dialog filtered to its formats) or record to a
+new tape in an empty drive; in a full one, the lock toggle, which shows the lock as it is ("Locked: click to let the
+machine write it"), **Save** for a changed disk, and eject. Its menu has **Save**, **Save As...**, **Insert...**,
+**Eject**, and **Lock** or **Unlock**. Save writes the disk's own image at once and says so in the status bar for five
+seconds, and asks only when something is off: a format that cannot hold all of the disk lists what it would lose and
+offers **Save as WOZ...** (DMK, 2MG) or **Save Anyway**; an image changed on disk since the disk was read says when, and
+offers **Overwrite**, keeping the file's changes as a backup, or **Save As...** (the row's button says it will ask); a
+read-only file offers **Save As...** or **Make Writable and Save**; an image that can only be read, or a disk a launch
+built, offers **Save As...**, which is then the row's button. A slot's inline buttons in the Machine view add or
+remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
+and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
+Machine...**). The views redraw at most ten times a second.
+
+The **Favorites** view ([favorites.ts](../extension/src/favorites.ts), the favorite itself in
+[favorite.ts](../extension/src/favorite.ts)) lists the `retrocore.favorites` setting: in user settings, and the
+workspace's, grouped under **User** and **Workspace** when both have some. A favorite is a Start Machine setup (the
+catalog machine, its settings that differ from their defaults, and what it runs) with a name, a description and the
+saved machine; a launch.json machine is kept as the setup it amounts to, so launch options Start Machine cannot set
+are not. Loading one sets it up off under its own name, which names its launch configuration and saved machine, with
+its saved machine as that one's; starting one loads it and boots it through Start Machine, so **Start Last Machine**
+repeats it. A name is one favorite across user and workspace settings, as it names the favorite's launch configuration and
+saved machine; one with no saved machine loads as its launch gives it, dropping edits made to it since. Changes to an
+off machine run one at a time, each from the saved machine the one before left. In user settings a favorite's paths
+are kept as they are; in the workspace's, paths inside the workspace
+are written as `${workspaceFolder}/...`, and moving a favorite between the two converts them.
+
+The Machine view's heart, on the machine's row, says whether the machine shown is a favorite. The machine is one when
+it was loaded from one (its name is the favorite's) or was saved as one (the extension links the launch
+configuration's name to the favorite's). Its heart is empty when it is not one, and clicking it saves the machine at
+once under its machine's name, numbered if taken, and links it. Filled, the favorite matches the machine as it is
+now, and clicking it reveals the favorite in the Favorites view. Broken, it differs, in its settings, what it runs,
+its cards, or its disks and tapes (`differences` in favorite.ts, which ignores empty slots and drives), and clicking
+it updates the favorite. The machine's tooltip names the favorite and what differs.
+
+VS Code opens Run and Debug as a session starts and when it breaks (its `debug.openDebug` setting). When that
+takes the sidebar from the Retrocore views within a moment of a Retrocore session starting or stopping, the
+extension reveals the Machine view again without focusing it, so the keyboard stays with the display panel or the
+editor.

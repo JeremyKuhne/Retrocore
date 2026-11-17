@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Assembler;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using Retrocore.Assembler;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
@@ -107,7 +107,7 @@ public sealed class OpcodeTableGenerator : IIncrementalGenerator
             variantType.GetMembers().OfType<IFieldSymbol>().Where(field => field.HasConstantValue).Select(field => field.Name),
             StringComparer.Ordinal);
 
-        Dictionary<string, OpcodeMap> maps = new(StringComparer.Ordinal);
+        Dictionary<string, OpcodeMap> maps = [with(StringComparer.Ordinal)];
         OpcodeMap? current = null;
         bool description = false;
         for (int lineNumber = 0; lineNumber < text.Lines.Count; lineNumber++)
@@ -229,7 +229,7 @@ public sealed class OpcodeTableGenerator : IIncrementalGenerator
             return null;
         }
 
-        Dictionary<string, byte> result = new(StringComparer.Ordinal);
+        Dictionary<string, byte> result = [with(StringComparer.Ordinal)];
         HashSet<byte> values = [];
         foreach (IFieldSymbol field in symbol.GetMembers().OfType<IFieldSymbol>().Where(field => field.HasConstantValue))
         {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Debug;
 using Retrocore.Media;
 
 namespace Retrocore.Tests;
@@ -26,6 +27,18 @@ public class PascalMediaTests
         ?? Path.Join(ExternalTestData.Root, "apple2-pascal-disks");
 
     /// <summary>
+    ///  Gets the path of one of Apple Pascal 1.3's disks: the Internet Archive's image, <c>UCSD Pascal 1.3_1.DSK</c>,
+    ///  where it is present, else the WOZ image named by its volume, <c>UCSD Pascal 1.3_APPLE1.woz</c>.
+    /// </summary>
+    /// <param name="volume">The disk's number, 0 to 3, as its volume, APPLE0 to APPLE3, has it.</param>
+    /// <returns>The path, which may not be a file.</returns>
+    internal static string Apple2Pascal13Disk(int volume)
+    {
+        string image = Path.Join(Apple2Disks, $"UCSD Pascal 1.3_{volume}.DSK");
+        return File.Exists(image) ? image : Path.Join(Apple2Disks, $"UCSD Pascal 1.3_APPLE{volume}.woz");
+    }
+
+    /// <summary>
     ///  Reads an Apple Pascal disk, or ends the test as inconclusive without it.
     /// </summary>
     /// <param name="disk">The disk's file name.</param>
@@ -34,7 +47,7 @@ public class PascalMediaTests
     {
         string path = Path.Join(Apple2Disks, disk);
         if (!File.Exists(path)) { Assert.Inconclusive($"Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with {disk}."); }
-        return PascalVolume.Read(File.ReadAllBytes(path), proDosOrder: false);
+        return PascalVolume.Read(DiskImageFile.Sectors(path), proDosOrder: false);
     }
 
     /// <summary>
@@ -253,14 +266,21 @@ public class PascalMediaTests
     }
 
     /// <summary>
-    ///  Gets the code files on the Apple Pascal 1.1 and Apple III Pascal 1.1 disks, or ends the test as inconclusive
-    ///  without them.
+    ///  Gets the code files on the Apple Pascal 1.1 and 1.3 and Apple III Pascal 1.1 and 1.2 disks, or ends the test as
+    ///  inconclusive without 1.1's.
     /// </summary>
     /// <returns>Each file's disk and name, and its contents.</returns>
     internal static List<(string Name, byte[] Data)> CodeFiles()
     {
         List<(string, byte[])> files = [];
-        foreach (string disk in (string[])["UCSD Pascal 1.1_0.dsk", "UCSD Pascal 1.1_1.dsk", "UCSD Pascal 1.1_2.dsk", "UCSD Pascal 1.1_3.dsk"])
+        // Apple Pascal 1.3's disks join 1.1's where they are present.
+        string[] apple2 =
+        [
+            "UCSD Pascal 1.1_0.dsk", "UCSD Pascal 1.1_1.dsk", "UCSD Pascal 1.1_2.dsk", "UCSD Pascal 1.1_3.dsk",
+            .. Enumerable.Range(0, 4).Select(Apple2Pascal13Disk).Where(File.Exists).Select(Path.GetFileName).OfType<string>()
+        ];
+
+        foreach (string disk in apple2)
         {
             PascalVolume volume = Apple2Volume(disk);
             foreach (PascalFileEntry entry in volume.Files)

@@ -328,6 +328,7 @@ internal sealed class Application : DisposableBase
 
     private static string ScreenName(Apple2Monitor screen) => screen switch
     {
+        Apple2Monitor.ColorRgb => "color RGB",
         Apple2Monitor.White => "black and white",
         Apple2Monitor.Green => "green",
         Apple2Monitor.Amber => "amber",
@@ -500,7 +501,8 @@ internal sealed class Application : DisposableBase
             case Command.Screen:
                 Apple2Monitor screen = _settings.Screen switch
                 {
-                    Apple2Monitor.Color => Apple2Monitor.White,
+                    Apple2Monitor.Color => Apple2Monitor.ColorRgb,
+                    Apple2Monitor.ColorRgb => Apple2Monitor.White,
                     Apple2Monitor.White => Apple2Monitor.Green,
                     Apple2Monitor.Green => Apple2Monitor.Amber,
                     _ => Apple2Monitor.Color

@@ -30,6 +30,11 @@ internal sealed class Ay38910
     private bool _envelopeRising;
     private bool _envelopeHolding;
     private int _address;
+    private bool _outputDirty;
+    private float _output;
+    private int _toneOutputMask;
+    private int _noiseOutputMask;
+    private bool _envelopeAffectsOutput;
 
     /// <summary>
     ///  Creates a reset PSG.
@@ -43,6 +48,7 @@ internal sealed class Ay38910
     {
         get
         {
+            if (!_outputDirty) { return _output; }
             float output = 0;
             int mixer = _registers[7];
             for (int channel = 0; channel < 3; channel++)
@@ -57,7 +63,9 @@ internal sealed class Ay38910
                 }
             }
 
-            return output / 3;
+            _output = output / 3;
+            _outputDirty = false;
+            return _output;
         }
     }
 
@@ -121,6 +129,8 @@ internal sealed class Ay38910
         }
 
         _registers[_address] = (byte)(value & s_masks[_address]);
+        _outputDirty = true;
+        if (_address is >= 7 and <= 10) { UpdateOutputMask(); }
         if (_address == 13)
         {
             _envelopeCounter = 0;
@@ -148,21 +158,26 @@ internal sealed class Ay38910
             {
                 _toneCounters[channel] = 0;
                 _tones[channel] = !_tones[channel];
+                if ((_toneOutputMask & (1 << channel)) != 0) { _outputDirty = true; }
             }
         }
 
         if (++_noiseCounter >= Math.Max(1, (int)_registers[6]) * 2)
         {
             _noiseCounter = 0;
+            uint previous = _noise;
             uint feedback = (_noise ^ (_noise >> 3)) & 1;
             _noise = (_noise >> 1) | (feedback << 16);
+            if (_noiseOutputMask != 0 && ((_noise ^ previous) & 1) != 0) { _outputDirty = true; }
         }
 
         int envelopePeriod = _registers[11] | (_registers[12] << 8);
         if (++_envelopeCounter >= Math.Max(1, envelopePeriod * 2))
         {
             _envelopeCounter = 0;
+            int previous = _envelopeStep;
             StepEnvelope();
+            if (_envelopeAffectsOutput && previous != _envelopeStep) { _outputDirty = true; }
         }
     }
 
@@ -179,6 +194,22 @@ internal sealed class Ay38910
         _address = 0;
         _envelopeStep = 15;
         _envelopeRising = _envelopeHolding = false;
+        _outputDirty = true;
+        _toneOutputMask = _noiseOutputMask = 0;
+        _envelopeAffectsOutput = false;
+    }
+
+    private void UpdateOutputMask()
+    {
+        int audible = 0;
+        for (int channel = 0; channel < 3; channel++)
+        {
+            if (_registers[8 + channel] != 0) { audible |= 1 << channel; }
+        }
+
+        _toneOutputMask = audible & ~_registers[7];
+        _noiseOutputMask = audible & ~(_registers[7] >> 3);
+        _envelopeAffectsOutput = ((_registers[8] | _registers[9] | _registers[10]) & 16) != 0;
     }
 
     private void StepEnvelope()

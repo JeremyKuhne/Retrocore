@@ -14,8 +14,9 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Apple Pascal 1.3's disks are WOZ images in <c>RETROCORE_APPLE2_PASCAL_DISKS</c> (<c>UCSD Pascal 1.3_APPLE1.woz</c>
-///   to <c>APPLE3.woz</c>). Its Compiler, decompiled, compiles with <c>(*$S++*)</c> on a 128K IIe booted from APPLE1
+///   Apple Pascal 1.3's disks are in <c>RETROCORE_APPLE2_PASCAL_DISKS</c>, as the Internet Archive's
+///   <c>UCSD Pascal 1.3_1.DSK</c> to <c>1.3_3.DSK</c> or as WOZ images, <c>UCSD Pascal 1.3_APPLE1.woz</c> to
+///   <c>APPLE3.woz</c>. Its Compiler, decompiled, compiles with <c>(*$S++*)</c> on a 128K IIe booted from APPLE1
 ///   with APPLE3's 128K system in place of the 64K one: the Apple II's 64K runs out in COMPINIT. Its two assembled
 ///   procedures, in PASCALCO, are assembled from their decompiled source and linked in. It takes about three minutes.
 ///  </para>
@@ -37,12 +38,12 @@ public class PascalCompilerRoundTripTests
     [TestMethod]
     public void ApplePascal13CompilerRebuildsItself()
     {
-        string apple1 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.3_APPLE1.woz");
-        string apple2 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.3_APPLE2.woz");
-        string apple3 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.3_APPLE3.woz");
+        string apple1 = PascalMediaTests.Apple2Pascal13Disk(1);
+        string apple2 = PascalMediaTests.Apple2Pascal13Disk(2);
+        string apple3 = PascalMediaTests.Apple2Pascal13Disk(3);
         if (!File.Exists(apple1) || !File.Exists(apple2) || !File.Exists(apple3))
         {
-            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.3's WOZ images.");
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.3's disks.");
         }
 
         byte[] original = PascalVolume.Read(Sectors(apple2), proDosOrder: false).ReadFile("SYSTEM.COMPILER");
@@ -84,10 +85,10 @@ public class PascalCompilerRoundTripTests
     [TestMethod]
     public void ApplePascal13CompilersIdentifiersKeepTheirPointerViews()
     {
-        string apple2 = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.3_APPLE2.woz");
+        string apple2 = PascalMediaTests.Apple2Pascal13Disk(2);
         if (!File.Exists(apple2))
         {
-            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.3's WOZ images.");
+            Assert.Inconclusive("Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with Apple Pascal 1.3's disks.");
         }
 
         byte[] original = PascalVolume.Read(Sectors(apple2), proDosOrder: false).ReadFile("SYSTEM.COMPILER");

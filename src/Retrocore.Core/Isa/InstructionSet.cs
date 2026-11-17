@@ -28,7 +28,7 @@ public sealed partial class InstructionSet
 
     private readonly List<string> _mnemonics = [];
     private readonly List<string> _baseNames = [];
-    private readonly Dictionary<string, int> _ids = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _ids = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<uint, int> _packed = [];
     private readonly List<IsaEncoding> _encodings = [];
     private readonly List<InstructionFlow> _flows = [];
@@ -105,6 +105,12 @@ public sealed partial class InstructionSet
     ///  description was parsed without one.
     /// </summary>
     public PostbyteCodec? Postbytes { get; private init; }
+
+    /// <summary>
+    ///  Gets the addresses where code starts on this CPU without a vector pointing there, such as the Z80's and
+    ///  8080's restarts and the 8085's interrupt entries: the description's, and the set's own.
+    /// </summary>
+    public IReadOnlyList<ushort> EntryPoints { get; private init; } = [];
 
     /// <summary>
     ///  Gets a small number that identifies this set for the life of the process, so unmanaged values such as
@@ -467,7 +473,9 @@ public sealed partial class InstructionSet
         InstructionFlow flow,
         MemoryAccess access,
         MemoryAccess encodingAccess,
-        bool prefer)
+        bool prefer,
+        ushort? target,
+        bool conditional)
     {
         if (!_ids.TryGetValue(mnemonic, out int id))
         {
@@ -496,7 +504,9 @@ public sealed partial class InstructionSet
         _encodings.Add(new((ushort)id, form.Id, entry.Opcode, entry.Length, entry.Undocumented, entry.SplitAt)
         {
             Cycles = entry.Cycles,
-            CyclesTaken = entry.CyclesTaken
+            CyclesTaken = entry.CyclesTaken,
+            FixedTarget = target,
+            IsConditional = conditional
         });
 
         _flows.Add(flow);

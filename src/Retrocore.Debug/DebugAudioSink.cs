@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Runtime.InteropServices;
 using Retrocore.Machines;
+using System.Runtime.InteropServices;
 
 namespace Retrocore.Debug;
 
@@ -20,7 +20,7 @@ namespace Retrocore.Debug;
 /// <param name="sampleRate">The samples per second the machine's audio produces.</param>
 internal sealed class DebugAudioSink(int channels, int sampleRate) : IAudioSink
 {
-    private readonly List<short> _samples = new(sampleRate * channels / 10);
+    private readonly List<short> _samples = [with(sampleRate * channels / 10)];
 
     /// <summary>
     ///  Gets the channels each sample frame holds.

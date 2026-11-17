@@ -21,7 +21,7 @@ internal static partial class AssemblyCompiler
         InstructionSet codes,
         List<InstructionSet>? cpuSettings)
     {
-        List<LayoutSection> sections = new(capacity: 1);
+        List<LayoutSection> sections = [with(capacity: 1)];
         bool configured = project.DeclaredSections is { Count: > 0 };
         sections.Add(new(DefaultSectionName, options.Origin, options.ImageSize, line: 0, trim: configured));
         if (sectionCount == 0 && !configured)

@@ -32,7 +32,7 @@ internal static class AssembleCommand
             return 2;
         }
 
-        Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> options = [with(StringComparer.OrdinalIgnoreCase)];
         for (int index = 2; index < args.Length; index += 2) { options[args[index]] = args[index + 1]; }
 
         string output = args[1];

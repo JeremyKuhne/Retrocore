@@ -27,7 +27,7 @@ namespace Retrocore.Machines.Apple1;
 ///   The cursor is the 2513's <c>@</c> blinking with a space, from a 555 timer; here it changes every 16 frames.
 ///  </para>
 /// </remarks>
-public sealed class Apple1Terminal : IVideoSource
+public sealed class Apple1Terminal : IVideoSource, ICharacterSet
 {
     /// <summary>
     ///  Characters per line.
@@ -264,6 +264,39 @@ public sealed class Apple1Terminal : IVideoSource
             }
         }
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Seven dots, as the screen spaces them: the 2513's five and the two between characters.
+    ///  </para>
+    /// </remarks>
+    int ICharacterSet.CharacterWidth => PixelsPerCharacter;
+
+    /// <inheritdoc/>
+    int ICharacterSet.CharacterHeight => LinesPerRow;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A byte in memory draws as the terminal would show it written to port B: the 2513's character for its
+    ///   six-bit code, bit 7 ignored. Control characters, which the terminal drops, draw blank.
+    ///  </para>
+    /// </remarks>
+    bool ICharacterSet.IsLit(byte code, int line, int pixel, bool flashed)
+    {
+        if ((code & 0x60) == 0 || pixel is < 1 or > 5 || line is < 0 or >= LinesPerRow) { return false; }
+        int dots = _characterGenerator[(Code(code) << 3) | line];
+        return (dots & (0x10 >> (pixel - 1))) != 0;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Uppercase, as the terminal drops bit 5 of lowercase; none for control characters.
+    ///  </para>
+    /// </remarks>
+    char ICharacterSet.Character(byte code) => (code & 0x60) == 0 ? '\0' : Ascii(Code(code));
 
     private static uint Rgba(byte red, byte green, byte blue) =>
         (uint)(red | (green << 8) | (blue << 16) | (0xFF << 24));

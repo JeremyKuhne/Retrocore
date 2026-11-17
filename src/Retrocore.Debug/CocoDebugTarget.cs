@@ -172,7 +172,10 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         new("Text screen, where BASIC shows it", 0x0400, 0x200, "video", DebugRegion.Rows(32)),
         new("Extended Color BASIC ROM", 0x8000, 0x2000, "rom"),
         new("Color BASIC ROM", 0xA000, 0x2000, "rom"),
-        new("Cartridge or Disk BASIC ROM", 0xC000, 0x3F00, "rom"),
+        // Split where the CoCo 3's MMU maps its 8K pages, and its constant vector page, apart.
+        new("Cartridge or Disk BASIC ROM", 0xC000, 0x2000, "rom"),
+        new("Cartridge ROM", 0xE000, 0x1E00, "rom"),
+        new("Cartridge ROM, or the CoCo 3's vector page", 0xFE00, 0x100, "rom"),
         new("I/O", 0xFF00, 0xE0, "io"),
         new("Vectors, from the ROM", 0xFFE0, 0x20, "rom")
     ];

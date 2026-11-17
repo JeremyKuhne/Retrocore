@@ -153,7 +153,20 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Direct page", 0x0000, 256);
 
     /// <inheritdoc/>
-    public IReadOnlyList<DebugRegion> Regions { get; } =
+    /// <remarks>
+    ///  <para>
+    ///   A ROM's addresses are RAM while the map puts RAM there, as a 64K machine's all-RAM map and the CoCo 3's
+    ///   MMU can; the vectors at $FFE0 read the ROM whatever the map.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DebugRegion> Regions =>
+    [
+        .. s_regions.Select(region => region.Kind == "rom" && region.Start < 0xFF00 && ReadArea(region.Start) is CocoMemoryArea.Ram
+            ? region with { Name = "RAM, which the map puts over the ROM", Kind = "ram" }
+            : region)
+    ];
+
+    private static readonly DebugRegion[] s_regions =
     [
         new("Direct page", 0x0000, 0x100, "ram"),
         new("Text screen, where BASIC shows it", 0x0400, 0x200, "video", DebugRegion.Rows(32)),

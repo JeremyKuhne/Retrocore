@@ -161,6 +161,7 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     private static readonly DebugRegion[] s_model3Regions =
     [
         new("ROM", 0x0000, 0x3800, "rom"),
+        new("Printer", 0x37E8, 0x2, "io"),
         new("Keyboard", 0x3800, 0x400, "io"),
         new("Video", 0x3C00, 0x400, "video", DebugRegion.Rows(64)),
         new("Communication region", 0x4000, 0x100, "ram")

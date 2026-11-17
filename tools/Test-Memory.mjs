@@ -583,6 +583,11 @@ try {
     const overlapped = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x0300, starts: [0x6530, 0x6531] }))
         .references.filter(reference => reference.address === 0x6531);
     assert.deepEqual(overlapped.map(reference => [reference.text, reference.kind]), [["LDA BANK2", "reads"]]);
+    // An overlapping BBR0 $10 both reads $10 and branches.
+    await write("0x654F", [0x4C, 0x0F, 0x10, 0x00]);
+    const bbr = async address => (await request("retro/memory/inspect", { memoryReference: "0x0000", address, starts: [0x654F, 0x6550] }))
+        .references.filter(reference => reference.address === 0x6550).map(reference => reference.kind);
+    assert.deepEqual([await bbr(0x0010), await bbr(0x6553)], [["reads"], ["branches"]]);
     // Immediate BIT changes only Z.
     await write("0x6540", [0x89, 0x80]);
     assert.equal((await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6540, starts: [0x6540] })).instruction.flags, "Z");

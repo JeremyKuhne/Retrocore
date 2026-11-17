@@ -259,13 +259,14 @@ internal sealed partial class DebugSession
 
         // A Decode from here start the listing keeps whose instruction analysis skipped, as one overlapping an earlier
         // start's, still refers to what its operand names.
-        int? directPage = DirectPage(analysis.Set);
         foreach (int start in analysis.Forced)
         {
             if (found.Any(reference => reference.Source == start)) { continue; }
             if (!Accepted(analysis, start, out DisassembledInstruction instruction)) { continue; }
-            (int? target, _) = ListingOperands.OperandAddress(instruction, directPage);
-            if (target == address) { found.Add((start, ReferenceOf(instruction, target.Value))); }
+            foreach ((int target, DisassemblyReferenceKind kind) in ReferencesOf(instruction))
+            {
+                if (target == address) { found.Add((start, kind)); }
+            }
         }
 
         count = found.Count;
@@ -300,27 +301,66 @@ internal sealed partial class DebugSession
         return references;
     }
 
-    // How an instruction uses the address its operand names, as analysis records it.
-    private static DisassemblyReferenceKind ReferenceOf(in DisassembledInstruction instruction, int target)
+    // The addresses an instruction refers to and how, as analysis records them (AnalysisEngine.AddReferences): a
+    // jump's, call's or branch's target, and the memory its operand reads or writes, so BBR0 $10,LOOP both reads $10
+    // and branches to LOOP.
+    private static List<(int Target, DisassemblyReferenceKind Kind)> ReferencesOf(in DisassembledInstruction instruction)
     {
-        if (instruction.DirectTarget == target)
+        List<(int Target, DisassemblyReferenceKind Kind)> references = [];
+        if (instruction.DirectTarget is { } direct)
         {
-            return instruction.Flow switch
+            DisassemblyReferenceKind flow = instruction.Flow switch
             {
                 DisassemblyFlow.Call => DisassemblyReferenceKind.Call,
                 DisassemblyFlow.Jump => DisassemblyReferenceKind.Jump,
                 _ => DisassemblyReferenceKind.Branch
             };
+
+            references.Add((direct, flow));
         }
 
-        if (instruction.Flow == DisassemblyFlow.IndirectJump) { return DisassemblyReferenceKind.IndirectJump; }
-        if (instruction.Form.Role == OperandRole.Pointer) { return DisassemblyReferenceKind.Read; }
-        return instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
+        OperandForm form = instruction.Form;
+        DisassemblyReferenceKind access = instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
         {
             MemoryAccess.Write => DisassemblyReferenceKind.Write,
             MemoryAccess.ReadWrite => DisassemblyReferenceKind.ReadWrite,
             _ => DisassemblyReferenceKind.Read
         };
+
+        if (form.HasPostbyte)
+        {
+            PostbyteReference postbyte = instruction.PostbyteReference;
+            if (postbyte == PostbyteReference.None) { return references; }
+            if (instruction.Flow == DisassemblyFlow.IndirectJump)
+            {
+                references.Add((instruction.Operand, DisassemblyReferenceKind.IndirectJump));
+            }
+            else if (postbyte == PostbyteReference.Pointer)
+            {
+                references.Add((instruction.Operand, DisassemblyReferenceKind.Read));
+            }
+            else if (instruction.DirectTarget is null)
+            {
+                references.Add((instruction.Operand, access));
+            }
+
+            return references;
+        }
+
+        if (instruction.Flow == DisassemblyFlow.IndirectJump)
+        {
+            if (form.FieldCount != 0) { references.Add((instruction.Operand, DisassemblyReferenceKind.IndirectJump)); }
+        }
+        else if (form.Role == OperandRole.Pointer)
+        {
+            references.Add((instruction.Operand, DisassemblyReferenceKind.Read));
+        }
+        else if (form.Role == OperandRole.Memory && (instruction.RelativeTarget is not null || instruction.DirectTarget is null))
+        {
+            references.Add((instruction.Operand, access));
+        }
+
+        return references;
     }
 
     // How a reference uses its address, in the inspector's words.

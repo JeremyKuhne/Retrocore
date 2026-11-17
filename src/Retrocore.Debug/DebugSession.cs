@@ -1061,12 +1061,14 @@ internal sealed partial class DebugSession
         return target;
     }
 
-    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command is typed at CP/M's first prompt.
+    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command, or MBASIC for a BASIC file, is typed
+    // at CP/M's first prompt.
     private static KayproDebugTarget LaunchKaypro(JsonObject args)
     {
         KayproDebugTarget target = KayproDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? 0);
-        if (args.String("command") is { } command) { target.TypeAtPrompt(command, seconds: 30); }
+        string? command = args.String("command") ?? (args.String("basic") is not null ? "MBASIC" : null);
+        if (command is not null) { target.TypeAtPrompt(command, seconds: 30); }
         return target;
     }
 

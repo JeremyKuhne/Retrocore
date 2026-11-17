@@ -337,7 +337,7 @@ internal sealed partial class DebugSession
         int at = BasicStackTop;
         for (int count = 0; count < MaximumStackEntries && at < 0xFFFB; count++)
         {
-            int token = Target.Peek((ushort)at);
+            int token = Target.BasicPeek((ushort)at);
             if (token == forToken)
             {
                 at += Target.BasicForSize;

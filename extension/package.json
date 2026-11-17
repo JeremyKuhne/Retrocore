@@ -177,6 +177,21 @@
         }
       },
       {
+        "id": "retrocore-mbasic",
+        "aliases": [
+          "MBASIC",
+          "mbasic"
+        ],
+        "extensions": [
+          ".mbasic.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-basic",
         "aliases": [
           "Retrocore BASIC"
@@ -246,6 +261,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-mbasic",
+        "scopeName": "source.retrocore-mbasic",
+        "path": "./syntaxes/mbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -291,7 +311,8 @@
             "business",
             "apple1",
             "level2",
-            "colorbasic"
+            "colorbasic",
+            "mbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -424,6 +445,9 @@
       },
       {
         "language": "retrocore-colorbasic"
+      },
+      {
+        "language": "retrocore-mbasic"
       },
       {
         "language": "retrocore-basic"
@@ -912,7 +936,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",

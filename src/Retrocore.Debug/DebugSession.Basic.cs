@@ -239,8 +239,8 @@ internal sealed partial class DebugSession
     }
 
     private int Word(int address) => Target.Basic?.BigEndian == true
-        ? (Target.Peek((ushort)address) << 8) | Target.Peek((ushort)(address + 1))
-        : Target.Peek((ushort)address) | (Target.Peek((ushort)(address + 1)) << 8);
+        ? (Target.BasicPeek((ushort)address) << 8) | Target.BasicPeek((ushort)(address + 1))
+        : Target.BasicPeek((ushort)address) | (Target.BasicPeek((ushort)(address + 1)) << 8);
 
     // The machine's memory by the addresses BASIC's program and text pointers hold, which may reach banked memory.
     private IBasicMemory TextMemory => Basic.Text(new TargetBasicMemory(Target));

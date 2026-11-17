@@ -24,6 +24,9 @@ public sealed partial class BasicVariables
     private const byte High = 0x80;
     private const int LevelTwoDefaultTypes = 0x4101;
     private const int LevelTwoStackTop = 0x40A0;
+    private const int MbasicNameLength = 40;
+    private const int MbasicWhileToken = 0xB4;
+    private const int MbasicWhileSize = 7;
     private const int StackRoom = 0x100;
 
     private const string TypeMismatch = "?TYPE MISMATCH: a string variable takes a string, and a numeric one a number.";
@@ -47,6 +50,14 @@ public sealed partial class BasicVariables
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
+    // MBASIC keeps Level II's types and number formats, but a name's characters past its second follow a count of
+    // them, each with bit 7 set, and a FOR entry has a text pointer after its variable.
+    private bool Mbasic => _dialect == BasicDialect.Mbasic;
+
+    // Whether numbers are Microsoft's later formats: integers low byte first, floats with the exponent last, and each
+    // letter's type set by DEFINT and the others.
+    private bool Typed => LevelTwo || Mbasic;
+
     // Color BASIC keeps AppleSoft's layout, but a string's descriptor has a spare byte before its address, and a
     // string array's elements are five bytes.
     private bool ColorBasic => _dialect is ColorBasicDialect;
@@ -66,7 +77,15 @@ public sealed partial class BasicVariables
         int end = Word(Pointers.Arrays);
         while (at < end && variables.Count < MaximumEntries)
         {
-            if (LevelTwo)
+            if (Mbasic)
+            {
+                int type = _memory.Read(at);
+                if (KindOfType(type) is not { } kind) { break; }
+                int header = MbasicHeader(at);
+                variables.Add(new(MbasicName(at, kind), kind, at, at + header));
+                at += header + type;
+            }
+            else if (LevelTwo)
             {
                 int type = _memory.Read(at);
                 if (KindOfType(type) is not { } kind) { break; }
@@ -105,7 +124,14 @@ public sealed partial class BasicVariables
             char first;
             char second;
             int header;
-            if (LevelTwo)
+            string? full = null;
+            if (Mbasic)
+            {
+                if (KindOfType(_memory.Read(at)) is not { } type) { break; }
+                (kind, first, second, header) = (type, (char)_memory.Read(at + 1), (char)_memory.Read(at + 2), MbasicHeader(at));
+                full = MbasicName(at, kind);
+            }
+            else if (LevelTwo)
             {
                 if (KindOfType(_memory.Read(at)) is not { } type) { break; }
                 (kind, first, second, header) = (type, (char)_memory.Read(at + 2), (char)_memory.Read(at + 1), 3);
@@ -123,17 +149,17 @@ public sealed partial class BasicVariables
             for (int index = 0; index < count; index++)
             {
                 int field = at + header + 3 + (index * 2);
-                int elements = LevelTwo ? Word(field) : (_memory.Read(field) << 8) | _memory.Read(field + 1);
+                int elements = Typed ? Word(field) : (_memory.Read(field) << 8) | _memory.Read(field + 1);
 
                 // The last subscript's count is stored first.
                 dimensions[count - 1 - index] = elements;
             }
 
             int elementsAt = at + header + 3 + (count * 2);
-            arrays.Add(new(Name(first, second, kind), kind, at, dimensions, elementsAt, ValueSize(kind)));
+            arrays.Add(new(full ?? Name(first, second, kind), kind, at, dimensions, elementsAt, ValueSize(kind)));
 
-            // AppleSoft's size counts from the array's start; Level II's from just past the size.
-            at += LevelTwo ? header + 2 + size : size;
+            // AppleSoft's size counts from the array's start; Level II's and MBASIC's from just past the size.
+            at += Typed ? header + 2 + size : size;
         }
 
         return arrays;
@@ -158,14 +184,14 @@ public sealed partial class BasicVariables
                 for (int index = 0; index < length; index++) { bytes[index] = _memory.Read((text + index) & 0xFFFF); }
                 return BasicValue.Of(bytes);
             case BasicVariableKind.Integer:
-                int word = LevelTwo ? Word(address) : (_memory.Read(address) << 8) | _memory.Read(address + 1);
+                int word = Typed ? Word(address) : (_memory.Read(address) << 8) | _memory.Read(address + 1);
                 return new((short)word);
             case BasicVariableKind.Function:
                 return new(0);
             default:
                 byte[] value = new byte[ValueSize(kind)];
                 for (int index = 0; index < value.Length; index++) { value[index] = _memory.Read(address + index); }
-                return new(BasicNumbers.ReadFloat(value, exponentFirst: !LevelTwo));
+                return new(BasicNumbers.ReadFloat(value, exponentFirst: !Typed));
         }
     }
 
@@ -213,12 +239,12 @@ public sealed partial class BasicVariables
                 int integer = (ushort)(short)truncated;
                 byte low = (byte)integer;
                 byte high = (byte)(integer >> 8);
-                Store(address, LevelTwo ? [low, high] : [high, low]);
+                Store(address, Typed ? [low, high] : [high, low]);
                 break;
             case BasicVariableKind.Function:
                 throw new ArgumentException("A function's value cannot be set.");
             default:
-                Store(address, BasicNumbers.WriteFloat(value.Number, ValueSize(kind), exponentFirst: !LevelTwo));
+                Store(address, BasicNumbers.WriteFloat(value.Number, ValueSize(kind), exponentFirst: !Typed));
                 break;
         }
     }
@@ -245,7 +271,7 @@ public sealed partial class BasicVariables
         }
 
         (char first, char second, BasicVariableKind kind) = Parse(name);
-        string stored = Name(first, second, kind);
+        string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
         return Simple().FirstOrDefault(variable => variable.Kind == kind && variable.Name == stored);
     }
 
@@ -270,7 +296,7 @@ public sealed partial class BasicVariables
         }
 
         (char first, char second, BasicVariableKind kind) = Parse(name);
-        string stored = Name(first, second, kind);
+        string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
         return Arrays().FirstOrDefault(array => array.Kind == kind && array.Name == stored);
     }
 
@@ -287,7 +313,9 @@ public sealed partial class BasicVariables
         if (IntegerBasic) { return IntegerCreate(name); }
         if (BusinessBasic) { return BusinessCreate(name); }
         (char first, char second, BasicVariableKind kind) = Parse(name);
-        int size = LevelTwo ? 3 + ValueSize(kind) : AppleSoftEntry;
+        byte[] rest = Mbasic ? MbasicRest(name) : [];
+        int header = Mbasic ? 4 + rest.Length : LevelTwo ? 3 : 2;
+        int size = Typed ? header + ValueSize(kind) : AppleSoftEntry;
         int start = Word(Pointers.Arrays);
         int end = Word(Pointers.FreeStart);
         int limit = LevelTwo ? Word(LevelTwoStackTop) - StackRoom : _dialect.VariableLimit(_memory);
@@ -298,7 +326,11 @@ public sealed partial class BasicVariables
 
         for (int at = end - 1; at >= start; at--) { _memory.Write(at + size, _memory.Read(at)); }
         for (int at = start; at < start + size; at++) { _memory.Write(at, 0); }
-        if (LevelTwo)
+        if (Mbasic)
+        {
+            Store(start, [(byte)ValueSize(kind), (byte)first, (byte)second, (byte)rest.Length, .. rest]);
+        }
+        else if (LevelTwo)
         {
             Store(start, [(byte)ValueSize(kind), (byte)second, (byte)first]);
         }
@@ -311,7 +343,7 @@ public sealed partial class BasicVariables
 
         BasicProgram.WriteWord(_memory, Pointers.Arrays, start + size);
         BasicProgram.WriteWord(_memory, Pointers.FreeStart, end + size);
-        return new(Name(first, second, kind), kind, start, start + (LevelTwo ? 3 : 2));
+        return new(Mbasic ? MbasicStored(name, kind) : Name(first, second, kind), kind, start, start + header);
     }
 
     /// <summary>
@@ -339,8 +371,15 @@ public sealed partial class BasicVariables
                 continue;
             }
 
+            // MBASIC's WHILE entries: the token, two text pointers and the line.
+            if (Mbasic && token == MbasicWhileToken)
+            {
+                at += MbasicWhileSize;
+                continue;
+            }
+
             if (token != forToken) { break; }
-            loops.Add(LevelTwo ? LevelTwoLoop(at) : AppleSoftLoop(at));
+            loops.Add(Mbasic ? MbasicLoop(at) : LevelTwo ? LevelTwoLoop(at) : AppleSoftLoop(at));
             at += forSize;
         }
 
@@ -359,7 +398,7 @@ public sealed partial class BasicVariables
         BasicVariableKind.Single => 4,
         BasicVariableKind.Double or BasicVariableKind.Long => 8,
         BasicVariableKind.Function when BusinessBasic => 6,
-        _ => LevelTwo || BusinessBasic ? 4 : 5
+        _ => Typed || BusinessBasic ? 4 : 5
     };
 
     // AppleSoft's FOR entry: the token, the variable, the step unpacked (its top bit set, its sign after it), the
@@ -400,6 +439,63 @@ public sealed partial class BasicVariables
         return new(variable, increment, BasicNumbers.ReadFloat(limit, exponentFirst: false), line);
     }
 
+    // MBASIC's FOR entry: the token, the variable, a text pointer, the step's sign, $FF for an integer loop, then a
+    // single step and limit, or an unused slot and an integer step and limit; then the line and the text pointer.
+    private BasicLoop MbasicLoop(int at)
+    {
+        int variable = Word(at + 1);
+        int line = Word(at + 15);
+        if (_memory.Read(at + 6) == 0xFF)
+        {
+            return new(variable, (short)Word(at + 11), (short)Word(at + 13), line);
+        }
+
+        byte[] step = new byte[4];
+        byte[] limit = new byte[4];
+        for (int index = 0; index < 4; index++)
+        {
+            step[index] = _memory.Read(at + 7 + index);
+            limit[index] = _memory.Read(at + 11 + index);
+        }
+
+        double increment = BasicNumbers.ReadFloat(step, exponentFirst: false);
+        return new(variable, increment, BasicNumbers.ReadFloat(limit, exponentFirst: false), line);
+    }
+
+    // An MBASIC entry's header: the type, two characters and the count of the rest, then the rest.
+    private int MbasicHeader(int at) => 4 + _memory.Read(at + 3);
+
+    // An MBASIC entry's whole name, with its suffix unless its type is its first letter's default.
+    private string MbasicName(int at, BasicVariableKind kind)
+    {
+        char first = (char)_memory.Read(at + 1);
+        char second = (char)_memory.Read(at + 2);
+        string rest = new([.. Enumerable.Range(at + 4, _memory.Read(at + 3)).Select(index => (char)(_memory.Read(index) & 0x7F))]);
+        return Suffixed(second == '\0' ? first.ToString() : $"{first}{second}{rest}", first, kind);
+    }
+
+    // A name as a program writes it, as MBASIC stores it: its first 40 characters in uppercase, with its suffix
+    // unless its type is its first letter's default.
+    private string MbasicStored(string name, BasicVariableKind kind)
+    {
+        string letters = Letters(name);
+        return Suffixed(letters, letters[0], kind);
+    }
+
+    // The characters of a name past its second, as MBASIC stores them, each with bit 7 set.
+    private static byte[] MbasicRest(string name)
+    {
+        string letters = Letters(name);
+        return letters.Length <= 2 ? [] : [.. letters[2..].Select(character => (byte)(character | High))];
+    }
+
+    // A name's letters, digits and dots, in uppercase, up to MBASIC's 40.
+    private static string Letters(string name)
+    {
+        string upper = name.Trim().ToUpperInvariant().TrimEnd('$', '%', '!', '#');
+        return upper.Length > MbasicNameLength ? upper[..MbasicNameLength] : upper;
+    }
+
     private static BasicVariableKind? KindOfType(int type) => type switch
     {
         2 => BasicVariableKind.Integer,
@@ -424,9 +520,12 @@ public sealed partial class BasicVariables
     }
 
     // A name as BASIC stores it, with its suffix unless its type is the default for its first letter.
-    private string Name(char first, char second, BasicVariableKind kind)
+    private string Name(char first, char second, BasicVariableKind kind) =>
+        Suffixed(second == '\0' ? first.ToString() : $"{first}{second}", first, kind);
+
+    // Letters with their type's suffix, unless the type is the default for the first letter.
+    private string Suffixed(string letters, char first, BasicVariableKind kind)
     {
-        string letters = second == '\0' ? first.ToString() : $"{first}{second}";
         return kind switch
         {
             BasicVariableKind.Integer when !Defaults(first, kind) => letters + "%",
@@ -441,8 +540,8 @@ public sealed partial class BasicVariables
     // suffix. AppleSoft's numbers are its only default.
     private bool Defaults(char first, BasicVariableKind kind)
     {
-        if (!LevelTwo || first is < 'A' or > 'Z') { return false; }
-        return KindOfType(_memory.Read(LevelTwoDefaultTypes + (first - 'A'))) == kind;
+        if (!Typed || first is < 'A' or > 'Z') { return false; }
+        return KindOfType(_memory.Read(DefaultTypes + (first - 'A'))) == kind;
     }
 
     // Splits a name as a program writes it into the two characters BASIC keeps and its type.
@@ -453,14 +552,18 @@ public sealed partial class BasicVariables
         if (upper.Length == 0 || !char.IsAsciiLetter(upper[0])) { throw new ArgumentException($"'{name}' {BadName}"); }
         char suffix = upper[^1];
         string letters = suffix is '$' or '%' or '!' or '#' ? upper[..^1] : upper;
-        if (!letters.All(char.IsAsciiLetterOrDigit)) { throw new ArgumentException($"'{name}' {BadName}"); }
+        if (!letters.All(character => char.IsAsciiLetterOrDigit(character) || (Mbasic && character == '.')))
+        {
+            throw new ArgumentException($"'{name}' {BadName}");
+        }
+
         BasicVariableKind kind = suffix switch
         {
             '$' => BasicVariableKind.String,
             '%' => BasicVariableKind.Integer,
-            '!' when LevelTwo => BasicVariableKind.Single,
-            '#' when LevelTwo => BasicVariableKind.Double,
-            _ when LevelTwo => DefaultKind(letters[0]),
+            '!' when Typed => BasicVariableKind.Single,
+            '#' when Typed => BasicVariableKind.Double,
+            _ when Typed => DefaultKind(letters[0]),
             _ => BasicVariableKind.Real
         };
 
@@ -469,7 +572,10 @@ public sealed partial class BasicVariables
 
     // The type Level II's DEF statements give names starting with a letter.
     private BasicVariableKind DefaultKind(char first) =>
-        KindOfType(_memory.Read(LevelTwoDefaultTypes + (first - 'A'))) ?? BasicVariableKind.Single;
+        KindOfType(_memory.Read(DefaultTypes + (first - 'A'))) ?? BasicVariableKind.Single;
+
+    // Where each letter's default type is.
+    private int DefaultTypes => Mbasic ? MbasicMemory.DEFTBL : LevelTwoDefaultTypes;
 
     private void WriteString(int address, byte[] text)
     {

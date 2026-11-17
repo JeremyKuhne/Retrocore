@@ -63,8 +63,11 @@ public sealed partial class BasicEvaluator
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
-    // Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
-    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect;
+    // MBASIC has Level II's types and suffixes, with ^ for powers.
+    private bool Mbasic => _dialect == BasicDialect.Mbasic;
+
+    // Level II, MBASIC and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
+    private bool Bitwise => LevelTwo || Mbasic || _dialect is ColorBasicDialect;
 
     private double True => Bitwise ? -1 : 1;
 
@@ -132,7 +135,7 @@ public sealed partial class BasicEvaluator
             return builder.Append('"').ToString();
         }
 
-        return BasicNumbers.Format(result.Value.Number, LevelTwo ? (result.Double ? 16 : 6) : 9);
+        return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 7) : 9);
     }
 
     private BasicResult Or()
@@ -316,7 +319,7 @@ public sealed partial class BasicEvaluator
             }
         }
 
-        if (_at < _bytes.Length && LevelTwo && _bytes[_at] is (byte)'#' or (byte)'!' or (byte)'%')
+        if (_at < _bytes.Length && (LevelTwo || Mbasic) && _bytes[_at] is (byte)'#' or (byte)'!' or (byte)'%')
         {
             precise |= _bytes[_at] == '#';
             _at++;
@@ -354,7 +357,7 @@ public sealed partial class BasicEvaluator
 
     // A type suffix: $ and %, and on Level II ! and # too.
     private bool IsSuffix(byte value) =>
-        value is (byte)'$' or (byte)'%' || (LevelTwo && value is (byte)'!' or (byte)'#');
+        value is (byte)'$' or (byte)'%' || ((LevelTwo || Mbasic) && value is (byte)'!' or (byte)'#');
 
     private BasicResult Variable(string name, List<int>? subscripts)
     {

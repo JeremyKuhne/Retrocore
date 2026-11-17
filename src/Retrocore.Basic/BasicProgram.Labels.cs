@@ -68,7 +68,11 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic || dialect is ColorBasicDialect))
+            {
+                break;
+            }
+
             if (StartsWord(text, index, "REM")) { break; }
             if (StartsWord(text, index, "DATA"))
             {

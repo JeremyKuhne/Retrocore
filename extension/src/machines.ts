@@ -524,7 +524,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "kaypro2" },
         diskFormats: ["img", "dsk", "imd", "dmk"],
         tapeFormats: [],
-        basicDialects: [],
+        basicDialects: ["mbasic"],
         dos: false,
         choices: []
     }

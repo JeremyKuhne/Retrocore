@@ -241,6 +241,7 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
         string sources = KayproSdkModules.SourceDirectory(directory);
+        AddMbasic(debug, sources);
         string source = Path.Join(sources, KayproSdkModules.MonitorSource);
         if (!File.Exists(source)) { return; }
         AssemblyResult result = KayproSdkModules.AssembleMonitor(source);

@@ -146,6 +146,8 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
     assert.equal(revertedMessage("Drive 1", "work.woz", undefined), "Reverted Drive 1 to work.woz; its changes were dropped.");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz", "prodos.2mg"]),
         "Apple IIe stopped with 2 disks not saved: work.woz, prodos.2mg. Their changes were not kept.");
+    assert.equal(stoppedMessage("Apple IIe", ["work.woz"], true),
+        "Apple IIe stopped with 1 disk not saved: work.woz. It is kept, still changed, for its next launch.");
 
     // What a stopping machine takes with it: changed disks in drives that save, and changed disks the machine ejected.
     const ejected = (label: string, changed: boolean) => ({ id: `k-${label}`, label, format: "2MG", why: "ejected" as const, when: "", changed });

@@ -46,7 +46,12 @@ interface MediaAnswer {
 }
 
 /** The retro/devices body. */
-interface Devices { devices: Device[]; hardware?: HardwareRow[] }
+interface Devices {
+    devices: Device[];
+    hardware?: HardwareRow[];
+    /** Whether the session keeps its changed disks in its recovery journal, for the next launch. */
+    recovery?: boolean;
+}
 
 /**
  * A row of the Machine or Drives view: the machine itself, its settings and each setting, a piece of its installed
@@ -528,7 +533,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     let timer: NodeJS.Timeout | undefined;
     // Each session's devices as it last sent them, shown or not, so one that stops in the background can say what it
     // took with it.
-    const sessionDevices = new Map<string, Device[]>();
+    const sessionDevices = new Map<string, Devices>();
 
     // Running sends retro/devices as often as a head moves; the views redraw at most ten times a second.
     const show = (body: Devices): void => {
@@ -552,7 +557,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             machineView.message = undefined;
             try {
                 const body = await session.customRequest("retro/devices") as Devices;
-                sessionDevices.set(session.id, body.devices);
+                sessionDevices.set(session.id, body);
                 show(body);
             } catch { /* Not launched yet. */ }
             await readBanks(session);
@@ -679,18 +684,22 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     }));
     context.subscriptions.push(vscode.debug.onDidReceiveDebugSessionCustomEvent(event => {
         if (event.event !== "retro/devices") return;
-        sessionDevices.set(event.session.id, (event.body as Devices).devices);
+        sessionDevices.set(event.session.id, event.body as Devices);
         if (event.session.id === vscode.debug.activeDebugSession?.id) show(event.body);
     }));
     context.subscriptions.push(vscode.debug.onDidChangeActiveDebugSession(session => void refresh(session)));
     // As a session ends VS Code can still give it as the active one; it is not, so the views show its machine off.
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(ended => {
-        // A session that ends with disks not saved says so, shown or in the background: until the recovery journal
-        // keeps them, their changes go.
-        const devices = sessionDevices.get(ended.id) ?? (ended.id === tree.session?.id ? tree.devices : []);
+        // A session that ends with disks not saved says so, shown or in the background: kept in its recovery journal
+        // for its next launch, or, for a session that keeps none, gone.
+        const last = sessionDevices.get(ended.id);
         sessionDevices.delete(ended.id);
-        const lost = unsavedDisks(devices);
-        if (lost.length > 0) void vscode.window.showWarningMessage(stoppedMessage(String(ended.configuration.name ?? "The machine"), lost));
+        const unsaved = unsavedDisks(last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []));
+        if (unsaved.length > 0) {
+            const kept = last?.recovery === true;
+            const message = stoppedMessage(String(ended.configuration.name ?? "The machine"), unsaved, kept);
+            void (kept ? vscode.window.showInformationMessage(message) : vscode.window.showWarningMessage(message));
+        }
         const active = vscode.debug.activeDebugSession;
         void refresh(active?.id === ended.id ? undefined : active);
     }));

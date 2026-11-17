@@ -28,6 +28,11 @@ public sealed class FloppyImageCodec : IImageCodec
     public string Format { get; }
 
     /// <summary>
+    ///  Gets the header a JVC image was read with, which saving it back keeps; null for another format or a new image.
+    /// </summary>
+    public byte[]? JvcHeader => _jvcHeader is null ? null : [.. _jvcHeader];
+
+    /// <summary>
     ///  Gets the codec that writes an image with an extension, for a drive that saves some formats.
     /// </summary>
     /// <param name="extension">The extension, with or without its dot, such as <c>.jv3</c>.</param>

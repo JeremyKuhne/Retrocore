@@ -344,10 +344,13 @@ export function unsavedDisks(devices: readonly Device[]): string[] {
     ]);
 }
 
-/** What a warning says when a machine stops with disks not saved. */
-export function stoppedMessage(machine: string, files: string[]): string {
+/** What a notice says when a machine stops with disks not saved: kept for its next launch, or lost. */
+export function stoppedMessage(machine: string, files: string[], kept = false): string {
     const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
-    return `${machine} stopped with ${disks} not saved: ${files.join(", ")}. Their changes were not kept.`;
+    const after = kept
+        ? `${files.length === 1 ? "It is" : "They are"} kept, still changed, for its next launch.`
+        : "Their changes were not kept.";
+    return `${machine} stopped with ${disks} not saved: ${files.join(", ")}. ${after}`;
 }
 
 /** What the status bar says for a moment after a save that asked nothing. */

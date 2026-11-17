@@ -8,10 +8,14 @@
 // clears them.
 
 import * as vscode from "vscode";
+import { randomUUID } from "node:crypto";
 import { fingerprint, restorable, type SavedMachine } from "./hardware";
 
 // Each launch configuration's saved machine is under this prefix and its name.
 const prefix = "retrocore.savedMachine:";
+
+// Each launch configuration's recovery id, which names the journal its machine keeps its unsaved disks in.
+const recoveryPrefix = "retrocore.recoveryId:";
 
 /** The saved machines, by launch configuration. */
 export interface SavedMachines {
@@ -53,6 +57,17 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
         resolveDebugConfigurationWithSubstitutedVariables(_folder, configuration) {
             const name = configuration.name;
             if (typeof name !== "string") return configuration;
+
+            // The machine keeps its changed disks for the next launch of the same configuration, under one id for
+            // it, made the first time it launches; a configuration can give its own.
+            if (typeof configuration.recoveryId !== "string") {
+                let recoveryId = state.get<string>(recoveryPrefix + name);
+                if (recoveryId === undefined) {
+                    recoveryId = randomUUID();
+                    void state.update(recoveryPrefix + name, recoveryId);
+                }
+                configuration = { ...configuration, recoveryId };
+            }
             const machine = saved.get(configuration);
             if (machine !== undefined) return { ...configuration, machineState: machine };
 

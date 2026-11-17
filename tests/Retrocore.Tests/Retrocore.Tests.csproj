@@ -59,6 +59,10 @@
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Kept.cs" Link="MediaActions.Kept.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Differences.cs" Link="MediaActions.Differences.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\KeptDisk.cs" Link="KeptDisk.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Journal.cs" Link="MediaActions.Journal.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.cs" Link="RecoveryJournal.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Written.cs" Link="RecoveryJournal.Written.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\JournalDisk.cs" Link="JournalDisk.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\FloppyMedia.cs" Link="FloppyMedia.cs" />

@@ -521,7 +521,7 @@ internal sealed class MachineHost : DisposableBase
                 ?? throw new ArgumentException($"There is no device '{id}'.");
 
             // The host saves disks and holds back a changed disk that would leave its drive, as the debug adapter does.
-            JsonObject? answer = MediaActions.Device(device, action, args);
+            JsonObject? answer = MediaActions.Device(device, action, args, (what, with) => _target.DeviceAction(device, what, with));
             if (answer is null) { _target.DeviceAction(device, action, args); }
             return answer;
         }
@@ -548,6 +548,36 @@ internal sealed class MachineHost : DisposableBase
 
         _frameWanted = true;
         return null;
+    }
+
+    /// <summary>
+    ///  Gets what a drive called a disk the machine ejected from it, which the host keeps until it is saved or let go.
+    /// </summary>
+    /// <param name="id">The drive's id.</param>
+    /// <param name="ejected">The ejected disk's id.</param>
+    /// <returns>Its label, such as its image's path, or null when it is no longer kept.</returns>
+    internal string? EjectedLabel(string id, string ejected)
+    {
+        using (Gate())
+        {
+            return _target.Devices.FirstOrDefault(device => device.Id == id) is { } device
+                ? MediaActions.Ejected(device).FirstOrDefault(kept => kept.Id == ejected)?.Label
+                : null;
+        }
+    }
+
+    /// <summary>
+    ///  Gets the changed disks the machine ejected from its drives, which the host keeps until they are saved or let go.
+    /// </summary>
+    /// <returns>Each one's drive, its id among the drive's ejected disks, and its label.</returns>
+    internal IReadOnlyList<(DeviceState Drive, string Ejected, string Label)> UnsavedEjected()
+    {
+        using (Gate())
+        {
+            return [.. _target.Devices.SelectMany(device => MediaActions.Ejected(device)
+                .Where(kept => kept.Medium.IsDirty)
+                .Select(kept => (DeviceState.Of(device), kept.Id, kept.Label)))];
+        }
     }
 
     /// <summary>

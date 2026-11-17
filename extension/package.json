@@ -637,9 +637,49 @@
           "group": "1_save@2"
         },
         {
+          "command": "retrocore.device.revert",
+          "when": "view == retrocore.drives && viewItem =~ /\\brevert\\b/",
+          "group": "1_save@3"
+        },
+        {
           "command": "retrocore.device.insert",
           "when": "view == retrocore.drives && viewItem =~ /\\binsert\\b/",
           "group": "2_media@1"
+        },
+        {
+          "command": "retrocore.device.ejectedSave",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.device.ejectedInsert",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "retrocore.device.ejectedDiscard",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "retrocore.device.ejectedSave",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "1_save@1"
+        },
+        {
+          "command": "retrocore.device.ejectedSaveAs",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "1_save@2"
+        },
+        {
+          "command": "retrocore.device.ejectedInsert",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "2_media@1"
+        },
+        {
+          "command": "retrocore.device.ejectedDiscard",
+          "when": "view == retrocore.drives && viewItem =~ /\\bejectedDisk\\b/",
+          "group": "2_media@2"
         },
         {
           "command": "retrocore.device.eject",
@@ -763,6 +803,26 @@
         },
         {
           "command": "retrocore.device.saveStale",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.revert",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.ejectedSave",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.ejectedSaveAs",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.ejectedInsert",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.ejectedDiscard",
           "when": "false"
         },
         {
@@ -1039,6 +1099,30 @@
         "command": "retrocore.device.saveAs",
         "title": "Save As...",
         "icon": "$(save-as)"
+      },
+      {
+        "command": "retrocore.device.revert",
+        "title": "Revert to Image",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "retrocore.device.ejectedSave",
+        "title": "Save",
+        "icon": "$(save)"
+      },
+      {
+        "command": "retrocore.device.ejectedSaveAs",
+        "title": "Save As..."
+      },
+      {
+        "command": "retrocore.device.ejectedInsert",
+        "title": "Insert Again",
+        "icon": "$(debug-step-into)"
+      },
+      {
+        "command": "retrocore.device.ejectedDiscard",
+        "title": "Discard",
+        "icon": "$(trash)"
       },
       {
         "command": "retrocore.device.refresh",

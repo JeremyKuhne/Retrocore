@@ -187,6 +187,17 @@ takes out go. A drive's `media` also gives its `medium` id, mount `generation`, 
 it, with its `baseline` revision and the `current` one (null for no file). The host watches each image a disk came
 from, and sends `retro/devices` when one changes, even while the machine is stopped.
 
+A disk can also leave its drive and come back. `revert` reads the disk's image again in its place, as an insert of
+the image would (a bad image leaves the disk), and answers `reverted`; a changed disk it replaced, or one an `eject` or
+`insert` let go of through `discards`, is kept, and the drive's `undo` (`{ id, label, format, why, when, changed }`)
+names it until `undo` with `medium` set to that id puts it back (answering `changed` first for a changed disk in the
+drive, as an eject does) and answers `undone`. A drive the machine ejects disks from by itself, the 3.5 drive, lists
+the changed ones it ejected as `ejected`, each kept until a `save`, `insertAgain` or `discard` names it with
+`ejected` (a discard is kept for `undo` too); a save of one works as a save of the disk in the drive does.
+`differences` answers what the disk changed against its image as the file is now, as `{ unit, count, summary }` in
+the image's unit (`sector` for a `.dsk`, JV1 or JVC, with the tracks they are on; `block` for a block image or 2MG),
+or null for WOZ, DMK and JV3.
+
 ## A machine that is off
 
 The language server, which is the same `Retrocore.Debug.dll`, answers two requests about a machine with no debug
@@ -257,7 +268,14 @@ seconds, and asks only when something is off: a format that cannot hold all of t
 offers **Save as WOZ...** (DMK, 2MG) or **Save Anyway**; an image changed on disk since the disk was read says when, and
 offers **Overwrite**, keeping the file's changes as a backup, or **Save As...** (the row's button says it will ask); a
 read-only file offers **Save As...** or **Make Writable and Save**; an image that can only be read, or a disk a launch
-built, offers **Save As...**, which is then the row's button. A slot's inline buttons in the Machine view add or
+built, offers **Save As...**, which is then the row's button. **Revert to Image** in the drive's menu, and in the
+prompt for an image changed on disk, reads the image again without asking, and a notification offers **Undo**,
+saying how many sectors or blocks were dropped; ejecting a changed disk, inserting over it or undoing over it asks
+**Save**, **Save As...** or **Discard**, saying what the machine changed, and a discard offers **Undo**. A changed
+disk's tooltip says what changed once the pointer is on it. A disk the machine ejected with changes stays under its
+drive as an **Ejected** row, with **Save**, **Insert Again** and **Discard**, until it is saved or let go. A session
+that ends with disks not saved says which; their changes are not kept past it yet. A slot's inline buttons in the
+Machine view add or
 remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
 and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved
 Machine...**). The views redraw at most ten times a second.

@@ -60,6 +60,13 @@ internal static class DeviceJson
             ["activity"] = Camel(device.Activity.ToString())
         };
 
+        // The disk Undo puts back, and the changed disks the machine ejected, which the host keeps out of the drive.
+        if (MediaActions.Undoable(device) is { } undo) { result["undo"] = undo.ToJson(); }
+        if (MediaActions.Ejected(device) is { Count: > 0 } ejected)
+        {
+            result["ejected"] = new JsonArray([.. ejected.Select(kept => (JsonNode)kept.ToJson())]);
+        }
+
         switch (device)
         {
             case IDiskDrive drive:

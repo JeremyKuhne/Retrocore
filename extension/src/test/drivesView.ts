@@ -62,9 +62,13 @@ export async function testDrivesView(workspace: vscode.WorkspaceFolder): Promise
         assert.match(stale.description, /image changed on disk/);
         assert.match(stale.tooltip, /Image changed on disk: .*when read/);
 
-        // Back as it was, then marked read-only: a read-only image.
-        fs.writeFileSync(disk, blank);
-        await row("disk0", candidate => candidate.mark === "", "the image as the disk read it again");
+        // Reverted, the disk is the image as it is now, so the mark goes; a disk the machine did not change leaves
+        // nothing for Undo.
+        await vscode.commands.executeCommand("retrocore.machine.change", "device", { id: "disk0", action: "revert" });
+        const reverted = await row("disk0", candidate => candidate.mark === "", "the disk read again from its image");
+        assert.doesNotMatch(reverted.description, /image changed on disk/);
+
+        // Marked read-only: a read-only image.
         fs.chmodSync(disk, 0o444);
         const readOnly = await row("disk0", candidate => /read-only image/.test(candidate.description), "the read-only image");
         assert.match(readOnly.tooltip, /Read-only file/);
@@ -76,7 +80,7 @@ export async function testDrivesView(workspace: vscode.WorkspaceFolder): Promise
 
         const session = vscode.debug.activeDebugSession;
         if (session !== undefined) await vscode.debug.stopDebugging(session);
-        console.log("Isolated VS Code passed: the Drives view draws a disk's picture and lock badge, and marks its image changed on disk and read-only as the host's watcher sees them.");
+        console.log("Isolated VS Code passed: the Drives view draws a disk's picture and lock badge, and marks its image changed on disk and read-only as the host's watcher sees them, and reverts to it.");
     } finally {
         try { fs.chmodSync(disk, 0o644); } catch { /* Gone. */ }
         fs.rmSync(folder, { recursive: true, force: true });

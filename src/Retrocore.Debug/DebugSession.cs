@@ -359,7 +359,7 @@ internal sealed partial class DebugSession
                 ?? throw new ArgumentException($"There is no device '{id}'.");
 
             // The host saves disks, and holds back a changed disk that would leave its drive; the machine does the rest.
-            JsonObject? answer = MediaActions.Device(device, action, args);
+            JsonObject? answer = MediaActions.Device(device, action, args, (what, with) => Target.DeviceAction(device, what, with));
             if (answer is null) { Target.DeviceAction(device, action, args); }
             NotifyDevices();
             return WithAnswer(DevicesBody(), answer);

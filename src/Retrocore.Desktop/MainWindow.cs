@@ -761,7 +761,7 @@ internal sealed class MainWindow : Window
         }
 
         _machinePane.Hold();
-        if (_machinePane.Unsaved.Count == 0) { return; }
+        if (!_machinePane.HasUnsaved) { return; }
         e.Cancel = true;
         _ = CloseAfterAsking();
     }

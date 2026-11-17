@@ -124,8 +124,18 @@ internal sealed partial class Trs80Model2DebugTarget
         }
 
         // A changed disk is held back, as from retro/device, so an older client cannot lose it.
-        if (MediaActions.Device(_machine.Drives[drive], action, args) is { } answer) { return answer; }
-        DeviceAction(_machine.Drives[drive], action, args);
+        // A disk let go of is ejected or replaced by the machine through the host, which keeps it for Undo once that
+        // has gone through.
+        JsonObject? answer = MediaActions.Device(_machine.Drives[drive], action, args, (what, with) => DeviceAction(_machine.Drives[drive], what, with));
+        if (answer is null)
+        {
+            DeviceAction(_machine.Drives[drive], action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
+        }
+
         return MediaState();
     }
 

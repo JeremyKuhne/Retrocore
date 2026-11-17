@@ -539,6 +539,9 @@ try {
     assert.match((await inspect(0x0400, "aux:0x0000")).mapped, /^Not mapped now: the CPU reads /);
     await write("0x6600", [0x81, 0x00, 0x00, 0x00, 0x00]);
     assert.deepEqual((await inspect(0x6600)).values, [{ label: "Float, 5 bytes", value: "1" }]);
+    // A bank's gap holds no number, nor does a float that runs into it.
+    assert.deepEqual((await inspect(0xC000, "main:0x0000")).values, []);
+    assert.deepEqual((await inspect(0xBFFE, "main:0x0000")).values, []);
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

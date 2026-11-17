@@ -1030,7 +1030,7 @@ test("the inspector says where the cursor's address is, what it is and what the 
     assert.ok(html.includes('<span class="v">Text page 1, row 0, column 3</span>'), html);
     assert.ok(html.includes('<span class="k">In</span><span class="v">START+3</span>'), html);
     assert.ok(html.includes("START: Starts it."), html);
-    assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes(">hello.s:4</a>"), html);
+    assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes('<button class="link" data-src="C:/src/hello.s"') && html.includes(">hello.s:4</button>"), html);
     assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v">1</span>'), html);
     assert.ok(!html.includes(">Map<"), "no map line on a machine without banks");
 });

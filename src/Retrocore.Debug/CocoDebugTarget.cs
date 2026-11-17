@@ -160,7 +160,8 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         new("Extended Color BASIC ROM", 0x8000, 0x2000, "rom"),
         new("Color BASIC ROM", 0xA000, 0x2000, "rom"),
         new("Cartridge or Disk BASIC ROM", 0xC000, 0x3F00, "rom"),
-        new("I/O", 0xFF00, 0x100, "io")
+        new("I/O", 0xFF00, 0xE0, "io"),
+        new("Vectors, from the ROM", 0xFFE0, 0x20, "rom")
     ];
 
     /// <inheritdoc/>

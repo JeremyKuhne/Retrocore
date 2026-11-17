@@ -75,7 +75,8 @@ button:disabled{opacity:.5;cursor:default}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
 #inspector .doc{margin:2px 0 6px;color:var(--vscode-descriptionForeground)}
-#inspector a[data-src]{color:var(--vscode-textLink-foreground);cursor:pointer;text-decoration:none}
+#inspector button.link{background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);font:inherit;cursor:pointer}
+#inspector button.link:focus-visible{outline:1px solid var(--vscode-focusBorder)}
 #listing{flex:none;width:46ch;overflow:auto;display:grid;align-content:start;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing[hidden]{display:none}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
@@ -970,8 +971,8 @@ function inspectionHtml() {
     if (known.label && known.offset > 0) html += row("In", escapeText(known.label + "+" + known.offset));
     if (known.summary) html += '<div class="doc">' + escapeText((known.offset > 0 ? known.label + ": " : "") + known.summary) + "</div>";
     if (known.path) {
-        html += row("Source", '<a data-src="' + escapeText(known.path) + '" data-line="' + known.line + '" title="Open ' + escapeText(known.path) + ", line " + known.line + '">'
-            + escapeText(fileName(known.path) + ":" + known.line) + "</a>");
+        html += row("Source", '<button class="link" data-src="' + escapeText(known.path) + '" data-line="' + known.line + '" title="Open ' + escapeText(known.path) + ", line " + known.line + '">'
+            + escapeText(fileName(known.path) + ":" + known.line) + "</button>");
     }
     return html;
 }

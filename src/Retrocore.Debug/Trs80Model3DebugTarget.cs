@@ -149,7 +149,16 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Communication region", 0x4000, 256);
 
     /// <inheritdoc/>
-    public IReadOnlyList<DebugRegion> Regions { get; } =
+    /// <remarks>
+    ///  <para>
+    ///   The Model III's map; the Model 4's and 4P's switch, so they name only the memory scope.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DebugRegion> Regions => _machine.Configuration.Variant == Trs80Model3Variant.Model3
+        ? s_model3Regions
+        : [new(MemoryScope.Name, MemoryScope.Start, MemoryScope.Length, "ram")];
+
+    private static readonly DebugRegion[] s_model3Regions =
     [
         new("ROM", 0x0000, 0x3800, "rom"),
         new("Keyboard", 0x3800, 0x400, "io"),

@@ -1092,11 +1092,21 @@ internal sealed partial class DebugSession
             return null;
         }
 
-        DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
         // The module whose definition the value came from, as evaluation resolves it: the first that defines the
         // name. Its documentation, or none, describes it; another module's same name is a different symbol.
         IDebugModule? defining = _debug.Modules.FirstOrDefault(module => module.TryResolve(name, out _));
-        if (defining is null) { return null; }
+        return defining is null ? null : SymbolSummary(defining, name);
+    }
+
+    /// <summary>
+    ///  Gets the summary of a module's documentation for one of its names.
+    /// </summary>
+    /// <param name="defining">The module the name is from.</param>
+    /// <param name="name">The name.</param>
+    /// <returns>The summary, or null when the module documents no such name.</returns>
+    private string? SymbolSummary(IDebugModule defining, string name)
+    {
+        DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
         DocumentationSet documentation = defining.Documentation;
         if ((documentation.Find(name) ?? documentation.FindRoutine(name)) is not { } topic) { return null; }
         string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;

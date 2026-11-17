@@ -37,7 +37,10 @@ internal sealed partial class DebugSession
         }
 
         IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
-        DebugRegion? region = DebugRegion.At(Target.Regions, address);
+        // A coprocessor's view, such as the SoftCard's Z80's, has addresses of its own, which the machine's regions
+        // and memory map do not describe.
+        bool own = bank?.InstructionSet is null;
+        DebugRegion? region = own ? DebugRegion.At(Target.Regions, address) : null;
 
         // The name at the address, a constant such as CH included; else the code label it is in, as COUT+3.
         (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
@@ -53,6 +56,8 @@ internal sealed partial class DebugSession
             offset = address - start;
         }
 
+        string? summary = label is null ? null : SummaryAt(label, address - offset, memory);
+
         SourceLine? source = _debug.Position(memory, (ushort)address)?.Chain[^1];
         return new JsonObject
         {
@@ -60,14 +65,24 @@ internal sealed partial class DebugSession
             ["region"] = region?.Name,
             ["kind"] = region?.Kind,
             ["detail"] = region?.Detail?.Invoke(address - region.Start),
-            ["mapped"] = Mapping(bank, (ushort)address),
+            ["mapped"] = own ? Mapping(bank, (ushort)address) : null,
             ["label"] = label,
             ["offset"] = offset,
-            ["summary"] = label is null ? null : SymbolSummary(label),
+            ["summary"] = summary,
             ["path"] = source?.Path,
             ["line"] = source?.Line,
-            ["values"] = Floats(memory, address)
+            ["values"] = Floats(bank, memory, address)
         };
+    }
+
+    // The documentation of the name an address has: from the module whose symbol it is there, the one that applies
+    // to the memory when several have it, as a program's own COUT is not the ROM's; a hints file's name has none.
+    private string? SummaryAt(string name, int value, IDebugMemory memory)
+    {
+        bool Defines(IDebugModule module) => module.TryResolve(name, out long resolved) && resolved == value;
+        bool Applies(IDebugModule module) => Defines(module) && DebugInfo.Active(module, memory, (ushort)value);
+        IDebugModule? owner = _debug.Modules.FirstOrDefault(Applies) ?? _debug.Modules.FirstOrDefault(Defines);
+        return owner is null ? null : SymbolSummary(owner, name);
     }
 
     // What the memory map does with an address now, on a machine with banks: in the CPU's view, what it reads and
@@ -118,7 +133,7 @@ internal sealed partial class DebugSession
 
     // The BASIC's floating point numbers that start at an address: AppleSoft's, Color BASIC's and Business BASIC's
     // five bytes, exponent first; Level II's single and double, exponent last. None for an integer BASIC.
-    private JsonArray Floats(IDebugMemory memory, int address)
+    private JsonArray Floats(DebugMemoryBank? bank, IDebugMemory memory, int address)
     {
         JsonArray values = [];
         BasicDialect? basic = Target.Basic;
@@ -129,7 +144,13 @@ internal sealed partial class DebugSession
 
         void Add(string label, int length, bool exponentFirst, int digits)
         {
-            if (address + length > 0x10000) { return; }
+            // Only bytes the space has: a bank's gaps read as $FF, which are no number.
+            if (address + length > 0x10000
+                || (bank is not null && Enumerable.Range(address, length).Any(at => bank.AreaOf((ushort)at) is null)))
+            {
+                return;
+            }
+
             byte[] bytes = [.. Enumerable.Range(address, length).Select(at => memory.Peek((ushort)at))];
             values.Add((JsonNode)new JsonObject
             {

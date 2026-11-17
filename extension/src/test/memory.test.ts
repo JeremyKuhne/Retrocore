@@ -1204,6 +1204,16 @@ test("assembling in place types an instruction over a listing line, padding or o
     page.elements.get("listing")!.dispatch("dblclick", { target: { closest: (selector: string) => selector === "[data-a]" ? line : null } });
     state = await drive(page, [], () => 0, lists);
     assert.deepEqual([assemblesSent.length, state.status], [0, "Show the listing to assemble an instruction."]);
+
+    // With it shown, a double-click that reaches the listing itself, as when its first click drew it again, types
+    // over the cursor's line.
+    box.checked = true;
+    box.dispatch("change", {});
+    await drive(page, [{ listingLine: 0 }], () => 0, lists);
+    assembleReply = { cancelled: true };
+    page.elements.get("listing")!.dispatch("dblclick", { target: { closest: () => null } });
+    await drive(page, [], () => 0, lists);
+    assert.deepEqual(assemblesSent.map(sent => sent.address), [top]);
 });
 
 test("the gutter's breakpoints are function breakpoints named by address", () => {

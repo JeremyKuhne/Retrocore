@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -140,6 +141,12 @@ internal sealed partial class DebugSession
             if (named.Success) { result = named; }
         }
 
+        if (!result.Success && RestartNumber(set, address, text, symbols) is { } restart)
+        {
+            AssemblyResult numbered = AssembleText(set, address, restart, symbols);
+            if (numbered.Success) { result = numbered; }
+        }
+
         if (!result.Success)
         {
             throw new ArgumentException(result.Diagnostics[0].Message);
@@ -176,6 +183,23 @@ internal sealed partial class DebugSession
 
         if (plain < operand.Length) { pieces.Add((plain, operand.Length, false)); }
         return pieces;
+    }
+
+    // The 8080's RST takes the restart's number, 0-7, where the listing names the address it calls, as RST 1 lists as
+    // RST RESTART1 where $0008 is named: such a line as RST with the number, or null for any other.
+    private static string? RestartNumber(InstructionSet set, int address, string text, Dictionary<string, long> symbols)
+    {
+        if (!ReferenceEquals(set.Description, I8080Isa.Description)) { return null; }
+        int space = text.IndexOf(' ', StringComparison.Ordinal);
+        if (space < 0 || !string.Equals(text[..space], "RST", StringComparison.OrdinalIgnoreCase)) { return null; }
+
+        // The operand's value, as the assembler reckons it.
+        AssemblyResult value = AssembleText(set, address, ".word " + text[(space + 1)..], symbols);
+        AssemblySection? section = value.Success ? value.Sections.FirstOrDefault(found => found.Size > 0) : null;
+        if (section is null) { return null; }
+        ReadOnlySpan<byte> bytes = section.Bytes.Span;
+        int target = bytes[0] | (bytes[1] << 8);
+        return target % 8 == 0 && target <= 0x38 ? $"RST {target / 8}" : null;
     }
 
     // A name's value from the session, or null where it has none; ::COUT is the outermost scope's COUT, which the

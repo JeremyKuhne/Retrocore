@@ -192,6 +192,12 @@ try {
     assert.equal((await event("stopped")).reason, "entry");
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$100 (256)");
     assert.equal((await request("threads")).threads[0].name, "Altair 8080");
+    await request("retro/memory/mark", { memoryReference: "0x0000", address: 8, name: "RESTART1" });
+    // Assembling in place: RST 1 lists as RST RESTART1 where $0008 is named, and that assembles back.
+    const assembled = async line => request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x2000, line });
+    assert.deepEqual(await assembled("RST 1"), { bytes: [0xCF], text: "RST RESTART1", nop: [0x00] });
+    assert.deepEqual([(await assembled("RST RESTART1")).bytes, (await assembled("RST $08")).bytes], [[0xCF], [0xCF]]);
+    await request("retro/memory/mark", { memoryReference: "0x0000", address: 8, name: "" });
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.deepEqual(Object.keys(hardware), ["model", "memory", "serial", "cassette", "terminal", "panel"]);
     assert.equal(hardware.cassette.value, "Cassette interface at ports $06 and $07, 300 baud");

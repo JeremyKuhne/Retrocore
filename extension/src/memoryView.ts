@@ -966,13 +966,12 @@ listingPanel.addEventListener("click", event => {
     activateListing(target);
 });
 
-// A double-click on a line types over it.
+// A double-click on a line types over it. Its first click selected the line and drew the listing again, so the
+// element under the pointer may be new, or the event may come to the listing itself: the cursor's line is the one.
 listingPanel.addEventListener("dblclick", event => {
     const target = event.target;
-    const line = target && target.closest ? target.closest("[data-a]") : null;
-    if (line === null || (target.closest && (target.closest("[data-go]") || target.closest("[data-src]") || target.closest("[data-bp]")))) return;
-    const listed = listingLines.find(item => item.address === Number(line.dataset.a));
-    if (listed !== undefined) void assembleLine(listed);
+    if (target && target.closest && (target.closest("[data-go]") || target.closest("[data-src]") || target.closest("[data-bp]"))) return;
+    void assembleAtCursor();
 });
 // Up and Down move between lines, Left and Right between a line and its links, Home and End to the first and last
 // line, Enter or Space does what a click does, and Escape goes back to the bytes.

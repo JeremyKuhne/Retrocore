@@ -628,6 +628,12 @@ try {
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
     // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
     assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // The outermost scope's name, and a dotted operator after a name.
+    assert.deepEqual([(await assemble("JSR ::COUT")).bytes, (await assemble("LDA #(CH.mod 16)")).bytes], [[0x20, 0xED, 0xFD], [0xA9, 0x04]]);
+    // An alias is never a name the line already has.
+    await mark({ address: 0x6600, name: "__RETROCORE0" });
+    assert.deepEqual((await assemble(".word RamTest::R6H,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
+    await mark({ address: 0x6600, name: "" });
     // Quoted text stays as typed; a width prefix's name is still the session's.
     assert.deepEqual((await assemble('.byte "RamTest::R6H"')).bytes, Array.from(Buffer.from("RamTest::R6H", "ascii")));
     assert.deepEqual([(await assemble("STA z:CH")).bytes, (await assemble("LDA a:CH")).bytes], [[0x85, 0x24], [0xAD, 0x24, 0x00]]);

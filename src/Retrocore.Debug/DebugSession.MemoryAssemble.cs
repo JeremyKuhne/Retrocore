@@ -91,7 +91,14 @@ internal sealed partial class DebugSession
                 string value = name.Value;
                 if (!value.Contains("::", StringComparison.Ordinal)) { return value; }
                 if (TryResolve(value, memory, space) is not { } resolved) { return value; }
-                string alias = $"__RETROCORE{aliases++}";
+                // An alias no name in the line already is.
+                string alias;
+                do
+                {
+                    alias = $"__RETROCORE{aliases++}";
+                }
+                while (line.Contains(alias, StringComparison.Ordinal) || symbols.ContainsKey(alias));
+
                 symbols[alias] = resolved;
                 return alias;
             }
@@ -171,12 +178,13 @@ internal sealed partial class DebugSession
         return pieces;
     }
 
-    // A name's value from the session, or null where it has none.
+    // A name's value from the session, or null where it has none; ::COUT is the outermost scope's COUT, which the
+    // session knows as COUT.
     private long? TryResolve(string name, IDebugMemory memory, string space)
     {
         try
         {
-            return _debug.Resolve(name, memory, space);
+            return _debug.Resolve(name.StartsWith("::", StringComparison.Ordinal) ? name[2..] : name, memory, space);
         }
         catch (FormatException)
         {
@@ -196,8 +204,8 @@ internal sealed partial class DebugSession
         return new Assembler.Assembler().Assemble(new AssemblySource("    " + text + "\n", "line"), options);
     }
 
-    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H, ::COUT or z:CH's CH; not a number such as $C0
-    // or 1E, nor a width prefix such as z: or a:.
-    [GeneratedRegex(@"(?<![$%\w.])(?:::)?[A-Za-z_][\w.]*(?:::[A-Za-z_][\w.]*)*(?!:(?!:))")]
+    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H, Main::@again, ::COUT or z:CH's CH; not a number
+    // such as $C0 or 1E, a width prefix such as z: or a:, nor an operator such as .mod, as a dot is never in a name.
+    [GeneratedRegex(@"(?<![$%\w.@])(?:::)?[A-Za-z_@][\p{L}\p{Nd}_]*(?:::@?[A-Za-z_][\p{L}\p{Nd}_]*)*(?!:(?!:))")]
     private static partial Regex LineName();
 }

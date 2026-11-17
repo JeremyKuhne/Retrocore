@@ -1,0 +1,1091 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+namespace Retrocore.Pascal;
+
+public sealed partial class PascalDecompiler
+{
+    private readonly List<(TypeNode First, TypeNode Second, bool Flow)> _links = [];
+
+    // The fields the code reaches, each with a type of its own, to put in their records once their kinds are known.
+    private readonly List<(TypeNode Record, int Offset, TypeNode Field)> _sites = [];
+
+    // How many of the fields are in their records; each goes in once.
+    private int _placed;
+
+    // A field the code reaches at an offset from a record's address.
+    private FieldDesignator Site(Designator record, int offset)
+    {
+        FieldDesignator field = new(record, offset, site: true);
+        _sites.Add((record.Type, offset, field.Type));
+        return field;
+    }
+
+    // Puts each field the code reaches in its record: in the field at its offset, or a variant's it can be one with,
+    // or, where it is a pointer and they integers or the other way round, as another variant's.
+    private bool PlaceSites()
+    {
+        bool changed = false;
+
+        // What a scalar is used as shows in what it is linked to as well as in itself.
+        Dictionary<TypeNode, List<TypeNode>> linked = [];
+        foreach ((TypeNode first, TypeNode second, _) in _links)
+        {
+            TypeNode a = first.Find();
+            TypeNode b = second.Find();
+            if (a == b || a.Kind is not (TypeKind.Scalar or TypeKind.Unknown) || b.Kind is not (TypeKind.Scalar or TypeKind.Unknown))
+            {
+                continue;
+            }
+
+            Neighbors(a).Add(b);
+            Neighbors(b).Add(a);
+        }
+
+        Dictionary<TypeNode, ScalarKind?> shown = [];
+        ScalarKind? Evidence(TypeNode type)
+        {
+            TypeNode start = type.Find();
+            if (shown.TryGetValue(start, out ScalarKind? known)) { return known; }
+
+            (int integer, int boolean, int character) = (0, 0, 0);
+            HashSet<TypeNode> seen = [start];
+            Queue<TypeNode> next = new([start]);
+            while (next.TryDequeue(out TypeNode? node) && seen.Count < 256)
+            {
+                integer += node.IntegerVotes + (node.Forced == ScalarKind.Integer || node.Low is not null ? 4 : 0);
+                boolean += node.BooleanVotes + (node.Forced == ScalarKind.Boolean ? 4 : 0);
+                character += node.CharVotes + (node.Forced == ScalarKind.Char ? 4 : 0);
+                foreach (TypeNode other in (linked.GetValueOrDefault(node) ?? []).Where(seen.Add))
+                {
+                    next.Enqueue(other);
+                }
+            }
+
+            ScalarKind? kind = null;
+            if (boolean > integer + character) { kind = ScalarKind.Boolean; }
+            else if (integer + character > boolean) { kind = ScalarKind.Integer; }
+
+            shown[start] = kind;
+            return kind;
+        }
+
+        List<TypeNode> Neighbors(TypeNode node)
+        {
+            if (!linked.TryGetValue(node, out List<TypeNode>? list))
+            {
+                list = [];
+                linked[node] = list;
+            }
+
+            return list;
+        }
+
+        // Pointers go in last, as whether two can be one depends on the records they point to, whose fields go in
+        // first.
+        List<int> order = [.. Enumerable.Range(_placed, _sites.Count - _placed).OrderBy(index => _sites[index].Field.Find().Kind == TypeKind.Pointer)];
+        _placed = _sites.Count;
+        foreach (int index in order)
+        {
+            // Reaching a field makes a record of what is at the address.
+            (TypeNode record, int offset, TypeNode field) = _sites[index];
+            record.Field(offset);
+            TypeNode root = record.Find();
+            if (root.Alternatives(offset).Contains(field.Find())) { continue; }
+
+            TypeNode.Place(root, offset, field, Evidence);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    // PASCALIO, the segment the system loads for reals' I/O and SEEK.
+    private const int PascalIo = 31;
+
+    // Whether a CXP's segment is a unit: neither the system nor a segment of the code file.
+    private bool IsUnit(int segment) =>
+        segment is not (0 or PascalIo) && !_procedures.Any(procedure => procedure.Segment.Number == segment);
+
+    private void UseUnit(int segment)
+    {
+        if (_units.Add(segment)) { _unitOrder.Add(segment); }
+    }
+
+    // A unit's type by name.
+    private TypeNode Named(string name)
+    {
+        switch (name)
+        {
+            case "INTEGER": return TypeNode.Scalar(ScalarKind.Integer);
+            case "CHAR": return TypeNode.Scalar(ScalarKind.Char);
+            case "BOOLEAN": return TypeNode.Scalar(ScalarKind.Boolean);
+            case "REAL": return TypeNode.Of(TypeKind.Real);
+            case "STRING":
+                {
+                    TypeNode text = TypeNode.Of(TypeKind.String);
+                    text.MaxLength = 80;
+                    return text;
+                }
+
+            default:
+                {
+                    TypeNode node = new() { Kind = TypeKind.Scalar };
+                    if (_library?.Units.Any(unit => unit.Enumerations.ContainsKey(name)) == true)
+                    {
+                        node.Enumeration = name;
+                    }
+
+                    return node;
+                }
+        }
+    }
+
+    // A file variable FINIT opens: a TEXT (record size -2), an untyped FILE (-1), or a FILE of records of a size in words.
+    private static void FileVariable(Designator file, Expr size)
+    {
+        TypeNode root = file.Type.Find();
+        int bytes = size switch
+        {
+            Constant constant => constant.Value,
+            Unary { Op: Operator.Negate, Operand: Constant negated } => -negated.Value,
+            _ => 0
+        };
+
+        if (bytes == -2)
+        {
+            root.Kind = TypeKind.Text;
+            root.Element ??= TypeNode.Scalar(ScalarKind.Char);
+        }
+        else
+        {
+            root.Kind = TypeKind.File;
+            root.RecordWords = bytes;
+            if (bytes > 0) { root.Element ??= new TypeNode(); }
+        }
+    }
+
+    // Decides which parameters are VAR from what their calls pass, then infers every type from how it is used.
+    private void Infer()
+    {
+        Dictionary<Procedure, List<List<Expr>>> calls = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, statement =>
+            {
+                if (statement is CallStatement { Callee.Procedure: { } callee } call)
+                {
+                    Calls(calls, callee).Add([.. call.Arguments.Select(argument => argument.Value)]);
+                }
+            }, expression =>
+            {
+                if (expression is Call { Callee.Procedure: { } callee } call)
+                {
+                    Calls(calls, callee).Add(call.Arguments);
+                }
+
+            });
+        }
+
+        // A VAR parameter passed on to another is an address too, so this runs until nothing changes.
+        for (int pass = 0; pass < 8; pass++)
+        {
+            bool changed = false;
+            foreach (Procedure procedure in _procedures)
+            {
+                changed |= Parameters(procedure, calls.TryGetValue(procedure, out List<List<Expr>>? sites) ? sites : []);
+            }
+
+            if (!changed) { break; }
+        }
+
+        SignUnits();
+
+        // What expressions show of their own types goes first, then what statements show of how they meet.
+        foreach (Procedure procedure in _procedures) { Walk(procedure.Body, _ => { }, Constrain); }
+        foreach (Procedure procedure in _procedures)
+        {
+            Walk(procedure.Body, statement => Constrain(procedure, statement), _ => { });
+        }
+
+        foreach ((TypeNode formal, TypeNode actual) in _wordsPassed)
+        {
+            TypeNode.Unify(formal, formal.Find().Kind == TypeKind.Scalar ? FirstWord(actual) : actual);
+        }
+
+        foreach ((TypeNode formal, TypeNode actual) in _bytesPassed)
+        {
+            if (formal.Find().Kind == TypeKind.String || actual.Find().Kind == TypeKind.String)
+            {
+                formal.String(0);
+                actual.String(0);
+            }
+            else
+            {
+                TypeNode.Unify(formal, actual);
+            }
+        }
+
+        // A pointer takes no constant but NIL, which LDCN loads: one a number is stored in is a word used both ways,
+        // as FORMATTER keeps RWTS's address, $3D00, to read it into.
+        foreach (TypeNode stored in _constantStores)
+        {
+            if (stored.Find() is { Kind: TypeKind.Pointer } pointer) { pointer.Punned = true; }
+        }
+
+        Settle();
+    }
+
+    private static List<List<Expr>> Calls(Dictionary<Procedure, List<List<Expr>>> calls, Procedure callee)
+    {
+        if (!calls.TryGetValue(callee, out List<List<Expr>>? sites))
+        {
+            sites = [];
+            calls[callee] = sites;
+        }
+
+        return sites;
+    }
+
+    // The parameter each argument fills: the first argument's words are the highest.
+    private static List<Variable> Slots(Procedure procedure, IReadOnlyList<Expr> arguments)
+    {
+        List<Variable> slots = [];
+        int top = procedure.Frame.ParameterWords;
+        foreach (Expr argument in arguments)
+        {
+            top -= argument.Words;
+            slots.Add(procedure.Frame.At(top + 1));
+        }
+
+        return slots;
+    }
+
+    // A parameter is VAR when its calls pass an address and it has no copy; one never passed is VAR when the
+    // procedure uses it as an address.
+    private static bool Parameters(Procedure procedure, List<List<Expr>> sites)
+    {
+        bool changed = false;
+        HashSet<Variable> addressed = [];
+        HashSet<Variable> valued = [];
+        foreach (List<Expr> arguments in sites)
+        {
+            List<Variable> slots = Slots(procedure, arguments);
+            for (int index = 0; index < arguments.Count; index++)
+            {
+                Variable parameter = slots[index];
+                parameter.Words = Math.Max(parameter.Words, arguments[index].Words);
+                if (arguments[index].Words == 2) { parameter.Type.Find().Kind = TypeKind.Real; }
+                if (IsAddress(arguments[index]))
+                {
+                    addressed.Add(parameter);
+                }
+                else
+                {
+                    valued.Add(parameter);
+                }
+            }
+        }
+
+        // A parameter whose own value the procedure stores as a word, or compares with NIL, is a pointer, though its
+        // calls pass the address of what it points to, as they do a VAR record's.
+        HashSet<Variable> pointers = [];
+        Walk(procedure.Body, statement => Stored(statement, pointers), expression => Compared(expression, pointers));
+
+        int first = procedure.IsFunction ? 3 : 1;
+        for (int offset = first; offset <= procedure.Frame.ParameterWords; offset++)
+        {
+            if (procedure.Level <= 0) { break; }
+
+            Variable parameter = procedure.Frame.At(offset);
+            if (parameter.Copy is not null) { continue; }
+
+            bool reference = !pointers.Contains(parameter)
+                && (addressed.Contains(parameter) || (!valued.Contains(parameter) && parameter.Type.Find().Kind == TypeKind.Pointer && sites.Count == 0));
+
+            changed |= reference != parameter.IsReference;
+            parameter.IsReference = reference;
+        }
+
+        return changed;
+    }
+
+    // A variable whose word an assignment stores, or a comparison compares with NIL.
+    private static void Stored(Statement statement, HashSet<Variable> pointers)
+    {
+        if (statement is Assignment { Block: false } stored) { Pointer(stored.Value, pointers); }
+    }
+
+    private static void Compared(Expr expression, HashSet<Variable> pointers)
+    {
+        if (expression is Comparison { Right: Nil } compared) { Pointer(compared.Left, pointers); }
+    }
+
+    private static void Pointer(Expr value, HashSet<Variable> pointers)
+    {
+        if (value is Load { Designator: VariableDesignator { Variable: var variable } }) { pointers.Add(variable); }
+    }
+
+    // Whether an argument is an address: a designator's, a file's window (its first word), or a VAR parameter's.
+    private static bool IsAddress(Expr argument) => argument switch
+    {
+        Address or ByteAddress => true,
+        Load { Designator: VariableDesignator { Variable: var variable } } =>
+            variable.IsReference || variable.Type.Find().Kind is TypeKind.File or TypeKind.Text,
+        _ => false
+    };
+
+    // Visits every statement and expression.
+    private static void Walk(List<Statement> statements, Action<Statement> visit, Action<Expr> visitExpression)
+    {
+        foreach (Statement statement in statements)
+        {
+            visit(statement);
+            switch (statement)
+            {
+                case Assignment assignment:
+                    Walk(assignment.Target, visitExpression);
+                    Walk(assignment.Value, visitExpression);
+                    break;
+                case CallStatement call:
+                    foreach (Argument argument in call.Arguments)
+                    {
+                        Walk(argument.Value, visitExpression);
+                        if (argument.Width is not null) { Walk(argument.Width, visitExpression); }
+                        if (argument.Decimals is not null) { Walk(argument.Decimals, visitExpression); }
+                    }
+
+                    break;
+                case IfStatement branch:
+                    Walk(branch.Condition, visitExpression);
+                    Walk(branch.Then, visit, visitExpression);
+                    if (branch.Else is not null) { Walk(branch.Else, visit, visitExpression); }
+                    break;
+                case WhileStatement loop:
+                    Walk(loop.Condition, visitExpression);
+                    Walk(loop.Body, visit, visitExpression);
+                    break;
+                case RepeatStatement loop:
+                    Walk(loop.Body, visit, visitExpression);
+                    Walk(loop.Condition, visitExpression);
+                    break;
+                case ForStatement loop:
+                    Walk(loop.Control, visitExpression);
+                    Walk(loop.From, visitExpression);
+                    Walk(loop.To, visitExpression);
+                    Walk(loop.Body, visit, visitExpression);
+                    break;
+                case CaseStatement choice:
+                    Walk(choice.Selector, visitExpression);
+                    foreach ((List<int> _, List<Statement> body) in choice.Arms) { Walk(body, visit, visitExpression); }
+                    break;
+                case WithStatement with:
+                    Walk(with.Record, visitExpression);
+                    Walk(with.Body, visit, visitExpression);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    private static void Walk(Expr expression, Action<Expr> visit)
+    {
+        visit(expression);
+        switch (expression)
+        {
+            case Load load: Walk(load.Designator, visit); break;
+            case Address address: Walk(address.Designator, visit); break;
+            case ByteAddress address: Walk(address.Designator, visit); break;
+            case PackedAddress address: Walk(address.Designator, visit); break;
+            case Unary unary: Walk(unary.Operand, visit); break;
+            case Binary binary:
+                Walk(binary.Left, visit);
+                Walk(binary.Right, visit);
+                break;
+            case Comparison comparison:
+                Walk(comparison.Left, visit);
+                Walk(comparison.Right, visit);
+                break;
+            case Checked check: Walk(check.Value, visit); break;
+            case Written written: Walk(written.Value, visit); break;
+            case ScanTest test: Walk(test.Character, visit); break;
+            case SetValue set:
+                if (set.Value is not null) { Walk(set.Value, visit); }
+                foreach ((Expr low, Expr? high) in set.Members)
+                {
+                    Walk(low, visit);
+                    if (high is not null) { Walk(high, visit); }
+                }
+
+                if (set.Left is not null) { Walk(set.Left, visit); }
+                if (set.Right is not null) { Walk(set.Right, visit); }
+                break;
+            case Call call:
+                foreach (Expr argument in call.Arguments) { Walk(argument, visit); }
+                break;
+            case StringFunction function:
+                foreach (Expr argument in function.Arguments) { Walk(argument, visit); }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private static void Walk(Designator designator, Action<Expr> visit)
+    {
+        switch (designator)
+        {
+            case FieldDesignator field: Walk(field.Record, visit); break;
+            case PackedFieldDesignator field: Walk(field.Record, visit); break;
+            case IndexDesignator index:
+                Walk(index.Array, visit);
+                Walk(index.Index, visit);
+                break;
+            case StringIndexDesignator index:
+                Walk(index.Text, visit);
+                Walk(index.Index, visit);
+                break;
+            case LengthDesignator length: Walk(length.Text, visit); break;
+            case Dereference dereference: Walk(dereference.Pointer, visit); break;
+            case WindowDesignator window: Walk(window.File, visit); break;
+            default:
+                break;
+        }
+    }
+
+    // What a statement shows of its parts' types.
+    private void Constrain(Procedure procedure, Statement statement)
+    {
+        switch (statement)
+        {
+            case Assignment { Value: PackedConstant or StringConstant } packed
+                when packed.Target.Type.Find() is { Kind: TypeKind.Array, Bytes: true } array:
+                {
+                    int length = packed.Value is PackedConstant p ? p.Bytes.Length : ((StringConstant)packed.Value).Characters.Length;
+
+                    // A packed array takes a constant as long as it is.
+                    array.Size((length + 1) / 2);
+                    if (array.IndexLow is { } low)
+                    {
+                        array.IndexHigh = Math.Max(array.IndexHigh ?? 0, low + length - 1);
+                    }
+
+                    break;
+                }
+
+            case Assignment { Block: true, Value: Load whole } assignment
+                when assignment.Target.Type.Find().Kind != TypeKind.String && whole.Type.Find().Kind != TypeKind.String:
+                // A record or array moved whole is the same type at both ends; fewer words than a record has are its
+                // first field's, as an identifier's name is moved from its record's address.
+                assignment.Target.Type.Find().Moved = true;
+                whole.Type.Find().Moved = true;
+                Whole(assignment.Target, whole.Type, whole.Words);
+                Whole(whole.Designator, assignment.Target.Type, whole.Words);
+                TypeNode.Unify(First(assignment.Target.Type, whole.Words), First(whole.Type, whole.Words));
+                break;
+            case Assignment { Value: WordsConstant { Values.Length: 2 } } real
+                when real.Target.Type.Find().Kind is TypeKind.Unknown or TypeKind.Scalar:
+                real.Target.Type.Find().Kind = TypeKind.Real;
+                break;
+            case Assignment assignment:
+                Indexes(assignment.Target);
+                Assign(assignment.Target.Type, assignment.Value);
+                if ((assignment.Value is Checked check ? check.Value : assignment.Value) is Constant number)
+                {
+                    if (number.Value != 0) { _constantStores.Add(assignment.Target.Type); }
+
+                    // A pointer takes no number but NIL, which LDCN loads: a place a number is stored in is a scalar.
+                    TypeNode stored = assignment.Target.Type.Find();
+                    if (stored.Kind == TypeKind.Unknown) { stored.Kind = TypeKind.Scalar; }
+                }
+
+                break;
+            case CallStatement { Callee.Procedure: { } callee } call:
+                Pass(callee, [.. call.Arguments.Select(argument => argument.Value)]);
+                break;
+            case CallStatement { Callee.UnitProcedure: { } declared } call:
+                PassUnit(declared, [.. call.Arguments.Select(argument => argument.Value)]);
+                break;
+            case CallStatement { Callee.Builtin: "MARK" or "RELEASE", Arguments: [{ Value: Address mark }] }:
+                // MARK and RELEASE take the variable that keeps the heap's mark, a pointer.
+                mark.Designator.Type.Target();
+                break;
+            case CallStatement { Callee.Builtin: "UNITSTATUS" or "UNITREAD" or "UNITWRITE" } unitCall:
+                // A unit's number, and the counts, block and mode or control after the buffer, are integers.
+                for (int index = 0; index < unitCall.Arguments.Count; index++)
+                {
+                    if (index != 1) { unitCall.Arguments[index].Value.Type.Vote(ScalarKind.Integer, 2); }
+                }
+
+                break;
+            case IfStatement branch:
+                branch.Condition.Type.Vote(ScalarKind.Boolean, 2);
+                break;
+            case WhileStatement loop:
+                loop.Condition.Type.Vote(ScalarKind.Boolean, 2);
+                break;
+            case RepeatStatement loop:
+                loop.Condition.Type.Vote(ScalarKind.Boolean, 2);
+                break;
+            case ForStatement loop:
+                // A FOR loop counts in a scalar.
+                TypeNode counter = loop.Control.Type.Find();
+                if (counter.Kind == TypeKind.Unknown) { counter.Kind = TypeKind.Scalar; }
+                Assign(loop.Control.Type, loop.From);
+                Assign(loop.Control.Type, loop.To);
+                break;
+            case CaseStatement choice:
+                choice.Selector.Type.Vote(ScalarKind.Integer);
+                break;
+            case WithStatement with:
+                TypeNode.Unify(with.Temporary.Type.Target(), with.Record.Type);
+                break;
+            default:
+                break;
+        }
+
+        _ = procedure;
+    }
+
+    // What an expression shows of its parts' types.
+    private void Constrain(Expr expression)
+    {
+        switch (expression)
+        {
+            case Nil nil:
+                nil.Type.Find().Kind = TypeKind.Pointer;
+                break;
+            case Binary
+            {
+                Op: Operator.Add or Operator.Subtract or Operator.Multiply or Operator.Divide or Operator.Modulo
+            } binary:
+                binary.Left.Type.Vote(ScalarKind.Integer, 2);
+                binary.Right.Type.Vote(ScalarKind.Integer, 2);
+                binary.Type.Force(ScalarKind.Integer);
+                break;
+            case Binary { Op: Operator.And or Operator.Or } binary:
+                binary.Left.Type.Vote(ScalarKind.Boolean, 2);
+                binary.Right.Type.Vote(ScalarKind.Boolean, 2);
+                binary.Type.Force(ScalarKind.Boolean);
+                break;
+            case Binary binary:
+                binary.Type.Find().Kind = TypeKind.Real;
+                Real(binary.Left);
+                Real(binary.Right);
+                break;
+            case Unary { Op: Operator.Negate or Operator.Absolute or Operator.Square } unary:
+                unary.Operand.Type.Vote(ScalarKind.Integer, 2);
+                unary.Type.Force(ScalarKind.Integer);
+                break;
+            case Unary { Op: Operator.Not } unary:
+                unary.Operand.Type.Vote(ScalarKind.Boolean, 2);
+                unary.Type.Force(ScalarKind.Boolean);
+                break;
+            case Unary { Op: Operator.Float } unary:
+                unary.Operand.Type.Vote(ScalarKind.Integer, 2);
+                unary.Type.Find().Kind = TypeKind.Real;
+                break;
+            case Unary unary:
+                unary.Type.Find().Kind = TypeKind.Real;
+                Real(unary.Operand);
+                break;
+            case Comparison comparison:
+                Compare(comparison);
+                break;
+            case Written written:
+                switch (written.Procedure)
+                {
+                    case 13: written.Value.Type.Vote(ScalarKind.Integer, 2); break;
+                    case 17: written.Value.Type.Vote(ScalarKind.Char, 2); break;
+                    case 19 when written.Value is not (StringConstant or StringFunction or PackedConstant or Constant):
+                        written.Value.Type.String(0);
+                        break;
+                    case 0: Real(written.Value); break;
+                    default: break;
+                }
+
+                break;
+            case Call { Callee.Procedure: { } callee } call:
+                Pass(callee, call.Arguments);
+                break;
+            case Call { Callee.UnitProcedure: { } declared } call:
+                PassUnit(declared, call.Arguments);
+                break;
+            case Call
+            {
+                Callee.Builtin: "TRUNC" or "ROUND" or "SIN" or "COS" or "LOG" or "ATAN" or "LN" or "EXP" or "SQRT"
+            } call:
+                Real(call.Arguments[0]);
+                break;
+            case Call { Callee.Builtin: "PWROFTEN" or "UNITBUSY" } numbered when numbered.Arguments.Count > 0:
+                // Their arguments are integers.
+                numbered.Arguments[0].Type.Vote(ScalarKind.Integer, 2);
+                break;
+            case Call { Callee.Builtin: "SCAN" } scan when scan.Arguments is [{ } limit, ScanTest test, _]:
+                limit.Type.Vote(ScalarKind.Integer, 2);
+                test.Character.Type.Vote(ScalarKind.Char, 2);
+                break;
+            case Load { Designator: StringIndexDesignator index }:
+                index.Index.Type.Vote(ScalarKind.Integer, 2);
+                break;
+            case Load { Designator: var loaded }:
+                Indexes(loaded);
+                break;
+            case Address { Designator: var addressed }:
+                Indexes(addressed);
+                break;
+            case SetValue set:
+                Set(set);
+                break;
+            default:
+                break;
+        }
+    }
+
+    // A record's first field, and its first's, while the record has more words than a move of so many moves.
+    // A variable a record as long as it moves to or from is that record, whatever its first word is besides.
+    private static void Whole(Designator designator, TypeNode other, int words)
+    {
+        if (designator is not VariableDesignator { Variable: var variable }) { return; }
+
+        TypeNode record = other.Find();
+        TypeNode own = variable.Type.Find();
+        if (record.Kind != TypeKind.Record || own.Kind == TypeKind.Record || SizeOf(record) != words || (SizeOf(own) ?? 1) >= words)
+        {
+            return;
+        }
+
+        variable.Type = record;
+        TypeNode.Unify(record, own);
+    }
+
+    private static TypeNode First(TypeNode type, int words)
+    {
+        TypeNode current = type;
+        for (int depth = 0; depth < 8; depth++)
+        {
+            TypeNode root = current.Find();
+            bool larger = root.Kind == TypeKind.Record && root.Fields?.ContainsKey(0) == true && (SizeOf(root) ?? 0) > words;
+            if (!larger) { break; }
+
+            current = root.Field(0);
+        }
+
+        return current;
+    }
+
+    // An array's index is an integer, wherever the element is reached.
+    private static void Indexes(Designator designator)
+    {
+        switch (designator)
+        {
+            case IndexDesignator index:
+                index.Index.Type.Vote(ScalarKind.Integer);
+                Indexes(index.Array);
+                break;
+            case FieldDesignator field: Indexes(field.Record); break;
+            case PackedFieldDesignator field: Indexes(field.Record); break;
+            default: break;
+        }
+    }
+
+    // An assignment, or a value parameter's argument: the two share a type, and a range check gives its subrange.
+    private void Assign(TypeNode target, Expr value)
+    {
+        if (value is Checked check)
+        {
+            target.Range(check.Low, check.High);
+            value = check.Value;
+        }
+
+        switch (value)
+        {
+            case StringConstant or StringFunction:
+                target.String(0);
+                break;
+            case Load load when load.Type.Find().Kind == TypeKind.String || target.Find().Kind == TypeKind.String:
+                // Strings of any lengths assign to each other.
+                target.String(0);
+                load.Type.String(0);
+                break;
+            case Written written:
+                Assign(target, written.Value);
+                break;
+            default:
+                Flow(target, value.Type);
+                break;
+        }
+    }
+
+    // Whether a link is of a pointer and an integer that stay apart: a pointer compared with an integer, or a pointer
+    // that flows into an integer.
+    // A word used both ways and a plain integer or pointer stay apart too: the one is read and written as the other
+    // by its view, .I or .P.
+    private static bool Ordinal(TypeNode first, TypeNode second, bool flow)
+    {
+        TypeNode a = first.Find();
+        TypeNode b = second.Find();
+        if (Viewed(a, b) || Viewed(b, a)) { return true; }
+        if ((a.Kind, b.Kind) is (TypeKind.Pointer, TypeKind.Scalar)) { return !flow; }
+        return TypeNode.Conflicts(a, b);
+    }
+
+    // Whether one type is a word used both ways and the other a plain integer or pointer.
+    private static bool Viewed(TypeNode punned, TypeNode plain)
+    {
+        bool both = punned.Kind == TypeKind.Pointer && punned.Punned;
+        bool single = plain.Kind == TypeKind.Scalar || (plain.Kind == TypeKind.Pointer && !plain.Punned);
+        return both && single;
+    }
+
+    private static void Characters(TypeNode type, HashSet<TypeNode> seen)
+    {
+        TypeNode root = type.Find();
+        if (!seen.Add(root)) { return; }
+        if (root.Kind == TypeKind.Array && root.Bytes && root.Element is { } element && element.Find().Low is null)
+        {
+            element.Find().Kind = TypeKind.Scalar;
+            element.Find().Forced = ScalarKind.Char;
+        }
+
+        if (root.Element is { } inner) { Characters(inner, seen); }
+        foreach (TypeNode field in root.AllFields) { Characters(field, seen); }
+    }
+
+    // Two types a value flows between: a scalar's kind is shared, but not a subrange; anything else is one type.
+    private void Link(TypeNode first, TypeNode second) => _links.Add((first, second, false));
+
+    // A value that flows into a place: an integer that flows into a pointer makes a word used both ways, but a pointer
+    // that flows into an integer is ORD of it, which compiles to nothing, so they stay apart.
+    private void Flow(TypeNode target, TypeNode value) => _links.Add((target, value, true));
+
+    // Settles the links: those that met pointers or structures become one type, and the scalars on each set of links
+    // pool their votes for a kind, though each keeps a kind it is forced to and its own subrange.
+    private void Settle()
+    {
+        // A packed array's bytes are characters unless a range check bounds them.
+        HashSet<TypeNode> seen = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            foreach (Variable variable in procedure.Frame.Variables.Values) { Characters(variable.Type, seen); }
+        }
+
+        static bool Scalar(TypeNode type) => type.Find().Kind is TypeKind.Scalar or TypeKind.Unknown;
+
+        // A type that is linked to a scalar is a scalar before any pointer meets it, so that a pointer that flows into
+        // it stays ORD of the pointer.
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            foreach ((TypeNode first, TypeNode second, _) in _links)
+            {
+                TypeNode a = first.Find();
+                TypeNode b = second.Find();
+                if ((a.Kind, b.Kind) is (TypeKind.Scalar, TypeKind.Unknown) or (TypeKind.Unknown, TypeKind.Scalar))
+                {
+                    a.Kind = TypeKind.Scalar;
+                    b.Kind = TypeKind.Scalar;
+                    changed = true;
+                }
+            }
+        }
+
+        // The links settle, then the fields the code reaches go into their records, which may link more types.
+        HashSet<int> unified = [];
+        for (bool placed = true; placed;)
+        {
+            for (bool changed = true; changed;)
+            {
+                changed = false;
+                for (int index = 0; index < _links.Count; index++)
+                {
+                    (TypeNode first, TypeNode second, bool flow) = _links[index];
+                    if (!unified.Contains(index) && first.Find() != second.Find() && (!Scalar(first) || !Scalar(second)))
+                    {
+                        // A pointer compared with an integer, or flowing into one, is ORD of it; only an integer that
+                        // flows into a pointer makes a word used both ways.
+                        if (Ordinal(first, second, flow))
+                        {
+                            // A word used both ways and a pointer it is read into point to one type.
+                            if (first.Find().Kind == TypeKind.Pointer && second.Find().Kind == TypeKind.Pointer)
+                            {
+                                TypeNode.Targets(first, second);
+                            }
+
+                            continue;
+                        }
+
+                        // A record linked to a scalar is its first field's link.
+                        if (first.Find().Kind == TypeKind.Record && Scalar(second) || second.Find().Kind == TypeKind.Record && Scalar(first))
+                        {
+                            unified.Add(index);
+                            _links.Add(first.Find().Kind == TypeKind.Record ? (first.Field(0), second, flow) : (first, second.Field(0), flow));
+                            changed = true;
+                            continue;
+                        }
+
+                        unified.Add(index);
+                        TypeNode.Unify(first, second);
+                        changed = true;
+                    }
+                }
+            }
+
+            placed = PlaceSites();
+        }
+
+        // The fields' bytes, now in their records, are characters too.
+        HashSet<TypeNode> placedSeen = [];
+        foreach (Procedure procedure in _procedures)
+        {
+            foreach (Variable variable in procedure.Frame.Variables.Values) { Characters(variable.Type, placedSeen); }
+        }
+
+        foreach ((_, _, TypeNode field) in _sites) { Characters(field, placedSeen); }
+
+        Dictionary<TypeNode, TypeNode> classes = [];
+        TypeNode Class(TypeNode type)
+        {
+            TypeNode root = type.Find();
+            if (!classes.TryGetValue(root, out TypeNode? parent)) { return classes[root] = root; }
+            if (parent == root) { return root; }
+
+            TypeNode top = Class(parent);
+            classes[root] = top;
+            return top;
+        }
+
+        foreach ((TypeNode first, TypeNode second, _) in _links)
+        {
+            TypeNode a = Class(first);
+            TypeNode b = Class(second);
+            if (a != b) { classes[b] = a; }
+        }
+
+        Dictionary<TypeNode, (int Integer, int Char, int Boolean, string? Enumeration)> pooled = [];
+        foreach (TypeNode root in classes.Keys.ToList())
+        {
+            TypeNode top = Class(root);
+            (int i, int c, int b, string? e) = pooled.TryGetValue(top, out var votes) ? votes : (0, 0, 0, null);
+            int weight = root.Forced is null ? 1 : 4;
+            pooled[top] = (
+                i + (root.IntegerVotes * weight) + (root.Forced == ScalarKind.Integer ? 4 : 0),
+                c + (root.CharVotes * weight) + (root.Forced == ScalarKind.Char ? 4 : 0),
+                b + (root.BooleanVotes * weight) + (root.Forced == ScalarKind.Boolean ? 4 : 0),
+                e ?? root.Enumeration);
+        }
+
+        foreach (TypeNode root in classes.Keys)
+        {
+            if (!Scalar(root) || root.Forced is not null || root.Enumeration is not null) { continue; }
+
+            (int integer, int character, int boolean, string? enumeration) = pooled[Class(root)];
+            if (enumeration is not null && root.IntegerVotes == 0 && root.CharVotes == 0)
+            {
+                root.Enumeration = enumeration;
+                root.Kind = TypeKind.Scalar;
+                continue;
+            }
+
+            if (integer + character + boolean == 0) { continue; }
+
+            root.Kind = TypeKind.Scalar;
+            root.Forced = boolean > integer && boolean >= character
+                ? ScalarKind.Boolean
+                : character > integer ? ScalarKind.Char : ScalarKind.Integer;
+        }
+    }
+
+    private static void Real(Expr expression)
+    {
+        if (expression is WordsConstant) { return; }
+        expression.Type.Find().Kind = TypeKind.Real;
+    }
+
+    private void Compare(Comparison comparison)
+    {
+        comparison.Type.Force(ScalarKind.Boolean);
+        switch (comparison.Comparand)
+        {
+            case Comparand.Word:
+                Link(comparison.Left.Type, comparison.Right.Type);
+
+                // Words ordered are numbers: pointers are only equal or not.
+                if (comparison.Op is not (Operator.Equal or Operator.NotEqual))
+                {
+                    comparison.Left.Type.Vote(ScalarKind.Integer);
+                    comparison.Right.Type.Vote(ScalarKind.Integer);
+                }
+
+                break;
+            case Comparand.Boolean:
+                comparison.Left.Type.Force(ScalarKind.Boolean);
+                comparison.Right.Type.Force(ScalarKind.Boolean);
+                break;
+            case Comparand.Real:
+                Real(comparison.Left);
+                Real(comparison.Right);
+                break;
+            case Comparand.String:
+                if (comparison.Left is not (StringConstant or StringFunction)) { comparison.Left.Type.String(0); }
+                if (comparison.Right is not (StringConstant or StringFunction)) { comparison.Right.Type.String(0); }
+                break;
+            case Comparand.Set when comparison.Op == Operator.In:
+                {
+                    TypeNode set = comparison.Right.Type.Find();
+                    Link(SetElement(set), comparison.Left.Type);
+                    break;
+                }
+
+            case Comparand.Set or Comparand.Bytes or Comparand.Words:
+                if (comparison.Left is not (StringConstant or PackedConstant) && comparison.Right is not (StringConstant or PackedConstant))
+                {
+                    TypeNode.Unify(comparison.Left.Type, comparison.Right.Type);
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void Set(SetValue set)
+    {
+        TypeNode root = set.Type.Find();
+        root.Kind = TypeKind.Set;
+        TypeNode element = SetElement(root);
+        foreach ((Expr low, Expr? high) in set.Members)
+        {
+            Link(element, low.Type);
+            if (high is not null) { Link(element, high.Type); }
+        }
+
+        if (set.Value is Load load) { TypeNode.Unify(root, load.Type); }
+    }
+
+    // A set's element, a scalar: what is tested for in it, or put in it, only shares its kind, so a word that is also a
+    // pointer, read as an integer, does not make the element one.
+    private static TypeNode SetElement(TypeNode set)
+    {
+        TypeNode root = set.Find();
+        root.Element ??= new TypeNode();
+        if (root.Element.Find().Kind == TypeKind.Unknown) { root.Element.Find().Kind = TypeKind.Scalar; }
+        return root.Element;
+    }
+
+    // The bytes VAR parameters were passed, with their arguments', to meet once the statements have shown which are
+    // strings.
+    private readonly List<(TypeNode Formal, TypeNode Actual)> _bytesPassed = [];
+
+    // The VAR parameters not yet known to be more than a word that were passed what may be a record, with their
+    // arguments' types, to meet once the statements have shown which they are: a scalar takes a record's first word.
+    private readonly List<(TypeNode Formal, TypeNode Actual)> _wordsPassed = [];
+
+    // The type of a record's or an array's first word: its first field's, or its first element's, all the way down.
+    private static TypeNode FirstWord(TypeNode type)
+    {
+        TypeNode root = type.Find();
+        return root.Kind switch
+        {
+            TypeKind.Record => FirstWord(root.Field(0)),
+            TypeKind.Array when root.Element is { } element && !root.Bytes && root.PerWord == 0 => FirstWord(element),
+            _ => type
+        };
+    }
+
+    // A call of a procedure in the code file: VAR parameters share their arguments' types.
+    private void Pass(Procedure callee, IReadOnlyList<Expr> arguments)
+    {
+        List<Variable> slots = Slots(callee, arguments);
+        for (int index = 0; index < arguments.Count; index++)
+        {
+            Variable parameter = slots[index];
+            Expr argument = arguments[index];
+            if (parameter.Copy is { } copy)
+            {
+                // A string of any length passes to a value string, which its copy holds at its own length.
+                if (copy.Type.Find().Kind != TypeKind.String)
+                {
+                    TypeNode.Unify(copy.Type, Designate(argument).Type);
+                }
+                else if (argument is not (StringConstant or StringFunction or Constant))
+                {
+                    Designate(argument).Type.String(0);
+                }
+            }
+            else if (parameter.IsReference)
+            {
+                // A string of any length passes to a VAR string.
+                TypeNode formal = parameter.Type.Target();
+                TypeNode actual = Designate(argument).Type;
+                if (formal.Find().Kind == TypeKind.String || actual.Find().Kind == TypeKind.String)
+                {
+                    formal.String(0);
+                    actual.String(0);
+                }
+                else if (formal.Find() is { Kind: TypeKind.Array, Bytes: true }
+                    && actual.Find() is { Kind: TypeKind.Array, Bytes: true })
+                {
+                    // Bytes may be a string's, which the statements after may show: they meet once all have.
+                    _bytesPassed.Add((formal, actual));
+                }
+                else if (formal.Find().Kind is TypeKind.Unknown or TypeKind.Scalar
+                    && actual.Find().Kind is TypeKind.Unknown or TypeKind.Record or TypeKind.Array)
+                {
+                    // A record's address is its first field's: which a VAR scalar takes, the statements after show.
+                    _wordsPassed.Add((formal, actual));
+                }
+                else
+                {
+                    TypeNode.Unify(formal, actual);
+                }
+            }
+            else
+            {
+                Assign(parameter.Type, argument);
+            }
+        }
+    }
+
+    private void PassUnit(PascalUnitProcedure declared, IReadOnlyList<Expr> arguments)
+    {
+        // A procedure declared from its calls says nothing more of them.
+        if (_inferredProcedures.Contains(declared)) { return; }
+
+        for (int index = 0; index < arguments.Count && index < declared.Parameters.Count; index++)
+        {
+            PascalUnitParameter parameter = declared.Parameters[index];
+            if (parameter.Type is null) { continue; }
+
+            TypeNode type = Named(parameter.Type);
+            if (parameter.IsReference)
+            {
+                TypeNode.Unify(Designate(arguments[index]).Type, type);
+            }
+            else if (type.Find() is { Kind: TypeKind.Scalar } scalar)
+            {
+                TypeNode argument = arguments[index].Type;
+                if (scalar.Enumeration is not null && arguments[index] is Constant or Load or Call)
+                {
+                    TypeNode.Unify(argument, type);
+                }
+                else if (scalar.Forced is { } kind) { argument.Vote(kind, 2); }
+            }
+            else if (type.Find().Kind == TypeKind.Real)
+            {
+                Real(arguments[index]);
+            }
+        }
+    }
+
+    // The thing an argument's address designates.
+    private static Designator Designate(Expr address) => address switch
+    {
+        Address a => a.Designator,
+        ByteAddress b => b.Designator,
+        Load { Designator: var designator } when designator.Type.Find().Kind is TypeKind.String => designator,
+        _ => new Dereference(address)
+    };
+}

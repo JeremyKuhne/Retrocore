@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Buffers.Binary;
 using System.Text;
 
 namespace Retrocore.Media;
@@ -15,7 +16,7 @@ namespace Retrocore.Media;
 ///   The segment dictionary has 16 slots. For each, its code's block and length (bytes 0-63), its name (64-191, eight
 ///   characters), its kind (192-223), the block of a unit's interface text (224-255), and its information
 ///   (256-287): its segment number in the low byte, its machine type in bits 8-11 and the code file's version in
-///   bits 13-15. Bytes 288-291 are the set of intrinsic units the program uses.
+///   bits 13-15. Bytes 288-295 are the set of intrinsic units the program uses: Apple III Pascal's go up to 63.
 ///  </para>
 ///  <para>
 ///   A segment ends with its procedure dictionary. Its last word is the segment number and, in its high byte, the
@@ -35,7 +36,7 @@ public sealed class PascalCodeFile
     private const int BlockSize = 512;
     private const int Slots = 16;
 
-    private PascalCodeFile(IReadOnlyList<PascalSegment> segments, uint intrinsics)
+    private PascalCodeFile(IReadOnlyList<PascalSegment> segments, ulong intrinsics)
     {
         Segments = segments;
         IntrinsicUnits = intrinsics;
@@ -47,9 +48,9 @@ public sealed class PascalCodeFile
     public IReadOnlyList<PascalSegment> Segments { get; }
 
     /// <summary>
-    ///  Gets the set of intrinsic units a program uses, one bit for each segment number from 0 to 31.
+    ///  Gets the set of intrinsic units a program uses, one bit for each segment number from 0 to 63.
     /// </summary>
-    public uint IntrinsicUnits { get; }
+    public ulong IntrinsicUnits { get; }
 
     /// <summary>
     ///  Reads a code file.
@@ -92,7 +93,7 @@ public sealed class PascalCodeFile
             segments.Add(new PascalSegment(slot, name, block, length, kind, text, information, code, procedures));
         }
 
-        uint intrinsics = (uint)(Word(data, 288) | (Word(data, 290) << 16));
+        ulong intrinsics = BinaryPrimitives.ReadUInt64LittleEndian(data[288..296]);
         return new PascalCodeFile(segments, intrinsics);
     }
 

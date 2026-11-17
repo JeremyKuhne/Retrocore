@@ -129,6 +129,7 @@ internal sealed partial class SourceAnalysis
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
             SourceResolver = resolver,
+            SdkPaths = [SdkModules.SdkDirectory],
             BuildTime = DateTimeOffset.UnixEpoch
         };
 
@@ -178,6 +179,29 @@ internal sealed partial class SourceAnalysis
                 }
             }
         }
+    }
+
+    /// <summary>
+    ///  Tests whether a line's bytes came from expanding a macro it calls, as p-code's do from <c>Pcode.asm</c>'s, rather
+    ///  than from an instruction of its own.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>Whether the line called a macro that emitted bytes.</returns>
+    internal bool ExpandsMacro(string path, int line)
+    {
+        foreach (AssemblySourceMapEntry entry in Emitted(path, line))
+        {
+            for (AssemblyLocation? location = entry.Location; location?.ExpandedFrom is { } from; location = from)
+            {
+                if (location.IsMacroExpansion && from.Line == line && string.Equals(Path.GetFullPath(from.Path), path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

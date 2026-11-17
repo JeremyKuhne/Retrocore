@@ -1,7 +1,8 @@
 # Backlog: Apple Pascal
 
 Status: **asked for 2026-11-13** ("implement Apple III Pascal support", designed with Apple II Pascal in mind). Built
-for both machines, every version: see Built. Writing Pascal (Apple II) volumes is what remains. [Pascal.md](../Pascal.md) is the user guide.
+for both machines, every version: see Built. Writing Pascal (Apple II) volumes is what remains; Apple Pascal
+1.3 runs from either its DSK images or its WOZ images. [Pascal.md](../Pascal.md) is the user guide.
 
 Apple Pascal is UCSD Pascal II.1 for the Apple II (Apple Pascal 1.0-1.3) and the Apple III (Apple III Pascal
 1.0-1.2). A program is compiled to p-code, the instruction set of a stack machine, and a 6502 interpreter runs it.
@@ -31,6 +32,7 @@ file system.
 | `UCSD Pascal 1.1_0.dsk` … `1.1_3.dsk` | `4e6b4792…cf4b`, `d6e7509a…4229`, `88b67683…1adf`, `86141693…3058` | Apple Pascal 1.1: APPLE0-APPLE3, with sample programs as source and code |
 | `UCSD Pascal 1.2_0.DSK` … `1.2_3.DSK` | `6f8fd3bd…16ab`, `25daeefe…1da0`, `6576fccb…9f21`, `488bc4bd…d275` | Apple Pascal 1.2 |
 | `UCSD Pascal 1.3_0.DSK` … `1.3_3.DSK` | `fb72505d…41a8`, `70296fd0…d00b`, `873b9e41…05a9`, `fea7dd59…fac0` | Apple Pascal 1.3, dated 3 September 1985, from the Internet Archive (items `211`-`214_Apple_II_Pascal_1.3_*`, whose labels swap APPLE0 and APPLE1) |
+| `UCSD Pascal 1.3_APPLE0.woz` … `APPLE3.woz` | `f3deb6b3…2be8`, `dd52f6ab…ae93`, `bc96cd93…011c`, `c0458c2c…9044` | Apple Pascal 1.3, WOZ images from archive.org's woz-a-day collection (`wozaday_Apple_Pascal_v13`); its code files are version 6 |
 
 **Already in Retrocore:** `SosVolume` reads SOS volumes, and `SosDriverCodeFile` reads a Pascal code file with one
 native segment (Titan's RAM disk driver). Apple III Pascal 1.1 boots on the emulator, edits, compiles with a
@@ -73,7 +75,9 @@ Built 2026-11-13, the second round:
   `retro/device` with `writeProtect`), so the Editor and Compiler can save in a debug session. Writes stay in memory.
 - **Listings:** `PascalListing` reads a compiler listing: each line's segment, procedure, depth or declaration and
   offset, the segments' and procedures' names, and the words of declared variables where their types' sizes are
-  known; `PascalListingTests`.
+  known; `PascalListingTests`. **Fixed 2026-11-13:** the words were numbered backwards within an identifier list
+  and across parameters; the Compiler allocates a list from its last name (`VAR A, B` puts B at the lower word) and
+  numbers parameters in stack order (the last is lowest), as the p-code source's variable names showed.
 - **Source lines:** breakpoints in `.pas`, `.pascal` and `.text` sources bind through `NAME.LST.TEXT`, on a disk in a
   drive (read again when it changes) or beside the source, to the first p-code of the line's statement. Frames show
   source lines and procedure names; Step Over and Step Into go by line. `Test-PascalDap.mjs` compiles HELLO in the
@@ -97,8 +101,8 @@ Built 2026-11-13, the third round:
   their frames read (`Apple2PascalTests`, `Apple3PascalTests`). 1.0's R(un) runs no code its C(ompile) wrote, so
   the tests X(ecute) it; its Compiler leaves the code file open when it also writes a listing, so 1.0 compiles
   without one; and Apple III Pascal 1.0's first disk has its known damaged Filer.
-- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings and
-  saplings), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
+- **SOS volumes written:** `SosVolumeBuilder` lays out a 140K volume (boot blocks, directory, bitmap, seedlings,
+  saplings and trees), and `--pascal sos` builds one from other disks' files (`SosVolumeTests`).
 - **Apple III Pascal 1.2** boots from disks built from 1.1's and the update's, compiles and runs HELLO (code
   version 6), and its frames read. Its larger `SYSTEM.PASCAL` leaves no room on the boot disk for 1.1's Filer and
   Library, so they go on the second. Its Editor asks `Edit what file?` and its Quit asks `Write to what file?`.
@@ -108,8 +112,9 @@ Built 2026-11-13, the third round:
 - **Paced pasting:** on the Apple II and III, `retro/type` keys go in a typist's pace apart (30,000 cycles a key and
   300,000 a line on the II, twice that on the III), so the Editor takes a pasted program whole.
 - **`.text` sources** open as Apple Pascal.
-- **Not done:** writing Pascal volumes for the Apple II, and SOS trees (files over 128K, which a 140K disk barely
-  needs). Apple Pascal 1.3 had no image on an allowed host then; the fourth round adds it.
+- **WOZ images and SOS trees** (2026-11-15): `--pascal compile` and the tests take 1.3's WOZ images as well as its
+  DSK images, and answer 1.3's question for a listing file; SOS trees (files over 128K) are written.
+- **Not done:** writing Pascal volumes for the Apple II.
 
 Built 2026-11-13, the fourth round:
 
@@ -124,6 +129,26 @@ Built 2026-11-13, the fourth round:
   - Its Editor loses keys typed faster than a typist, more readily than 1.2's: the test types at the debugger's
     paste pace. It asks `Edit what file?`, stays in its Quit menu after U(pdate), and its Compiler asks for a
     listing file whatever the program says.
+
+Built 2026-11-13, the decompiler (asked for: "a disassembler for Apple II/III compiled Pascal", then "Decompile to
+Pascal, ideally to something that can be recompiled into the exact same p-code"):
+
+- **Decompiler:** `PascalDecompiler` and `--pascal decompile`: a code file back to Pascal that the Compiler compiles to
+  the same code ([Pascal.md](../Pascal.md#decompiling)). Units are named from `PascalLibrary`, the library's
+  interface text.
+- **Checking it:** `EmulatedPascalCompiler` and `--pascal compile` run Apple Pascal 1.1's Compiler on an emulated
+  Apple II with the source as the workfile (`PascalTextFile.Write`, `PascalVolume.WriteFile`), in about four seconds;
+  `PascalCodeComparison` and `--pascal compare` compare code files. Apple's own sources on APPLE3 recompile to their
+  code files, but for BALANCED's and DISKIO's alignment bytes, which hold stale bytes and are not compared.
+- **Round trips:** the nine samples with sources and BINDER, without one, recompile to the same code
+  (`PascalDecompilerTests`).
+- **Found:** the Compiler allocates an identifier list from its last name, gives a function's result the first two
+  words, initializes units in the reverse of USES and files in the reverse of their declarations, keeps a WITH's
+  record (but a whole variable's) in a temporary, reaches a record variable's fields by their own offsets, writes
+  negative constants as their magnitude and NGI, folds no constant expression, and passes FILE OF records' sizes in
+  words; an untyped FILE is 40 words, a TEXT 301.
+- **Not done:** see [PcodeAssembly.md](PcodeAssembly.md), the backlog of p-code disassembly and reassembly, with the
+  decompiler's own next steps.
 
 ## The pieces
 

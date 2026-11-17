@@ -298,6 +298,7 @@ applies to any instructions before it; without one, the host's CPU applies.
 | `M6809` | The Motorola MC6809, with page-`$10` and page-`$11` instructions, indexed postbytes, register pairs and stack register lists. |
 | `I8080` | The Intel 8080. Its undocumented opcodes disassemble as the `NOP`, `JMP`, `RET` and `CALL` they act as. |
 | `I8085` | The Intel 8085: the 8080's instructions with `RIM` and `SIM`, and the undocumented `DSUB`, `ARHL`, `RDEL`, `LDHI`, `LDSI`, `RSTV`, `SHLX`, `LHLX`, `JNK` and `JK`. |
+| `Pcode` | Apple Pascal's p-code, which has no instructions of its own: [`Pcode.asm`](../src/Retrocore.Pascal/Pcode.asm) writes each p-code as a macro. |
 
 An instruction is a mnemonic and its operand. Where one instruction has several encodings, such as the Z80's
 duplicate `NEG`s, the documented one is used.
@@ -524,6 +525,10 @@ Table:  .byte 0
 - **`.local` names, ...** gives each invocation its own copy of those labels.
 - **`.exitmacro`** ends the expansion early.
 - **Recursion** is allowed, up to the depth limit.
+- **Macro-only CPUs.** A macro defined while `.cpu Pcode` is in effect belongs to it, and expands only while
+  `.cpu Pcode` is in effect again. So `Pcode.asm`'s `LDA`, `INC`, `NOP` and `STP`, which are p-codes, leave the
+  6502's alone in an assembled procedure written under `.cpu Mos6502` in the same file; and under `.cpu Pcode`, an
+  instruction that is no macro's is an error.
 
 ```asm
 .macro Delay count

@@ -95,16 +95,17 @@ public class PascalListingTests
     }
 
     /// <summary>
-    ///  Declarations give their variables' words: globals after the program's files, parameters, a function's
-    ///  result, locals after parameters, and a string's 41 words.
+    ///  Declarations give their variables' words: globals after the program's files, a list from its last name,
+    ///  parameters, a function's result, locals after parameters, and a string's 41 words.
     /// </summary>
     [TestMethod]
     public void DeclarationsGiveVariables()
     {
         PascalListing listing = PascalListing.Parse(Demo);
+        // The Compiler allocates a list from its last name: VAR A, B puts B at word 3 and A at 4.
         listing.Variables(1, 1).Should().Equal(
-            new PascalVariable("A", 3, 1, "INTEGER"),
-            new PascalVariable("B", 4, 1, "INTEGER"),
+            new PascalVariable("A", 4, 1, "INTEGER"),
+            new PascalVariable("B", 3, 1, "INTEGER"),
             new PascalVariable("S", 5, 41, "STRING"));
 
         listing.Variables(1, 2).Should().Equal(
@@ -157,10 +158,11 @@ public class PascalListingTests
         listing.Compiles(1, "SHAPES").Should().BeTrue();
         listing.ProcedureName(1, 2).Should().Be("Area");
         listing.Variables(1, 1).Should().Equal(new PascalVariable("A", 3, 0, "array[1..3] of integer"));
+        // Parameters are pushed in order, so the last has the lowest word.
         listing.Variables(1, 2).Should().Equal(
             new PascalVariable("Area", 1, 2, "integer"),
-            new PascalVariable("Side", 3, 1, "integer", Reference: true),
-            new PascalVariable("N", 4, 1, "integer"));
+            new PascalVariable("Side", 4, 1, "integer", Reference: true),
+            new PascalVariable("N", 3, 1, "integer"));
 
         PascalListing.IsOrdinal("Integer").Should().BeTrue();
         PascalListing.IsOrdinal("1..10").Should().BeTrue();

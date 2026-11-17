@@ -130,6 +130,12 @@ internal static class SdkModules
     internal static string RomDirectory => DefaultDirectory ?? Path.Join(AppContext.BaseDirectory, "Sdk", "Roms");
 
     /// <summary>
+    ///  Gets the SDK directory beside the debug host, which <c>.include &lt;file&gt;</c> searches: its
+    ///  <c>Pascal/Pcode.asm</c> holds p-code's macros.
+    /// </summary>
+    internal static string SdkDirectory => Path.Join(AppContext.BaseDirectory, "Sdk");
+
+    /// <summary>
     ///  Adds the modules for every SDK ROM source present.
     /// </summary>
     /// <param name="debug">The session's modules.</param>

@@ -24,6 +24,12 @@ internal sealed partial class AssemblyPreprocessor
         internal IReadOnlyList<Line> Body { get; } = body;
 
         /// <summary>
+        ///  Gets the macro-only CPU it was defined under, such as <c>Pcode</c>, whose <c>.cpu</c> must be in effect for
+        ///  it to expand; null for a macro that expands under any CPU.
+        /// </summary>
+        internal string? Cpu { get; init; }
+
+        /// <summary>
         ///  Gets or sets Merlin macro-body labels that receive invocation-local bindings.
         /// </summary>
         internal string[]? MerlinLocals { get; set; }

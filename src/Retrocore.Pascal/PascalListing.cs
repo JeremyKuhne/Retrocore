@@ -182,9 +182,8 @@ public sealed partial class PascalListing
         return upper.Length > 8 ? upper[..8] : upper;
     }
 
-    // The variables of each procedure, from its declarations: a heading's parameters, then its VAR sections. A
-    // name's word follows the one before it on the line when that one's size is known; otherwise the line's names
-    // after it are left out.
+    // The variables of each procedure, from its declarations: a heading's parameters, then its VAR sections, from the
+    // word each line starts at. Words go as the Compiler allocates them (see Locals and Parameters).
     private void Declarations(List<PascalListingLine> lines)
     {
         Dictionary<(int, int), string> sections = [];
@@ -229,11 +228,9 @@ public sealed partial class PascalListing
             }
 
             sections[procedure] = section;
-            bool known = true;
+            List<(List<string> Names, int Size, string Type, bool Reference)> declared = [];
             foreach (string group in groups.Split(';'))
             {
-                if (!known) { break; }
-
                 int colon = group.IndexOf(':', StringComparison.Ordinal);
                 if (colon < 0) { continue; }
 
@@ -241,17 +238,70 @@ public sealed partial class PascalListing
                 bool reference = parameters && names.StartsWith("VAR ", StringComparison.OrdinalIgnoreCase);
                 if (reference) { names = names[4..]; }
                 string type = group[(colon + 1)..].Trim();
-                int size = reference ? 1 : Size(type, parameters);
-                foreach (string name in names.Split(','))
+                List<string> identifiers = [.. names.Split(',').Select(name => name.Trim()).Where(name => Identifier().IsMatch(name))];
+                if (identifiers.Count > 0)
                 {
-                    if (!Identifier().IsMatch(name.Trim())) { continue; }
-
-                    Add(procedure, new PascalVariable(name.Trim(), word, Math.Max(size, 0), type, reference));
-                    known = size > 0;
-                    if (!known) { break; }
-                    word += size;
+                    declared.Add((identifiers, reference ? 1 : Size(type, parameters), type, reference));
                 }
+
             }
+
+            if (parameters)
+            {
+                Parameters(procedure, declared, word);
+            }
+            else
+            {
+                Locals(procedure, declared, word);
+            }
+        }
+    }
+
+    // A VAR section's names: each group's words follow the last group's, and a group gives its last name the lowest
+    // word, as the Compiler allocates a list from its end. A size that is not known ends what can be placed.
+    private void Locals((int, int) procedure, List<(List<string> Names, int Size, string Type, bool Reference)> declared, int word)
+    {
+        foreach ((List<string> names, int size, string type, bool reference) in declared)
+        {
+            if (size <= 0)
+            {
+                Add(procedure, new PascalVariable(names[^1], word, 0, type, reference));
+                return;
+            }
+
+            for (int index = 0; index < names.Count; index++)
+            {
+                Add(procedure, new PascalVariable(names[index], word + ((names.Count - 1 - index) * size), size, type, reference));
+            }
+
+            word += names.Count * size;
+        }
+    }
+
+    // A heading's parameters: in the order their arguments are pushed, so the last has the lowest word and the first
+    // the highest. A size that is not known ends what can be placed, from the last.
+    private void Parameters((int, int) procedure, List<(List<string> Names, int Size, string Type, bool Reference)> declared, int word)
+    {
+        List<(string Name, int Size, string Type, bool Reference)> all = [];
+        foreach ((List<string> names, int size, string type, bool reference) in declared)
+        {
+            all.AddRange(names.Select(name => (name, size, type, reference)));
+        }
+
+        int[] words = new int[all.Count];
+        int first = all.Count;
+        for (int index = all.Count - 1; index >= 0; index--)
+        {
+            words[index] = word;
+            first = index;
+            if (all[index].Size <= 0) { break; }
+            word += all[index].Size;
+        }
+
+        for (int index = first; index < all.Count; index++)
+        {
+            (string name, int size, string type, bool reference) = all[index];
+            Add(procedure, new PascalVariable(name, words[index], Math.Max(size, 0), type, reference));
         }
     }
 

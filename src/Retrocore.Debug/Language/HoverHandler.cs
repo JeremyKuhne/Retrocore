@@ -59,7 +59,15 @@ internal sealed class HoverHandler
 
         List<string> parts = [];
         bool operation = SourceText.IsOperation(lines[line][..word.Start]);
-        string? instruction = operation ? InstructionDocs.Describe(word.Word, SourceText.InstructionSetOf(lines, line)) : null;
+        // A line whose bytes a macro of that name wrote is the macro's, whatever .cpu the text before it shows: p-code's
+        // LDA is Pcode.asm's macro, even where the .cpu Pcode that owns it is in that include.
+        bool expanded = operation
+            && analysis?.ExpandsMacro(path, line) == true
+            && analysis.Find(word.Word).Any(site => site.Kind == SymbolSiteKind.Macro);
+
+        // A mnemonic's .w suffix forces absolute addressing; the instruction is the same.
+        string mnemonic = word.Word.EndsWith(".w", StringComparison.OrdinalIgnoreCase) ? word.Word[..^2] : word.Word;
+        string? instruction = operation && !expanded ? InstructionDocs.Describe(mnemonic, SourceText.InstructionSetOf(lines, line)) : null;
         IReadOnlyList<SymbolSite> sites = instruction is null ? LanguageHost.SitesAt(_workspace, path, request.Position) : [];
         if (instruction is not null)
         {

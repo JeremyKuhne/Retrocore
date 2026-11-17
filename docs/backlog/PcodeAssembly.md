@@ -1,0 +1,226 @@
+# Backlog: p-code disassembly and reassembly
+
+Status: **asked for 2026-11-13**, as the backlog to follow the decompiler ("I want a backlog of p-code
+disassembly/reassembly"). **Built** the same day: `--pascal disassemble code output.asm` and `--pascal assemble`
+([Pascal.md](../Pascal.md#p-code-source)); see Built. [Pascal.md](../Pascal.md#decompiling) is the guide to what is built: the
+decompiler, `--pascal compile` and `--pascal compare`.
+
+A decompiled source compiles to the same code only where the Compiler's patterns cover the code. A p-code source
+that assembles back to the same bytes covers everything: every code file, from any compiler or version, the system's
+own programs, assembled procedures, and code no Pascal source gives. It is what `--disassemble` already does for
+6502 programs (see the retrocore-disassembly skill), for p-code.
+
+## What there is
+
+- `PcodeDisassembler` decodes one procedure at a time from its entry to its exit, with jump table targets and case
+  tables, and `--pascal disassemble` lists it with raw offsets. `PascalCodeFile` reads the segment dictionary, the
+  procedure dictionaries, assembled procedures' relocation lists and units' interface text.
+- `PascalCodeComparison` compares two code files by segment, ignoring the byte the Compiler skips to align an operand.
+- `EmulatedPascalCompiler` compiles a source with Apple Pascal 1.1's Compiler on an emulated Apple II, in about four
+  seconds, so a source's bytes can be checked against the original's. Only the Apple II's 1.1 Compiler is wired up.
+
+## Decided: p-code as macros (2026-11-13)
+
+P-code is written with the native assembler's macros rather than as a CPU of its own:
+[`Pcode.asm`](../../src/Retrocore.Pascal/Pcode.asm) defines one macro for each p-code under `.cpu Pcode`, and a
+code file's source includes it and lays out the whole file itself from address 0: the segment dictionary in block 0
+(`.word Segment1 / 512, Segment1End - Segment1`), each segment from a block boundary, `.scope`s for segments and
+procedures, jumps to labels, jump tables and the procedure dictionary as self-relative `.word * - label`s, and the
+attributes. `Pcode` is a macro-only CPU: the macros defined under its `.cpu` expand only under it, so p-code's `LDA`,
+`INC`, `NOP` and `STP` leave an assembled procedure's 6502 code, under `.cpu Mos6502`, alone
+([NativeAssembly.md](../NativeAssembly.md#macros)); under `.cpu Pcode` an instruction no macro writes is an error.
+
+**The prototype** (a script, not in the repository) wrote every code file on the Apple II and Apple III disks at hand
+as such a source: 63 of 69 assemble back byte-identically, among them every Compiler, Editor, Filer, Linker and
+Assembler, both machines' libraries, and the samples. Of the other six, three are the system itself
+(`SYSTEM.PASCAL`, twice, and `128K.PASCAL`), whose stub segments declare procedures that are elsewhere, and one is
+Apple Pascal 1.2's `SYSTEM.EDITOR`, a byte off in the code the Asimov image has damaged. `PcodeAssemblyTests`
+assembles P1's whole code file this way.
+
+**Found:**
+
+- `.if` is the preprocessor's, before addresses are known: a macro cannot test `*`. The byte `LDC` and `XJP` skip to
+  reach a word is `.align 2, pad`, with the byte the code file has (the Compiler leaves a stale one there).
+- In a `.byte` list, `*` is the address of that byte, so a jump's operand is `target - (* + 1)`.
+- A jump back, and any jump too far for a byte, goes through the procedure's jump table: `UJPT entry` names the
+  table's word, and `Attributes`, the label each procedure scope has, resolves the offset.
+- `XJP`'s own `UJP` is written as its own line, with a label, because a case table's missing entries point at it.
+- `.word` takes 0-$FFFF, so negative words are written `& $FFFF`; and a label cannot be defined qualified
+  (`::Name:`), so each segment's start and end labels sit just outside its scope.
+- `--assemble` writes the image to `$FFFF`; `--pascal assemble` should write only the code file's bytes.
+- An error inside a macro names the macro's line, not the line that called it, which makes a bad p-code hard to find.
+
+## Built
+
+- `PcodeSourceWriter` writes a code file as source: p-code with `Pcode.asm`'s macros, assembled procedures as 6502
+  code with their relocated operands and relocation lists by label, and data where it cannot read a segment.
+  `--pascal disassemble code output.asm` writes it and assembles it back to check; `--pascal assemble` writes a code
+  file from it, to the last byte the source writes.
+- `Pcode.asm` ships as `Sdk/Pascal/Pcode.asm`; the CLI and the language server search the host's SDK folder for
+  `.include <...>`.
+- **Checked:** all 69 code files on the Apple Pascal 1.0, 1.1 and 1.2 and Apple III Pascal 1.1 and 1.2 disks at hand
+  assemble back byte-identically; the system's stub segments (SYSTEM.PASCAL's and the `PASCALSY` stubs at the head of
+  Apple III Pascal's Editor and Linker) are written as data. `PcodeAssemblyTests`.
+- **Found:** a relocated operand can point inside a data word (FORMATTER's RWTS call reads its IOB pointer's high
+  byte), so such a target is named from the word (`L0598 + 1`); and a target inside an instruction, as in the
+  damaged code of Apple Pascal 1.2's `SYSTEM.EDITOR`, is too, in parentheses where it is subtracted.
+- **Names** (the same day, "work on what is still bare"): the system's and PASCALIO's procedures by `Pcode.asm`'s
+  `PASCALSY` and `PASCALIO` scopes; units' procedures from the library, with a scope the source defines for each
+  unit; a call's callee and a real constant's value beside it; a listing's segment, procedure and variable names and
+  its source lines; and a hints file of names and comments keyed as `pascal` breakpoints are, with
+  `SEGMENT.N@WORD` for variables
+  ([Pascal.md](../Pascal.md#names)). `--pascal compile` writes the listing a source asks for.
+- **Found:** a Pascal file's name is at most 15 letters: the Compiler writes no listing to `HILBERT.LST.TEXT`, and
+  APPLE1 has room for a listing only once the Editor is off it. `PascalListing` numbered variables backwards: the
+  Compiler allocates an identifier list from its last name, and parameters in stack order, so in `VAR A, B: INTEGER`
+  B is the lower word; the debugger's variable names were wrong the same way.
+- **Not done:** a macro's errors at the line that called it; writing to a disk image; a unit's own variables
+  (`LDE`) by name.
+
+## The pieces
+
+### 1. A p-code source format
+
+A dialect for the native assembler, or a format of its own, that says all of a code file:
+
+- **Segments:** each segment dictionary slot: name, kind, number, machine type, version, and a unit's interface text
+  (kept verbatim, as the file holds it, from its block); the intrinsic unit set; and slots that are empty.
+- **Procedures:** each procedure's number, lexical level, parameter and data sizes, entry and exit, in the procedure
+  dictionary's order, which need not be the order of the code; entries left as 0; procedures a system stub only
+  declares.
+- **P-code:** mnemonics as `--pascal disassemble` writes them, with labels for jumps; a negative jump names its jump
+  table entry, and the jump table is generated or written out; `XJP`'s cases and its own `UJP`; `LDC` and `XJP`'s
+  alignment byte written as it is, since it holds stale bytes (see the samples BALANCED and DISKIO).
+- **Constants:** `LSA`, `LPA` and `LDC` data, as text where it is printable.
+- **Assembled procedures:** 6502 code through the native assembler, with their four relocation lists.
+- **Gaps:** bytes no procedure reaches, as data, so every byte of the file is said.
+
+### 2. The disassembler
+
+- Write the whole code file as source, every byte accounted for, as `--disassemble` does for 6502 code, and report
+  what was left as data.
+- ~~Name procedures and calls~~ and ~~a hints file~~: done (see Built).
+
+### 3. The assembler
+
+- `--pascal assemble source code`: the native assembler with `Pcode.asm`, from address 0, writing the bytes to the
+  last block (or to a disk image and a file's name). Done but for the command: the macros and `.cpu Pcode`.
+- Report a macro's errors at the line that called it.
+- Language server support: hovers for p-codes (the opcode table has a summary for each), go to definition for labels
+  and procedures.
+
+### 4. Round trips
+
+- A test, as the 6502 disassembler has, that disassembles and reassembles every code file on the disks at hand and
+  compares the bytes.
+- Apple III Pascal's code (versions 4 and 6) and Apple Pascal 1.0 and 1.2 (versions 1 and 5): their Compilers differ,
+  but their p-code does not, so the same source format serves.
+
+## The decompiler's own next steps
+
+What the decompiler does not decompile yet, found by decompiling every code file on the disks at hand:
+
+- **System programs:** code compiled with `(*$U-*)` (SOROCGOTO, HAZELGOTO, the system's Filer, Editor, Compiler and
+  Linker). Done (2026-11-14) for their globals: the outer block declares them, the program is its segment procedure
+  1, whose segment procedures `(*$NS 7*)` numbers from 7 ([Pascal.md](../Pascal.md#decompiling)). The system's
+  procedures past `CXP 0, 29` (the 1.1 Compiler calls `CXP 0, 43` in COMPOPTI) are declared FORWARD in the outer
+  block, never defined, taking the call's arguments as parameters (2026-11-15). **Done (2026-11-15): the decompiled
+  1.1 Compiler recompiles, with the 1.1 Compiler, to the same segments** (`--pascal compare`). It compiles on Apple
+  III Pascal (`--pascal sos --add` puts the Apple II Compiler, its segments marked version 4, on a tools disk), which
+  has the memory it needs, with `(*$S++*)`; on the Apple II it runs out of room in DECLARAT, even under Apple Pascal
+  1.2 on a 128K IIe (`--iie`). What it took, past the system programs' globals: records with variant parts, each
+  field the code reaches typed alone and put in its record once the links settle; one WITH temporary for each WITH;
+  nested segment procedures; words used as pointers and integers passed by value or VAR as pointers; NEW of a
+  variant's words; moves of a record's first words as an array view; records' first fields moved to whole; field
+  names by type under nested WITHs; FORWARD headings where nested procedures take numbers; the R option; GOTOs to
+  the ends of bodies; and FWRITEBYTES's width before its count. **Done (2026-11-15): Apple Pascal 1.3's Compiler
+  too** (`PascalCompilerRoundTripTests`, about three minutes): decompiled, compiled with itself on a 128K IIe booted
+  with APPLE3's 128K system (64K runs out in COMPINIT), its two assembled procedures in PASCALCO assembled with the
+  1.3 Assembler and linked with the 1.3 Linker, it has the same segments. What it took: a word used both ways that
+  points to bytes and to bits has a variant for each; an assembled procedure's VAR parameter that calls pass both a
+  record and its first field is the field's type (its tree search's name); characters assigned to a string's
+  element; and, in the tools, WOZ images, 1.3's prompts, a source split with an include file where it passes a
+  volume, and the Linker's files on a volume of their own. **Done (2026-11-15): Apple Pascal 1.0's Compiler**
+  (`ApplePascal10CompilerRebuildsItself`, about two minutes): decompiled, compiled with itself, `(*$S++*)`, on
+  Apple III Pascal 1.1, its segments marked version 4 on a /PASCAL2 of its own (on the 64K Apple II the stack runs
+  into the screen in COMPINIT, and 1.0 has no 128K system), it has the same segments. What it took: 1.0 has no NS,
+  so segment procedures declared FORWARD take segments 2 to 6; the system's files indexed from word 1 are an array
+  of pointers to files; booleans compared by EQUI are ORD of them; a record's bytes indexed, and SCAN's array inside
+  a WITH, are its first field's; a value parameter's copy found again when a procedure is decoded again for its
+  WITHs; the byte before a procedure's attributes, 1.0's buffer's, not compared; and, in the tools, 1.0's APPLE1
+  workfile deleted so that C(ompile) asks for the source. **Done (2026-11-15): Apple III Pascal 1.0's, 1.1's and
+  1.2's Compilers** (`Apple3PascalCompilerRoundTripTests`, about three minutes each): decompiled, compiled with
+  themselves, `(*$S++*)`, on the emulated Apple III, they have the same segments. What it took: 1.1's and 1.2's
+  call intrinsic units of the system's in SYSTEM.PASCAL (EXTFILEM, 62, and 1.2's DIRSTUFF, 60), whose code keeps
+  no interface, so the decompiler declares each from its calls as an intrinsic unit with EXTERNAL procedures and
+  untyped VAR parameters, its interface's variables where the code reaches its data segment, compiled for its
+  interface before the program; a WITH of a field of the outer WITH's record nested in it; an index of a record's
+  address its first field's; files' words from their FINIT, Apple III Pascal's 550; a word that never reaches a
+  record no WITH's temporary; one R option a segment, as 1.0 takes only the first of a list; a system function
+  (1.2's SYSTEM31); FOPEN with NIL as the system's procedure 5; a word passed as a file a pointer to one; constant
+  set members the code pushes as ORD or CHR of them, which the Compiler does not fold; CASE with OTHERWISE; and, in
+  the tools, a source too long for /WORK split past halfway with the rest on /OUT, no Filer prefix without units
+  (1.0's Filer is damaged), 1.2's listing prompt after its banner, and the 64 bits of intrinsic units Apple III
+  code files keep. **Done as far as it can be (2026-11-16): Apple Pascal 1.2's Compiler**
+  (`ApplePascal12CompilerRebuildsItselfButForOneJumpTableEntry`, about three minutes): decompiled and compiled with
+  itself, `(*$S++*)`, on a 128K IIe with 1.2's 128K system, every procedure's p-code is Apple's, but PASCALCO is a
+  word shorter: in Apple's INSYMBOL (PASCALCO.6) the big CASE's out-of-range jump and its arms' 21 jumps to its end
+  go through two words of the jump table, both $0760, a label of its own for the out-of-range jump as 1.3's and the
+  Apple III's Compilers give it (they have OTHERWISE); 1.2's own Compiler gives them one. No Compiler at hand builds
+  Apple's: 1.3's rejects IDSEARCH and TREESEARCH, and the Apple III's lay files out larger. So Apple built 1.2's
+  system programs with a Compiler of its own (its Assembler shows the same CASE), likely 1.3's forerunner.
+- **A user program: Wizardry.** **Done (2026-11-15): Wizardry I v2.1 (Sir-Tech, Apple Pascal 1.1) decompiles to the
+  same segments**, both code files on its boot disk (`PascalWizardryTests`): SYSTEM.STARTUP (USES CHAINSTUFF from the
+  disk's library) compiles with the 1.1 Compiler on a 64K Apple II with `(*$S+*)`; WIZARDRY.CODE, whose declarations
+  the 1.1 Compiler cannot hold in 64K, compiles with `(*$S++*)` under Apple Pascal 1.2's 128K system on a 128K IIe
+  (the 1.1 Compiler marked version 5), its source split with an include file so that CODE: has room for its 85K code
+  file; each code file's assembled procedures are assembled with the 1.1 Assembler, in the order of their code, and
+  linked with the 1.1 Linker, onto OUT: where LINK: has no room. Apple III Pascal, which built the 1.1 Compiler's own
+  source, does not serve here: the Apple II Compiler there reads only an included file's first page, and its code
+  file goes wrong after an include. What it took: assembled procedures signed by the bytes their code takes off the
+  stack, and by what all their calls have in common, as a function called inside an expression has the expression's
+  words below it; a packed record's string field; a word only compared as equal or not is a word; what WRITE writes as
+  a string is one; arrays fitted to their room keep whole elements, the rest padding, and elements IXA shows the words
+  of have them; an array of records and a scalar at an element's address are one array; a CONCAT passed to a value
+  string, a character passed as one, and a string passed to a value string keeps its length; a VAR scalar passed a
+  record's address takes its first word, decided once the statements have shown what it is, and a scalar's block words
+  are its record's; a variable whose address a call passes for a record is that record, the variables in its words its
+  fields, and the record where the code reaches it whole (its address, a move, a comparison of words, written whole).
+- **Found in the 1.1 Compiler's code** (decompiled): its word emitter, PASCALCO.21, is `IF ODD(IC) THEN
+  GENBYTE(0)`, then `MOVELEFT` of the word into the code buffer (`G2^[IC]`), with the bytes swapped when the target
+  is most significant byte first; so the 1.1 Compiler writes 0 in every alignment byte, where the Compilers that
+  built the samples only stepped over it. PASCALCO.20 is `GENBYTE`; an `LSA` is preceded by a `NOP` when the counter
+  is even (BODYPART, `S9P3`).
+- ~~**`IDSEARCH` and `TREESEARCH`**~~ (`CSP IDS`, `TRS`): done (2026-11-14). `SCAN` and Apple
+  III Pascal's `UNITSTATUS` (`CSP 12`, named `USTAT`) decompile, found by compiling probes with Apple III Pascal's
+  Compiler: `UNITSTATUS` pushes the unit, the buffer's address and byte offset, and the control word; `SCAN` the
+  limit, 0 for `=` or 1 for `<>`, the character, the array's address and byte offset, and a 0.
+- **GOTO into a statement:** a jump the structurer cannot place at the start of a statement (LIBRARY, the Linker), and
+  an FJP that leaves its statement (LIBMAP), as a GOTO out of a REPEAT's condition makes.
+- **Units:** a unit's variables (`LDE`, `LAE`, `STE`), and a unit that USES another. A program's own units, linked
+  in, decompile to UNIT sources (2026-11-14), found with probes built by Apple III Pascal's tools: a unit compiled
+  alone is segment 7, and the program's USES renumbers its units from 7 in order; the host keeps an empty segment
+  for each, which the Linker fills; the Compiler calls their initializations at the program's start.
+- **Segment procedures:** a segment procedure's `CXP 1, n` to the program's procedures decompiles, with them declared
+  FORWARD first (2026-11-14); the 1.1 Compiler's nested segment procedures (ROUTINE and STATEMEN inside BODYPART)
+  decompile but are not yet recompiled. Its `GSEG`/`RSEG` prologues (PASCALCO.28 and .29) are not decompiled: a
+  procedure that jumps to `GSEG`s and back, then `RSEG`s at its exit.
+- **Other Compilers:** recompiling with Apple Pascal 1.2's Compiler, so code files it wrote can be checked as 1.1's
+  are (Apple Pascal 1.0, 1.1 and 1.3's and Apple III Pascal's are done).
+- ~~**Names from a listing:**~~ done, with hints too: `--pascal decompile --listing --hints`
+  ([Pascal.md](../Pascal.md#decompiling)).
+- ~~**Linking:**~~ done with Apple's own Assembler and Linker on the emulated Apple II (`--pascal assemble-native`,
+  `--pascal link`): FORMATTER rebuilds byte for byte ([Pascal.md](../Pascal.md#rebuilding-a-linked-program)).
+  **Found:** the 1.1 Compiler on APPLE2 leaves 0 in an alignment byte where the Compilers Apple built the samples with
+  left their buffer's bytes (in FORMATTER, the previous procedure's at the same offset), so a decompiled source
+  records them. `PascalAssemblyWriter` writes assembled procedures as source in the Assembler's syntax, beside a
+  decompiled source, so FORMATTER rebuilds from the disk with nothing written by hand. Interpreter-, segment- and
+  base-relative words are written as `.INTERP`, `.DEF`/`.REF` and `.PUBLIC` (the same day), found by assembling and
+  linking probes with Apple's own tools: BASE-relative words are 10 + 2 bytes a word; `.INTERP` is relocated only by
+  1.2's tools; `JMP (X)` is `JMP @X` to the Assembler; `A` cannot be a `.PUBLIC`. `--pascal assembly` writes any code
+  file's assembled procedures so; all of 1.2's SYSTEM.LIBRARY assembles back. Apple III Pascal's Compiler,
+  Assembler and Linker run on an emulated Apple III (`EmulatedApple3PascalTools`), for the same commands given its
+  SOS disks: a program and its 6502 function rebuild byte for byte with 1.1's. **Not done:** naming a system
+  program's globals for `.PUBLIC`; rebuilding AIIFORMAT whole: it decompiles, `CSP 12`
+  included, but its units need writing as UNITs of their own (compiled, then linked), CODEACCESS reaches the
+  system's global at word 630, and segment 15 is boot code kept as data.

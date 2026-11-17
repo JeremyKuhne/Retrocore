@@ -16,8 +16,9 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c>, <c>1.2_1.DSK</c> and <c>1.3_1.DSK</c>, APPLE1, and the APPLE2 beside each,
-///   with the Compiler) are in <c>RETROCORE_APPLE2_PASCAL_DISKS</c>; the ROMs are the SDK's.
+///   The disks (<c>UCSD Pascal 1.0_1.DSK</c>, <c>1.1_1.dsk</c>, <c>1.2_1.DSK</c> and <c>1.3_1.DSK</c> or 1.3's WOZ image
+///   <c>UCSD Pascal 1.3_APPLE1.woz</c>, APPLE1, and the APPLE2 beside each, with the Compiler) are in
+///   <c>RETROCORE_APPLE2_PASCAL_DISKS</c>; the ROMs are the SDK's.
 ///   The IIe shows lowercase, so the screen is compared in capitals. The Editor is typed a key at a time, at a typist's
 ///   pace: keys queued faster can be lost while it scrolls.
 ///  </para>
@@ -235,12 +236,12 @@ public class Apple2PascalTests
 
     private static Apple2Machine Boot(Apple2Model model, string version)
     {
-        // Apple Pascal 1.0's and 1.2's images are named in capitals.
+        // Apple Pascal 1.0's and 1.2's images are named in capitals; 1.3's may be WOZ images.
         string extension = version == "1.1" ? "dsk" : "DSK";
-        string apple1 = $"UCSD Pascal {version}_1.{extension}";
-        string apple2 = $"UCSD Pascal {version}_2.{extension}";
-        string path = Path.Join(PascalMediaTests.Apple2Disks, apple1);
-        string tools = Path.Join(PascalMediaTests.Apple2Disks, apple2);
+        string path = Disk(1);
+        string tools = Disk(2);
+        string apple1 = Path.GetFileName(path);
+        string apple2 = Path.GetFileName(tools);
         if (!File.Exists(path) || !File.Exists(tools))
         {
             Assert.Inconclusive($"Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with {apple1} and {apple2}.");
@@ -251,12 +252,16 @@ public class Apple2PascalTests
         if (!model.IsIIe()) { machine.Bus.InstallLanguageCard(); }
 
         // A converted image is read-only; a writable copy takes the workfile, the code and the listing.
-        WozDisk media = SectorDiskConverter.Convert(File.ReadAllBytes(path), proDosOrder: false);
+        WozDisk media = SectorDiskConverter.Convert(DiskImageFile.Sectors(path), proDosOrder: false);
         machine.Drives[0].Insert(media.Writable(), apple1, "DSK");
-        machine.Drives[1].Insert(SectorDiskConverter.Convert(File.ReadAllBytes(tools), proDosOrder: false), apple2, "DSK");
+        machine.Drives[1].Insert(SectorDiskConverter.Convert(DiskImageFile.Sectors(tools), proDosOrder: false), apple2, "DSK");
         machine.Bus.ResetSwitches();
         machine.Processor.Reset();
         return machine;
+
+        string Disk(int volume) => version == "1.3"
+            ? PascalMediaTests.Apple2Pascal13Disk(volume)
+            : Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal {version}_{volume}.{extension}");
     }
 
     private static void Type(Apple2Machine machine, string keys)

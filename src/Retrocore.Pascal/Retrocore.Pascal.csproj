@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\Retrocore.Assembler\Retrocore.Assembler.csproj" />
   </ItemGroup>
 
 </Project>

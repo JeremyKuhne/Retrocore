@@ -1,0 +1,609 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+namespace Retrocore.Pascal;
+
+public sealed partial class PascalDecompiler
+{
+    /// <summary>
+    ///  Decompiles one procedure: runs its p-code on a stack of expressions, and finds its statements in the patterns
+    ///  of jumps the Compiler writes for each.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The patterns, where <c>c</c> is a condition's code:
+    ///  </para>
+    ///  <list type="bullet">
+    ///   <item>
+    ///    <description>
+    ///     IF: <c>c FJP L1; then; UJP L2; L1: else; L2:</c>, the UJP and else left out without ELSE.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     WHILE: <c>L1: c FJP L2; body; UJP L1; L2:</c>.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     REPEAT: <c>L1: body; c FJP L1</c>, the jump back through the jump table.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     FOR: <c>v := a; t := b; L1: v t LEQI (GEQI for DOWNTO) FJP L2; body; v := v + 1 (- 1); UJP L1; L2:</c>.
+    ///    </description>
+    ///   </item>
+    ///   <item>
+    ///    <description>
+    ///     CASE: <c>selector UJP L1; arms, each ending UJP L2; L1: XJP table; L2:</c>.
+    ///    </description>
+    ///   </item>
+    ///  </list>
+    ///  <para>
+    ///   Any other jump is a GOTO.
+    ///  </para>
+    /// </remarks>
+    private sealed partial class Decoder
+    {
+        private readonly PascalDecompiler _owner;
+        private readonly Procedure _procedure;
+        private readonly IReadOnlyList<PcodeInstruction> _code;
+        private readonly Dictionary<int, int> _index = [];
+        private readonly Dictionary<int, List<int>> _backward = [];
+        private readonly HashSet<(int Head, int Jump)> _loops = [];
+        private readonly Dictionary<Variable, StringFunction> _strings = [];
+        private readonly Dictionary<int, (List<Statement> List, int Position)> _boundaries = [];
+        private readonly List<int> _gotos = [];
+
+        // The offset of the p-code being run.
+        private int _at;
+
+        /// <summary>
+        ///  Prepares to decompile a procedure: indexes its p-code by offset and finds the jumps back.
+        /// </summary>
+        /// <param name="owner">The decompiler, which knows the code file's procedures and units.</param>
+        /// <param name="procedure">The procedure, with its p-code decoded.</param>
+        public Decoder(PascalDecompiler owner, Procedure procedure)
+        {
+            _owner = owner;
+            _procedure = procedure;
+            _code = procedure.Instructions;
+            for (int index = 0; index < _code.Count; index++) { _index[_code[index].Offset] = index; }
+            if (_code.Count > 0) { _index.TryAdd(_code[^1].Next, _code.Count); }
+
+            for (int index = 0; index < _code.Count; index++)
+            {
+                PcodeInstruction instruction = _code[index];
+                if (instruction.Opcode.Code is not (Pcode.Fjp or Pcode.Ujp) || instruction.Targets[0] < 0) { continue; }
+
+                int target = Index(instruction.Targets[0]);
+                if (target <= index)
+                {
+                    if (!_backward.TryGetValue(target, out List<int>? sources))
+                    {
+                        sources = [];
+                        _backward[target] = sources;
+                    }
+
+                    sources.Add(index);
+                }
+            }
+        }
+
+        private int Index(int offset) =>
+            _index.TryGetValue(offset, out int index) ? index : throw new InvalidDataException($"A jump to ${offset:X4} lands inside a p-code.");
+
+        /// <summary>
+        ///  Decompiles the procedure's body into its statements, and gives each GOTO's target a label.
+        /// </summary>
+        /// <exception cref="InvalidDataException">The p-code is not in a pattern the decompiler knows.</exception>
+        public void Decode()
+        {
+            int start = 0;
+            int end = Index(_procedure.Code.Exit);
+
+            // The program's body starts with a jump to the segments it loads (or two NOPs where it loads none), then
+            // its units' initializations.
+            if (_procedure.Level <= 0 && _procedure.Number == 1)
+            {
+                if (start < end && _code[start].Opcode.Code == Pcode.Ujp)
+                {
+                    start++;
+                }
+                else
+                {
+                    while (start < end && start < 2 && _code[start].Opcode.Code is 210 or 215) { start++; }
+                }
+
+                while (start < end
+                    && _code[start] is { Opcode.Code: Pcode.Cxp } call
+                    && call.Operands[1] == 1
+                    && _owner.IsUnit(call.Operands[0]))
+                {
+                    _owner.UseUnit(call.Operands[0]);
+                    start++;
+                }
+            }
+
+            start = Resident(start, end);
+
+            List<Expr> stack = [];
+            List<Statement> body = Block(start, end, stack);
+            if (stack.Count > 0)
+            {
+                throw new InvalidDataException($"{_procedure} ends with {stack.Count} values on the stack.");
+            }
+
+            Prologue(body);
+            _procedure.Body = body;
+
+            // A GOTO may go to the end of the body: a label before its END.
+            _boundaries.TryAdd(_procedure.Code.Exit, (body, body.Count));
+
+            // Each GOTO's target gets its label where a statement starts.
+            foreach (int target in _gotos.Distinct().Order())
+            {
+                if (!_boundaries.TryGetValue(target, out (List<Statement> List, int Position) boundary))
+                {
+                    throw new InvalidDataException($"A GOTO's target, ${target:X4}, is not where a statement starts.");
+                }
+
+                int label = _procedure.Labels.Count + 1;
+                _procedure.Labels[target] = label;
+                int position = boundary.List.FindIndex(statement => statement.Offset >= target && statement is not LabelStatement);
+                LabelStatement labelStatement = new(target) { Offset = target };
+                boundary.List.Insert(position < 0 ? boundary.List.Count : position, labelStatement);
+            }
+        }
+
+        // A body with the R option starts with a jump past its end, where it loads each segment the option names
+        // (SLDC n; CSP GSEG) and jumps back; it releases them (SLDC n; CSP RSEG) after its exit. The body starts after
+        // the jump.
+        private int Resident(int start, int end)
+        {
+            if (start >= end || _code[start] is not { Opcode.Code: Pcode.Ujp } jump || jump.Targets[0] < 0)
+            {
+                return start;
+            }
+
+            int at = Index(jump.Targets[0]);
+            if (at <= end) { return start; }
+
+            List<int> segments = [];
+            while (at + 1 < _code.Count
+                && _code[at].Opcode.Code < 128
+                && _code[at + 1] is { Opcode.Code: Pcode.Csp } load
+                && load.Operands[0] == 21)
+            {
+                segments.Add(_code[at].Opcode.Code);
+                at += 2;
+            }
+
+            if (segments.Count == 0
+                || at >= _code.Count
+                || _code[at] is not { Opcode.Code: Pcode.Ujp } back
+                || back.Targets[0] != _code[start].Next)
+            {
+                return start;
+            }
+
+            // A procedure decoded again, for its WITH statements, finds them again.
+            _procedure.Resident.Clear();
+            _procedure.Resident.AddRange(segments);
+            if (_backward.TryGetValue(start + 1, out List<int>? sources)) { sources.Remove(at); }
+            return start + 1;
+        }
+
+        // A run of statements from one p-code up to another, leaving any value it ends with on the stack.
+        private List<Statement> Block(int from, int to, List<Expr> stack)
+        {
+            List<Statement> statements = [];
+            int at = from;
+            int begun = from;
+            while (at < to)
+            {
+                PcodeInstruction instruction = _code[at];
+                if (stack.Count == 0)
+                {
+                    begun = at;
+                    _boundaries.TryAdd(instruction.Offset, (statements, statements.Count));
+                    if (Loop(ref at, to, statements))
+                    {
+                        Span(statements, begun, at);
+                        continue;
+                    }
+                }
+
+                int count = statements.Count;
+                switch (instruction.Opcode.Code)
+                {
+                    case Pcode.Fjp:
+                        at = If(at, to, stack, statements);
+                        break;
+                    case Pcode.Ujp:
+                        at = Jump(at, to, stack, statements);
+                        break;
+                    case Pcode.Xjp:
+                        throw new InvalidDataException($"The XJP at ${instruction.Offset:X4} has no CASE before it.");
+                    default:
+                        Execute(instruction, stack, statements);
+                        at++;
+                        break;
+                }
+
+                for (int index = count; index < statements.Count; index++)
+                {
+                    if (statements[index].Offset == 0) { statements[index].Offset = instruction.Offset; }
+                }
+
+                Span(statements, begun, at);
+            }
+
+            return statements;
+        }
+
+        // The statements just made span the p-code from where the stack was last empty to the last one read.
+        private void Span(List<Statement> statements, int begun, int at)
+        {
+            for (int index = statements.Count - 1; index >= 0; index--)
+            {
+                Statement statement = statements[index];
+                if (statement.Start is not null && statement.End is not null) { break; }
+
+                statement.Start ??= _code[begun].Offset;
+                statement.End ??= _code[at - 1].Offset;
+            }
+        }
+
+        // A loop whose head is here: REPEAT, WHILE or FOR.
+        private bool Loop(ref int at, int to, List<Statement> statements)
+        {
+            if (!_backward.TryGetValue(at, out List<int>? sources)) { return false; }
+
+            int head = at;
+            int jump = sources.Where(source => source < to && !_loops.Contains((head, source))).DefaultIfEmpty(-1).Max();
+            if (jump < 0) { return false; }
+
+            _loops.Add((head, jump));
+            int offset = _code[at].Offset;
+            if (_code[jump].Opcode.Code == Pcode.Fjp)
+            {
+                List<Expr> stack = [];
+                List<Statement> body = Block(at, jump, stack);
+                if (stack.Count != 1)
+                {
+                    throw new InvalidDataException($"The REPEAT at ${offset:X4} has no condition.");
+                }
+
+                statements.Add(new RepeatStatement(body, stack[0]) { Offset = offset });
+                at = jump + 1;
+                return true;
+            }
+
+            // WHILE: the condition's FJP goes past the jump back.
+            int exit = jump + 1;
+            for (int test = at; test < jump; test++)
+            {
+                if (_code[test] is not { Opcode.Code: Pcode.Fjp } fjp
+                    || fjp.Targets[0] < 0
+                    || Index(fjp.Targets[0]) != exit)
+                {
+                    continue;
+                }
+
+                List<Expr> stack = [];
+                List<Statement> condition = Block(at, test, stack);
+                if (condition.Count != 0 || stack.Count != 1) { break; }
+
+                List<Statement> body = Block(test + 1, jump, []);
+
+                // A GOTO to the jump back goes to the end of the body: a label before its END.
+                _boundaries.TryAdd(_code[jump].Offset, (body, body.Count));
+                Statement loop = (Statement?)For(stack[0], body, statements, offset)
+                    ?? new WhileStatement(stack[0], body) { Offset = offset };
+
+                statements.Add(loop);
+                at = exit;
+                return true;
+            }
+
+            // Any other loop is a label and a GOTO back to it.
+            return false;
+        }
+
+        // FOR v := a TO b: the two assignments before the loop, its test, and the step at the end of its body.
+        private static ForStatement? For(Expr condition, List<Statement> body, List<Statement> statements, int offset)
+        {
+            if (condition is not Comparison { Comparand: Comparand.Word } test
+                || test.Op is not (Operator.LessEqual or Operator.GreaterEqual)
+                || test.Left is not Load { Designator: VariableDesignator control }
+                || test.Right is not Load { Designator: VariableDesignator { Variable: Variable limit } }
+                || statements.Count < 2
+                || statements[^1] is not Assignment { Target: VariableDesignator limitDesignator } limitAssignment
+                || limitDesignator.Variable is not Variable limitTarget
+                || limitTarget != limit
+                || statements[^2] is not Assignment { Target: VariableDesignator startDesignator } startAssignment
+                || startDesignator.Variable is not Variable start
+                || start != control.Variable
+                || body.Count == 0
+                || body[^1] is not Assignment { Target: VariableDesignator { Variable: Variable step } } stepAssignment
+                || step != control.Variable)
+            {
+                return null;
+            }
+
+            bool down = test.Op == Operator.GreaterEqual;
+            Expr stepValue = stepAssignment.Value is Checked checkedStep ? checkedStep.Value : stepAssignment.Value;
+            if (stepValue is not Binary { Right: Constant { Value: 1 } } binary
+                || binary.Left is not Load { Designator: VariableDesignator { Variable: Variable stepped } }
+                || stepped != control.Variable
+                || binary.Op != (down ? Operator.Subtract : Operator.Add))
+            {
+                return null;
+            }
+
+            limit.Kind = VariableKind.Temporary;
+            statements.RemoveRange(statements.Count - 2, 2);
+            body.RemoveAt(body.Count - 1);
+            return new ForStatement(control, startAssignment.Value, limitAssignment.Value, down, body)
+            {
+                Offset = startAssignment.Offset,
+                Start = startAssignment.Start
+            };
+        }
+
+        // An FJP: IF, with ELSE where the THEN ends by jumping past it.
+        private int If(int at, int to, List<Expr> stack, List<Statement> statements)
+        {
+            PcodeInstruction fjp = _code[at];
+            Expr condition = Pop(stack);
+            if (fjp.Targets[0] < 0) { throw new InvalidDataException($"The FJP at ${fjp.Offset:X4} jumps nowhere."); }
+
+            int target = Index(fjp.Targets[0]);
+            if (target <= at || target > to)
+            {
+                throw new InvalidDataException($"The FJP at ${fjp.Offset:X4} leaves its statement.");
+            }
+
+            // A UJP before the target is the jump over an ELSE, but where an IF inside jumps to the target too: then
+            // it is that IF's, as a GOTO in its THEN.
+            PcodeInstruction last = _code[target - 1];
+            bool inner = Enumerable.Range(at + 1, Math.Max(0, target - at - 2)).Any(JumpsThere);
+            if (target - 1 > at && last.Opcode.Code == Pcode.Ujp && last.Targets[0] >= 0 && !inner)
+            {
+                // An ELSE with nothing in it jumps to where it starts. One with an FJP that leaves it is no ELSE, but
+                // what follows a GOTO, as the Compiler's FJPs stay in their statements.
+                int end = Index(last.Targets[0]);
+                if (end >= target && end <= to && !IsCaseJump(last) && Closed(target, end))
+                {
+                    List<Statement> then = Block(at + 1, target - 1, []);
+
+                    // A GOTO to the jump over the ELSE goes to the end of the THEN: a label before its END.
+                    _boundaries.TryAdd(last.Offset, (then, then.Count));
+                    List<Statement> otherwise = Block(target, end, []);
+                    statements.Add(new IfStatement(condition, then, otherwise) { Offset = fjp.Offset });
+                    return end;
+                }
+            }
+
+            List<Statement> only = Block(at + 1, target, []);
+            statements.Add(new IfStatement(condition, only, otherwise: null) { Offset = fjp.Offset });
+            return target;
+
+            bool JumpsThere(int index) =>
+                _code[index] is { Opcode.Code: Pcode.Fjp } other && other.Targets[0] == fjp.Targets[0];
+        }
+
+        // Whether the FJPs from one p-code up to another all stay in between.
+        private bool Closed(int from, int to)
+        {
+            for (int index = from; index < to; index++)
+            {
+                if (_code[index] is not { Opcode.Code: Pcode.Fjp } fjp || fjp.Targets[0] < 0) { continue; }
+
+                int target = Index(fjp.Targets[0]);
+                if (target < from || target > to) { return false; }
+            }
+
+            return true;
+        }
+
+        private bool IsCaseJump(PcodeInstruction ujp) =>
+            ujp.Targets[0] >= 0 && Index(ujp.Targets[0]) < _code.Count && _code[Index(ujp.Targets[0])].Opcode.Code == Pcode.Xjp;
+
+        // A UJP: a CASE's jump to its table, or a GOTO.
+        private int Jump(int at, int to, List<Expr> stack, List<Statement> statements)
+        {
+            PcodeInstruction ujp = _code[at];
+            if (stack.Count > 0 && IsCaseJump(ujp)) { return Case(at, stack, statements); }
+            if (stack.Count > 0)
+            {
+                throw new InvalidDataException($"The UJP at ${ujp.Offset:X4} leaves a value on the stack.");
+            }
+
+            if (ujp.Targets[0] < 0) { throw new InvalidDataException($"The UJP at ${ujp.Offset:X4} jumps nowhere."); }
+
+            _gotos.Add(ujp.Targets[0]);
+            statements.Add(new GotoStatement(ujp.Targets[0]) { Offset = ujp.Offset });
+            return at + 1;
+        }
+
+        private int Case(int at, List<Expr> stack, List<Statement> statements)
+        {
+            PcodeInstruction ujp = _code[at];
+            Expr selector = Pop(stack);
+            int table = Index(ujp.Targets[0]);
+            PcodeInstruction xjp = _code[table];
+            int end = table + 1;
+            int low = xjp.Operands[0];
+            int high = xjp.Operands[1];
+            int otherwise = xjp.Targets[0];
+
+            // The arms in the order of their code, each with the values that lead to it.
+            SortedDictionary<int, List<int>> arms = [];
+            for (int value = low; value <= high; value++)
+            {
+                int target = xjp.Targets[value - low + 1];
+                if (target == otherwise || target < 0) { continue; }
+                if (!arms.TryGetValue(target, out List<int>? labels))
+                {
+                    labels = [];
+                    arms[target] = labels;
+                }
+
+                labels.Add(value);
+            }
+
+            List<int> starts = [.. arms.Keys.Select(Index)];
+            if (starts.Count > 0 && starts[0] != at + 1)
+            {
+                throw new InvalidDataException($"The CASE at ${ujp.Offset:X4} has code before its first arm.");
+            }
+
+            // Apple III Pascal's OTHERWISE: its statement follows the table, where the XJP goes for other values, and
+            // the arms jump past it.
+            int? past = Past(at, table, starts, otherwise);
+            if (past is { } after) { end = after; }
+
+            List<(List<int> Labels, List<Statement> Body)> bodies = [];
+            for (int arm = 0; arm < starts.Count; arm++)
+            {
+                int first = starts[arm];
+                int next = arm + 1 < starts.Count ? starts[arm + 1] : table;
+                int last = next;
+                if (last - 1 >= first
+                    && _code[last - 1] is { Opcode.Code: Pcode.Ujp } exit
+                    && exit.Targets[0] >= 0
+                    && Index(exit.Targets[0]) == end)
+                {
+                    last--;
+                }
+
+                bodies.Add((arms[_code[first].Offset], Block(first, last, [])));
+            }
+
+            // OTHERWISE is an arm without labels.
+            if (past is not null) { bodies.Add(([], Block(table + 1, end, []))); }
+
+            statements.Add(new CaseStatement(selector, bodies) { Offset = ujp.Offset });
+            return end;
+        }
+
+        // Where a CASE with OTHERWISE ends: past the statement after its table, where every arm that ends with a jump
+        // jumps; null for a CASE without one, whose arms jump to just after the table.
+        private int? Past(int at, int table, List<int> starts, int otherwise)
+        {
+            if (otherwise < 0 || Index(otherwise) != table + 1 || starts.Count == 0) { return null; }
+
+            int? past = null;
+            for (int arm = 0; arm < starts.Count; arm++)
+            {
+                int next = arm + 1 < starts.Count ? starts[arm + 1] : table;
+                if (next - 1 <= at || _code[next - 1] is not { Opcode.Code: Pcode.Ujp } exit || exit.Targets[0] < 0)
+                {
+                    continue;
+                }
+
+                int target = Index(exit.Targets[0]);
+                if (target <= table + 1 || (past is { } other && other != target)) { return null; }
+                past = target;
+            }
+
+            return past;
+        }
+
+        // Value parameters that are strings, records or arrays are copied into the procedure's own variables first. A
+        // procedure decoded again for its WITH statements finds the copies it found the first time.
+        private void Prologue(List<Statement> body)
+        {
+            Frame frame = _procedure.Frame;
+            int copied = 0;
+            while (copied < body.Count
+                && body[copied] is Assignment { Block: true, Target: VariableDesignator copyTarget } assignment
+                && copyTarget.Variable is Variable copy
+                && assignment.Value is Load { Designator: Dereference { Pointer: Load pointer } }
+                && pointer.Designator is VariableDesignator { Variable: Variable parameter }
+                && copy.Frame == frame
+                && parameter.Frame == frame
+                && parameter.Kind == VariableKind.Parameter
+                && ((copy.Kind == VariableKind.Variable && parameter.Copy is null) || parameter.Copy == copy))
+            {
+                parameter.Copy = copy;
+                copy.Kind = VariableKind.Copy;
+                TypeNode.Unify(copy.Type, parameter.Type.Target());
+                copied++;
+            }
+
+            body.RemoveRange(0, copied);
+        }
+
+        private static Expr Pop(List<Expr> stack)
+        {
+            if (stack.Count == 0) { throw new InvalidDataException("The p-code takes a value from an empty stack."); }
+            Expr value = stack[^1];
+            stack.RemoveAt(stack.Count - 1);
+            return value;
+        }
+
+        // The thing an address on the stack is the address of.
+        private static Designator Designate(Expr address) => address switch
+        {
+            Address a => a.Designator,
+            Checked { Value: Address a } => a.Designator,
+            _ => new Dereference(address)
+        };
+
+        private Variable Local(int offset) => Use(Generation(_procedure.Frame, offset));
+
+        // The program's own variables are the globals.
+        private Variable Global(int offset) =>
+            Use(_procedure.Level <= 0 ? Generation(_owner.Globals, offset) : _owner.Globals.At(offset));
+
+        // A word of the procedure's own frame: for a WITH temporary kept in a word several WITHs share, the one the last
+        // store to it before this p-code set.
+        private Variable Generation(Frame frame, int offset)
+        {
+            if (_procedure.Generations.TryGetValue(offset, out SortedDictionary<int, Variable>? stores))
+            {
+                Variable? current = null;
+                foreach ((int store, Variable variable) in stores)
+                {
+                    if (store > _at) { break; }
+                    current = variable;
+                }
+
+                if (current is not null) { return current; }
+            }
+
+            return frame.At(offset);
+        }
+
+        private Variable Intermediate(int levels, int offset) => Use(_owner.Enclosing(_procedure, levels).At(offset));
+
+        private static Variable Use(Variable variable)
+        {
+            variable.Used = true;
+            return variable;
+        }
+
+        private static Load LoadWord(Variable variable)
+        {
+            variable.LoadedAsWord = true;
+            return new Load(new VariableDesignator(variable), 1);
+        }
+
+        private static Address AddressOf(Variable variable)
+        {
+            variable.AddressTaken = true;
+            return new Address(new VariableDesignator(variable));
+        }
+
+        private static void Store(Variable variable, Expr value, List<Statement> statements)
+        {
+            variable.LoadedAsWord = true;
+            statements.Add(new Assignment(new VariableDesignator(variable), value));
+        }
+    }
+}

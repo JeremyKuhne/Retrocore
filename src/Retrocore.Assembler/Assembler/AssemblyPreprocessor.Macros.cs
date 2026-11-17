@@ -48,7 +48,8 @@ internal sealed partial class AssemblyPreprocessor
             frozen.Add(new(Substitute(line.Text, substitutions, frame), line.Location, line.Dialect));
         }
 
-        _macros.Add(name, new([.. names], frozen));
+        // A macro defined under a macro-only CPU, as p-code's are, belongs to it.
+        _macros.Add(name, new([.. names], frozen) { Cpu = MacroCpus.Contains(_cpu) ? _cpu : null });
     }
 
     private void ExpandMacro(Macro macro, string operand, Line invocation, int includeDepth, int macroDepth, bool merlin = false)

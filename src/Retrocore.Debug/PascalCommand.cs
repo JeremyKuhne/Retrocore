@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 using Retrocore.Pascal;
 using System.Globalization;
@@ -18,6 +19,11 @@ namespace Retrocore.Debug;
 ///   A disk is an Apple II Pascal volume or an Apple III SOS volume, as a <c>.dsk</c>, <c>.po</c> or <c>.woz</c> image.
 ///  </para>
 ///  <para>
+///   <c>--pascal disassemble code output.asm</c> writes the code file as p-code source (see
+///   <see cref="PcodeSourceWriter"/>) and checks it assembles back to the same bytes; <c>--pascal assemble source
+///   output.code</c> assembles such a source.
+///  </para>
+///  <para>
 ///   <c>--pascal catalog disk [--json]</c> lists the files. <c>--pascal extract disk NAME output [--raw]</c> writes
 ///   one, a text file as plain text unless <c>--raw</c>. <c>--pascal segments code</c> lists a code file's segments
 ///   and procedures, and <c>--pascal disassemble code [SEGMENT[.PROCEDURE]]</c> disassembles them: p-code as p-code,
@@ -30,14 +36,23 @@ namespace Retrocore.Debug;
 ///   as Apple III Pascal 1.2's update disks are copied onto 1.1's.
 ///  </para>
 /// </remarks>
-internal static class PascalCommand
+internal static partial class PascalCommand
 {
     private const string Usage = """
         Usage: --pascal catalog disk [--json]
                --pascal extract disk NAME output [--raw]
                --pascal segments (file.code | disk NAME)
                --pascal disassemble (file.code | disk NAME) [SEGMENT[.PROCEDURE]]
-               --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...]
+               --pascal disassemble (file.code | disk NAME) [--library L] [--listing L] [--hints file.json] output.asm
+               --pascal assemble source.asm output.code
+               --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
+               --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [--pcode] [output.text]
+               --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
+               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--code-room blocks] [--iie]
+               --pascal assembly (file.code | disk NAME) output.text
+               --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
+               --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
+               --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
 
     /// <summary>
@@ -54,8 +69,16 @@ internal static class PascalCommand
                 ["catalog", string disk, .. string[] rest] => Catalog(disk, rest.Contains("--json")),
                 ["extract", string disk, string name, string output, .. string[] rest] => Extract(disk, name, output, rest.Contains("--raw")),
                 ["segments", .. string[] rest] when CodeFile(rest, out _) is { } file => Segments(file),
+                ["disassemble", .. string[] rest] when rest.Any(IsSource) => DisassembleToSource(rest),
                 ["disassemble", .. string[] rest] when CodeFile(rest, out string? which) is { } file => Disassemble(file, which),
-                ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") => Sos(output, name, rest),
+                ["assemble", string source, string output] => Assemble(source, output),
+                ["sos", string output, string name, .. string[] rest] when rest.Contains("--from") || rest.Contains("--add") => Sos(output, name, rest),
+                ["decompile", .. string[] rest] => Decompile(rest),
+                ["compile", .. string[] rest] => Compile(rest),
+                ["assembly", .. string[] rest] when rest.Length >= 2 && CodeFile(rest[..^1], out _) is { } file => Assembly(file, rest[..^1], rest[^1]),
+                ["assemble-native", string source, string boot, string tools, string output] => AssembleNative(source, boot, tools, output),
+                ["link", string host, .. string[] rest] when rest.Length >= 3 => Link(host, rest[..^3], rest[^3], rest[^2], rest[^1]),
+                ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
                 _ => Fail(Usage, code: 2)
             };
         }
@@ -120,6 +143,11 @@ internal static class PascalCommand
                 case "--from" when index + 1 < args.Length:
                     from = OpenSos(args[++index]);
                     break;
+                case "--add" when index + 2 < args.Length:
+                    // A Pascal code file from the host, as SOS file type 2, Pascal code.
+                    builder.Add(args[index + 2], fileType: 0x02, auxType: 0, File.ReadAllBytes(args[index + 1]));
+                    index += 2;
+                    break;
                 case string file when from is not null:
                     builder.Add(from, file);
                     break;
@@ -156,6 +184,433 @@ internal static class PascalCommand
         }
 
         return PascalCodeFile.Read(data);
+    }
+
+    private static bool IsSource(string path) =>
+        Path.GetExtension(path).ToUpperInvariant() is ".ASM" or ".S";
+
+    // Writes a code file as p-code source, then assembles the source to check it gives the same bytes.
+    private static int DisassembleToSource(string[] args)
+    {
+        // The options come out first, so the output may come before or after them.
+        List<string> input = [.. args];
+        byte[]? library = Option(input, "--library");
+        byte[]? listing = Option(input, "--listing");
+        byte[]? hints = Option(input, "--hints");
+        if (input.Count == 0 || !IsSource(input[^1])) { throw new ArgumentException(Usage); }
+
+        string output = input[^1];
+        input.RemoveAt(input.Count - 1);
+        byte[] data = input switch
+        {
+            [string disk, string name] when IsDisk(disk) => Open(disk).Read(name),
+            [string path] => File.ReadAllBytes(path),
+            _ => throw new ArgumentException(Usage)
+        };
+
+        // Units are named from the library on the code file's disk unless another is given.
+        if (library is null && input is [string onDisk, _] && IsDisk(onDisk))
+        {
+            PascalDisk disk = Open(onDisk);
+            if (disk.Files.Any(file => string.Equals(file.Name, "SYSTEM.LIBRARY", StringComparison.OrdinalIgnoreCase)))
+            {
+                library = disk.Read("SYSTEM.LIBRARY");
+            }
+        }
+
+        PcodeSourceOptions options = new()
+        {
+            Library = library is null ? null : PascalLibrary.Read(library),
+            Listing = listing is null ? null : PascalListing.Parse(Text(listing))
+        };
+
+        if (hints is not null) { options = Hints(options, hints); }
+        PcodeSource source = PcodeSourceWriter.Write(data, options);
+        File.WriteAllText(output, source.Text);
+        foreach (string note in source.Notes) { Console.WriteLine($"note: {note}"); }
+
+        byte[] assembled = AssembleCodeFile(output);
+        int differences = Enumerable.Range(0, Math.Min(data.Length, assembled.Length)).Count(index => data[index] != assembled[index]);
+        if (differences == 0 && assembled.Length == data.Length)
+        {
+            Console.WriteLine($"Wrote {output}; it assembles to the same {data.Length} bytes.");
+            return 0;
+        }
+
+        int first = Enumerable.Range(0, Math.Min(data.Length, assembled.Length)).FirstOrDefault(index => data[index] != assembled[index]);
+        Console.WriteLine($"Wrote {output}, but it assembles to {assembled.Length} bytes for {data.Length}, {differences} differing, the first at ${first:X4}.");
+        return 1;
+    }
+
+    // An option's file, a host file's path or a disk and a file's name, taken out of the arguments.
+    private static byte[]? Option(List<string> args, string option)
+    {
+        int at = args.IndexOf(option);
+        if (at < 0) { return null; }
+        if (at + 1 >= args.Count) { throw new ArgumentException($"{option} names no file."); }
+
+        bool disk = IsDisk(args[at + 1]);
+        if (disk && at + 2 >= args.Count) { throw new ArgumentException($"{option} names a disk but no file on it."); }
+        byte[] data = disk ? Open(args[at + 1]).Read(args[at + 2]) : File.ReadAllBytes(args[at + 1]);
+        args.RemoveRange(at, disk ? 3 : 2);
+        return data;
+    }
+
+    // A text file's text: a Pascal text file's lines, or a host file's as it is.
+    private static string Text(byte[] data) =>
+        data.Length >= 1024 && data.Length % 1024 == 0 && Array.IndexOf(data, (byte)'\n') < 0
+            ? PascalTextFile.Read(data)
+            : System.Text.Encoding.ASCII.GetString(data);
+
+    // A hints file: { "names": { "FORMATTE.2": "Format", "FORMATTE.2+$3E": "Return" }, "comments": { ... } }.
+    private static PcodeSourceOptions Hints(PcodeSourceOptions options, byte[] data)
+    {
+        (Dictionary<string, string> names, Dictionary<string, string> comments) = Hints(data);
+        return options with { Names = names, Comments = comments };
+    }
+
+    // A hints file's names and comments, by key.
+    private static (Dictionary<string, string> Names, Dictionary<string, string> Comments) Hints(byte[] data)
+    {
+        JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
+        return (Strings(root["names"]), Strings(root["comments"]));
+
+        static Dictionary<string, string> Strings(JsonNode? node)
+        {
+            Dictionary<string, string> values = [with(StringComparer.OrdinalIgnoreCase)];
+            if (node is not JsonObject entries) { return values; }
+
+            foreach ((string key, JsonNode? value) in entries)
+            {
+                values[key] = value?.GetValue<string>() ?? throw new InvalidDataException($"The hint {key} has no text.");
+            }
+
+            return values;
+        }
+    }
+
+    // A hints file's lists of constants, { "constants": { "SYMBOL": ["IDENT", "COMMA"] } }, and what takes their
+    // names, { "values": { "PASCALCO.1@15": "SYMBOL" } }.
+    private static (Dictionary<string, IReadOnlyList<string>> Constants, Dictionary<string, string> Values) Constants(byte[] data)
+    {
+        JsonNode root = JsonNode.Parse(data) ?? throw new InvalidDataException("The hints file is empty.");
+        Dictionary<string, IReadOnlyList<string>> constants = [with(StringComparer.OrdinalIgnoreCase)];
+        if (root["constants"] is JsonObject lists)
+        {
+            foreach ((string list, JsonNode? names) in lists)
+            {
+                constants[list] = names is JsonArray array
+                    ? [.. array.Select(name => name?.GetValue<string>() ?? "")]
+                    : throw new InvalidDataException($"The constants {list} are not a list of names.");
+            }
+        }
+
+        Dictionary<string, string> values = [with(StringComparer.OrdinalIgnoreCase)];
+        if (root["values"] is JsonObject entries)
+        {
+            foreach ((string key, JsonNode? list) in entries)
+            {
+                values[key] = list?.GetValue<string>() ?? throw new InvalidDataException($"The values of {key} name no constants.");
+            }
+        }
+
+        return (constants, values);
+    }
+
+    // Assembles p-code source into a code file.
+    private static int Assemble(string source, string output)
+    {
+        byte[] code = AssembleCodeFile(source);
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes in {code.Length / 512} blocks.");
+        return 0;
+    }
+
+    // A code file source's bytes: from address 0, to the last byte it writes.
+    private static byte[] AssembleCodeFile(string source)
+    {
+        AssemblyResult result = SourceBuild.Assemble(source, dialect: null, cpu: "Mos6502", origin: 0, linkerConfiguration: null);
+        (int address, ReadOnlyMemory<byte> bytes) = SourceBuild.Emitted(result).Single();
+        if (address != 0) { throw new InvalidDataException("A code file's source starts at address 0."); }
+        return bytes.ToArray();
+    }
+
+    // Two code files, each a path or a disk and a name.
+    private static (PascalCodeFile First, PascalCodeFile Second)? CodeFiles(string[] args)
+    {
+        int split = args.Length > 0 && IsDisk(args[0]) ? 2 : 1;
+        return args.Length < split + 1 || CodeFile(args[..split], out _) is not { } first || CodeFile(args[split..], out _) is not { } second
+            ? null
+            : (first, second);
+    }
+
+    // Decompiles a code file to Pascal: from a path or a disk, with its units from a library, by default the
+    // SYSTEM.LIBRARY on the code file's disk.
+    private static int Decompile(string[] args)
+    {
+        List<string> rest = [.. args];
+        byte[]? library = Option(rest, "--library");
+        byte[]? listing = Option(rest, "--listing");
+        byte[]? hints = Option(rest, "--hints");
+        bool pcode = rest.Remove("--pcode");
+
+        if (rest.Count == 0) { return Fail(Usage, code: 2); }
+        bool onDisk = IsDisk(rest[0]);
+        int inputs = onDisk ? 2 : 1;
+        if (rest.Count < inputs) { return Fail(Usage, code: 2); }
+
+        byte[] data = onDisk ? Open(rest[0]).Read(rest[1]) : File.ReadAllBytes(rest[0]);
+        if (library is null && onDisk)
+        {
+            PascalDisk disk = Open(rest[0]);
+            if (disk.Files.Any(file => string.Equals(file.Name, "SYSTEM.LIBRARY", StringComparison.OrdinalIgnoreCase)))
+            {
+                library = disk.Read("SYSTEM.LIBRARY");
+            }
+        }
+
+        PascalDecompilerOptions options = new()
+        {
+            Library = library is null ? null : PascalLibrary.Read(library),
+            Listing = listing is null ? null : PascalListing.Parse(Text(listing)),
+            PcodeComments = pcode
+        };
+
+        if (hints is not null)
+        {
+            (Dictionary<string, string> names, Dictionary<string, string> comments) = Hints(hints);
+            (Dictionary<string, IReadOnlyList<string>> constants, Dictionary<string, string> values) = Constants(hints);
+            options = options with { Names = names, Comments = comments, Constants = constants, Values = values };
+        }
+
+        PascalDecompilation result = PascalDecompiler.Decompile(PascalCodeFile.Read(data), options);
+        foreach (string warning in result.Warnings) { Console.Error.WriteLine($"warning: {warning}"); }
+        if (rest.Count > inputs)
+        {
+            File.WriteAllText(rest[inputs], result.Source);
+            Console.WriteLine($"Wrote {rest[inputs]}.");
+
+            // The program's own units go beside it, NAME.UNIT.text, to compile before it, each to UNIT.CODE.
+            foreach (PascalDecompiledUnit unit in result.Units)
+            {
+                string unitPath = $"{Path.ChangeExtension(rest[inputs], extension: null)}.{unit.Name}.text";
+                File.WriteAllText(unitPath, unit.Source);
+                Console.WriteLine($"Wrote the unit {unit.Name}, segment {unit.Segment}, to {unitPath}; compile it to {unit.Name}.CODE.");
+            }
+
+            // Assembled procedures go beside it, as source for the Assembler: NAME.asm.text.
+            if (result.Assembly is { } assembly)
+            {
+                string assemblyPath = $"{Path.ChangeExtension(rest[inputs], extension: null)}.asm.text";
+                File.WriteAllText(assemblyPath, assembly);
+                Console.WriteLine($"Wrote its assembled procedures to {assemblyPath}.");
+            }
+        }
+        else
+        {
+            Console.Write(result.Source);
+        }
+
+        return result.Warnings.Count == 0 ? 0 : 1;
+    }
+
+    // Compiles a source with Apple Pascal's Compiler on an emulated Apple II.
+    // Writes each segment's assembled procedures as source for Apple's Assembler, one file a segment: output.NAME.text.
+    // A library's units name their procedures and parameters from their interface text.
+    private static int Assembly(PascalCodeFile file, string[] input, string output)
+    {
+        PascalLibrary? library = null;
+        try
+        {
+            library = PascalLibrary.Read(input is [string disk, string name] && IsDisk(disk) ? Open(disk).Read(name) : File.ReadAllBytes(input[0]));
+        }
+        catch (InvalidDataException)
+        {
+        }
+
+        int written = 0;
+        foreach (PascalSegment segment in file.Segments.Where(segment => segment.Procedures.Any(procedure => procedure.IsNative)))
+        {
+            PascalUnit? unit = library?.Unit(segment.Number);
+            List<PascalAssembledProcedure> procedures = [];
+            foreach (PascalProcedure procedure in segment.Procedures.Where(procedure => procedure.IsNative).OrderBy(procedure => procedure.Attributes))
+            {
+                PascalUnitProcedure? declared = unit?.Procedure(procedure.Index);
+                int words = declared?.Parameters.Sum(parameter => parameter.IsReference || parameter.Type is null
+                    ? 1
+                    : PascalListing.WordsOf(parameter.Type) is 2 ? 2 : 1) ?? 0;
+
+                procedures.Add(new PascalAssembledProcedure(
+                    declared?.Name ?? $"S{segment.Number}P{procedure.Index}",
+                    procedure.Index,
+                    declared?.IsFunction ?? false,
+                    words));
+            }
+
+            PascalAssemblySource source = PascalAssemblyWriter.Write(segment, procedures);
+            string path = $"{Path.ChangeExtension(output, extension: null)}.{segment.Name.Trim()}.text";
+            File.WriteAllText(path, source.Text);
+            foreach (string note in source.Notes) { Console.WriteLine($"note: {note}"); }
+            Console.WriteLine($"Wrote {path}: {procedures.Count} assembled procedures.");
+            written++;
+        }
+
+        return written > 0 ? 0 : Fail("The code file has no assembled procedures.");
+    }
+
+    // Assembles a 6502 source with Apple's Assembler, on an emulated Apple II.
+    private static int AssembleNative(string source, string boot, string tools, string output)
+    {
+        (byte[]? code, string screen) = EmulatedPascalTools.Assemble(File.ReadAllText(source), boot, tools);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Assembler flagged errors.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        return 0;
+    }
+
+    // Links a host code file with library code files with Apple's Linker, on an emulated Apple II.
+    private static int Link(string host, string[] libraries, string boot, string tools, string output)
+    {
+        (byte[]? code, string screen) = EmulatedPascalTools.Link(
+            File.ReadAllBytes(host),
+            [.. libraries.Select(File.ReadAllBytes)],
+            boot,
+            tools);
+
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Linker wrote no code file.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        return 0;
+    }
+
+    // compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]...
+    private static int Compile(string[] args)
+    {
+        List<string> rest = [.. args];
+        Apple2Model model = rest.Remove("--iie") ? Apple2Model.IIeEnhanced : Apple2Model.IIPlus;
+        Dictionary<string, byte[]> units = [with(StringComparer.OrdinalIgnoreCase)];
+        for (int at = rest.IndexOf("--unit"); at >= 0; at = rest.IndexOf("--unit"))
+        {
+            if (at + 1 >= rest.Count) { return Fail(Usage, code: 2); }
+            units[Path.GetFileName(rest[at + 1]).ToUpperInvariant()] = File.ReadAllBytes(rest[at + 1]);
+            rest.RemoveRange(at, 2);
+        }
+
+        // The blocks CODE: keeps for the code file, where included files go on it: a large program's code needs more.
+        int? codeRoom = null;
+        int room = rest.IndexOf("--code-room");
+        if (room >= 0)
+        {
+            if (room + 1 >= rest.Count || !int.TryParse(rest[room + 1], CultureInfo.InvariantCulture, out int blocks) || blocks <= 0)
+            {
+                return Fail(Usage, code: 2);
+            }
+
+            codeRoom = blocks;
+            rest.RemoveRange(room, 2);
+        }
+
+        int includes = rest.IndexOf("--includes");
+        if (includes >= 0)
+        {
+            if (includes + 1 >= rest.Count) { return Fail(Usage, code: 2); }
+            string folder = rest[includes + 1];
+            rest.RemoveRange(includes, 2);
+            return rest is [string main, string bootDisk, string compilerDisk, string written]
+                ? CompileFiles(main, folder, bootDisk, compilerDisk, written, model, codeRoom)
+                : Fail(Usage, code: 2);
+        }
+
+        if (codeRoom is not null) { return Fail(Usage, code: 2); }
+
+        return rest switch
+        {
+            [string source, string boot, string compiler, string output] => Compile(source, boot, compiler, output, listing: null, units, model),
+            [string source, string boot, string compiler, string output, string listing] => Compile(source, boot, compiler, output, listing, units, model),
+            _ => Fail(Usage, code: 2)
+        };
+    }
+
+    // Compiles a main file and the files a folder holds, which it includes by name: each goes on a volume with room.
+    private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model, int? codeRoom)
+    {
+        Dictionary<string, string> included = [with(StringComparer.OrdinalIgnoreCase)];
+        EnumerationOptions texts = new() { MatchCasing = MatchCasing.CaseInsensitive };
+        foreach (string path in Directory.EnumerateFiles(folder, "*.text", texts))
+        {
+            if (Path.GetFullPath(path) != Path.GetFullPath(main))
+            {
+                included[Path.GetFileName(path)] = File.ReadAllText(path);
+            }
+        }
+
+        (byte[]? code, string screen) = EmulatedPascalCompiler.CompileFiles(File.ReadAllText(main), included, boot, compiler, roms: null, model, codeRoom);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Compiler stopped with an error.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes, from {main} and {included.Count} included files.");
+        return 0;
+    }
+
+    private static int Compile(string source, string boot, string compiler, string output, string? listing, Dictionary<string, byte[]> units, Apple2Model model)
+    {
+        // A listing the source asks for, (*$L APPLE1:NAME.TEXT*), is read back from APPLE1 to the host.
+        string text = File.ReadAllText(source);
+        System.Text.RegularExpressions.Match asked = ListingName().Match(text);
+        string? listed = listing is not null && asked.Success ? asked.Groups["name"].Value : null;
+        if (listing is not null && listed is null)
+        {
+            return Fail("The source asks for no listing: (*$L APPLE1:NAME.TEXT*).", code: 2);
+        }
+
+
+        (byte[]? code, string screen, string? listingText) = EmulatedPascalCompiler.CompileWithListing(text, boot, compiler, listed, roms: null, units, model);
+        if (code is null)
+        {
+            Console.Error.WriteLine(screen);
+            return Fail("The Compiler stopped with an error.");
+        }
+
+        File.WriteAllBytes(output, code);
+        Console.WriteLine($"Wrote {output}, {code.Length} bytes.");
+        if (listing is not null && listingText is not null)
+        {
+            File.WriteAllText(listing, listingText);
+            Console.WriteLine($"Wrote the listing to {listing}.");
+        }
+        else if (listing is not null)
+        {
+            // The Compiler writes no listing whose name it cannot make, such as one longer than 15 characters.
+            return Fail($"The Compiler wrote no listing {listed}{(listed?.Length > 15 ? ": a file's name is at most 15 characters" : "")}.");
+        }
+
+        return 0;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\(\*\$L\s*(?:[A-Z0-9]+:)?(?<name>[^*\s]+)\s*\*\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ListingName();
+
+    // Compares two code files' segments: their dictionary entries and code.
+    private static int Compare(PascalCodeFile first, PascalCodeFile second)
+    {
+        IReadOnlyList<string> differences = PascalCodeComparison.Compare(first, second);
+        foreach (string difference in differences) { Console.WriteLine(difference); }
+        if (differences.Count == 0) { Console.WriteLine("The code files' segments are the same."); }
+        return differences.Count == 0 ? 0 : 1;
     }
 
     private static int Catalog(string path, bool json)

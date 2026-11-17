@@ -33,6 +33,7 @@ internal static class SourceBuild
         {
             Dialect = dialect ?? AssemblyDialect.Native,
             SourceResolver = new FileAssemblySourceResolver(),
+            SdkPaths = [SdkModules.SdkDirectory],
             LinkerConfiguration = linkerConfiguration is null
                 ? null
                 : new(File.ReadAllText(linkerConfiguration), Path.GetFullPath(linkerConfiguration))

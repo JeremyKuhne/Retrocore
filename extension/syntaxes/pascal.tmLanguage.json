@@ -49,9 +49,20 @@
     },
     "keyword": {
       "patterns": [
-        { "name": "keyword.control.pascal.retrocore", "match": "(?i)\\b(begin|end|if|then|else|case|of|for|to|downto|do|while|repeat|until|with|goto|exit)\\b" },
+        {
+          "comment": "An intrinsic unit's segments: CODE and DATA are words of its heading alone, and names anywhere else.",
+          "match": "(?i)\\b(intrinsic)\\s+(code)\\s+([0-9]+)(?:\\s+(data)\\s+([0-9]+))?",
+          "captures": {
+            "1": { "name": "storage.modifier.pascal.retrocore" },
+            "2": { "name": "storage.modifier.pascal.retrocore" },
+            "3": { "name": "constant.numeric.integer.pascal.retrocore" },
+            "4": { "name": "storage.modifier.pascal.retrocore" },
+            "5": { "name": "constant.numeric.integer.pascal.retrocore" }
+          }
+        },
+        { "name": "keyword.control.pascal.retrocore", "match": "(?i)\\b(begin|end|if|then|else|case|otherwise|of|for|to|downto|do|while|repeat|until|with|goto|exit)\\b" },
         { "name": "keyword.operator.word.pascal.retrocore", "match": "(?i)\\b(and|or|not|div|mod|in)\\b" },
-        { "name": "storage.modifier.pascal.retrocore", "match": "(?i)\\b(var|const|type|label|array|record|set|file|packed|segment|forward|external|uses|interface|implementation)\\b" }
+        { "name": "storage.modifier.pascal.retrocore", "match": "(?i)\\b(var|const|type|label|array|record|set|file|packed|segment|forward|external|uses|interface|implementation|intrinsic|separate)\\b" }
       ]
     },
     "type": {
@@ -64,7 +75,7 @@
     },
     "builtin": {
       "name": "support.function.pascal.retrocore",
-      "match": "(?i)\\b(write|writeln|read|readln|reset|rewrite|close|eof|eoln|get|put|page|new|mark|release|ord|chr|succ|pred|odd|abs|sqr|sqrt|sin|cos|exp|ln|log|atan|round|trunc|length|copy|concat|pos|insert|delete|str|fillchar|moveleft|moveright|scan|sizeof|unitread|unitwrite|unitbusy|unitwait|unitclear|unitstatus|blockread|blockwrite|ioresult|seek|halt|memavail|time|pwroften|gotoxy)\\b"
+      "match": "(?i)\\b(write|writeln|read|readln|reset|rewrite|close|eof|eoln|get|put|page|new|mark|release|ord|chr|succ|pred|odd|abs|sqr|sqrt|sin|cos|exp|ln|log|atan|round|trunc|length|copy|concat|pos|insert|delete|str|fillchar|moveleft|moveright|scan|sizeof|unitread|unitwrite|unitbusy|unitwait|unitclear|unitstatus|blockread|blockwrite|ioresult|seek|halt|memavail|time|pwroften|gotoxy|idsearch|treesearch)\\b"
     },
     "operator": {
       "name": "keyword.operator.pascal.retrocore",

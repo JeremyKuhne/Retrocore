@@ -403,7 +403,8 @@ internal sealed partial class AssemblyPreprocessor
                 if (_conditions.Count != 0 && !_conditions[^1].Active) { continue; }
                 if (_macros.Count != 0
                     && !operationText.IsEmpty
-                    && _macros.TryGetValue(operationText.ToString(), out Macro? macro))
+                    && _macros.TryGetValue(operationText.ToString(), out Macro? macro)
+                    && (macro.Cpu is null || string.Equals(macro.Cpu, _cpu, StringComparison.OrdinalIgnoreCase)))
                 {
                     if (!labelText.IsEmpty) { Emit(original, labelText is ":" ? ":" : $"{labelText}:"); }
                     ExpandMacro(

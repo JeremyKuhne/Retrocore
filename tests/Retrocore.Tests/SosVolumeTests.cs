@@ -198,6 +198,22 @@ public class SosVolumeTests
     }
 
     /// <summary>
+    ///  A file of more than 256 blocks is a tree, a master index of index blocks, and reads back whole.
+    /// </summary>
+    [TestMethod]
+    public void BuiltTreesReadBack()
+    {
+        byte[] large = [.. Enumerable.Range(0, (260 * 512) - 3).Select(index => (byte)((index * 13) + (index >> 9)))];
+        SosVolumeBuilder builder = new("WORK");
+        builder.Add("SOURCE.TEXT", 0x03, 0, large);
+        builder.BlocksUsed.Should().Be(7 + 260 + 2 + 1);
+
+        SosVolume volume = SosVolume.Read(builder.Build(proDosOrder: false), proDosOrder: false);
+        volume.Files.Single().StorageType.Should().Be(3);
+        volume.ReadFile("SOURCE.TEXT").Should().Equal(large);
+    }
+
+    /// <summary>
     ///  A builder takes only SOS names, a name once, and files that fit.
     /// </summary>
     [TestMethod]
@@ -211,8 +227,6 @@ public class SosVolumeTests
         builder.Add("FILE", 0x06, 0, []);
         Action again = () => builder.Add("file", 0x06, 0, []);
         again.Should().Throw<ArgumentException>();
-        Action tree = () => builder.Add("TREE", 0x06, 0, new byte[(256 * 512) + 1]);
-        tree.Should().Throw<ArgumentException>();
         builder.Add("BIG", 0x06, 0, new byte[256 * 512]);
         Action full = () => builder.Add("MORE", 0x06, 0, new byte[20 * 512]);
         full.Should().Throw<InvalidOperationException>();

@@ -640,7 +640,27 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Zero page", 0, 256);
 
     /// <inheritdoc/>
-    public IReadOnlyList<DebugRegion> Regions { get; } = AppleRegions();
+    public IReadOnlyList<DebugRegion> Regions => _machine.Bus.MockingboardInstalled ? s_mockingboardRegions : s_regions;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The Mockingboard's page in slot 4 is its VIAs, which the bus calls the slot's ROM.
+    ///  </para>
+    /// </remarks>
+    public string? KindAt(ushort address) =>
+        address >> 8 == 0xC4 && _machine.Bus.MockingboardInstalled && ReadArea(address) is Apple2MemoryArea.Slot4Rom ? "io" : null;
+
+    private static readonly DebugRegion[] s_regions = AppleRegions();
+
+    private static readonly DebugRegion[] s_mockingboardRegions = [.. s_regions.Select(Mockingboard)];
+
+    // Slot 4's page as the Mockingboard's VIAs.
+    private static DebugRegion Mockingboard(DebugRegion region) => region.Start switch
+    {
+        0xC400 => region with { Name = "Slot 4, the Mockingboard's VIAs", Kind = "io" },
+        _ => region
+    };
 
     // The II family's map, as the firmware and DOS use it.
     private static DebugRegion[] AppleRegions() =>

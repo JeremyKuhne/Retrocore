@@ -116,6 +116,16 @@ try {
     const cocoCharacters = (await request("retro/memory/characters")).text;
     assert.equal(cocoCharacters[0x01], "A", "$01 draws an uppercase A, dark on green");
     assert.equal(cocoCharacters[0x41], "A", "and $41 the same A, light on dark");
+    // Retrocore Memory's map and inspector name the CoCo's regions by what the map reads there now.
+    const cocoInspect = async address => request("retro/memory/inspect", { memoryReference: "0x0000", address });
+    assert.deepEqual([(await cocoInspect(0x0421)).region, (await cocoInspect(0x0421)).detail], ["Text screen, where BASIC shows it", "row 1, column 1"]);
+    assert.equal((await cocoInspect(0x8000)).region, "Extended Color BASIC ROM");
+    assert.equal((await cocoInspect(0xA000)).region, "Color BASIC ROM");
+    assert.equal((await cocoInspect(0xC000)).region, "No ROM mapped here");
+    assert.equal((await cocoInspect(0xFFFE)).region, "Vectors, from the ROM");
+    const cocoMap = await request("retro/memory/map", { memoryReference: "0x0000" });
+    const cocoArea = address => cocoMap.areas.find(area => address >= area.start && address < area.start + area.length);
+    assert.deepEqual([cocoArea(0x0000).kind, cocoArea(0x8000).kind, cocoArea(0xC000).kind, cocoArea(0xFF00).kind], ["ram", "rom", "none", "io"]);
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     await request("stepIn", { threadId: 1 });

@@ -576,12 +576,6 @@ function ensure(firstRow, lastRow) {
     }
 }
 
-// Reads all of memory not read yet, for find.
-async function ensureAll() {
-    if (pages.every(page => page === 1)) return;
-    await load(0, SIZE);
-}
-
 function visibleRows() {
     return Math.max(1, Math.floor(grid.clientHeight / LINE));
 }
@@ -1608,7 +1602,8 @@ async function findValue(text, backward) {
         return;
     }
     if (forms.length === 0) { status(read.decimal + " does not fit a byte, a word or the BASIC's numbers.", true); return; }
-    await ensureAll();
+    // Matches only in memory as it is now: a read that fails says why, and finds nothing.
+    if (!await loaded(0, SIZE)) return;
     const from = backward ? cursor - 1 : cursor + 1;
     let best = -1, bestForm = null, bestDistance = SIZE + 1;
     for (const form of forms) {
@@ -1632,7 +1627,8 @@ async function find(backward) {
         await findInstruction(text, backward);
         return;
     }
-    await ensureAll();
+    // Matches only in memory as it is now: a read that fails says why, and finds nothing.
+    if (!await loaded(0, SIZE)) return;
     const at = findPattern(bytes, readable, pattern, backward ? cursor - 1 : cursor + 1, backward);
     if (at < 0) { status("Not found.", true); return; }
     found(at, pattern.length, "Found at " + where(at) + ".");

@@ -1244,6 +1244,25 @@ test("find by value finds the nearest form, the BASIC's float included", async (
     assert.match(String(state.status), /does not fit/);
 });
 
+test("a find whose read fails finds nothing, and says why", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    page.send({ type: "test", id: 9, actions: [{ findValue: "=$41" }] });
+    let done: Record<string, unknown> | undefined;
+    for (let round = 0; round < 20 && done === undefined; round++) {
+        await page.settle();
+        for (const sent of page.posted.splice(0)) {
+            if (sent.type === "testDone") done = sent.state as Record<string, unknown>;
+            else if (sent.type === "read") page.send({ type: "reply", id: sent.id, error: "The debug session ended." });
+            else if (sent.type === "numbers") page.send({ type: "reply", id: sent.id, result: { formats: [] } });
+            else if (sent.type !== "labels" && sent.type !== "characters" && sent.type !== "map" && sent.type !== "banks" && sent.type !== "inspect" && sent.type !== "listing") page.send({ type: "reply", id: sent.id, result: {} });
+        }
+    }
+    assert.ok(done !== undefined, "the find finished");
+    assert.equal(done.cursor, 0x0000, "no match from bytes never read");
+    assert.match(String(done.status), /session ended/);
+});
+
 test("bookmarks mark their bytes and the list goes to one", async () => {
     const page = runPage();
     const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };

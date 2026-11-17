@@ -567,6 +567,11 @@ try {
     await mark({ address: 0x6520, kind: "code" });
     assert.deepEqual([(await inspect(0x6520)).instruction.cycles, (await inspect(0x6520)).instruction.cyclesTaken], [2, 3]);
     await mark({ address: 0x6520, count: 2, kind: "clear" });
+    // No instruction runs over a Decode from here start, as the listing has it.
+    await write("0x6530", [0xAD, 0x00, 0x03]);
+    const at6530 = starts => request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6530, starts });
+    assert.equal((await at6530([0x6530])).instruction.text, "LDA BANK2");
+    assert.equal((await at6530([0x6530, 0x6531])).instruction, null);
     // The code that writes, reads or jumps to an address, in the program and the firmware.
     at = "references to an address";
     inspected = await inspect(0xD000);

@@ -120,20 +120,18 @@ internal sealed partial class DebugSession
         DocumentationTopic effective = new DocumentationResolver(owner.Documentation, sets).Effective(topic);
         string written = string.Join(" ", effective.Remarks.Prepend(effective.Summary));
         SortedDictionary<int, (string? Name, string Meaning)> found = [];
+        DocumentationResolver resolver = new(owner.Documentation, sets);
         foreach (Match link in LinkPattern().Matches(written))
         {
-            string linked = link.Groups[1].Value.Split(':')[^1];
-            IDebugModule? defining = owner;
-            if (!owner.TryResolve(linked, out _))
-            {
-                defining = _debug.Modules.FirstOrDefault(module => module.TryResolve(linked, out _));
-            }
-
-            if (defining is null || !defining.TryResolve(linked, out long mask)) { continue; }
+            // The link as the documentation resolves it, a module's name included, as <Hardware:READY> is that
+            // module's READY whatever this one calls READY.
+            DocumentationTarget target = resolver.Resolve(topic, link.Groups[1].Value);
+            if (!target.IsResolved || target.Topic is not { } linked) { continue; }
+            long mask = target.Value ?? linked.Value ?? 0;
             if (mask is <= 0 or > 0x80 || !BitOperations.IsPow2(mask)) { continue; }
-            string? meaning = SymbolSummary(defining, linked);
-            if (meaning is null || !BitWord().IsMatch(meaning)) { continue; }
-            found.TryAdd(BitOperations.Log2((ulong)mask), (linked, meaning));
+            string meaning = Plain(resolver.Effective(linked).Summary);
+            if (meaning.Length == 0 || !BitWord().IsMatch(meaning)) { continue; }
+            found.TryAdd(BitOperations.Log2((ulong)mask), (linked.Name, meaning));
         }
 
         foreach (Match numbered in NumberedBit().Matches(summary))
@@ -194,6 +192,14 @@ internal sealed partial class DebugSession
     // nominal cycles, the flags it changes and what it does.
     private JsonObject? InstructionAt(SpaceAnalysis analysis, int address)
     {
+        // As the listing has it: a marked instruction is one line whatever starts inside it, and no instruction runs
+        // over a later boundary, a marked one only over another start or data marked.
+        bool marked = analysis.MarkedCode.ContainsKey(address);
+        foreach ((int code, int size) in analysis.MarkedCode)
+        {
+            if (code < address && code + size > address) { return null; }
+        }
+
         if (!analysis.Forced.Contains(address))
         {
             if (analysis.Marked(address)) { return null; }
@@ -204,6 +210,9 @@ internal sealed partial class DebugSession
         }
 
         if (!Decode(analysis, address, out DisassembledInstruction instruction)) { return null; }
+        Func<int, bool> boundary = marked ? analysis.MarkedCodeBoundary : analysis.Boundary;
+        if (RunsOver(address, instruction.Size, boundary)) { return null; }
+
         (int Cycles, int Taken)? cycles = InstructionCycles.Of(instruction);
         (string Summary, string Flags)? brief = InstructionDocs.Brief(instruction.Mnemonic, analysis.Set);
         return new JsonObject
@@ -231,7 +240,13 @@ internal sealed partial class DebugSession
         JsonArray references = [];
         foreach ((int source, DisassemblyReferenceKind kind) in found.Take(ReferencesShown))
         {
-            string? text = Decode(analysis, source, out DisassembledInstruction instruction) ? NamedText(analysis, instruction) : null;
+            // A vector's source is the pointer, not an instruction.
+            string? text = null;
+            if (kind != DisassemblyReferenceKind.Vector && Decode(analysis, source, out DisassembledInstruction instruction))
+            {
+                text = NamedText(analysis, instruction);
+            }
+
             int start = analysis.Labels.Keys.LastOrDefault(label => label <= source, -1);
             string? label = null;
             if (start >= 0 && source - start < LabelReach)

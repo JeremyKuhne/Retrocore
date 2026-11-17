@@ -80,6 +80,8 @@ button:disabled{opacity:.5;cursor:default}
 #inspector .doc{margin:2px 0 6px;color:var(--vscode-descriptionForeground)}
 #inspector button.link{background:none;border:none;padding:0;color:var(--vscode-textLink-foreground);font:inherit;cursor:pointer}
 #inspector button.link:focus-visible{outline:1px solid var(--vscode-focusBorder)}
+#inspector button.ref{width:100%;background:none;border:none;color:inherit;font:inherit;text-align:left}
+#inspector button.ref:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #listing{flex:none;width:46ch;overflow:auto;display:grid;align-content:start;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing[hidden]{display:none}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
@@ -1096,9 +1098,10 @@ function codeHtml() {
     if (known.referenceCount > 0) {
         html += row("References", String(known.referenceCount));
         for (const reference of known.references) {
-            html += '<div class="hit" data-go="' + reference.address + '" title="Go to ' + where(reference.address) + '"><span class="a">' + where(reference.address)
+            // A button, so Tab reaches it and Enter or Space goes there.
+            html += '<button class="hit ref" data-go="' + reference.address + '" title="Go to ' + where(reference.address) + '"><span class="a">' + where(reference.address)
                 + (reference.label ? " " + escapeText(reference.label) : "") + '</span><span class="v">' + escapeText(reference.kind) + "</span><span>"
-                + escapeText(reference.text ?? "") + "</span></div>";
+                + escapeText(reference.text ?? "") + "</span></button>";
         }
         if (known.referenceCount > known.references.length) html += '<div class="doc">and ' + (known.referenceCount - known.references.length) + " more</div>";
     }

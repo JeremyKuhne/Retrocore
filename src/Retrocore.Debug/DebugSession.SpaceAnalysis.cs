@@ -23,6 +23,11 @@ internal sealed partial class DebugSession
     /// <param name="MarkedCode">Code marked in the hints file, with its instructions' sizes.</param>
     /// <param name="Position">The source position of an address, found once.</param>
     /// <param name="Marked">Whether an address is data marked in the hints file.</param>
+    /// <param name="Boundary">
+    ///  Whether a line starts at an address, so no instruction before it runs into it: a start, a label, marked data
+    ///  or a statement's or analysis's start.
+    /// </param>
+    /// <param name="MarkedCodeBoundary">What ends a marked instruction early: another start, or data marked.</param>
     private sealed record SpaceAnalysis(
         ListingMemory Memory,
         InstructionSet Set,
@@ -32,5 +37,7 @@ internal sealed partial class DebugSession
         HashSet<int> Forced,
         Dictionary<int, int> MarkedCode,
         Func<int, DebugPosition?> Position,
-        Func<int, bool> Marked);
+        Func<int, bool> Marked,
+        Func<int, bool> Boundary,
+        Func<int, bool> MarkedCodeBoundary);
 }

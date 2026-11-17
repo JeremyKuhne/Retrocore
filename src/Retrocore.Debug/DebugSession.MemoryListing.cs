@@ -70,24 +70,8 @@ internal sealed partial class DebugSession
         IReadOnlyDictionary<int, string> comments = MarkHints.Comments(space);
 
         GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
-        bool Boundary(int address)
-        {
-            if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
-            // Marked data starts a line of its own, so no instruction before it runs into it.
-            if (Marked(address) && (address == 0 || !Marked(address - 1))) { return true; }
-            DebugPosition? position = Position(address);
-            // Where analysis guessed an instruction starts, or its guessed data does, as a pointer's first byte.
-            if (position is null)
-            {
-                GuessKind kind = guesses.Kinds[address];
-                return kind == GuessKind.Start || (kind == GuessKind.Data && (address == 0 || Guessed(address - 1) != GuessKind.Data));
-            }
-
-            return position is { Start: { } start } && start == address;
-        }
-
-        // What ends a marked instruction early: another start, or data marked, not a source's statement or a label.
-        bool MarkedCodeBoundary(int address) => forced.Contains(address) || (Marked(address) && !Marked(address - 1));
+        Func<int, bool> Boundary = analysis.Boundary;
+        Func<int, bool> MarkedCodeBoundary = analysis.MarkedCodeBoundary;
 
         int? directPage = DirectPage(set);
 
@@ -309,7 +293,38 @@ internal sealed partial class DebugSession
             Position,
             markedData);
 
-        return new SpaceAnalysis(memory, set, labels, names, guesses, forced, markedCode, Position, Marked);
+        GuessKind Guessed(int address) => Position(address) is null ? guesses.Kinds[address] : GuessKind.Unknown;
+        bool Boundary(int address)
+        {
+            if (forced.Contains(address) || labels.ContainsKey(address)) { return true; }
+            // Marked data starts a line of its own, so no instruction before it runs into it.
+            if (Marked(address) && (address == 0 || !Marked(address - 1))) { return true; }
+            DebugPosition? position = Position(address);
+            // Where analysis guessed an instruction starts, or its guessed data does, as a pointer's first byte.
+            if (position is null)
+            {
+                GuessKind kind = guesses.Kinds[address];
+                return kind == GuessKind.Start || (kind == GuessKind.Data && (address == 0 || Guessed(address - 1) != GuessKind.Data));
+            }
+
+            return position is { Start: { } start } && start == address;
+        }
+
+        // What ends a marked instruction early: another start, or data marked, not a source's statement or a label.
+        bool MarkedCodeBoundary(int address) => forced.Contains(address) || (Marked(address) && !Marked(address - 1));
+
+        return new SpaceAnalysis(
+            memory,
+            set,
+            labels,
+            names,
+            guesses,
+            forced,
+            markedCode,
+            Position,
+            Marked,
+            Boundary,
+            MarkedCodeBoundary);
     }
 
     // The comments on a line's bytes, in order, or null where it has none.

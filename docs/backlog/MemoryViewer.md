@@ -28,7 +28,7 @@ expression at each stop, Back and Forward go through the view's moves, bookmarks
 for each launch configuration, and Find takes a number after `=`, as a byte, a word either way round, or the BASIC's
 floats, which `retro/memory/numbers` encodes. Last, the inspector names a flag byte's bits from its
 documentation, the masks it links to or what it says of a bit by number; shows the instruction where code is known to
-start, with cycles from the instruction set or, for the 6502, measured on a processor of its own; and lists the
+start, with cycles from the instruction set or, for the 6502 and 6809, measured on a processor of its own; and lists the
 references analysis found to the address.
 
 Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character

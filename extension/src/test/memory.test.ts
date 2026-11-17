@@ -1116,7 +1116,7 @@ test("the inspector names a byte's bits, shows the instruction starting there an
     assert.ok(html.includes('<span class="k">Size</span><span class="v">2 bytes, 2 cycles, 3 taken</span>'), html);
     assert.ok(html.includes('<div class="doc">Branches when Z is clear.</div>'), html);
     assert.ok(html.includes('<span class="k">References</span><span class="v">34</span>') && html.includes("and 33 more"), html);
-    assert.ok(html.includes('data-go="784"') && html.includes("$0310 WAIT+2") && html.includes("BIT READY"), html);
+    assert.ok(html.includes('<button class="hit ref" data-go="784"') && html.includes("$0310 WAIT+2") && html.includes("BIT READY"), html);
 
     // Decode from here's starts go with the request, as the listing's do.
     await drive(page, [{ decode: true }], () => 0x81, lists);

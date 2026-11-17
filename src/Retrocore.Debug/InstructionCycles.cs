@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.M6809;
 using Retrocore.Isa;
 
 namespace Retrocore.Debug;
@@ -12,28 +13,41 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The Z80's, 6809's and 8080's instruction sets list their cycles. The 6502 family's describe no timing, which the
-///   processor works out cycle by cycle, so the instruction is run once on a processor of its own, over memory of
-///   zeros with X and Y zero, so no index crosses a page: once with the flags clear and once with them set, so a
-///   branch is taken in one and not the other.
+///   The Z80's and 8080's instruction sets list their cycles. The 6502 family's describe no timing, and the 6809's
+///   only a base that indexed operands and register lists add to, so the instruction is run once on a processor of
+///   its own, over memory of zeros with the index registers zero, so no index crosses a page: once with the flags
+///   clear and once with them set, so a branch is taken in one and not the other; for the 65C02's bit branches, BBR
+///   and BBS, the byte they test is zero in one run and $FF in the other.
 ///  </para>
 /// </remarks>
 internal static class InstructionCycles
 {
-    // More than any 6502 instruction takes, BRK's 7 included.
-    private const int MostCycles = 16;
+    // More than any instruction takes, a 6809 PSHS of every register included.
+    private const int MostCycles = 64;
+
+    // The 6809's CC: E F H I N Z V C; interrupts masked, and N, Z, V and C set or clear.
+    private const byte M6809Masked = 0x50;
+    private const byte M6809Flags = 0x0F;
+
+    // The 6502's flags a branch tests.
+    private const StatusRegister Flags6502 =
+        StatusRegister.Negative | StatusRegister.Overflow | StatusRegister.Zero | StatusRegister.Carry;
 
     /// <summary>
     ///  Gets an instruction's cycles: when a branch is not taken, and when it is.
     /// </summary>
     /// <param name="instruction">The instruction.</param>
-    /// <returns>The cycles, or null where the instruction set gives none.</returns>
+    /// <returns>The cycles, or null where the instruction set gives none or the instruction does not finish.</returns>
     public static (int Cycles, int Taken)? Of(in DisassembledInstruction instruction)
     {
         InstructionSet set = instruction.InstructionSet;
-        IsaEncoding encoding = instruction.Encoding;
-        if (encoding.Cycles != 0) { return (encoding.Cycles, encoding.CyclesTaken); }
-        if (!ReferenceEquals(set.Description, M6502Isa.Description)) { return null; }
+        bool m6502 = ReferenceEquals(set.Description, M6502Isa.Description);
+        bool m6809 = ReferenceEquals(set.Description, M6809Isa.Description);
+        if (!m6502 && !m6809)
+        {
+            IsaEncoding encoding = instruction.Encoding;
+            return encoding.Cycles == 0 ? null : (encoding.Cycles, encoding.CyclesTaken);
+        }
 
         byte[] bytes = new byte[instruction.Size];
         for (int index = 0; index < bytes.Length; index++)
@@ -41,16 +55,34 @@ internal static class InstructionCycles
             bytes[index] = instruction.GetByte(index);
         }
 
-        ProcessorVariant variant = M6502Isa.VariantOf(set);
-        int? clear = Run(bytes, instruction.Address, variant, StatusRegister.Unused);
-        StatusRegister flags = StatusRegister.Negative | StatusRegister.Overflow | StatusRegister.Zero | StatusRegister.Carry;
-        int? flagged = Run(bytes, instruction.Address, variant, flags);
-        if (clear is not { } first || flagged is not { } second) { return null; }
-        return (Math.Min(first, second), Math.Max(first, second));
+        int? first;
+        int? second;
+        if (m6502)
+        {
+            // A bit branch's zero-page byte, unless it is one of the instruction's own.
+            int? tested = null;
+            if (instruction.Mnemonic.StartsWith("BB", StringComparison.OrdinalIgnoreCase) && bytes.Length == 3)
+            {
+                int zeroPage = bytes[1];
+                if ((ushort)(zeroPage - instruction.Address) >= bytes.Length) { tested = zeroPage; }
+            }
+
+            ProcessorVariant variant = M6502Isa.VariantOf(set);
+            first = Run6502(bytes, instruction.Address, variant, flags: false, tested: null);
+            second = Run6502(bytes, instruction.Address, variant, flags: true, tested);
+        }
+        else
+        {
+            first = Run6809(bytes, instruction.Address, flags: false);
+            second = Run6809(bytes, instruction.Address, flags: true);
+        }
+
+        if (first is not { } clear || second is not { } flagged) { return null; }
+        return (Math.Min(clear, flagged), Math.Max(clear, flagged));
     }
 
-    // Runs the instruction once at its address, giving its cycles, or null where it does not finish, as STP does not.
-    private static int? Run(byte[] bytes, ushort address, ProcessorVariant variant, StatusRegister status)
+    // Memory of zeros holding the instruction at its address.
+    private static FlatBus Holding(byte[] bytes, ushort address)
     {
         FlatBus bus = new(new byte[0x10000]);
         for (int index = 0; index < bytes.Length; index++)
@@ -58,10 +90,35 @@ internal static class InstructionCycles
             bus.Memory[(ushort)(address + index)] = bytes[index];
         }
 
+        return bus;
+    }
+
+    // Runs a 6502 instruction once, giving its cycles, or null where it does not finish, as STP does not.
+    private static int? Run6502(byte[] bytes, ushort address, ProcessorVariant variant, bool flags, int? tested)
+    {
+        FlatBus bus = Holding(bytes, address);
+        if (tested is { } zeroPage) { bus.Memory[zeroPage] = 0xFF; }
         Processor<FlatBus> processor = new(bus, variant);
         ProcessorRegisters registers = processor.Registers;
         registers.ProgramCounter = address;
-        registers.Status = status | StatusRegister.IRQBDisable;
+        StatusRegister status = StatusRegister.Unused | StatusRegister.IRQBDisable;
+        if (flags) { status |= Flags6502; }
+        registers.Status = status;
+        processor.Registers = registers;
+        ProcessorExecutionResult result = processor.StepInstruction(MostCycles);
+        return result.Status == ProcessorExecutionStatus.InstructionComplete ? (int)result.Cycles : null;
+    }
+
+    // Runs a 6809 instruction once, with its stacks well away from it, giving its cycles, or null where it does not
+    // finish, as SYNC and CWAI do not.
+    private static int? Run6809(byte[] bytes, ushort address, bool flags)
+    {
+        M6809Processor<FlatBus> processor = new(Holding(bytes, address));
+        M6809Registers registers = processor.Registers;
+        registers.PC = address;
+        registers.CC = flags ? (byte)(M6809Masked | M6809Flags) : M6809Masked;
+        registers.S = (ushort)(address + 0x8000);
+        registers.U = (ushort)(address + 0xC000);
         processor.Registers = registers;
         ProcessorExecutionResult result = processor.StepInstruction(MostCycles);
         return result.Status == ProcessorExecutionStatus.InstructionComplete ? (int)result.Cycles : null;

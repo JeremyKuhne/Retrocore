@@ -146,8 +146,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   and the rest, and what it says of a bit by number, as the IIe's `RDRAMRD` "reports in bit 7 whether RAMRD is on".
   Where code is known to start, from the sources, analysis, **Decode from here** or **Mark code**, it shows the
   instruction there with its size, cycles (and when a branch is taken), the flags it changes and what it does; the
-  Z80's, 6809's and 8080's cycles come from their instruction sets, and the 6502's from running the instruction
-  once on a processor of its own. **References** lists the instructions in the code the debugger knows that read,
+  Z80's and 8080's cycles come from their instruction sets, and the 6502's and 6809's, whose indexed operands and
+  register lists add to a base, from running the instruction once on a processor of its own. **References** lists the instructions in the code the debugger knows that read,
   write, call or jump to the address, each with the label it is in; a click goes there.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
   as the word `[$4100].w`, in the CPU's byte order, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on

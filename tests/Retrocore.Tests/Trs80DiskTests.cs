@@ -231,6 +231,24 @@ public class Trs80DiskTests
     }
 
     /// <summary>
+    ///  The controller decodes only the low two address bits, so the doublers see their selects at $37E4-$37E7 too:
+    ///  the Percom's in the command register's mirror and the Radio Shack's in the sector register's.
+    /// </summary>
+    [TestMethod]
+    public void DoublersSelectThroughTheRegistersMirrors()
+    {
+        Trs80Bus percom = Bus(new FloppyDisk(), Trs80Doubler.Percom);
+        percom.Write(0x37E4, 0xFF);
+        percom.Disks.DoubleDensity.Should().BeTrue();
+        percom.Disks.IsBusy.Should().BeFalse("the select is not a write track command");
+
+        Trs80Bus tandy = Bus(new FloppyDisk(), Trs80Doubler.Tandy);
+        tandy.Write(0x37E6, 0x80);
+        tandy.Disks.DoubleDensity.Should().BeTrue();
+        tandy.Disks.Sector.Should().Be(0x80);
+    }
+
+    /// <summary>
     ///  Bit 3 of the select latch with drive 0, 1 or 2 selects side 1 of that drive; alone it selects drive 3.
     /// </summary>
     [TestMethod]

@@ -159,9 +159,12 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
         Disks.SelectTimed(drive, side, Disks.DoubleDensity);
     }
 
-    // The FD1771's registers, with the doublers watching them for their density selects.
+    // The FD1771's registers, with the doublers watching them for their density selects. The controller decodes only
+    // the low two address bits, so $37E4-$37E7 reach its registers too.
     private void WriteController(int register, byte value)
     {
+        register &= 3;
+
         // A Percom doubler takes $FE and $FF as density selects rather than commands.
         if (register == 0 && (_doubler & Trs80Doubler.Percom) != 0 && value is 0xFE or 0xFF)
         {

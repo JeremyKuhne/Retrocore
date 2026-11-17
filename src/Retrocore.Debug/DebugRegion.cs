@@ -11,7 +11,9 @@ namespace Retrocore.Debug;
 /// <param name="Name">The name, such as <c>Text page 1</c>.</param>
 /// <param name="Start">The first address.</param>
 /// <param name="Length">The bytes it spans.</param>
-/// <param name="Kind">What it holds: <c>ram</c>, <c>rom</c>, <c>io</c> or <c>video</c>.</param>
+/// <param name="Kind">
+///  What it holds: <c>ram</c>, <c>rom</c>, <c>io</c>, <c>video</c>, or <c>none</c> where nothing is mapped.
+/// </param>
 /// <param name="Detail">
 ///  Where an offset in the region is, such as <c>row 3, column 12</c> on a text screen, or null for none.
 /// </param>

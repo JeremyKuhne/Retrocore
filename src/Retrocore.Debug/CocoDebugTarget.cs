@@ -155,8 +155,9 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   A ROM's addresses are RAM while the map puts RAM there, as a 64K machine's all-RAM map and the CoCo 3's
-    ///   MMU can, and empty with no cartridge in the port; the vectors at $FFE0 read the ROM whatever the map.
+    ///   Each ROM region is named by what the map reads there now: a ROM, the cartridge's, RAM, as a 64K
+    ///   machine's all-RAM map and the CoCo 3's MMU can put there, or nothing; the vectors at $FFE0 read the ROM
+    ///   whatever the map. The regions split where the CoCo 3 maps its 8K pages apart.
     ///  </para>
     /// </remarks>
     public IReadOnlyList<DebugRegion> Regions =>
@@ -164,10 +165,16 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         .. s_regions.Select(region => region.Kind != "rom" || region.Start >= 0xFF00 ? region : ReadArea(region.Start) switch
         {
             CocoMemoryArea.Ram => region with { Name = "RAM, which the map puts over the ROM", Kind = "ram" },
-            CocoMemoryArea.None => region with { Name = "Cartridge space, with no cartridge", Kind = "io" },
-            _ => region
+            CocoMemoryArea.ExtendedBasic => region with { Name = Coco3 ? "Internal ROM, lower half" : ExtendedName },
+            CocoMemoryArea.ColorBasic => region with { Name = Coco3 ? "Internal ROM, upper half" : ColorName },
+            CocoMemoryArea.Cartridge => region with { Name = "Cartridge ROM" },
+            _ => region with { Name = "No ROM mapped here", Kind = "none" }
         })
     ];
+
+    private const string ExtendedName = "Extended Color BASIC ROM", ColorName = "Color BASIC ROM";
+
+    private bool Coco3 => _machine.Model == CocoModel.Coco3;
 
     private static readonly DebugRegion[] s_regions =
     [
@@ -175,10 +182,9 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
         new("Text screen, where BASIC shows it", 0x0400, 0x200, "video", DebugRegion.Rows(32)),
         new("Extended Color BASIC ROM", 0x8000, 0x2000, "rom"),
         new("Color BASIC ROM", 0xA000, 0x2000, "rom"),
-        // Split where the CoCo 3's MMU maps its 8K pages, and its constant vector page, apart.
-        new("Cartridge or Disk BASIC ROM", 0xC000, 0x2000, "rom"),
+        new("Cartridge ROM", 0xC000, 0x2000, "rom"),
         new("Cartridge ROM", 0xE000, 0x1E00, "rom"),
-        new("Cartridge ROM, or the CoCo 3's vector page", 0xFE00, 0x100, "rom"),
+        new("Cartridge ROM", 0xFE00, 0x100, "rom"),
         new("I/O", 0xFF00, 0xE0, "io"),
         new("Vectors, from the ROM", 0xFFE0, 0x20, "rom")
     ];

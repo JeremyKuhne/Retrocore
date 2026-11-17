@@ -211,35 +211,37 @@ internal sealed partial class DebugSession
 
         (int Cycles, int Taken)? cycles = InstructionCycles.Of(instruction);
         (string Summary, string Flags)? brief = InstructionDocs.Brief(instruction.Mnemonic, analysis.Set);
-
-        // The 65C02's BIT #n sets only Z: with no memory operand, N and V stay as they were.
-        bool bit = string.Equals(instruction.Mnemonic, "BIT", StringComparison.OrdinalIgnoreCase);
-        bool m6502 = ReferenceEquals(analysis.Set.Description, M6502Isa.Description);
-        bool immediate = instruction.Form is { Role: OperandRole.None, FieldCount: > 0 };
-        if (bit && m6502 && immediate && brief is { } described) { brief = (described.Summary, "Z"); }
         return new JsonObject
         {
             ["text"] = NamedText(analysis, instruction),
             ["size"] = instruction.Size,
             ["cycles"] = cycles?.Cycles,
             ["cyclesTaken"] = cycles is { } both && both.Taken != both.Cycles ? both.Taken : null,
-            ["flags"] = brief?.Flags,
+            ["flags"] = InstructionDocs.FlagsOf(instruction),
             ["summary"] = brief?.Summary
         };
     }
 
-    // Decodes the instruction at an address where the listing would list it: not inside a marked instruction the
-    // listing keeps whole, nor running over a later boundary, a marked one only over another start or data marked.
+    // Decodes the instruction at an address where the listing would list one: not in data the sources or the hints
+    // file describe, or analysis guessed, unless a start says so; not inside a source's statement, nor inside a
+    // marked instruction the listing keeps whole; nor running over a later boundary, a marked one only over another
+    // start or data marked.
     private static bool Accepted(SpaceAnalysis analysis, int address, out DisassembledInstruction instruction)
     {
+        instruction = default;
+        if (!analysis.Forced.Contains(address))
+        {
+            if (analysis.Marked(address)) { return false; }
+            DebugPosition? position = analysis.Position(address);
+            if (position is { Data: true } || (position?.Start is { } start && start != address)) { return false; }
+            GuessKind guess = position is null ? analysis.Guesses.Kinds[address] : GuessKind.Unknown;
+            if (guess is GuessKind.Data or GuessKind.Operand) { return false; }
+        }
+
         foreach ((int code, int size) in analysis.MarkedCode)
         {
             bool inside = code < address && code + size > address;
-            if (inside && !RunsOver(code, size, analysis.MarkedCodeBoundary))
-            {
-                instruction = default;
-                return false;
-            }
+            if (inside && !RunsOver(code, size, analysis.MarkedCodeBoundary)) { return false; }
         }
 
         if (!Decode(analysis, address, out instruction)) { return false; }

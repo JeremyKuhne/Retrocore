@@ -156,6 +156,64 @@ internal static partial class InstructionDocs
         return docs.TryGetValue(key, out (string Summary, string Flags) doc) ? doc : null;
     }
 
+    /// <summary>
+    ///  Gets the flags one decoded instruction changes, where its mnemonic's depend on its operands, as ADD HL,BC
+    ///  changes only H, N and C, or BIT #$80 only Z.
+    /// </summary>
+    /// <param name="instruction">The instruction.</param>
+    /// <returns>The flags, or null where its mnemonic has no documentation.</returns>
+    internal static string? FlagsOf(in DisassembledInstruction instruction)
+    {
+        InstructionSet set = instruction.InstructionSet;
+        if (Brief(instruction.Mnemonic, set) is not { } brief) { return null; }
+        string mnemonic = instruction.Mnemonic.ToUpperInvariant();
+        string text = instruction.ToString().ToUpperInvariant();
+        int space = text.IndexOf(' ', StringComparison.Ordinal);
+        string[] operands = space < 0 ? [] : [.. text[(space + 1)..].Split(',', StringSplitOptions.TrimEntries)];
+        string first = operands.Length > 0 ? operands[0] : "";
+        string second = operands.Length > 1 ? operands[1] : "";
+        bool pair = first is "BC" or "DE" or "HL" or "SP" or "IX" or "IY";
+        bool namesCc = operands.Contains("CC");
+        if (ReferenceEquals(set.Description, Z80Isa.Description))
+        {
+            return mnemonic switch
+            {
+                "ADD" => pair ? "H N C" : "S Z H PV N C",
+                "INC" or "DEC" => pair ? "none" : brief.Flags,
+                "EX" => first == "AF" ? "all (swapped with AF')" : "none",
+                "IN" => second.StartsWith('[') && second != "[C]" ? "none" : "S Z H PV N",
+                "LD" => first == "A" && second is "I" or "R" ? "S Z H PV N" : "none",
+                "POP" => first == "AF" ? "all" : "none",
+                _ => brief.Flags
+            };
+        }
+
+        if (ReferenceEquals(set.Description, I8080Isa.Description))
+        {
+            return mnemonic == "POP" ? first == "PSW" ? "all" : "none" : brief.Flags;
+        }
+
+        if (ReferenceEquals(set.Description, M6809Isa.Description))
+        {
+            return mnemonic switch
+            {
+                "EXG" or "PULS" or "PULU" => namesCc ? "all" : "none",
+                "TFR" => second == "CC" ? "all" : "none",
+                _ => brief.Flags
+            };
+        }
+
+        if (set.IsMacroOnly) { return brief.Flags; }
+        bool cmos = M6502Isa.VariantOf(set) != ProcessorVariant.Mos6502;
+        return mnemonic switch
+        {
+            // BIT #n has no memory operand for N and V to come from.
+            "BIT" when first.StartsWith('#') => "Z",
+            "BRK" => cmos ? "B I D" : "B I",
+            _ => brief.Flags
+        };
+    }
+
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
         string key = mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) ? mnemonic[..3] : mnemonic;

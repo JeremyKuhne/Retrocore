@@ -396,11 +396,11 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
         return [];
     }
 
-    // A changed disk's tooltip says what changed, which the host works out only when the pointer is on the row.
+    // A changed disk's tooltip says what changed, which the host works out only when the pointer is on the row; VS Code
+    // asks for it here only for a row whose tooltip was left undefined.
     async resolveTreeItem(item: vscode.TreeItem, node: Node): Promise<vscode.TreeItem> {
-        if (!("device" in node) || !node.device.media?.changed) return item;
-        const changes = await this.changes(node.device);
-        if (changes !== undefined) item.tooltip = driveTooltip(node.device, changes);
+        if (!("device" in node) || item.tooltip !== undefined) return item;
+        item.tooltip = driveTooltip(node.device, await this.changes(node.device));
         return item;
     }
 
@@ -435,7 +435,7 @@ class DriveTree implements vscode.TreeDataProvider<Node> {
         item.description = summary(device);
         item.iconPath = this.icons(iconName(device));
         item.resourceUri = driveUri(device);
-        item.tooltip = driveTooltip(device);
+        if (!device.media?.changed || this.state.session === undefined) item.tooltip = driveTooltip(device);
         item.contextValue = contextWords(device, this.state.session !== undefined).join(" ");
         return item;
     }
@@ -724,8 +724,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // mount in discards), so a disk that went in while a question was open is never saved or let go by it.
     const answer = async (session: vscode.DebugSession, request: "hardware" | "device", args: Record<string, unknown>): Promise<boolean> => {
         let current: Record<string, unknown> = { ...args, supportsRetrocoreMedia: 1 };
-        // The disks let go of on the way, each offered back with Undo once the change goes through.
-        const discarded: { id: string; name: string; file: string }[] = [];
+        // The image each changed disk asked about came from, to name it when it is let go.
+        const labels = new Map<string, string>();
         for (;;) {
             if (!still(session)) return false;
             const body = await session.customRequest(`retro/${request}`, current) as Devices & MediaAnswer;
@@ -740,7 +740,6 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             const file = target ? path.basename(target) : "its image";
             switch (body.outcome) {
                 case undefined:
-                    for (const dropped of discarded) offerUndo(session, dropped.id, discardedMessage(dropped.name, dropped.file));
                     return true;
                 case "saved": {
                     const said = [...body.notes ?? [], ...body.losses ?? []];
@@ -756,7 +755,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     if (choice === "Discard") {
                         const discards = Array.isArray(current.discards) ? current.discards : [];
                         current = { ...current, discards: [...discards, { device: id, generation }] };
-                        discarded.push({ id, name, file: label });
+                        labels.set(id, label);
                     } else if (choice === "Save As...") {
                         if (!await saveAsNew(session, id, generation, {})) return false;
                     } else if (choice !== "Save" || !await answer(session, "device", { id, action: "save", generation })) return false;
@@ -764,7 +763,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                 }
                 case "conflict": {
                     // An image changed on disk since the disk was read can also be read again in its place.
-                    const own = body.baseline && body.current && current.ejected === undefined && typeof current.path !== "string";
+                    const own = body.baseline && body.current && current.ejected === undefined && typeof current.path !== "string"
+                        && device?.operations.includes("insert") === true;
                     const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current);
                     const choice = await ask(own ? { ...question, buttons: [...question.buttons, "Revert to Image"] } : question);
                     if (choice !== undefined && choice === question.buttons[0]) {
@@ -795,8 +795,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     }
                     return choice === "Save As..." && await saveAsNew(session, id, generation, current);
                 }
+                // A disk let go of, or replaced by Undo or Insert Again while changed, can be put back.
                 case "discarded":
-                    if (body.undo) offerUndo(session, id, discardedMessage(name, file));
+                case "undone":
+                case "inserted":
+                    if (body.undo) offerUndo(session, id, body.undo, discardedMessage(name, labels.get(id) ?? file));
                     return true;
                 default:
                     return true;
@@ -823,11 +826,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const session = tree.session;
         return session === undefined ? undefined : changeWords(await differencesOf(session, device.id));
     };
-    // A notification with Undo, which puts back the disk the drive's last revert or discard dropped.
-    const offerUndo = (session: vscode.DebugSession, id: string, message: string): void => {
+    // A notification with Undo, which puts back the disk it is about, by the id the host kept it under: a later revert
+    // or discard keeps another, and the host refuses this one rather than put back a different disk.
+    const offerUndo = (session: vscode.DebugSession, id: string, medium: string, message: string): void => {
         void vscode.window.showInformationMessage(message, "Undo").then(async choice => {
-            const medium = tree.devices.find(device => device.id === id)?.undo?.id;
-            if (choice !== "Undo" || medium === undefined || !still(session)) return;
+            if (choice !== "Undo" || !still(session)) return;
             await sendTo(session, "device", { id, action: "undo", medium });
         });
     };
@@ -841,7 +844,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             const body = await session.customRequest("retro/device", { id, action: "revert", generation, supportsRetrocoreMedia: 1 }) as Devices & MediaAnswer;
             show(body);
             const name = device?.name ?? id;
-            if (body.undo) offerUndo(session, id, revertedMessage(name, file, differences));
+            if (body.undo) offerUndo(session, id, body.undo, revertedMessage(name, file, differences));
             else vscode.window.setStatusBarMessage(`$(discard) Reverted ${name} to ${file}`, 5000);
             return true;
         } catch (error) {
@@ -1005,18 +1008,19 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.hardware", () => tree.hardware));
     // The drive rows as the Drives view draws them, for the tests: each drive's name, summary, menu words, icon file,
     // the mark at its end and its tooltip.
-    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.driveRows", () =>
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.driveRows", () => Promise.all(
         drives.getChildren().flatMap(node => "controller" in node ? drives.getChildren(node) : [node])
             .filter(node => "device" in node)
-            .map(node => {
-                const item = drives.getTreeItem(node);
+            .map(async node => {
+                // As hovering would, a tooltip left for hover is worked out.
+                const item = await drives.resolveTreeItem(drives.getTreeItem(node), node);
                 const icon = item.iconPath as { light: vscode.Uri } | undefined;
                 return {
                     id: item.id, label: item.label, description: item.description, contextValue: item.contextValue,
                     icon: icon?.light.fsPath, mark: item.resourceUri?.query ?? "",
                     tooltip: item.tooltip instanceof vscode.MarkdownString ? item.tooltip.value : item.tooltip
                 };
-            })));
+            }))));
     // The Memory rows' labels, descriptions and the references they open, for the tests.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.memoryRows", () => {
         const provider = new MachineTree(tree, context.extensionUri, favorites);

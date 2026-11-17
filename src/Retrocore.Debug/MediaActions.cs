@@ -162,8 +162,7 @@ internal static partial class MediaActions
             case "eject":
             case "insert" when device.Media is not null:
                 JsonObject? held = Detach([device], args, action == "eject" ? "eject it" : "insert another disk");
-                if (held is null) { KeepDiscarded(device); }
-                return held;
+                return held ?? Discard(device, action, args, machine);
             default:
                 return null;
         }

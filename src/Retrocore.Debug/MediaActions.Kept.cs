@@ -66,13 +66,51 @@ internal static partial class MediaActions
         return answer;
     }
 
-    // Keeps a changed disk a person let go of, as it leaves its drive, so Undo can put it back.
-    private static void KeepDiscarded(IDevice device)
+    // The changed disk in a drive that a person let go of, to keep for Undo once it has left; null for none.
+    private static KeptDisk? Outgoing(IDevice device) =>
+        device is IMediumSlot { Medium: { } disk } && device.Media is { } media && HasUnsaved(device)
+            ? new(disk, media.Label, media.Format, "discarded")
+            : null;
+
+    // An eject or insert that lets a changed disk go: the machine acts, and only once it has does the disk become the
+    // one Undo puts back, so a failed insert leaves both the disk and the Undo there was. With no machine to act
+    // (a caller that acts itself), the disk is kept now.
+    private static JsonObject? Discard(IDevice device, string action, JsonObject args, Action<string, JsonObject>? machine)
     {
-        if (device is IMediumSlot { Medium: { } disk } && device.Media is { } media && HasUnsaved(device))
+        if (Outgoing(device) is not { } outgoing) { return null; }
+        if (machine is null)
         {
-            s_undo.AddOrUpdate(device, new(disk, media.Label, media.Format, "discarded"));
+            s_undo.AddOrUpdate(device, outgoing);
+            return null;
         }
+
+        machine(action, args);
+        s_undo.AddOrUpdate(device, outgoing);
+        JsonObject answer = Answer(device, "discarded", Source(outgoing.Medium));
+        answer["undo"] = outgoing.Id;
+        return answer;
+    }
+
+    // Puts a kept disk in its drive in place of the one there, which, if it was changed and let go, becomes the one
+    // Undo puts back; the answer names that Undo, or none.
+    private static JsonObject Replace(IDevice device, KeptDisk kept, string outcome)
+    {
+        KeptDisk? outgoing = Outgoing(device);
+        IMediumSlot drive = (IMediumSlot)device;
+        drive.Unmount();
+        drive.Mount(kept.Medium, kept.Label, kept.Format);
+        if (outgoing is null)
+        {
+            s_undo.Remove(device);
+        }
+        else
+        {
+            s_undo.AddOrUpdate(device, outgoing);
+        }
+
+        JsonObject answer = Answer(device, outcome, Source(kept.Medium));
+        answer["undo"] = outgoing?.Id;
+        return answer;
     }
 
     // Puts back the disk the last revert or discard dropped: in the drive, the disk there going as an eject would, or
@@ -91,12 +129,7 @@ internal static partial class MediaActions
             return Answer(device, "undone", Source(kept.Medium));
         }
 
-        if (Detach([device], args, "put the disk back") is { } held) { return held; }
-        IMediumSlot drive = (IMediumSlot)device;
-        drive.Unmount();
-        drive.Mount(kept.Medium, kept.Label, kept.Format);
-        s_undo.Remove(device);
-        return Answer(device, "undone", Source(kept.Medium));
+        return Detach([device], args, "put the disk back") ?? Replace(device, kept, "undone");
     }
 
     // Acts on a disk the machine ejected: saves it, puts it back in its drive (the disk there going as an eject
@@ -121,11 +154,8 @@ internal static partial class MediaActions
                 break;
             case "insertAgain":
                 if (Detach([device], args, "put the ejected disk back") is { } held) { return held; }
-                IMediumSlot drive = (IMediumSlot)device;
-                drive.Unmount();
-                drive.Mount(kept.Medium, kept.Label, kept.Format);
+                answer = Replace(device, kept, "inserted");
                 ejected.Remove(kept);
-                answer = Answer(device, "inserted", Source(kept.Medium));
                 break;
             case "discard":
                 ejected.Remove(kept);

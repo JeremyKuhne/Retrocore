@@ -5,7 +5,6 @@
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Trs80;
-using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -44,6 +43,15 @@ internal static partial class MediaActions
         }
 
         byte[] encoded = codec.Encode(disk.Snapshot()).Bytes;
+
+        // A 2MG's blocks are compared, not its header or the comment and creator data after them.
+        if (codec is BlockImageCodec { IsTwoImg: true })
+        {
+            if (Blocks(encoded) is not { } mine || Blocks(file) is not { } theirs) { return null; }
+            encoded = mine;
+            file = theirs;
+        }
+
         return Layout(codec, encoded, file) is not { } layout ? null : Compare(layout, encoded, file);
     }
 
@@ -52,12 +60,7 @@ internal static partial class MediaActions
     private static (string Unit, int Size, int PerTrack, int Encoded, int File)? Layout(IImageCodec codec, byte[] encoded, byte[] file)
     {
         if (codec is SectorImageCodec) { return ("sector", 256, 16, 0, 0); }
-        if (codec is BlockImageCodec blocks)
-        {
-            if (!blocks.IsTwoImg) { return ("block", 512, 0, 0, 0); }
-            bool both = TwoImgContainer.IsTwoImg(encoded) && TwoImgContainer.IsTwoImg(file);
-            return both ? ("block", 512, 0, BlocksAt(encoded), BlocksAt(file)) : null;
-        }
+        if (codec is BlockImageCodec) { return ("block", 512, 0, 0, 0); }
 
         if (codec.Format == "JV1") { return ("sector", Jv1Format.SectorSize, Jv1Format.SectorsPerTrack, 0, 0); }
         if (codec.Format != "JVC" || codec is not FloppyImageCodec) { return null; }
@@ -69,11 +72,19 @@ internal static partial class MediaActions
         return ("sector", size, sectors * sides, header.Length, header.Length);
     }
 
-    // Where a 2MG's blocks start: its header's offset, or just after the header when a writer left it zero.
-    private static int BlocksAt(byte[] image)
+    // A 2MG's blocks, or null for a file that is not a 2MG this reads.
+    private static byte[]? Blocks(byte[] image)
     {
-        int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(24));
-        return offset == 0 ? Math.Max((int)BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(8)), 64) : offset;
+        if (!TwoImgContainer.IsTwoImg(image)) { return null; }
+        try
+        {
+            TwoImgContainer.Read(image, out ReadOnlySpan<byte> blocks, out _);
+            return blocks.ToArray();
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
     }
 
     // Compares the disk's units with the file's, a unit the file lacks counting as changed.

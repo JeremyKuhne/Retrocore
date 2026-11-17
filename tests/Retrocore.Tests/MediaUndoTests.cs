@@ -81,10 +81,12 @@ public sealed class MediaUndoTests
         JsonObject discard = Speaking();
         JsonObject mount = new() { ["device"] = drive.Id, ["generation"] = drive.MountGeneration };
         discard["discards"] = new JsonArray(mount);
-        MediaActions.Device(drive, "eject", discard).Should().BeNull("the machine ejects the disk let go of");
-        drive.Eject();
+        JsonObject ejected = MediaActions.Device(drive, "eject", discard, Machine(drive)) ?? throw new InvalidOperationException("No answer.");
+        ejected.String("outcome").Should().Be("discarded");
+        drive.Medium.Should().BeNull("the machine ejected the disk let go of");
         KeptDisk kept = MediaActions.Undoable(drive) ?? throw new InvalidOperationException("Nothing kept.");
         kept.Why.Should().Be("discarded");
+        ejected.String("undo").Should().Be(kept.Id);
 
         JsonObject args = Speaking();
         args["medium"] = kept.Id;
@@ -111,6 +113,41 @@ public sealed class MediaUndoTests
         JsonObject args = Speaking();
         args["medium"] = undo;
         MediaActions.Device(drive, "undo", args)?.String("outcome").Should().Be("changed");
+
+        // Let go of, the disk Undo replaces is the one the next Undo puts back.
+        IMedium replaced = drive.Medium ?? throw new InvalidOperationException("The drive is empty.");
+        JsonObject mount = new() { ["device"] = drive.Id, ["generation"] = drive.MountGeneration };
+        args["discards"] = new JsonArray(mount);
+        JsonObject undone = MediaActions.Device(drive, "undo", args) ?? throw new InvalidOperationException("No answer.");
+        undone.String("outcome").Should().Be("undone");
+        KeptDisk next = MediaActions.Undoable(drive) ?? throw new InvalidOperationException("Nothing kept.");
+        next.Medium.Should().BeSameAs(replaced);
+        undone.String("undo").Should().Be(next.Id);
+    }
+
+    /// <summary>
+    ///  An insert over a changed disk let go of that fails, as for an image that cannot be read, leaves the disk and
+    ///  the Undo there was.
+    /// </summary>
+    [TestMethod]
+    public void FailedInsertKeepsTheUndoThereWas()
+    {
+        (Apple2Disk35Drive drive, _) = Drive("failed.po");
+        Write(drive, block: 1, 0x22);
+        string undo = MediaActions.Device(drive, "revert", Speaking(), Machine(drive))?.String("undo") ?? "";
+        Write(drive, block: 2, 0x33);
+        IMedium current = drive.Medium ?? throw new InvalidOperationException("The drive is empty.");
+
+        string bad = Path.Join(s_root, $"bad-{Guid.NewGuid():N}.po");
+        File.WriteAllBytes(bad, new byte[100]);
+        JsonObject insert = Speaking();
+        insert["path"] = bad;
+        JsonObject mount = new() { ["device"] = drive.Id, ["generation"] = drive.MountGeneration };
+        insert["discards"] = new JsonArray(mount);
+        Action failing = () => MediaActions.Device(drive, "insert", insert, Machine(drive));
+        failing.Should().Throw<Exception>();
+        drive.Medium.Should().BeSameAs(current);
+        MediaActions.Undoable(drive)?.Id.Should().Be(undo, "the Undo there was stays");
     }
 
     /// <summary>
@@ -182,6 +219,19 @@ public sealed class MediaUndoTests
         differences["count"]?.GetValue<int>().Should().Be(3);
         differences.String("summary").Should().Be("blocks 7-8, 200");
 
+        // A 2MG's blocks, not the bytes after them: only a changed block counts.
+        byte[] data = new byte[1600 * 512];
+        byte[] twoImg = [.. TwoImgContainer.Create(1600).Wrap(data, locked: false), .. new byte[512]];
+        string container = Path.Join(s_root, $"container-{Guid.NewGuid():N}.2mg");
+        File.WriteAllBytes(container, twoImg);
+        (Apple2Disk35Drive wrapped, _) = Drive("wrapped.po");
+        DeviceAction(wrapped, container);
+        twoImg[^1] = 0x77;
+        File.WriteAllBytes(container, twoImg);
+        Differences(wrapped)?["count"]?.GetValue<int>().Should().Be(0, "the bytes after the blocks are not blocks");
+        Write(wrapped, block: 5, 0x42);
+        Differences(wrapped)?.String("summary").Should().Be("block 5");
+
         // A Disk II .dsk: 256-byte sectors, 16 to a track.
         string dsk = Path.Join(s_root, $"sectors-{Guid.NewGuid():N}.dsk");
         byte[] bytes = new byte[35 * 4096];
@@ -218,9 +268,17 @@ public sealed class MediaUndoTests
     // Inserts an image as the debug host does.
     private static void DeviceAction(Apple2Disk35Drive drive, string path) => Apple2Loader.Insert(drive, path);
 
-    // The machine's own action on the drive, as the debug host passes it: an insert reads the image.
-    private static Action<string, JsonObject> Machine(Apple2Disk35Drive drive) =>
-        (action, args) => DeviceAction(drive, args.String("path") ?? throw new ArgumentException($"{action} needs a path."));
+    // The machine's own action on the drive, as the debug host passes it: an insert reads the image; an eject ejects.
+    private static Action<string, JsonObject> Machine(Apple2Disk35Drive drive) => (action, args) =>
+    {
+        if (action == "eject")
+        {
+            drive.Eject();
+            return;
+        }
+
+        DeviceAction(drive, args.String("path") ?? throw new ArgumentException($"{action} needs a path."));
+    };
 
     // Writes a block of one byte, as the machine would, unlocking the disk first.
     private static void Write(Apple2Disk35Drive drive, uint block, byte value)

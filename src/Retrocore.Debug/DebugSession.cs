@@ -436,7 +436,10 @@ internal sealed partial class DebugSession
         transport.On("retro/key", args => Reply(() =>
         {
             int code = (args.Int("code") ?? 0);
-            if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+            if (code < 0 || code > (_target?.MaximumKey ?? 127))
+            {
+                throw new ArgumentOutOfRangeException(nameof(args));
+            }
 
             // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
             // goes now and drops the rest of the paste.
@@ -838,6 +841,7 @@ internal sealed partial class DebugSession
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Kaypro2 => LaunchKaypro(args),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -1054,6 +1058,15 @@ internal sealed partial class DebugSession
     {
         Trs80Model2DebugTarget target = Trs80Model2DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? 0);
+        return target;
+    }
+
+    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command is typed at CP/M's first prompt.
+    private static KayproDebugTarget LaunchKaypro(JsonObject args)
+    {
+        KayproDebugTarget target = KayproDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? 0);
+        if (args.String("command") is { } command) { target.TypeAtPrompt(command, seconds: 30); }
         return target;
     }
 

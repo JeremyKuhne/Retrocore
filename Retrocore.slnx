@@ -29,6 +29,7 @@
   <Project Path="src/Retrocore.Machines.Apple3/Retrocore.Machines.Apple3.csproj" />
   <Project Path="src/Retrocore.Machines.Chips/Retrocore.Machines.Chips.csproj" />
   <Project Path="src/Retrocore.Machines.Coco/Retrocore.Machines.Coco.csproj" />
+  <Project Path="src/Retrocore.Machines.Kaypro/Retrocore.Machines.Kaypro.csproj" />
   <Project Path="src/Retrocore.Machines.Trs80/Retrocore.Machines.Trs80.csproj" />
   <Project Path="tests/Retrocore.Tests/Retrocore.Tests.csproj" />
 </Solution>

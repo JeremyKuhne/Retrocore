@@ -165,7 +165,10 @@ export function tooltipLines(device: Device, now: Date = new Date()): string[] {
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
-            : media.changed ? "Changed: not saved to the image" : "The same as its image");
+            : media.changed ? "Changed: not saved to the image"
+            // A disk the machine did not change is the image as it was read, which is not the file there now.
+            : source?.stale ? (source.current === null ? "Not changed by the machine; its image is gone" : "Not changed by the machine, but its image is not the file it was read from")
+            : "The same as its image");
         if (source?.stale) {
             const read = source.baseline ? `; it was ${when(source.baseline.written, now)} when read` : "";
             lines.push(source.current === null ? "Image deleted since it was read"

@@ -76,6 +76,9 @@ test("the tooltip names the image, whether the disk changed, when the image chan
     assert.equal(lines[3], "Unlocked: the machine can write it");
     assert.equal(lines[4], "Track 17, sector 4, writing");
     assert.equal(tooltipLines(drive(false), now)[1], "The same as its image");
+    assert.equal(tooltipLines(drive(false, { stale: true, current: revision(changed, "b") }), now)[1],
+        "Not changed by the machine, but its image is not the file it was read from", "an image changed on disk is not the same");
+    assert.equal(tooltipLines(drive(false, { stale: true, current: null }), now)[1], "Not changed by the machine; its image is gone");
     assert.ok(tooltipLines(drive(false, { readOnly: "file" }), now).includes("Read-only file: Save As saves the disk under another name"));
     assert.ok(tooltipLines(drive(false, {}, true), now).includes("Locked: the machine cannot write it"));
 });

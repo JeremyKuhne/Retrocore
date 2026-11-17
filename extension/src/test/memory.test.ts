@@ -966,6 +966,17 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     assert.deepEqual(breakpointsSent.map(sent => [sent.address, sent.ids]), [[top, null]]);
     assert.equal(state.status, `Breakpoint at $${hex(top, 4)}.`);
 
+    // While the listing is hidden, its old lines don't say where a line starts, so F9 sets nothing.
+    const box = page.elements.get("listingBox")! as unknown as { checked: boolean; dispatch(name: string, event: object): void };
+    box.checked = false;
+    box.dispatch("change", {});
+    breakpointsSent.length = 0;
+    state = await drive(page, [{ breakpoint: true }], () => 0, lists);
+    assert.deepEqual([breakpointsSent.length, state.status], [0, "Show the listing to set a breakpoint."]);
+    box.checked = true;
+    box.dispatch("change", {});
+    await drive(page, [], () => 0, lists);
+
     // Clicking a filled dot sends the breakpoints that stop there, to take them away.
     breakpointsSent.length = 0;
     const line = { dataset: { a: String(top + 7) } };

@@ -151,6 +151,8 @@ let aligned = false, rowStarts = null;
 // Whether the listing shows (the page remembers), the lines it shows, which request they answer, its width, and the
 // addresses Decode from here started an instruction at.
 let showListing = true, listingLines = [], listingKey = "", listingWidth = 0;
+// The key of the listing the lines are, which is listingKey once the one asked for last has come.
+let listingLoaded = "";
 // The writes the page made, which change what the listing shows, and the cursor the listing last scrolled to.
 let writes = 0, listingCursor = -1;
 // The marks, names and comments made, which change what the listing shows.
@@ -594,6 +596,7 @@ async function loadListing(start, count, key) {
         const result = await request({ type: "listing", address: start, count, starts: Array.from(forcedStarts) });
         if (key !== listingKey) return;
         listingLines = result.lines;
+        listingLoaded = key;
         listingError = "";
         // New lines can move the cursor's, as when Decode from here or a write changes the instructions' sizes,
         // so its line is brought into view again.
@@ -698,9 +701,16 @@ async function toggleBreakpoint(line) {
 }
 
 // F9 in the bytes: a breakpoint at the line the cursor is in.
+// Only the listing on show, as last asked for, says where the cursor's line starts and what stops there: while it is
+// hidden or being read again, its lines may be of other bytes.
 async function toggleAtCursor() {
-    const line = listingLines.find(item => cursor >= item.address && cursor < item.address + item.size);
-    if (line === undefined) { status("Show the listing to set a breakpoint.", true); return; }
+    const shown = showListing && !ended && narrow !== true;
+    const current = shown && listingLoaded === listingKey;
+    const line = current ? listingLines.find(item => cursor >= item.address && cursor < item.address + item.size) : undefined;
+    if (line === undefined) {
+        status(!shown ? "Show the listing to set a breakpoint." : !current ? "The listing is being read; press F9 again." : "No listing line is at the cursor.", true);
+        return;
+    }
     await toggleBreakpoint(line);
 }
 

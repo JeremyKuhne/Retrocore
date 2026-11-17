@@ -87,7 +87,8 @@ public sealed class DisassembleCommandTests
 
     /// <summary>
     ///  A Z80 program disassembles with <c>--cpu Z80</c>, with no Apple II names, and its text at the restart addresses
-    ///  stays data when the hints turn the CPU's vectors off; the source assembles back to the same bytes.
+    ///  stays data when the hints turn the CPU's vectors off; the source assembles back to the same bytes. An Apple II
+    ///  machine with the Z80 is an error.
     /// </summary>
     [TestMethod]
     public void Z80ProgramDisassemblesAndReassembles()
@@ -122,6 +123,10 @@ public sealed class DisassembleCommandTests
             AssemblyResult result = assembler.Assemble(new AssemblySource(source, output), options);
             result.Diagnostics.Should().BeEmpty();
             result.Sections[0].Bytes.ToArray().Should().Equal(program);
+
+            // An Apple II's names are for 6502 code, so asking for one with the Z80 is an error.
+            string[] apple = [input, output, "--origin", "$0000", "--cpu", "Z80", "--machine", "iiplus", "--sdk-roms", s_inputs];
+            DisassembleCommand.Run(apple).Should().NotBe(0);
         }
         finally
         {

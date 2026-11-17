@@ -85,9 +85,16 @@ internal static class DisassembleCommand
                 throw new ArgumentException($"--cpu must be one of {string.Join(", ", CpuCatalog.InstructionSets.Keys)}.");
             }
 
-            // Only the Apple II's sources name addresses; another CPU's program gets no machine's names.
+            // Only the Apple II's sources name addresses, for the 6502 family; another CPU's program gets no machine's
+            // names, so asking for an Apple II with it is a mistake.
             bool apple = CpuCatalog.Get(cpu).Description == CpuCatalog.Get("Mos6502").Description;
-            Apple2Model? model = Model(options.GetValueOrDefault("--machine") ?? (apple ? "iiplus" : "none"));
+            string machineName = options.GetValueOrDefault("--machine") ?? (apple ? "iiplus" : "none");
+            if (!apple && machineName != "none")
+            {
+                throw new ArgumentException($"--machine {machineName} is an Apple II, whose names are for 6502 code; use --machine none with --cpu {cpu}.");
+            }
+
+            Apple2Model? model = Model(machineName);
             string dos = model is null ? "none" : options.GetValueOrDefault("--dos") ?? "3.3";
             DisassemblyHints hints = options.TryGetValue("--hints", out string? path) ? DisassemblyHints.Read(path) : new();
             DisassemblyProgram program = new(image, origin, what, cpu, hints);

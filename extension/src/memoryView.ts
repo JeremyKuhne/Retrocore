@@ -1113,6 +1113,7 @@ function showInspector() {
         + '<button data-act="unmark" title="Take the code and data marks off the selection">Unmark</button>'
         + '<button data-act="name" title="Name this address, kept in the hints file">Name</button>'
         + '<button data-act="comment" title="Comment on this address, kept in the hints file">Comment</button>'
+        + '<button data-act="fill" title="Fill the selection with a byte, bytes or text, repeated">Fill' + count + "</button>"
         + '<button data-act="bookmark" title="' + (bookmarkAt.has(cursor) ? "Rename or remove this bookmark" : "Bookmark this address with a name, kept for this launch configuration") + '">Bookmark</button></div>';
     html += '<div class="where">' + where(cursor);
     const name = labelOf(labels, cursor);
@@ -1127,7 +1128,11 @@ function showInspector() {
     if (frozen.has(cursor)) rows.push({ label: "Frozen at", value: "$" + hex(frozen.get(cursor), 2) });
     if (readable[cursor] === 1 && readOnly[cursor]) rows.push({ label: "Writes", value: "refused: not RAM now" });
     for (const row of rows) {
-        html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
+        // A value that can be written is a button that asks for a new one.
+        const value = editable(row.label)
+            ? '<button class="link" data-edit="' + escapeText(row.label) + '" title="Write ' + escapeText(row.label.toLowerCase()) + ' at ' + where(cursor) + '">' + escapeText(row.value) + "</button>"
+            : escapeText(row.value);
+        html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + value + "</span></div>";
     }
     html += codeHtml();
     inspector.innerHTML = html;
@@ -1588,6 +1593,7 @@ side.addEventListener("click", event => {
             case "name": void mark({ what: "name" }); break;
             case "comment": void mark({ what: "comment" }); break;
             case "bookmark": void addBookmark(); break;
+            case "fill": void fill(); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1597,6 +1603,8 @@ side.addEventListener("click", event => {
         }
         return;
     }
+    const edited = target.closest ? target.closest("[data-edit]") : null;
+    if (edited !== null) { void editValue(edited.dataset.edit); return; }
     const source = target.closest ? target.closest("[data-src]") : null;
     if (source !== null) {
         void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
@@ -1800,6 +1808,123 @@ function found(at, size, message) {
     status(message);
 }
 
+// Writing values: an inspector row's value typed anew, the selection filled with a pattern, or the clipboard pasted
+// at the cursor. Each is one edit, which undo takes back, written in turn with typing, undo and redo.
+const byteRows = ["Byte", "Unsigned", "Signed", "Binary"];
+
+// Whether an inspector row's value can be typed anew: the byte's forms, the words and the BASIC's floats.
+function editable(label) {
+    return byteRows.includes(label) || label === "Word, low first" || label === "Word, high first"
+        || (inspected !== null && inspected.address === cursor && (inspected.values ?? []).some(value => value.label === label));
+}
+
+// The bytes a row's value is written as, or why the text is not one.
+async function valueBytes(label, text) {
+    if (byteRows.includes(label)) {
+        const value = parseByte(text);
+        return typeof value === "string" ? value : [value];
+    }
+    if (label === "Word, low first" || label === "Word, high first") {
+        const value = parseValue(text, 2);
+        if (typeof value === "string") return value;
+        return label === "Word, low first" ? [value & 0xFF, value >> 8] : [value >> 8, value & 0xFF];
+    }
+    // A float, encoded by the debugger from the text as typed.
+    let result;
+    try {
+        result = await request({ type: "numbers", value: text.trim() });
+    } catch (error) {
+        return String(error.message || error);
+    }
+    const format = (result.formats ?? []).find(item => item.label === label);
+    return format === undefined ? text.trim() + " is too large for " + label.toLowerCase() + "." : Array.from(format.bytes);
+}
+
+async function editValue(label) {
+    const at = cursor;
+    const row = inspect(bytes, readable, at, charset === null ? undefined : charset.text).concat(inspected !== null && inspected.address === at ? inspected.values ?? [] : [])
+        .find(item => item.label === label);
+    if (row === undefined) return;
+    const answer = await request({ type: "input", title: label + " at " + where(at), prompt: "A new value, written to memory.", value: row.value.split("  ")[0] });
+    if (!answer || answer.cancelled) return;
+    const values = await valueBytes(label, answer.text);
+    if (typeof values === "string") { status(values, true); return; }
+    if (at + values.length > SIZE) { status(label + " at " + where(at) + " runs past " + where(SIZE - 1) + ".", true); return; }
+    await writeInTurn(at, values, label + " at " + where(at) + " written.");
+}
+
+// Writes as one edit, in turn with typing, undo and redo, so it is on the undo stack before either runs.
+async function writeInTurn(offset, values, done) {
+    let written = false;
+    await new Promise(resolve => queue(async () => {
+        written = await write(offset, values, true);
+        resolve(undefined);
+    }));
+    if (written) status(done);
+    return written;
+}
+
+// Bytes or text for a range: text is the machine's characters, each chosen to keep what it can of the byte it
+// replaces, as typing does; or null and a message for a character the machine does not have.
+function dataAt(data, offset, count) {
+    if (Array.isArray(data)) return data;
+    const values = [];
+    const characters = Array.from(data.text);
+    for (let index = 0; index < Math.min(count, characters.length); index++) {
+        const old = bytes[offset + index];
+        const value = charset === null ? typedText(characters[index], old) : typedText(characters[index], old, charset.text, charset.looksSame);
+        if (value === undefined) { status("The machine has no " + characters[index] + " character.", true); return null; }
+        values.push(value);
+    }
+    return values;
+}
+
+async function fill() {
+    const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor), count = high - low + 1;
+    const span = where(low) + (count > 1 ? "-" + where(high) + " (" + count + " bytes)" : "");
+    const answer = await request({ type: "input", title: "Fill " + span, prompt: 'A byte, bytes or text in quotes, repeated to fill, such as EA, 01 02 or "*".' });
+    if (!answer || answer.cancelled) return;
+    const data = parseData(answer.text);
+    if (typeof data === "string") { status(data, true); return; }
+    if (!await loaded(low, count)) return;
+    const pattern = Array.isArray(data) ? data : null;
+    let values = [];
+    if (pattern !== null) {
+        for (let index = 0; index < count; index++) values.push(pattern[index % pattern.length]);
+    } else {
+        // Text repeats as characters, each chosen against the byte it replaces.
+        const text = Array.from(data.text);
+        const repeated = { text: Array.from({ length: count }, (_, index) => text[index % text.length]).join("") };
+        values = dataAt(repeated, low, count);
+        if (values === null) return;
+    }
+    await writeInTurn(low, values, "Filled " + span + ".");
+}
+
+// Pastes the clipboard at the cursor: in the text pane as the machine's characters, else as hex bytes, which may
+// be the Monitor's lines with their addresses.
+async function paste() {
+    const at = cursor;
+    let clipboard;
+    try {
+        clipboard = String((await request({ type: "paste" })).text ?? "");
+    } catch (error) {
+        status(String(error.message || error), true);
+        return;
+    }
+    if (clipboard.length === 0) { status("The clipboard is empty.", true); return; }
+    const data = pane === "text" ? { text: clipboard.split(String.fromCharCode(13)).join("").split(String.fromCharCode(10)).join("") } : parseData(clipboard);
+    if (typeof data === "string") { status("The clipboard does not hold hex bytes: " + data, true); return; }
+    const length = Array.isArray(data) ? data.length : Array.from(data.text).length;
+    const count = Math.min(length, SIZE - at);
+    if (!await loaded(at, count)) return;
+    const values = dataAt(data, at, count);
+    if (values === null) return;
+    const written = values.slice(0, count);
+    const cut = length > count ? "; " + (length - count) + " more ran past " + where(SIZE - 1) : "";
+    await writeInTurn(at, written, "Pasted " + written.length + (written.length === 1 ? " byte" : " bytes") + " at " + where(at) + cut + ".");
+}
+
 // Copies the selection as memory holds it now, reading the bytes out of view first.
 async function copy() {
     const low = Math.min(cursor, anchor), high = Math.max(cursor, anchor);
@@ -1845,6 +1970,8 @@ grid.addEventListener("keydown", event => {
         void copy();
     } else if (control && (key === "d" || key === "D")) {
         decodeHere();
+    } else if (control && (key === "v" || key === "V")) {
+        void paste();
     } else if (control && (key === "g" || key === "G")) {
         gotoBox.focus();
         gotoBox.select();
@@ -1991,6 +2118,9 @@ async function test(actions) {
         }
         if (action.decode) decodeHere();
         if (action.assemble) await assembleAtCursor();
+        if (action.edit !== undefined) await editValue(action.edit);
+        if (action.fill) await fill();
+        if (action.paste) await paste();
         if (action.mark !== undefined) await mark(action.mark);
         if (action.breakpoint) await toggleAtCursor();
         if (action.listingLine !== undefined) selectLine(listingLines[action.listingLine].address, listingLines[action.listingLine].size);

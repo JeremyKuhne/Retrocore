@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
+import { addressAt, parseData, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -413,6 +413,10 @@ const assemblesSent: Record<string, unknown>[] = [];
 const confirmsSent: Record<string, unknown>[] = [];
 let assembleReply: Record<string, unknown> = { cancelled: true };
 let confirmChoice: string | null = null;
+// What the input box and the clipboard give the page.
+let inputReply: Record<string, unknown> = { cancelled: true };
+const inputsSent: Record<string, unknown>[] = [];
+let clipboardText = "";
 // The inspect requests the page sent.
 const inspectsSent: Record<string, unknown>[] = [];
 // The Decode from here starts the page asked about after a mark.
@@ -466,6 +470,11 @@ function answer(
         } else if (sent.type === "assemble") {
             assemblesSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: assembleReply });
+        } else if (sent.type === "input") {
+            inputsSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: inputReply });
+        } else if (sent.type === "paste") {
+            page.send({ type: "reply", id: sent.id, result: { text: clipboardText } });
         } else if (sent.type === "confirm") {
             confirmsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { choice: confirmChoice } });
@@ -1113,7 +1122,7 @@ test("the inspector says where the cursor's address is, what it is and what the 
     assert.ok(html.includes('<span class="k">In</span><span class="v">START+3</span>'), html);
     assert.ok(html.includes("START: Starts it."), html);
     assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes('<button class="link" data-src="C:/src/hello.s"') && html.includes(">hello.s:4</button>"), html);
-    assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v">1</span>'), html);
+    assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v"><button class="link" data-edit="Float, 5 bytes" title="Write float, 5 bytes at $0403">1</button></span>'), html);
     assert.ok(!html.includes(">Map<"), "no map line on a machine without banks");
 });
 
@@ -1139,6 +1148,69 @@ test("the inspector names a byte's bits, shows the instruction starting there an
     page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-go]" ? { dataset: { go: "784" } } : null } });
     const state = await drive(page, [], () => 0x81, lists);
     assert.equal(state.cursor, 0x0310);
+});
+
+test("the inspector's values are written as typed, the selection is filled and the clipboard is pasted", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0403, info: { bank: null, label: "Memory", readOnly: false } });
+    let state = await drive(page, [{ goto: 0x0403 }], () => 0, lists);
+    const sent = () => writesSent.map(item => [item.offset, item.data]);
+
+    // A word low first, a signed byte and the BASIC's float, each one write at the cursor.
+    writesSent.length = 0;
+    inputReply = { text: "$1234" };
+    state = await drive(page, [{ edit: "Word, low first" }], () => 0, lists);
+    assert.equal(inputsSent[inputsSent.length - 1].title, "Word, low first at $0403");
+    inputReply = { text: "-1" };
+    await drive(page, [{ edit: "Signed" }], () => 0, lists);
+    inputReply = { text: "1000" };
+    state = await drive(page, [{ edit: "Float, 5 bytes" }], () => 0, lists);
+    assert.deepEqual(sent(), [[0x0403, [0x34, 0x12]], [0x0403, [0xFF]], [0x0403, [0x8A, 0x7A, 0, 0, 0]]]);
+    assert.equal(state.status, "Float, 5 bytes at $0403 written.");
+    // Text that is no value writes nothing and says why; undo takes back the last write.
+    writesSent.length = 0;
+    inputReply = { text: "70000" };
+    state = await drive(page, [{ edit: "Word, high first" }], () => 0, lists);
+    assert.deepEqual([sent(), state.status], [[], "70000 does not fit in a word."]);
+    // (The stand-in reads zeros back after each write, so those are what the float replaced.)
+    await drive(page, [{ undo: true }], () => 0, lists);
+    assert.deepEqual(sent(), [[0x0403, [0, 0, 0, 0, 0]]]);
+
+    // Fill repeats bytes or text over the selection, a listing line's two bytes here.
+    const top = parseInt((state.listing as string[])[0].substring(0, 4), 16);
+    writesSent.length = 0;
+    inputReply = { text: "EA" };
+    await drive(page, [{ listingLine: 0 }, { fill: true }], () => 0, lists);
+    inputReply = { text: "01 02 03" };
+    await drive(page, [{ listingLine: 0 }, { fill: true }], () => 0, lists);
+    inputReply = { text: '"A"' };
+    state = await drive(page, [{ listingLine: 0 }, { fill: true }], () => 0, lists);
+    assert.deepEqual(sent(), [[top, [0xEA, 0xEA]], [top, [0x01, 0x02]], [top, [0x41, 0x41]]]);
+    assert.equal(state.status, `Filled $${hex(top, 4)}-$${hex(top + 1, 4)} (2 bytes).`);
+
+    // Paste takes the Monitor's lines as hex, or in the text pane the characters.
+    writesSent.length = 0;
+    clipboardText = "0300: A9 C1\n0302- 20 ED FD ; JSR COUT";
+    state = await drive(page, [{ goto: 0x0500 }, { paste: true }], () => 0, lists);
+    assert.deepEqual([sent(), state.status], [[[0x0500, [0xA9, 0xC1, 0x20, 0xED, 0xFD]]], "Pasted 5 bytes at $0500."]);
+    writesSent.length = 0;
+    clipboardText = "HI";
+    await drive(page, [{ pane: "text" }, { paste: true }], () => 0, lists);
+    assert.deepEqual(sent(), [[0x0500, [0x48, 0x49]]]);
+    writesSent.length = 0;
+    clipboardText = "not hex";
+    state = await drive(page, [{ pane: "hex" }, { paste: true }], () => 0, lists);
+    assert.deepEqual([sent().length, state.status], [0, "The clipboard does not hold hex bytes: not is not hex bytes: each byte takes two hex digits."]);
+});
+
+test("bytes to fill or paste are hex, the Monitor's lines, or text in quotes", () => {
+    assert.deepEqual(parseData("A9 C1,20 $ED 0xFD"), [0xA9, 0xC1, 0x20, 0xED, 0xFD]);
+    assert.deepEqual(parseData("0300: A9C1\n0302- 20 ; JSR\n"), [0xA9, 0xC1, 0x20]);
+    assert.deepEqual(parseData('"HELLO"'), { text: "HELLO" });
+    assert.equal(parseData(""), "Type bytes such as A9 C1, or text in quotes.");
+    assert.equal(parseData("ABC"), "ABC is not hex bytes: each byte takes two hex digits.");
+    assert.equal(parseData('""'), "The text is empty.");
 });
 
 test("assembling in place types an instruction over a listing line, padding or overwriting as the user says", async () => {

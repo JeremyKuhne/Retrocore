@@ -62,6 +62,9 @@ internal static class InstructionCycles
         int? second;
         if (m6809)
         {
+            // RTI pulls every register or only CC and PC as the stacked CC's E flag says, which the instruction
+            // does not show.
+            if (string.Equals(instruction.Mnemonic, "RTI", StringComparison.OrdinalIgnoreCase)) { return null; }
             int? fewest = null;
             int? most = null;
             foreach (byte flags in s_m6809Flags)

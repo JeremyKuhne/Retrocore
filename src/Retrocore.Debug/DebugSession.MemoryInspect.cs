@@ -166,6 +166,11 @@ internal sealed partial class DebugSession
         string after = text[(match.Index + match.Length)..];
         int stop = after.IndexOfAny(stops);
         string following = (stop < 0 ? after : after[..stop]).Trim();
+
+        // Another byte's bit, as KBDSTRB's "clears bit 7 of KBD" or "KBD's bit 7" speaks of, is not this one's.
+        if (following.StartsWith("of ", StringComparison.Ordinal)) { return null; }
+        string leading = text[..match.Index].TrimEnd();
+        if (leading.EndsWith("'s", StringComparison.Ordinal)) { return null; }
         if (following.Length > 0 && char.IsLetterOrDigit(following[0])) { return following; }
 
         string before = text[..match.Index].TrimEnd();

@@ -610,6 +610,8 @@ try {
     at = "named bits";
     assert.deepEqual((await inspect(0xC013)).bits, [{ bit: 7, name: null, meaning: "whether RAMRD is on" }]);
     assert.equal((await inspect(0x0024)).bits, null, "CH says nothing of its bits");
+    // The IIe's KBDSTRB reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of KBD".
+    assert.deepEqual((await inspect(0xC010)).bits, [{ bit: 7, name: null, meaning: "whether a key is down" }]);
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;

@@ -50,6 +50,8 @@ public sealed class InstructionCyclesTests
         // LBGE and LBLT compare N with V, so each is taken in one run and not another.
         Of([0x10, 0x2C, 0x00, 0x00], 0x1000, M6809Isa.InstructionSet).Should().Be((5, 6));
         Of([0x10, 0x2D, 0x00, 0x00], 0x1000, M6809Isa.InstructionSet).Should().Be((5, 6));
+        // RTI's cycles depend on the stacked E flag, so it has none.
+        Of([0x3B], 0x1000, M6809Isa.InstructionSet).Should().BeNull();
     }
 
     /// <summary>

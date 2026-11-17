@@ -124,8 +124,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   column 0* or *Hi-res page 1, line 83, byte 5*; on a machine with banks, what the memory map does with it now,
   such as *Reads main language card* or, in auxiliary RAM's editor, *Not mapped now*; the documentation of its
   label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
-  opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft, Color BASIC
-  and Business BASIC, Level II's single and double). Its **Watch** and **Freeze** buttons act on the selection.
+  opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft and Color
+  BASIC, four for Business BASIC, Level II's single and double). Its **Watch** and **Freeze** buttons act on the selection.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
   as the word `[$4100].w`, in the CPU's byte order, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
   a machine with a SoftCard the CPU's editor watches `[cpu:$4100]`, which stays the 6502's while the Z80's frame is

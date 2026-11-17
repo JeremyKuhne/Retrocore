@@ -131,8 +131,8 @@ internal sealed partial class DebugSession
     [GeneratedRegex("(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])")]
     private static partial Regex AreaWords();
 
-    // The BASIC's floating point numbers that start at an address: AppleSoft's, Color BASIC's and Business BASIC's
-    // five bytes, exponent first; Level II's single and double, exponent last. None for an integer BASIC.
+    // The BASIC's floating point numbers that start at an address: AppleSoft's and Color BASIC's five bytes and
+    // Business BASIC's four, exponent first; Level II's single and double, exponent last. None for an integer BASIC.
     private JsonArray Floats(DebugMemoryBank? bank, IDebugMemory memory, int address)
     {
         JsonArray values = [];
@@ -163,6 +163,10 @@ internal sealed partial class DebugSession
         {
             Add("Single, 4 bytes", 4, exponentFirst: false, digits: 6);
             Add("Double, 8 bytes", 8, exponentFirst: false, digits: 16);
+        }
+        else if (ReferenceEquals(basic, BasicDialect.BusinessBasic))
+        {
+            Add("Real, 4 bytes", 4, exponentFirst: true, digits: 6);
         }
         else
         {

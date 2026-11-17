@@ -144,16 +144,24 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
     assert.equal(revertedMessage("Drive 1", "work.woz", sectors), "Reverted Drive 1 to work.woz; 14 changed sectors were dropped.");
     assert.equal(revertedMessage("Drive 1", "work.woz", { unit: "block", count: 1, summary: "block 9" }), "Reverted Drive 1 to work.woz; 1 changed block was dropped.");
     assert.equal(revertedMessage("Drive 1", "work.woz", undefined), "Reverted Drive 1 to work.woz; its changes were dropped.");
-    assert.equal(stoppedMessage("Apple IIe", ["work.woz", "prodos.2mg"]),
+    assert.equal(stoppedMessage("Apple IIe", [], ["work.woz", "prodos.2mg"]),
         "Apple IIe stopped with 2 disks not saved: work.woz, prodos.2mg. Their changes were not kept.");
-    assert.equal(stoppedMessage("Apple IIe", ["work.woz"], true),
+    assert.equal(stoppedMessage("Apple IIe", ["work.woz"], []),
         "Apple IIe stopped with 1 disk not saved: work.woz. It is kept, still changed, for its next launch.");
+    assert.equal(stoppedMessage("Apple IIe", ["work.woz"], ["hello.dsk"]),
+        "Apple IIe stopped with 2 disks not saved: work.woz, hello.dsk. work.woz is kept, still changed, for its next "
+            + "launch; the changes to hello.dsk were not kept.");
 
     // What a stopping machine takes with it: changed disks in drives that save, and changed disks the machine ejected.
     const ejected = (label: string, changed: boolean) => ({ id: `k-${label}`, label, format: "2MG", why: "ejected" as const, when: "", changed });
-    assert.deepEqual(unsavedDisks([drive(false), drive(true)]), ["work.woz"]);
-    assert.deepEqual(unsavedDisks([{ ...drive(false), ejected: [ejected(path.resolve(path.sep, "a.2mg"), true), ejected("b.2mg", false)] }]), ["a.2mg"]);
-    assert.deepEqual(unsavedDisks([{ ...drive(true), operations: ["insert", "eject"] }]), [], "a drive that cannot save has nothing to lose to a stop");
+    assert.deepEqual(unsavedDisks([drive(false), drive(true)]), { kept: [], lost: ["work.woz"] });
+    assert.deepEqual(unsavedDisks([drive(true)], true), { kept: ["work.woz"], lost: [] }, "the journal keeps a disk from an image");
+    assert.deepEqual(unsavedDisks([drive(true, { kind: "built", saves: false })], true), { kept: [], lost: ["work.woz"] },
+        "a disk the launch built is built again, not kept");
+    assert.deepEqual(unsavedDisks([{ ...drive(false), ejected: [ejected(path.resolve(path.sep, "a.2mg"), true), ejected("b.2mg", false)] }]),
+        { kept: [], lost: ["a.2mg"] });
+    assert.deepEqual(unsavedDisks([{ ...drive(true), operations: ["insert", "eject"] }]), { kept: [], lost: [] },
+        "a drive that cannot save has nothing to lose to a stop");
 });
 
 test("a disk with an image can be reverted, and one the machine ejected says when it left", () => {

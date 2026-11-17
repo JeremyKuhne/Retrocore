@@ -694,11 +694,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         // for its next launch, or, for a session that keeps none, gone.
         const last = sessionDevices.get(ended.id);
         sessionDevices.delete(ended.id);
-        const unsaved = unsavedDisks(last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []));
-        if (unsaved.length > 0) {
-            const kept = last?.recovery === true;
-            const message = stoppedMessage(String(ended.configuration.name ?? "The machine"), unsaved, kept);
-            void (kept ? vscode.window.showInformationMessage(message) : vscode.window.showWarningMessage(message));
+        const { kept, lost } = unsavedDisks(last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []), last?.recovery === true);
+        if (kept.length + lost.length > 0) {
+            const message = stoppedMessage(String(ended.configuration.name ?? "The machine"), kept, lost);
+            void (lost.length === 0 ? vscode.window.showInformationMessage(message) : vscode.window.showWarningMessage(message));
         }
         const active = vscode.debug.activeDebugSession;
         void refresh(active?.id === ended.id ? undefined : active);

@@ -927,8 +927,10 @@ After the reviews:
      next launch with that id puts each disk back after the launch and saved machine have set the machine up, as the
      medium it was (a Disk II disk from WOZ2, a 3.5 disk or block device from 2MG, a floppy from DMK), changed against
      its image; a saved disk leaves the journal, and one that cannot go back stays in it, said in the Debug Console. A
-     journal a running session has (by process id and start time) is not shared: the second session keeps none. The
-     stop notice says the disks are kept for the next launch. Tests: `RecoveryJournalTests`, and `Test-CocoDap.mjs`,
+     journal is held by one process at a time, through a lock file it keeps open until it closes the journal, so a second
+     session keeps none; one that cannot be read is set aside with its snapshots. One checkpoint runs at a time, from
+     its snapshots to its commit. The stop notice says which disks are kept for the next launch and which are not, as
+     a disk the launch built. Tests: `RecoveryJournalTests`, and `Test-CocoDap.mjs`,
      where a disk Disk BASIC wrote comes back changed in the relaunched machine, says what changed, lists its
      directory and saves to its JVC image.
    - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle

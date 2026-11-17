@@ -177,6 +177,31 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A journal that cannot be read is set aside with its snapshots, which no later commit removes.
+    /// </summary>
+    [TestMethod]
+    public void AnUnreadableJournalIsSetAsideWithItsDisks()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("unreadable.po");
+        Write(drive, block: 1, 0x55);
+        Stop(Open(id), drive);
+        string snapshot = Snapshots(id).Single();
+        string folder = Path.Join(RecoveryJournal.Root, id);
+        File.WriteAllText(Path.Join(folder, "journal.json"), "{ not json");
+
+        List<string> problems = [];
+        RecoveryJournal journal = RecoveryJournal.Open(id, problems) ?? throw new InvalidOperationException("The journal is taken.");
+        problems.Should().ContainSingle().Which.Should().Contain("could not be read");
+        journal.Kept.Should().BeEmpty();
+        Stop(journal);
+
+        string aside = Directory.EnumerateDirectories(folder, "Unreadable-*").Single();
+        File.Exists(Path.Join(aside, "Media", snapshot)).Should().BeTrue("the disk is kept beside the journal it was in");
+        File.ReadAllText(Path.Join(aside, "journal.json")).Should().Be("{ not json");
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]

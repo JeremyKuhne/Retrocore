@@ -117,6 +117,7 @@ internal sealed partial class DebugSession
     // The machine's recovery journal, when its launch gave a recoveryId, and the timer that checkpoints it.
     private RecoveryJournal? _journal;
     private Timer? _checkpoints;
+    private readonly Lock _checkpointing = new();
     private bool _stopOnContracts;
     private ushort _instructionStart;
 
@@ -615,8 +616,22 @@ internal sealed partial class DebugSession
         foreach (string problem in problems) { Say(problem); }
     }
 
-    // Keeps the machine's changed disks in its journal: snapshots under the lock, written off the machine's thread.
+    // Keeps the machine's changed disks in its journal: snapshots under the lock, written off the machine's thread. One
+    // checkpoint at a time, from taking its snapshots to committing them, so an older one never commits after a newer.
     private void Checkpoint()
+    {
+        if (!_checkpointing.TryEnter()) { return; }
+        try
+        {
+            CheckpointOnce();
+        }
+        finally
+        {
+            _checkpointing.Exit();
+        }
+    }
+
+    private void CheckpointOnce()
     {
         RecoveryJournal? journal = null;
         List<JournalDisk>? disks = null;

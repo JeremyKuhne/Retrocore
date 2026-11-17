@@ -25,16 +25,25 @@ namespace Retrocore.Debug;
 ///  </para>
 ///  <para>
 ///   A disk it held that cannot go back in its drive, as when the drive is gone, stays in the journal untouched:
-///   nothing in it is dropped but by saving or letting go of the disk.
+///   nothing in it is dropped but by saving or letting go of the disk. A journal that cannot be read is moved aside
+///   with its snapshots, into an <c>Unreadable-&lt;time&gt;\</c> folder beside them.
+///  </para>
+///  <para>
+///   One process has a journal at a time: it holds <c>journal.lock</c> open, unshared, from opening the journal to
+///   closing it, and the system lets go of it if the process ends without closing.
 ///  </para>
 /// </remarks>
 internal sealed partial class RecoveryJournal
 {
     private const string SessionFile = "session.json";
+    private const string LockFile = "journal.lock";
     private const string JournalFile = "journal.json";
     private const string MediaFolder = "Media";
 
     private readonly string _folder;
+
+    // Held from opening the journal to closing it, so no other process opens it meanwhile.
+    private readonly FileStream _lock;
 
     // Commits run one at a time, off the machine's thread, and none after the journal is closed.
     private readonly Lock _writing = new();
@@ -49,10 +58,11 @@ internal sealed partial class RecoveryJournal
 
     private readonly DateTime _started = DateTime.UtcNow;
 
-    private RecoveryJournal(string id, string folder, IReadOnlyList<JsonObject> kept, int next)
+    private RecoveryJournal(string id, string folder, FileStream held, IReadOnlyList<JsonObject> kept, int next)
     {
         Id = id;
         _folder = folder;
+        _lock = held;
         Kept = kept;
         _next = next;
     }
@@ -90,11 +100,33 @@ internal sealed partial class RecoveryJournal
 
         string folder = Path.Join(Root, id);
         Directory.CreateDirectory(Path.Join(folder, MediaFolder));
-        if (Read(Path.Join(folder, SessionFile)) is { } session && session.Bool("clean") != true && Running(session))
+        FileStream held;
+        try
         {
+            held = new(Path.Join(folder, LockFile), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (IOException)
+        {
+            // Another process, or another session in this one, has it.
             return null;
         }
 
+        try
+        {
+            RecoveryJournal opened = Read(folder, held, id, problems);
+            opened.WriteSession(clean: false);
+            return opened;
+        }
+        catch
+        {
+            held.Dispose();
+            throw;
+        }
+    }
+
+    // Reads the journal's disks, under its lock.
+    private static RecoveryJournal Read(string folder, FileStream held, string id, List<string> problems)
+    {
         List<JsonObject> kept = [];
         string journal = Path.Join(folder, JournalFile);
         if (File.Exists(journal))
@@ -105,10 +137,13 @@ internal sealed partial class RecoveryJournal
             }
             catch (JsonException exception)
             {
-                // Set aside, never deleted: its snapshots stay beside it.
-                string aside = Path.Join(folder, $"journal-{DateTime.UtcNow:yyyyMMddHHmmss}.unreadable.json");
-                File.Move(journal, aside);
-                problems.Add($"The recovery journal could not be read ({exception.Message}); it is kept as {aside}.");
+                // Set aside with its snapshots, never deleted, so the commits that follow keep their hands off them.
+                string aside = Path.Join(folder, $"Unreadable-{DateTime.UtcNow:yyyyMMddHHmmssfff}");
+                Directory.CreateDirectory(aside);
+                File.Move(journal, Path.Join(aside, JournalFile));
+                Directory.Move(Path.Join(folder, MediaFolder), Path.Join(aside, MediaFolder));
+                Directory.CreateDirectory(Path.Join(folder, MediaFolder));
+                problems.Add($"The recovery journal could not be read ({exception.Message}); it is kept, with its disks, in {aside}.");
             }
         }
 
@@ -117,9 +152,7 @@ internal sealed partial class RecoveryJournal
             .DefaultIfEmpty(0)
             .Max() + 1;
 
-        RecoveryJournal opened = new(id, folder, kept, next);
-        opened.WriteSession(clean: false);
-        return opened;
+        return new(id, folder, held, kept, next);
     }
 
     /// <summary>
@@ -220,8 +253,12 @@ internal sealed partial class RecoveryJournal
                 _written.TryRemove(gone, out _);
             }
 
-            // What the last commit holds is the machine's unsaved state.
-            if (close) { WriteSession(clean: true); }
+            // What the last commit holds is the machine's unsaved state, and the journal is free for the next session.
+            if (close)
+            {
+                WriteSession(clean: true);
+                _lock.Dispose();
+            }
         }
     }
 
@@ -240,26 +277,6 @@ internal sealed partial class RecoveryJournal
         string temporary = Path.Join(_folder, SessionFile + ".tmp");
         WriteDurably(temporary, Utf8(session));
         File.Move(temporary, Path.Join(_folder, SessionFile), overwrite: true);
-    }
-
-    // Whether the process a session names still runs: the same id, started at the same time, so a reused id is not
-    // taken for it.
-    private static bool Running(JsonObject session)
-    {
-        if (session.Int("processId") is not { } id || session.String("processStart") is not { } start) { return false; }
-        try
-        {
-            using Process process = Process.GetProcessById(id);
-            DateTime started = DateTime.Parse(start, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-            return Math.Abs((process.StartTime.ToUniversalTime() - started).TotalSeconds) < 1;
-        }
-        catch (Exception exception) when (exception is ArgumentException
-            or InvalidOperationException
-            or FormatException
-            or System.ComponentModel.Win32Exception)
-        {
-            return false;
-        }
     }
 
     // A JSON file as people read it, indented.

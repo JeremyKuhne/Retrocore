@@ -93,7 +93,7 @@ public sealed class MemoryHintsTests
         File.WriteAllText(path, "{" + entries + "," + data + "," + comments + "}");
         try
         {
-            DisassemblyProgram program = new(new byte[16], 0x0800, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
+            DisassemblyProgram program = new(new byte[16], 0x0800, "test", "Mos6502", DisassemblyHints.Read(path));
             AnalysisProject project = program.Project(new Dictionary<ushort, string>());
             AnalysisRegion region = project.Regions.Where(region => region.Kind == AnalysisRegionKind.Data).Should().ContainSingle().Which;
             (region.Address, region.Length, region.Kind).Should().Be(((ushort)0x0800, 2, AnalysisRegionKind.Data));
@@ -150,7 +150,7 @@ public sealed class MemoryHintsTests
             byte[] image = new byte[6];
             image[0] = 0xEA;
             image[1] = 0xEA;
-            DisassemblyProgram program = new(image, 0xFFFA, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
+            DisassemblyProgram program = new(image, 0xFFFA, "test", "Mos6502", DisassemblyHints.Read(path));
             DisassemblyResult result = Disassembler.Analyze(program.Project(new Dictionary<ushort, string>()));
             result.Diagnostics.Should().NotContain(diagnostic => diagnostic.IsError);
             result.Instructions.Select(instruction => (int)instruction.Address).Should().Contain([0xFFFA, 0xFFFB]);
@@ -184,7 +184,7 @@ public sealed class MemoryHintsTests
         {
             // $0800 BRK, $0801 JSR $0900 .byte 1, $0805 NOP, $0806 JSR $0A00, $0809 .byte $FF
             byte[] image = [0x00, 0x20, 0x00, 0x09, 0x01, 0xEA, 0x20, 0x00, 0x0A, 0xFF];
-            DisassemblyProgram program = new(image, 0x0800, "test", ProcessorVariant.Mos6502, DisassemblyHints.Read(path));
+            DisassemblyProgram program = new(image, 0x0800, "test", "Mos6502", DisassemblyHints.Read(path));
             AnalysisProject project = program.Project(new Dictionary<ushort, string>());
             project.EntryPoints.Should().Contain((ushort)0x0805).And.NotContain((ushort)0x0804).And.NotContain((ushort)0x0809);
         }

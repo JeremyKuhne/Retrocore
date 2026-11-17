@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
+using Retrocore.Cpu.Z80;
 using Retrocore.Debug;
 using Retrocore.Media;
 
@@ -76,6 +78,50 @@ public sealed class DisassembleCommandTests
             source.Should().Contain("; From Monitor.asm.").And.Contain("HOME = $FC58").And.Contain("COUT = $FDED");
             source.Should().Contain("JSR HOME").And.Contain("JSR COUT").And.Contain("PrintLoop:").And.Contain("LDA Message,X");
             source.Should().Contain("; Prints the message.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A Z80 program disassembles with <c>--cpu Z80</c>, with no Apple II names, and its text at the restart addresses
+    ///  stays data when the hints turn the CPU's vectors off; the source assembles back to the same bytes.
+    /// </summary>
+    [TestMethod]
+    public void Z80ProgramDisassemblesAndReassembles()
+    {
+        // $0000 JP $0010; $0003 "HELLO, WORLD!"; $0010 LD HL,$0003; loop: LD A,[HL]; OR A; RET Z; INC HL; JR loop
+        byte[] program =
+        [
+            0xC3, 0x10, 0x00, .. "HELLO, WORLD!"u8, 0x21, 0x03, 0x00, 0x7E, 0xB7, 0xC8, 0x23, 0x18, 0xFA
+        ];
+
+        string directory = Directory.CreateTempSubdirectory("retrocore-disassemble-").FullName;
+        try
+        {
+            string input = Path.Join(directory, "hello.bin");
+            string hints = Path.Join(directory, "hints.json");
+            string output = Path.Join(directory, "hello.asm");
+            File.WriteAllBytes(input, program);
+            File.WriteAllText(hints, """
+                {
+                  "names": { "$0003": "Message", "$0013": "PrintLoop" },
+                  "vectors": false
+                }
+                """);
+
+            DisassembleCommand.Run([input, output, "--origin", "$0000", "--cpu", "Z80", "--hints", hints]).Should().Be(0);
+            string source = File.ReadAllText(output);
+            source.Should().Contain("Message:").And.Contain("PrintLoop:").And.Contain("JR PrintLoop");
+            source.Should().NotContain("RST").And.NotContain("Monitor.asm");
+
+            Retrocore.Assembler.Assembler assembler = new();
+            AssemblyOptions options = new(Z80Isa.Name, 0x0000, program.Length);
+            AssemblyResult result = assembler.Assemble(new AssemblySource(source, output), options);
+            result.Diagnostics.Should().BeEmpty();
+            result.Sections[0].Bytes.ToArray().Should().Equal(program);
         }
         finally
         {

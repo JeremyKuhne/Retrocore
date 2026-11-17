@@ -879,6 +879,13 @@ async function assembleLine(line) {
         return;
     }
     if (!result || result.cancelled) return;
+    // The line's own text, accepted as it was, leaves its bytes alone: assembled again it may take another
+    // encoding, as LDA $0024 written with an absolute address assembles to zero page.
+    const same = text => String(text ?? "").split(" ").join(String.fromCharCode(9)).split(String.fromCharCode(9)).filter(part => part !== "").join(" ").toUpperCase();
+    if (line.kind !== "data" && same(result.line) === same(line.text)) {
+        status(line.text + " is unchanged.");
+        return;
+    }
     const values = Array.from(result.bytes);
     const typed = result.text ?? result.line;
     const end = line.address + values.length;

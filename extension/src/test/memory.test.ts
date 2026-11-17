@@ -1187,6 +1187,12 @@ test("assembling in place types an instruction over a listing line, padding or o
     await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
     assert.deepEqual(writesSent.map(sent => [sent.offset, sent.data]), [[top, [0x20, 0xED, 0xFD]]]);
 
+    // The line's text accepted as it was writes nothing, as it may assemble to another encoding.
+    writesSent.length = 0;
+    assembleReply = { bytes: [0xA9, 0xC1], text: "LDA #$C1", nop: [0xEA], line: "lda  #$C1" };
+    state = await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.deepEqual([writesSent.length, state.status], [0, "LDA #$C1 is unchanged."]);
+
     // An instruction of the same size writes without asking.
     writesSent.length = 0;
     confirmsSent.length = 0;

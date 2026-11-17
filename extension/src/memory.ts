@@ -523,6 +523,41 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             // A number's bytes as the BASIC's floats, which Find looks for.
                             await reply(await session.customRequest("retro/memory/numbers", { memoryReference: base, value: received.value }));
                             break;
+                        case "assemble": {
+                            // An instruction to type over the line at an address, checked as it is typed: its bytes
+                            // and what they decode to, or why it does not assemble.
+                            const address = Number(received.address);
+                            const at = bookmarkWhere({ name: "", bank: start.bank, address });
+                            const assemble = (line: string) => session.customRequest("retro/memory/assemble", { memoryReference: base, address, line });
+                            const line = await vscode.window.showInputBox({
+                                title: `Assemble at ${at}`,
+                                prompt: "An instruction in the CPU's syntax, with the session's labels, such as LDA KBD or JSR COUT.",
+                                value: typeof received.text === "string" ? received.text : "",
+                                validateInput: async value => {
+                                    if (value.trim().length === 0) return null;
+                                    try {
+                                        const result = await assemble(value);
+                                        const shown = (result.bytes as number[]).map(byte => byte.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+                                        return { message: `${shown}${result.text ? `: ${result.text}` : ""}`, severity: vscode.InputBoxValidationSeverity.Info };
+                                    } catch (error) {
+                                        return error instanceof Error ? error.message : String(error);
+                                    }
+                                }
+                            });
+                            if (line === undefined || line.trim().length === 0) {
+                                await reply({ cancelled: true });
+                                break;
+                            }
+                            await reply({ ...(await assemble(line)), line: line.trim() });
+                            break;
+                        }
+                        case "confirm": {
+                            // A question the page asks before it writes, with its answers; null when dismissed.
+                            const actions = Array.isArray(received.actions) ? received.actions.map(String) : [];
+                            const choice = await vscode.window.showWarningMessage(String(received.message), { modal: true }, ...actions);
+                            await reply({ choice: choice ?? null });
+                            break;
+                        }
                         case "bookmark": {
                             // Names the address, renames its bookmark, or with an empty name removes it.
                             const address = Number(received.address);

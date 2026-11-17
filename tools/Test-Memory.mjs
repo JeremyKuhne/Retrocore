@@ -120,6 +120,11 @@ try {
     // The double's 56 bits hold 2^53 + 1, which the text keeps and a JavaScript or C# double would not.
     assert.deepEqual((await request("retro/memory/numbers", { memoryReference: "0x0000", value: "9007199254740993" })).formats[1].bytes,
         [0x04, 0, 0, 0, 0, 0, 0, 0xB6]);
+    // A line assembles in the Z80's syntax, its conditions no symbols.
+    const z80 = async line => (await request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x7000, line })).bytes;
+    assert.deepEqual([await z80("LD A,[HL]"), await z80("JP NZ,$0000"), await z80("XOR A")], [[0x7E], [0xC2, 0, 0], [0xAF]]);
+    // AF's apostrophe opens no quoted text.
+    assert.deepEqual(await z80("EX AF,AF'"), [0x08]);
     // The instruction at the ROM's start, with the T-states the Z80's instruction set gives.
     const reset = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0 })).instruction;
     assert.deepEqual([reset.text, reset.size, reset.cycles, reset.cyclesTaken], ["DI", 1, 4, null], JSON.stringify(reset));
@@ -325,6 +330,11 @@ try {
         "    JMP SWITCHED",
         "TABLE:",
         "    .byte $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $0B",
+        ".proc Main",
+        "@1loop:",
+        "    BNE @1loop",
+        "    RTS",
+        ".endproc",
     ];
     writeFileSync(switching, program.join("\n") + "\n");
     const hintsFile = join(root, "artifacts", "memory-tests", "language-card.hints.json");
@@ -612,6 +622,41 @@ try {
     assert.equal((await inspect(0x0024)).bits, null, "CH says nothing of its bits");
     // The IIe's KBDSTRB reports in bit 7 whether a key is down: its own bit, unlike "clears bit 7 of KBD".
     assert.deepEqual((await inspect(0xC010)).bits, [{ bit: 7, name: null, meaning: "whether a key is down" }]);
+    // Assembling in place: one line at an address, with the session's labels, written by the editor, not here.
+    at = "assembling a line";
+    const assemble = line => request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x6560, line });
+    const unassembled = (await read("0x6560", 3)).bytes;
+    assert.deepEqual(await assemble("LDA KBD"), { bytes: [0xAD, 0x00, 0xC0], text: "LDA KBD", nop: [0xEA] });
+    assert.deepEqual((await assemble("STA CH")).bytes, [0x85, 0x24], "a zero-page label assembles to zero page");
+    assert.deepEqual((await assemble("JSR COUT")).bytes, [0x20, 0xED, 0xFD]);
+    assert.deepEqual((await assemble("LDA BANK2,X")).bytes, [0xBD, 0x00, 0x03]);
+    assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
+    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
+    assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // A name with a combining mark, as a decomposed é is, assembles as the assembler reads it.
+    await mark({ address: 0x6600, name: "CAFÉ" });
+    assert.deepEqual((await assemble("LDA CAFÉ")).bytes, [0xAD, 0x00, 0x66]);
+    await mark({ address: 0x6600, name: "" });
+    // A scope's cheap local, whose name may start with a digit after @.
+    assert.deepEqual((await request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x0325, line: "BNE Main::@1loop" })).bytes, [0xD0, 0xFE]);
+    // The outermost scope's name, and a dotted operator after a name.
+    assert.deepEqual([(await assemble("JSR ::COUT")).bytes, (await assemble("LDA #(CH.mod 16)")).bytes], [[0x20, 0xED, 0xFD], [0xA9, 0x04]]);
+    // An alias is never a name the line already has.
+    await mark({ address: 0x6600, name: "__RETROCORE0" });
+    assert.deepEqual((await assemble(".word RamTest::R6H,__RETROCORE0")).bytes, [0x0D, 0x00, 0x00, 0x66]);
+    await mark({ address: 0x6600, name: "" });
+    // Quoted text stays as typed; a width prefix's name is still the session's.
+    assert.deepEqual((await assemble('.byte "RamTest::R6H"')).bytes, Array.from(Buffer.from("RamTest::R6H", "ascii")));
+    assert.deepEqual([(await assemble("STA z:CH")).bytes, (await assemble("LDA a:CH")).bytes], [[0x85, 0x24], [0xAD, 0x24, 0x00]]);
+    // A label spelled as a register or condition is still the label where the register would not assemble.
+    await mark({ address: 0x6600, name: "Z" });
+    assert.deepEqual((await assemble("LDA Z")).bytes, [0xAD, 0x00, 0x66]);
+    assert.deepEqual((await assemble("LDA $10,X")).bytes, [0xB5, 0x10]);
+    await mark({ address: 0x6600, name: "" });
+    await rejects(assemble("FOO"), /Unknown instruction/);
+    await rejects(assemble("LDA NOSUCH"), /NOSUCH/);
+    await rejects(assemble("  "), /Type an instruction/);
+    assert.deepEqual((await read("0x6560", 3)).bytes, unassembled, "assembling writes nothing");
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;

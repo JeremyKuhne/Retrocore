@@ -192,14 +192,6 @@ internal sealed partial class DebugSession
     // nominal cycles, the flags it changes and what it does.
     private JsonObject? InstructionAt(SpaceAnalysis analysis, int address)
     {
-        // As the listing has it: a marked instruction is one line whatever starts inside it, and no instruction runs
-        // over a later boundary, a marked one only over another start or data marked.
-        bool marked = analysis.MarkedCode.ContainsKey(address);
-        foreach ((int code, int size) in analysis.MarkedCode)
-        {
-            if (code < address && code + size > address) { return null; }
-        }
-
         if (!analysis.Forced.Contains(address))
         {
             if (analysis.Marked(address)) { return null; }
@@ -209,9 +201,7 @@ internal sealed partial class DebugSession
             if (!known) { return null; }
         }
 
-        if (!Decode(analysis, address, out DisassembledInstruction instruction)) { return null; }
-        Func<int, bool> boundary = marked ? analysis.MarkedCodeBoundary : analysis.Boundary;
-        if (RunsOver(address, instruction.Size, boundary)) { return null; }
+        if (!Accepted(analysis, address, out DisassembledInstruction instruction)) { return null; }
 
         (int Cycles, int Taken)? cycles = InstructionCycles.Of(instruction);
         (string Summary, string Flags)? brief = InstructionDocs.Brief(instruction.Mnemonic, analysis.Set);
@@ -226,6 +216,25 @@ internal sealed partial class DebugSession
         };
     }
 
+    // Decodes the instruction at an address where the listing would list it: not inside a marked instruction the
+    // listing keeps whole, nor running over a later boundary, a marked one only over another start or data marked.
+    private static bool Accepted(SpaceAnalysis analysis, int address, out DisassembledInstruction instruction)
+    {
+        foreach ((int code, int size) in analysis.MarkedCode)
+        {
+            bool inside = code < address && code + size > address;
+            if (inside && !RunsOver(code, size, analysis.MarkedCodeBoundary))
+            {
+                instruction = default;
+                return false;
+            }
+        }
+
+        if (!Decode(analysis, address, out instruction)) { return false; }
+        Func<int, bool> boundary = analysis.MarkedCode.ContainsKey(address) ? analysis.MarkedCodeBoundary : analysis.Boundary;
+        return !RunsOver(address, instruction.Size, boundary);
+    }
+
     // The instructions in the code the session knows, from the sources and analysis, that read, write, call or jump
     // to an address, in address order, the first of them; count is how many there are.
     private JsonArray ReferencesTo(SpaceAnalysis analysis, int address, out int count)
@@ -233,7 +242,12 @@ internal sealed partial class DebugSession
         SortedSet<(int Source, DisassemblyReferenceKind Kind)> found = [];
         foreach (DisassemblyReference reference in analysis.Guesses.References[address])
         {
-            found.Add((reference.Source, reference.Kind));
+            // Not from an instruction the listing would not list; a vector's source is a pointer, not an instruction.
+            bool vector = reference.Kind == DisassemblyReferenceKind.Vector;
+            if (vector || Accepted(analysis, reference.Source, out _))
+            {
+                found.Add((reference.Source, reference.Kind));
+            }
         }
 
         count = found.Count;

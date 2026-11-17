@@ -47,6 +47,9 @@ public sealed class InstructionCyclesTests
     {
         Of([0xA6, 0x94], 0x1000, M6809Isa.InstructionSet).Should().Be((7, 7));
         Of([0x34, 0x03], 0x1000, M6809Isa.InstructionSet).Should().Be((7, 7));
+        // LBGE and LBLT compare N with V, so each is taken in one run and not another.
+        Of([0x10, 0x2C, 0x00, 0x00], 0x1000, M6809Isa.InstructionSet).Should().Be((5, 6));
+        Of([0x10, 0x2D, 0x00, 0x00], 0x1000, M6809Isa.InstructionSet).Should().Be((5, 6));
     }
 
     /// <summary>

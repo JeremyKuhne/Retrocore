@@ -572,6 +572,16 @@ try {
     const at6530 = starts => request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6530, starts });
     assert.equal((await at6530([0x6530])).instruction.text, "LDA BANK2");
     assert.equal((await at6530([0x6530, 0x6531])).instruction, null);
+    // Nor are references counted from it; but from $6530 alone, LDA $0300 reads BANK2.
+    const readers = async starts => (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x0300, starts }))
+        .references.filter(reference => reference.address === 0x6530);
+    assert.equal((await readers([0x6530])).length, 1);
+    assert.equal((await readers([0x6530, 0x6531])).length, 0);
+    // A start inside a marked instruction the listing rejects for running over it still shows its own.
+    await mark({ address: 0x6530, kind: "code" });
+    const inside = await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0x6531, starts: [0x6531] });
+    assert.equal(inside.instruction?.text, "BRK", JSON.stringify(inside.instruction));
+    await mark({ address: 0x6530, count: 3, kind: "clear" });
     // The code that writes, reads or jumps to an address, in the program and the firmware.
     at = "references to an address";
     inspected = await inspect(0xD000);

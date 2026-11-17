@@ -16,7 +16,8 @@ namespace Retrocore.Debug;
 ///   The Z80's and 8080's instruction sets list their cycles. The 6502 family's describe no timing, and the 6809's
 ///   only a base that indexed operands and register lists add to, so the instruction is run once on a processor of
 ///   its own, over memory of zeros with the index registers zero, so no index crosses a page: once with the flags
-///   clear and once with them set, so a branch is taken in one and not the other; for the 65C02's bit branches, BBR
+///   clear and once with them set (the 6809's also with N alone, for a condition that compares N with V), so a branch
+///   is taken in one and not the other; for the 65C02's bit branches, BBR
 ///   and BBS, the byte they test is zero in one run and $FF in the other.
 ///  </para>
 /// </remarks>
@@ -25,9 +26,11 @@ internal static class InstructionCycles
     // More than any instruction takes, a 6809 PSHS of every register included.
     private const int MostCycles = 64;
 
-    // The 6809's CC: E F H I N Z V C; interrupts masked, and N, Z, V and C set or clear.
+    // The 6809's CC: E F H I N Z V C; interrupts masked.
     private const byte M6809Masked = 0x50;
-    private const byte M6809Flags = 0x0F;
+
+    // N, Z, V and C all clear, all set, and N alone, so every condition, LBGE's N = V included, is both true and false.
+    private static readonly byte[] s_m6809Flags = [0x00, 0x0F, 0x08];
 
     // The 6502's flags a branch tests.
     private const StatusRegister Flags6502 =
@@ -57,7 +60,21 @@ internal static class InstructionCycles
 
         int? first;
         int? second;
-        if (m6502)
+        if (m6809)
+        {
+            int? fewest = null;
+            int? most = null;
+            foreach (byte flags in s_m6809Flags)
+            {
+                if (Run6809(bytes, instruction.Address, flags) is not { } cycles) { return null; }
+                fewest = Math.Min(fewest ?? cycles, cycles);
+                most = Math.Max(most ?? cycles, cycles);
+            }
+
+            first = fewest;
+            second = most;
+        }
+        else
         {
             // A bit branch's zero-page byte, unless it is one of the instruction's own.
             int? tested = null;
@@ -70,11 +87,6 @@ internal static class InstructionCycles
             ProcessorVariant variant = M6502Isa.VariantOf(set);
             first = Run6502(bytes, instruction.Address, variant, flags: false, tested: null);
             second = Run6502(bytes, instruction.Address, variant, flags: true, tested);
-        }
-        else
-        {
-            first = Run6809(bytes, instruction.Address, flags: false);
-            second = Run6809(bytes, instruction.Address, flags: true);
         }
 
         if (first is not { } clear || second is not { } flagged) { return null; }
@@ -111,12 +123,12 @@ internal static class InstructionCycles
 
     // Runs a 6809 instruction once, with its stacks well away from it, giving its cycles, or null where it does not
     // finish, as SYNC and CWAI do not.
-    private static int? Run6809(byte[] bytes, ushort address, bool flags)
+    private static int? Run6809(byte[] bytes, ushort address, byte flags)
     {
         M6809Processor<FlatBus> processor = new(Holding(bytes, address));
         M6809Registers registers = processor.Registers;
         registers.PC = address;
-        registers.CC = flags ? (byte)(M6809Masked | M6809Flags) : M6809Masked;
+        registers.CC = (byte)(M6809Masked | flags);
         registers.S = (ushort)(address + 0x8000);
         registers.U = (ushort)(address + 0xC000);
         processor.Registers = registers;

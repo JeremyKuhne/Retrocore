@@ -200,6 +200,23 @@ public sealed class MediaUndoTests
         args["medium"] = undo;
         MediaActions.Device(drive, "undo", args)?.String("outcome").Should().Be("undone");
         MediaActions.Ejected(drive).Single().Medium.Should().BeSameAs(second);
+
+        // A card with a changed ejected disk does not come out until it is saved or let go.
+        Action remove = () => MediaActions.Hardware([drive.Id], [drive], "removeCard", Speaking());
+        remove.Should().Throw<InvalidOperationException>().WithMessage("*ejected a disk*");
+
+        // Put back while another ejected disk is let go of: that one's Undo stays.
+        DeviceAction(drive, image);
+        Write(drive, block: 11, 0x66);
+        drive.EjectByProgram();
+        KeptDisk third = MediaActions.Ejected(drive).Last();
+        JsonObject letGo = Speaking();
+        letGo["ejected"] = third.Id;
+        MediaActions.Device(drive, "discard", letGo);
+        JsonObject back = Speaking();
+        back["ejected"] = MediaActions.Ejected(drive).Single().Id;
+        MediaActions.Device(drive, "insertAgain", back)?.String("outcome").Should().Be("inserted");
+        MediaActions.Undoable(drive)?.Id.Should().Be(third.Id, "Insert Again leaves another disk's Undo");
     }
 
     /// <summary>

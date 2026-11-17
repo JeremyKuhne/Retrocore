@@ -32,6 +32,12 @@ internal static partial class MediaActions
     /// </summary>
     /// <param name="device">The drive.</param>
     /// <returns>The disks, oldest first.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   A drive's ejected disks go with it, so a card with one changed is not taken out until each is saved or let go
+    ///   (<see cref="Detach"/>).
+    ///  </para>
+    /// </remarks>
     internal static IReadOnlyList<KeptDisk> Ejected(IDevice device)
     {
         List<KeptDisk> kept = s_ejected.GetValue(device, _ => []);
@@ -73,16 +79,11 @@ internal static partial class MediaActions
             : null;
 
     // An eject or insert that lets a changed disk go: the machine acts, and only once it has does the disk become the
-    // one Undo puts back, so a failed insert leaves both the disk and the Undo there was. With no machine to act
-    // (a caller that acts itself), the disk is kept now.
+    // one Undo puts back, so a failed insert leaves both the disk and the Undo there was. With no machine to act (a
+    // caller that acts itself), nothing is kept, as nothing says the action went through.
     private static JsonObject? Discard(IDevice device, string action, JsonObject args, Action<string, JsonObject>? machine)
     {
-        if (Outgoing(device) is not { } outgoing) { return null; }
-        if (machine is null)
-        {
-            s_undo.AddOrUpdate(device, outgoing);
-            return null;
-        }
+        if (machine is null || Outgoing(device) is not { } outgoing) { return null; }
 
         machine(action, args);
         s_undo.AddOrUpdate(device, outgoing);
@@ -99,9 +100,10 @@ internal static partial class MediaActions
         IMediumSlot drive = (IMediumSlot)device;
         drive.Unmount();
         drive.Mount(kept.Medium, kept.Label, kept.Format);
+        // The Undo goes only when it is the disk put back: Insert Again leaves another disk's Undo where it was.
         if (outgoing is null)
         {
-            s_undo.Remove(device);
+            if (Undoable(device)?.Id == kept.Id) { s_undo.Remove(device); }
         }
         else
         {

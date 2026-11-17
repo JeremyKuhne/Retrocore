@@ -236,6 +236,8 @@ internal sealed partial class DebugSession
 
     // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H, Main::@again, ::COUT or z:CH's CH; not a number
     // such as $C0 or 1E, a width prefix such as z: or a:, nor an operator such as .mod, as a dot is never in a name.
-    [GeneratedRegex(@"(?<![$%\w.@])(?:::)?[A-Za-z_@][\p{L}\p{Nd}_]*(?:::(?:@|[A-Za-z_])[\p{L}\p{Nd}_]*)*(?!:(?!:))")]
+    // A name's characters after its first are AssemblySyntax.IsWord's: letters, marks, digits and connectors, which
+    // are \w's.
+    [GeneratedRegex(@"(?<![$%\w.@])(?:::)?[A-Za-z_@]\w*(?:::(?:@|[A-Za-z_])\w*)*(?!:(?!:))")]
     private static partial Regex LineName();
 }

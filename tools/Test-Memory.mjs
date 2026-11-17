@@ -633,6 +633,10 @@ try {
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
     // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
     assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // A name with a combining mark, as a decomposed é is, assembles as the assembler reads it.
+    await mark({ address: 0x6600, name: "CAFÉ" });
+    assert.deepEqual((await assemble("LDA CAFÉ")).bytes, [0xAD, 0x00, 0x66]);
+    await mark({ address: 0x6600, name: "" });
     // A scope's cheap local, whose name may start with a digit after @.
     assert.deepEqual((await request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x0325, line: "BNE Main::@1loop" })).bytes, [0xD0, 0xFE]);
     // The outermost scope's name, and a dotted operator after a name.

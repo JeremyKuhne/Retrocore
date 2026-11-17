@@ -407,6 +407,12 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
 // The marks the page sent.
 const marksSent: Record<string, unknown>[] = [];
 
+// The writes drive answered, the assemble requests, and the questions the page asked with the answers given.
+const writesSent: Record<string, unknown>[] = [];
+const assemblesSent: Record<string, unknown>[] = [];
+const confirmsSent: Record<string, unknown>[] = [];
+let assembleReply: Record<string, unknown> = { cancelled: true };
+let confirmChoice: string | null = null;
 // The inspect requests the page sent.
 const inspectsSent: Record<string, unknown>[] = [];
 // The Decode from here starts the page asked about after a mark.
@@ -457,6 +463,12 @@ function answer(
                     ]
                 }
             });
+        } else if (sent.type === "assemble") {
+            assemblesSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: assembleReply });
+        } else if (sent.type === "confirm") {
+            confirmsSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: { choice: confirmChoice } });
         } else if (sent.type === "mark") {
             marksSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { path: "C:/src/hello.hints.json", address: sent.address, count: sent.count } });
@@ -771,6 +783,7 @@ async function drive(page: ReturnType<typeof runPage>, actions: unknown[], fill:
                 for (const expression of sent.expressions as string[]) lists.watched.add(expression);
                 page.send({ type: "reply", id: sent.id, result: null });
             } else if (sent.type === "write") {
+                writesSent.push(sent);
                 page.send({ type: "reply", id: sent.id, result: { bytesWritten: 1 } });
             } else {
                 page.posted.push(sent);
@@ -949,7 +962,7 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     // A comment follows its line.
     assert.match(html, /<span class="t">RTS<\/span><span class="cm">; Returns<\/span>/);
     // Analysis's guesses say so.
-    assert.match(html, /class="ln code guess" role="listitem" aria-keyshortcuts="F9" title="A guess: no source describes these bytes, and analysis takes them for code"/);
+    assert.match(html, /class="ln code guess" role="listitem" aria-keyshortcuts="F9 F2" title="A guess: no source describes these bytes, and analysis takes them for code"/);
     assert.match(html, /<span class="l" title="START">START<\/span><span class="t">LDA #\$C1<\/span><a class="src" role="link" tabindex="-1" data-src="C:\/src\/hello.s" data-line="3"[^>]*>hello.s:3<\/a>/);
     assert.match(html, new RegExp('<span class="t">JMP <a role="link" tabindex="-1" data-go="' + parseInt(top, 16) + '"[^>]*>START</a></span>'), "an operand's target is a link");
     assert.match(html, /class="ln data"/);
@@ -959,12 +972,12 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.match(memoryEditorHtml("NONCE"), /#listing\{[^}]*display:grid;align-content:start/);
     assert.match(memoryEditorHtml("NONCE"), /#listing \.src\{flex:none/);
     assert.equal((html.match(/tabindex="0"/g) ?? []).length, 1);
-    assert.match(html, /^<div class="ln code" role="listitem" aria-keyshortcuts="F9" tabindex="0"/, "the first line, when the cursor is in none");
+    assert.match(html, /^<div class="ln code" role="listitem" aria-keyshortcuts="F9 F2" tabindex="0"/, "the first line, when the cursor is in none");
 
     // A line selects its bytes, the cursor on the first.
     state = await drive(page, [{ listingLine: 1 }], () => 0, lists);
     assert.deepEqual([state.cursor, state.anchor], [parseInt(top, 16) + 2, parseInt(top, 16) + 4]);
-    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" aria-keyshortcuts="F9" tabindex="0" data-a="[0-9]+" data-s="3"/);
+    assert.match(page.elements.get("listing")!.innerHTML, /class="ln code sel cur" role="listitem" aria-keyshortcuts="F9 F2" tabindex="0" data-a="[0-9]+" data-s="3"/);
 
     // Enter on a line does what a click does.
     const lineElement = { dataset: { a: String(parseInt(top, 16)), s: "2" }, querySelectorAll: () => [] };
@@ -1011,7 +1024,7 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     assert.deepEqual(state.breakpoints, [top + 7]);
     const html = page.elements.get("listing")!.innerHTML;
     assert.ok(html.includes(`<span class="bp on" data-bp="1" aria-hidden="true" title="Take the breakpoint at $${hex(top + 7, 4)} away (F9)">&#9679;</span><span class="sr">Breakpoint, </span>`), html);
-    assert.ok(html.includes('role="listitem" aria-keyshortcuts="F9"'), html);
+    assert.ok(html.includes('role="listitem" aria-keyshortcuts="F9 F2"'), html);
     assert.ok(html.includes(`<span class="bp" data-bp="1" aria-hidden="true" title="Stop at $${hex(top, 4)} (F9)">`), html);
 
     // F9 sets one at the cursor's line.
@@ -1126,6 +1139,61 @@ test("the inspector names a byte's bits, shows the instruction starting there an
     page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-go]" ? { dataset: { go: "784" } } : null } });
     const state = await drive(page, [], () => 0x81, lists);
     assert.equal(state.cursor, 0x0310);
+});
+
+test("assembling in place types an instruction over a listing line, padding or overwriting as the user says", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
+    let state = await drive(page, [{ goto: 0x0300 }], () => 0, lists);
+    const top = parseInt((state.listing as string[])[0].substring(0, 4), 16);
+    const at = (offset: number) => "$" + hex(offset, 4);
+
+    // The line's text is offered to type over; a cancel writes nothing.
+    assemblesSent.length = 0;
+    writesSent.length = 0;
+    assembleReply = { cancelled: true };
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.deepEqual([assemblesSent[0].address, assemblesSent[0].text, writesSent.length], [top, "LDA #$C1", 0]);
+
+    // A shorter instruction pads the rest with NOP when asked.
+    assembleReply = { bytes: [0xEA], text: "NOP", nop: [0xEA], line: "NOP" };
+    confirmChoice = "Pad with NOP";
+    confirmsSent.length = 0;
+    state = await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.equal(confirmsSent[0].message, "NOP is 1 byte, 1 fewer than LDA #$C1. Pad the rest with NOP?");
+    assert.deepEqual(writesSent.map(sent => [sent.offset, sent.data]), [[top, [0xEA, 0xEA]]]);
+    assert.equal(state.status, `Assembled NOP at ${at(top)}.`);
+    // Undo takes the whole write back.
+    writesSent.length = 0;
+    await drive(page, [{ undo: true }], () => 0, lists);
+    assert.deepEqual(writesSent.map(sent => [sent.offset, sent.data]), [[top, [0, 0]]]);
+
+    // Leaving the rest writes only the instruction.
+    writesSent.length = 0;
+    confirmChoice = "Leave the rest";
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.deepEqual(writesSent.map(sent => [sent.offset, sent.data]), [[top, [0xEA]]]);
+
+    // A longer one says what it overwrites, and writes only on Write.
+    writesSent.length = 0;
+    confirmsSent.length = 0;
+    assembleReply = { bytes: [0x20, 0xED, 0xFD], text: "JSR COUT", nop: [0xEA], line: "JSR COUT" };
+    confirmChoice = null;
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.equal(confirmsSent[0].message, `JSR COUT is 3 bytes, 1 more than LDA #$C1: it overwrites JMP START at ${at(top + 2)} (in part).`);
+    assert.equal(writesSent.length, 0);
+    confirmChoice = "Write";
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.deepEqual(writesSent.map(sent => [sent.offset, sent.data]), [[top, [0x20, 0xED, 0xFD]]]);
+
+    // An instruction of the same size writes without asking.
+    writesSent.length = 0;
+    confirmsSent.length = 0;
+    assembleReply = { bytes: [0xA9, 0x01], text: "LDA #$01", nop: [0xEA], line: "LDA #1" };
+    await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
+    assert.deepEqual([confirmsSent.length, writesSent.map(sent => sent.data)], [0, [[0xA9, 0x01]]]);
+    assert.ok(page.elements.get("inspector")!.innerHTML.includes('data-act="assemble"'));
 });
 
 test("the gutter's breakpoints are function breakpoints named by address", () => {

@@ -741,7 +741,7 @@ function showListingLines() {
             : '<a class="src" role="link" tabindex="-1" data-src="' + escapeText(line.path) + '" data-line="' + line.line + '" title="Open ' + escapeText(line.path) + ", line " + line.line + '">'
                 + escapeText(fileName(line.path)) + ":" + line.line + "</a>";
         const label = line.label === null || line.label === undefined ? "" : line.label;
-        html += '<div class="' + classes + '" role="listitem" aria-keyshortcuts="F9"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '">' + breakpointHtml(line) + '<span class="a">' + hex(line.address, 4) + "</span>"
+        html += '<div class="' + classes + '" role="listitem" aria-keyshortcuts="F9 F2"' + (line.guess ? ' title="A guess: no source describes these bytes, and analysis takes them for ' + line.kind + '"' : "") + ' tabindex="' + (index === stop ? 0 : -1) + '" data-a="' + line.address + '" data-s="' + line.size + '">' + breakpointHtml(line) + '<span class="a">' + hex(line.address, 4) + "</span>"
             + '<span class="l"' + (label === "" ? "" : ' title="' + escapeText(label) + '"') + ">" + escapeText(label) + '</span><span class="t">' + text + "</span>"
             + (line.comment ? '<span class="cm">; ' + escapeText(line.comment) + "</span>" : "") + source + "</div>";
     }
@@ -849,6 +849,68 @@ async function reconcile(address, count, keep) {
     for (const start of sent) if (!left.has(start)) forcedStarts.delete(start);
 }
 
+// Assembling in place: F2, Assemble in the inspector or a double-click on a listing line asks for an instruction to
+// type over the line, as the Monitor's mini-assembler takes one, which the debugger assembles with the session's
+// labels. A shorter instruction leaves the rest of the old one, or pads it with NOPs, as the user says; a longer one
+// says what it overwrites first. The write is one edit, which undo takes back.
+async function assembleAtCursor() {
+    const shown = listingShown();
+    const current = listingCurrent();
+    const line = current ? listingLines.find(item => cursor >= item.address && cursor < item.address + item.size) : undefined;
+    if (line === undefined) {
+        status(!shown ? "Show the listing to assemble an instruction." : !current ? "The listing is being read; press F2 again." : "No listing line is at the cursor.", true);
+        return;
+    }
+    await assembleLine(line);
+}
+
+async function assembleLine(line) {
+    const problem = writeProblem(line.address, 1);
+    if (problem !== null) { status(problem, true); return; }
+    let result;
+    try {
+        result = await request({ type: "assemble", address: line.address, text: line.kind === "data" ? "" : line.text });
+    } catch (error) {
+        status(String(error.message || error), true);
+        return;
+    }
+    if (!result || result.cancelled) return;
+    const values = Array.from(result.bytes);
+    const typed = result.text ?? result.line;
+    const end = line.address + values.length;
+    if (end > SIZE) { status(typed + " runs past " + where(SIZE - 1) + ".", true); return; }
+    const sized = count => count + (count === 1 ? " byte" : " bytes");
+    if (values.length < line.size) {
+        const left = line.size - values.length;
+        const answer = await request({
+            type: "confirm",
+            message: typed + " is " + sized(values.length) + ", " + left + " fewer than " + line.text + ". Pad the rest with NOP?",
+            actions: ["Pad with NOP", "Leave the rest"]
+        });
+        if (!answer || !answer.choice) return;
+        if (answer.choice === "Pad with NOP") {
+            const nop = Array.from(result.nop ?? []);
+            while (nop.length > 0 && values.length + nop.length <= line.size) values.push(...nop);
+            if (values.length < line.size) {
+                status("A NOP does not fit the " + sized(line.size - values.length) + " left; they are left as they were.", true);
+            }
+        }
+    } else if (values.length > line.size) {
+        // What the longer instruction writes over: the lines after, as listed, and any bytes past the listing.
+        const covered = listingLines.filter(item => item.address > line.address && item.address < end);
+        const named = covered.map(item => item.text + " at " + where(item.address) + (item.address + item.size > end ? " (in part)" : ""));
+        const listedTo = covered.length === 0 ? line.address + line.size : covered[covered.length - 1].address + covered[covered.length - 1].size;
+        if (listedTo < end) named.push(where(listedTo) + "-" + where(end - 1));
+        const answer = await request({
+            type: "confirm",
+            message: typed + " is " + sized(values.length) + ", " + (values.length - line.size) + " more than " + line.text + ": it overwrites " + named.join(", ") + ".",
+            actions: ["Write"]
+        });
+        if (!answer || answer.choice !== "Write") return;
+    }
+    if (await write(line.address, values, true)) status("Assembled " + typed + " at " + where(line.address) + ".");
+}
+
 // Starts an instruction at the cursor, where the listing decoded from the wrong byte.
 function decodeHere() {
     forcedStarts.add(cursor);
@@ -888,6 +950,14 @@ listingPanel.addEventListener("click", event => {
     activateListing(target);
 });
 
+// A double-click on a line types over it.
+listingPanel.addEventListener("dblclick", event => {
+    const target = event.target;
+    const line = target && target.closest ? target.closest("[data-a]") : null;
+    if (line === null || (target.closest && (target.closest("[data-go]") || target.closest("[data-src]") || target.closest("[data-bp]")))) return;
+    const listed = listingLines.find(item => item.address === Number(line.dataset.a));
+    if (listed !== undefined) void assembleLine(listed);
+});
 // Up and Down move between lines, Left and Right between a line and its links, Home and End to the first and last
 // line, Enter or Space does what a click does, and Escape goes back to the bytes.
 listingPanel.addEventListener("keydown", event => {
@@ -899,6 +969,9 @@ listingPanel.addEventListener("keydown", event => {
     let next = null;
     if (event.key === "Enter" || event.key === " ") {
         if (!activateListing(target)) return;
+    } else if (event.key === "F2") {
+        const listed = listingLines.find(item => item.address === Number(line.dataset.a));
+        if (listed !== undefined) void assembleLine(listed);
     } else if (event.key === "F9") {
         if (!listingCurrent()) { status("The listing is being read; press F9 again.", true); event.preventDefault(); return; }
         const listed = listingLines.find(item => item.address === Number(line.dataset.a));
@@ -1005,7 +1078,8 @@ function showInspector() {
     const watchTitle = "Add to VS Code's Watch view as " + watchExpressions(low, high).join(", ");
     let html = '<div class="acts"><button data-act="watch" title="' + escapeText(watchTitle) + '">' + (high === low + 1 ? "Watch word" : "Watch" + count) + "</button>"
         + '<button data-act="freeze" title="' + (allFrozen ? freezeTitle.thaw : freezeTitle.freeze) + '">' + (allFrozen ? "Thaw" : "Freeze") + count + "</button>"
-        + (showListing ? '<button data-act="decode" title="Start an instruction at the cursor in the listing, where it decodes from the wrong byte (Ctrl+D)">Decode from here</button>' : "") + "</div>"
+        + (showListing ? '<button data-act="decode" title="Start an instruction at the cursor in the listing, where it decodes from the wrong byte (Ctrl+D)">Decode from here</button>'
+            + '<button data-act="assemble" title="Type an instruction over the listing line at the cursor, which is assembled and written (F2)">Assemble</button>' : "") + "</div>"
         + '<div class="acts"><button data-act="markCode" title="Mark code as starting here, kept in the hints file">Mark code</button>'
         + '<button data-act="markData" title="Mark the selection as data, kept in the hints file">Mark data' + count + "</button>"
         + '<button data-act="unmark" title="Take the code and data marks off the selection">Unmark</button>'
@@ -1477,6 +1551,7 @@ side.addEventListener("click", event => {
             case "watch": queue(watchSelection); break;
             case "freeze": queue(toggleFreeze); break;
             case "decode": decodeHere(); break;
+            case "assemble": void assembleAtCursor(); break;
             case "markCode": void mark({ kind: "code" }); break;
             case "markData": void mark({ kind: "data" }); break;
             case "unmark": void mark({ kind: "clear" }); break;
@@ -1750,6 +1825,8 @@ grid.addEventListener("keydown", event => {
         void find(event.shiftKey);
     } else if (key === "F9") {
         void toggleAtCursor();
+    } else if (key === "F2") {
+        void assembleAtCursor();
     } else if (key === "ArrowLeft") {
         moveTo(cursor - 1, event.shiftKey, false);
     } else if (key === "ArrowRight") {
@@ -1883,6 +1960,7 @@ async function test(actions) {
             render();
         }
         if (action.decode) decodeHere();
+        if (action.assemble) await assembleAtCursor();
         if (action.mark !== undefined) await mark(action.mark);
         if (action.breakpoint) await toggleAtCursor();
         if (action.listingLine !== undefined) selectLine(listingLines[action.listingLine].address, listingLines[action.listingLine].size);

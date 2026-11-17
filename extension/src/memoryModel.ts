@@ -338,6 +338,55 @@ export function parseValue(text: string, size = 1): number | string {
     return value & 0xFFFF;
 }
 
+/** A bookmark: a name for an address in memory as the CPU maps it or in a bank. */
+export interface MemoryBookmark {
+    name: string;
+    bank: string | null;
+    address: number;
+}
+
+/**
+ * Sets, renames or removes the bookmark at an address of a space: a name replaces the one there, and an empty name
+ * removes it. Returns the new list, in address order within each space.
+ */
+export function withBookmark(list: readonly MemoryBookmark[], bank: string | null, address: number, name: string): MemoryBookmark[] {
+    const kept = list.filter(item => item.bank !== bank || item.address !== address);
+    const trimmed = name.trim();
+    if (trimmed.length > 0) kept.push({ name: trimmed, bank, address });
+    return kept.sort((first, second) => (first.bank ?? "").localeCompare(second.bank ?? "") || first.address - second.address);
+}
+
+/** A number Find looks for, in each form it can take: its bytes, labelled as the inspector labels them. */
+export interface ValueForm {
+    label: string;
+    bytes: number[];
+}
+
+/**
+ * Reads the number Find looks for after its =, such as =1000, =$C000, =%1010 or =-2.5, as the inspector's forms:
+ * a byte when it fits one, else a word low first and high first when it fits one. A fraction or exponent has no such
+ * forms, only the BASIC's floats, which the debugger encodes. Returns a message for text that is no number.
+ */
+export function valueForms(text: string): { forms: ValueForm[]; decimal: string } | string {
+    const trimmed = text.trim();
+    let value: number;
+    if (/^(\$|0[xX])[0-9A-Fa-f]{1,8}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
+    else if (/^%[01]{1,32}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
+    else if (/^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(trimmed)) value = Number(trimmed);
+    else return "Type a number after =, such as =1000, =$C000, =%1010 or =-2.5.";
+    if (!Number.isFinite(value)) return `${trimmed} is too large.`;
+    const forms: ValueForm[] = [];
+    if (Number.isInteger(value)) {
+        if (value >= -128 && value <= 255) {
+            forms.push({ label: "a byte", bytes: [value & 0xFF] });
+        } else if (value >= -32768 && value <= 0xFFFF) {
+            const word = value & 0xFFFF;
+            forms.push({ label: "a word, low first", bytes: [word & 0xFF, word >> 8] }, { label: "a word, high first", bytes: [word >> 8, word & 0xFF] });
+        }
+    }
+    return { forms, decimal: String(value) };
+}
+
 /** The value at an offset: a byte, or with a size of 2 a word in the CPU's byte order. */
 export function valueAt(data: Uint8Array, offset: number, size = 1, bigEndian = false): number {
     if (size === 1) return data[offset];
@@ -382,4 +431,4 @@ export function narrowSearch(
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];

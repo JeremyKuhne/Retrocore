@@ -1,6 +1,6 @@
 # Backlog: a memory viewer and editor
 
-Status: **steps 1 to 4 built, and step 5's inspector and map** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
+Status: **steps 1 to 4 built, and step 5's inspector, map and moving around** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
 `retro/memory/read`, `retro/memory/labels`, `retro/memory/characters` and `retro/memory/freeze`. The watch list is
 VS Code's own Watch view, which the editor adds expressions such as `[$4100]` to, so data breakpoints come from
 there.
@@ -23,8 +23,11 @@ Step 5 begins with the inspector's `retro/memory/inspect`: each target names its
 with where in a text or hi-res screen an address is; the memory map's areas are named from the banks; a label's
 documentation comes from its module's; and the BASIC's floats are decoded by `BasicNumbers`. The map bar comes
 from `retro/memory/map`: the regions, and the runs of addresses that read the same area now, which in a bank's
-editor are dimmed where the CPU reads something else. Left from step 5: named bits, the instruction at the cursor
-and references; following an expression, back and forward, bookmarks and find by value.
+editor are dimmed where the CPU reads something else. Moving around follows: Follow re-evaluates Go to's
+expression at each stop, Back and Forward go through the view's moves, bookmarks are kept in the workspace's state
+for each launch configuration, and Find takes a number after `=`, as a byte, a word either way round, or the BASIC's
+floats, which `retro/memory/numbers` encodes. Left from step 5: named bits, the instruction at the cursor and
+references.
 
 Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor

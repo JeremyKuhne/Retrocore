@@ -4,7 +4,7 @@
 
 // Retrocore Memory's page: a hex and text grid over a whole 64K space, with labels, rows aligned to them, the
 // machine's own characters, read-only shading, changes since the last stop or differences from a snapshot or another
-// bank, go to, find, copy, editing with undo, an inspector, RAM search of bytes or words, watching in VS Code's Watch
+// bank, go to, following an expression, back and forward, bookmarks, find, copy, editing with undo, an inspector, RAM search of bytes or words, watching in VS Code's Watch
 // view and frozen bytes. The page asks the extension for bytes, labels,
 // characters, writes, freezes and watches; the extension asks the debugger, or VS Code for watches.
 
@@ -30,6 +30,8 @@ button{font-family:var(--vscode-font-family);font-size:12px;padding:2px 8px;bord
 button:hover{background:var(--vscode-button-secondaryHoverBackground)}
 button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
 button:disabled{opacity:.5;cursor:default}
+.bar .nav{display:flex;gap:2px}
+.bar .nav button{padding:2px 6px}
 .main{flex:1;display:flex;min-height:0}
 #grid{flex:none;overflow:auto;position:relative;outline:none;font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre;user-select:none;cursor:text}
 #spacer{position:absolute;top:0;left:0;width:1px}
@@ -38,6 +40,7 @@ button:disabled{opacity:.5;cursor:default}
 .addr{display:inline-block;width:6ch;color:var(--vscode-editorLineNumber-foreground)}
 .lab{display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:top;margin-right:1ch;color:var(--vscode-symbolIcon-functionForeground,var(--vscode-editor-foreground))}
 .lab.in{opacity:.6}
+.hex span.bm{box-shadow:inset 0 -2px var(--vscode-charts-yellow,#cca700)}
 .hex span.lb{background-image:linear-gradient(135deg,var(--vscode-symbolIcon-functionForeground,var(--vscode-focusBorder)) 5px,transparent 5px)}
 .ro{background-color:color-mix(in srgb,var(--vscode-editor-foreground) 8%,transparent)}
 .chg{background-color:var(--vscode-debugView-valueChangedHighlight,rgba(86,156,214,.35))}
@@ -123,13 +126,16 @@ body.narrow .item .k{width:auto}
 </style></head>
 <body>
 <div class="bar"><span class="title" id="title">Memory</span>
+<span class="nav"><button id="back" disabled aria-label="Back" title="Back to where the view was before a go-to (Alt+Left, or the mouse's back button)">&#8592;</button><button id="forward" disabled aria-label="Forward" title="Forward again (Alt+Right, or the mouse's forward button)">&#8594;</button></span>
+<button id="bookmarks" title="Go to a bookmark, or remove one; Bookmark in the inspector adds one">Bookmarks</button>
 <label title="Show the bytes as instructions and data beside them"><input type="checkbox" id="listingBox" checked> Listing</label>
 <label id="alignLabel" title="Start a row where each label starts, so a label's bytes begin a row of their own" hidden><input type="checkbox" id="align"> Align to labels</label>
 <label id="machineLabel" title="Draw the text column in the machine's own characters, or as ASCII" hidden><input type="checkbox" id="machineText" checked> Machine text</label>
 <button id="snapshot" title="Keep a copy of every byte now, to compare with">Snapshot</button>
 <label title="Highlight the bytes that differ from what they held at the stop before, from the snapshot, or from another bank's bytes at the same addresses">Compare with <select id="compareWith" aria-label="Compare with"><option value="">the last stop</option></select></label>
 <label title="An address, label or expression, such as $0400, TEXT_PAGE or HL+2 (Ctrl+G)">Go to <input id="goto" aria-label="Go to address" placeholder="$0400"></label>
-<label title="Hex bytes with ?? for any byte, such as A9 ?? 20; text in quotes; or an instruction, with ? for any character and * for any run, such as STA $C0?? or JSR COUT. Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20, &quot;TEXT&quot; or STA $C0??"></label>
+<label id="followLabel" title="Go to the Go to expression again at each stop, such as PC, S+$100 or [$06].w; a view that does not follow stays where it is"><input type="checkbox" id="follow"> Follow</label>
+<label title="Hex bytes with ?? for any byte, such as A9 ?? 20; text in quotes; a number after =, such as =1000 or =-2.5, as a byte, a word either way round or the BASIC's float; or an instruction, with ? for any character and * for any run, such as STA $C0?? or JSR COUT. Enter finds the next, Shift+Enter the one before (Ctrl+F, F3)">Find <input id="find" aria-label="Find" placeholder="A9 ?? 20, &quot;TEXT&quot;, =1000 or STA $C0??"></label>
 </div>
 <div id="map" hidden aria-hidden="true"></div>
 <div class="main"><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div>
@@ -177,8 +183,16 @@ let breakpointChanges = 0;
 // Why the last listing request failed, which shows in place of lines; empty when it did not.
 let listingError = "";
 const forcedStarts = new Set();
+// The expression the view follows, gone to again at each stop; empty for a view that stays put (the page remembers).
+let following = "";
+// Where go-tos left from, for Back, and where Back left from, for Forward.
+const backStack = [], forwardStack = [];
+const HISTORY = 100;
+// The bookmarks in this view's space, by address.
+let bookmarkAt = new Map();
 try {
     const saved = vscode.getState();
+    if (saved && typeof saved.following === "string") following = saved.following;
     if (saved && typeof saved.showListing === "boolean") showListing = saved.showListing;
     if (saved && typeof saved.machineText === "boolean") machineText = saved.machineText;
     if (saved && typeof saved.aligned === "boolean") aligned = saved.aligned;
@@ -189,7 +203,7 @@ try {
 // Remembers the page's choices, which are conveniences.
 function remember() {
     try {
-        vscode.setState({ machineText, aligned, showListing });
+        vscode.setState({ machineText, aligned, showListing, following });
     } catch {
         // Nothing to do: the page works without them.
     }
@@ -478,7 +492,7 @@ function mapTitle(address) {
 
 mapBar.addEventListener("mousemove", event => { mapBar.title = mapTitle(mapAddress(event)); });
 mapBar.addEventListener("click", event => {
-    moveTo(mapAddress(event), false, true);
+    jump(mapAddress(event));
     grid.focus();
 });
 
@@ -597,10 +611,16 @@ function rowHtml(row) {
         if (frozen.has(offset)) classes += " frz";
         else if (readable[offset] === 1 && readOnly[offset]) classes += " ro";
         let shown = "  ", character = " ", textClasses = classes.replace("mid", ""), title = "";
+        const names = [];
         if (labelAt.has(offset)) {
             classes += " lb";
-            title = ' title="' + escapeText(labelAt.get(offset)) + '"';
+            names.push(labelAt.get(offset));
         }
+        if (bookmarkAt.has(offset)) {
+            classes += " bm";
+            names.push("Bookmark: " + bookmarkAt.get(offset));
+        }
+        if (names.length > 0) title = ' title="' + escapeText(names.join("; ")) + '"';
         if (readable[offset] === 1) {
             shown = hex(bytes[offset], 2);
             if (charset !== null) {
@@ -851,7 +871,7 @@ function activateListing(target) {
     }
     const go = target.closest("[data-go]");
     if (go !== null) {
-        moveTo(Number(go.dataset.go), false, true);
+        jump(Number(go.dataset.go));
         grid.focus();
         return true;
     }
@@ -994,7 +1014,8 @@ function showInspector() {
         + '<button data-act="markData" title="Mark the selection as data, kept in the hints file">Mark data' + count + "</button>"
         + '<button data-act="unmark" title="Take the code and data marks off the selection">Unmark</button>'
         + '<button data-act="name" title="Name this address, kept in the hints file">Name</button>'
-        + '<button data-act="comment" title="Comment on this address, kept in the hints file">Comment</button></div>';
+        + '<button data-act="comment" title="Comment on this address, kept in the hints file">Comment</button>'
+        + '<button data-act="bookmark" title="' + (bookmarkAt.has(cursor) ? "Rename or remove this bookmark" : "Bookmark this address with a name, kept for this launch configuration") + '">Bookmark</button></div>';
     html += '<div class="where">' + where(cursor);
     const name = labelOf(labels, cursor);
     if (name !== undefined) html += " · " + escapeText(name);
@@ -1428,6 +1449,7 @@ side.addEventListener("click", event => {
             case "unmark": void mark({ kind: "clear" }); break;
             case "name": void mark({ what: "name" }); break;
             case "comment": void mark({ what: "comment" }); break;
+            case "bookmark": void addBookmark(); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1443,7 +1465,7 @@ side.addEventListener("click", event => {
         return;
     }
     const hit = target.closest ? target.closest("[data-go]") : null;
-    if (hit !== null) moveTo(Number(hit.dataset.go), false, true);
+    if (hit !== null) jump(Number(hit.dataset.go));
 });
 side.addEventListener("keydown", event => {
     if (event.target.id === "searchValue" && event.key === "Enter") {
@@ -1462,16 +1484,146 @@ async function goTo(text) {
     if (text.trim().length === 0) return;
     try {
         const result = await request({ type: "goto", text });
-        moveTo(result.address, false, true);
-        status("");
+        // A view that follows follows what was gone to last.
+        if (following !== "") setFollowing(text.trim());
+        jump(result.address);
+        status(following === "" ? "" : "Following " + following + ".");
         grid.focus();
     } catch (error) {
         status(String(error.message || error), true);
     }
 }
 
+// Goes to an address, remembering where the cursor was for Back.
+function jump(offset) {
+    const to = Math.min(SIZE - 1, Math.max(0, offset));
+    if (to !== cursor) {
+        backStack.push(cursor);
+        if (backStack.length > HISTORY) backStack.shift();
+        forwardStack.length = 0;
+    }
+    moveTo(to, false, true);
+    showHistory();
+}
+
+// Back to where a go-to left from, or with forward, on to where Back left from.
+function goBack(forward) {
+    const from = forward ? forwardStack : backStack, to = forward ? backStack : forwardStack;
+    if (from.length === 0) return;
+    to.push(cursor);
+    moveTo(from.pop(), false, true);
+    showHistory();
+}
+
+function showHistory() {
+    backButton.disabled = backStack.length === 0;
+    forwardButton.disabled = forwardStack.length === 0;
+}
+
+// Follows an expression, or with none stays put.
+function setFollowing(text) {
+    following = text;
+    followBox.checked = following !== "";
+    followLabel.title = following === ""
+        ? "Go to the Go to expression again at each stop, such as PC, S+$100 or [$06].w; a view that does not follow stays where it is"
+        : "Following " + following + ": the view goes there again at each stop. Clear to stay put.";
+    remember();
+}
+
+// Turns following on with Go to's text, or off.
+function useFollow(on) {
+    if (!on) {
+        setFollowing("");
+        status("The view stays where it is.");
+        return Promise.resolve();
+    }
+    const text = gotoBox.value.trim();
+    if (text === "") {
+        followBox.checked = false;
+        status("Type what to follow in Go to, such as PC, then check Follow.", true);
+        gotoBox.focus();
+        return Promise.resolve();
+    }
+    setFollowing(text);
+    status("Following " + text + ".");
+    return follow();
+}
+
+// Goes where the followed expression points now, as at a stop.
+async function follow() {
+    const text = following;
+    if (text === "") return;
+    try {
+        const result = await request({ type: "goto", text });
+        if (following === text) jump(result.address);
+    } catch (error) {
+        if (following === text) status("Following " + text + ": " + String(error.message || error), true);
+    }
+}
+
+// Bookmarks the cursor's address, or renames or removes its bookmark, through the extension, which asks the name.
+async function addBookmark() {
+    try {
+        const name = labelOf(labels, cursor);
+        const result = await request({ type: "bookmark", address: cursor, name: name ?? null });
+        if (result.cancelled) return;
+        useBookmarks(result.bookmarks);
+        render();
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+// Lists the bookmarks to go to one; one in another space opens there.
+async function pickBookmark() {
+    try {
+        const result = await request({ type: "bookmarks" });
+        if (result.none) { status("No bookmarks yet: Bookmark in the inspector adds one."); return; }
+        if (result.bookmarks !== undefined) useBookmarks(result.bookmarks);
+        if (typeof result.address === "number") {
+            jump(result.address);
+            status("Bookmark " + result.name + " at " + where(result.address) + ".");
+            grid.focus();
+        }
+        render();
+    } catch (error) {
+        status(String(error.message || error), true);
+    }
+}
+
+function useBookmarks(list) {
+    bookmarkAt = new Map((list ?? []).map(item => [item.address, item.name]));
+}
+
+// Finds a number, as a byte, a word either way round or the BASIC's floats, whichever comes first from the cursor.
+async function findValue(text, backward) {
+    const read = valueForms(text);
+    if (typeof read === "string") { status(read, true); return; }
+    const forms = read.forms.slice();
+    try {
+        const floats = await request({ type: "numbers", value: read.decimal });
+        for (const format of floats.formats ?? []) forms.push({ label: "a " + String(format.label).toLowerCase(), bytes: format.bytes });
+    } catch (error) {
+        status(String(error.message || error), true);
+        return;
+    }
+    if (forms.length === 0) { status(read.decimal + " does not fit a byte, a word or the BASIC's numbers.", true); return; }
+    await ensureAll();
+    const from = backward ? cursor - 1 : cursor + 1;
+    let best = -1, bestForm = null, bestDistance = SIZE + 1;
+    for (const form of forms) {
+        const at = findPattern(bytes, readable, form.bytes.map(value => ({ value, mask: 0xFF })), from, backward);
+        if (at < 0) continue;
+        const distance = backward ? (from - at + 2 * SIZE) % SIZE : (at - from + 2 * SIZE) % SIZE;
+        if (distance < bestDistance) { best = at; bestForm = form; bestDistance = distance; }
+    }
+    if (best < 0) { status(read.decimal + " is not in memory as " + forms.map(form => form.label).join(", or ") + ".", true); return; }
+    found(best, bestForm.bytes.length, "Found " + read.decimal + " as " + bestForm.label + " at " + where(best) + ".");
+}
+
 async function find(backward) {
     const text = findBox.value;
+    if (text.trim().startsWith("=")) { await findValue(text.trim().substring(1), backward); return; }
     const pattern = parsePattern(text, charset === null ? undefined : charset.text);
     if (typeof pattern === "string") {
         // What is neither bytes nor quoted text is an instruction, which the debugger decodes.
@@ -1525,6 +1677,8 @@ function offsetAt(event) {
 }
 
 grid.addEventListener("mousedown", event => {
+    // The mouse's back and forward buttons go back and forward, from where the cursor is.
+    if (event.button === 3 || event.button === 4) return;
     const hit = offsetAt(event);
     if (hit === null) return;
     pane = hit.text ? "text" : "hex";
@@ -1562,6 +1716,8 @@ grid.addEventListener("keydown", event => {
         void find(event.shiftKey);
     } else if (key === "F9") {
         void toggleAtCursor();
+    } else if (event.altKey && (key === "ArrowLeft" || key === "ArrowRight")) {
+        goBack(key === "ArrowRight");
     } else if (key === "ArrowLeft") {
         moveTo(cursor - 1, event.shiftKey, false);
     } else if (key === "ArrowRight") {
@@ -1628,6 +1784,19 @@ machineBox.addEventListener("change", () => {
     grid.focus();
 });
 
+const backButton = document.getElementById("back"), forwardButton = document.getElementById("forward");
+const followBox = document.getElementById("follow"), followLabel = document.getElementById("followLabel");
+backButton.addEventListener("click", () => { goBack(false); grid.focus(); });
+forwardButton.addEventListener("click", () => { goBack(true); grid.focus(); });
+document.getElementById("bookmarks").addEventListener("click", () => void pickBookmark());
+followBox.addEventListener("change", () => void useFollow(followBox.checked));
+// The mouse's back and forward buttons.
+window.addEventListener("mouseup", event => {
+    if (event.button !== 3 && event.button !== 4) return;
+    goBack(event.button === 4);
+    event.preventDefault();
+});
+
 gotoBox.addEventListener("keydown", event => {
     if (event.key === "Enter") void goTo(gotoBox.value);
     else if (event.key === "Escape") grid.focus();
@@ -1647,6 +1816,14 @@ findBox.addEventListener("keydown", event => {
 async function test(actions) {
     for (const action of actions) {
         if (action.goto !== undefined) moveTo(action.goto, false, true);
+        if (action.jump !== undefined) jump(action.jump);
+        if (action.back) goBack(false);
+        if (action.forward) goBack(true);
+        if (action.gotoText !== undefined) { gotoBox.value = action.gotoText; await goTo(action.gotoText); }
+        if (action.follow !== undefined) { followBox.checked = action.follow; await useFollow(action.follow); }
+        if (action.findValue !== undefined) { findBox.value = action.findValue; await find(action.backward === true); }
+        if (action.bookmark) await addBookmark();
+        if (action.bookmarks) await pickBookmark();
         if (action.pane !== undefined) { pane = action.pane; render(); }
         if (action.type !== undefined) { for (const key of action.type) await typeKey(key, moves); }
         if (action.find !== undefined) { findBox.value = action.find; await find(false); }
@@ -1691,7 +1868,11 @@ async function test(actions) {
         hex: Array.from(rows.querySelectorAll(".hex span")).map(span => span.textContent).slice(0, 64),
         row: { start: rowStart(rowOf(cursor)), end: rowEnd(rowOf(cursor)), count: rowCount() },
         listing: listingLines.map(line => hex(line.address, 4) + " " + line.text),
-        breakpoints: listingLines.filter(line => Array.isArray(line.breakpoints) && line.breakpoints.length > 0).map(line => line.address)
+        breakpoints: listingLines.filter(line => Array.isArray(line.breakpoints) && line.breakpoints.length > 0).map(line => line.address),
+        following,
+        back: backStack.slice(),
+        forward: forwardStack.slice(),
+        bookmarks: Array.from(bookmarkAt, ([address, name]) => ({ address, name }))
     };
 }
 
@@ -1707,11 +1888,15 @@ window.addEventListener("message", event => {
         info = message.info;
         document.getElementById("title").textContent = info.label + (info.bank === null ? "" : " (" + info.bank + ")");
         cursor = anchor = message.address;
+        useBookmarks(message.bookmarks);
+        if (following !== "") gotoBox.value = following;
+        setFollowing(following);
         reveal(cursor, true);
         render();
         grid.focus();
         void loadExtras();
         void loadBanks();
+        void follow();
     } else if (message.type === "changed") {
         generation++;
         pages.fill(0);
@@ -1721,6 +1906,14 @@ window.addEventListener("message", event => {
         marks++;
         const reconciled = message.kind === undefined ? Promise.resolve() : reconcile(message.address, message.count, message.kind === "code" ? message.address : undefined);
         void reconciled.then(loadExtras).then(() => render(), error => status(String(error.message || error), true));
+    } else if (message.type === "bookmarks") {
+        // Bookmarks were added, renamed or removed here or in another editor.
+        useBookmarks(message.bookmarks);
+        render();
+    } else if (message.type === "goto") {
+        // A bookmark in this space picked from another editor's list.
+        jump(message.address);
+        grid.focus();
     } else if (message.type === "breakpoints") {
         // Breakpoints were set or taken away, here or anywhere else.
         breakpointChanges++;
@@ -1746,6 +1939,7 @@ window.addEventListener("message", event => {
         render();
         void loadExtras();
         void readOther();
+        void follow();
     } else if (message.type === "ended") {
         ended = true;
         document.getElementById("ended").hidden = false;

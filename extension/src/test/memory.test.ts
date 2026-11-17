@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, type PatternByte } from "../memoryModel";
+import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -199,6 +199,11 @@ class Element {
 }
 
 /** Runs the page's script with fake elements, recording what it posts to the extension. */
+/** The page's window, which takes the mouse's back and forward buttons. */
+function window(page: ReturnType<typeof runPage>): Element {
+    return page.window;
+}
+
 function runPage() {
     const html = memoryEditorHtml("NONCE");
     const open = '<script nonce="NONCE">';
@@ -227,7 +232,7 @@ function runPage() {
         assert.ok(index >= 0, `the page posts a ${type}`);
         return posted.splice(index, 1)[0];
     };
-    return { elements, posted, send, settle, key, take, context };
+    return { elements, posted, send, settle, key, take, context, window };
 }
 
 test("the page's script parses", () => {
@@ -404,6 +409,9 @@ const startsSent: Record<string, unknown>[] = [];
 const breakpointsSent: Record<string, unknown>[] = [];
 const findsSent: Record<string, unknown>[] = [];
 
+// Where the fake debugger says PC is.
+let pcNow = 0x0300;
+
 // The starts each listing request the page sent asked for.
 const listingStarts: number[][] = [];
 
@@ -474,6 +482,17 @@ function answer(
             const address = Number(sent.address), end = address + Number(sent.count);
             startsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { starts: (sent.starts as number[]).filter(start => start < address || start >= end) } });
+        } else if (sent.type === "goto") {
+            // PC is wherever the test says the CPU stopped; anything else is hex.
+            const text = String(sent.text);
+            page.send({ type: "reply", id: sent.id, result: { address: text === "PC" ? pcNow : parseInt(text.replace(/^\$/, ""), 16) } });
+        } else if (sent.type === "numbers") {
+            // AppleSoft's five bytes: 1000 is $8A $7A $00 $00 $00.
+            page.send({ type: "reply", id: sent.id, result: { formats: sent.value === "1000" ? [{ label: "Float, 5 bytes", bytes: [0x8A, 0x7A, 0, 0, 0] }] : [] } });
+        } else if (sent.type === "bookmark") {
+            page.send({ type: "reply", id: sent.id, result: { bookmarks: [{ address: 0x0400, name: String(sent.name ?? "here") }] } });
+        } else if (sent.type === "bookmarks") {
+            page.send({ type: "reply", id: sent.id, result: { bookmarks: [{ address: 0x0400, name: "TEXT_PAGE" }], address: 0x0400, name: "TEXT_PAGE" } });
         } else if (sent.type === "banks") {
             page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
         } else if (sent.type === "readOther") {
@@ -1108,4 +1127,118 @@ test("the label or address under the cursor is what the editor's menu opens", ()
     const scoped = "        jsr screen::clear";
     assert.equal(addressAt(scoped, scoped.length - 1), "screen::clear", "a scoped label is whole from its name");
     assert.equal(addressAt(scoped, scoped.indexOf("screen") + 1), "screen::clear", "and from its scope");
+});
+
+test("find by value reads a number as a byte or as words either way round", () => {
+    assert.deepEqual(valueForms("200"), { forms: [{ label: "a byte", bytes: [200] }], decimal: "200" });
+    assert.deepEqual(valueForms("-1"), { forms: [{ label: "a byte", bytes: [0xFF] }], decimal: "-1" });
+    assert.deepEqual(valueForms("$C000"), {
+        forms: [{ label: "a word, low first", bytes: [0x00, 0xC0] }, { label: "a word, high first", bytes: [0xC0, 0x00] }],
+        decimal: "49152"
+    });
+    assert.deepEqual(valueForms("%101"), { forms: [{ label: "a byte", bytes: [5] }], decimal: "5" });
+    assert.deepEqual(valueForms("-2.5"), { forms: [], decimal: "-2.5" }, "a fraction is only the BASIC's floats");
+    assert.deepEqual(valueForms("1E6"), { forms: [], decimal: "1000000" }, "too big for a word");
+    assert.equal(typeof valueForms("HELLO"), "string");
+});
+
+test("bookmarks are one a space and address, renamed in place and removed by an empty name", () => {
+    let list = withBookmark([], null, 0x0400, " Screen ");
+    list = withBookmark(list, "aux", 0x0400, "Aux screen");
+    list = withBookmark(list, null, 0x0300, "Start");
+    assert.deepEqual(list.map(item => item.name), ["Start", "Screen", "Aux screen"]);
+    list = withBookmark(list, null, 0x0400, "Text");
+    assert.deepEqual(list.map(item => item.name), ["Start", "Text", "Aux screen"]);
+    list = withBookmark(list, null, 0x0300, "");
+    assert.deepEqual(list.map(item => `${item.bank ?? ""}${item.address}`), ["1024", "aux1024"]);
+});
+
+test("go-tos go back and forward, and a stop moves a view that follows", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    let state = await drive(page, [{ jump: 0x0400 }, { jump: 0x0800 }], () => 0, lists);
+    assert.deepEqual(state.back, [0x0000, 0x0400]);
+    assert.equal((page.elements.get("back") as unknown as { disabled: boolean }).disabled, false);
+    state = await drive(page, [{ back: true }], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+    assert.deepEqual(state.forward, [0x0800]);
+
+    // The mouse's forward button, then Alt+Left.
+    window(page).dispatch("mouseup", { button: 4, preventDefault: () => undefined });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0800);
+    page.key("ArrowLeft", { altKey: true });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+
+    // A new go-to drops what Forward had.
+    state = await drive(page, [{ gotoText: "$0C00" }], () => 0, lists);
+    assert.equal(state.cursor, 0x0C00);
+    assert.deepEqual(state.forward, []);
+
+    // Following PC goes where it is now and again at each stop; unchecking stays put.
+    pcNow = 0x0300;
+    state = await drive(page, [{ gotoText: "PC" }, { follow: true }], () => 0, lists);
+    assert.equal(state.following, "PC");
+    assert.equal(state.cursor, 0x0300);
+    pcNow = 0x0350;
+    page.send({ type: "stopped" });
+    // The first answers what the stop asks for, the second reports where the page went.
+    await drive(page, [], () => 0, lists);
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0350);
+    assert.equal((state.back as number[]).at(-1), 0x0300, "a followed move is one Back undoes");
+    state = await drive(page, [{ follow: false }], () => 0, lists);
+    pcNow = 0x0360;
+    page.send({ type: "stopped" });
+    // The first answers what the stop asks for, the second reports where the page went.
+    await drive(page, [], () => 0, lists);
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0350);
+    assert.equal(state.following, "");
+});
+
+test("find by value finds the nearest form, the BASIC's float included", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    // 1000 as a word low first at $2000, high first at $1000, and as AppleSoft's float at $0900.
+    const fill = (offset: number) => {
+        const placed: Record<number, number> = { 0x2000: 0xE8, 0x2001: 0x03, 0x1000: 0x03, 0x1001: 0xE8, 0x0900: 0x8A, 0x0901: 0x7A, 0x0902: 0, 0x0903: 0, 0x0904: 0 };
+        return placed[offset] ?? 0x55;
+    };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    let state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x0900);
+    assert.equal(state.status, "Found 1000 as a float, 5 bytes at $0900.");
+    state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x1000);
+    assert.match(String(state.status), /as a word, high first at \$1000/);
+    state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x2000);
+    assert.equal(state.anchor, 0x2001, "the match is selected");
+    state = await drive(page, [{ findValue: "=1000", backward: true }], fill, lists);
+    assert.equal(state.cursor, 0x1000);
+    state = await drive(page, [{ findValue: "=-2.5" }], fill, lists);
+    assert.match(String(state.status), /does not fit/);
+});
+
+test("bookmarks mark their bytes and the list goes to one", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [{ address: 0x0002, name: "Two" }] });
+    let state = await drive(page, [{ goto: 0x0000 }], () => 0, lists);
+    assert.deepEqual(state.bookmarks, [{ address: 2, name: "Two" }]);
+    assert.ok(page.elements.get("rows")!.innerHTML.includes('class=" bm" data-o="2" title="Bookmark: Two"'), page.elements.get("rows")!.innerHTML);
+    state = await drive(page, [{ bookmarks: true }], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+    assert.deepEqual(state.back, [0x0000]);
+    assert.equal(state.status, "Bookmark TEXT_PAGE at $0400.");
+    state = await drive(page, [{ bookmark: true }], () => 0, lists);
+    assert.deepEqual(state.bookmarks, [{ address: 0x0400, name: "TEXT_PAGE" }], "the label is the name it suggests");
+
+    // Another editor's change shows here.
+    page.send({ type: "bookmarks", bookmarks: [] });
+    state = await drive(page, [], () => 0, lists);
+    assert.deepEqual(state.bookmarks, []);
 });

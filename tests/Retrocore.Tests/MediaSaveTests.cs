@@ -562,7 +562,20 @@ public sealed class MediaSaveTests
     private static void Until(Action act, Func<bool> seen)
     {
         using ManualResetEventSlim changed = new();
-        void Changed() => changed.Set();
+
+        // A watcher's timer may raise the event it took before the handler was removed, after the wait is disposed.
+        void Changed()
+        {
+            try
+            {
+                changed.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+                // This wait is over.
+            }
+        }
+
         MediaActions.SourcesChanged += Changed;
         try
         {

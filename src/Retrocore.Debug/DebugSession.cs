@@ -1138,8 +1138,12 @@ internal sealed partial class DebugSession
         string summary = new DocumentationResolver(documentation, sets).Effective(topic).Summary;
 
         // A link shows its name without its module.
-        return summary.Length == 0 ? null : LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
+        return summary.Length == 0 ? null : Plain(summary);
     }
+
+    // Documentation text with each link as its name, without its module.
+    private static string Plain(string summary) =>
+        LinkPattern().Replace(summary, link => link.Groups[1].Value.Split(':')[^1]);
 
     // A documentation link, such as <XAMH> or <Monitor:A1L>.
     [GeneratedRegex(@"<([A-Za-z_][\w.]*(?::[A-Za-z_][\w.]*)?)>")]

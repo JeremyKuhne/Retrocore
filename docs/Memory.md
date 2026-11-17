@@ -141,6 +141,14 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
   opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft and Color
   BASIC, four for Business BASIC, Level II's single and double). Its **Watch** and **Freeze** buttons act on the selection.
+- **Bits, the instruction and references.** For a soft switch or flag byte, the inspector names the bits its
+  documentation describes, with each one's value now: the masks it links to, as the CoCo 3's `INIT0` lists `MMUEN`
+  and the rest, and what it says of a bit by number, as the IIe's `RDRAMRD` "reports in bit 7 whether RAMRD is on".
+  Where code is known to start, from the sources, analysis, **Decode from here** or **Mark code**, it shows the
+  instruction there with its size, cycles (and when a branch is taken), the flags it changes and what it does; the
+  Z80's and 8080's cycles come from their instruction sets, and the 6502's and 6809's, whose indexed operands and
+  register lists add to a base, from running the instruction once on a processor of its own. **References** lists the instructions in the code the debugger knows that read,
+  write, call or jump to the address, each with the label it is in; a click goes there.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
   as the word `[$4100].w`, in the CPU's byte order, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
   a machine with a SoftCard the CPU's editor watches `[cpu:$4100]`, which stays the 6502's while the Z80's frame is
@@ -252,7 +260,7 @@ Retrocore Memory uses five more requests:
 | `retro/memory/find` | For a `memoryReference` and an instruction `pattern` (`?` any character, `*` any run; case and the spaces around commas ignored), the nearest instruction from `from`, or back from it with `backward`, wrapping once, whose text matches with its operand as a number or as its label: its `address`, `size` and `text`, or a null `address`. |
 | `retro/memory/map` | For a `memoryReference`: the machine's `regions`, each with its `start`, `length`, `name` and `kind`, as `retro/memory/inspect` gives them; and the `areas`, the runs of addresses that read the same part of the machine now, to the byte, each with its `start`, `length`, `name`, `kind` (`ram`, `rom`, `io`, `video` or `none`) and whether it is `mapped`: always in the CPU's view, and in a bank's whether the CPU reads the bank there now. A bank's gaps are `none`; a coprocessor's view has neither. |
 | `retro/memory/numbers` | For a `memoryReference` and a `value`, as BASIC writes numbers: `formats`, each with the `label` the inspector gives it and the `bytes` in memory order, rounded once from the decimal text as BASIC stores the value, so Level II's double keeps all 56 bits. None in a coprocessor's view, with an integer BASIC, or where the value is too large for a format. |
-| `retro/memory/inspect` | For a `memoryReference` and an `address`: the `region` of the machine's map it is in, with its `kind` (`ram`, `rom`, `io`, `video`, or `none` where nothing is mapped) and the `detail` of where in it, such as a text screen's row and column; what the memory map does with it now, `mapped`, on a machine with banks; the `label` it is or is in, with the `offset` past it and its documentation's `summary`; the source `path` and `line` that emitted it; and the BASIC's floating point `values` starting there, each a `label` and `value`. Anything unknown is null. |
+| `retro/memory/inspect` | For a `memoryReference` and an `address`: the `region` of the machine's map it is in, with its `kind` (`ram`, `rom`, `io`, `video`, or `none` where nothing is mapped) and the `detail` of where in it, such as a text screen's row and column; what the memory map does with it now, `mapped`, on a machine with banks; the `label` it is or is in, with the `offset` past it and its documentation's `summary`; the source `path` and `line` that emitted it; the BASIC's floating point `values` starting there, each a `label` and `value`; the `bits` its name's documentation describes, each a `bit`, the `name` of the mask linked for it or null, and its `meaning`; the `instruction` starting there where code is known to start, with its `text`, `size`, `cycles`, `cyclesTaken` for a branch, the `flags` it changes and its `summary`; and up to 32 `references` from known code, each the instruction's `address`, `text`, `label` and `kind` (`reads`, `writes`, `changes`, `jumps`, `calls`, `branches`, `jumps through` or `vector`), with their `referenceCount`. It takes the editor's Decode from here `starts`, as the listing does. Anything unknown is null. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
@@ -279,7 +287,10 @@ Model I's video memory in Retrocore Memory and types, undoes and inspects bytes 
 On the IIe it built from the SDK's sources, it also checks `retro/memory/inspect`'s regions, screen positions,
 mapping, documented labels, source lines and floats, `retro/memory/map`'s regions and areas, and
 `retro/memory/numbers`' AppleSoft floats.
+It checks the instruction at the cursor, with cycles measured on the 65C02 and a branch's when taken, the references
+to an address, and a soft switch's bits; on the Model I, the Z80's T-states; and `Test-CocoDap.mjs` the CoCo 3's
+`INIT0` and `INIT1` bits.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
 banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
-breakpoints and finding instructions, the inspector, the map, back and forward, following, bookmarks and
-finding numbers.
+breakpoints and finding instructions, the inspector with its bits, instruction and references, the map, back and
+forward, following, bookmarks and finding numbers.

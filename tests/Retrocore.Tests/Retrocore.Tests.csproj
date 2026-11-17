@@ -63,6 +63,8 @@
     <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\FloppyMedia.cs" Link="FloppyMedia.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ListingOperands.cs" Link="ListingOperands.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\InstructionCycles.cs" Link="InstructionCycles.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\FlatBus.cs" Link="FlatBus.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\JsonNodes.cs" Link="JsonNodes.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugScreens.cs" Link="DebugScreens.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\MessageFraming.cs" Link="MessageFraming.cs" />

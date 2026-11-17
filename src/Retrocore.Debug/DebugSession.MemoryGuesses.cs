@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Isa;
 
 namespace Retrocore.Debug;
@@ -22,6 +23,9 @@ internal sealed partial class DebugSession
     ///  The sources' data statements that apply, as start and length pairs, which the analysis keeps out of.
     /// </param>
     /// <param name="Kinds">Each byte's guess.</param>
+    /// <param name="References">
+    ///  What the instructions analysis found read, write, call or jump to, by the address they refer to.
+    /// </param>
     private sealed record MemoryGuesses(
         IDebugTarget Target,
         InstructionSet Set,
@@ -31,5 +35,6 @@ internal sealed partial class DebugSession
         int[] Entries,
         int[] Starts,
         int[] Data,
-        GuessKind[] Kinds);
+        GuessKind[] Kinds,
+        ILookup<int, DisassemblyReference> References);
 }

@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Basic;
+using Retrocore.Debug.Language;
+using Retrocore.Documentation;
+using Retrocore.Isa;
+using System.Numerics;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -13,6 +18,9 @@ internal sealed partial class DebugSession
 {
     // How far past a code label an address still reads as in it, such as COUT+3.
     private const int LabelReach = 0x100;
+
+    // The most references the inspector lists; the count says how many there are.
+    private const int ReferencesShown = 32;
 
     /// <summary>
     ///  Answers retro/memory/inspect: where an address of a memory view's space is and what the debugger knows of it.
@@ -26,6 +34,15 @@ internal sealed partial class DebugSession
     ///   <c>line</c> that emitted it; and the BASIC's floating point <c>values</c> starting there, each a
     ///   <c>label</c> and <c>value</c>. Anything unknown is null.
     ///  </para>
+    ///  <para>
+    ///   The <c>bits</c> of a byte whose name's documentation describes them, each its <c>bit</c>, the <c>name</c> of
+    ///   the mask the documentation links to for it, if any, and its <c>meaning</c>; the <c>instruction</c> starting
+    ///   at the address, where it is not data, with its <c>text</c>, <c>size</c>, <c>cycles</c> (and
+    ///   <c>cyclesTaken</c> for a branch), the <c>flags</c> it changes and its <c>summary</c>; and the
+    ///   <c>references</c> to the address from the code the session knows, each the <c>address</c> of the
+    ///   instruction, its <c>text</c>, the <c>label</c> it is in and its <c>kind</c>, at most 32 of them, with their
+    ///   <c>referenceCount</c>. Like the listing, it takes the editor's Decode from here <c>starts</c>.
+    ///  </para>
     /// </remarks>
     private JsonObject MemoryInspect(JsonObject args)
     {
@@ -36,14 +53,16 @@ internal sealed partial class DebugSession
             throw new ArgumentOutOfRangeException(nameof(args), "The address is in $0000-$FFFF.");
         }
 
-        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        SpaceAnalysis analysis = AnalyzeSpace(bank, args);
+        IDebugMemory memory = analysis.Memory;
         // A coprocessor's view, such as the SoftCard's Z80's, has addresses of its own, which the machine's regions
         // and memory map do not describe.
         bool own = bank?.InstructionSet is null;
         DebugRegion? region = own ? DebugRegion.At(Target.Regions, address) : null;
 
         // The name at the address, a constant such as CH included; else the code label it is in, as COUT+3.
-        (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
+        SortedDictionary<int, string> labels = analysis.Labels;
+        SortedDictionary<int, string> names = analysis.Names;
         string? label = null;
         int offset = 0;
         if (names.TryGetValue(address, out string? named))
@@ -56,9 +75,17 @@ internal sealed partial class DebugSession
             offset = address - start;
         }
 
-        string? summary = label is null ? null : SummaryAt(label, address - offset, memory);
+        string? summary = null;
+        JsonArray? bits = null;
+        if (label is not null && OwnerOf(label, address - offset, memory) is { } owner)
+        {
+            summary = SymbolSummary(owner, label);
+            if (offset == 0) { bits = BitsOf(owner, label, summary); }
+        }
 
-        SourceLine? source = _debug.Position(memory, (ushort)address)?.Chain[^1];
+        JsonArray references = ReferencesTo(analysis, address, out int referenceCount);
+
+        SourceLine? source = analysis.Position(address)?.Chain[^1];
         return new JsonObject
         {
             ["address"] = address,
@@ -71,14 +98,316 @@ internal sealed partial class DebugSession
             ["summary"] = summary,
             ["path"] = source?.Path,
             ["line"] = source?.Line,
-            ["values"] = Floats(bank, memory, address)
+            ["values"] = Floats(bank, memory, address),
+            ["bits"] = bits,
+            ["instruction"] = InstructionAt(analysis, address),
+            ["references"] = references,
+            ["referenceCount"] = referenceCount
         };
     }
 
-    // The documentation of the name an address has: from the module whose symbol it is there, chosen as the names
-    // are, so a label from the module whose code is at its address, as a program's own COUT is not the ROM's, and a
-    // constant such as CH from a module whose code is in memory; a hints file's name has none.
-    private string? SummaryAt(string name, int value, IDebugMemory memory)
+    // The bits of a flag byte or soft switch, as its documentation names them: the masks it links to, such as
+    // INIT0's <MMUEN> = $40, whose own documentation speaks of a bit, then what its summary says of a bit by number,
+    // as RDRAMRD's "reports in bit 7 whether RAMRD is on" does. Only a constant's or variable's.
+    private JsonArray? BitsOf(IDebugModule owner, string name, string? summary)
+    {
+        if (summary is null || owner.Documentation.Find(name) is not { } topic) { return null; }
+        if (topic.Kind is not (DocumentationKind.Constant or DocumentationKind.Variable or DocumentationKind.Definition))
+        {
+            return null;
+        }
+
+        DocumentationSet[] sets = [.. _debug.Modules.Select(module => module.Documentation)];
+        DocumentationTopic effective = new DocumentationResolver(owner.Documentation, sets).Effective(topic);
+        string written = string.Join(" ", effective.Remarks.Prepend(effective.Summary));
+        SortedDictionary<int, (string? Name, string Meaning)> found = [];
+        DocumentationResolver resolver = new(owner.Documentation, sets);
+        foreach (Match link in LinkPattern().Matches(written))
+        {
+            // The link as the documentation resolves it, a module's name included, as <Hardware:READY> is that
+            // module's READY whatever this one calls READY.
+            DocumentationTarget target = resolver.Resolve(topic, link.Groups[1].Value);
+            if (!target.IsResolved || target.Topic is not { } linked) { continue; }
+            long mask = target.Value ?? linked.Value ?? 0;
+            if (mask is <= 0 or > 0x80 || !BitOperations.IsPow2(mask)) { continue; }
+            string meaning = Plain(resolver.Effective(linked).Summary);
+            if (meaning.Length == 0 || !BitWord().IsMatch(meaning)) { continue; }
+            found.TryAdd(BitOperations.Log2((ulong)mask), (linked.Name, meaning));
+        }
+
+        foreach (Match numbered in NumberedBit().Matches(summary))
+        {
+            int bit = numbered.Groups[1].Value[0] - '0';
+            if (BitClause(summary, numbered) is { } meaning) { found.TryAdd(bit, (null, meaning)); }
+        }
+
+        if (found.Count == 0) { return null; }
+        JsonArray bits = [];
+        foreach ((int bit, (string? Name, string Meaning) described) in found.Reverse())
+        {
+            JsonObject named = new()
+            {
+                ["bit"] = bit,
+                ["name"] = described.Name,
+                ["meaning"] = described.Meaning
+            };
+
+            bits.Add((JsonNode)named);
+        }
+
+        return bits;
+    }
+
+    // What a sentence says of a numbered bit: the words after it, as "bit 7 is set when a key is typed" says; or, where
+    // it ends a clause, the clause before it, as "the timer's clock, in bit 5" says.
+    private static string? BitClause(string text, Match match)
+    {
+        char[] stops = ['.', ';', ',', ':', '('];
+        string after = text[(match.Index + match.Length)..];
+        int stop = after.IndexOfAny(stops);
+        string following = (stop < 0 ? after : after[..stop]).Trim();
+
+        // Another byte's bit, as KBDSTRB's "clears bit 7 of KBD" or "KBD's bit 7" speaks of, is not this one's.
+        if (following.StartsWith("of ", StringComparison.Ordinal)) { return null; }
+        string leading = text[..match.Index].TrimEnd();
+        if (leading.EndsWith("'s", StringComparison.Ordinal)) { return null; }
+        if (following.Length > 0 && char.IsLetterOrDigit(following[0])) { return following; }
+
+        string before = text[..match.Index].TrimEnd();
+        foreach (string preposition in (string[])[" in", " at", " as"])
+        {
+            if (before.EndsWith(preposition, StringComparison.Ordinal)) { before = before[..^preposition.Length]; }
+        }
+
+        before = before.TrimEnd(',', ' ');
+        string preceding = before[(before.LastIndexOfAny(stops) + 1)..].Trim();
+        if (preceding.StartsWith("and ", StringComparison.Ordinal)) { preceding = preceding[4..]; }
+        return preceding.Length == 0 ? null : preceding;
+    }
+
+    // A bit by number, such as "bit 7"; not "bit 15", which no byte has.
+    [GeneratedRegex(@"\b[Bb]it ([0-7])\b")]
+    private static partial Regex NumberedBit();
+
+    // The word bit, in a mask's documentation.
+    [GeneratedRegex(@"\bbit\b", RegexOptions.IgnoreCase)]
+    private static partial Regex BitWord();
+
+    // The instruction starting at an address where code is known to start, from a source's statement, analysis, a
+    // Decode from here start or a mark, not elsewhere, as in I/O or a table: its text with operands named, size,
+    // nominal cycles, the flags it changes and what it does.
+    private JsonObject? InstructionAt(SpaceAnalysis analysis, int address)
+    {
+        if (!analysis.Forced.Contains(address))
+        {
+            if (analysis.Marked(address)) { return null; }
+            DebugPosition? position = analysis.Position(address);
+            bool known = analysis.Guesses.Kinds[address] == GuessKind.Start;
+            if (position is not null) { known = position is { Data: false, Start: { } start } && start == address; }
+            if (!known) { return null; }
+        }
+
+        if (!Accepted(analysis, address, out DisassembledInstruction instruction)) { return null; }
+
+        (int Cycles, int Taken)? cycles = InstructionCycles.Of(instruction);
+        (string Summary, string Flags)? brief = InstructionDocs.Brief(instruction.Mnemonic, analysis.Set);
+        return new JsonObject
+        {
+            ["text"] = NamedText(analysis, instruction),
+            ["size"] = instruction.Size,
+            ["cycles"] = cycles?.Cycles,
+            ["cyclesTaken"] = cycles is { } both && both.Taken != both.Cycles ? both.Taken : null,
+            ["flags"] = InstructionDocs.FlagsOf(instruction),
+            ["summary"] = brief?.Summary
+        };
+    }
+
+    // Decodes the instruction at an address where the listing would list one: not in data the sources or the hints
+    // file describe, or analysis guessed, unless a start says so; not inside a source's statement, nor inside a
+    // marked instruction the listing keeps whole; nor running over a later boundary, a marked one only over another
+    // start or data marked.
+    private static bool Accepted(SpaceAnalysis analysis, int address, out DisassembledInstruction instruction)
+    {
+        instruction = default;
+        if (!analysis.Forced.Contains(address))
+        {
+            if (analysis.Marked(address)) { return false; }
+            DebugPosition? position = analysis.Position(address);
+            if (position is { Data: true } || (position?.Start is { } start && start != address)) { return false; }
+            GuessKind guess = position is null ? analysis.Guesses.Kinds[address] : GuessKind.Unknown;
+            if (guess is GuessKind.Data or GuessKind.Operand) { return false; }
+        }
+
+        foreach ((int code, int size) in analysis.MarkedCode)
+        {
+            bool inside = code < address && code + size > address;
+            if (inside && !RunsOver(code, size, analysis.MarkedCodeBoundary)) { return false; }
+        }
+
+        if (!Decode(analysis, address, out instruction)) { return false; }
+        Func<int, bool> boundary = analysis.MarkedCode.ContainsKey(address) ? analysis.MarkedCodeBoundary : analysis.Boundary;
+        return !RunsOver(address, instruction.Size, boundary);
+    }
+
+    // The instructions in the code the session knows, from the sources and analysis, that read, write, call or jump
+    // to an address, in address order, the first of them; count is how many there are.
+    private JsonArray ReferencesTo(SpaceAnalysis analysis, int address, out int count)
+    {
+        SortedSet<(int Source, DisassemblyReferenceKind Kind)> found = [];
+        foreach (DisassemblyReference reference in analysis.Guesses.References[address])
+        {
+            // Not from an instruction the listing would not list; a vector's source is a pointer, not an instruction.
+            bool vector = reference.Kind == DisassemblyReferenceKind.Vector;
+            if (vector || Accepted(analysis, reference.Source, out _))
+            {
+                found.Add((reference.Source, reference.Kind));
+            }
+        }
+
+        // A Decode from here start the listing keeps whose instruction analysis skipped, as one overlapping an earlier
+        // start's, still refers to what its operand names.
+        foreach (int start in analysis.Forced)
+        {
+            if (found.Any(reference => reference.Source == start)) { continue; }
+            if (!Accepted(analysis, start, out DisassembledInstruction instruction)) { continue; }
+            foreach ((int target, DisassemblyReferenceKind kind) in ReferencesOf(instruction))
+            {
+                if (target == address) { found.Add((start, kind)); }
+            }
+        }
+
+        count = found.Count;
+        JsonArray references = [];
+        foreach ((int source, DisassemblyReferenceKind kind) in found.Take(ReferencesShown))
+        {
+            // A vector's source is the pointer, not an instruction.
+            string? text = null;
+            if (kind != DisassemblyReferenceKind.Vector && Decode(analysis, source, out DisassembledInstruction instruction))
+            {
+                text = NamedText(analysis, instruction);
+            }
+
+            int start = analysis.Labels.Keys.LastOrDefault(label => label <= source, -1);
+            string? label = null;
+            if (start >= 0 && source - start < LabelReach)
+            {
+                label = source == start ? analysis.Labels[start] : $"{analysis.Labels[start]}+{source - start}";
+            }
+
+            JsonObject reference = new()
+            {
+                ["address"] = source,
+                ["text"] = text,
+                ["label"] = label,
+                ["kind"] = ReferenceKind(kind)
+            };
+
+            references.Add((JsonNode)reference);
+        }
+
+        return references;
+    }
+
+    // The addresses an instruction refers to and how, as analysis records them (AnalysisEngine.AddReferences): a
+    // jump's, call's or branch's target, and the memory its operand reads or writes, so BBR0 $10,LOOP both reads $10
+    // and branches to LOOP.
+    private static List<(int Target, DisassemblyReferenceKind Kind)> ReferencesOf(in DisassembledInstruction instruction)
+    {
+        List<(int Target, DisassemblyReferenceKind Kind)> references = [];
+        if (instruction.DirectTarget is { } direct)
+        {
+            DisassemblyReferenceKind flow = instruction.Flow switch
+            {
+                DisassemblyFlow.Call => DisassemblyReferenceKind.Call,
+                DisassemblyFlow.Jump => DisassemblyReferenceKind.Jump,
+                _ => DisassemblyReferenceKind.Branch
+            };
+
+            references.Add((direct, flow));
+        }
+
+        OperandForm form = instruction.Form;
+        DisassemblyReferenceKind access = instruction.InstructionSet.EncodingAccess(instruction.EncodingId) switch
+        {
+            MemoryAccess.Write => DisassemblyReferenceKind.Write,
+            MemoryAccess.ReadWrite => DisassemblyReferenceKind.ReadWrite,
+            _ => DisassemblyReferenceKind.Read
+        };
+
+        if (form.HasPostbyte)
+        {
+            PostbyteReference postbyte = instruction.PostbyteReference;
+            if (postbyte == PostbyteReference.None) { return references; }
+            if (instruction.Flow == DisassemblyFlow.IndirectJump)
+            {
+                references.Add((instruction.Operand, DisassemblyReferenceKind.IndirectJump));
+            }
+            else if (postbyte == PostbyteReference.Pointer)
+            {
+                references.Add((instruction.Operand, DisassemblyReferenceKind.Read));
+            }
+            else if (instruction.DirectTarget is null)
+            {
+                references.Add((instruction.Operand, access));
+            }
+
+            return references;
+        }
+
+        if (instruction.Flow == DisassemblyFlow.IndirectJump)
+        {
+            if (form.FieldCount != 0) { references.Add((instruction.Operand, DisassemblyReferenceKind.IndirectJump)); }
+        }
+        else if (form.Role == OperandRole.Pointer)
+        {
+            references.Add((instruction.Operand, DisassemblyReferenceKind.Read));
+        }
+        else if (form.Role == OperandRole.Memory && (instruction.RelativeTarget is not null || instruction.DirectTarget is null))
+        {
+            references.Add((instruction.Operand, access));
+        }
+
+        return references;
+    }
+
+    // How a reference uses its address, in the inspector's words.
+    private static string ReferenceKind(DisassemblyReferenceKind kind) => kind switch
+    {
+        DisassemblyReferenceKind.Branch => "branches",
+        DisassemblyReferenceKind.Jump => "jumps",
+        DisassemblyReferenceKind.Call => "calls",
+        DisassemblyReferenceKind.Write => "writes",
+        DisassemblyReferenceKind.ReadWrite => "changes",
+        DisassemblyReferenceKind.IndirectJump => "jumps through",
+        DisassemblyReferenceKind.Vector => "vector",
+        _ => "reads"
+    };
+
+    // Decodes the instruction at an address from the bytes that can be read there.
+    private static bool Decode(SpaceAnalysis analysis, int address, out DisassembledInstruction instruction)
+    {
+        Span<byte> bytes = stackalloc byte[LongestInstruction];
+        int available = 0;
+        while (available < Math.Min(LongestInstruction, 0x10000 - address) && analysis.Memory.Readable(address + available))
+        {
+            bytes[available] = analysis.Memory.Peek((ushort)(address + available));
+            available++;
+        }
+
+        return Disassembler.TryDecode(bytes[..available], (ushort)address, analysis.Set, out instruction);
+    }
+
+    // An instruction's text with its operand named, as the listing writes it.
+    private string NamedText(SpaceAnalysis analysis, in DisassembledInstruction instruction)
+    {
+        (int? target, int? shown) = ListingOperands.OperandAddress(instruction, DirectPage(analysis.Set));
+        return ListingOperands.Named(instruction.ToString(), target, shown, analysis.Names);
+    }
+
+    // The module whose symbol the name an address has is there, chosen as the names are, so a label from the module
+    // whose code is at its address, as a program's own COUT is not the ROM's, and a constant such as CH from a module
+    // whose code is in memory; none for a hints file's name.
+    private IDebugModule? OwnerOf(string name, int value, IDebugMemory memory)
     {
         ushort address = (ushort)value;
         bool Defines(IDebugModule module) => module.TryResolve(name, out long resolved) && resolved == value;
@@ -89,8 +418,7 @@ internal sealed partial class DebugSession
             return module.InMemory(memory) && module.AddressConstants.Any(constant => constant.Name == name && constant.Value == value);
         }
 
-        IDebugModule? owner = _debug.Modules.FirstOrDefault(Applies) ?? _debug.Modules.FirstOrDefault(Defines);
-        return owner is null ? null : SymbolSummary(owner, name);
+        return _debug.Modules.FirstOrDefault(Applies) ?? _debug.Modules.FirstOrDefault(Defines);
     }
 
     // What the memory map does with an address now, on a machine with banks: in the CPU's view, what it reads and

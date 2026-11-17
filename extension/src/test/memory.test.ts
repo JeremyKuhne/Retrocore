@@ -407,6 +407,8 @@ test("a snapshot whose read fails is not taken, and says why", async () => {
 // The marks the page sent.
 const marksSent: Record<string, unknown>[] = [];
 
+// The inspect requests the page sent.
+const inspectsSent: Record<string, unknown>[] = [];
 // The Decode from here starts the page asked about after a mark.
 const startsSent: Record<string, unknown>[] = [];
 
@@ -474,8 +476,17 @@ function answer(
             });
         } else if (sent.type === "inspect") {
             const address = Number(sent.address);
+            inspectsSent.push(sent);
             page.send({
-                type: "reply", id: sent.id, result: address === 0x0024
+                type: "reply", id: sent.id, result: address === 0x0300
+                    ? {
+                        address, region: null, label: "READY", offset: 0, summary: "Bit 7 is set when ready.", values: [],
+                        bits: [{ bit: 7, name: null, meaning: "is set when ready" }, { bit: 0, name: "BUSY", meaning: "The busy bit." }],
+                        instruction: { text: "BNE READY", size: 2, cycles: 2, cyclesTaken: 3, flags: "none", summary: "Branches when Z is clear." },
+                        references: [{ address: 0x0310, text: "BIT READY", label: "WAIT+2", kind: "reads" }],
+                        referenceCount: 34
+                    }
+                    : address === 0x0024
                     ? { address, region: "Zero page", kind: "ram", detail: null, mapped: "Reads and writes main RAM", label: "CH", offset: 0, summary: "The cursor's column.", path: null, line: null, values: [] }
                     : { address, region: "Text page 1", kind: "video", detail: "row 0, column 3", mapped: null, label: "START", offset: 3, summary: "Starts it.", path: "C:/src/hello.s", line: 4, values: [{ label: "Float, 5 bytes", value: "1" }] }
             });
@@ -1091,6 +1102,30 @@ test("the inspector says where the cursor's address is, what it is and what the 
     assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes('<button class="link" data-src="C:/src/hello.s"') && html.includes(">hello.s:4</button>"), html);
     assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v">1</span>'), html);
     assert.ok(!html.includes(">Map<"), "no map line on a machine without banks");
+});
+
+test("the inspector names a byte's bits, shows the instruction starting there and goes to the code that uses it", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
+    await drive(page, [{ goto: 0x0300 }], () => 0x81, lists);
+    const html = page.elements.get("inspector")!.innerHTML;
+    assert.ok(html.includes('<span class="k">Bit 7</span><span class="v">1</span></div><div class="doc">is set when ready</div>'), html);
+    assert.ok(html.includes('<span class="k">Bit 0 BUSY</span><span class="v">1</span>'), html);
+    assert.ok(html.includes('<span class="k">Instruction</span><span class="v">BNE READY</span>'), html);
+    assert.ok(html.includes('<span class="k">Size</span><span class="v">2 bytes, 2 cycles, 3 taken</span>'), html);
+    assert.ok(html.includes('<div class="doc">Branches when Z is clear.</div>'), html);
+    assert.ok(html.includes('<span class="k">References</span><span class="v">34</span>') && html.includes("and 33 more"), html);
+    assert.ok(html.includes('<button class="hit ref" data-go="784"') && html.includes("$0310 WAIT+2") && html.includes("BIT READY"), html);
+
+    // Decode from here's starts go with the request, as the listing's do.
+    await drive(page, [{ decode: true }], () => 0x81, lists);
+    assert.deepEqual(inspectsSent[inspectsSent.length - 1].starts, [0x0300]);
+
+    // A reference goes to its instruction.
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-go]" ? { dataset: { go: "784" } } : null } });
+    const state = await drive(page, [], () => 0x81, lists);
+    assert.equal(state.cursor, 0x0310);
 });
 
 test("the gutter's breakpoints are function breakpoints named by address", () => {

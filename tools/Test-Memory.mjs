@@ -624,6 +624,13 @@ try {
     assert.deepEqual((await assemble("JSR COUT")).bytes, [0x20, 0xED, 0xFD]);
     assert.deepEqual((await assemble("LDA BANK2,X")).bytes, [0xBD, 0x00, 0x03]);
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
+    // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
+    assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // A label spelled as a register or condition is still the label where the register would not assemble.
+    await mark({ address: 0x6600, name: "Z" });
+    assert.deepEqual((await assemble("LDA Z")).bytes, [0xAD, 0x00, 0x66]);
+    assert.deepEqual((await assemble("LDA $10,X")).bytes, [0xB5, 0x10]);
+    await mark({ address: 0x6600, name: "" });
     await rejects(assemble("FOO"), /Unknown instruction/);
     await rejects(assemble("LDA NOSUCH"), /NOSUCH/);
     await rejects(assemble("  "), /Type an instruction/);

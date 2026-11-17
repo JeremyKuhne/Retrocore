@@ -1194,6 +1194,16 @@ test("assembling in place types an instruction over a listing line, padding or o
     await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
     assert.deepEqual([confirmsSent.length, writesSent.map(sent => sent.data)], [0, [[0xA9, 0x01]]]);
     assert.ok(page.elements.get("inspector")!.innerHTML.includes('data-act="assemble"'));
+
+    // A double-click while the listing is hidden asks for nothing, as its old lines may be of other bytes.
+    const box = page.elements.get("listingBox")! as unknown as { checked: boolean; dispatch(name: string, event: object): void };
+    box.checked = false;
+    box.dispatch("change", {});
+    assemblesSent.length = 0;
+    const line = { dataset: { a: String(top), s: "2" } };
+    page.elements.get("listing")!.dispatch("dblclick", { target: { closest: (selector: string) => selector === "[data-a]" ? line : null } });
+    state = await drive(page, [], () => 0, lists);
+    assert.deepEqual([assemblesSent.length, state.status], [0, "Show the listing to assemble an instruction."]);
 });
 
 test("the gutter's breakpoints are function breakpoints named by address", () => {

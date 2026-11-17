@@ -70,37 +70,54 @@ internal sealed partial class DebugSession
         return new JsonObject { ["bytes"] = written, ["text"] = text, ["nop"] = padding };
     }
 
-    // Assembles one line at an address, its names given by the session as constants, so LDA KBD reads $C000.
+    // Assembles one line at an address, its names given by the session as constants, so LDA KBD reads $C000. A
+    // scoped name such as RamTest::R6H, which a constant cannot be called, stands in the line as an alias. A name
+    // spelled as one of the CPU's registers or conditions, such as X or Z, is taken for the register first, and for
+    // the session's name only where the line does not assemble without it.
     private byte[] AssembleLine(InstructionSet set, int address, string line, IDebugMemory memory, string space)
     {
         Dictionary<string, long> symbols = [with(StringComparer.Ordinal)];
+        Dictionary<string, long> spelled = [with(StringComparer.Ordinal)];
         IEnumerable<string> registerNames = set.Description.Registers.Select(register => register.Name);
         HashSet<string> registers = [with(StringComparer.OrdinalIgnoreCase), .. registerNames];
         int operands = line.IndexOfAny([' ', '\t']);
+        string text = line;
         if (operands > 0)
         {
-            foreach (Match name in LineName().Matches(line[operands..]))
+            int aliases = 0;
+            string operand = LineName().Replace(line[operands..], name =>
             {
                 string value = name.Value;
-                bool known = symbols.ContainsKey(value);
-                if (known || registers.Contains(value) || s_conditions.Contains(value)) { continue; }
-                try
-                {
-                    symbols[value] = _debug.Resolve(value, memory, space);
-                }
-                catch (FormatException)
-                {
-                    // Not one of the session's names: the assembler says so if it is not one of its own.
-                }
+                if (!value.Contains("::", StringComparison.Ordinal)) { return value; }
+                if (TryResolve(value, memory, space) is not { } resolved) { return value; }
+                string alias = $"__RETROCORE{aliases++}";
+                symbols[alias] = resolved;
+                return alias;
+            });
+
+            text = line[..operands] + operand;
+            foreach (Match name in LineName().Matches(operand))
+            {
+                string value = name.Value;
+                if (symbols.ContainsKey(value) || spelled.ContainsKey(value)) { continue; }
+                if (TryResolve(value, memory, space) is not { } resolved) { continue; }
+                bool register = registers.Contains(value) || s_conditions.Contains(value);
+                (register ? spelled : symbols)[value] = resolved;
             }
         }
 
-        AssemblyOptions options = new(set.Name, address, Math.Min(AssembleMaximum, 0x10000 - address))
+        AssemblyResult result = AssembleText(set, address, text, symbols);
+        if (!result.Success && spelled.Count > 0)
         {
-            PredefinedSymbols = symbols
-        };
+            foreach ((string name, long value) in spelled)
+            {
+                symbols[name] = value;
+            }
 
-        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource("    " + line + "\n", "line"), options);
+            AssemblyResult named = AssembleText(set, address, text, symbols);
+            if (named.Success) { result = named; }
+        }
+
         if (!result.Success)
         {
             throw new ArgumentException(result.Diagnostics[0].Message);
@@ -117,7 +134,32 @@ internal sealed partial class DebugSession
         return section.Bytes[..Math.Min(size, section.Size)].ToArray();
     }
 
-    // A name in an operand, such as KBD, COUT+1's COUT or Monitor.COUT; not a number such as $C0 or 1E.
-    [GeneratedRegex(@"(?<![$%\w.])[A-Za-z_][\w.]*")]
+    // A name's value from the session, or null where it has none.
+    private long? TryResolve(string name, IDebugMemory memory, string space)
+    {
+        try
+        {
+            return _debug.Resolve(name, memory, space);
+        }
+        catch (FormatException)
+        {
+            // Not one of the session's names: the assembler says so if it is not one of its own.
+            return null;
+        }
+    }
+
+    // Assembles a line's text at an address with names as constants.
+    private static AssemblyResult AssembleText(InstructionSet set, int address, string text, Dictionary<string, long> symbols)
+    {
+        AssemblyOptions options = new(set.Name, address, Math.Min(AssembleMaximum, 0x10000 - address))
+        {
+            PredefinedSymbols = symbols
+        };
+
+        return new Assembler.Assembler().Assemble(new AssemblySource("    " + text + "\n", "line"), options);
+    }
+
+    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H or ::COUT; not a number such as $C0 or 1E.
+    [GeneratedRegex(@"(?<![$%\w.:])(?:::)?[A-Za-z_][\w.]*(?:::[A-Za-z_][\w.]*)*")]
     private static partial Regex LineName();
 }

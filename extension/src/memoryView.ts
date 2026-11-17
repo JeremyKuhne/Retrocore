@@ -865,6 +865,10 @@ async function assembleAtCursor() {
 }
 
 async function assembleLine(line) {
+    // Only the listing as last read says how long the line is and what follows it; it may change while the user
+    // types, as at a stop or a write, so it is checked again before writing.
+    if (!listingCurrent()) { status(!listingShown() ? "Show the listing to assemble an instruction." : "The listing is being read; press F2 again.", true); return; }
+    const key = listingKey;
     const problem = writeProblem(line.address, 1);
     if (problem !== null) { status(problem, true); return; }
     let result;
@@ -908,7 +912,17 @@ async function assembleLine(line) {
         });
         if (!answer || answer.choice !== "Write") return;
     }
-    if (await write(line.address, values, true)) status("Assembled " + typed + " at " + where(line.address) + ".");
+    if (listingKey !== key || !listingCurrent()) {
+        status("The listing changed while you typed; press F2 again.", true);
+        return;
+    }
+    // In turn with typing, undo and redo, so the write is on the undo stack before either can run.
+    let written = false;
+    await new Promise(resolve => queue(async () => {
+        written = await write(line.address, values, true);
+        resolve(undefined);
+    }));
+    if (written) status("Assembled " + typed + " at " + where(line.address) + ".");
 }
 
 // Starts an instruction at the cursor, where the listing decoded from the wrong byte.

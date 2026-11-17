@@ -120,7 +120,12 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   **Shift** the one before, wrapping around.
 - **The inspector** beside the bytes shows the address with the label it is in, such as `COUT+3`, the byte at
   the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
-  Its **Watch** and **Freeze** buttons act on the selection.
+  It says which part of the machine's map the address is in and where in it, such as *Text page 1, row 10,
+  column 0* or *Hi-res page 1, line 83, byte 5*; on a machine with banks, what the memory map does with it now,
+  such as *Reads main language card* or, in auxiliary RAM's editor, *Not mapped now*; the documentation of its
+  label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
+  opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft, Color BASIC
+  and Business BASIC, Level II's single and double). Its **Watch** and **Freeze** buttons act on the selection.
 - **Watch** adds the selection to VS Code's Watch view: a byte as `[$4100]` (in a bank, `[aux:$0400]`), two bytes
   as the word `[$4100].w`, in the CPU's byte order, and more as each byte, up to 16. VS Code evaluates a watch in the focused frame, so on
   a machine with a SoftCard the CPU's editor watches `[cpu:$4100]`, which stays the 6502's while the Z80's frame is
@@ -230,6 +235,7 @@ Retrocore Memory uses five more requests:
 | `retro/memory/note` | For a `memoryReference` and `address`, the `name` and `comment` the hints file gives it now, or null. |
 | `retro/memory/starts` | For a `memoryReference`, a mark's `address` and `count`, and an editor's Decode from here `starts`, the `starts` left: each whose instruction is in those bytes or runs into them goes, except `keep`, a code mark's own. |
 | `retro/memory/find` | For a `memoryReference` and an instruction `pattern` (`?` any character, `*` any run; case and the spaces around commas ignored), the nearest instruction from `from`, or back from it with `backward`, wrapping once, whose text matches with its operand as a number or as its label: its `address`, `size` and `text`, or a null `address`. |
+| `retro/memory/inspect` | For a `memoryReference` and an `address`: the `region` of the machine's map it is in, with its `kind` (`ram`, `rom`, `io` or `video`) and the `detail` of where in it, such as a text screen's row and column; what the memory map does with it now, `mapped`, on a machine with banks; the `label` it is or is in, with the `offset` past it and its documentation's `summary`; the source `path` and `line` that emitted it; and the BASIC's floating point `values` starting there, each a `label` and `value`. Anything unknown is null. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
@@ -253,6 +259,8 @@ the Model I, which needs nothing external, along with resuming after a data brea
 breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the IIe's banks, their mapping, bank
 expressions, disassembly and data, function and instruction breakpoints. The extension's editor test opens the
 Model I's video memory in Retrocore Memory and types, undoes and inspects bytes there, with their labels, characters and read-only ROM.
+On the IIe it built from the SDK's sources, it also checks `retro/memory/inspect`'s regions, screen positions,
+mapping, documented labels, source lines and floats.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
 banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
-breakpoints and finding instructions.
+breakpoints and finding instructions, and the inspector.

@@ -149,6 +149,15 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Communication region", 0x4000, 256);
 
     /// <inheritdoc/>
+    public IReadOnlyList<DebugRegion> Regions { get; } =
+    [
+        new("ROM", 0x0000, 0x3800, "rom"),
+        new("Keyboard", 0x3800, 0x400, "io"),
+        new("Video", 0x3C00, 0x400, "video", DebugRegion.Rows(64)),
+        new("Communication region", 0x4000, 0x100, "ram")
+    ];
+
+    /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
 
     /// <inheritdoc/>

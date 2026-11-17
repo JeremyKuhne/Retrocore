@@ -74,6 +74,8 @@ button:disabled{opacity:.5;cursor:default}
 .item{display:flex;gap:8px;padding:2px 0}
 .item .k{width:9em;flex:none;color:var(--vscode-descriptionForeground);white-space:nowrap}
 .item .v{font-family:var(--vscode-editor-font-family);white-space:pre}
+#inspector .doc{margin:2px 0 6px;color:var(--vscode-descriptionForeground)}
+#inspector a[data-src]{color:var(--vscode-textLink-foreground);cursor:pointer;text-decoration:none}
 #listing{flex:none;width:46ch;overflow:auto;display:grid;align-content:start;border-left:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);white-space:pre}
 #listing[hidden]{display:none}
 #listing .ln{height:20px;line-height:20px;padding:0 8px;cursor:pointer;display:flex;gap:1ch}
@@ -575,6 +577,7 @@ function render() {
     ensure(top - count, top + 2 * count);
     showInspector();
     wantListing();
+    wantInspection();
     showListingLines();
     if (tab === "frozen") showFrozen();
 }
@@ -919,7 +922,9 @@ function showInspector() {
     if (name !== undefined) html += " · " + escapeText(name);
     if (high > low) html += " · " + (high - low + 1) + " bytes, " + where(low) + "-$" + hex(high, 4);
     html += "</div>";
+    html += inspectionHtml();
     const rows = inspect(bytes, readable, cursor, charset === null ? undefined : charset.text);
+    if (inspected !== null && inspected.address === cursor) rows.push(...(inspected.values ?? []));
     if (comparison !== "" && differs(cursor)) rows.push({ label: comparison === "snapshot" ? "In the snapshot" : "In " + comparedName(), value: "$" + hex(compared().bytes[cursor], 2) });
     else if (readable[cursor] === 1 && changed[cursor]) rows.push({ label: "At the last stop", value: "$" + hex(was[cursor], 2) });
     if (frozen.has(cursor)) rows.push({ label: "Frozen at", value: "$" + hex(frozen.get(cursor), 2) });
@@ -928,6 +933,47 @@ function showInspector() {
         html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
     }
     inspector.innerHTML = html;
+}
+
+// What the debugger says about the cursor's address: its region and where in it, what the memory map does with it,
+// the label it is in with its documentation, and its source line. Asked for again when the cursor, memory, the
+// marks or the stop change.
+let inspected = null, inspectKey = "";
+
+function wantInspection() {
+    if (ended) return;
+    const key = cursor + ":" + generation + ":" + writes + ":" + marks;
+    if (key === inspectKey) return;
+    inspectKey = key;
+    void loadInspection(cursor, key);
+}
+
+async function loadInspection(address, key) {
+    let result = null;
+    try {
+        result = await request({ type: "inspect", address });
+    } catch {
+        // The inspector shows what the page knows without it.
+    }
+    if (key !== inspectKey) return;
+    inspected = result;
+    showInspector();
+}
+
+function inspectionHtml() {
+    const known = inspected !== null && inspected.address === cursor ? inspected : null;
+    if (known === null) return "";
+    const row = (label, value) => '<div class="item"><span class="k">' + label + '</span><span class="v">' + value + "</span></div>";
+    let html = "";
+    if (known.region) html += row("Region", escapeText(known.region + (known.detail ? ", " + known.detail : "")));
+    if (known.mapped) html += row("Map", escapeText(known.mapped));
+    if (known.label && known.offset > 0) html += row("In", escapeText(known.label + "+" + known.offset));
+    if (known.summary) html += '<div class="doc">' + escapeText((known.offset > 0 ? known.label + ": " : "") + known.summary) + "</div>";
+    if (known.path) {
+        html += row("Source", '<a data-src="' + escapeText(known.path) + '" data-line="' + known.line + '" title="Open ' + escapeText(known.path) + ", line " + known.line + '">'
+            + escapeText(fileName(known.path) + ":" + known.line) + "</a>");
+    }
+    return html;
 }
 
 // The narrowest the inspector gets beside the bytes; narrower than that, it moves under them.
@@ -1311,6 +1357,11 @@ side.addEventListener("click", event => {
             case "watchHit": void watch([action.dataset.w ?? "[" + where(offset) + "]"]); break;
             case "thaw": void freeze([], [offset]).catch(error => status(String(error.message || error), true)); break;
         }
+        return;
+    }
+    const source = target.closest ? target.closest("[data-src]") : null;
+    if (source !== null) {
+        void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
         return;
     }
     const hit = target.closest ? target.closest("[data-go]") : null;

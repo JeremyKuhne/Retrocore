@@ -153,6 +153,17 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Direct page", 0x0000, 256);
 
     /// <inheritdoc/>
+    public IReadOnlyList<DebugRegion> Regions { get; } =
+    [
+        new("Direct page", 0x0000, 0x100, "ram"),
+        new("Text screen, where BASIC shows it", 0x0400, 0x200, "video", DebugRegion.Rows(32)),
+        new("Extended Color BASIC ROM", 0x8000, 0x2000, "rom"),
+        new("Color BASIC ROM", 0xA000, 0x2000, "rom"),
+        new("Cartridge or Disk BASIC ROM", 0xC000, 0x3F00, "rom"),
+        new("I/O", 0xFF00, 0x100, "io")
+    ];
+
+    /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
 
     /// <inheritdoc/>

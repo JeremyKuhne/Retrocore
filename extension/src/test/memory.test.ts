@@ -447,6 +447,13 @@ function answer(
         } else if (sent.type === "breakpoint") {
             breakpointsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { status: `Breakpoint at $${hex(Number(sent.address), 4)}.` } });
+        } else if (sent.type === "inspect") {
+            const address = Number(sent.address);
+            page.send({
+                type: "reply", id: sent.id, result: address === 0x0024
+                    ? { address, region: "Zero page", kind: "ram", detail: null, mapped: "Reads and writes main RAM", label: "CH", offset: 0, summary: "The cursor's column.", path: null, line: null, values: [] }
+                    : { address, region: "Text page 1", kind: "video", detail: "row 0, column 3", mapped: null, label: "START", offset: 3, summary: "Starts it.", path: "C:/src/hello.s", line: 4, values: [{ label: "Float, 5 bytes", value: "1" }] }
+            });
         } else if (sent.type === "find") {
             findsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { address: 0x0310, size: 3, text: "STA SPKR" } });
@@ -1005,6 +1012,27 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     // Bytes and text are found in the page.
     await drive(page, [{ find: "A9 ??" }, { find: '"HI' }], () => 0, lists);
     assert.equal(findsSent.length, 1);
+});
+
+test("the inspector says where the cursor's address is, what it is and what the firmware says of it", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0024, info: { bank: null, label: "Memory", readOnly: false } });
+    await drive(page, [{ goto: 0x0024 }], () => 0, lists);
+    let html = page.elements.get("inspector")!.innerHTML;
+    assert.ok(html.includes('<span class="k">Region</span><span class="v">Zero page</span>'), html);
+    assert.ok(html.includes('<span class="k">Map</span><span class="v">Reads and writes main RAM</span>'), html);
+    assert.ok(html.includes('<div class="doc">The cursor&#39;s column.</div>') || html.includes("<div class=\"doc\">The cursor's column.</div>"), html);
+
+    // Inside a label, the label and offset, its documentation, the source line and the BASIC's floats.
+    await drive(page, [{ goto: 0x0403 }], () => 0, lists);
+    html = page.elements.get("inspector")!.innerHTML;
+    assert.ok(html.includes('<span class="v">Text page 1, row 0, column 3</span>'), html);
+    assert.ok(html.includes('<span class="k">In</span><span class="v">START+3</span>'), html);
+    assert.ok(html.includes("START: Starts it."), html);
+    assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes(">hello.s:4</a>"), html);
+    assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v">1</span>'), html);
+    assert.ok(!html.includes(">Map<"), "no map line on a machine without banks");
 });
 
 test("the gutter's breakpoints are function breakpoints named by address", () => {

@@ -522,6 +522,23 @@ try {
     assert.equal((await findFrom("LDA #$01", 0x650F, true)).address, 0x6500);
     await rejects(findFrom("  ", 0), /instruction/);
     // A listing line gives the breakpoints that stop at its address, a bank's only in that bank's listing.
+    // The inspector: the region an address is in and where in it, the map, the label and its documentation, the
+    // source line and the BASIC's floats.
+    at = "inspecting an address";
+    const inspect = async (address, memoryReference = "0x0000") => request("retro/memory/inspect", { memoryReference, address });
+    let inspected = await inspect(0x0528);
+    assert.deepEqual([inspected.region, inspected.kind, inspected.detail], ["Text page 1", "video", "row 10, column 0"]);
+    assert.equal((await inspect(0x0478)).detail, "screen hole");
+    assert.deepEqual([(await inspect(0x2D2D)).region, (await inspect(0x2D2D)).detail], ["Hi-res page 1", "line 83, byte 5 (dots 35-41)"]);
+    inspected = await inspect(0x0024);
+    assert.deepEqual([inspected.region, inspected.label, inspected.offset], ["Zero page", "CH", 0]);
+    assert.ok(inspected.summary?.length > 0, JSON.stringify(inspected));
+    assert.match(inspected.mapped, /^Reads and writes /);
+    inspected = await inspect(0x0301);
+    assert.deepEqual([inspected.label, inspected.offset, inspected.path, inspected.line], ["BANK2", 1, switching, program.indexOf("BANK2:") + 2]);
+    assert.match((await inspect(0x0400, "aux:0x0000")).mapped, /^Not mapped now: the CPU reads /);
+    await write("0x6600", [0x81, 0x00, 0x00, 0x00, 0x00]);
+    assert.deepEqual((await inspect(0x6600)).values, [{ label: "Float, 5 bytes", value: "1" }]);
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

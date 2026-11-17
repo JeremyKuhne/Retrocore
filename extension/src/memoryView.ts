@@ -1545,11 +1545,12 @@ function useFollow(on) {
 
 // Goes where the followed expression points now, as at a stop.
 async function follow() {
-    const text = following;
+    const text = following, started = moves;
     if (text === "") return;
     try {
         const result = await request({ type: "goto", text });
-        if (following === text) jump(result.address);
+        // A move made while the debugger answered, such as Back, wins over where the expression pointed.
+        if (following === text && moves === started) jump(result.address);
     } catch (error) {
         if (following === text) status("Following " + text + ": " + String(error.message || error), true);
     }

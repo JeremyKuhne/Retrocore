@@ -1209,13 +1209,22 @@ test("go-tos go back and forward, and a stop moves a view that follows", async (
     state = await drive(page, [], () => 0, lists);
     assert.equal(state.cursor, 0x0350);
     assert.equal((state.back as number[]).at(-1), 0x0300, "a followed move is one Back undoes");
+    // Back while the stop's answer is on its way stays back, and keeps Forward.
+    pcNow = 0x0370;
+    page.send({ type: "stopped" });
+    const asked = page.posted.splice(page.posted.findIndex(message => message.type === "goto"), 1)[0];
+    state = await drive(page, [{ back: true }], () => 0, lists);
+    page.send({ type: "reply", id: asked.id, result: { address: 0x0370 } });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0300);
+    assert.deepEqual(state.forward, [0x0350]);
     state = await drive(page, [{ follow: false }], () => 0, lists);
     pcNow = 0x0360;
     page.send({ type: "stopped" });
     // The first answers what the stop asks for, the second reports where the page went.
     await drive(page, [], () => 0, lists);
     state = await drive(page, [], () => 0, lists);
-    assert.equal(state.cursor, 0x0350);
+    assert.equal(state.cursor, 0x0300, "a view that does not follow stays where it is");
     assert.equal(state.following, "");
 });
 

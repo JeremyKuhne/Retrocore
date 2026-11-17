@@ -27,32 +27,54 @@ internal static class ImageWatcher
 
     private static Timer? s_sweep;
 
+    // Whether a disk still comes from an image, by its full path.
+    private static Func<string, bool> s_watched = _ => false;
+
     /// <summary>
     ///  Watches an image, and stops watching images no disk comes from any more.
     /// </summary>
     /// <param name="path">The image's full path.</param>
     /// <param name="watched">Whether a disk still comes from an image, by its full path.</param>
-    /// <param name="changed">Checks an image that changed, by its full path.</param>
-    internal static void Watch(string path, Func<string, bool> watched, Action<string> changed)
+    /// <param name="changed">
+    ///  Checks an image that changed, by its full path; false when it could not be read, to be tried again.
+    /// </param>
+    internal static void Watch(string path, Func<string, bool> watched, Func<string, bool> changed)
     {
         lock (s_lock)
         {
-            foreach (string gone in s_watches.Keys.Where(key => !watched(key)).ToList())
-            {
-                s_watches[gone].Close();
-                s_watches.Remove(gone);
-            }
-
+            s_watched = watched;
+            Prune();
             if (!s_watches.ContainsKey(path)) { s_watches[path] = new ImageWatch(path, changed); }
             s_sweep ??= new(_ => Sweep(), state: null, SweepMilliseconds, SweepMilliseconds);
         }
     }
 
-    // Sweeps each watch in turn.
+    // Stops watching images no disk comes from any more, and sweeping once none are left.
+    private static void Prune()
+    {
+        foreach (string gone in s_watches.Keys.Where(key => !s_watched(key)).ToList())
+        {
+            s_watches[gone].Close();
+            s_watches.Remove(gone);
+        }
+
+        if (s_watches.Count == 0)
+        {
+            s_sweep?.Dispose();
+            s_sweep = null;
+        }
+    }
+
+    // Sweeps each watch in turn, after dropping those no disk needs.
     private static void Sweep()
     {
         ImageWatch[] watches;
-        lock (s_lock) { watches = [.. s_watches.Values]; }
+        lock (s_lock)
+        {
+            Prune();
+            watches = [.. s_watches.Values];
+        }
+
         foreach (ImageWatch watch in watches) { watch.Sweep(); }
     }
 }

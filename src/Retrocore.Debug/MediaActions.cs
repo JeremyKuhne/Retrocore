@@ -57,19 +57,21 @@ internal static class MediaActions
     ///  Checks an image as it is now, for each disk read from it, and says so when any of them sees it differently.
     /// </summary>
     /// <param name="path">The image's full path.</param>
+    /// <returns>False when the file could not be read, so the check should be tried again.</returns>
     /// <remarks>
     ///  <para>
     ///   Checks run one at a time, so each reads the file after the one before it, and the last to finish has the file
     ///   as it is now; an older check never lands over a newer one.
     ///  </para>
     /// </remarks>
-    internal static void Recheck(string path)
+    internal static bool Recheck(string path)
     {
         bool changed = false;
         lock (s_rechecking)
         {
             List<DiskSource> sources = [.. s_sources.Select(pair => pair.Value).Where(source => SameFile(path, source.Path))];
-            if (sources.Count == 0 || ImageCheck.Of(path) is not { } check) { return; }
+            if (sources.Count == 0) { return true; }
+            if (ImageCheck.Of(path) is not { } check) { return false; }
             foreach (DiskSource source in sources)
             {
                 if (source.Check == check) { continue; }
@@ -79,6 +81,7 @@ internal static class MediaActions
         }
 
         if (changed) { SourcesChanged?.Invoke(); }
+        return true;
     }
 
     // Keeps where a disk came from, watches its image, and checks it once off the machine's thread, as the file may

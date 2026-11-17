@@ -24,7 +24,7 @@ internal sealed class ImageWatch
 
     private readonly Lock _lock = new();
     private readonly Timer _settle;
-    private readonly Action<string> _changed;
+    private readonly Func<string, bool> _changed;
     private FileSystemWatcher? _watcher;
     private FileSystemWatcher? _targetWatcher;
     private string? _target;
@@ -36,8 +36,10 @@ internal sealed class ImageWatch
     ///  Starts watching an image.
     /// </summary>
     /// <param name="path">The image's full path, as the disk was read from it.</param>
-    /// <param name="changed">Checks the image, by that path.</param>
-    internal ImageWatch(string path, Action<string> changed)
+    /// <param name="changed">
+    ///  Checks the image, by that path; false when it could not be read, to be tried again.
+    /// </param>
+    internal ImageWatch(string path, Func<string, bool> changed)
     {
         Path = path;
         _changed = changed;
@@ -96,11 +98,12 @@ internal sealed class ImageWatch
     }
 
     // The image is checked once its events settle, after the watch is made whole and the file noted, so the next
-    // sweep does not check it again.
+    // sweep does not check it again; a check that could not read the file forgets it, so the next sweep tries again.
     private void Settled()
     {
         Sweep(check: false);
-        _changed(Path);
+        if (_changed(Path)) { return; }
+        lock (_lock) { _signature = null; }
     }
 
     private void Poke()

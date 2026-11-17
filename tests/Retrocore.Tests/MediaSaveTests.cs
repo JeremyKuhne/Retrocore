@@ -204,10 +204,15 @@ public sealed class MediaSaveTests
         File.WriteAllBytes(target, File.ReadAllBytes(other));
         Apple2FloppyDrive chained = Drive(through);
         Source(chained)?.Bool("stale").Should().BeFalse();
+        // The file the link now leads to holds other bytes than the one the disk was read from.
+        string third = Path.Join(folder, "third.dsk");
+        byte[] elsewhere = new byte[35 * 4096];
+        elsewhere[1] = 0x77;
+        File.WriteAllBytes(third, elsewhere);
         void Repoint()
         {
             File.Delete(middle);
-            File.CreateSymbolicLink(middle, Image("third.dsk").Path);
+            File.CreateSymbolicLink(middle, third);
         }
 
         Until(Repoint, () => Source(chained)?.Bool("stale") == true);

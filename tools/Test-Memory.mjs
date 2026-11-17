@@ -526,6 +526,9 @@ try {
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);
     assert.deepEqual(lines[0].breakpoints, [gutter[0].id], JSON.stringify(lines));
+    // The extension asks for one byte's line, started there, to know what stops at an address it toggles.
+    lines = await listing(0x6500, 1, [0x6500]);
+    assert.deepEqual(lines.find(line => line.address === 0x6500)?.breakpoints, [gutter[0].id], JSON.stringify(lines));
     lines = (await request("retro/memory/listing", { memoryReference: "aux:0x0000", address: 0x6510, count: 1 })).lines;
     assert.deepEqual(lines[0].breakpoints, [gutter[1].id], JSON.stringify(lines));
     assert.equal((await listing(0x6510, 1))[0].breakpoints, null);

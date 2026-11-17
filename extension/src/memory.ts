@@ -367,9 +367,20 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 backward: received.backward
                             }));
                             break;
-                        case "breakpoint":
-                            await reply({ status: await toggleBreakpoint(session, start.bank, Number(received.address), (received.ids as number[] | null) ?? []) });
+                        case "breakpoint": {
+                            // What stops at the address is asked again, not taken from the page's listing, which may
+                            // be from before a breakpoint moved; a start there makes a line begin at it.
+                            const address = Number(received.address);
+                            const now = await session.customRequest("retro/memory/listing", {
+                                memoryReference: base,
+                                address,
+                                count: 1,
+                                starts: [address]
+                            }) as { lines?: { address: number; breakpoints: number[] | null }[] };
+                            const line = (now.lines ?? []).find(item => item.address === address);
+                            await reply({ status: await toggleBreakpoint(session, start.bank, address, line?.breakpoints ?? []) });
                             break;
+                        }
                         case "starts":
                             // The Decode from here starts a mark leaves.
                             await reply(await session.customRequest("retro/memory/starts", {

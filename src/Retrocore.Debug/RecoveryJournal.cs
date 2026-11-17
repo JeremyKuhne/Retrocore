@@ -133,7 +133,17 @@ internal sealed partial class RecoveryJournal
         {
             try
             {
-                kept.AddRange((Read(journal)?["disks"] as JsonArray ?? []).OfType<JsonObject>().Select(disk => (JsonObject)disk.DeepClone()));
+                // Anything but an object whose disks are all objects is unreadable, never an empty journal: a commit
+                // would then remove the snapshots it names.
+                JsonArray disks = Read(journal)?["disks"] as JsonArray
+                    ?? throw new JsonException("It has no list of disks.");
+
+                if (disks.Any(disk => disk is not JsonObject))
+                {
+                    throw new JsonException("A disk in it is not one.");
+                }
+
+                kept.AddRange(disks.OfType<JsonObject>().Select(disk => (JsonObject)disk.DeepClone()));
             }
             catch (JsonException exception)
             {
@@ -209,56 +219,66 @@ internal sealed partial class RecoveryJournal
         {
             if (_closed) { return; }
             if (close) { _closed = true; }
-            JsonArray entries = [];
-            foreach (JournalDisk disk in disks)
+            try
             {
-                Written? written;
-                if (disk.Snapshot is { } snapshot)
-                {
-                    string file = $"{disk.Medium:N}-{_next++}.{Extension(snapshot.Kind)}";
-                    WriteDurably(Path.Join(_folder, MediaFolder, file), snapshot.Image.Span);
-                    written = new(disk.Version, file, snapshot.Kind, snapshot.WriteProtected);
-                    _written[disk.Medium] = written;
-                }
-                else if (!_written.TryGetValue(disk.Medium, out written))
-                {
-                    continue;
-                }
+                Write(disks);
 
-                JsonObject entry = (JsonObject)disk.Entry.DeepClone();
-                entry["medium"] = $"{disk.Medium:N}";
-                entry["type"] = disk.Type;
-                entry["kind"] = written.Kind;
-                entry["writeProtected"] = written.WriteProtected;
-                entry["file"] = written.File;
-                entry["kept"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-                entries.Add((JsonNode)entry);
+                // What the last commit holds is the machine's unsaved state.
+                if (close) { WriteSession(clean: true); }
+            }
+            finally
+            {
+                // Closed, whether or not its last commit went through, the journal is free for the next session.
+                if (close) { _lock.Dispose(); }
+            }
+        }
+    }
+
+    // Writes a commit's snapshots, then the journal naming them, then removes the snapshots no longer named.
+    private void Write(IReadOnlyList<JournalDisk> disks)
+    {
+        JsonArray entries = [];
+        foreach (JournalDisk disk in disks)
+        {
+            Written? written;
+            if (disk.Snapshot is { } snapshot)
+            {
+                string file = $"{disk.Medium:N}-{_next++}.{Extension(snapshot.Kind)}";
+                WriteDurably(Path.Join(_folder, MediaFolder, file), snapshot.Image.Span);
+                written = new(disk.Version, file, snapshot.Kind, snapshot.WriteProtected);
+                _written[disk.Medium] = written;
+            }
+            else if (!_written.TryGetValue(disk.Medium, out written))
+            {
+                continue;
             }
 
-            foreach (JsonObject unplaced in _unplaced) { entries.Add((JsonNode)unplaced.DeepClone()); }
+            JsonObject entry = (JsonObject)disk.Entry.DeepClone();
+            entry["medium"] = $"{disk.Medium:N}";
+            entry["type"] = disk.Type;
+            entry["kind"] = written.Kind;
+            entry["writeProtected"] = written.WriteProtected;
+            entry["file"] = written.File;
+            entry["kept"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            entries.Add((JsonNode)entry);
+        }
 
-            string temporary = Path.Join(_folder, JournalFile + ".tmp");
-            WriteDurably(temporary, Utf8(new JsonObject { ["disks"] = entries }));
-            File.Move(temporary, Path.Join(_folder, JournalFile), overwrite: true);
+        foreach (JsonObject unplaced in _unplaced) { entries.Add((JsonNode)unplaced.DeepClone()); }
 
-            // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
-            HashSet<string> named = [.. entries.OfType<JsonObject>().Select(entry => entry.String("file") ?? "")];
-            foreach (string file in Directory.EnumerateFiles(Path.Join(_folder, MediaFolder)))
-            {
-                if (!named.Contains(Path.GetFileName(file))) { TryDelete(file); }
-            }
+        string temporary = Path.Join(_folder, JournalFile + ".tmp");
+        WriteDurably(temporary, Utf8(new JsonObject { ["disks"] = entries }));
+        File.Move(temporary, Path.Join(_folder, JournalFile), overwrite: true);
 
-            foreach (Guid gone in _written.Keys.Where(medium => !disks.Any(disk => disk.Medium == medium)).ToList())
-            {
-                _written.TryRemove(gone, out _);
-            }
+        // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
+        HashSet<string> named = [.. entries.OfType<JsonObject>().Select(entry => entry.String("file") ?? "")];
+        foreach (string file in Directory.EnumerateFiles(Path.Join(_folder, MediaFolder)))
+        {
+            if (!named.Contains(Path.GetFileName(file))) { TryDelete(file); }
+        }
 
-            // What the last commit holds is the machine's unsaved state, and the journal is free for the next session.
-            if (close)
-            {
-                WriteSession(clean: true);
-                _lock.Dispose();
-            }
+        foreach (Guid gone in _written.Keys.Where(medium => !disks.Any(disk => disk.Medium == medium)).ToList())
+        {
+            _written.TryRemove(gone, out _);
         }
     }
 

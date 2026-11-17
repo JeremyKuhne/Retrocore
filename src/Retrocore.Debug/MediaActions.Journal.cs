@@ -86,6 +86,10 @@ internal static partial class MediaActions
     internal static List<string> Recover(IReadOnlyList<IDevice> devices, RecoveryJournal journal)
     {
         List<string> problems = [];
+
+        // The drives a kept disk went back in: a second kept for the same drive, as when one could not go back before
+        // and another changed there since, stays in the journal rather than replace the first.
+        HashSet<string> filled = [];
         foreach (JsonObject disk in journal.Kept)
         {
             string label = disk.String("label") ?? "a disk";
@@ -110,6 +114,11 @@ internal static partial class MediaActions
                 else
                 {
                     IMediumSlot slot = device as IMediumSlot ?? throw new InvalidDataException($"{device.Info.Name} holds no disk.");
+                    if (!filled.Add(drive))
+                    {
+                        throw new InvalidDataException($"Another disk kept for {device.Info.Name} went back in it.");
+                    }
+
                     slot.Mount(medium, label, format);
                 }
 

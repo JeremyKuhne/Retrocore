@@ -202,6 +202,57 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A journal that reads as JSON but not as a journal is set aside too, never taken for an empty one.
+    /// </summary>
+    /// <param name="text">The journal's text.</param>
+    [TestMethod]
+    [DataRow("{}")]
+    [DataRow("""{ "disks": {} }""")]
+    [DataRow("""{ "disks": [1] }""")]
+    public void AJournalOfTheWrongShapeIsSetAside(string text)
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("shape.po");
+        Write(drive, block: 1, 0x66);
+        Stop(Open(id), drive);
+        File.WriteAllText(Path.Join(RecoveryJournal.Root, id, "journal.json"), text);
+
+        List<string> problems = [];
+        RecoveryJournal journal = RecoveryJournal.Open(id, problems) ?? throw new InvalidOperationException("The journal is taken.");
+        problems.Should().ContainSingle().Which.Should().Contain("could not be read");
+        Stop(journal);
+        Directory.EnumerateDirectories(Path.Join(RecoveryJournal.Root, id), "Unreadable-*").Should().ContainSingle();
+    }
+
+    /// <summary>
+    ///  Two disks kept for one drive, as when one could not go back and another changed there since, never replace
+    ///  each other: the first goes back, and the second stays in the journal.
+    /// </summary>
+    [TestMethod]
+    public void TwoDisksKeptForOneDriveBothStay()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("twice.po");
+        Write(drive, block: 1, 0x77);
+        Stop(Open(id), drive);
+
+        // The drive is gone for a launch, then back with another changed disk.
+        RecoveryJournal without = Open(id);
+        MediaActions.Recover([], without).Should().ContainSingle();
+        Apple2Disk35Drive other = Again(image);
+        Write(other, block: 2, 0x88);
+        Stop(without, other);
+        Disks(id).Should().HaveCount(2);
+
+        Apple2Disk35Drive next = Again(image);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().ContainSingle().Which.Should().Contain("went back in it");
+        Stop(journal, next);
+        Disks(id).Should().HaveCount(2, "neither disk is dropped");
+        Snapshots(id).Should().HaveCount(2);
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]

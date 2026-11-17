@@ -54,17 +54,19 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
     };
 
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
-        resolveDebugConfigurationWithSubstitutedVariables(_folder, configuration) {
+        resolveDebugConfigurationWithSubstitutedVariables(folder, configuration) {
             const name = configuration.name;
             if (typeof name !== "string") return configuration;
 
             // The machine keeps its changed disks for the next launch of the same configuration, under one id for
-            // it, made the first time it launches; a configuration can give its own.
+            // it, made the first time it launches; a configuration can give its own. Configurations of one name in
+            // the folders of a multi-root workspace are each their own.
             if (typeof configuration.recoveryId !== "string") {
-                let recoveryId = state.get<string>(recoveryPrefix + name);
+                const key = `${recoveryPrefix}${folder?.uri.toString() ?? ""}|${name}`;
+                let recoveryId = state.get<string>(key);
                 if (recoveryId === undefined) {
                     recoveryId = randomUUID();
-                    void state.update(recoveryPrefix + name, recoveryId);
+                    void state.update(key, recoveryId);
                 }
                 configuration = { ...configuration, recoveryId };
             }

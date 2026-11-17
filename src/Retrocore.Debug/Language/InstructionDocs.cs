@@ -137,6 +137,25 @@ internal static partial class InstructionDocs
         _ => DescribeM6502(mnemonic, M6502Isa.VariantOf(set))
     };
 
+    /// <summary>
+    ///  Gets what an instruction does and the flags it changes, in a line each, for any CPU.
+    /// </summary>
+    /// <param name="mnemonic">The mnemonic, such as LDA, BBR3 or LDIR.</param>
+    /// <param name="set">The CPU's instruction set.</param>
+    /// <returns>The summary and flags, or null where the CPU's mnemonics have no documentation.</returns>
+    internal static (string Summary, string Flags)? Brief(string mnemonic, InstructionSet set)
+    {
+        if (set.IsMacroOnly) { return null; }
+        Dictionary<string, (string Summary, string Flags)> docs = s_docs;
+        string key = mnemonic;
+        if (ReferenceEquals(set.Description, Z80Isa.Description)) { docs = s_z80; }
+        else if (ReferenceEquals(set.Description, M6809Isa.Description)) { docs = s_m6809; }
+        else if (ReferenceEquals(set.Description, I8080Isa.Description)) { docs = s_i8080; }
+        else if (mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3])) { key = mnemonic[..3]; }
+
+        return docs.TryGetValue(key, out (string Summary, string Flags) doc) ? doc : null;
+    }
+
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
         string key = mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) ? mnemonic[..3] : mnemonic;

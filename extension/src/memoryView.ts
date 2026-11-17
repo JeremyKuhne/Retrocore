@@ -1025,6 +1025,7 @@ function showInspector() {
     for (const row of rows) {
         html += '<div class="item"><span class="k">' + escapeText(row.label) + '</span><span class="v">' + escapeText(row.value) + "</span></div>";
     }
+    html += codeHtml();
     inspector.innerHTML = html;
 }
 
@@ -1035,7 +1036,7 @@ let inspected = null, inspectKey = "";
 
 function wantInspection() {
     if (ended) return;
-    const key = cursor + ":" + generation + ":" + writes + ":" + marks;
+    const key = cursor + ":" + generation + ":" + writes + ":" + marks + ":" + Array.from(forcedStarts).join(",");
     if (key === inspectKey) return;
     inspectKey = key;
     void loadInspection(cursor, key);
@@ -1044,7 +1045,7 @@ function wantInspection() {
 async function loadInspection(address, key) {
     let result = null;
     try {
-        result = await request({ type: "inspect", address });
+        result = await request({ type: "inspect", address, starts: Array.from(forcedStarts) });
     } catch {
         // The inspector shows what the page knows without it.
     }
@@ -1065,6 +1066,41 @@ function inspectionHtml() {
     if (known.path) {
         html += row("Source", '<button class="link" data-src="' + escapeText(known.path) + '" data-line="' + known.line + '" title="Open ' + escapeText(known.path) + ", line " + known.line + '">'
             + escapeText(fileName(known.path) + ":" + known.line) + "</button>");
+    }
+    return html;
+}
+
+// What the debugger says the cursor's byte means as bits, as an instruction and to the code: the bits a soft switch's
+// or flag byte's documentation names, with their values now; the instruction starting here, where code is known to
+// start; and the instructions that read, write or jump to the address, each going there.
+function codeHtml() {
+    const known = inspected !== null && inspected.address === cursor ? inspected : null;
+    if (known === null) return "";
+    const row = (label, value) => '<div class="item"><span class="k">' + label + '</span><span class="v">' + value + "</span></div>";
+    let html = "";
+    for (const bit of known.bits ?? []) {
+        const value = readable[cursor] === 1 ? String((bytes[cursor] >> bit.bit) & 1) : "?";
+        html += row("Bit " + bit.bit + (bit.name ? " " + escapeText(bit.name) : ""), value) + '<div class="doc">' + escapeText(bit.meaning) + "</div>";
+    }
+    const instruction = known.instruction;
+    if (instruction) {
+        html += row("Instruction", escapeText(instruction.text));
+        let size = instruction.size + (instruction.size === 1 ? " byte" : " bytes");
+        if (typeof instruction.cycles === "number") {
+            size += ", " + instruction.cycles + (typeof instruction.cyclesTaken === "number" ? " cycles, " + instruction.cyclesTaken + " taken" : " cycles");
+        }
+        html += row("Size", size);
+        if (instruction.flags) html += row("Flags", escapeText(instruction.flags));
+        if (instruction.summary) html += '<div class="doc">' + escapeText(instruction.summary) + "</div>";
+    }
+    if (known.referenceCount > 0) {
+        html += row("References", String(known.referenceCount));
+        for (const reference of known.references) {
+            html += '<div class="hit" data-go="' + reference.address + '" title="Go to ' + where(reference.address) + '"><span class="a">' + where(reference.address)
+                + (reference.label ? " " + escapeText(reference.label) : "") + '</span><span class="v">' + escapeText(reference.kind) + "</span><span>"
+                + escapeText(reference.text ?? "") + "</span></div>";
+        }
+        if (known.referenceCount > known.references.length) html += '<div class="doc">and ' + (known.referenceCount - known.references.length) + " more</div>";
     }
     return html;
 }

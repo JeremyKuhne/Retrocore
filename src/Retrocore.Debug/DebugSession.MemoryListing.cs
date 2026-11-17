@@ -54,59 +54,17 @@ internal sealed partial class DebugSession
             throw new ArgumentOutOfRangeException(nameof(args), "A listing covers 1 to 4096 bytes from $0000-$FFFF.");
         }
 
-        HashSet<int> forced = [];
-        if (args["starts"] is JsonArray starts)
-        {
-            foreach (JsonNode? start in starts)
-            {
-                if (start?.GetValue<int>() is int value and >= 0 and <= 0xFFFF) { forced.Add(value); }
-            }
-        }
-
-        // Code marked in the hints file starts instructions, as Decode from here's starts do, unless the bytes have
-        // changed since so that its instruction now runs into data marked: the data, also marked, stays data.
+        SpaceAnalysis analysis = AnalyzeSpace(bank, args);
+        ListingMemory memory = analysis.Memory;
+        InstructionSet set = analysis.Set;
+        SortedDictionary<int, string> labels = analysis.Labels;
+        SortedDictionary<int, string> names = analysis.Names;
+        MemoryGuesses guesses = analysis.Guesses;
+        HashSet<int> forced = analysis.Forced;
+        Dictionary<int, int> markedCode = analysis.MarkedCode;
+        Func<int, DebugPosition?> Position = analysis.Position;
+        Func<int, bool> Marked = analysis.Marked;
         string space = HintSpace(bank);
-        IReadOnlyList<(int Start, int Length)> markedData = MarkHints.Data(space);
-        bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
-        // Its instruction is one line whatever source statement or label starts inside it.
-        Dictionary<int, int> markedCode = [];
-        foreach (int code in MarkHints.Code(space))
-        {
-            int size = InstructionSize(bank, code);
-            if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked))
-            {
-                forced.Add(code);
-                markedCode[code] = size;
-            }
-        }
-
-        // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
-        // be checked against memory again at every byte of it.
-        ListingMemory memory = new(bank is null ? Target : new BankMemory(bank), address => MemoryByte(bank, address));
-        Dictionary<int, DebugPosition?> positions = [];
-        DebugPosition? Position(int address)
-        {
-            if (!positions.TryGetValue(address, out DebugPosition? position))
-            {
-                position = _debug.Position(memory, (ushort)address);
-                positions.Add(address, position);
-            }
-
-            return position;
-        }
-
-        InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
-        (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
-        // Analysis guesses at the bytes no source describes, from the PC, the starts and the sources' code.
-        MemoryGuesses guesses = Guess(
-            bank,
-            memory,
-            set,
-            GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
-            forced,
-            Position,
-            markedData);
-
 
         // A comment starts a data line, so each shows on the line it is about; one inside an instruction shows on it.
         IReadOnlyDictionary<int, string> comments = MarkHints.Comments(space);
@@ -293,6 +251,65 @@ internal sealed partial class DebugSession
         }
 
         return new JsonObject { ["lines"] = lines.ToJsonArray() };
+    }
+
+    // Reads a space and analyzes it, from the request's Decode from here starts (starts) and the hints file's marks.
+    private SpaceAnalysis AnalyzeSpace(DebugMemoryBank? bank, JsonObject args)
+    {
+        HashSet<int> forced = [];
+        if (args["starts"] is JsonArray starts)
+        {
+            foreach (JsonNode? start in starts)
+            {
+                if (start?.GetValue<int>() is int value and >= 0 and <= 0xFFFF) { forced.Add(value); }
+            }
+        }
+
+        // Code marked in the hints file starts instructions, as Decode from here's starts do, unless the bytes have
+        // changed since so that its instruction now runs into data marked: the data, also marked, stays data.
+        string space = HintSpace(bank);
+        IReadOnlyList<(int Start, int Length)> markedData = MarkHints.Data(space);
+        bool Marked(int address) => markedData.Any(range => address >= range.Start && address < range.Start + range.Length);
+        // Its instruction is one line whatever source statement or label starts inside it.
+        Dictionary<int, int> markedCode = [];
+        foreach (int code in MarkHints.Code(space))
+        {
+            int size = InstructionSize(bank, code);
+            if (!Enumerable.Range(code, Math.Min(size, 0x10000 - code)).Any(Marked))
+            {
+                forced.Add(code);
+                markedCode[code] = size;
+            }
+        }
+
+        // Each byte is read once, and each address's position found once, as a long data statement's would otherwise
+        // be checked against memory again at every byte of it.
+        ListingMemory memory = new(bank is null ? Target : new BankMemory(bank), address => MemoryByte(bank, address));
+        Dictionary<int, DebugPosition?> positions = [];
+        DebugPosition? Position(int address)
+        {
+            if (!positions.TryGetValue(address, out DebugPosition? position))
+            {
+                position = _debug.Position(memory, (ushort)address);
+                positions.Add(address, position);
+            }
+
+            return position;
+        }
+
+        InstructionSet set = bank?.InstructionSet ?? Target.InstructionSet;
+        (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
+        // Analysis guesses at the bytes no source describes, from the PC, the starts and the sources' code.
+        MemoryGuesses guesses = Guess(
+            bank,
+            memory,
+            set,
+            GuessEntries(bank, labels.Keys.Where(label => Position(label) is { Data: false })),
+            forced,
+            Position,
+            markedData);
+
+        return new SpaceAnalysis(memory, set, labels, names, guesses, forced, markedCode, Position, Marked);
     }
 
     // The comments on a line's bytes, in order, or null where it has none.

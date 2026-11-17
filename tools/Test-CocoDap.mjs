@@ -192,6 +192,16 @@ try {
     assert.equal((await event("stopped")).reason, "entry");
     const coco3Hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.equal(coco3Hardware.rom.value, "Color, Extended and Super Extended Color BASIC 2.0, from the SDK's sources");
+    // Retrocore Memory's inspector names a register's bits: from the masks its documentation links to, as INIT0's
+    // <MMUEN> is bit 6, and from what it says of a bit by number, as INIT1's "the timer's clock, in bit 5" does.
+    const bitsAt = async address => (await request("retro/memory/inspect", { memoryReference: "0x0000", address })).bits;
+    const init0 = await bitsAt(0xFF90);
+    assert.deepEqual(init0.map(bit => bit.name), ["COCO", "MMUEN", "IEN", "FEN", "MC3", "MC2", "MC1", "MC0"]);
+    assert.deepEqual(init0[1], { bit: 6, name: "MMUEN", meaning: "INIT0's bit that turns the MMU on, which maps each 8K of the 64K address space to a block of RAM or ROM." });
+    assert.deepEqual(await bitsAt(0xFF91), [
+        { bit: 5, name: null, meaning: "the timer's clock" },
+        { bit: 0, name: null, meaning: "which of the MMU's two tasks maps the address space" }
+    ]);
     await request("continue", { threadId: 1 });
     assert.equal((await event("stopped")).reason, "breakpoint");
     await request("stepIn", { threadId: 1 });

@@ -120,6 +120,9 @@ try {
     // The double's 56 bits hold 2^53 + 1, which the text keeps and a JavaScript or C# double would not.
     assert.deepEqual((await request("retro/memory/numbers", { memoryReference: "0x0000", value: "9007199254740993" })).formats[1].bytes,
         [0x04, 0, 0, 0, 0, 0, 0, 0xB6]);
+    // The instruction at the ROM's start, with the T-states the Z80's instruction set gives.
+    const reset = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0 })).instruction;
+    assert.deepEqual([reset.text, reset.size, reset.cycles, reset.cyclesTaken], ["DI", 1, 4, null], JSON.stringify(reset));
 
     // Labels come from the program and the SDK's ROM source, where their code is in memory now.
     at = "reading memory labels";
@@ -550,6 +553,33 @@ try {
     // A bank's gap holds no number, nor does a float that runs into it.
     assert.deepEqual((await inspect(0xC000, "main:0x0000")).values, []);
     assert.deepEqual((await inspect(0xBFFE, "main:0x0000")).values, []);
+    // The instruction where code starts, with its cycles, run on a 65C02 of its own, and the flags it changes; none
+    // inside one, nor in I/O or a table.
+    at = "the instruction at the cursor";
+    assert.deepEqual((await inspect(0x0300)).instruction,
+        { text: "LDA LCBANK2", size: 3, cycles: 4, cyclesTaken: null, flags: "N Z", summary: "Loads A from memory." });
+    assert.equal((await inspect(0x0317)).instruction.cycles, 3);
+    for (const address of [0x0301, 0xC000, 0x0024, 0x031A]) {
+        assert.equal((await inspect(address)).instruction, null, "no instruction at $" + address.toString(16));
+    }
+    // A branch takes a cycle more when taken.
+    await write("0x6520", [0xD0, 0x02]);
+    await mark({ address: 0x6520, kind: "code" });
+    assert.deepEqual([(await inspect(0x6520)).instruction.cycles, (await inspect(0x6520)).instruction.cyclesTaken], [2, 3]);
+    await mark({ address: 0x6520, count: 2, kind: "clear" });
+    // The code that writes, reads or jumps to an address, in the program and the firmware.
+    at = "references to an address";
+    inspected = await inspect(0xD000);
+    assert.deepEqual([inspected.referenceCount, inspected.references], [2, [
+        { address: 0x0308, text: "STA $D000", label: "BANK2+8", kind: "writes" },
+        { address: 0x0314, text: "STA $D000", label: "FROZEN+9", kind: "writes" }
+    ]]);
+    assert.deepEqual((await inspect(0x0317)).references, [{ address: 0x0317, text: "JMP SWITCHED", label: "SWITCHED", kind: "jumps" }]);
+    assert.ok((await inspect(0xC013)).references.some(reference => reference.text === "LDA RDRAMRD" && reference.kind === "reads"));
+    // A soft switch's bits, from what its documentation says of them.
+    at = "named bits";
+    assert.deepEqual((await inspect(0xC013)).bits, [{ bit: 7, name: null, meaning: "whether RAMRD is on" }]);
+    assert.equal((await inspect(0x0024)).bits, null, "CH says nothing of its bits");
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;

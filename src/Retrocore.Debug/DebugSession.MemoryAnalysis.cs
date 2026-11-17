@@ -95,6 +95,8 @@ internal sealed partial class DebugSession
 
         // Targets one run's analysis finds in another start that one's, until no run gains any.
         List<HashSet<int>> found = [.. Enumerable.Range(0, runs.Count / 2).Select(_ => new HashSet<int>())];
+        // Each run's references from its last analysis, which replaces the earlier ones.
+        IReadOnlyList<DisassemblyReference>[] referencesOf = new IReadOnlyList<DisassemblyReference>[runs.Count / 2];
         HashSet<int> pending = [.. Enumerable.Range(0, runs.Count / 2)];
         for (int round = 0; round < GuessRounds && pending.Count > 0; round++)
         {
@@ -104,6 +106,7 @@ internal sealed partial class DebugSession
                 int start = runs[index * 2], length = runs[(index * 2) + 1];
                 IEnumerable<int> inRun = ordered.Concat(found[index]);
                 DisassemblyResult result = AnalyzeRun(image, start, length, set, bank, inRun, starts, regions, kinds);
+                referencesOf[index] = result.References;
                 foreach (DisassemblyReference reference in result.References)
                 {
                     // A jump through a pointer in another run, which this run's analysis cannot read, is followed
@@ -154,7 +157,14 @@ internal sealed partial class DebugSession
 
         // The bytes read become the analysis's, and the last analysis's bytes the next request's scratch.
         _guessScratch = _guesses?.Image ?? new byte[0x10000];
-        _guesses = new MemoryGuesses(Target, set, space, image, [.. runs], ordered, starts, data, kinds);
+        List<DisassemblyReference> all = [];
+        foreach (IReadOnlyList<DisassemblyReference> list in referencesOf)
+        {
+            if (list is not null) { all.AddRange(list); }
+        }
+
+        ILookup<int, DisassemblyReference> references = all.ToLookup(reference => (int)reference.Target);
+        _guesses = new MemoryGuesses(Target, set, space, image, [.. runs], ordered, starts, data, kinds, references);
         return _guesses;
     }
 

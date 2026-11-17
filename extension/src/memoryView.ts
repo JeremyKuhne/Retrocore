@@ -919,7 +919,9 @@ async function assembleLine(line) {
     // In turn with typing, undo and redo, so the write is on the undo stack before either can run.
     let written = false;
     await new Promise(resolve => queue(async () => {
-        written = await write(line.address, values, true);
+        // An edit or undo before it in the queue may have changed the listing while it waited.
+        if (listingKey === key && listingCurrent()) written = await write(line.address, values, true);
+        else status("The listing changed while you typed; press F2 again.", true);
         resolve(undefined);
     }));
     if (written) status("Assembled " + typed + " at " + where(line.address) + ".");

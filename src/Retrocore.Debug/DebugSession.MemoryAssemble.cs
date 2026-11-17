@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Isa;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -85,7 +86,7 @@ internal sealed partial class DebugSession
         if (operands > 0)
         {
             int aliases = 0;
-            string operand = LineName().Replace(line[operands..], name =>
+            string Alias(Match name)
             {
                 string value = name.Value;
                 if (!value.Contains("::", StringComparison.Ordinal)) { return value; }
@@ -93,16 +94,30 @@ internal sealed partial class DebugSession
                 string alias = $"__RETROCORE{aliases++}";
                 symbols[alias] = resolved;
                 return alias;
-            });
+            }
+
+            // Names outside quoted text only, so .byte "RamTest::R6H" stays those characters.
+            string written = line[operands..];
+            StringBuilder operand = new();
+            foreach ((int start, int end, bool quoted) in Pieces(written))
+            {
+                string piece = written[start..end];
+                operand.Append(quoted ? piece : LineName().Replace(piece, Alias));
+            }
 
             text = line[..operands] + operand;
-            foreach (Match name in LineName().Matches(operand))
+            string aliased = operand.ToString();
+            foreach ((int start, int end, bool quoted) in Pieces(aliased))
             {
-                string value = name.Value;
-                if (symbols.ContainsKey(value) || spelled.ContainsKey(value)) { continue; }
-                if (TryResolve(value, memory, space) is not { } resolved) { continue; }
-                bool register = registers.Contains(value) || s_conditions.Contains(value);
-                (register ? spelled : symbols)[value] = resolved;
+                if (quoted) { continue; }
+                foreach (Match name in LineName().Matches(aliased[start..end]))
+                {
+                    string value = name.Value;
+                    if (symbols.ContainsKey(value) || spelled.ContainsKey(value)) { continue; }
+                    if (TryResolve(value, memory, space) is not { } resolved) { continue; }
+                    bool register = registers.Contains(value) || s_conditions.Contains(value);
+                    (register ? spelled : symbols)[value] = resolved;
+                }
             }
         }
 
@@ -134,6 +149,28 @@ internal sealed partial class DebugSession
         return section.Bytes[..Math.Min(size, section.Size)].ToArray();
     }
 
+    // An operand's pieces in order: quoted text, such as "HELLO" or 'A', and what is between. A quote that does not
+    // close, as the Z80's AF' has, is no quote.
+    private static List<(int Start, int End, bool Quoted)> Pieces(string operand)
+    {
+        List<(int Start, int End, bool Quoted)> pieces = [];
+        int plain = 0;
+        for (int index = 0; index < operand.Length; index++)
+        {
+            char character = operand[index];
+            if (character is not ('\'' or '"')) { continue; }
+            int close = operand.IndexOf(character, index + 1);
+            if (close < 0) { continue; }
+            if (index > plain) { pieces.Add((plain, index, false)); }
+            pieces.Add((index, close + 1, true));
+            plain = close + 1;
+            index = close;
+        }
+
+        if (plain < operand.Length) { pieces.Add((plain, operand.Length, false)); }
+        return pieces;
+    }
+
     // A name's value from the session, or null where it has none.
     private long? TryResolve(string name, IDebugMemory memory, string space)
     {
@@ -159,7 +196,8 @@ internal sealed partial class DebugSession
         return new Assembler.Assembler().Assemble(new AssemblySource("    " + text + "\n", "line"), options);
     }
 
-    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H or ::COUT; not a number such as $C0 or 1E.
-    [GeneratedRegex(@"(?<![$%\w.:])(?:::)?[A-Za-z_][\w.]*(?:::[A-Za-z_][\w.]*)*")]
+    // A name in an operand, such as KBD, COUT+1's COUT, RamTest::R6H, ::COUT or z:CH's CH; not a number such as $C0
+    // or 1E, nor a width prefix such as z: or a:.
+    [GeneratedRegex(@"(?<![$%\w.])(?:::)?[A-Za-z_][\w.]*(?:::[A-Za-z_][\w.]*)*(?!:(?!:))")]
     private static partial Regex LineName();
 }

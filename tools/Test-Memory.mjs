@@ -123,6 +123,8 @@ try {
     // A line assembles in the Z80's syntax, its conditions no symbols.
     const z80 = async line => (await request("retro/memory/assemble", { memoryReference: "0x0000", address: 0x7000, line })).bytes;
     assert.deepEqual([await z80("LD A,[HL]"), await z80("JP NZ,$0000"), await z80("XOR A")], [[0x7E], [0xC2, 0, 0], [0xAF]]);
+    // AF's apostrophe opens no quoted text.
+    assert.deepEqual(await z80("EX AF,AF'"), [0x08]);
     // The instruction at the ROM's start, with the T-states the Z80's instruction set gives.
     const reset = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0 })).instruction;
     assert.deepEqual([reset.text, reset.size, reset.cycles, reset.cyclesTaken], ["DI", 1, 4, null], JSON.stringify(reset));
@@ -626,6 +628,9 @@ try {
     assert.deepEqual((await assemble("BNE *+4")).bytes, [0xD0, 0x02]);
     // A scoped name stands in the line as an alias, as a constant cannot be called RamTest::R6H.
     assert.deepEqual((await assemble("STA RamTest::R6H")).bytes, [0x85, 0x0D]);
+    // Quoted text stays as typed; a width prefix's name is still the session's.
+    assert.deepEqual((await assemble('.byte "RamTest::R6H"')).bytes, Array.from(Buffer.from("RamTest::R6H", "ascii")));
+    assert.deepEqual([(await assemble("STA z:CH")).bytes, (await assemble("LDA a:CH")).bytes], [[0x85, 0x24], [0xAD, 0x24, 0x00]]);
     // A label spelled as a register or condition is still the label where the register would not assemble.
     await mark({ address: 0x6600, name: "Z" });
     assert.deepEqual((await assemble("LDA Z")).bytes, [0xAD, 0x00, 0x66]);

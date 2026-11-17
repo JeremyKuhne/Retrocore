@@ -640,6 +640,27 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Zero page", 0, 256);
 
     /// <inheritdoc/>
+    public IReadOnlyList<DebugRegion> Regions { get; } = AppleRegions();
+
+    // The II family's map, as the firmware and DOS use it.
+    private static DebugRegion[] AppleRegions() =>
+    [
+        new("Zero page", 0x0000, 0x100, "ram"),
+        new("Stack", 0x0100, 0x100, "ram"),
+        new("Input buffer", 0x0200, 0x100, "ram"),
+        new("Page 3, with DOS's and the Monitor's vectors", 0x0300, 0x100, "ram"),
+        new("Text page 1", 0x0400, 0x400, "video", DebugRegion.AppleText),
+        new("Text page 2", 0x0800, 0x400, "video", DebugRegion.AppleText),
+        new("Hi-res page 1", 0x2000, 0x2000, "video", DebugRegion.AppleHires),
+        new("Hi-res page 2", 0x4000, 0x2000, "video", DebugRegion.AppleHires),
+        new("I/O and soft switches", 0xC000, 0x100, "io"),
+        .. Enumerable.Range(1, 7).Select(slot => new DebugRegion($"Slot {slot} ROM", (ushort)(0xC000 + (slot << 8)), 0x100, "rom")),
+        new("Expansion ROM", 0xC800, 0x800, "rom"),
+        new("BASIC ROM, or the language card", 0xD000, 0x2800, "rom"),
+        new("Monitor ROM, or the language card", 0xF800, 0x800, "rom")
+    ];
+
+    /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
 
     /// <inheritdoc/>

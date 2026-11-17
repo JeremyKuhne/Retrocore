@@ -101,8 +101,9 @@ internal sealed class MachinePane : ScrollViewer
 
         _machine.SetMessage(_session.Problems.Count == 0 ? null : $"{_session.Name} could not be fully set up: {string.Join(" ", _session.Problems)}");
 
-        // The badge counts the disks changed in the machine and not yet saved to their images.
-        int changed = devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
+        // The badge counts the disks changed in the machine and not yet saved to their images, in drives or ejected.
+        int ejected = _session.Host.UnsavedEjected().Count;
+        int changed = ejected + devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
         _drives.SetBadge(changed, $"{changed} disk{(changed == 1 ? "" : "s")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
 
         // Built again for another machine, or when a card changes what this one offers, as adding a Mockingboard does.
@@ -411,6 +412,11 @@ internal sealed class MachinePane : ScrollViewer
     internal IReadOnlyList<DeviceState> Unsaved => [.. _session.Host.DeviceStates().Where(device => device.Media?.Changed == true && device.Can(MediaOperations.Save))];
 
     /// <summary>
+    ///  Gets whether any disk has changes not saved to its image, in a drive or ejected from one by the machine.
+    /// </summary>
+    internal bool HasUnsaved => Unsaved.Count != 0 || _session.Host.UnsavedEjected().Count != 0;
+
+    /// <summary>
     ///  Asks about each disk whose changes are not saved before something that sets the machine up again would lose
     ///  them: save it, or let the changes go.
     /// </summary>
@@ -488,6 +494,33 @@ internal sealed class MachinePane : ScrollViewer
             saved.Add(mount);
             JsonObject save = new() { ["generation"] = device.Generation };
             if (answer is null || !await Send(args => _session.Device(device.Id, "save", args), save)) { return false; }
+        }
+
+        // The changed disks the machine ejected, which the host holds only while the machine does: asked about the same
+        // way, by their ejected ids.
+        HashSet<string> discardedEjected = [];
+        HashSet<string> savedEjected = [];
+        while (_session.Host.UnsavedEjected().FirstOrDefault(kept => !discardedEjected.Contains(kept.Ejected)) is var (drive, ejected, label)
+            && ejected is not null)
+        {
+            string file = Path.GetFileName(label) is { Length: > 0 } name ? name : "its image";
+            string? answer = savedEjected.Contains(ejected)
+                ? await _window.Ask(
+                    $"{file} cannot hold all of the disk the machine ejected from {drive.Info.Name}, so it still has changes. Let them go before {what}?",
+                    ["Discard"])
+                : await _window.Ask(
+                    $"The machine ejected {file} from {drive.Info.Name} with changes not saved. Save them before {what}?",
+                    ["Save", "Discard"]);
+
+            if (answer == "Discard")
+            {
+                discardedEjected.Add(ejected);
+                continue;
+            }
+
+            savedEjected.Add(ejected);
+            JsonObject save = new() { ["ejected"] = ejected };
+            if (answer is null || !await Send(args => _session.Device(drive.Id, "save", args), save)) { return false; }
         }
 
         return true;

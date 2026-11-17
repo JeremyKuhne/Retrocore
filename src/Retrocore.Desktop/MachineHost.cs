@@ -567,6 +567,20 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
+    ///  Gets the changed disks the machine ejected from its drives, which the host keeps until they are saved or let go.
+    /// </summary>
+    /// <returns>Each one's drive, its id among the drive's ejected disks, and its label.</returns>
+    internal IReadOnlyList<(DeviceState Drive, string Ejected, string Label)> UnsavedEjected()
+    {
+        using (Gate())
+        {
+            return [.. _target.Devices.SelectMany(device => MediaActions.Ejected(device)
+                .Where(kept => kept.Medium.IsDirty)
+                .Select(kept => (DeviceState.Of(device), kept.Id, kept.Label)))];
+        }
+    }
+
+    /// <summary>
     ///  Captures the machine's cards and media, as a saved machine keeps them.
     /// </summary>
     /// <returns>The saved machine.</returns>

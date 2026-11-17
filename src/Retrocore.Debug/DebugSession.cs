@@ -555,12 +555,24 @@ internal sealed partial class DebugSession
         MediaActions.SourcesChanged -= SourcesChanged;
     }
 
-    // Sends the devices again when an image a disk came from changed on disk.
-    private void SourcesChanged() => Reply(() =>
+    // Sends the devices again when an image a disk came from changed on disk. It runs on a watcher's timer, where an
+    // exception would end the process, so a session whose client has gone, or that is between machines, lets it pass:
+    // the next devices the client asks for show the image as it is.
+    private void SourcesChanged()
     {
-        if (_target is not null && !_ended) { NotifyDevices(); }
-        return [];
-    });
+        try
+        {
+            Reply(() =>
+            {
+                if (_target is not null && !_ended) { NotifyDevices(); }
+                return [];
+            });
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The client went away or the machine is changing; nothing is lost, as the watch keeps the image's state.
+        }
+    }
 
     // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
     // happens only once: if it fails, the target is left as it was.

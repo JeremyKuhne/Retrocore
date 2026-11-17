@@ -930,9 +930,11 @@ async function assembleLine(line) {
     // In turn with typing, undo and redo, so the write is on the undo stack before either can run.
     let written = false;
     await new Promise(resolve => queue(async () => {
-        // An edit or undo before it in the queue may have changed the listing while it waited.
-        if (listingKey === key && listingCurrent()) written = await write(line.address, values, true);
-        else status("The listing changed while you typed; press F2 again.", true);
+        // An edit or undo before it in the queue, or a stop while the bytes are read, may change the listing while
+        // it waits; the write is checked again after each wait, up to sending it.
+        const current = () => listingKey === key && listingCurrent();
+        if (current()) written = await write(line.address, values, true, current);
+        if (!written && !current()) status("The listing changed while you typed; press F2 again.", true);
         resolve(undefined);
     }));
     if (written) status("Assembled " + typed + " at " + where(line.address) + ".");
@@ -1267,9 +1269,11 @@ function writeProblem(offset, count) {
     return null;
 }
 
-async function write(offset, values, record) {
+// still, when given, says whether what the write was decided from holds after reading the bytes, which waits.
+async function write(offset, values, record, still) {
     // Undo puts back the bytes from before, so they must be what memory held.
     if (!await loaded(offset, values.length)) return false;
+    if (still && !still()) return false;
     const problem = writeProblem(offset, values.length);
     if (problem !== null) {
         status(problem, true);

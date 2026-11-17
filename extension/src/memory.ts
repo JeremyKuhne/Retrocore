@@ -5,11 +5,12 @@
 // Memory views: Retrocore Memory, a custom editor for retrocore-memory URIs, which name a session and a memory
 // reference, and which reads through the debug host's retro/memory/read and writes through writeMemory. The Open Memory command
 // picks memory as the CPU maps it or one of the machine's banks, such as the IIe's auxiliary RAM, and an address
-// in it, and the Variables and Watch views open an address from their context menus.
+// in it, and the Variables and Watch views open an address from their context menus. Bookmarks, names for addresses,
+// are kept in the workspace's state for each launch configuration, since they record where someone was looking.
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn } from "./memoryModel";
+import { addressAt, bookmarkStore, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn, withBookmark, type MemoryBookmark } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -151,6 +152,17 @@ async function goTo(session: vscode.DebugSession, bank: string | null, text: str
     }
 }
 
+/**
+ * The workspace state key bookmarks are kept under: pairs of a launch configuration's name and its bookmarks, a list
+ * rather than an object so that any name, such as constructor or __proto__, is only a name.
+ */
+const bookmarksKey = "retrocore.memory.bookmarks";
+
+/** Where a bookmark is, as the page writes addresses: $0400, or aux:$0400 in a bank. */
+function bookmarkWhere(bookmark: MemoryBookmark): string {
+    return `${bookmark.bank === null ? "" : `${bookmark.bank}:`}$${hex(bookmark.address, 4)}`;
+}
+
 const blankPage = (text: string) => `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"></head>
 <body style="font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:12px">${text}</body></html>`;
@@ -200,6 +212,23 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         }
     };
     let lastEditor: MemoryEditor | undefined;
+    // The bookmarks of a session's launch configuration, and of one space of them as a page shows them.
+    const bookmarks = (session: vscode.DebugSession): MemoryBookmark[] =>
+        bookmarkStore(context.workspaceState.get<unknown>(bookmarksKey)).get(session.configuration.name) ?? [];
+    const bookmarksIn = (session: vscode.DebugSession, reference: string) =>
+        bookmarks(session).filter(item => bankBase(item.bank) === reference).map(item => ({ name: item.name, address: item.address }));
+    // Keeps a launch configuration's bookmarks and shows them in every editor of its sessions.
+    const keepBookmarks = async (session: vscode.DebugSession, list: MemoryBookmark[]): Promise<void> => {
+        const all = bookmarkStore(context.workspaceState.get<unknown>(bookmarksKey));
+        if (list.length === 0) all.delete(session.configuration.name);
+        else all.set(session.configuration.name, list);
+        await context.workspaceState.update(bookmarksKey, [...all]);
+        for (const editor of editors) {
+            if (editor.session.configuration.name === session.configuration.name) {
+                void editor.panel.webview.postMessage({ type: "bookmarks", bookmarks: bookmarksIn(editor.session, editor.reference) });
+            }
+        }
+    };
     context.subscriptions.push(vscode.debug.onDidStartDebugSession(session => sessions.set(session.id, session)));
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
         sessions.delete(session.id);
@@ -310,7 +339,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                     await panel.webview.postMessage({
                         type: "init",
                         address: start.address,
-                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly, bigEndian: bank.bigEndian === true }
+                        info: { bank: start.bank, label: bank.label, readOnly: bank.readOnly, bigEndian: bank.bigEndian === true },
+                        bookmarks: bookmarksIn(session, base)
                     });
                     ready();
                     return;
@@ -485,6 +515,74 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         case "goto":
                             await reply({ address: await goTo(session, start.bank, String(received.text)) });
                             break;
+                        case "numbers":
+                            // A number's bytes as the BASIC's floats, which Find looks for.
+                            await reply(await session.customRequest("retro/memory/numbers", { memoryReference: base, value: received.value }));
+                            break;
+                        case "bookmark": {
+                            // Names the address, renames its bookmark, or with an empty name removes it.
+                            const address = Number(received.address);
+                            const here = bookmarks(session).find(item => item.bank === start.bank && item.address === address);
+                            const at = bookmarkWhere({ name: "", bank: start.bank, address });
+                            const name = await vscode.window.showInputBox({
+                                title: `Bookmark ${at}`,
+                                prompt: here === undefined ? "A name for this bookmark." : "A new name for this bookmark; empty removes it.",
+                                value: here?.name ?? (typeof received.name === "string" ? received.name : at)
+                            });
+                            if (name === undefined || (here === undefined && name.trim().length === 0)) {
+                                await reply({ cancelled: true });
+                                break;
+                            }
+                            await keepBookmarks(session, withBookmark(bookmarks(session), start.bank, address, name));
+                            await reply({ bookmarks: bookmarksIn(session, base) });
+                            break;
+                        }
+                        case "bookmarks": {
+                            // A quick pick of the launch configuration's bookmarks, each with a button to remove it.
+                            if (bookmarks(session).length === 0) {
+                                await reply({ none: true });
+                                break;
+                            }
+                            type Item = vscode.QuickPickItem & { bookmark: MemoryBookmark };
+                            const remove: vscode.QuickInputButton = { iconPath: new vscode.ThemeIcon("trash"), tooltip: "Remove this bookmark" };
+                            const items = (): Item[] => bookmarks(session).map(bookmark => ({
+                                label: bookmark.name, description: bookmarkWhere(bookmark), buttons: [remove], bookmark
+                            }));
+                            const pick = vscode.window.createQuickPick<Item>();
+                            pick.title = "Go to a bookmark";
+                            pick.placeholder = "A bookmark's name or address";
+                            pick.matchOnDescription = true;
+                            pick.items = items();
+                            const chosen = await new Promise<MemoryBookmark | undefined>(resolve => {
+                                pick.onDidTriggerItemButton(async event => {
+                                    const gone = event.item.bookmark;
+                                    await keepBookmarks(session, withBookmark(bookmarks(session), gone.bank, gone.address, ""));
+                                    pick.items = items();
+                                    if (pick.items.length === 0) pick.hide();
+                                });
+                                pick.onDidAccept(() => {
+                                    resolve(pick.selectedItems[0]?.bookmark);
+                                    pick.hide();
+                                });
+                                pick.onDidHide(() => resolve(undefined));
+                                pick.show();
+                            });
+                            pick.dispose();
+                            if (chosen === undefined || bankBase(chosen.bank) === base) {
+                                await reply({ bookmarks: bookmarksIn(session, base), address: chosen?.address, name: chosen?.name });
+                                break;
+                            }
+                            // A bookmark in another space: an editor showing that space goes there, else one opens.
+                            await reply({ bookmarks: bookmarksIn(session, base) });
+                            const showing = [...editors].find(item => item.session.id === session.id && item.reference === bankBase(chosen.bank));
+                            if (showing !== undefined) {
+                                showing.panel.reveal();
+                                await showing.panel.webview.postMessage({ type: "goto", address: chosen.address });
+                            } else {
+                                await openMemory(session, `${chosen.bank === null ? "" : `${chosen.bank}:`}0x${hex(chosen.address, 4)}`);
+                            }
+                            break;
+                        }
                         case "copy":
                             await vscode.env.clipboard.writeText(String(received.text));
                             await reply(null);

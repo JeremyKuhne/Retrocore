@@ -111,13 +111,24 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   frame is focused, and `SP` in a caller's frame is the caller's; an address that frame puts in another bank, such
   as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's, as an address does while
   a BASIC frame is focused. Opening a label or a Watch expression does the same.
+- **Follow**, beside Go to, goes to Go to's expression again at each stop, such as `PC`, `S+$100`, `HL` or
+  `[$06].w`, so the view keeps up with a register or pointer; a new Go to while following follows that instead.
+  Clearing it leaves the view where it is. Each editor remembers what it follows.
+- **Back** and **Forward** (**Alt+Left** and **Alt+Right** wherever focus is in the editor, or the mouse's back and forward buttons) go through
+  where Go to, the map, the listing's operands, bookmarks, search results and following have moved the view.
+- **Bookmark** in the inspector names the cursor's address, or renames or removes its bookmark; **Bookmarks** in
+  the toolbar lists them in a quick pick, to go to one or remove it. They are kept in the workspace's state for each
+  launch configuration, since they record where someone was looking rather than anything about the program. A
+  bookmarked byte is underlined. One in another bank goes there in that bank's editor, opening one if none is open.
 - **Find** (**Ctrl+F**) takes hex bytes, with `??` for any byte, such as `A9 ?? 20`; text in quotes, such as
   `"HELLO"`, which matches each character in any of the machine's codes for it (or, without the machine's
   characters, with bit 7 clear or set); or an instruction, as the listing shows it, with `?` for any character and
   `*` for any run, such as `STA $C0??`, `JSR COUT` or `LD A,(*)`. An instruction's operand matches as a number or
   as its label, ignoring case and the spaces around commas, and every byte is tried as an instruction's start;
-  text that reads as hex bytes, such as `ADDA`, is found as bytes. **Enter** or **F3** finds the next, with
-  **Shift** the one before, wrapping around.
+  text that reads as hex bytes, such as `ADDA`, is found as bytes. A number after `=`, such as `=1000`,
+  `=$C000` or `=-2.5`, is found in any of the inspector's forms: a byte when it fits one, else a word low first or
+  high first, and the BASIC's floats, as BASIC rounds the number; the nearest wins, and the status says which form
+  it was. **Enter** or **F3** finds the next, with **Shift** the one before, wrapping around.
 - **The map** across the top is the whole space, colored by what memory reads there now (RAM, ROM, I/O, video,
   or nothing), with a line where each of the machine's regions starts and a box around the bytes in view. In a
   bank's editor, the addresses where the CPU reads something else now are dimmed. Hovering names the address, its
@@ -240,6 +251,7 @@ Retrocore Memory uses five more requests:
 | `retro/memory/starts` | For a `memoryReference`, a mark's `address` and `count`, and an editor's Decode from here `starts`, the `starts` left: each whose instruction is in those bytes or runs into them goes, except `keep`, a code mark's own. |
 | `retro/memory/find` | For a `memoryReference` and an instruction `pattern` (`?` any character, `*` any run; case and the spaces around commas ignored), the nearest instruction from `from`, or back from it with `backward`, wrapping once, whose text matches with its operand as a number or as its label: its `address`, `size` and `text`, or a null `address`. |
 | `retro/memory/map` | For a `memoryReference`: the machine's `regions`, each with its `start`, `length`, `name` and `kind`, as `retro/memory/inspect` gives them; and the `areas`, the runs of addresses that read the same part of the machine now, to the byte, each with its `start`, `length`, `name`, `kind` (`ram`, `rom`, `io`, `video` or `none`) and whether it is `mapped`: always in the CPU's view, and in a bank's whether the CPU reads the bank there now. A bank's gaps are `none`; a coprocessor's view has neither. |
+| `retro/memory/numbers` | For a `memoryReference` and a `value`, as BASIC writes numbers: `formats`, each with the `label` the inspector gives it and the `bytes` in memory order, rounded once from the decimal text as BASIC stores the value, so Level II's double keeps all 56 bits. None in a coprocessor's view, with an integer BASIC, or where the value is too large for a format. |
 | `retro/memory/inspect` | For a `memoryReference` and an `address`: the `region` of the machine's map it is in, with its `kind` (`ram`, `rom`, `io`, `video`, or `none` where nothing is mapped) and the `detail` of where in it, such as a text screen's row and column; what the memory map does with it now, `mapped`, on a machine with banks; the `label` it is or is in, with the `offset` past it and its documentation's `summary`; the source `path` and `line` that emitted it; and the BASIC's floating point `values` starting there, each a `label` and `value`. Anything unknown is null. |
 | `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
@@ -259,13 +271,15 @@ Z80's 16-bit registers except AF, the memory scope's bytes and Pascal's variable
 ## Testing
 
 `node tools/Test-Memory.mjs` checks memory references, unreadable bytes, `retro/memory/read`'s gaps and read-only
-runs, labels and the character set, freezing, writes and their rollback, memory events for changed views and variables on
+runs, labels and the character set, Level II's floats for find by value, freezing, writes and their rollback, memory events for changed views and variables on
 the Model I, which needs nothing external, along with resuming after a data breakpoint, a step landing on a
 breakpoint and the logpoint limit. With `RETROCORE_IIE_ROMS` set, it checks the IIe's banks, their mapping, bank
 expressions, disassembly and data, function and instruction breakpoints. The extension's editor test opens the
 Model I's video memory in Retrocore Memory and types, undoes and inspects bytes there, with their labels, characters and read-only ROM.
 On the IIe it built from the SDK's sources, it also checks `retro/memory/inspect`'s regions, screen positions,
-mapping, documented labels, source lines and floats, and `retro/memory/map`'s regions and areas.
+mapping, documented labels, source lines and floats, `retro/memory/map`'s regions and areas, and
+`retro/memory/numbers`' AppleSoft floats.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
 banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
-breakpoints and finding instructions, the inspector and the map.
+breakpoints and finding instructions, the inspector, the map, back and forward, following, bookmarks and
+finding numbers.

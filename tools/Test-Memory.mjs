@@ -112,6 +112,14 @@ try {
     at = "reading which bytes are read-only";
     assert.deepEqual((await request("retro/memory/read", { memoryReference: "0x3BFE", count: 4 })).readOnly, [{ offset: 0, count: 2 }]);
     assert.deepEqual((await request("retro/memory/read", { memoryReference: "0x3C00", count: 4 })).readOnly, []);
+    // Level II's single and double floats keep the exponent last.
+    assert.deepEqual((await request("retro/memory/numbers", { memoryReference: "0x0000", value: "1000" })).formats, [
+        { label: "Single, 4 bytes", bytes: [0, 0, 0x7A, 0x8A] },
+        { label: "Double, 8 bytes", bytes: [0, 0, 0, 0, 0, 0, 0x7A, 0x8A] }
+    ]);
+    // The double's 56 bits hold 2^53 + 1, which the text keeps and a JavaScript or C# double would not.
+    assert.deepEqual((await request("retro/memory/numbers", { memoryReference: "0x0000", value: "9007199254740993" })).formats[1].bytes,
+        [0x04, 0, 0, 0, 0, 0, 0, 0xB6]);
 
     // Labels come from the program and the SDK's ROM source, where their code is in memory now.
     at = "reading memory labels";
@@ -542,6 +550,13 @@ try {
     // A bank's gap holds no number, nor does a float that runs into it.
     assert.deepEqual((await inspect(0xC000, "main:0x0000")).values, []);
     assert.deepEqual((await inspect(0xBFFE, "main:0x0000")).values, []);
+    // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
+    at = "a number as the BASIC's floats";
+    const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;
+    assert.deepEqual(await numbers("1000"), [{ label: "Float, 5 bytes", bytes: [0x8A, 0x7A, 0, 0, 0] }]);
+    assert.deepEqual(await numbers("-.5"), [{ label: "Float, 5 bytes", bytes: [0x80, 0x80, 0, 0, 0] }]);
+    assert.deepEqual(await numbers("1E40"), [], "too large for AppleSoft");
+    await rejects(request("retro/memory/numbers", { memoryReference: "0x0000", value: "TEN" }), /not a number/);
     // The map: the regions, and runs of addresses that read the same part of the machine now, covering the space.
     at = "the memory map";
     const memoryMap = async memoryReference => request("retro/memory/map", { memoryReference });

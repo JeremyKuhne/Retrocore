@@ -139,24 +139,17 @@ internal sealed partial class DebugSession
     [GeneratedRegex("(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])")]
     private static partial Regex AreaWords();
 
-    // The BASIC's floating point numbers that start at an address: AppleSoft's and Color BASIC's five bytes and
-    // Business BASIC's four, exponent first; Level II's single and double, exponent last. None for an integer BASIC.
+    // The BASIC's floating point numbers that start at an address, in each of its formats; see FloatFormats.
     private JsonArray Floats(DebugMemoryBank? bank, IDebugMemory memory, int address)
     {
         JsonArray values = [];
-        BasicDialect? basic = Target.Basic;
-        if (basic is null || ReferenceEquals(basic, BasicDialect.Integer) || ReferenceEquals(basic, BasicDialect.Apple1))
-        {
-            return values;
-        }
-
-        void Add(string label, int length, bool exponentFirst, int digits)
+        foreach ((string label, int length, bool exponentFirst, int digits) in FloatFormats())
         {
             // Only bytes the space has: a bank's gaps read as $FF, which are no number.
             if (address + length > 0x10000
                 || (bank is not null && Enumerable.Range(address, length).Any(at => bank.AreaOf((ushort)at) is null)))
             {
-                return;
+                continue;
             }
 
             byte[] bytes = [.. Enumerable.Range(address, length).Select(at => memory.Peek((ushort)at))];
@@ -167,20 +160,69 @@ internal sealed partial class DebugSession
             });
         }
 
-        if (ReferenceEquals(basic, BasicDialect.Level2))
+        return values;
+    }
+
+    // The BASIC's floating point formats: AppleSoft's and Color BASIC's five bytes and Business BASIC's four,
+    // exponent first; Level II's single and double, exponent last. None for an integer BASIC.
+    private IEnumerable<(string Label, int Length, bool ExponentFirst, int Digits)> FloatFormats()
+    {
+        BasicDialect? basic = Target.Basic;
+        if (basic is null || ReferenceEquals(basic, BasicDialect.Integer) || ReferenceEquals(basic, BasicDialect.Apple1))
         {
-            Add("Single, 4 bytes", 4, exponentFirst: false, digits: 6);
-            Add("Double, 8 bytes", 8, exponentFirst: false, digits: 16);
-        }
-        else if (ReferenceEquals(basic, BasicDialect.BusinessBasic))
-        {
-            Add("Real, 4 bytes", 4, exponentFirst: true, digits: 6);
-        }
-        else
-        {
-            Add("Float, 5 bytes", 5, exponentFirst: true, digits: 9);
+            return [];
         }
 
-        return values;
+        if (ReferenceEquals(basic, BasicDialect.Level2))
+        {
+            return [("Single, 4 bytes", 4, false, 6), ("Double, 8 bytes", 8, false, 16)];
+        }
+
+        return ReferenceEquals(basic, BasicDialect.BusinessBasic)
+            ? [("Real, 4 bytes", 4, true, 6)]
+            : [("Float, 5 bytes", 5, true, 9)];
+    }
+
+    /// <summary>
+    ///  Answers retro/memory/numbers: a number's bytes in each of the BASIC's floating point formats, which Find
+    ///  looks for.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   For a <c>memoryReference</c> and a <c>value</c>, as BASIC writes numbers: <c>formats</c>, each with the
+    ///   <c>label</c> the inspector gives it and the <c>bytes</c> in memory order, rounded as BASIC stores the value.
+    ///   None in a coprocessor's view, for a value a format cannot hold, or with an integer BASIC.
+    ///  </para>
+    /// </remarks>
+    private JsonObject MemoryNumbers(JsonObject args)
+    {
+        MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
+        string value = Required(args, "value");
+        if (!BasicNumbers.TryParse(value, out double parsed) || !double.IsFinite(parsed))
+        {
+            throw new ArgumentException("The value is not a number.");
+        }
+
+        JsonArray formats = [];
+        if (bank?.InstructionSet is not null) { return new JsonObject { ["formats"] = formats }; }
+        foreach ((string label, int length, bool exponentFirst, _) in FloatFormats())
+        {
+            byte[] bytes;
+            try
+            {
+                // From the text, so Level II's double keeps the bits a double would lose.
+                bytes = BasicNumbers.WriteFloat(value, length, exponentFirst);
+            }
+            catch (OverflowException)
+            {
+                continue;
+            }
+
+            JsonArray list = [];
+            foreach (byte part in bytes) { list.Add((JsonNode)part); }
+            formats.Add((JsonNode)new JsonObject { ["label"] = label, ["bytes"] = list });
+        }
+
+        return new JsonObject { ["formats"] = formats };
     }
 }

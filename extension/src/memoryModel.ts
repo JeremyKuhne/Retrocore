@@ -191,8 +191,10 @@ export function findPattern(bytes: Uint8Array, readable: Uint8Array, pattern: Pa
         return true;
     };
     const starts = last + 1;
-    // A start past either end wraps, so Find Next from the last match and Find Previous from the first go on.
-    const first = ((from % starts) + starts) % starts;
+    // A start past where the pattern last fits wraps forward to the start and goes back to that last place, and
+    // one before the start wraps backward to it, so Find Next from the last match and Find Previous from the
+    // first go on, and the nearest match is never skipped.
+    const first = backward ? (from < 0 || from > last ? last : from) : (from < 0 || from > last ? 0 : from);
     for (let step = 0; step < starts; step++) {
         const start = backward ? (first - step + starts) % starts : (first + step) % starts;
         if (matches(start)) return start;
@@ -338,6 +340,81 @@ export function parseValue(text: string, size = 1): number | string {
     return value & 0xFFFF;
 }
 
+/** A bookmark: a name for an address in memory as the CPU maps it or in a bank. */
+export interface MemoryBookmark {
+    name: string;
+    bank: string | null;
+    address: number;
+}
+
+/**
+ * The bookmarks kept in the workspace's state, by launch configuration name: pairs of a name and its bookmarks.
+ * Anything else, such as nothing saved yet, is none.
+ */
+export function bookmarkStore(saved: unknown): Map<string, MemoryBookmark[]> {
+    const store = new Map<string, MemoryBookmark[]>();
+    if (!Array.isArray(saved)) return store;
+    for (const entry of saved) {
+        if (Array.isArray(entry) && typeof entry[0] === "string" && Array.isArray(entry[1])) store.set(entry[0], entry[1] as MemoryBookmark[]);
+    }
+    return store;
+}
+
+/**
+ * Sets, renames or removes the bookmark at an address of a space: a name replaces the one there, and an empty name
+ * removes it. Returns the new list, in address order within each space.
+ */
+export function withBookmark(list: readonly MemoryBookmark[], bank: string | null, address: number, name: string): MemoryBookmark[] {
+    const kept = list.filter(item => item.bank !== bank || item.address !== address);
+    const trimmed = name.trim();
+    if (trimmed.length > 0) kept.push({ name: trimmed, bank, address });
+    return kept.sort((first, second) => (first.bank ?? "").localeCompare(second.bank ?? "") || first.address - second.address);
+}
+
+/** A number Find looks for, in each form it can take: its bytes, labelled as the inspector labels them. */
+export interface ValueForm {
+    label: string;
+    bytes: number[];
+}
+
+/**
+ * Reads the number Find looks for after its =, such as =1000, =$C000, =%1010 or =-2.5, as the inspector's forms:
+ * a byte when it fits one, else a word low first and high first when it fits one. A fraction or exponent has no such
+ * forms, only the BASIC's floats, which the debugger encodes from the decimal: the text as typed, or a hex or binary
+ * number's value. Returns a message for text that is no number.
+ */
+export function valueForms(text: string): { forms: ValueForm[]; decimal: string } | string {
+    const trimmed = text.trim();
+    let value: number;
+    // Decimal text goes to the debugger as typed, as Level II's double holds more digits than a number here does.
+    let decimal: string | undefined;
+    // Whether the number is whole, which a fraction too small for a number here, as in 1.0000000000000001, is not.
+    let whole = true;
+    if (/^(\$|0[xX])[0-9A-Fa-f]{1,8}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
+    else if (/^%[01]{1,32}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
+    else if (/^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(trimmed)) {
+        value = Number(trimmed);
+        decimal = trimmed;
+        // Whole when the digits' trailing zeros cover the places the exponent leaves after the point.
+        const [, digitsText, exponentText] = /^[-+]?([0-9.]*)(?:[eE]([-+]?[0-9]+))?$/.exec(trimmed) ?? ["", "", ""];
+        const [wholePart, fraction = ""] = digitsText.split(".");
+        const digits = (wholePart + fraction).replace(/^0+/, "");
+        const places = fraction.length - Number(exponentText ?? 0);
+        whole = digits.length === 0 || places <= 0 || (digits.length - digits.replace(/0+$/, "").length) >= places;
+    } else return "Type a number after =, such as =1000, =$C000, =%1010 or =-2.5.";
+    if (!Number.isFinite(value)) return `${trimmed} is too large.`;
+    const forms: ValueForm[] = [];
+    if (whole && Number.isInteger(value)) {
+        if (value >= -128 && value <= 255) {
+            forms.push({ label: "a byte", bytes: [value & 0xFF] });
+        } else if (value >= -32768 && value <= 0xFFFF) {
+            const word = value & 0xFFFF;
+            forms.push({ label: "a word, low first", bytes: [word & 0xFF, word >> 8] }, { label: "a word, high first", bytes: [word >> 8, word & 0xFF] });
+        }
+    }
+    return { forms, decimal: decimal ?? String(value) };
+}
+
 /** The value at an offset: a byte, or with a size of 2 a word in the CPU's byte order. */
 export function valueAt(data: Uint8Array, offset: number, size = 1, bigEndian = false): number {
     if (size === 1) return data[offset];
@@ -382,4 +459,4 @@ export function narrowSearch(
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];

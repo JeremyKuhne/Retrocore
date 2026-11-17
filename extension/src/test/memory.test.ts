@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, type PatternByte } from "../memoryModel";
+import { addressAt, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -40,6 +40,11 @@ test("find wraps around, skips unreadable bytes and matches text with bit 7 eith
     assert.equal(findPattern(bytes, readable, text, -1, true), 3, "backward from before the start wraps to the end");
     assert.equal(findPattern(bytes, readable, text, 7, false), 0, "forward from past the end wraps to the start");
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), 6);
+    // A five-byte pattern fits from 0 to 3: from 6 forward wraps to 0, and from 6 backward starts at 3.
+    const zeros = new Uint8Array(8), all = new Uint8Array(8).fill(1);
+    const five = parsePattern("00 00 00 00 00") as PatternByte[];
+    assert.equal(findPattern(zeros, all, five, 6, false), 0, "past the last fit, forward wraps to the start");
+    assert.equal(findPattern(zeros, all, five, 6, true), 3, "past the last fit, backward is the last fit");
     readable[6] = 2;
     assert.equal(findPattern(bytes, readable, parsePattern("A9 ??") as PatternByte[], 0, false), -1);
 });
@@ -199,6 +204,11 @@ class Element {
 }
 
 /** Runs the page's script with fake elements, recording what it posts to the extension. */
+/** The page's window, which takes the mouse's back and forward buttons. */
+function window(page: ReturnType<typeof runPage>): Element {
+    return page.window;
+}
+
 function runPage() {
     const html = memoryEditorHtml("NONCE");
     const open = '<script nonce="NONCE">';
@@ -227,7 +237,7 @@ function runPage() {
         assert.ok(index >= 0, `the page posts a ${type}`);
         return posted.splice(index, 1)[0];
     };
-    return { elements, posted, send, settle, key, take, context };
+    return { elements, posted, send, settle, key, take, context, window };
 }
 
 test("the page's script parses", () => {
@@ -404,6 +414,9 @@ const startsSent: Record<string, unknown>[] = [];
 const breakpointsSent: Record<string, unknown>[] = [];
 const findsSent: Record<string, unknown>[] = [];
 
+// Where the fake debugger says PC is.
+let pcNow = 0x0300;
+
 // The starts each listing request the page sent asked for.
 const listingStarts: number[][] = [];
 
@@ -474,6 +487,17 @@ function answer(
             const address = Number(sent.address), end = address + Number(sent.count);
             startsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { starts: (sent.starts as number[]).filter(start => start < address || start >= end) } });
+        } else if (sent.type === "goto") {
+            // PC is wherever the test says the CPU stopped; anything else is hex.
+            const text = String(sent.text);
+            page.send({ type: "reply", id: sent.id, result: { address: text === "PC" ? pcNow : parseInt(text.replace(/^\$/, ""), 16) } });
+        } else if (sent.type === "numbers") {
+            // AppleSoft's five bytes: 1000 is $8A $7A $00 $00 $00.
+            page.send({ type: "reply", id: sent.id, result: { formats: sent.value === "1000" ? [{ label: "Float, 5 bytes", bytes: [0x8A, 0x7A, 0, 0, 0] }] : [] } });
+        } else if (sent.type === "bookmark") {
+            page.send({ type: "reply", id: sent.id, result: { bookmarks: [{ address: 0x0400, name: String(sent.name ?? "here") }] } });
+        } else if (sent.type === "bookmarks") {
+            page.send({ type: "reply", id: sent.id, result: { bookmarks: [{ address: 0x0400, name: "TEXT_PAGE" }], address: 0x0400, name: "TEXT_PAGE" } });
         } else if (sent.type === "banks") {
             page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
         } else if (sent.type === "readOther") {
@@ -1108,4 +1132,172 @@ test("the label or address under the cursor is what the editor's menu opens", ()
     const scoped = "        jsr screen::clear";
     assert.equal(addressAt(scoped, scoped.length - 1), "screen::clear", "a scoped label is whole from its name");
     assert.equal(addressAt(scoped, scoped.indexOf("screen") + 1), "screen::clear", "and from its scope");
+});
+
+test("find by value reads a number as a byte or as words either way round", () => {
+    assert.deepEqual(valueForms("200"), { forms: [{ label: "a byte", bytes: [200] }], decimal: "200" });
+    assert.deepEqual(valueForms("-1"), { forms: [{ label: "a byte", bytes: [0xFF] }], decimal: "-1" });
+    assert.deepEqual(valueForms("$C000"), {
+        forms: [{ label: "a word, low first", bytes: [0x00, 0xC0] }, { label: "a word, high first", bytes: [0xC0, 0x00] }],
+        decimal: "49152"
+    });
+    assert.deepEqual(valueForms("%101"), { forms: [{ label: "a byte", bytes: [5] }], decimal: "5" });
+    assert.deepEqual(valueForms("-2.5"), { forms: [], decimal: "-2.5" }, "a fraction is only the BASIC's floats");
+    assert.deepEqual(valueForms("1.0000000000000001"), { forms: [], decimal: "1.0000000000000001" }, "a fraction a number here rounds away is still one");
+    assert.deepEqual(valueForms("100E-2"), { forms: [{ label: "a byte", bytes: [1] }], decimal: "100E-2" });
+    assert.deepEqual(valueForms("1.50e1"), { forms: [{ label: "a byte", bytes: [15] }], decimal: "1.50e1" });
+    assert.deepEqual(valueForms("12.30"), { forms: [], decimal: "12.30" });
+    assert.deepEqual(valueForms("0.0"), { forms: [{ label: "a byte", bytes: [0] }], decimal: "0.0" });
+    assert.deepEqual(valueForms("1E6"), { forms: [], decimal: "1E6" }, "too big for a word");
+    assert.equal((valueForms("9007199254740993") as { decimal: string }).decimal, "9007199254740993", "every digit goes to the debugger");
+    assert.equal(typeof valueForms("HELLO"), "string");
+});
+
+test("bookmarks are kept by any launch configuration name, and anything else saved is none", () => {
+    assert.equal(bookmarkStore(undefined).size, 0);
+    assert.equal(bookmarkStore({ constructor: [] }).size, 0);
+    assert.equal(bookmarkStore([]).get("constructor"), undefined, "no inherited property is a list");
+    const store = bookmarkStore([["__proto__", [{ name: "Here", bank: null, address: 1 }]]]);
+    assert.deepEqual(store.get("__proto__"), [{ name: "Here", bank: null, address: 1 }]);
+    assert.deepEqual(bookmarkStore(JSON.parse(JSON.stringify([...store]))).get("__proto__")?.[0].name, "Here");
+});
+
+test("bookmarks are one a space and address, renamed in place and removed by an empty name", () => {
+    let list = withBookmark([], null, 0x0400, " Screen ");
+    list = withBookmark(list, "aux", 0x0400, "Aux screen");
+    list = withBookmark(list, null, 0x0300, "Start");
+    assert.deepEqual(list.map(item => item.name), ["Start", "Screen", "Aux screen"]);
+    list = withBookmark(list, null, 0x0400, "Text");
+    assert.deepEqual(list.map(item => item.name), ["Start", "Text", "Aux screen"]);
+    list = withBookmark(list, null, 0x0300, "");
+    assert.deepEqual(list.map(item => `${item.bank ?? ""}${item.address}`), ["1024", "aux1024"]);
+});
+
+test("go-tos go back and forward, and a stop moves a view that follows", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    let state = await drive(page, [{ jump: 0x0400 }, { jump: 0x0800 }], () => 0, lists);
+    assert.deepEqual(state.back, [0x0000, 0x0400]);
+    assert.equal((page.elements.get("back") as unknown as { disabled: boolean }).disabled, false);
+    state = await drive(page, [{ back: true }], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+    assert.deepEqual(state.forward, [0x0800]);
+
+    // The mouse's forward button, then Alt+Left.
+    window(page).dispatch("mouseup", { button: 4, preventDefault: () => undefined });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0800);
+    window(page).dispatch("keydown", { key: "ArrowLeft", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, preventDefault: () => undefined, stopPropagation: () => undefined });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+
+    // A new go-to drops what Forward had.
+    state = await drive(page, [{ gotoText: "$0C00" }], () => 0, lists);
+    assert.equal(state.cursor, 0x0C00);
+    assert.deepEqual(state.forward, []);
+
+    // Following PC goes where it is now and again at each stop; unchecking stays put.
+    pcNow = 0x0300;
+    state = await drive(page, [{ gotoText: "PC" }, { follow: true }], () => 0, lists);
+    assert.equal(state.following, "PC");
+    assert.equal(state.cursor, 0x0300);
+    pcNow = 0x0350;
+    page.send({ type: "stopped" });
+    // The first answers what the stop asks for, the second reports where the page went.
+    await drive(page, [], () => 0, lists);
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0350);
+    assert.equal((state.back as number[]).at(-1), 0x0300, "a followed move is one Back undoes");
+    // Back while the stop's answer is on its way stays back, and keeps Forward.
+    pcNow = 0x0370;
+    page.send({ type: "stopped" });
+    const asked = page.posted.splice(page.posted.findIndex(message => message.type === "goto"), 1)[0];
+    state = await drive(page, [{ back: true }], () => 0, lists);
+    page.send({ type: "reply", id: asked.id, result: { address: 0x0370 } });
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0300);
+    assert.deepEqual(state.forward, [0x0350]);
+    // Two stops before the first's answer: the second's answer is where the view goes, whichever comes first.
+    page.send({ type: "stopped" });
+    const first = page.posted.splice(page.posted.findIndex(message => message.type === "goto"), 1)[0];
+    page.send({ type: "stopped" });
+    const second = page.posted.splice(page.posted.findIndex(message => message.type === "goto"), 1)[0];
+    page.send({ type: "reply", id: first.id, result: { address: 0x0380 } });
+    page.send({ type: "reply", id: second.id, result: { address: 0x0390 } });
+    await drive(page, [], () => 0, lists);
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0390);
+    state = await drive(page, [{ back: true }, { follow: false }], () => 0, lists);
+    pcNow = 0x0360;
+    page.send({ type: "stopped" });
+    // The first answers what the stop asks for, the second reports where the page went.
+    await drive(page, [], () => 0, lists);
+    state = await drive(page, [], () => 0, lists);
+    assert.equal(state.cursor, 0x0300, "a view that does not follow stays where it is");
+    assert.equal(state.following, "");
+});
+
+test("find by value finds the nearest form, the BASIC's float included", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    // 1000 as a word low first at $2000, high first at $1000, and as AppleSoft's float at $0900.
+    const fill = (offset: number) => {
+        const placed: Record<number, number> = { 0x2000: 0xE8, 0x2001: 0x03, 0x1000: 0x03, 0x1001: 0xE8, 0x0900: 0x8A, 0x0901: 0x7A, 0x0902: 0, 0x0903: 0, 0x0904: 0 };
+        return placed[offset] ?? 0x55;
+    };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    let state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x0900);
+    assert.equal(state.status, "Found 1000 as a float, 5 bytes at $0900.");
+    state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x1000);
+    assert.match(String(state.status), /as a word, high first at \$1000/);
+    state = await drive(page, [{ findValue: "=1000" }], fill, lists);
+    assert.equal(state.cursor, 0x2000);
+    assert.equal(state.anchor, 0x2001, "the match is selected");
+    assert.deepEqual(state.back, [0x0000, 0x0900, 0x1000], "each match is one Back returns from");
+    state = await drive(page, [{ findValue: "=1000", backward: true }], fill, lists);
+    assert.equal(state.cursor, 0x1000);
+    state = await drive(page, [{ findValue: "=-2.5" }], fill, lists);
+    assert.match(String(state.status), /does not fit/);
+});
+
+test("a find whose read fails finds nothing, and says why", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [] });
+    page.send({ type: "test", id: 9, actions: [{ findValue: "=$41" }] });
+    let done: Record<string, unknown> | undefined;
+    for (let round = 0; round < 20 && done === undefined; round++) {
+        await page.settle();
+        for (const sent of page.posted.splice(0)) {
+            if (sent.type === "testDone") done = sent.state as Record<string, unknown>;
+            else if (sent.type === "read") page.send({ type: "reply", id: sent.id, error: "The debug session ended." });
+            else if (sent.type === "numbers") page.send({ type: "reply", id: sent.id, result: { formats: [] } });
+            else if (sent.type !== "labels" && sent.type !== "characters" && sent.type !== "map" && sent.type !== "banks" && sent.type !== "inspect" && sent.type !== "listing") page.send({ type: "reply", id: sent.id, result: {} });
+        }
+    }
+    assert.ok(done !== undefined, "the find finished");
+    assert.equal(done.cursor, 0x0000, "no match from bytes never read");
+    assert.match(String(done.status), /session ended/);
+});
+
+test("bookmarks mark their bytes and the list goes to one", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0000, info: { bank: null, label: "Memory", readOnly: false }, bookmarks: [{ address: 0x0002, name: "Two" }] });
+    let state = await drive(page, [{ goto: 0x0000 }], () => 0, lists);
+    assert.deepEqual(state.bookmarks, [{ address: 2, name: "Two" }]);
+    assert.ok(page.elements.get("rows")!.innerHTML.includes('class=" bm" data-o="2" title="Bookmark: Two"'), page.elements.get("rows")!.innerHTML);
+    state = await drive(page, [{ bookmarks: true }], () => 0, lists);
+    assert.equal(state.cursor, 0x0400);
+    assert.deepEqual(state.back, [0x0000]);
+    assert.equal(state.status, "Bookmark TEXT_PAGE at $0400.");
+    state = await drive(page, [{ bookmark: true }], () => 0, lists);
+    assert.deepEqual(state.bookmarks, [{ address: 0x0400, name: "TEXT_PAGE" }], "the label is the name it suggests");
+
+    // Another editor's change shows here.
+    page.send({ type: "bookmarks", bookmarks: [] });
+    state = await drive(page, [], () => 0, lists);
+    assert.deepEqual(state.bookmarks, []);
 });

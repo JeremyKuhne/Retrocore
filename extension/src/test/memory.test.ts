@@ -1143,6 +1143,11 @@ test("find by value reads a number as a byte or as words either way round", () =
     });
     assert.deepEqual(valueForms("%101"), { forms: [{ label: "a byte", bytes: [5] }], decimal: "5" });
     assert.deepEqual(valueForms("-2.5"), { forms: [], decimal: "-2.5" }, "a fraction is only the BASIC's floats");
+    assert.deepEqual(valueForms("1.0000000000000001"), { forms: [], decimal: "1.0000000000000001" }, "a fraction a number here rounds away is still one");
+    assert.deepEqual(valueForms("100E-2"), { forms: [{ label: "a byte", bytes: [1] }], decimal: "100E-2" });
+    assert.deepEqual(valueForms("1.50e1"), { forms: [{ label: "a byte", bytes: [15] }], decimal: "1.50e1" });
+    assert.deepEqual(valueForms("12.30"), { forms: [], decimal: "12.30" });
+    assert.deepEqual(valueForms("0.0"), { forms: [{ label: "a byte", bytes: [0] }], decimal: "0.0" });
     assert.deepEqual(valueForms("1E6"), { forms: [], decimal: "1E6" }, "too big for a word");
     assert.equal((valueForms("9007199254740993") as { decimal: string }).decimal, "9007199254740993", "every digit goes to the debugger");
     assert.equal(typeof valueForms("HELLO"), "string");

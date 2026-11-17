@@ -388,15 +388,23 @@ export function valueForms(text: string): { forms: ValueForm[]; decimal: string 
     let value: number;
     // Decimal text goes to the debugger as typed, as Level II's double holds more digits than a number here does.
     let decimal: string | undefined;
+    // Whether the number is whole, which a fraction too small for a number here, as in 1.0000000000000001, is not.
+    let whole = true;
     if (/^(\$|0[xX])[0-9A-Fa-f]{1,8}$/.test(trimmed)) value = parseInt(trimmed.replace(/^(\$|0[xX])/, ""), 16);
     else if (/^%[01]{1,32}$/.test(trimmed)) value = parseInt(trimmed.substring(1), 2);
     else if (/^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(trimmed)) {
         value = Number(trimmed);
         decimal = trimmed;
+        // Whole when the digits' trailing zeros cover the places the exponent leaves after the point.
+        const [, digitsText, exponentText] = /^[-+]?([0-9.]*)(?:[eE]([-+]?[0-9]+))?$/.exec(trimmed) ?? ["", "", ""];
+        const [wholePart, fraction = ""] = digitsText.split(".");
+        const digits = (wholePart + fraction).replace(/^0+/, "");
+        const places = fraction.length - Number(exponentText ?? 0);
+        whole = digits.length === 0 || places <= 0 || (digits.length - digits.replace(/0+$/, "").length) >= places;
     } else return "Type a number after =, such as =1000, =$C000, =%1010 or =-2.5.";
     if (!Number.isFinite(value)) return `${trimmed} is too large.`;
     const forms: ValueForm[] = [];
-    if (Number.isInteger(value)) {
+    if (whole && Number.isInteger(value)) {
         if (value >= -128 && value <= 255) {
             forms.push({ label: "a byte", bytes: [value & 0xFF] });
         } else if (value >= -32768 && value <= 0xFFFF) {

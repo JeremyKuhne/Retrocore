@@ -13,7 +13,8 @@
 // sources, launched with a blank romDirectory as ${env:RETROCORE_COCO_ROMS} gives when it is not set.
 
 import { resolve, join } from "node:path";
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -31,6 +32,11 @@ const extendedBasic = join(sdkRoms, "ExtendedBasic.asm");
 const diskBasic = join(sdkRoms, "DiskBasic.asm");
 const coco3 = join(sdkRoms, "Coco3.asm");
 const hello = join(root, "sample", "coco", "hello.asm");
+
+// The machine's recovery journal, in local data as the host finds it, removed afterward.
+const recoveryId = `test-coco-${randomUUID()}`;
+const journal = join(process.env.RETROCORE_LOCAL_DATA
+    ?? join(process.env.LOCALAPPDATA ?? join(process.env.HOME ?? "", ".local", "share"), "Retrocore"), "Recovery", recoveryId);
 
 // The host takes RETROCORE_COCO_ROMS when a launch names no dumps, so the source's part must not see it.
 delete process.env.RETROCORE_COCO_ROMS;
@@ -337,7 +343,7 @@ try {
     assert.deepEqual(Object.fromEntries(variables.variables.map(item => [item.name, item.value])), { A: "1", B: "1" });
 
     // A CoCo 2 with a disk boots Disk Extended Color BASIC.
-    await launch({ model: "coco2", disks: [disk] });
+    await launch({ model: "coco2", disks: [disk], recoveryId });
     await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK");
     assert.equal((await request("threads")).threads[0].name, "CoCo 2 6809");
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
@@ -375,6 +381,18 @@ try {
     const undone = await request("retro/device", { id: "disk0", action: "undo", medium: reverted.undo, supportsRetrocoreMedia: true });
     assert.equal(undone.outcome, "undone");
     assert.equal(undone.devices.find(device => device.id === "disk0").media.changed, true);
+
+    // Kept: the machine launched again under the same recovery id has the changed disk back in its drive, still
+    // changed against its image, which DIR reads.
+    await launch({ model: "coco2", disks: [disk], recoveryId });
+    await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK again");
+    drive = (await request("retro/devices")).devices.find(device => device.id === "disk0");
+    assert.equal(drive.media.changed, true, "the kept disk is back, changed");
+    assert.equal(drive.media.label.toLowerCase(), disk.toLowerCase());
+    const kept = await request("retro/device", { id: "disk0", action: "differences", supportsRetrocoreMedia: true });
+    assert.match(kept.differences.summary, /\b17\b/);
+    await type("DIR\r");
+    await screen(text => /HELLO\s+BAS/.test(text), "the kept disk's directory");
     let saved = await request("retro/device", { id: "disk0", action: "save", supportsRetrocoreMedia: true });
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));
     drive = saved.devices.find(device => device.id === "disk0");
@@ -452,11 +470,12 @@ try {
 
     await request("disconnect");
     console.log("Color Computer DAP passed: stepping from the 6809 sample into ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and "
-        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that says what changed, reverts and undoes, and saves to its image and as DMK, a breakpoint in the sample "
+        + "Coco3.asm and out, a Color BASIC program on the BASIC thread, Disk Extended Color BASIC saving and listing a program on a disk that says what changed, reverts and undoes, is kept for the next launch, and saves to its image and as DMK, a breakpoint in the sample "
         + `with its call stack and step out, and a CoCo 3 at 80 columns, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
+    rmSync(journal, { recursive: true, force: true });
     if (existsSync(disk)) unlinkSync(disk);
     if (existsSync(dmk)) unlinkSync(dmk);
     if (existsSync(program)) unlinkSync(program);

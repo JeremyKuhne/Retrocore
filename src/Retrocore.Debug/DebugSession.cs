@@ -110,6 +110,14 @@ internal sealed partial class DebugSession
 
     // Documented Keeps: contracts, checked when calls return; null when off or nothing documents one.
     private DebugContracts? _contracts;
+
+    // How often the machine's changed disks are kept in its recovery journal.
+    private const int CheckpointMilliseconds = 30_000;
+
+    // The machine's recovery journal, when its launch gave a recoveryId, and the timer that checkpoints it.
+    private RecoveryJournal? _journal;
+    private Timer? _checkpoints;
+    private readonly Lock _checkpointing = new();
     private bool _stopOnContracts;
     private ushort _instructionStart;
 
@@ -552,6 +560,7 @@ internal sealed partial class DebugSession
         {
             if (_ended) { return; }
             _run?.Cancel();
+            CloseJournal();
             ReleaseTarget();
             _ended = true;
         }
@@ -577,6 +586,120 @@ internal sealed partial class DebugSession
             // The client went away or the machine is changing; nothing is lost, as the watch keeps the image's state.
         }
     }
+
+    // Opens the journal a launch's recoveryId names, puts back the disks it kept, and checkpoints the machine's changed
+    // disks into it from then on. A journal that cannot be kept is said in the console; the machine runs without one.
+    private void OpenJournal(JsonObject args)
+    {
+        if (args.String("recoveryId") is not { } id) { return; }
+        List<string> problems = [];
+        try
+        {
+            _journal = RecoveryJournal.Open(id, problems);
+            if (_journal is null)
+            {
+                problems.Add("Another running session keeps this machine's recovery journal, so this one keeps none: "
+                    + "its changed disks are not kept when it stops.");
+            }
+            else
+            {
+                problems.AddRange(MediaActions.Recover(Target.Devices, _journal));
+                _checkpoints = new(_ => Checkpoint(), state: null, CheckpointMilliseconds, CheckpointMilliseconds);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _journal = null;
+            problems.Add($"The recovery journal cannot be kept, so changed disks are not kept when the machine stops: {exception.Message}");
+        }
+
+        foreach (string problem in problems) { Say(problem); }
+    }
+
+    // Keeps the machine's changed disks in its journal: snapshots under the lock, written off the machine's thread. One
+    // checkpoint at a time, from taking its snapshots to committing them, so an older one never commits after a newer.
+    private void Checkpoint()
+    {
+        if (!_checkpointing.TryEnter()) { return; }
+        try
+        {
+            CheckpointOnce();
+        }
+        finally
+        {
+            _checkpointing.Exit();
+        }
+    }
+
+    private void CheckpointOnce()
+    {
+        RecoveryJournal? journal = null;
+        List<JournalDisk>? disks = null;
+        try
+        {
+            Reply(() =>
+            {
+                journal = _journal;
+                if (journal is not null && _target is not null && !_ended)
+                {
+                    disks = MediaActions.Journal(_target.Devices, journal);
+                }
+
+                return [];
+            });
+
+            if (journal is not null && disks is not null) { journal.Commit(disks); }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The previous commit stands; the next checkpoint tries again.
+            try
+            {
+                Reply(() =>
+                {
+                    Say($"The recovery journal could not be written: {exception.Message}");
+                    return [];
+                });
+            }
+            catch (Exception gone) when (gone is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                // The client has gone.
+            }
+        }
+        catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
+        {
+            // The session is ending or between machines, which keeps the journal itself.
+        }
+    }
+
+    // Keeps the machine's changed disks one last time and closes its journal as cleanly ended, as the machine stops or
+    // another launch replaces it.
+    private void CloseJournal()
+    {
+        _checkpoints?.Dispose();
+        _checkpoints = null;
+        if (_journal is not { } journal) { return; }
+        _journal = null;
+        try
+        {
+            // Every changed disk whole: a checkpoint still being written may drop a snapshot this one would reuse.
+            journal.Commit(_target is null ? [] : MediaActions.Journal(_target.Devices, journal, whole: true), close: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Say($"The recovery journal could not be written as the machine stopped; it keeps the disks as of its last checkpoint: {exception.Message}");
+
+            // The client hears that the session's disks were not kept, so its stop notice does not say they were.
+            if (_target is not null) { Notify("retro/devices", DevicesBody()); }
+        }
+    }
+
+    // Says something in the debug console.
+    private void Say(string text) => Notify("output", new JsonObject
+    {
+        ["category"] = "console",
+        ["output"] = text + "\n"
+    });
 
     // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
     // happens only once: if it fails, the target is left as it was.
@@ -699,9 +822,10 @@ internal sealed partial class DebugSession
 
         bool loads = sourceFile is not null || program is not null;
 
-        // The old machine's recordings are saved and it is disposed before the new one is built, as machines can
-        // share host resources, such as the game controllers SDL reads. A launch that then fails leaves no machine,
-        // rather than the disposed one.
+        // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
+        // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
+        // fails leaves no machine, rather than the disposed one.
+        CloseJournal();
         ReleaseTarget();
         _target = null;
         _target = machine switch
@@ -818,6 +942,9 @@ internal sealed partial class DebugSession
             symbols.Load(debugFile);
             _debug.Add(new DebugFileModule(symbols, program is null ? null : Target.ProgramArea));
         }
+
+        // The disks the last run kept go back in their drives, over what the launch and saved machine put there.
+        OpenJournal(args);
 
         // The SDK's ROM sources follow the program, each applying only where its memory area is mapped.
         // The SDK's sources can come from the repository instead, so breakpoints set in the files being edited bind.
@@ -1906,6 +2033,9 @@ internal sealed partial class DebugSession
         JsonObject body = DeviceJson.Write(Target.Devices);
         body["hardware"] = HardwareRow.Json(Target.Hardware());
         body["configuration"] = MachineConfiguration.Capture(Target);
+
+        // Whether its changed disks are kept past the session, which the client's stop notice says.
+        body["recovery"] = _journal is not null;
         return body;
     }
 

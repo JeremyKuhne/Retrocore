@@ -16,6 +16,11 @@ public sealed class WozCodec(int sourceVersion = 2) : IImageCodec
     /// <inheritdoc/>
     public string Format => "WOZ";
 
+    /// <summary>
+    ///  Gets the WOZ version of the image the disk came from.
+    /// </summary>
+    public int SourceVersion { get; } = sourceVersion;
+
     /// <inheritdoc/>
     public EncodedImage Encode(MediumSnapshot snapshot)
     {
@@ -28,7 +33,7 @@ public sealed class WozCodec(int sourceVersion = 2) : IImageCodec
         // WOZ2 holds all WOZ1 does, so a WOZ1 image loses nothing, but programs that read only WOZ1 cannot open it.
         return new(snapshot.Image.ToArray(), Losses: [])
         {
-            Notes = sourceVersion == 1 ? ["The WOZ1 image is written as WOZ2."] : [],
+            Notes = SourceVersion == 1 ? ["The WOZ1 image is written as WOZ2."] : [],
         };
     }
 }

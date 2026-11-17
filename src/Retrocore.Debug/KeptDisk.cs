@@ -24,12 +24,12 @@ internal sealed record KeptDisk(IMedium Medium, string Label, string Format, str
     /// <summary>
     ///  Gets the id the protocol names it by, such as <c>k-3f9c…</c>.
     /// </summary>
-    internal string Id { get; } = $"k-{Guid.NewGuid():N}";
+    internal string Id { get; init; } = $"k-{Guid.NewGuid():N}";
 
     /// <summary>
     ///  Gets when it left its drive, in UTC.
     /// </summary>
-    internal DateTime When { get; } = DateTime.UtcNow;
+    internal DateTime When { get; init; } = DateTime.UtcNow;
 
     /// <summary>
     ///  Gets or sets what its drive calls it after a save, such as the image it was saved to.

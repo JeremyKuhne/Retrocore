@@ -336,18 +336,38 @@ export function revertedMessage(drive: string, file: string, differences: Differ
 export const discardedMessage = (drive: string, file: string): string => `Discarded the changes to ${file} from ${drive}.`;
 
 /** Says a session ended with disks not saved, which this version cannot keep past it. */
-/** The disks a machine's devices hold with changes not saved, in drives or ejected from them, by file name. */
-export function unsavedDisks(devices: readonly Device[]): string[] {
-    return devices.flatMap(device => [
-        ...device.media?.changed && device.operations.includes("save") ? [path.basename(device.media.label) || device.media.format] : [],
-        ...(device.ejected ?? []).filter(kept => kept.changed).map(kept => path.basename(kept.label) || kept.format)
-    ]);
+/**
+ * The disks a machine's devices hold with changes not saved, in drives or ejected from them, by file name: those its
+ * recovery journal keeps for the next launch, which come from images, and those it does not, as a disk a launch built.
+ */
+export function unsavedDisks(devices: readonly Device[], recovery = false): { kept: string[]; lost: string[] } {
+    const kept: string[] = [];
+    const lost: string[] = [];
+    for (const device of devices) {
+        if (device.media?.changed && device.operations.includes("save")) {
+            const name = path.basename(device.media.label) || device.media.format;
+            // The journal keeps a disk from an image in a drive it can go back in, which slot 7's cannot.
+            (recovery && device.media.source?.kind === "image" && device.operations.includes("insert") ? kept : lost).push(name);
+        }
+        // A disk the machine ejected is one it read from an image.
+        for (const ejected of (device.ejected ?? []).filter(disk => disk.changed)) {
+            (recovery ? kept : lost).push(path.basename(ejected.label) || ejected.format);
+        }
+    }
+    return { kept, lost };
 }
 
-/** What a warning says when a machine stops with disks not saved. */
-export function stoppedMessage(machine: string, files: string[]): string {
-    const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
-    return `${machine} stopped with ${disks} not saved: ${files.join(", ")}. Their changes were not kept.`;
+/** What a notice says when a machine stops with disks not saved: those kept for its next launch, and those lost. */
+export function stoppedMessage(machine: string, kept: string[], lost: string[]): string {
+    const count = kept.length + lost.length;
+    const disks = `${count} disk${count === 1 ? "" : "s"}`;
+    const after = lost.length === 0
+        ? `${count === 1 ? "It is" : "They are"} kept, still changed, for its next launch.`
+        : kept.length === 0
+            ? "Their changes were not kept."
+            : `${kept.join(", ")} ${kept.length === 1 ? "is" : "are"} kept, still changed, for its next launch; `
+                + `the changes to ${lost.join(", ")} were not kept.`;
+    return `${machine} stopped with ${disks} not saved: ${[...kept, ...lost].join(", ")}. ${after}`;
 }
 
 /** What the status bar says for a moment after a save that asked nothing. */

@@ -61,22 +61,26 @@ internal sealed class ImageWatch
         lock (_lock)
         {
             if (_closed) { return; }
-            if (_watcher is null || _failed)
+            // A watcher that failed, the path's or the target's, makes both again, and the image is checked.
+            bool failed = _failed;
+            _failed = false;
+            if (_watcher is null || failed)
             {
-                _failed = false;
                 _watcher?.Dispose();
                 _watcher = Create(Path);
             }
 
             string target = Target();
-            if (!SamePath(target, _target ?? Path) || (_targetWatcher is null && !SamePath(target, Path)))
+            if (failed || !SamePath(target, _target ?? Path) || (_targetWatcher is null && !SamePath(target, Path)))
             {
                 _targetWatcher?.Dispose();
                 _targetWatcher = SamePath(target, Path) ? null : Create(target);
                 _target = target;
             }
 
+            // After a failure, events may have been lost, so the image is checked even if it looks the same.
             string signature = Signature(target);
+            if (failed) { _signature = null; }
             if (signature == _signature) { return; }
             _signature = signature;
             if (check) { Poke(); }

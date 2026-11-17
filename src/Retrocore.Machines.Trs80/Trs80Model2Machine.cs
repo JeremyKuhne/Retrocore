@@ -5,7 +5,7 @@
 using Retrocore.Cpu;
 using Retrocore.Cpu.Z80;
 using Retrocore.Machines.Devices;
-using Retrocore.Machines.Trs80.Chips;
+using Retrocore.Machines.Chips;
 
 namespace Retrocore.Machines.Trs80;
 
@@ -40,8 +40,8 @@ public sealed class Trs80Model2Machine : IMachine
         Configuration = configuration;
         Bus = new(configuration, roms);
         Processor = new(Bus);
-        List<Trs80FloppyDrive> drives = [];
-        for (int drive = 0; drive < Trs80DiskController.DriveCount; drive++)
+        List<FloppyDrive> drives = [];
+        for (int drive = 0; drive < WesternDigitalFloppyDiskController.DriveCount; drive++)
         {
             drives.Add(new(Bus.Disks, drive, DriveInfo(drive, configuration.Variant)));
         }
@@ -67,7 +67,7 @@ public sealed class Trs80Model2Machine : IMachine
     /// <summary>
     ///  Gets the floppy drives.
     /// </summary>
-    public IReadOnlyList<Trs80FloppyDrive> Drives { get; }
+    public IReadOnlyList<FloppyDrive> Drives { get; }
 
     /// <inheritdoc/>
     public IReadOnlyList<IDevice> Devices { get; }

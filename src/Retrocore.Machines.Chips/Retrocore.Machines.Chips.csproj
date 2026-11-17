@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Chips more than one machine uses: the Western Digital floppy disk controllers with their drives, and the Z80
+       family's PIO, SIO, CTC and DMA. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <InternalsVisibleTo Include="Retrocore.Machines.Trs80" />
+    <InternalsVisibleTo Include="Retrocore.Machines.Coco" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+  </ItemGroup>
+
+</Project>

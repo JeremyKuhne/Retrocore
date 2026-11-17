@@ -3,8 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Coco;
-using Retrocore.Machines.Trs80;
 using Retrocore.Media.Trs80;
 using System.Text.Json.Nodes;
 
@@ -141,7 +141,7 @@ internal sealed partial class CocoDebugTarget
         }
 
         if (args.String("cassette") is { } cassette) { target.Insert(cassette); }
-        if (disks.Length > Trs80DiskController.DriveCount)
+        if (disks.Length > WesternDigitalFloppyDiskController.DriveCount)
         {
             throw new ArgumentException("The disk controller has four drives.");
         }
@@ -187,13 +187,13 @@ internal sealed partial class CocoDebugTarget
             case (CocoCassetteDrive, "eject"):
                 EjectCassette();
                 break;
-            case (Trs80FloppyDrive drive, "insert"):
+            case (FloppyDrive drive, "insert"):
                 Insert(drive.Drive, path ?? throw new ArgumentException("path is required."));
                 break;
-            case (Trs80FloppyDrive drive, "eject"):
+            case (FloppyDrive drive, "eject"):
                 drive.Eject();
                 break;
-            case (Trs80FloppyDrive drive, "writeProtect"):
+            case (FloppyDrive drive, "writeProtect"):
                 drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
                 break;
             default:
@@ -219,7 +219,7 @@ internal sealed partial class CocoDebugTarget
         string action = args.String("action") ?? throw new ArgumentException("action is required.");
         string device = args.String("device") ?? throw new ArgumentException("device is required.");
         int drive = args.Int("drive") ?? 0;
-        IReadOnlyList<Trs80FloppyDrive> drives = Drives;
+        IReadOnlyList<FloppyDrive> drives = Drives;
         if (device == "disk")
         {
             if (drive < 0 || drive >= drives.Count) { throw new ArgumentException($"There is no drive {drive}."); }
@@ -248,7 +248,7 @@ internal sealed partial class CocoDebugTarget
         return MediaState();
     }
 
-    private IReadOnlyList<Trs80FloppyDrive> Drives => _machine.Bus.DiskController?.Drives ?? [];
+    private IReadOnlyList<FloppyDrive> Drives => _machine.Bus.DiskController?.Drives ?? [];
 
     private void Insert(string path)
     {

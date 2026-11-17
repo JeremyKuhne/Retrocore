@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Trs80;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Tests;

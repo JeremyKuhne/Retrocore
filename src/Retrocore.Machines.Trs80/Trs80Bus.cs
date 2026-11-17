@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Cpu;
+using Retrocore.Machines.Chips;
 
 namespace Retrocore.Machines.Trs80;
 
@@ -32,6 +33,7 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
     private readonly int _romEnd;
     private readonly bool _expansion;
     private readonly bool _controller;
+    private readonly Trs80Doubler _doubler;
     private int _tick;
     private bool _clock;
 
@@ -49,7 +51,8 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
         _controller = _expansion && configuration.DiskController;
         Video = new(roms.CharacterGenerator, configuration.LowercaseModification) { Snow = configuration.VideoSnow };
         Cassette = new(configuration.Rom == Trs80Rom.Level1 ? 250 : 500);
-        Disks = new(configuration.Doubler);
+        _doubler = configuration.Doubler;
+        Disks = new(Trs80Timing.ClockHertz);
     }
 
     /// <summary>
@@ -75,7 +78,7 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
     /// <summary>
     ///  Gets the disk controller and drives.
     /// </summary>
-    public Trs80DiskController Disks { get; }
+    public WesternDigitalFloppyDiskController Disks { get; }
 
     /// <summary>
     ///  Gets the bytes sent to the printer.
@@ -125,7 +128,7 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
         if (!_expansion || address is < Latches or >= KeyboardStart) { return; }
         if (address < Latches + 4)
         {
-            Disks.Select(value);
+            SelectDrive(value);
         }
         else if (address is >= Printer and < Controller)
         {
@@ -133,8 +136,46 @@ public sealed class Trs80Bus : IProcessorBus, IIoBus
         }
         else if (_controller && address < Controller + 4)
         {
-            Disks.Write(address - Controller, value);
+            WriteController(address - Controller, value);
         }
+    }
+
+    // The drive select latch: bits 0-3 select drives 0-3 and start the motors. Double-sided drives take their side
+    // select from bit 3, drive 3's select, so bit 3 with drive 0, 1 or 2 selects side 1 of that drive, and a Model I
+    // with double-sided drives has three drives.
+    private void SelectDrive(byte value)
+    {
+        int side = (value & 0x07) != 0 && (value & 0x08) != 0 ? 1 : 0;
+        if (side == 1) { value &= 0xF7; }
+        int drive = (value & 0x0F) switch
+        {
+            0x01 => 0,
+            0x02 => 1,
+            0x04 => 2,
+            0x08 => 3,
+            _ => -1
+        };
+
+        Disks.SelectTimed(drive, side, Disks.DoubleDensity);
+    }
+
+    // The FD1771's registers, with the doublers watching them for their density selects.
+    private void WriteController(int register, byte value)
+    {
+        // A Percom doubler takes $FE and $FF as density selects rather than commands.
+        if (register == 0 && (_doubler & Trs80Doubler.Percom) != 0 && value is 0xFE or 0xFF)
+        {
+            Disks.SetDensity(value == 0xFF);
+            return;
+        }
+
+        // The Radio Shack doubler watches the sector register for its controller selects.
+        if (register == 2 && (_doubler & Trs80Doubler.Tandy) != 0 && value is 0x80 or 0xA0)
+        {
+            Disks.SetDensity(value == 0x80);
+        }
+
+        Disks.Write(register, value);
     }
 
     /// <inheritdoc/>

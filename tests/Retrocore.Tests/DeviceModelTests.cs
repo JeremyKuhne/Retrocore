@@ -3,9 +3,11 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Devices;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Tests;
@@ -67,7 +69,7 @@ public class DeviceModelTests
             }
         }
 
-        Trs80FloppyDrive drive = machine.Drives[0];
+        FloppyDrive drive = machine.Drives[0];
         drive.Insert(disk, "games.dsk", "JV1");
         drive.Media.Should().Be(new MediaState("games.dsk", "JV1", WriteProtected: false, Changed: false));
         drive.Head.Motor.Should().BeFalse();

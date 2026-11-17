@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Media.Trs80;
+namespace Retrocore.Media.Floppy;
 
 /// <summary>
 ///  What a floppy image format cannot hold of a disk, gathered by kind with the tracks each is on, so a disk whose

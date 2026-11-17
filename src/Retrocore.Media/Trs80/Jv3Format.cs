@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Media.Floppy;
+
 namespace Retrocore.Media.Trs80;
 
 /// <summary>

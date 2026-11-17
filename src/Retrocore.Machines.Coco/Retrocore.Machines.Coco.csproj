@@ -13,7 +13,7 @@
     <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
     <ProjectReference Include="..\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
-    <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Chips\Retrocore.Machines.Chips.csproj" />
   </ItemGroup>
 
 </Project>

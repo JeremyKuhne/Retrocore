@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;

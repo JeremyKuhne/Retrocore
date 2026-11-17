@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Cpu;
+using Retrocore.Machines.Chips;
 
 namespace Retrocore.Machines.Trs80;
 
@@ -83,7 +84,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
         Keyboard = new(Trs80Model3Timing.ClockHertz);
         bool level1 = configuration.Rom == Trs80Rom.Level1;
         Cassette = new(level1 ? 250 : 500, Trs80Model3Timing.ClockHertz, highSpeed: !level1);
-        Disks = new(Trs80Doubler.None, Trs80Model3Timing.ClockHertz, wd179x: true);
+        Disks = new(Trs80Model3Timing.ClockHertz, wd179x: true);
     }
 
     /// <summary>
@@ -109,7 +110,7 @@ public sealed class Trs80Model3Bus : IProcessorBus, IIoBus
     /// <summary>
     ///  Gets the FD1793 and its drives.
     /// </summary>
-    public Trs80DiskController Disks { get; }
+    public WesternDigitalFloppyDiskController Disks { get; }
 
     /// <summary>
     ///  Gets the bytes sent to the printer.

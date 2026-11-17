@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Cpu.Z80;
 using Retrocore.Machines;
 using Retrocore.Machines.Trs80;
+using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Trs80.Chips;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  A Z80 family peripheral on the interrupt daisy chain: it requests interrupts in mode 2, supplies its vector when

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-namespace Retrocore.Machines.Trs80.Chips;
+namespace Retrocore.Machines.Chips;
 
 /// <summary>
 ///  One of a <see cref="Z80Pio"/>'s two ports.

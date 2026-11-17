@@ -4,9 +4,9 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Coco;
 using Retrocore.Machines.Devices;
-using Retrocore.Machines.Trs80;
 using Retrocore.Media;
 using Retrocore.Media.Trs80;
 using System.Text.Json.Nodes;
@@ -285,7 +285,7 @@ public sealed class MediaUndoTests
         byte[] body = new byte[JvcFormat.Tracks * JvcFormat.SectorsPerTrack * JvcFormat.SectorSize];
         File.WriteAllBytes(jvc, [18, 1, .. body]);
         CocoMachine coco = CocoDiskTests.Create(CocoModel.Coco2);
-        Trs80FloppyDrive cocoDrive = coco.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
+        FloppyDrive cocoDrive = coco.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
         FloppyMedia.Insert(cocoDrive, jvc, coco: true);
         body[(((5 * JvcFormat.SectorsPerTrack) + 2) * JvcFormat.SectorSize) + 9] = 1;
         File.WriteAllBytes(jvc, [18, 1, .. body]);

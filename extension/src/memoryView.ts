@@ -1543,16 +1543,17 @@ function useFollow(on) {
     return follow();
 }
 
-// Goes where the followed expression points now, as at a stop.
+// Goes where the followed expression points now, as at a stop. Only the latest request's answer counts, as an
+// earlier stop's is out of date, and a move made while the debugger answered, such as Back, wins over it.
+let followAsked = 0;
 async function follow() {
-    const text = following, started = moves;
+    const text = following, started = moves, asked = ++followAsked;
     if (text === "") return;
     try {
         const result = await request({ type: "goto", text });
-        // A move made while the debugger answered, such as Back, wins over where the expression pointed.
-        if (following === text && moves === started) jump(result.address);
+        if (asked === followAsked && following === text && moves === started) jump(result.address);
     } catch (error) {
-        if (following === text) status("Following " + text + ": " + String(error.message || error), true);
+        if (asked === followAsked && following === text) status("Following " + text + ": " + String(error.message || error), true);
     }
 }
 

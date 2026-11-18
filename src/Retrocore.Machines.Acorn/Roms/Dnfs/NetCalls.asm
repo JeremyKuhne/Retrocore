@@ -408,8 +408,9 @@ REMOTE_OSBYTES_WITH_REPLY:
 
 ;; NETV 8: passes SOUND and ENVELOPE (OSWORDs 7 and 8) to the controlling station, which makes the sound.
 ;;
-;; The message is type 1: the OSWORD number at NFS_REMOTE_MESSAGE+1, then fifteen bytes of the control block, and
-;; the remote block's buffer is lengthened to end at &E9 for it (it stays so for later messages). It falls through
+;; The message is type 1: the OSWORD number at NFS_REMOTE_MESSAGE+1, then the control block from +2. Fifteen bytes
+;; of the block are copied, but the remote block's buffer is lengthened only to end at &E9, which is exclusive, so
+;; the message sent is sixteen bytes, with fourteen of the block (it stays so for later messages). It falls through
 ;; into <BUILD_OS_PROCEDURE_BLOCK>.
 ;; In: A = the OSWORD number, OS_X/OS_Y = the control block
 ;; Uses: A, X, Y, NFS_BLOCK_POINTER

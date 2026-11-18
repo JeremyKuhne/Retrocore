@@ -152,6 +152,7 @@ public static class D64Format
                 sectors,
                 dos,
                 out bool[] headerOnly,
+                out _,
                 out _);
 
             for (int sector = 0; sector < found.Length; sector++)
@@ -198,10 +199,31 @@ public static class D64Format
                 continue;
             }
 
-            GcrLayout.ReadTrack(disk.Track(position), bits, track, sectors, dos, out _, out IReadOnlyList<int> beyond);
+            GcrLayout.ReadTrack(disk.Track(position), bits, track, sectors, dos, out _, out IReadOnlyList<int> beyond, out _);
             omitted.AddRange(beyond.Select(sector => $"track {track}, sector {sector}"));
         }
 
         return omitted;
+    }
+
+    /// <summary>
+    ///  Lists the sectors that hold two good copies that differ, of which an image of the sectors keeps the first.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <param name="dos">The layout.</param>
+    /// <returns>Each sector, as "track 18, sector 0".</returns>
+    internal static IReadOnlyList<string> Conflicting(CommodoreDisk disk, CommodoreDos dos)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        List<string> conflicting = [];
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        for (int track = 1; track <= GcrLayout.Tracks; track++)
+        {
+            int position = (track - 1) * 2;
+            GcrLayout.ReadTrack(disk.Track(position), disk.BitCount(position), track, sectors, dos, out _, out _, out IReadOnlyList<int> differ);
+            conflicting.AddRange(differ.Select(sector => $"track {track}, sector {sector}"));
+        }
+
+        return conflicting;
     }
 }

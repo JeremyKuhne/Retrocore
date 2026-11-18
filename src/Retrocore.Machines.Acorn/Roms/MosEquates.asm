@@ -370,7 +370,9 @@ SOFT_KEY_POINTER = $02C9            ;; the offset in <SOFT_KEYS> of the next sof
 FIRST_AUTO_REPEAT = $02CA           ;; the next value for <AUTO_REPEAT_TIMER>, a one-byte queue
 ROLLOVER_WORK = $02CB               ;; &02CB-&02CD, the lowest key number each kind of keyboard scan reports
 SOUND_SEMAPHORE = $02CE             ;; zero while the envelope interrupt is processing, &FF when it is free
-BUFFER_BUSY = $02CF                 ;; a byte per buffer 0-8; bit 7 set when empty (printer: dormant; sound: flushed)
+;; A byte per buffer 0-8, whose bit 7 means the printer is dormant or a sound channel flushed. It is not whether a
+;; buffer is empty: that is <BUFFER_START> equal to <BUFFER_END>, and inserting into the keyboard buffer leaves it set.
+BUFFER_BUSY = $02CF
 BUFFER_START = $02D8                ;; each buffer's offset of the next byte to remove
 BUFFER_END = $02E1                  ;; each buffer's offset where the next byte goes; equal to the start when empty
 CFS_BLOCK_SIZE = $02EA              ;; the size of the open input file's resident block

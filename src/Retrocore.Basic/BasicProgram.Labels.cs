@@ -107,6 +107,21 @@ public sealed partial class BasicProgram
                 continue;
             }
 
+            // BBC BASIC finds words only in capitals, so reminder is a name, and a * at a statement's start hands the
+            // rest of the line to the MOS, so *RENAME GOTO done is a file name, not a jump.
+            if (dialect is BbcBasicDialect)
+            {
+                if (character == '*' && StatementStart(text, index)) { break; }
+                if (string.CompareOrdinal(text, index, "REM", 0, 3) == 0) { break; }
+                if (string.CompareOrdinal(text, index, "DATA", 0, 4) == 0)
+                {
+                    index = SkipData(text, index);
+                    continue;
+                }
+
+                if (!char.IsAsciiLetterUpper(character)) { continue; }
+            }
+
             // Business BASIC and MBASIC take REM and DATA only set apart from names, as REMAIN is a variable.
             bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
             if (separated ? SetApart(text, index, "REM") : StartsWord(text, index, "REM")) { break; }
@@ -287,6 +302,16 @@ public sealed partial class BasicProgram
 
         int end = index + word.Length;
         return end >= text.Length || !InName(text[end], periods: true);
+    }
+
+    // Whether a place starts a statement: the line's start, after a colon, or after THEN or ELSE.
+    private static bool StatementStart(string text, int index)
+    {
+        int before = index - 1;
+        while (before >= 0 && text[before] == ' ') { before--; }
+        if (before < 0 || text[before] == ':') { return true; }
+        return before >= 3 && string.CompareOrdinal(text, before - 3, "THEN", 0, 4) == 0
+            || before >= 3 && string.CompareOrdinal(text, before - 3, "ELSE", 0, 4) == 0;
     }
 
     private static bool StartsWord(string text, int index, string word, bool spaced = false)

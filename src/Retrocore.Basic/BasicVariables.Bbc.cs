@@ -202,6 +202,19 @@ public sealed partial class BasicVariables
             throw new ArgumentException($"{name} {BadName}");
         }
 
+        // The last block's link, or the list's head, will point at the new block. A list that loops is corrupt, and
+        // nothing is made.
+        int link = BbcBasicDialect.ListHeads + (2 * name[0]);
+        HashSet<int> seen = [];
+        while ((Word(link) >> 8) != 0)
+        {
+            link = Word(link);
+            if (!seen.Add(link))
+            {
+                throw new InvalidOperationException($"The variable list for {name[0]} loops: it is corrupt.");
+            }
+        }
+
         BasicVariableKind kind = BbcKind(name);
         int size = 2 + (name.Length - 1) + 1 + ValueSize(kind);
         int block = Word(BbcBasicDialect.Heap);
@@ -212,10 +225,6 @@ public sealed partial class BasicVariables
 
         for (int at = block; at < block + size; at++) { _memory.Write(at, 0); }
         for (int index = 1; index < name.Length; index++) { _memory.Write(block + 1 + index, (byte)name[index]); }
-
-        // The last block's link, or the list's head, points at the new block.
-        int link = BbcBasicDialect.ListHeads + (2 * name[0]);
-        while ((Word(link) >> 8) != 0) { link = Word(link); }
         BasicProgram.WriteWord(_memory, link, block);
         BasicProgram.WriteWord(_memory, BbcBasicDialect.Heap, block + size);
         return new(name, kind, block, block + 2 + name.Length);

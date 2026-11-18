@@ -214,7 +214,9 @@ public sealed class BbcBasicDialectTests
         // STR$ and the watch's own text use BASIC's general format.
         evaluator.Format(evaluator.Evaluate("STR$1234567890")).Should().Be("\"1234567890\"");
         evaluator.Format(evaluator.Evaluate("STR$0.5")).Should().Be("\"0.5\"");
-        evaluator.Format(evaluator.Evaluate("STR$0.01")).Should().Be("\"1E-2\"");
+        // STR$ gives ten digits, as the ROM does: 0.01 in a 32-bit mantissa is just short of it.
+        evaluator.Format(evaluator.Evaluate("STR$0.01")).Should().Be("\"9.999999998E-3\"");
+        evaluator.Format(evaluator.Evaluate("STR$(1/3)")).Should().Be("\"0.3333333334\"");
         evaluator.Format(evaluator.Evaluate("1.5E10")).Should().Be("1.5E10");
         evaluator.Format(evaluator.Evaluate("-12.25")).Should().Be("-12.25");
 
@@ -252,6 +254,62 @@ public sealed class BbcBasicDialectTests
         BasicSource source = BasicSource.Analyze(Program, BasicDialect.BbcBasic);
         string[] names = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => $"{site.Key}@{site.Line}")];
         names.Should().Equal("@%@0", "FOO@0", "X@0", "FOO@0", "FOO@2");  // by source line: none in line 20's *LOAD
+    }
+
+    /// <summary>
+    ///  Labels in BBC BASIC: a name in small letters such as reminder is no REM, and a * command's text keeps its
+    ///  words; TOP's P is no variable.
+    /// </summary>
+    [TestMethod]
+    public void LabelsAndTopReadAsBbcBasic()
+    {
+        const string Source = "REM retrocore bbcbasic\n    reminder=0:GOTO done\n    *RENAME GOTO done\ndone:\n    PRINT TOP\n";
+        BasicParseResult parsed = BasicProgram.Parse(Source, BasicDialect.BbcBasic);
+        parsed.Diagnostics.Should().BeEmpty();
+        string text = parsed.Program?.ToText() ?? "";
+        text.Should().Contain("reminder=0:GOTO 30").And.Contain("*RENAME GOTO done");
+
+        BasicSource source = BasicSource.Analyze("10 P=1:PRINT TOP\n", BasicDialect.BbcBasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Should().ContainSingle();
+    }
+
+    /// <summary>
+    ///  FN calls are checked as BASIC checks them, and reals keep BASIC II's 32-bit mantissa.
+    /// </summary>
+    [TestMethod]
+    public void FunctionsAndRealPrecision()
+    {
+        BbcMachine machine = Boot();
+        (string Parameter, string Body)? Define(string name) => name switch
+        {
+            "f" => ("x", "x+&7FFFFFFF"),
+            "g" => ("", "42"),
+            _ => null
+        };
+
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine), Define);
+        evaluator.Evaluate("FNf(1)").Value.Number.Should().Be(2147483648.0, "a real parameter makes the sum real");
+        evaluator.Evaluate("FNg").Value.Number.Should().Be(42);
+        Action missing = () => evaluator.Evaluate("FNf");
+        missing.Should().Throw<FormatException>().WithMessage("Arguments.");
+        Action extra = () => evaluator.Evaluate("FNg(1)");
+        extra.Should().Throw<FormatException>().WithMessage("Arguments.");
+        evaluator.Evaluate("1E10+1-1E10").Value.Number.Should().Be(0, "1E10+1 rounds to 32 bits");
+    }
+
+    /// <summary>
+    ///  A variable list that loops is corrupt: making a variable on it fails rather than hanging.
+    /// </summary>
+    [TestMethod]
+    public void LoopingVariableListIsCorrupt()
+    {
+        BbcMachine machine = Boot();
+        DelegateBasicMemory memory = Memory(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, memory);
+        BasicVariable first = variables.Create("ab");
+        BasicProgram.WriteWord(memory, first.Address, first.Address);  // its link points at itself
+        Action make = () => variables.Create("ac");
+        make.Should().Throw<InvalidOperationException>().WithMessage("*corrupt*");
     }
 
     /// <summary>

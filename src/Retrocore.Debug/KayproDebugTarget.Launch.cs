@@ -71,7 +71,7 @@ internal sealed partial class KayproDebugTarget
     /// <summary>
     ///  Runs the machine until CP/M shows its prompt, such as <c>A&gt;</c>, and types a command at it.
     /// </summary>
-    /// <param name="command">The command, such as <c>DIR</c> or <c>B:STAT</c>.</param>
+    /// <param name="command">The command, such as <c>MBASIC</c> or <c>B:MBASIC</c>.</param>
     /// <param name="seconds">The most machine time to wait for the prompt.</param>
     /// <exception cref="InvalidOperationException">CP/M does not show its prompt in time.</exception>
     internal void TypeAtPrompt(string command, double seconds)

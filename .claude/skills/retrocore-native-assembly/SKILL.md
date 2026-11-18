@@ -69,10 +69,11 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 ## Editing the SDK's ROM sources
 
 The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms`,
-`src/Retrocore.Machines.Trs80/Roms` and `src/Retrocore.Machines.Kaypro/Roms` must assemble byte-identically to the
-ROMs, for every variant: `ENHANCED` for the IIe; `REVISION` 12 or 13 for Level II; `MODEL` 1 or 3 for `Level1.asm`;
-`MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for `Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and
-structure only in ways that keep the bytes.
+`src/Retrocore.Machines.Trs80/Roms` and `src/Retrocore.Machines.Kaypro/Roms` (MBASIC.COM's too) must assemble
+byte-identically to the ROMs, for every variant: `ENHANCED` for the IIe; `REVISION` 12 or 13 for Level II; `MODEL` 1
+or 3 for `Level1.asm`; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for `Model2Boot.asm`;
+`MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and structure only
+in ways that keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks.
 - **Rewriting data as macros:** check that the macro emits exactly the bytes it replaces.

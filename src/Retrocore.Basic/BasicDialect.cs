@@ -32,6 +32,7 @@ public abstract partial class BasicDialect
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
         ColorBasicDialect.Disk,
+        MbasicDialect.Instance,
         PetBasicDialect.Basic4
     ];
 
@@ -71,6 +72,11 @@ public abstract partial class BasicDialect
     ///  BASIC 1.1.
     /// </summary>
     public static BasicDialect ColorBasic => ColorBasicDialect.Disk;
+
+    /// <summary>
+    ///  Gets MBASIC, Microsoft's BASIC-80 5.21 for CP/M.
+    /// </summary>
+    public static BasicDialect Mbasic => MbasicDialect.Instance;
 
     /// <summary>
     ///  Gets the Color Computer's BASIC as the ROMs fitted know it, which crunch only their own words.
@@ -329,6 +335,29 @@ public abstract partial class BasicDialect
     /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int})"/> gives them.</param>
     /// <returns>The stored bytes, without the zero that ends the line, with the unit each came from.</returns>
     internal abstract CrunchOutput Crunch(ReadOnlySpan<int> text);
+
+    /// <summary>
+    ///  Finds the zero that ends a line's tokens, which a dialect that stores numbers in binary does not take from
+    ///  inside a number.
+    /// </summary>
+    /// <param name="tokens">The bytes from the line's first token.</param>
+    /// <returns>The zero's index, or -1 for none.</returns>
+    internal virtual int TerminatorIn(ReadOnlySpan<byte> tokens) => tokens.IndexOf((byte)0);
+
+    /// <summary>
+    ///  Turns a line's tokens as the interpreter keeps them in memory back into those CRUNCH made, such as line
+    ///  pointers back into line numbers.
+    /// </summary>
+    /// <param name="tokens">The tokens.</param>
+    /// <param name="memory">The machine's memory.</param>
+    /// <returns>The tokens CRUNCH made.</returns>
+    internal virtual byte[] FromMemory(byte[] tokens, IBasicMemory memory) => tokens;
+
+    /// <summary>
+    ///  Gets whether the interpreter rewrites lines in memory as it runs (<see cref="FromMemory"/> changes them), so
+    ///  that the program's identity must come from the lines read back rather than the bytes.
+    /// </summary>
+    internal virtual bool RewritesLines => false;
 
     /// <summary>
     ///  Gets the text the tokenizer sees after the line number's digits.

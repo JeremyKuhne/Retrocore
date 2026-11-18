@@ -236,6 +236,13 @@ try {
     await screen(text => /LIST[\s\S]*30 A=3/.test(text), "the program kept through the reset");
     await request("setExceptionBreakpoints", { filters: [] });
 
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    await assert.rejects(request("launch", { machine: "trs80-model1", sdkRoms, disks: dos }), /disks must be a list/);
+    await assert.rejects(
+        request("launch", { machine: "trs80-model1", sdkRoms, disks: [null, { path: dos }] }),
+        /disks\[1\] must be an image's path/);
+
     // Machine reset stops as the machine powers on, at the ROM's first instruction.
     await launch({}, ["machineReset"]);
     const powerOn = await stoppedAt("breakpoint", 1, "The machine reset as it powered on.");

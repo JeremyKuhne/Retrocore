@@ -167,7 +167,8 @@ NXTD:
 
 ;; Points <PNT> at the cursor's line and sets <LNMX> for its length, 40 or 80 columns.
 ;;
-;; A column past the first row's end, in a line of one row, is moved back by 40.
+;; A column past the first row's end is moved back by 40, whatever the line's length; a caller that keeps the column
+;; in a second row saves <PNTR> around the call, as <JSTS2> does.
 ;; In: TBLX = the line's first row
 ;; Uses: A, X
 STUPT:
@@ -477,7 +478,8 @@ BKLN_2:
 ;;
 ;; Printable characters are stored as their screen codes. RETURN (or shifted RETURN) moves to the next line and
 ;; ends quote mode, inserts and reversing. The cursor keys, HOME, CLR, RVS, DEL and INST do their jobs, except in
-;; quote mode or while inserts are pending, where they print as reversed characters instead. The business editor
+;; quote mode or while inserts are pending, where they print as reversed characters instead; DEL deletes in quote
+;; mode too, and prints reversed only while inserts are pending. The business editor
 ;; also takes TAB, which moves to the next tab stop, and shifted TAB, which sets or clears one at the cursor.
 ;; In: A = the character
 ;; Keeps: A, X, Y
@@ -692,7 +694,7 @@ NXTX_16:
     jmp LOOP2
 
 ;; Moves the cursor down to the next logical line, scrolling at the bottom, and clears <INPUT_ROW>'s top bit.
-;; Uses: A, X
+;; Uses: A, X, Y
 NXLN:
     sec
     lsr INPUT_ROW

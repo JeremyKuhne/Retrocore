@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
@@ -177,6 +178,7 @@ internal static partial class MediaActions
             (nameof(Disk35Disk), TwoImgContainer.SnapshotKind) => Disk35Disk.Load(image, writeProtected),
             (nameof(MemoryBlockDevice), TwoImgContainer.SnapshotKind) => MemoryBlockDevice.Load(image, writeProtected),
             (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.Read(image),
+            (nameof(AcornTape), AcornTape.SnapshotKind) => UefFormat.Read(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
         };
 
@@ -207,6 +209,8 @@ internal static partial class MediaActions
             ["format"] = floppy.Format,
             ["jvcHeader"] = floppy.JvcHeader is { } header ? Convert.ToBase64String(header) : null,
         },
+        AcornTapeCodec => new() { ["kind"] = "acornTape" },
+        AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
         _ => null,
     };
 
@@ -220,6 +224,8 @@ internal static partial class MediaActions
             "block" => BlockImageCodec.For(codec.Bool("twoImg") == true ? "2MG" : format),
             "floppy" when codec.String("jvcHeader") is { } header => FloppyImageCodec.ForImage("JVC", Convert.FromBase64String(header)),
             "floppy" => FloppyImageCodec.For(format, [format]),
+            "acornTape" => new AcornTapeCodec(),
+            "acornDisk" => new AcornDiskCodec(format),
             _ => null,
         };
     }

@@ -185,7 +185,7 @@ internal sealed partial class DebugSession
         {
             if (Target.IsInstructionBoundary)
             {
-                if (Target.ProgramCounter == rom.StatementStart) { return true; }
+                if (Target.ProgramCounter == rom.StatementStart && Target.BasicPagedIn) { return true; }
                 if (Target.CycleCount >= end) { return false; }
             }
 

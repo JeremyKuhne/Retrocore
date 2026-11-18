@@ -231,6 +231,7 @@ internal sealed partial class DebugSession
         }
 
         if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
+        if (Basic == BasicDialect.BbcBasic) { return BbcProgramVariables(line, Span); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -246,6 +247,28 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Arrays", ["value"] = Span(arrays, free), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Free", ["value"] = Span(free, strings), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // BBC BASIC's memory, in its order: the program from PAGE to TOP, the variables on the heap from LOMEM, free space
+    // up to BASIC's stack, which runs down from HIMEM.
+    private List<JsonNode?> BbcProgramVariables(string line, Func<int, int, string> span)
+    {
+        int page = Target.Peek(BbcBasicDialect.PageHigh) << 8;
+        int top = Word(BbcBasicDialect.Top);
+        int lomem = Word(BbcBasicDialect.Lomem);
+        int heap = Word(BbcBasicDialect.Heap);
+        int stack = Word(BbcBasicDialect.BasicStack);
+        int himem = Word(BbcBasicDialect.Himem);
+        string data = $"&{Word(BbcBasicDialect.DataPointerAddress):X4}";
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = span(page, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Variables", ["value"] = span(lomem, heap), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free", ["value"] = span(heap, stack), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "BASIC's stack", ["value"] = span(stack, himem), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
         ];

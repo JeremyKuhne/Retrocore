@@ -436,7 +436,7 @@ internal sealed partial class DebugSession
         transport.On("retro/key", args => Reply(() =>
         {
             int code = (args.Int("code") ?? 0);
-            if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+            if (code is < 0 or > 255) { throw new ArgumentOutOfRangeException(nameof(args)); }
 
             // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
             // goes now and drops the rest of the paste.
@@ -838,6 +838,7 @@ internal sealed partial class DebugSession
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Bbc => LaunchBbc(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -1062,6 +1063,15 @@ internal sealed partial class DebugSession
     private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
     {
         CocoDebugTarget target = CocoDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a BBC Micro calls the MOS through its vectors, which it sets up as it starts, so the MOS and BASIC
+    // run first.
+    private static BbcDebugTarget LaunchBbc(JsonObject args, bool loads)
+    {
+        BbcDebugTarget target = BbcDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }

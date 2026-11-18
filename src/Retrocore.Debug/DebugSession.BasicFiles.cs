@@ -130,7 +130,7 @@ internal sealed partial class DebugSession
                 look += (ulong)(Target.ClockHertz / 10);
             }
 
-            if (rom is not null && Target.IsInstructionBoundary && Target.ProgramCounter == rom.Prompt)
+            if (rom is not null && Target.IsInstructionBoundary && Target.ProgramCounter == rom.Prompt && Target.BasicPagedIn)
             {
                 // The prompt's own code sets up the line BASIC waits on; a little more and BASIC is waiting.
                 ulong settle = Target.CycleCount + (ulong)(Target.ClockHertz / 10);

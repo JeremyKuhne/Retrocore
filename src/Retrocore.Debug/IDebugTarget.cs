@@ -196,6 +196,12 @@ internal interface IDebugTarget : IDebugMemory
     BasicRom? BasicRom => null;
 
     /// <summary>
+    ///  Gets whether BASIC's code is in memory now, so <see cref="BasicRom"/>'s addresses are BASIC's: always, but on a
+    ///  machine whose BASIC is a paged ROM, as the BBC Micro's is, only while it is paged in.
+    /// </summary>
+    bool BasicPagedIn => true;
+
+    /// <summary>
     ///  Gets the number of the BASIC line running, or last run.
     /// </summary>
     int BasicCurrentLine => Basic is { } dialect
@@ -222,6 +228,13 @@ internal interface IDebugTarget : IDebugMemory
     ///  returns to; null when they are read from the CPU's stack by their tokens, as the Microsoft BASICs keep them.
     /// </summary>
     IReadOnlyList<(int Line, int TextPointer)>? BasicGosubs => null;
+
+    /// <summary>
+    ///  Gets the calls in progress, most recent first, for a BASIC with more kinds than GOSUB, as BBC BASIC's PROCs
+    ///  and FNs: the line each was made from, the address before the place it returns to, and its kind; null to take
+    ///  <see cref="BasicGosubs"/>, each a GOSUB.
+    /// </summary>
+    IReadOnlyList<(int Line, int TextPointer, string Kind)>? BasicCalls => null;
 
     /// <summary>
     ///  Gets the text pointer at the start of a statement, at <see cref="Debug.BasicRom.Gone"/>: the colon or line
@@ -488,7 +501,10 @@ internal interface IDebugTarget : IDebugMemory
     /// <summary>
     ///  Types a key.
     /// </summary>
-    /// <param name="code">The ASCII code, 0-127.</param>
+    /// <param name="code">
+    ///  The ASCII code, 0-127, or above it a machine's own code for a key that types no character, as the BBC Micro's
+    ///  cursor, COPY and function keys.
+    /// </param>
     /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
     bool Key(int code);
 

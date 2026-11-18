@@ -59,6 +59,11 @@ internal static class LanguageHost
     internal const string ColorBasicId = "retrocore-colorbasic";
 
     /// <summary>
+    ///  The VS Code language of BBC BASIC documents.
+    /// </summary>
+    internal const string BbcBasicId = "retrocore-bbcbasic";
+
+    /// <summary>
     ///  The VS Code language of a BASIC document whose pragma or file name gives its dialect.
     /// </summary>
     internal const string BasicId = "retrocore-basic";
@@ -78,6 +83,7 @@ internal static class LanguageHost
         or BusinessId
         or Level1Id
         or ColorBasicId
+        or BbcBasicId
         or BasicId;
 
     /// <summary>

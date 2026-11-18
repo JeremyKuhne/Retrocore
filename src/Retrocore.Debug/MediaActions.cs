@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Runtime.CompilerServices;
@@ -369,6 +370,9 @@ internal static partial class MediaActions
         return medium switch
         {
             WozDisk => DiskIIImage.CodecFor(extension),
+            AcornTape => new AcornTapeCodec(),
+            FloppyDisk when extension.TrimStart('.').ToUpperInvariant() is "SSD" or "DSD" =>
+                new AcornDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
             _ => BlockImageCodec.For(extension),
         };

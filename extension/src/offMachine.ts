@@ -208,14 +208,16 @@ export class OffMachine {
             const workspace = folderOf(owner.folder);
             const entry = launchConfigurations(workspace).find(candidate => candidate.name === owner.name);
             const setup = this.state.get<Setup>(lastSetupKey);
+            // What only a launch resolves, such as ${file}, keeps the value its session resolved it to.
+            const started = this.state.get<OffTarget>(`${recoveryTargetPrefix}${recoveryId}`);
             if (entry !== undefined) {
-                await this.select({ configuration: { ...resolveVariables(entry, workspace?.uri.fsPath), recoveryId },
+                const fresh = resolveVariables(entry, workspace?.uri.fsPath);
+                await this.select({ configuration: { ...keepResolved(fresh, started?.configuration ?? {}), recoveryId },
                     source: { kind: "launch", name: owner.name, folder: workspace?.uri.toString() } });
             } else if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
                 await this.select({ configuration: { ...setupConfiguration(setup), recoveryId }, source: { kind: "setup", setup } });
             } else {
                 // The machine as its session started it, as a favorite's is.
-                const started = this.state.get<OffTarget>(`${recoveryTargetPrefix}${recoveryId}`);
                 if (started === undefined) return false;
                 await this.select({ ...started, configuration: { ...started.configuration, recoveryId } });
             }

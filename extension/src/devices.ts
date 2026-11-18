@@ -788,11 +788,16 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // keeps them for the machine's next launch, Review shows them too, and Discard lets them go. A journal of another
     // workspace's machine is that workspace's to offer.
     const offerRecovery = async (): Promise<void> => {
-        let journals: { id: string; name?: string | null; kept?: string | null; disks: string[] }[];
-        try {
-            journals = (await languageRequest<{ journals: typeof journals }>("retrocore/recovery/list", {})).journals;
-        } catch {
-            return;
+        let journals: { id: string; name?: string | null; kept?: string | null; disks: string[] }[] | undefined;
+        // The language server may still be starting, so a failed look is tried again a few times before giving up
+        // until the next start; nothing is marked, so the journals are offered then.
+        for (let tries = 0; journals === undefined; tries++) {
+            try {
+                journals = (await languageRequest<{ journals: NonNullable<typeof journals> }>("retrocore/recovery/list", {})).journals;
+            } catch {
+                if (tries === 4) return;
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
         }
         for (const journal of journals) {
             const owner = saved.recoveryOf(journal.id);

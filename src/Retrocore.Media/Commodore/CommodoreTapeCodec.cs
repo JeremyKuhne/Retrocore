@@ -5,8 +5,8 @@
 namespace Retrocore.Media.Commodore;
 
 /// <summary>
-///  Writes a Commodore tape as a TAP image, which holds every pulse to the microsecond, or a WAV file, whose pulses
-///  are rounded to its samples. Neither keeps the record tab.
+///  Writes a Commodore tape as a TAP image, which holds every pulse to the microsecond up to about 16.8 seconds, or a
+///  WAV file, whose pulses are rounded to its samples. Neither keeps the record tab; each lists what it cannot hold.
 /// </summary>
 /// <param name="format"><c>TAP</c> or <c>WAV</c>.</param>
 public sealed class CommodoreTapeCodec(string format = "TAP") : IImageCodec
@@ -39,9 +39,17 @@ public sealed class CommodoreTapeCodec(string format = "TAP") : IImageCodec
         }
 
         // Neither format keeps a record tab, as bare block images keep no lock.
-        if (Format == "TAP") { return new(snapshot.Image.ToArray(), Losses: []); }
+        CommodoreTape tape = CommodoreTape.FromSnapshot(snapshot.Image.Span);
+        if (Format == "WAV")
+        {
+            return new(CommodoreWave.Write(tape.Pulses), ["Each pulse's length, to the nearest 1/44,100 second."]);
+        }
 
-        CommodoreTape tape = TapFormat.Read(snapshot.Image.Span);
-        return new(CommodoreWave.Write(tape.Pulses), ["Each pulse's length, to the nearest 1/44,100 second."]);
+        int longer = 0;
+        foreach (int pulse in tape.Pulses) { if (pulse > TapFormat.LongestPulse) { longer++; } }
+        return new(TapFormat.Write(tape.Pulses), longer == 0
+            ? []
+            : [$"{longer} pause{(longer == 1 ? "" : "s")} longer than {TapFormat.LongestPulse / 1e6:0.######} s, the longest "
+                + $"a TAP image holds, shortened to that."]);
     }
 }

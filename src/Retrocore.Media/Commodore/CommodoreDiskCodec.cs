@@ -8,6 +8,13 @@ namespace Retrocore.Media.Commodore;
 ///  Writes a Commodore GCR disk as a G64 image, which holds every cell, or as an image of its sectors, D64 for DOS 2
 ///  or D67 for DOS 1, which loses anything else on the disk and any sector the drive could not read.
 /// </summary>
+/// <remarks>
+///  <para>
+///   A sector image lists as losses the sectors that do not read, the good sectors its layout has no place for (a
+///   DOS 1 disk's 20th sector on tracks 18-24, in a D64), and anything at a half-track or past track 35, so a save
+///   asks before dropping them.
+///  </para>
+/// </remarks>
 /// <param name="format"><c>G64</c>, <c>D64</c> or <c>D67</c>.</param>
 public sealed class CommodoreDiskCodec(string format = "G64") : IImageCodec
 {
@@ -42,7 +49,12 @@ public sealed class CommodoreDiskCodec(string format = "G64") : IImageCodec
         // None of the formats keeps the write-protect tab, as bare block images keep no lock.
         if (Format == "G64") { return new(snapshot.Image.ToArray(), Losses: []); }
         CommodoreDisk disk = G64Format.Read(snapshot.Image.Span);
-        (byte[] image, IReadOnlyList<string> unreadable) = Format == "D67" ? D67Format.Write(disk) : D64Format.Write(disk);
-        return new(image, [.. unreadable.Select(sector => $"{sector}, which does not read, written as zeros.")]);
+        CommodoreDos dos = Format == "D67" ? CommodoreDos.Dos1 : CommodoreDos.Dos2;
+        (byte[] image, IReadOnlyList<string> unreadable) = D64Format.WriteSectors(disk, dos);
+        return new(image,
+        [
+            .. unreadable.Select(sector => $"{sector}, which does not read, written as zeros."),
+            .. D64Format.Omitted(disk, dos).Select(place => $"{place}, which a {Format} image has no place for.")
+        ]);
     }
 }

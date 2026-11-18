@@ -104,13 +104,17 @@ public sealed class KayproTests
     }
 
     /// <summary>
-    ///  A Ctrl+C drops the keys still queued, such as the rest of a paste, and is the next key the program reads.
+    ///  A Ctrl+C drops the keys still queued, such as the rest of a paste, and the one the SIO holds unread, and is
+    ///  the next key the program reads.
     /// </summary>
     [TestMethod]
     public void CtrlCDropsQueuedKeys()
     {
         KayproMachine machine = Create();
         Type(machine, "DIR A:");
+
+        // The first key reaches the SIO, unread; Ctrl+C takes its place too.
+        machine.Bus.Tick();
         machine.Bus.Keyboard.Type(0x03);
         machine.Bus.Keyboard.IsTyping.Should().BeTrue();
 

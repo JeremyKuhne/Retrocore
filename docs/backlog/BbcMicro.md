@@ -21,4 +21,8 @@ characters) are SDK sources. What is left is below.
   whole rest of the line.
 - RS-423 works with the MOS, but the host's serial line is not connected to it.
 - The UEF reader ignores the base frequency (`&0113`) and phase (`&0115`) chunks.
+- The 8271's scan commands (`&00` and `&04`) run as verifies: they take no comparison bytes and leave the scan
+  registers alone. The DFS never issues them.
+- The 6845 starts the vertical sync at the start of a row in both fields, as MAME's does, not half a line later in
+  the odd field of an interlaced picture.
 - The TRS-80's partial 6845 could move onto the shared `Crtc6845`.

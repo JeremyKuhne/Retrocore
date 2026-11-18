@@ -473,6 +473,13 @@ public sealed class Intel8271
                 _currentTracks[1] = value;
                 break;
             case 0x23:
+                // STEP (bit 1) rising moves the head a cylinder, outward when the direction (bit 2) is set; the
+                // current track register is left as it is.
+                if ((value & 0x02) != 0 && (_outputPort & 0x02) == 0)
+                {
+                    _cylinders[_drive] = Math.Clamp(_cylinders[_drive] + ((value & 0x04) != 0 ? -1 : 1), 0, 83);
+                }
+
                 _outputPort = (byte)(value & 0x3F);
                 HeadLoaded = (value & 0x08) != 0;
                 _idleSince = _time;
@@ -688,6 +695,19 @@ public sealed class Intel8271
         return (0, RevolutionCycles - angle + (16 * ByteCycles));
     }
 
+    // An FM ID field's CRC-CCITT, from &FFFF over the ID mark (&FE) and the four ID bytes.
+    private static ushort IdCrc(FloppySector sector)
+    {
+        int crc = 0xFFFF;
+        foreach (byte value in (byte[])[0xFE, sector.Track, sector.Side, sector.Sector, sector.SizeCode])
+        {
+            crc ^= value << 8;
+            for (int bit = 0; bit < 8; bit++) { crc = (crc & 0x8000) != 0 ? (crc << 1) ^ 0x1021 : crc << 1; }
+        }
+
+        return (ushort)crc;
+    }
+
     private IEnumerable<int> ReadIds()
     {
         foreach (int wait in LoadAndSeek(_command[1])) { yield return wait; }
@@ -711,7 +731,10 @@ public sealed class Intel8271
             (int index, int wait) = NextId(sectors.Count);
             yield return wait;
             FloppySector sector = sectors[index];
-            byte[] field = [sector.Track, sector.Side, sector.Sector, sector.SizeCode];
+
+            // The whole ID field after its mark: the four ID bytes and their CRC, high byte first.
+            ushort crc = IdCrc(sector);
+            byte[] field = [sector.Track, sector.Side, sector.Sector, sector.SizeCode, (byte)(crc >> 8), (byte)crc];
             foreach (byte value in field)
             {
                 yield return ByteCycles;

@@ -262,6 +262,53 @@ public class BbcDiskTests
     }
 
     /// <summary>
+    ///  Read ID gives the whole ID field: the four ID bytes, then their CRC, high byte first.
+    /// </summary>
+    [TestMethod]
+    public void ReadIdGivesTheCrc()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x7A, 0x17, 0xC1);            // non-DMA mode
+        Send(fdc, 0x5B, 0, 0, 1);               // read one ID on drive 0, track 0
+        List<byte> bytes = [];
+        for (int cycle = 0; cycle < 4_000_000 && fdc.IsBusy; cycle++)
+        {
+            fdc.Tick();
+            if (fdc.DataRequest) { bytes.Add(fdc.ReadData()); }
+        }
+
+        bytes.Should().HaveCount(6);
+        bytes[0].Should().Be(0, "track 0");
+        int crc = 0xFFFF;
+        foreach (byte value in (byte[])[0xFE, .. bytes[..4]])
+        {
+            crc ^= value << 8;
+            for (int bit = 0; bit < 8; bit++) { crc = (crc & 0x8000) != 0 ? (crc << 1) ^ 0x1021 : crc << 1; }
+        }
+
+        ((bytes[4] << 8) | bytes[5]).Should().Be(crc & 0xFFFF);
+    }
+
+    /// <summary>
+    ///  A STEP pulse on the output port moves the head a cylinder, and the direction bit says which way.
+    /// </summary>
+    [TestMethod]
+    public void OutputPortStepsTheHead()
+    {
+        Intel8271 fdc = new();
+        Send(fdc, 0x7A, 0x23, 0x48);            // drive 0, head loaded
+        Send(fdc, 0x7A, 0x23, 0x4A);            // STEP, inward
+        Send(fdc, 0x7A, 0x23, 0x48);
+        Send(fdc, 0x7A, 0x23, 0x4A);
+        fdc.Cylinder(0).Should().Be(2);
+        Send(fdc, 0x7A, 0x23, 0x4C);            // outward, STEP low
+        Send(fdc, 0x7A, 0x23, 0x4E);            // STEP
+        fdc.Cylinder(0).Should().Be(1);
+    }
+
+    /// <summary>
     ///  A sector count of 0 is 32: verifying 32 sectors from sector 0 of a ten-sector track runs out of sectors,
     ///  rather than verifying none and succeeding.
     /// </summary>

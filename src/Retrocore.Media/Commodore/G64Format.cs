@@ -56,7 +56,13 @@ public static class G64Format
         {
             uint offset = BinaryPrimitives.ReadUInt32LittleEndian(image[(HeaderSize + (position * 4))..]);
             uint speed = BinaryPrimitives.ReadUInt32LittleEndian(image[(HeaderSize + (image[9] * 4) + (position * 4))..]);
-            if (offset == 0 || offset + 2 > image.Length) { continue; }
+            // Only a zero offset is an absent track; one past the file's end is a file cut short.
+            if (offset == 0) { continue; }
+            if ((long)offset + 2 > image.Length)
+            {
+                throw new InvalidDataException($"The G64 image's half-track {position} starts past its end.");
+            }
+
             int length = BinaryPrimitives.ReadUInt16LittleEndian(image[(int)offset..]);
             if (offset + 2 + length > image.Length)
             {

@@ -162,8 +162,8 @@ export class OffMachine {
         if (entry === undefined) return;
         // What only a launch resolves, such as ${file}, keeps the value the session it came from resolved it to.
         const { machineState: _saved, ...fresh } = resolveVariables(entry, workspace?.uri.fsPath);
-        // The recovery id its launches gave it stays, as launch.json does not hold it.
-        const configuration = { ...keepResolved(fresh, target.configuration), recoveryId: target.configuration.recoveryId };
+        // The recovery id is launch.json's when it gives one; otherwise the one its launches are given, by its name.
+        const configuration = keepResolved(fresh, target.configuration);
         if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
         this.target = { ...target, configuration };
         this.body = undefined;

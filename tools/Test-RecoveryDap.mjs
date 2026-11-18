@@ -122,8 +122,17 @@ try {
     let drive = off.devices.find(device => device.id === "disk0");
     assert.equal(drive.media.changed, true, JSON.stringify(drive.media));
     assert.equal(drive.media.kept, true);
+    // The machine is built for each request, but its mount is named alike each time, and an answer about another is refused.
+    const generation = drive.media.generation;
+    assert.equal((await language.request("retrocore/machine/describe", { configuration })).devices.find(device => device.id === "disk0").media.generation, generation);
+    await assert.rejects(language.request("retrocore/machine/change",
+        { configuration, request: "device", arguments: { id: "disk0", action: "save", generation: generation + 1, supportsRetrocoreMedia: 1 } }));
+    const held = await language.request("retrocore/machine/change",
+        { configuration, request: "device", arguments: { id: "disk0", action: "eject", supportsRetrocoreMedia: 1 } });
+    assert.equal(held.outcome, "changed", JSON.stringify(held));
+    assert.equal(held.generation, generation);
     const saved = await language.request("retrocore/machine/change",
-        { configuration, request: "device", arguments: { id: "disk0", action: "save", supportsRetrocoreMedia: 1 } });
+        { configuration, request: "device", arguments: { id: "disk0", action: "save", generation, supportsRetrocoreMedia: 1 } });
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));
     assert.equal(JSON.parse(readFileSync(journal, "utf8")).disks.length, 0, "a saved disk leaves the journal");
     assert.ok(readFileSync(disk).includes(Buffer.from("FIRST   BAS")), "the image has the program");

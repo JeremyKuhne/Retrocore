@@ -16,6 +16,8 @@ const prefix = "retrocore.savedMachine:";
 
 // Each launch configuration's recovery id, which names the journal its machine keeps its unsaved disks in.
 const recoveryPrefix = "retrocore.recoveryId:";
+// The recovery id a configuration gives itself, by the same key, so its journal is found as a made one is.
+const givenPrefix = "retrocore.givenRecoveryId:";
 
 /** The saved machines, by launch configuration. */
 export interface SavedMachines {
@@ -60,8 +62,13 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
         onDidReset: reset.event,
         // Configurations of one name in the folders of a multi-root workspace are each their own.
         recoveryId(configuration, folder) {
-            if (typeof configuration.recoveryId === "string") return configuration.recoveryId;
             const name = configuration.name;
+            if (typeof configuration.recoveryId === "string") {
+                // Kept apart from the one made for the name, which still finds that id's journal.
+                const givenKey = `${givenPrefix}${folder ?? ""}|${name}`;
+                if (typeof name === "string" && state.get(givenKey) !== configuration.recoveryId) void state.update(givenKey, configuration.recoveryId);
+                return configuration.recoveryId;
+            }
             if (typeof name !== "string") return undefined;
             const recoveryKey = `${recoveryPrefix}${folder ?? ""}|${name}`;
             let recoveryId = state.get<string>(recoveryKey);
@@ -72,9 +79,9 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             return recoveryId;
         },
         recoveryOf(id) {
-            const found = state.keys().find(name => name.startsWith(recoveryPrefix) && state.get(name) === id);
-            if (found === undefined) return undefined;
-            const rest = found.slice(recoveryPrefix.length);
+            const owns = (prefix: string): string | undefined => state.keys().find(name => name.startsWith(prefix) && state.get(name) === id)?.slice(prefix.length);
+            const rest = owns(recoveryPrefix) ?? owns(givenPrefix);
+            if (rest === undefined) return undefined;
             const bar = rest.indexOf("|");
             return { name: rest.slice(bar + 1), folder: bar > 0 ? rest.slice(0, bar) : undefined };
         }

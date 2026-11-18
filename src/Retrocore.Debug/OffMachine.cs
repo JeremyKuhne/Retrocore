@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -23,7 +24,8 @@ namespace Retrocore.Debug;
 ///  </para>
 ///  <para>
 ///   Nothing is kept between requests: each builds the machine afresh and disposes it, so the saved machine the
-///   editor holds is the whole of an off machine's state. ROM dumps are used when the launch names them; without
+///   editor holds is the whole of an off machine's state. A drive's <c>generation</c> names what it holds, the same
+///   for each request while it holds the same image, and an answer about another is refused as a running machine's is. ROM dumps are used when the launch names them; without
 ///   them each machine's ROMs are assembled from the SDK's sources, as a launch does.
 ///  </para>
 /// </remarks>
@@ -61,6 +63,7 @@ internal static class OffMachine
         // and a save answers what it found.
         return With(parameters, target =>
         {
+            ToMounts(arguments, target.Devices);
             if (request == "hardware")
             {
                 string[]? ids = target.Hardware().FirstOrDefault(row => row.Id == id)?.Devices;
@@ -107,6 +110,7 @@ internal static class OffMachine
                 JsonObject? answer = act(target);
                 if (changes) { journal?.Commit(MediaActions.Journal(target.Devices, journal), close: true); }
                 JsonObject body = DeviceJson.Write(target.Devices);
+                ToTokens(body, answer, target.Devices);
                 body["hardware"] = HardwareRow.Json(Off(target.Hardware(), configuration));
                 body["configuration"] = MachineConfiguration.Capture(target);
                 body["problems"] = problems.ToJsonArray();
@@ -117,6 +121,69 @@ internal static class OffMachine
                 journal?.Release();
                 (target as IDisposable)?.Dispose();
             }
+        }
+    }
+
+    // A machine built for each request mounts its disks afresh each time, with new generations, so the editor is told
+    // of a mount by a token of what its drive holds, which stays while the drive holds the same image. An answer back
+    // names a mount by its token, which becomes that mount's generation again, or one no mount has when the drive holds
+    // another image now, so a question left open while another disk went in is still refused or asked again.
+    private static int Token(IDevice device)
+    {
+        if (device is not IMediumSlot { Medium: { } medium })
+        {
+            return 0;
+        }
+
+        string held = $"{device.Id}|{MediaActions.Source(medium)?.Path.ToUpperInvariant() ?? device.Media?.Label}";
+        uint hash = 2166136261;
+        foreach (char character in held)
+        {
+            hash = (hash ^ character) * 16777619;
+        }
+
+        return (int)(hash & 0x7FFFFFFF);
+    }
+
+    // The tokens in a change's arguments, its generation and its discards, as the mounts they name now.
+    private static void ToMounts(JsonObject arguments, IReadOnlyList<IDevice> devices)
+    {
+        int Mount(string? id, int token) =>
+            devices.FirstOrDefault(device => device.Id == id) is IMediumSlot slot and IDevice device && Token(device) == token
+                ? slot.MountGeneration
+                : -1;
+
+        if (arguments.Int("generation") is { } generation)
+        {
+            arguments["generation"] = Mount(arguments.String("id"), generation);
+        }
+
+        foreach (JsonObject entry in (arguments.Array("discards") ?? []).OfType<JsonObject>())
+        {
+            if (entry.Int("generation") is { } token)
+            {
+                entry["generation"] = Mount(entry.String("device"), token);
+            }
+        }
+    }
+
+    // The mounts' generations in the devices and media's answer, as their tokens.
+    private static void ToTokens(JsonObject body, JsonObject? answer, IReadOnlyList<IDevice> devices)
+    {
+        foreach (JsonObject written in (body["devices"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            IDevice? device = devices.FirstOrDefault(candidate => candidate.Id == written.String("id"));
+            if (device is not null && written["media"] is JsonObject { } media && media["generation"] is not null)
+            {
+                media["generation"] = Token(device);
+            }
+        }
+
+        if (answer is not null && answer["generation"] is not null)
+        {
+            answer["generation"] = devices.FirstOrDefault(device => device.Id == answer.String("device")) is { } device
+                ? Token(device)
+                : null;
         }
     }
 

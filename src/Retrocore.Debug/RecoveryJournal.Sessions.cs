@@ -34,7 +34,19 @@ internal sealed partial class RecoveryJournal
         foreach (string folder in Directory.EnumerateDirectories(Root))
         {
             string id = Path.GetFileName(folder);
-            if (!IsId(id) || Take(folder, GlanceMilliseconds) is not { } held) { continue; }
+            if (!IsId(id)) { continue; }
+            FileStream? held;
+            try
+            {
+                held = Take(folder, GlanceMilliseconds);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // A journal whose lock cannot be opened is passed over, and the others are still found.
+                continue;
+            }
+
+            if (held is null) { continue; }
             using (held)
             {
                 try

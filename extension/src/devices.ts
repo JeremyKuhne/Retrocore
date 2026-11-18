@@ -713,7 +713,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             // The kept disks are the off machine's now: saved there, shown in its Drives view, or let go.
             const buttons = kept.length !== 0 && recoveryId !== undefined ? ["Save All", "Review", "Discard"] : [];
             void (lost.length === 0 ? vscode.window.showInformationMessage(message, ...buttons) : vscode.window.showWarningMessage(message, ...buttons))
-                .then(choice => recoveryId === undefined ? undefined : onKeptDisks(choice, recoveryId, machine, kept));
+                .then(choice => recoveryId === undefined ? undefined : onKeptDisks(choice, recoveryId, machine, kept, ended.id));
         }
         const active = vscode.debug.activeDebugSession;
         void refresh(active?.id === ended.id ? undefined : active);
@@ -722,7 +722,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // What a person chose for a machine's kept disks, from its stop notice or its crash notice. Save All saves each
     // through the off machine, asking only as Save does; Review shows them in the Drives view; Discard asks once, as
     // nothing can put them back.
-    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, files: string[]): Promise<void> => {
+    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, files: string[], ended?: string): Promise<void> => {
         if (choice === undefined) return;
         if (choice === "Discard") {
             const question = discardKeptQuestion(machine, files);
@@ -739,9 +739,22 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the disks it kept.`);
             return;
         }
-        await vscode.commands.executeCommand("retrocore.drives.focus");
-        if (choice !== "Save All") return;
-        const on = offTarget();
+        // The views show a running session's machine; the stopped one's disks are shown once none runs, and Save All
+        // saves them meanwhile. The session that just ended can still be given as the active one; it is not running.
+        const active = vscode.debug.activeDebugSession;
+        const running = active?.type === "retrocore" && active.id !== ended ? active : undefined;
+        if (choice !== "Save All") {
+            if (running === undefined) {
+                await vscode.commands.executeCommand("retrocore.drives.focus");
+                return;
+            }
+            const now = await vscode.window.showInformationMessage(
+                `Retrocore: the Drives view shows ${running.name} while it runs, and ${machine}'s kept disks once it stops.`, "Save All");
+            if (now !== "Save All") return;
+        } else if (running === undefined) {
+            await vscode.commands.executeCommand("retrocore.drives.focus");
+        }
+        const on = offTarget(true);
         for (const device of off.devices) {
             if (!on.still()) return;
             if (device.media?.kept && !await sendTo(on, "device", { id: device.id, action: "save" })) return;
@@ -799,13 +812,14 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         still: () => still(session),
         show
     });
-    // The off machine as a target: a question about it stands while no session runs and it is still the one shown.
-    // Its views follow its own changes, so an answer's devices need no showing.
-    const offTarget = (): Target => {
+    // The off machine as a target: a question about it stands while no session runs and it is still the one shown,
+    // or, for a stopped machine's kept disks saved from its notice, while it is still the one shown. Its views follow
+    // its own changes, so an answer's devices need no showing.
+    const offTarget = (alongside = false): Target => {
         const shown = off.recoveryId ?? off.name;
         return {
             request: async (request, args) => await off.request(request, args) as unknown as Devices & MediaAnswer,
-            still: () => vscode.debug.activeDebugSession?.type !== "retrocore" && (off.recoveryId ?? off.name) === shown,
+            still: () => (alongside || vscode.debug.activeDebugSession?.type !== "retrocore") && (off.recoveryId ?? off.name) === shown,
             show: () => undefined
         };
     };

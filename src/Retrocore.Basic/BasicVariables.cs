@@ -479,10 +479,9 @@ public sealed partial class BasicVariables
             throw new OverflowException("?STRING TOO LONG: a string holds at most 255 characters.");
         }
 
-        // BASIC 4 marks the string the variable had as garbage, and gives the new one its link back to the variable.
+        // BASIC 4 marks the string the variable had as garbage, once the new one fits, and gives the new one its link
+        // back to the variable.
         bool linked = LinksStrings;
-        if (linked) { MarkGarbage(address); }
-
         int place = 0;
         if (text.Length > 0)
         {
@@ -496,9 +495,14 @@ public sealed partial class BasicVariables
                     : "?OUT OF MEMORY: string space is full.");
             }
 
+            if (linked) { MarkGarbage(address); }
             Store(place, text);
             if (linked) { BasicProgram.WriteWord(_memory, place + text.Length, address); }
             BasicProgram.WriteWord(_memory, Pointers.StringBottom, place);
+        }
+        else if (linked)
+        {
+            MarkGarbage(address);
         }
 
         Store(address, ColorBasic
@@ -516,7 +520,12 @@ public sealed partial class BasicVariables
         int length = _memory.Read(descriptor);
         int text = Word(descriptor + 1);
         if (length == 0 || text >= 0x8000 || text < Word(Pointers.StringBottom)) { return -1; }
-        return text == Word(PetBasicDialect.DiskStatusDescriptor + 1) ? -1 : text + length;
+
+        // The disk status's string has no link, while it has a length: Clear leaves its address behind.
+        bool diskStatus = _memory.Read(PetBasicDialect.DiskStatusDescriptor) != 0
+            && text == Word(PetBasicDialect.DiskStatusDescriptor + 1);
+
+        return diskStatus ? -1 : text + length;
     }
 
     // Marks the string a descriptor points at as garbage, as assignment does: its length and 255 for its link.

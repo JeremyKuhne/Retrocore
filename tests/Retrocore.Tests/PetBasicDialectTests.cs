@@ -342,6 +342,65 @@ public sealed class PetBasicDialectTests
         BasicProgram.Parse("10 R E M GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeTrue();
         BasicProgram.Parse("10 D A T A GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeTrue();
         BasicProgram.Parse("10 D A T A 1:GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeFalse("DATA ends at the colon");
+
+        // A spaced jump names its label too, which resolves or is missing.
+        BasicParseResult spaced = BasicProgram.Parse("loop:\n    PRINT\n    G O T O loop\n", BasicDialect.PetBasic1);
+        spaced.Diagnostics.Should().BeEmpty();
+        spaced.Program?.ToText().Should().Be("10 PRINT\n20 GOTO 10\n", "the tokenizer stores the spaced word as GOTO");
+        BasicParseResult missing = BasicProgram.Parse("10 G O S U B nowhere\n", BasicDialect.PetBasic1);
+        missing.Success.Should().BeFalse();
+        missing.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("There is no label", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  On BASIC 4, an edit that does not fit leaves the variable's string and its link as they were, and the disk
+    ///  status is passed over only while it has a length.
+    /// </summary>
+    [TestMethod]
+    public void Basic4StringEditsKeepTheHeapSound()
+    {
+        BasicDialect dialect = BasicDialect.PetBasic4;
+        BasicPointers pointers = dialect.Pointers;
+        byte[] ram = new byte[0x10000];
+        DelegateBasicMemory memory = DelegateBasicMemory.Of(ram);
+
+        // A$ = "HI" at the top of string space, its link back to the descriptor after it.
+        int descriptor = VariablesStart + 2;
+        int text = MemoryTop - 4;
+        byte[] entry = [0x41, 0x80, 0x02, (byte)text, (byte)(text >> 8), 0x00, 0x00];
+        entry.CopyTo(ram, VariablesStart);
+        "HI"u8.CopyTo(ram.AsSpan(text));
+        Word(ram, text + 2, descriptor);
+        Word(ram, pointers.ProgramStart, ProgramStart);
+        Word(ram, pointers.Variables, VariablesStart);
+        Word(ram, pointers.Arrays, VariablesStart + 7);
+        Word(ram, pointers.FreeStart, VariablesStart + 7);
+        Word(ram, pointers.StringBottom, text);
+        Word(ram, pointers.MemoryTop, MemoryTop);
+
+        // String space holds no 255 more bytes above the variables: the edit is refused, and nothing changes.
+        Word(ram, pointers.StringBottom, VariablesStart + 200);
+        Word(ram, pointers.FreeStart, VariablesStart + 100);
+        BasicVariables variables = new(dialect, memory);
+        Action big = () => variables.Write(BasicVariableKind.String, descriptor, BasicValue.Of(new byte[255]));
+        big.Should().Throw<InvalidOperationException>();
+        Read(ram, text + 2).Should().Be(descriptor, "the old string keeps its link");
+
+        // With the disk status cleared but its address left at A$'s string, A$'s old string is still marked garbage.
+        Word(ram, pointers.StringBottom, text);
+        Word(ram, pointers.FreeStart, VariablesStart + 7);
+        ram[PetBasicDialect.DiskStatusDescriptor] = 0;
+        Word(ram, PetBasicDialect.DiskStatusDescriptor + 1, text);
+        variables.Write(BasicVariableKind.String, descriptor, BasicValue.Of("NEW"u8.ToArray()));
+        ram.AsSpan(text + 2, 2).ToArray().Should().Equal((byte)2, (byte)0xFF);
+
+        // While the disk status has a length, its string is left alone.
+        int status = Read(ram, descriptor + 1);
+        ram[PetBasicDialect.DiskStatusDescriptor] = 3;
+        Word(ram, PetBasicDialect.DiskStatusDescriptor + 1, status);
+        byte link = ram[status + 3];
+        variables.Write(BasicVariableKind.String, descriptor, BasicValue.Of("ANOTHER"u8.ToArray()));
+        ram[status + 3].Should().Be(link, "the disk status's string has no link to mark");
     }
 
     /// <summary>

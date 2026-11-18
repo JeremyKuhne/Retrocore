@@ -179,7 +179,7 @@ try {
         const byName = Object.fromEntries(variables.map(variable => [variable.name, variable.value]));
         assert.equal(byName["I%"], "1", `I% is 1 (${JSON.stringify(byName)})`);
         const cpu = (await request("stackTrace", { threadId: 1 })).stackFrames;
-        assert.ok(cpu.some(frame => /Mbasic\.asm$/.test(frame.source?.path ?? "")), "the CPU is in MBASIC's source");
+        assert.ok(cpu.some(frame => /[\\/]Mbasic[\\/]\w+\.asm$/.test(frame.source?.path ?? "")), "the CPU is in MBASIC's source");
         await request("setExceptionBreakpoints", { filters: [] });
         await request("continue", { threadId: 2 });
         await screen("TOTAL 14");

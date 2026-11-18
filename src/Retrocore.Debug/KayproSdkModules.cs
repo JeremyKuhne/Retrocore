@@ -33,9 +33,9 @@ internal static class KayproSdkModules
     internal const string CharacterGeneratorSource = "Kaypro2CharacterGenerator.asm";
 
     /// <summary>
-    ///  Gets MBASIC's source file name.
+    ///  Gets MBASIC's source: the root of its modules, in their own folder.
     /// </summary>
-    internal const string MbasicSource = "Mbasic.asm";
+    internal static readonly string MbasicSource = Path.Join("Mbasic", "Mbasic.asm");
 
     /// <summary>
     ///  Gets where MBASIC loads, CP/M's transient program area.
@@ -82,7 +82,7 @@ internal static class KayproSdkModules
     /// <summary>
     ///  Assembles MBASIC.
     /// </summary>
-    /// <param name="path">The <c>Mbasic.asm</c> source.</param>
+    /// <param name="path">The <c>Mbasic/Mbasic.asm</c> source, which includes its modules.</param>
     /// <returns>The assembly, byte-identical to MBASIC.COM from <c>$0100</c>.</returns>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static AssemblyResult AssembleMbasic(string path) => Assemble(path, MbasicSize, MbasicOrigin);

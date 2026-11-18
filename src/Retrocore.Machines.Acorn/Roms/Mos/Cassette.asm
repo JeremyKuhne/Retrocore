@@ -151,7 +151,7 @@ FSC_ROUTINES:
 ;; It pushes the routine's address from <FSC_ROUTINES> and returns to it, so the routine returns to the caller.
 ;; Calls 7 and above do nothing.
 ;; In: A = the call, X and Y = its parameters
-;; Out: A, X, Y = as the call's routine leaves them
+;; Out: A/X/Y = as the call's routine leaves them
 ;; Uses: FS_SCRATCH+12
 ;; See: <FSC_ROUTINES>
 FSCV_DEFAULT:
@@ -172,9 +172,10 @@ FSCV_DEFAULT:
 ;; It finds block 0, then reads the blocks one by one to <CFS_DATA_ADDRESS> or across the Tube, retrying or
 ;; aborting on an error as *OPT 2 says. A nonzero <CFS_BLOCK_EXEC> asks for the file's own load address, which must
 ;; not be &FFFFFFFF ("Bad address"). A protected file can only be *RUN, and then ESCAPE is disabled and BREAK clears
-;; memory. At the end it writes the file's length to bytes 10-13 of the control block at <CFS_OSFILE_BLOCK>, as
-;; <SHOW_BLOCK_INFO> worked it out from the last block. For *RUN that is the last OSFILE call's block. "Loading"
-;; is shown when the first block is found.
+;; memory. At the end it writes <CFS_FILE_LENGTH> to bytes 10-13 of the control block at <CFS_OSFILE_BLOCK>; for
+;; *RUN that is the last OSFILE call's block. <SHOW_BLOCK_INFO> works the length out from the last block only when
+;; it shows block information: not with *OPT 1,0, nor in the ROM filing system without extended messages. Then the
+;; length written is whatever an earlier file left there. "Loading" is shown when the first block is found.
 ;; In: A = &FF for OSFILE or 0 for *RUN, CFS_DATA_ADDRESS = the load address, CFS_BLOCK_EXEC = nonzero to load at
 ;;   the file's own address
 ;; Uses: A, X, Y, FS_SCRATCH..FS_WORKSPACE+$0F, CFS_OUTPUT_HEADER..CFS_LAST_FLAGS

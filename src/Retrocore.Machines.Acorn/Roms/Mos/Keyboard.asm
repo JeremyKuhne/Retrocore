@@ -301,7 +301,7 @@ CTRL_CHARACTER_DONE:
 ;; The intercept may change anything else.
 ;; In: carry = clear for the first call, set for the second
 ;; Out: A = nonzero when there is no intercept
-;; Uses: A
+;; Uses: A, X, Y (the intercept's)
 CALL_BREAK_INTERCEPT:
     lda BREAK_INTERCEPT
     eor #$4C                        ; JMP abs

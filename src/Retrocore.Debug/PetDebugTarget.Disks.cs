@@ -94,13 +94,7 @@ internal sealed partial class PetDebugTarget
         string model = args.String("diskModel") ?? "4040";
         if (!DiskModels.Contains(model)) { throw new ArgumentException("diskModel is 4040 or 2040."); }
 
-        // A single path, or anything but a list, is a mistake, not a launch with no disks.
-        if (args["disks"] is { } named && named is not JsonArray && named.GetValueKind() != JsonValueKind.Null)
-        {
-            throw new ArgumentException("disks must be a list of images' paths, such as [\"game.d64\"].");
-        }
-
-        JsonNode?[] disks = args.Array("disks") is { } given ? [.. given] : [];
+        string?[] disks = args.ImagePaths("disks", "game.d64");
         List<int> units = [];
 
         // Anything but a list of numbers is a mistake, not a request for the default units.
@@ -146,15 +140,9 @@ internal sealed partial class PetDebugTarget
         List<Cbm4040> added = [.. units.Select(address => _machine.AddDisk(driveRoms, address))];
         for (int index = 0; index < disks.Length; index++)
         {
-            // Null leaves a drive empty; anything but a path is a mistake, not a disk to leave out unsaid.
-            if (disks[index] is null) { continue; }
-            if (disks[index] is not JsonValue value || value.GetValueKind() != JsonValueKind.String)
-            {
-                throw new ArgumentException($"disks[{index}] must be an image's path, or null to leave the drive empty.");
-            }
-
+            if (disks[index] is not { } path) { continue; }
             Cbm4040 unit = added[index / 2];
-            Insert(index % 2 == 0 ? unit.Drive0 : unit.Drive1, value.GetValue<string>());
+            Insert(index % 2 == 0 ? unit.Drive0 : unit.Drive1, path);
         }
     }
 

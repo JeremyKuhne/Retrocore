@@ -119,6 +119,11 @@ try {
         rmSync(folder, { recursive: true, force: true });
     }
 
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    await assert.rejects(request("launch", { machine: "kaypro2", disks: cpm }), /disks must be a list/);
+    await assert.rejects(request("launch", { machine: "kaypro2", disks: [null, { path: cpm }] }), /disks\[1\] must be an image's path/);
+
     log("reset");
     await launch({}, ["machineReset"]);
     let stopped = await event("stopped");

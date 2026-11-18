@@ -249,7 +249,12 @@ internal sealed partial class PetDebugTarget
         IDevice device = _machine.Devices.FirstOrDefault(candidate => candidate.Id == id)
             ?? throw new ArgumentException("device must be cassette1, cassette2 or a disk drive, such as disk8-0.");
 
-        if (MediaActions.Device(device, action, args) is { } answer) { return answer; }
+        // As retro/device does: the host saves and reverts, and keeps a changed disk or tape that leaves for Undo.
+        if (MediaActions.Device(device, action, args, (what, with) => DeviceAction(device, what, with)) is { } answer)
+        {
+            return answer;
+        }
+
         DeviceAction(device, action, args);
         return MediaState();
     }

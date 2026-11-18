@@ -5,7 +5,8 @@
 // Commodore PET BASIC through the debug adapter, from the SDK's sources, on BASIC 2, 1 and 4: a file launched on
 // the BASIC thread, stopping on its first statement; stepping statement by statement through colons; a breakpoint
 // inside a GOSUB, with the GOSUB's frame below it; the variables and the FOR loop in Microsoft's layout, which the
-// BASICs keep in different places; the program in memory read and written as text; and an error with BASIC's message.
+// BASICs keep in different places; the program in memory read and written as text; an error with BASIC's message;
+// Step Into on SYS stopping in the machine code; and a statement started once though an interrupt returns to GONE.
 
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";
@@ -89,6 +90,34 @@ async function session(model) {
         assert.match(error.description, /^\?UNDEF'D STATEMENT ERROR in 10/);
         assert.equal((await frames())[0].name, "10: GOTO 999");
 
+        // Step Into on SYS stops in the machine code it calls, at its first instruction: LDA #1, STA $03F0, RTS in
+        // the second cassette buffer.
+        await request("setExceptionBreakpoints", { filters: [] });
+        const routine = Buffer.from([0xA9, 0x01, 0x8D, 0xF0, 0x03, 0x60]).toString("base64");
+        await request("writeMemory", { memoryReference: "0x33A", data: routine });
+        const document = (await request("retro/basic/document", { base: "retrocore-basic://pet/" })).uri;
+        const looping = "10 SYS 826\n20 FOR I=1 TO 2000\n30 A=A+1\n40 NEXT I\n50 PRINT \"DONE\"\n";
+        assert.equal((await request("retro/basic/write", { text: looping })).success, true);
+        await request("setBreakpoints", { source: { path: document }, breakpoints: [{ line: 1 }] });
+        await request("continue", { threadId: 1 });
+        for (const key of "RUN\r") await request("retro/key", { code: key.charCodeAt(0) });
+        await stopped("breakpoint");
+        await request("stepIn", { threadId: 2 });
+        const into = await event("stopped");
+        assert.equal(into.reason, "step");
+        assert.match(into.description ?? "", /^Machine code at \$033A/);
+
+        // The retrace interrupts sixty times a second; returning from one taken at GONE starts no statement again,
+        // so each pass of the loop is one hit.
+        await request("setBreakpoints", {
+            source: { path: document },
+            breakpoints: [{ line: 3, hitCondition: ">100000" }, { line: 5 }]
+        });
+        await request("continue", { threadId: 1 });
+        await stopped("breakpoint");
+        const hits = (await request("retro/breakpoints")).breakpoints.map(breakpoint => breakpoint.hits);
+        assert.equal(hits[0], 2000, `each pass is one hit: ${JSON.stringify(hits)}`);
+
         await request("disconnect", {});
     } finally {
         clearTimeout(timeout);
@@ -103,7 +132,7 @@ try {
     await session("pet2001");
     await session("pet4032");
     await session("pet4032-business");
-    console.log("PET BASIC DAP passed on BASIC 2, BASIC 1 and BASIC 4 (both keyboards): stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, reads and writes the program, and stops on an error with BASIC's message.");
+    console.log("PET BASIC DAP passed on BASIC 2, BASIC 1 and BASIC 4 (both keyboards): stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, reads and writes the program, stops on an error with BASIC's message, steps into SYS's machine code, and starts no statement twice for an interrupt.");
 } finally {
     unlinkSync(file);
 }

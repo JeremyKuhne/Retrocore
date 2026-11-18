@@ -183,7 +183,9 @@ internal sealed partial class PetDebugTarget : IDebugTarget
         ProcessorRegisters before = _machine.Processor.Registers;
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
         _machine.StepCycle();
-        _calls.Observe(_machine.LastCycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
+        ProcessorCycle cycle = _machine.LastCycle;
+        if (cycle.IsOpcodeFetch && !cycle.IsStalled) { _returnedFromInterrupt = cycle.Value == RtiOpcode; }
+        _calls.Observe(cycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
             throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
@@ -197,6 +199,7 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     {
         for (int count = 0; count < cycles; count++) { _machine.StepCycle(); }
         _calls.Reset();
+        _returnedFromInterrupt = false;
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
             throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
@@ -216,8 +219,15 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     public string? Trap(ushort address) => Peek(address) == BrkOpcode ? $"BRK at ${address:X4}." : null;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   BASIC's CHRGET, which BASIC copies into page zero and runs there, counts as BASIC's: Step Into on SYS stops in
+    ///   the machine code SYS calls, not in the CHRGET that fetches its address.
+    ///  </para>
+    /// </remarks>
     public bool InRom(ushort address) =>
-        _machine.Bus.Area(address) is PetMemoryArea.Basic or PetMemoryArea.Editor or PetMemoryArea.Kernal or PetMemoryArea.OptionRom;
+        _machine.Bus.Area(address) is PetMemoryArea.Basic or PetMemoryArea.Editor or PetMemoryArea.Kernal or PetMemoryArea.OptionRom
+            || InChrget(address);
 
     /// <inheritdoc/>
     /// <exception cref="ArgumentException">The address is not RAM.</exception>

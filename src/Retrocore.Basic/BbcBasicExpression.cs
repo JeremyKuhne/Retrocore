@@ -156,12 +156,17 @@ internal sealed class BbcBasicExpression
                 }
                 else
                 {
-                    left = new(left.Number + right.Number);
+                    left = IsInteger(left) && IsInteger(right)
+                        ? Integer(unchecked(Int(left) + Int(right)))
+                        : new(left.Number + right.Number);
                 }
             }
             else if (TakeCharacter('-'))
             {
-                left = new(Number(left) - Number(Term()));
+                BasicValue right = Term();
+                left = IsInteger(left) && IsInteger(right)
+                    ? Integer(unchecked(Int(left) - Int(right)))
+                    : new(Number(left) - Number(right));
             }
             else
             {
@@ -177,7 +182,11 @@ internal sealed class BbcBasicExpression
         {
             if (TakeCharacter('*'))
             {
-                left = new(Number(left) * Number(Power()));
+                BasicValue right = Power();
+                double product = Number(left) * Number(right);
+                left = IsInteger(left) && IsInteger(right) && product is >= int.MinValue and <= int.MaxValue
+                    ? Integer((int)product)
+                    : new(product);
             }
             else if (TakeCharacter('/'))
             {
@@ -231,7 +240,8 @@ internal sealed class BbcBasicExpression
         {
             case (byte)'-':
                 _at++;
-                return new(-Number(Factor()));
+                BasicValue negated = Factor();
+                return IsInteger(negated) ? Integer(unchecked(-Int(negated))) : new(-Number(negated));
             case (byte)'+':
                 _at++;
                 return new(Number(Factor()));
@@ -255,6 +265,14 @@ internal sealed class BbcBasicExpression
             }
 
             _at += length;
+
+            // TOP has no token of its own: the tokeniser makes it TO, then P.
+            if (word == "TO" && _at < _bytes.Length && _bytes[_at] == 'P')
+            {
+                _at++;
+                word = "TOP";
+            }
+
             return Keyword(word);
         }
 
@@ -275,17 +293,17 @@ internal sealed class BbcBasicExpression
             case "PI":
                 return new(Math.PI);
             case "PAGE":
-                return new(_memory.Read(PageHigh) << 8);
+                return Integer(_memory.Read(PageHigh) << 8);
             case "TOP":
-                return new(Word(Top));
+                return Integer(Word(Top));
             case "LOMEM":
-                return new(Word(Lomem));
+                return Integer(Word(Lomem));
             case "HIMEM":
-                return new(Word(Himem));
+                return Integer(Word(Himem));
             case "ERL":
-                return new(Word(ErrorLine));
+                return Integer(Word(ErrorLine));
             case "COUNT":
-                return new(_memory.Read(Count));
+                return Integer(_memory.Read(Count));
             case "FN":
                 return Function();
             case "LEFT$(" or "RIGHT$(" or "MID$(" or "STRING$(" or "INSTR(":
@@ -302,13 +320,15 @@ internal sealed class BbcBasicExpression
         return word switch
         {
             "ABS" => new(Math.Abs(Number(argument))),
-            "ACS" => new(Math.Acos(Number(argument))),
-            "ASN" => new(Math.Asin(Number(argument))),
+            "ACS" => new(Math.Acos(Unit(Number(argument)))),
+            "ASN" => new(Math.Asin(Unit(Number(argument)))),
             "ATN" => new(Math.Atan(Number(argument))),
             "COS" => new(Math.Cos(Number(argument))),
             "DEG" => new(Number(argument) * 180 / Math.PI),
             "EXP" => new(Math.Exp(Number(argument))),
-            "INT" => new(Math.Floor(Number(argument))),
+            "INT" => Math.Floor(Number(argument)) is >= int.MinValue and <= int.MaxValue and double whole
+                ? Integer((int)whole)
+                : throw new FormatException("Too big."),
             "LN" => new(Logarithm(Number(argument), Math.Log)),
             "LOG" => new(Logarithm(Number(argument), Math.Log10)),
             "RAD" => new(Number(argument) * Math.PI / 180),
@@ -316,8 +336,8 @@ internal sealed class BbcBasicExpression
             "SIN" => new(Math.Sin(Number(argument))),
             "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : new(Math.Sqrt(Number(argument))),
             "TAN" => new(Math.Tan(Number(argument))),
-            "LEN" => new(Text(argument).Length),
-            "ASC" => new(Text(argument) is { Length: > 0 } text ? text[0] : -1),
+            "LEN" => Integer(Text(argument).Length),
+            "ASC" => Integer(Text(argument) is { Length: > 0 } text ? text[0] : -1),
             "VAL" => new(Value(Text(argument))),
             _ => BasicValue.Of([(byte)Int(argument)])     // CHR$
         };
@@ -330,7 +350,7 @@ internal sealed class BbcBasicExpression
         BasicValue argument = Factor();
         string text = hex
             ? Int(argument).ToString("X", System.Globalization.CultureInfo.InvariantCulture)
-            : BasicNumbers.Format(Number(argument), 9);
+            : Format(Number(argument));
 
         return BasicValue.Of(Encoding.ASCII.GetBytes(text));
     }
@@ -340,7 +360,8 @@ internal sealed class BbcBasicExpression
         List<BasicValue> arguments = [Expression()];
         while (TakeCharacter(',')) { arguments.Add(Expression()); }
         Expect(')');
-        int Whole(int index) => Int(arguments[index]);
+        // BASIC takes only the low byte of these integers: LEFT$("ABC",256) is empty.
+        int Whole(int index) => Int(arguments[index]) & 0xFF;
         void Needs(int least, int most)
         {
             if (arguments.Count < least || arguments.Count > most)
@@ -376,7 +397,7 @@ internal sealed class BbcBasicExpression
                 int start = Math.Max(1, arguments.Count > 2 ? Whole(2) : 1);
                 if (start > text.Length + 1) { return new(0); }
                 int found = text.AsSpan(start - 1).IndexOf(find);
-                return new(found < 0 ? 0 : found + start);
+                return Integer(found < 0 ? 0 : found + start);
         }
     }
 
@@ -425,7 +446,7 @@ internal sealed class BbcBasicExpression
             if (_variables.FindArray(name) is not { } array) { throw new FormatException($"Array {name}( not found."); }
             try
             {
-                return _variables.Read(array.Kind, array.ElementAddress(subscripts));
+                return Typed(array.Kind, _variables.Read(array.Kind, array.ElementAddress(subscripts)));
             }
             catch (ArgumentOutOfRangeException exception)
             {
@@ -435,9 +456,12 @@ internal sealed class BbcBasicExpression
 
         if (_bound.TryGetValue(name, out BasicValue bound)) { return bound; }
         return _variables.Find(name) is { } variable
-            ? _variables.Read(variable.Kind, variable.ValueAddress)
-            : name.EndsWith('$') ? BasicValue.Of([]) : new(0);
+            ? Typed(variable.Kind, _variables.Read(variable.Kind, variable.ValueAddress))
+            : throw new FormatException($"No such variable: {name}.");
     }
+
+    private static BasicValue Typed(BasicVariableKind kind, BasicValue value) =>
+        kind == BasicVariableKind.Integer ? Integer((int)value.Number) : value;
 
     private string Letters()
     {
@@ -499,7 +523,10 @@ internal sealed class BbcBasicExpression
         }
 
         string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
-        return BasicNumbers.TryParse(text, out double number) ? new(number) : throw Syntax($"'{text}' is not a number");
+        if (!BasicNumbers.TryParse(text, out double number)) { throw Syntax($"'{text}' is not a number"); }
+        return !text.Contains('.') && !text.Contains('E') && number is >= int.MinValue and <= int.MaxValue
+            ? Integer((int)number)
+            : new(number);
     }
 
     // VAL: the number at the start of the string, or 0.
@@ -523,12 +550,48 @@ internal sealed class BbcBasicExpression
         return BasicNumbers.TryParse(trimmed[..end], out double number) ? number : 0;
     }
 
+    /// <summary>
+    ///  Writes a number in BASIC II's general format, as STR$ and PRINT with @%'s default show it: up to ten
+    ///  significant digits without trailing zeros, E notation when the power of ten is ten or more or below -1, and a
+    ///  leading zero from 0.1 up to 1.
+    /// </summary>
+    /// <param name="value">The number.</param>
+    /// <returns>The text, such as <c>1234567890</c>, <c>0.5</c>, <c>1.5E10</c> or <c>1E-2</c>.</returns>
+    internal static string Format(double value)
+    {
+        const int Digits = 10;
+        if (value == 0) { return "0"; }
+
+        // The digits, rounded to ten, and the power of ten of the first.
+        string scientific = Math.Abs(value).ToString("E" + (Digits - 1), System.Globalization.CultureInfo.InvariantCulture);
+        int mark = scientific.IndexOf('E');
+        string digits = scientific[..mark].Replace(".", "", StringComparison.Ordinal).TrimEnd('0');
+        int power = int.Parse(scientific[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+        string sign = value < 0 ? "-" : "";
+        if (power >= Digits || power < -1)
+        {
+            string fraction = digits.Length > 1 ? "." + digits[1..] : "";
+            return $"{sign}{digits[0]}{fraction}E{power}";
+        }
+
+        if (power == -1) { return $"{sign}0.{digits}"; }
+        return digits.Length <= power + 1
+            ? sign + digits.PadRight(power + 1, '0')
+            : $"{sign}{digits[..(power + 1)]}.{digits[(power + 1)..]}";
+    }
+
+    // ACS and ASN take -1 to 1, and BASIC says "-ve root" for anything else.
+    private static double Unit(double value) => value is >= -1 and <= 1 ? value : throw new FormatException("-ve root.");
+
     private static double Logarithm(double value, Func<double, double> logarithm) =>
         value <= 0 ? throw new FormatException("Log range.") : logarithm(value);
 
-    private static BasicValue Truth(bool value) => new(value ? -1 : 0);
+    private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);
 
-    private static BasicValue Integer(int value) => new(value);
+    // An integer value, which BASIC keeps apart from a real one: Long holds it.
+    private static BasicValue Integer(int value) => BasicValue.OfLong(value);
+
+    private static bool IsInteger(BasicValue value) => value.Long is not null;
 
     private static double Number(BasicValue value) =>
         value.IsString ? throw new FormatException("Type mismatch: a string where a number is needed.") : value.Number;

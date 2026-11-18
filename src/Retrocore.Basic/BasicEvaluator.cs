@@ -137,6 +137,7 @@ public sealed partial class BasicEvaluator
             return builder.Append('"').ToString();
         }
 
+        if (_dialect is BbcBasicDialect) { return BbcBasicExpression.Format(result.Value.Number); }
         return BasicNumbers.Format(result.Value.Number, LevelTwo ? (result.Double ? 16 : 6) : 9);
     }
 

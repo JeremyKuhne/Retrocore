@@ -174,6 +174,11 @@ public sealed class BbcBasicDialectTests
     [DataRow("7/2", 3.5)]
     [DataRow("\"A\"<\"B\"", -1.0)]
     [DataRow("PAGE", 0x0E00 * 1.0)]           // no filing system ROM
+    [DataRow("TOP-PAGE", 2.0)]                 // TOP is TO then P; an empty program is its end marker
+    [DataRow("&7FFFFFFF+1", -2147483648.0)]    // integers wrap at 32 bits
+    [DataRow("&7FFFFFFF+1.0", 2147483648.0)]   // a real operand makes the sum real
+    [DataRow("LEN LEFT$(\"ABC\",256)", 0.0)]   // the low byte of the count
+    [DataRow("LEN STRING$(256,\"X\")", 0.0)]
     public void WatchesTakeBbcGrammar(string expression, double expected)
     {
         BasicEvaluator evaluator = Variables();
@@ -192,6 +197,28 @@ public sealed class BbcBasicDialectTests
         evaluator.Evaluate("PI").Value.Number.Should().BeApproximately(Math.PI, 1e-9);
         Action random = () => evaluator.Evaluate("RND(6)");
         random.Should().Throw<FormatException>().WithMessage("RND* without running BASIC.");
+
+        // STR$ and the watch's own text use BASIC's general format.
+        evaluator.Format(evaluator.Evaluate("STR$1234567890")).Should().Be("\"1234567890\"");
+        evaluator.Format(evaluator.Evaluate("STR$0.5")).Should().Be("\"0.5\"");
+        evaluator.Format(evaluator.Evaluate("STR$0.01")).Should().Be("\"1E-2\"");
+        evaluator.Format(evaluator.Evaluate("1.5E10")).Should().Be("1.5E10");
+        evaluator.Format(evaluator.Evaluate("-12.25")).Should().Be("-12.25");
+
+        Action outside = () => evaluator.Evaluate("ASN 2");
+        outside.Should().Throw<FormatException>().WithMessage("-ve root.");
+        Action missing = () => evaluator.Evaluate("missing=0");
+        missing.Should().Throw<FormatException>().WithMessage("No such variable*");
+    }
+
+    /// <summary>
+    ///  A hexadecimal number is a constant, not a name: renaming BEEF leaves &amp;BEEF alone.
+    /// </summary>
+    [TestMethod]
+    public void HexNumbersAreNotNames()
+    {
+        BasicSource source = BasicSource.Analyze("10 BEEF=1:PRINT &BEEF\n", BasicDialect.BbcBasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Should().Equal("BEEF");
     }
 
     /// <summary>

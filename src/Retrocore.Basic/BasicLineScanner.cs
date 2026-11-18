@@ -181,6 +181,16 @@ internal sealed class BasicLineScanner
             }
 
             afterExternal = false;
+
+            // A BBC hexadecimal number, such as &BEEF, is a constant, not a name.
+            if (Bbc && value == '&')
+            {
+                while (index + 1 < _bytes.Length && char.IsAsciiHexDigitUpper((char)_bytes[index + 1])) { index++; }
+                jump = BasicJump.None;
+                name = null;
+                continue;
+            }
+
             if (char.IsAsciiLetter((char)value) || (Bbc && BbcBasicDialect.IsNameCharacter(value) && !char.IsAsciiDigit((char)value)))
             {
                 index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);

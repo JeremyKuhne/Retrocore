@@ -1164,6 +1164,11 @@ test("the inspector's values are written as typed, the selection is filled and t
     assert.equal(inputsSent[inputsSent.length - 1].title, "Word, low first at $0403");
     inputReply = { text: "-1" };
     await drive(page, [{ edit: "Signed" }], () => 0, lists);
+    // A value accepted as shown writes nothing, as a float shows rounded.
+    const before = writesSent.length;
+    inputReply = { text: "1" };
+    state = await drive(page, [{ goto: 0x0403 }, { edit: "Float, 5 bytes" }], () => 0, lists);
+    assert.deepEqual([writesSent.length, state.status], [before, "Float, 5 bytes at $0403 is unchanged."]);
     // The Binary row takes its own grouping back.
     inputReply = { text: "%1010 1001" };
     await drive(page, [{ edit: "Binary" }], () => 0, lists);

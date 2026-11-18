@@ -526,12 +526,13 @@ ASSEMBLE_GROUP_ONE:
     bne ASSEMBLE_GROUP_ONE_MEMORY
     jsr ADD_8_TO_OPCODE                       ; +8, the immediate form
 
-;; Assembles an immediate operand: the expression after the #, which must be a byte.
+;; Assembles an immediate operand: the expression after the #, which should be a byte.
 ;;
+;; Only IntA's second byte is checked; its top two are ignored, so #&10000 assembles as #0 rather than raising "Byte".
 ;; In: OPCODE = the immediate form
-;; Errors: "Byte", when the operand is above 255
-;; Entry: ASSEMBLE_BYTE_OPERAND = stores OPCODE and the byte in IntA, checking it is one; ASSEMBLE_BYTE_ERROR = raises
-;;   "Byte"
+;; Errors: "Byte", when IntA's second byte is not zero
+;; Entry: ASSEMBLE_BYTE_OPERAND = stores OPCODE and IntA's low byte, checking only its second byte;
+;;   ASSEMBLE_BYTE_ERROR = raises "Byte"
 ASSEMBLE_IMMEDIATE:
     jsr EVALUATE_INTEGER_A
 ASSEMBLE_BYTE_OPERAND:

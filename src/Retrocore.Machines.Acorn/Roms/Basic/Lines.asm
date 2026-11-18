@@ -237,8 +237,9 @@ MOVE_TO_NEXT_STATEMENT_DONE:
 ;;
 ;; It checks the end of the current statement with <CHECK_END_OF_STATEMENT>. After a colon there is nothing more to
 ;; do. Otherwise the statement ended the line: in the input line, an immediate statement, that is the end of the
-;; work and BASIC goes back to <IMMEDIATE_MODE>; in a program it falls into <MOVE_TO_NEXT_LINE>. ELSE is taken as the
-;; end of the line, as the rest of a line after ELSE is not run.
+;; work and BASIC goes back to <IMMEDIATE_MODE>; in a program it falls into <MOVE_TO_NEXT_LINE>. ELSE is not skipped
+;; here: in a program, a statement ended by ELSE falls into <MOVE_TO_NEXT_LINE> with Y = 0, which reads the text after
+;; ELSE as the next line's header, leaving PTRA inside that text.
 ;; In: PTR_A, PTR_A_OFFSET = the end of a statement, which may start with spaces
 ;; Out: PTR_A = the next statement's base, PTR_A_OFFSET = 1
 ;; Uses: A, X, Y

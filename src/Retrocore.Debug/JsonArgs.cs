@@ -141,6 +141,48 @@ internal static class JsonArgs
     /// <returns>The array, or null when it is missing or not an array.</returns>
     internal static JsonArray? Array(this JsonNode? node, string name) => (node as JsonObject)?[name] as JsonArray;
 
+    /// <summary>
+    ///  Reads a list of images' paths, one per drive, a null leaving its drive empty.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A single path, or anything else but a list, is a mistake, not a launch with no disks; so is an entry that is
+    ///   neither a path nor null, rather than a drive left empty unsaid.
+    ///  </para>
+    /// </remarks>
+    /// <param name="node">The object, or null.</param>
+    /// <param name="name">The property.</param>
+    /// <param name="example">An image's name for the message, such as <c>game.dsk</c>.</param>
+    /// <returns>The paths, empty when the value is missing or null.</returns>
+    /// <exception cref="ArgumentException">The value is not a list, or an entry is not a string or null.</exception>
+    internal static string?[] ImagePaths(this JsonNode? node, string name, string example)
+    {
+        switch ((node as JsonObject)?[name])
+        {
+            case null:
+                return [];
+            case JsonValue value when value.GetValueKind() == JsonValueKind.Null:
+                return [];
+            case JsonArray list:
+                string?[] paths = new string?[list.Count];
+                for (int index = 0; index < list.Count; index++)
+                {
+                    paths[index] = list[index] switch
+                    {
+                        null => null,
+                        JsonValue entry when entry.GetValueKind() == JsonValueKind.Null => null,
+                        JsonValue entry when entry.GetValueKind() == JsonValueKind.String => entry.GetValue<string>(),
+                        _ => throw new ArgumentException(
+                            $"{name}[{index}] must be an image's path, or null to leave the drive empty.")
+                    };
+                }
+
+                return paths;
+            default:
+                throw new ArgumentException($"{name} must be a list of images' paths, such as [\"{example}\"].");
+        }
+    }
+
     // A property's value when it is a scalar: null when the node is not an object, or the value is missing or null.
     private static JsonValue? Scalar(JsonNode? node, string name) => (node as JsonObject)?[name] switch
     {

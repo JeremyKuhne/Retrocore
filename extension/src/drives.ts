@@ -109,6 +109,14 @@ export function iconName(device: Device): string {
     return `${picture}-${device.media.writeProtected ? "locked" : "unlocked"}-${device.activity}`;
 }
 
+/**
+ * Whether a device is a tape deck with keys, as the PET's Datasettes are: PLAY, RECORD, STOP and REWIND pressed on the
+ * tape in it, which it records onto in place and saves like a disk. Other tape drives record to a file named first.
+ */
+export function hasTapeKeys(device: Device): boolean {
+    return device.kind === "tapeDrive" && device.operations.includes("save");
+}
+
 /** Whether a drive's disk can be saved to an image: it saves, and holds a disk. */
 export const saves = (device: Device): boolean => device.media !== null && device.operations.includes("save");
 
@@ -223,7 +231,10 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
 export function contextWords(device: Device, running: boolean): string[] {
     const words = ["device", device.media ? "loaded" : "empty"];
     if (device.operations.includes("insert")) words.push("insert");
-    if (running && device.operations.includes("record")) words.push("record");
+    // A deck with keys records onto its tape, or a blank one, with nothing to name; its other keys move the tape.
+    const keys = hasTapeKeys(device);
+    if (running && device.operations.includes("record")) words.push(keys ? "recordKey" : "record");
+    if (running && keys && device.media) words.push("play", "stop", "rewind");
     if (device.media && device.operations.includes("eject")) words.push("eject");
     if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "locked" : "unlocked");
     // Revert reads the image again, through the drive's insert.

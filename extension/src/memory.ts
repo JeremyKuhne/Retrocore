@@ -626,6 +626,19 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             await vscode.env.clipboard.writeText(String(received.text));
                             await reply(null);
                             break;
+                        case "paste":
+                            await reply({ text: await vscode.env.clipboard.readText() });
+                            break;
+                        case "input": {
+                            // A value for the page to write, such as a word from the inspector or a fill's pattern.
+                            const text = await vscode.window.showInputBox({
+                                title: String(received.title),
+                                prompt: typeof received.prompt === "string" ? received.prompt : undefined,
+                                value: typeof received.value === "string" ? received.value : ""
+                            });
+                            await reply(text === undefined ? { cancelled: true } : { text });
+                            break;
+                        }
                     }
                 } catch (error) {
                     await panel.webview.postMessage({ type: "reply", id: received.id, error: message(error) });

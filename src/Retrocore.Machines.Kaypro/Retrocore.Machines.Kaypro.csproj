@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Kaypro II: a Z80 CP/M computer with an FD1793, Z80 PIOs and SIO, and an 80x24 text screen. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.Z80\Retrocore.Cpu.Z80.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Chips\Retrocore.Machines.Chips.csproj" />
+  </ItemGroup>
+
+</Project>

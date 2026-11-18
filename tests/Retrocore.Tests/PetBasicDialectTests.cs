@@ -386,6 +386,11 @@ public sealed class PetBasicDialectTests
         overlapping.Diagnostics.Should().BeEmpty();
         overlapping.Program?.ToText().Should().Be("10 FOR EM=1TO2:GOTO 10\n");
 
+        // A jump right after a digit is still a jump, as CRUNCH has no word boundaries.
+        BasicParseResult compact = BasicProgram.Parse("loop:\n    IF A=1T H E N loop\n", BasicDialect.PetBasic1);
+        compact.Diagnostics.Should().BeEmpty();
+        compact.Program?.ToText().Should().Be("10 IF A=1THEN 10\n");
+
         BasicParseResult missing = BasicProgram.Parse("10 G O S U B nowhere\n", BasicDialect.PetBasic1);
         missing.Success.Should().BeFalse();
         missing.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("There is no label", StringComparison.Ordinal));

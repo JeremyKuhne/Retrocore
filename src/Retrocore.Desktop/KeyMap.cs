@@ -110,6 +110,20 @@ internal static class KeyMap
             [Key.Up] = 11,
             [Key.Down] = 10
         },
+
+        // The Kaypro II's keyboard sends ASCII, with its arrows as $F1-$F4; it has no BREAK.
+        ["kaypro2"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 8,
+            [Key.Tab] = 9,
+            [Key.Escape] = 27,
+            [Key.Delete] = 127,
+            [Key.Up] = 0xF1,
+            [Key.Down] = 0xF2,
+            [Key.Left] = 0xF3,
+            [Key.Right] = 0xF4
+        },
     };
 
     /// <summary>

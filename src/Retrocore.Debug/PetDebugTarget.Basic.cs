@@ -47,6 +47,14 @@ internal sealed partial class PetDebugTarget
     public bool PressesReturnForPrompt => false;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   PETSCII's shifted keys, cursor up and left, INST and CLR, are codes from <c>$80</c> up.
+    ///  </para>
+    /// </remarks>
+    public int MaximumKey => 255;
+
+    /// <inheritdoc/>
     public int BasicCurrentLine => Word(Symbol("CURLIN"));
 
     // Whether an address is in BASIC's CHRGET, from CHRGET to its RTS at CHRRTS, in page zero.

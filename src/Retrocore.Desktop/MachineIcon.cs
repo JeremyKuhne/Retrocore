@@ -21,12 +21,14 @@ internal static class MachineIcon
     internal const string Frame = "Retrocore.MachineIconFrame";
 
     // What each machine's screen shows, by the launch's machine option, as the extension's icons draw them: the
-    // Model III, 4 and the Altair's terminal glow white like the Model I, and the Model II green like the IIe.
+    // Model III, 4 and the Altair's terminal glow white like the Model I, and the Model II and the Kaypro II green like
+    // the IIe.
     private static readonly Dictionary<string, (string Glass, string Text, bool Cursor)> s_screens = new()
     {
         ["apple2"] = ("#173404", "#97C459", false),
         ["apple3"] = ("#173404", "#97C459", false),
         ["trs80-model2"] = ("#173404", "#97C459", false),
+        ["kaypro2"] = ("#173404", "#97C459", false),
         ["apple1"] = ("#2C2C2A", "#E6F1FB", true),
         ["coco"] = ("#3FB23F", "#0B2A0B", false),
         ["pet"] = ("#2C2C2A", "#E6F1FB", false),

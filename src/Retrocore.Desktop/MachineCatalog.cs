@@ -225,6 +225,8 @@ internal static class MachineCatalog
                 ], "2sio"),
                 new("upperCase", "Caps lock", [new("Off", Value: false), new("On", Value: true, "Letters type as capitals, as Altair BASIC needs")], Default: false),
             ]),
+        new("kaypro2", "Kaypro II", "Z80 at 2.5 MHz, 64 KB, 80x24 and two drives, running CP/M 2.2",
+            Options(("machine", "kaypro2")), []),
     ];
 
     // The models a launch option names, as the debug host reads them, by machine: an alias, or none for its default.

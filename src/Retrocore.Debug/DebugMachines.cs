@@ -65,6 +65,11 @@ internal static class DebugMachines
     internal const string Altair = "altair";
 
     /// <summary>
+    ///  The Kaypro II, running CP/M.
+    /// </summary>
+    internal const string Kaypro2 = "kaypro2";
+
+    /// <summary>
     ///  Gets the machine a launch names.
     /// </summary>
     /// <param name="machine">The launch's <c>machine</c> value.</param>
@@ -81,9 +86,10 @@ internal static class DebugMachines
         Coco => Coco,
         Pet => Pet,
         Altair => Altair,
+        Kaypro2 => Kaypro2,
         null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
             $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\", "
-                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Coco}\", \"{Pet}\" and \"{Altair}\".")
+                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Coco}\", \"{Pet}\", \"{Altair}\" and \"{Kaypro2}\".")
     };
 }

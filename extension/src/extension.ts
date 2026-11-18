@@ -231,7 +231,8 @@ export function activate(context: vscode.ExtensionContext): void {
                                 : machine === "pet" ? petTitle(model)
                                     : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
                     // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal and the
-                    // PET 2001's screen do; the Model II's is green, like the IIe's.
+                    // PET 2001's screen do; the Model II's and the Kaypro II's are green, like the IIe's. The Kaypro II's model is
+                    // its title.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" || machine === "pet" ? "trs80-model1"
                         : machine === "apple1" || machine === "coco" ? machine : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.

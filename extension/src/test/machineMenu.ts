@@ -54,7 +54,7 @@ export async function testMachineMenu(workspace: vscode.WorkspaceFolder): Promis
         "TRS-80 Color Computer (Retrocore)", "TRS-80 Color Computer 2 (Retrocore)", "TRS-80 Color Computer 3 (Retrocore)",
         "Commodore PET 2001 (BASIC 2) (Retrocore)", "Commodore PET 2001 (Retrocore)",
         "Commodore PET 4032 (Retrocore)", "Commodore PET 4032 (business keyboard) (Retrocore)",
-        "MITS Altair 8800 (Retrocore)"
+        "MITS Altair 8800 (Retrocore)", "Kaypro II (Retrocore)"
     ]);
     assert.ok(configurations.every(configuration => configuration.debugHost === undefined), "the packaged host runs them");
 

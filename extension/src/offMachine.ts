@@ -216,6 +216,23 @@ export class OffMachine {
         return this.recoveryId === recoveryId;
     }
 
+    /**
+     * Whether the launch configuration or Start Machine setup a journal was made for still launches with its recovery
+     * id, so its next launch puts the disks back: one given another id in launch.json since does not.
+     */
+    launchesWith(recoveryId: string): boolean {
+        const owner = this.saved.recoveryOf(recoveryId);
+        if (owner === undefined) return false;
+        const workspace = folderOf(owner.folder);
+        const entry = launchConfigurations(workspace).find(candidate => candidate.name === owner.name);
+        if (entry !== undefined) {
+            return this.saved.recoveryId(resolveVariables(entry, workspace?.uri.fsPath), workspace?.uri.toString()) === recoveryId;
+        }
+        const setup = this.state.get<Setup>(lastSetupKey);
+        if (!isUsable(setup) || setupConfiguration(setup).name !== owner.name) return false;
+        return this.saved.recoveryId(setupConfiguration(setup), folderOf(undefined)?.uri.toString()) === recoveryId;
+    }
+
     /** The recovery id of the machine shown, whose journal keeps the disks its last run did not save. */
     get recoveryId(): string | undefined {
         const target = this.target;

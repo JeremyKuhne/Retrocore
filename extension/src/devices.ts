@@ -801,6 +801,13 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             void vscode.window.showWarningMessage(crashedMessage(machine, journal.disks, journal.kept ?? undefined), "Recover", "Review", "Discard")
                 .then(async choice => {
                     if (choice === undefined) return;
+                    // A machine that launches with another recovery id now would never put these disks back, so they
+                    // stay offered rather than being marked recovered; Discard still lets them go.
+                    if (choice !== "Discard" && !off.launchesWith(journal.id)) {
+                        void vscode.window.showWarningMessage(`Retrocore: ${machine} now launches with another recovery id, `
+                            + "so its next launch cannot put these disks back. They stay offered; Discard lets them go.");
+                        return;
+                    }
                     if (choice !== "Discard") {
                         try {
                             await languageRequest("retrocore/recovery/resolve", { id: journal.id, action: "recover" });

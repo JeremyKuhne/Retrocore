@@ -153,7 +153,7 @@ public sealed partial class BasicEvaluator
     {
         if (!Take("NOT")) { return Relation(); }
         double value = Number(Not());
-        return new(new(Bitwise ? ~ToInteger(value) : (value == 0 ? 1 : 0)));
+        return new(new(Bitwise ? ~LogicInteger(value) : (value == 0 ? 1 : 0)));
     }
 
     private BasicResult Relation()
@@ -499,8 +499,12 @@ public sealed partial class BasicEvaluator
 
     private BasicResult Logic(BasicResult left, BasicResult right, Func<int, int, int> bits, Func<bool, bool, bool> logic) =>
         Bitwise
-            ? new(new(bits(ToInteger(Number(left)), ToInteger(Number(right)))))
+            ? new(new(bits(LogicInteger(Number(left)), LogicInteger(Number(right)))))
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
+
+    // AND, OR and NOT's operand as an integer. The PET's BASIC converts it as AYINT and QINT do, down to the integer
+    // below; Level II and Color BASIC truncate toward zero.
+    private int LogicInteger(double value) => ToInteger(_dialect is PetBasicDialect ? Math.Floor(value) : value);
 
     private static int ToInteger(double value) =>
         value is < short.MinValue or > short.MaxValue

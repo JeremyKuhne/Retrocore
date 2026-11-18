@@ -118,6 +118,9 @@ public static class UefFormat
             }
         }
 
+        // Bytes after the last chunk too few for a chunk's header are a header cut short.
+        if (position != file.Length) { throw new InvalidDataException("The UEF file ends inside a chunk's header."); }
+
         return new AcornTape(tape.HalfCycles);
     }
 

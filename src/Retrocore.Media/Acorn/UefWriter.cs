@@ -37,6 +37,9 @@ internal sealed class UefWriter
     public void Gap(int units)
     {
         FlushTones();
+
+        // A gap too long to add to the one waiting goes out first, so neither overflows.
+        if (units > int.MaxValue - _gap) { FlushGap(); }
         _gap += units;
     }
 

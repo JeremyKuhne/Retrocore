@@ -181,6 +181,32 @@ public class AcornTapeTests
     }
 
     /// <summary>
+    ///  Gaps whose total cannot fit an int stay separate silences, reading and writing, so none is lost.
+    /// </summary>
+    [TestMethod]
+    public void HugeGapsStayWhole()
+    {
+        UefFormat.Read(UefFormat.Write([1, 1, int.MaxValue, 3, 1, 1])).HalfCycles.Sum(length => (long)length)
+            .Should().Be(4L + int.MaxValue + 3);
+
+        AcornTones tones = new();
+        tones.Gap(1_440_000_000);
+        tones.Gap(1_440_000_000);
+        tones.HalfCycles.Should().Equal(1_440_000_000, 1_440_000_000);
+    }
+
+    /// <summary>
+    ///  A file that ends part way into a chunk's header is bad data.
+    /// </summary>
+    [TestMethod]
+    public void CutHeaderIsBadData()
+    {
+        byte[] uef = [.. UefFormat.Write([1, 1, 2, 2]), 0x00, 0x01, 0x05];
+        Action read = () => UefFormat.Read(uef);
+        read.Should().Throw<InvalidDataException>();
+    }
+
+    /// <summary>
     ///  A chunk whose length runs past the file, even one too large to add, is bad data.
     /// </summary>
     [TestMethod]

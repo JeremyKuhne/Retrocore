@@ -89,7 +89,8 @@ internal sealed class AcornTones
     public void Gap(int units)
     {
         if (units <= 0) { return; }
-        if (HalfCycles.Count != 0 && HalfCycles[^1] >= Silence)
+        // It runs on into silence before it, while their total fits; past that it is a silence of its own.
+        if (HalfCycles.Count != 0 && HalfCycles[^1] >= Silence && units <= int.MaxValue - HalfCycles[^1])
         {
             HalfCycles[^1] += units;
             return;

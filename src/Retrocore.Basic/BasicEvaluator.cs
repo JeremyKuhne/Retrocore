@@ -63,8 +63,8 @@ public sealed partial class BasicEvaluator
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
-    // Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
-    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect;
+    // Level II, Color BASIC and the PET's BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
+    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect or PetBasicDialect;
 
     private double True => Bitwise ? -1 : 1;
 

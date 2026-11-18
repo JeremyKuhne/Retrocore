@@ -14,7 +14,6 @@ display, drives, the extension's and Desktop's machine entries, and MBASIC as a 
 - `Mbasic.asm`, byte-identical to MBASIC.COM 5.21, with Microsoft's names for its tables, variables, statement and
   function handlers, error entries and interpreter core.
 - The MBASIC dialect: CRUNCH, LIST, variables, loops, tokenized files; checked against MBASIC itself.
-- `--disassemble` takes `--cpu Z80` (and any CPU the catalog knows) and the hints' `"vectors": false`.
 - `tools/Test-KayproDap.mjs` and `KayproTests`, `MbasicOracleTests`.
 
 ## Next

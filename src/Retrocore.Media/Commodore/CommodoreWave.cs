@@ -43,6 +43,7 @@ public static class CommodoreWave
         int rate = 0;
         int bits = 0;
         ReadOnlySpan<byte> samples = default;
+        bool found = false;
         int offset = 12;
         while (offset + 8 <= wave.Length)
         {
@@ -74,10 +75,14 @@ public static class CommodoreWave
             else if (id.SequenceEqual("data"u8))
             {
                 samples = body;
+                found = true;
             }
 
             offset += 8 + size + (size & 1);
         }
+
+        // A file cut short before its samples would read as an empty tape.
+        if (!found) { throw new InvalidDataException("The WAV file has no data chunk: it holds no samples."); }
 
         if (channels < 1 || rate <= 0 || bits is not (8 or 16))
         {

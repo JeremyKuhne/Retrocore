@@ -118,9 +118,26 @@ public static class D64Format
     /// <param name="disk">The disk.</param>
     /// <param name="dos">The layout.</param>
     /// <returns>The sectors, and the ones that could not be read, written as zeros.</returns>
-    internal static (byte[] Image, IReadOnlyList<string> Unreadable) WriteSectors(CommodoreDisk disk, CommodoreDos dos)
+    internal static (byte[] Image, IReadOnlyList<string> Unreadable) WriteSectors(CommodoreDisk disk, CommodoreDos dos) =>
+        WriteSectors(disk, dos, out _);
+
+    /// <summary>
+    ///  Reads a disk's sectors back in order, and lists the DOS 1 sectors kept as zeros because they were never written.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <param name="dos">The layout.</param>
+    /// <param name="unwritten">
+    ///  The sectors with a header and no data block on a DOS 1 disk, as "track 18, sector 0".
+    /// </param>
+    /// <returns>The sectors, and the ones that could not be read, written as zeros.</returns>
+    internal static (byte[] Image, IReadOnlyList<string> Unreadable) WriteSectors(
+        CommodoreDisk disk,
+        CommodoreDos dos,
+        out IReadOnlyList<string> unwritten)
     {
         ArgumentNullException.ThrowIfNull(disk);
+        List<string> blank = [];
+        unwritten = blank;
         byte[] image = new byte[GcrLayout.SectorCount(dos) * GcrLayout.SectorSize];
         List<string> unreadable = [];
         for (int track = 1; track <= GcrLayout.Tracks; track++)
@@ -134,14 +151,19 @@ public static class D64Format
                 track,
                 sectors,
                 dos,
-                out bool[] unwritten,
+                out bool[] headerOnly,
                 out _);
 
             for (int sector = 0; sector < found.Length; sector++)
             {
                 if (found[sector]) { continue; }
                 sectors.Slice(sector * GcrLayout.SectorSize, GcrLayout.SectorSize).Clear();
-                if (dos == CommodoreDos.Dos1 && unwritten[sector]) { continue; }
+                if (dos == CommodoreDos.Dos1 && headerOnly[sector])
+                {
+                    blank.Add($"track {track}, sector {sector}");
+                    continue;
+                }
+
                 unreadable.Add($"track {track}, sector {sector}");
             }
         }

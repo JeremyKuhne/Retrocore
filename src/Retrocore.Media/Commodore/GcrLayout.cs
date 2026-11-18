@@ -158,18 +158,28 @@ public static class GcrLayout
         int count,
         int track,
         Span<byte> sectors,
-        CommodoreDos dos = CommodoreDos.Dos2) => ReadTrack(bits, count, track, sectors, dos, out _);
+        CommodoreDos dos = CommodoreDos.Dos2) => ReadTrack(bits, count, track, sectors, dos, out _, out _);
 
     /// <summary>
-    ///  Reads a track's sectors from its cells, and says which have a header but no data block after it, as DOS 1
-    ///  leaves each sector it formats until it writes one.
+    ///  Reads a track's sectors from its cells; says which have a header but no data block after it, as DOS 1 leaves
+    ///  each sector it formats until it writes one, and which good sectors the layout has no place for.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A block with a code no nibble encodes is bad, as the drive's byte decoding error says, whatever its checksum.
+    ///   Each data block is decoded on its own and kept only when good, so a bad copy of a sector after a good one
+    ///   leaves the good one.
+    ///  </para>
+    /// </remarks>
     /// <param name="bits">The cells, packed eight to a byte.</param>
     /// <param name="count">How many.</param>
     /// <param name="track">The track the headers must name.</param>
     /// <param name="sectors">Receives each sector found, 256 bytes each.</param>
     /// <param name="dos">The DOS whose layout the disk has.</param>
     /// <param name="unwritten">Which sectors have a good header and no data block.</param>
+    /// <param name="beyond">
+    ///  The good sectors numbered past the layout's last, such as a DOS 1 disk's 20th on a DOS 2 layout.
+    /// </param>
     /// <returns>Which sectors were found with good checksums.</returns>
     internal static bool[] ReadTrack(
         ReadOnlySpan<byte> bits,
@@ -177,12 +187,15 @@ public static class GcrLayout
         int track,
         Span<byte> sectors,
         CommodoreDos dos,
-        out bool[] unwritten)
+        out bool[] unwritten,
+        out IReadOnlyList<int> beyond)
     {
         bool[] found = new bool[SectorsOn(track, dos)];
         bool[] headers = new bool[found.Length];
         bool[] blocks = new bool[found.Length];
+        SortedSet<int> extra = [];
         unwritten = new bool[found.Length];
+        beyond = [];
         if (count == 0) { return found; }
 
         // Twice round, so a block that crosses the track's start is read whole.
@@ -190,36 +203,64 @@ public static class GcrLayout
         int position = 0;
         int sector = -1;
         Span<byte> header = stackalloc byte[5];
+        Span<byte> data = stackalloc byte[SectorSize];
         while (position < limit)
         {
             int start = NextSync(bits, count, ref position, limit);
             if (start < 0) { break; }
-            byte mark = ReadByte(bits, count, ref position);
-            if (mark == 0x08)
+            bool valid = true;
+            byte mark = ReadByte(bits, count, ref position, ref valid);
+            if (valid && mark == 0x08)
             {
-                for (int i = 0; i < header.Length; i++) { header[i] = ReadByte(bits, count, ref position); }
-                bool good = (header[0] ^ header[1] ^ header[2] ^ header[3] ^ header[4]) == 0 && header[2] == track;
-                sector = good && header[1] < found.Length ? header[1] : -1;
-                if (sector >= 0) { headers[sector] = true; }
+                for (int i = 0; i < header.Length; i++) { header[i] = ReadByte(bits, count, ref position, ref valid); }
+                bool good = valid && (header[0] ^ header[1] ^ header[2] ^ header[3] ^ header[4]) == 0 && header[2] == track;
+                sector = good ? header[1] : -1;
+                if (sector >= 0 && sector < found.Length) { headers[sector] = true; }
             }
-            else if (mark == 0x07 && sector >= 0)
+            else if (valid && mark == 0x07 && sector >= 0)
             {
-                blocks[sector] = true;
-                Span<byte> data = sectors.Slice(sector * SectorSize, SectorSize);
+                if (sector < found.Length) { blocks[sector] = true; }
                 byte sum = 0;
                 for (int i = 0; i < SectorSize; i++)
                 {
-                    data[i] = ReadByte(bits, count, ref position);
+                    data[i] = ReadByte(bits, count, ref position, ref valid);
                     sum ^= data[i];
                 }
 
-                if (ReadByte(bits, count, ref position) == sum) { found[sector] = true; }
+                bool good = ReadByte(bits, count, ref position, ref valid) == sum && valid;
+                if (good && sector >= found.Length)
+                {
+                    extra.Add(sector);
+                }
+                else if (good && !found[sector])
+                {
+                    data.CopyTo(sectors.Slice(sector * SectorSize, SectorSize));
+                    found[sector] = true;
+                }
+
+                sector = -1;
+            }
+            else
+            {
                 sector = -1;
             }
         }
 
         for (int i = 0; i < found.Length; i++) { unwritten[i] = headers[i] && !blocks[i]; }
+        beyond = [.. extra];
         return found;
+    }
+
+    /// <summary>
+    ///  Gets whether a track holds a sync, a run of at least ten 1s, as anything the drive wrote there has.
+    /// </summary>
+    /// <param name="bits">The cells, packed eight to a byte.</param>
+    /// <param name="count">How many.</param>
+    /// <returns>Whether it does.</returns>
+    internal static bool HasSync(ReadOnlySpan<byte> bits, int count)
+    {
+        int position = 0;
+        return count > 0 && NextSync(bits, count, ref position, count * 2) >= 0;
     }
 
     // Moves past the next run of at least ten 1s to the cell after it; returns -1 when there is none before the limit.
@@ -248,12 +289,15 @@ public static class GcrLayout
         return -1;
     }
 
-    // Reads ten cells as a byte: two nibbles of five; an invalid code reads as 0.
-    private static byte ReadByte(ReadOnlySpan<byte> bits, int count, ref int position)
+    // Reads ten cells as a byte: two nibbles of five. A code no nibble encodes reads as 0 and clears valid.
+    private static byte ReadByte(ReadOnlySpan<byte> bits, int count, ref int position, ref bool valid)
     {
         int code = 0;
         for (int i = 0; i < 10; i++) { code = (code << 1) | (Bit(bits, count, position++) ? 1 : 0); }
-        return (byte)((Decode(code >> 5) << 4) | Decode(code & 0x1F));
+        int high = Decode(code >> 5);
+        int low = Decode(code & 0x1F);
+        if (high < 0 || low < 0) { valid = false; }
+        return (byte)((Math.Max(high, 0) << 4) | Math.Max(low, 0));
     }
 
     /// <summary>
@@ -263,11 +307,8 @@ public static class GcrLayout
     /// <returns>The cells, the first in bit 9.</returns>
     internal static int Encode(byte value) => (s_encode[value >> 4] << 5) | s_encode[value & 0x0F];
 
-    private static int Decode(int five)
-    {
-        int nibble = Array.IndexOf(s_encode, (byte)five);
-        return nibble < 0 ? 0 : nibble;
-    }
+    // The nibble five cells encode, or -1 for a code none does.
+    private static int Decode(int five) => Array.IndexOf(s_encode, (byte)five);
 
     private static bool Bit(ReadOnlySpan<byte> bits, int count, int position)
     {

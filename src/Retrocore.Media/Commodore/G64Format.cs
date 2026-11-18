@@ -14,7 +14,8 @@ namespace Retrocore.Media.Commodore;
 /// <remarks>
 ///  <para>
 ///   A G64 image holds every cell, so a disk written back is the disk read. A speed entry over 3 points to a table of
-///   zones by byte, which this reader takes as the zone most of the track uses.
+///   zones by byte; a track whose bytes all have one zone reads at that zone, and one that mixes zones is refused,
+///   since a disk keeps one zone a track and the rest of its timing would be lost.
 ///  </para>
 /// </remarks>
 public static class G64Format
@@ -34,7 +35,9 @@ public static class G64Format
     /// </summary>
     /// <param name="image">The file's bytes.</param>
     /// <returns>The disk.</returns>
-    /// <exception cref="InvalidDataException">The image is not a G64 image.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not a G64 image, is cut short, or has a track that mixes speed zones.
+    /// </exception>
     public static CommodoreDisk Read(ReadOnlySpan<byte> image)
     {
         if (image.Length < HeaderSize || !IsG64(image))
@@ -60,10 +63,12 @@ public static class G64Format
                 throw new InvalidDataException($"The G64 image's half-track {position} runs past its end.");
             }
 
-            int zone = speed <= 3 ? (int)speed : SpeedOf(image, (int)speed, length);
+            int zone = speed <= 3 ? (int)speed : SpeedOf(image, (int)speed, length, position);
             disk.SetTrack(position, image.Slice((int)offset + 2, length), length * 8, zone);
         }
 
+        // Setting the tracks is reading the image, not a change to the disk.
+        disk.MarkSaved();
         return disk;
     }
 
@@ -107,21 +112,28 @@ public static class G64Format
         return [.. header, .. tracks];
     }
 
-    // The zone most of a track's bytes use, from a speed table of a zone for each byte, four to a byte.
-    private static int SpeedOf(ReadOnlySpan<byte> image, int table, int length)
+    // The zone of a track's bytes, from a speed table of a zone for each byte, four to a byte; all must share one.
+    private static int SpeedOf(ReadOnlySpan<byte> image, int table, int length, int position)
     {
-        Span<int> counts = stackalloc int[4];
-        for (int index = 0; index < length && table + (index / 4) < image.Length; index++)
+        if (table + ((length + 3) / 4) > image.Length)
         {
-            counts[(image[table + (index / 4)] >> (6 - (2 * (index % 4)))) & 3]++;
+            throw new InvalidDataException($"The G64 image's speed table for half-track {position} runs past its end.");
         }
 
-        int best = 0;
-        for (int zone = 1; zone < 4; zone++)
+        int zone = -1;
+        for (int index = 0; index < length; index++)
         {
-            if (counts[zone] > counts[best]) { best = zone; }
+            int at = (image[table + (index / 4)] >> (6 - (2 * (index % 4)))) & 3;
+            if (zone >= 0 && at != zone)
+            {
+                throw new InvalidDataException(
+                    $"The G64 image's half-track {position} mixes speed zones {zone} and {at}, which Retrocore cannot keep; "
+                        + "a disk holds one zone a track.");
+            }
+
+            zone = at;
         }
 
-        return best;
+        return Math.Max(zone, 0);
     }
 }

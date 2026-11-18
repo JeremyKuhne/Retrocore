@@ -514,7 +514,7 @@ public sealed class Intel8271
             {
                 _currentTracks[_drive] = (byte)(_currentTracks[_drive] + (outward ? -1 : 1));
             }
-            while (_currentTracks[_drive] == _badTracks[_drive][0] || _currentTracks[_drive] == _badTracks[_drive][1]);
+            while (IsBadTrack(_currentTracks[_drive]));
 
             _cylinders[_drive] = Math.Clamp(_cylinders[_drive] + (outward ? -1 : 1), 0, 83);
             moved = true;
@@ -523,6 +523,10 @@ public sealed class Intel8271
 
         if (moved) { yield return _settle * 2 * Milliseconds; }
     }
+
+    // A bad track register skips its track, but &FF, as the DFS sets them, is no bad track at all.
+    private bool IsBadTrack(byte track) =>
+        track != 0xFF && (track == _badTracks[_drive][0] || track == _badTracks[_drive][1]);
 
     private IEnumerable<int> Seek(byte track)
     {

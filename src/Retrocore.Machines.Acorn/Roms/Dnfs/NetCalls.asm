@@ -196,7 +196,7 @@ TRANSMIT_WITH_INTERRUPTS:
 ; NETV
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The NFS's NETV handler: carries out NETV reasons 0-8 and keeps the registers.
+;; The NFS's NETV handler: carries out NETV reasons 0-8, returning the registers as each reason's routine leaves them.
 ;;
 ;; The MOS calls NETV for the printer drivers (reasons 0-3 and 5, with Y the printer type), for OSWRCH (4), OSRDCH
 ;; (6), OSBYTE (7) and OSWORD (8) when OSBYTEs &CE-&D0 ask for them, and with &0D when a line has been read. Each
@@ -204,7 +204,7 @@ TRANSMIT_WITH_INTERRUPTS:
 ;; registers and flags stacked here: the stacked flags are at STACK+6,X after a TSX in the routine, A at STACK+5,X, X
 ;; at STACK+4,X and Y at STACK+3,X.
 ;; In: A = the reason, Y = depends on the reason
-;; Keeps: A, X, Y
+;; Out: A, X, Y = as on entry, but for OSBYTE (7) the controlling station's results
 ;; See: <NETV_ROUTINES_LOW>
 NETV_HANDLER:
     php
@@ -462,7 +462,7 @@ BUILD_OS_PROCEDURE_BLOCK:
 ;; page, from <REMOTE_TEMPLATE>: control byte &80, port &93, its buffer NFS_REMOTE_MESSAGE to &DE.
 ;;
 ;; The caller sets the station.
-;; Out: NFS_BLOCK_POINTER = the block, carry = clear
+;; Out: NFS_BLOCK_POINTER = the block, carry = set, from the NFS_TEMPLATE_END before the template
 ;; Uses: A, X, Y
 ;; See: <BUILD_BLOCK>
 BUILD_REMOTE_BLOCK:
@@ -545,7 +545,7 @@ PRINT_TEMPLATE:
 ;; NETV 5: OSBYTE 5 is selecting a printer type. Selecting the network printer empties the printer's block and sets
 ;; NFS_PRINT_STATE to &41; any other type leaves NFS_PRINT_STATE at A, 5.
 ;; In: A = 5, X = 5, OS_X = the new printer type
-;; Uses: X
+;; Uses: A (&41 for the network printer), X
 NETV_PRINTER_TYPE:
     dex
     cpx OS_X

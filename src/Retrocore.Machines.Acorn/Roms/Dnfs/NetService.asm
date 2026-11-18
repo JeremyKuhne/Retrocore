@@ -1670,9 +1670,9 @@ MASK_TO_HANDLE_LOOP:
     txa
     rts
 
-;; Compares NFS_FILE_START with NFS_FILE_END, the first three bytes and the top one but not the bottom.
+;; Compares NFS_FILE_START with NFS_FILE_END, all four bytes.
 ;;
-;; It compares bytes 3, 2 and 1; byte 0 is left out.
+;; It compares bytes 3, 2, 1 and 0, from the top, and stops at the first that differs.
 ;; Out: zero = set if they are equal
 ;; Uses: A, X
 NFS_COMPARE_ADDRESSES:
@@ -1758,8 +1758,9 @@ NFS_READ_FILE_NAME_END:
 ;; The NFS's OSFILE, through FILEV: loads and saves files here, and passes the other calls to <NFS_OSFILE_INFO>.
 ;;
 ;; A negative call other than &FF does nothing.
-;; In: A = the call, X, Y = the control block
-;; Out: A, X, Y = as on entry
+;; In: A = the call, X/Y = the control block
+;; Out: X/Y = as on entry, A = the call for a load or save; for the other calls the object's type (1 for a file),
+;;   or 0 when it is not found
 ;; Errors: the file server's, those of <TRANSMIT>, "No reply" (&A5) and "Escape" (&11)
 NFS_OSFILE:
     jsr SAVE_CALL_REGISTERS

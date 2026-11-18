@@ -837,7 +837,7 @@ ESCAPE_ERROR:
     .byte "Escape",0
 
 ;; Resets the 8271 and programs it again, then releases the NMI and the Tube.
-;; Out: X = 0
+;; Out: X = the Tube's presence, from OSBYTE &EA: &FF with a Tube, otherwise 0
 ;; Uses: A, Y
 RESET_FDC:
     lda #1                          ; 1 then 0 resets the 8271

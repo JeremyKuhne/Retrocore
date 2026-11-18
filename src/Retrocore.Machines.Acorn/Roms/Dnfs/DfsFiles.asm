@@ -1111,7 +1111,7 @@ OSWORD_DISC_ACCESS_RESULT:
 ;;
 ;; &7D writes the catalogue's sequence number to the block's first byte; &7E writes the disc's size, the number of
 ;; sectors times 256, as four bytes.
-;; In: Y = &7F for OSWORD &7D, &80 for &7E, FS_SCRATCH/FS_SCRATCH+1 = the OSWORD block
+;; In: Y = &7E for OSWORD &7D, &7F for &7E (the OSWORD number plus one), FS_SCRATCH/FS_SCRATCH+1 = the OSWORD block
 ;; Uses: A, Y
 ;; Errors: the disc errors
 OSWORD_READ_DISC_INFO:
@@ -1342,7 +1342,7 @@ READ_FILE_NAMES:
 ;; so that the pointer's step after each name moves it to the next. The handle's byte gets the catalogue's cycle
 ;; number. Directory letters match either case.
 ;; Out: carry = set when there are no more names
-;; Uses: A, Y, FS_SCRATCH
+;; Uses: A, X, Y, FS_SCRATCH
 READ_NEXT_FILE_NAME:
     ldy DFS_GBPB_POINTER
 READ_NEXT_FILE_NAME_SEARCH:
@@ -1377,7 +1377,7 @@ READ_NEXT_FILE_NAME_END:
 
 ;; OSGBPB 5: puts the current disc's title and boot option into OSGBPB's data: 12, the title's twelve characters, the
 ;; option, and the drive.
-;; Uses: A, Y
+;; Uses: A, X, Y
 READ_TITLE_AND_OPTION:
     jsr SELECT_DEFAULTS                       ; the current drive
     jsr ENSURE_CATALOGUE                       ; and its catalogue

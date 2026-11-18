@@ -858,8 +858,8 @@ PRINT_INFO:
 
 ;; Prints three bytes of <DFS_INFO_BLOCK>, the highest first, then a space, and moves on to the next address.
 ;; In: Y = the offset of the four-byte address in the block
-;; Out: Y = the offset of the next address
-;; Keeps: X
+;; Out: Y = the offset of the next address, X = 0
+;; Uses: A
 PRINT_INFO_ADDRESS:
     ldx #$03
 PRINT_INFO_ADDRESS_LOOP:
@@ -1612,10 +1612,12 @@ DFS_RELEASE_TUBE_NOW:
     rts
 
 ;; Releases the NMI, if the DFS claimed it, and the Tube, if there is one.
-;; Keeps: A, X, Y
+;; Uses: X, Y (from OSBYTE &EA)
+;; Keeps: A
 RELEASE_NMI_AND_TUBE:
     jsr RELEASE_NMI
 ;; Releases the Tube, if there is one, for the DFS.
+;; Uses: X, Y (from OSBYTE &EA)
 ;; Keeps: A
 DFS_RELEASE_TUBE:
     pha

@@ -294,7 +294,7 @@ RENUMBER_FAILED:
     beq RENUMBER_SCAN_ON            ; always taken: PRINT_NEWLINE returns A = 0
 
 ;; Moves <RENUMBER_LINE> from one line of the program to the next, by the length in the line.
-;; In: RENUMBER_LINE = the line's number, Y = 1
+;; In: RENUMBER_LINE = the line's number, Y = 1, carry = clear, since the length is added with it
 ;; Out: RENUMBER_LINE = the next line's number, carry = clear
 ;; Uses: A, Y
 NEXT_PROGRAM_LINE:

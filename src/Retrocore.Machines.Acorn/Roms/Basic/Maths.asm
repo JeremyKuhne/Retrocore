@@ -87,10 +87,12 @@ TAN_FUNCTION:
     rts
 
 ;; Divides FPA by the packed real at FP_POINTER, normalised and rounded.
+;;
+;; A zero FPA is returned at once, before the divisor is loaded, so 0 divided by 0 is 0 here, not an error.
 ;; In: FP_POINTER = the packed real
 ;; Out: FP_A = FP_A divided by the number
 ;; Uses: A, X, Y, FP_B, FP_WORK..FP_WORK+3
-;; Errors: 18 (Division by zero) = the number is zero, 20 (Too big) = the quotient is too large
+;; Errors: 18 (Division by zero) = the number is zero and FPA is not, 20 (Too big) = the quotient is too large
 DIVIDE_FP_A:
     jsr TEST_FP_A
     beq ZERO_FP_A_DONE                  ; zero divided by anything is zero
@@ -580,7 +582,8 @@ SIN_QUADRANT:
 ;; The sine of a reduced angle, or its cosine when bit 0 of QUADRANT is set, falling into <ROOT_ONE_LESS_SQUARE>
 ;; for the cosine.
 ;; In: FP_A = the reduced angle, -pi/4 to pi/4, QUADRANT = bit 0 set for the cosine
-;; Out: FP_A = the sine or cosine, A = &FF, QUADRANT = shifted right one bit
+;; Out: FP_A = the sine or cosine, A = &FF, QUADRANT = shifted right one bit for the sine; for the cosine 0, as
+;;   <SQR_FP_A> counts it down
 ;; Uses: X, Y, FP_B, FP_POINTER, FP_TEMP_1..FP_TEMP_3, FP_WORK..FP_WORK+5, SERIES_POINTER
 SIN_OR_COS_REDUCED:
     lsr QUADRANT

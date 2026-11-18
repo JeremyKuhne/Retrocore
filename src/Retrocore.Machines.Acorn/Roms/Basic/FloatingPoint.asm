@@ -26,9 +26,9 @@ MULTIPLIER = FP_WORK                ;; MULTIPLY_FP_A_UNNORMALISED: FPA's mantiss
 ;; The digits are gathered as a 40-bit integer in FPA's five mantissa bytes, the rounding byte the lowest, multiplying
 ;; by ten for each one; <NUMBER_SCALE> counts the power of ten to apply. Once the integer reaches &18 in its top byte,
 ;; a ten times larger one might not fit, so further digits are dropped: one before the point adds one to the scale,
-;; one after it is ignored. A number with neither a point nor an exponent that fits in 31 bits is returned as an
-;; integer in IntA. Any other is normalised into FPA and multiplied or divided by ten once for each power of the scale,
-;; then rounded.
+;; one after it is ignored. A number with no decimal point, a net scale of zero (an exponent may cancel out, as in
+;; 1E0) and a value that fits in 31 bits is returned as an integer in IntA. Any other is normalised into FPA and
+;; multiplied or divided by ten once for each power of the scale, then rounded.
 ;; In: A = the first character, a digit or a point, Y = its offset from PTR_B
 ;; Out: carry = set when a number was read, A = &40 with the number in IntA or &FF with it in FP_A,
 ;;   PTR_B_OFFSET = just past the number
@@ -99,7 +99,7 @@ READ_NUMBER_END:
     sty PTR_B_OFFSET
     lda NUMBER_SCALE
     ora NUMBER_POINT_SEEN
-    beq READ_NUMBER_INTEGER             ; neither a point nor an exponent
+    beq READ_NUMBER_INTEGER             ; no point, and a net scale of zero
     jsr TEST_FP_A
     beq READ_NUMBER_DONE                ; zero needs no scaling
 READ_NUMBER_REAL:

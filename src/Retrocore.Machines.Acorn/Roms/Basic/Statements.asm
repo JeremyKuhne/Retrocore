@@ -540,8 +540,9 @@ MISSING_QUOTE_ERROR:
     brk
     .byte ERROR_MISSING_QUOTE
     .byte "Missing ",'"',0
-;; Prints a string in quotes, a doubled quote as one.
-;; In: PTR_B,Y = the opening quote
+;; Prints a string in quotes, a doubled quote as one, from a character of it.
+;; In: A = the character to print first, PTR_B,Y = it
+;; Entry: PRINT_QUOTED_NEXT = starts at the opening quote, PTR_B,Y, without printing it
 ;; Out: PTR_B_OFFSET = just past the closing quote, PTR_A_OFFSET = the same, carry = clear
 PRINT_QUOTED_CHARACTER:
     jsr PRINT_CHARACTER

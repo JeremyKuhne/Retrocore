@@ -112,7 +112,7 @@ STORE_FP_A_IN_VARIABLE:
 ;; over the entry when it differs, so it relies on every token it is given being in the table; LIST handles the line
 ;; number token, &8D, itself. The keyword is then printed with <PRINT_CHARACTER>, so it counts towards <COUNT>.
 ;; In: A = the character or token
-;; Uses: A, WORK..WORK+3 (for a token)
+;; Uses: A, WORK, WORK+1..WORK+3 (for a token)
 ;; Keeps: X, Y
 ;; See: <PRINT_CHARACTER>, <LIST_COMMAND>
 PRINT_CHARACTER_OR_TOKEN:

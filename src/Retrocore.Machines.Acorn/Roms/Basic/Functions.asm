@@ -394,10 +394,10 @@ NOT_FUNCTION_LOOP:
 ;; INSTR(: finds one string in another: INSTR(string, search [, start]).
 ;;
 ;; It gives the position, counting from 1, of the first copy of the search string at or after the start position
-;; (1 if left out, and 0 is taken as 1), or 0 if there is none. An empty search string is found at the start
-;; position. The string searched is kept on BASIC's stack, the search string in StrA, and IntA holds the position
-;; being tried (INT_A), the number of positions left to try (INT_A+1) and the start less one (INT_A+3); WORK points
-;; to the characters being compared.
+;; (1 if left out; only its low byte is used, and 0 is taken as 1, so 256 starts at 1), or 0 if there is none. An
+;; empty search string is found at the start position. The string searched is kept on BASIC's stack, the search
+;; string in StrA, and IntA holds the position being tried (INT_A), the number of positions left to try (INT_A+1)
+;; and the start less one (INT_A+3); WORK points to the characters being compared.
 ;; Out: INT_A = the position, or 0, A = &40 (an integer)
 ;; Uses: X, Y, WORK
 ;; Errors: "Type mismatch" when either string is not a string, "Missing ," and "Missing )"
@@ -708,7 +708,8 @@ EVALUATE_TO_CLOSE_BRACKET_MISSING:
     .byte ERROR_MISSING_BRACKET
     .byte "Missing )",0
 
-;; Reads a hexadecimal number after &, of up to eight digits 0-9 and A-F, into IntA.
+;; Reads a hexadecimal number after &, of digits 0-9 and A-F, into IntA, modulo 2^32: digits past the eighth push
+;; the top ones out, so &100000000 is 0.
 ;;
 ;; Each digit is shifted into IntA from the bottom; X becomes negative once a digit has been read, so an & with no
 ;; digits after it is an error.
@@ -1023,7 +1024,7 @@ MAKE_CHARACTER_STRING:
     rts
 
 ;; LEFT$(: gives the first characters of a string: LEFT$(string, n), or the whole string when n is its length or
-;; more.
+;; more. Only n's low byte is used, so LEFT$("ABC",256) is empty.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
 ;; Errors: "Type mismatch", "Missing ," and "Missing )"
 LEFT_STR_FUNCTION:
@@ -1045,7 +1046,7 @@ LEFT_STR_RETURN:
     rts
 
 ;; RIGHT$(: gives the last characters of a string: RIGHT$(string, n), or the whole string when n is its length or
-;; more.
+;; more. Only n's low byte is used, so RIGHT$("ABC",256) is empty.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
 ;; Errors: "Type mismatch", "Missing ," and "Missing )"
 RIGHT_STR_FUNCTION:
@@ -1107,8 +1108,9 @@ LEFT_STR_MISSING_COMMA:
 
 ;; MID$(: gives part of a string: MID$(string, start [, n]).
 ;;
-;; It gives n characters from the start position, counting from 1 (0 is taken as 1), or all of them to the end when
-;; n is left out or more than there are. A start past the end gives an empty string.
+;; Only the low bytes of start and n are used. It gives n characters from the start position, counting from 1 (0 is
+;; taken as 1), or all of them to the end when n is left out or more than there are. A start past the end gives an
+;; empty string. So MID$("ABC",256) is "ABC", and MID$("ABC",1,256) is empty.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
 ;; Uses: X, Y, INT_A+2 (the offset of the start)
 ;; Errors: "Type mismatch", "Missing ," and "Missing )"
@@ -1205,7 +1207,8 @@ STR_STR_TYPE_MISMATCH:
 
 ;; STRING$(: gives copies of a string joined together: STRING$(n, string).
 ;;
-;; The string is copied after itself in StrA n - 1 times; n = 0 gives an empty string.
+;; The string is copied after itself in StrA n - 1 times, n being the count's low byte; 0 gives an empty string, so
+;; STRING$(256,"A") is empty and STRING$(257,"A") is one copy.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
 ;; Errors: "Type mismatch", "Missing ,", "Missing )" and "String too long" when the result is over 255 characters
 STRING_STR_FUNCTION:

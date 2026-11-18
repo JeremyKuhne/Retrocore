@@ -123,7 +123,8 @@ SERIES_POINTER = $4D                ;; <EVALUATE_CONTINUED_FRACTION>'s pointer t
 
 ;; The resident integer variables, four bytes each: @% at &0400, then A% to Z%.
 ;;
-;; Their values survive NEW, RUN and BREAK, since BASIC clears only the heap. @% sets PRINT's number format.
+;; A% to Z% survive NEW, RUN and BREAK, since BASIC clears only the heap. @%, PRINT's number format, survives NEW
+;; and RUN, but BASIC sets it back to &0000090A when it starts again after BREAK.
 RESIDENT_INTEGERS = $0400
 
 AT_PERCENT = RESIDENT_INTEGERS      ;; @%: PRINT's number format and field width

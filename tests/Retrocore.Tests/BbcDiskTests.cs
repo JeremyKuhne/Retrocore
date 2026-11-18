@@ -465,6 +465,59 @@ public class BbcDiskTests
         (written * 256).Should().BeLessThan(Intel8271.RevolutionCycles / Intel8271.ByteCycles);
     }
 
+    /// <summary>
+    ///  A format that fits still runs to the next index, writing gap 4, and a late DMA ends a format with the sectors
+    ///  written before it kept.
+    /// </summary>
+    [TestMethod]
+    public void FormatEndsAtTheIndexOrALateDma()
+    {
+        // One sector: from its ID's first request, the command ends close to a revolution later, at the index.
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x63, 0, 21, 0x21, 0, 16);    // format drive 0, track 0: one sector of 256 bytes
+        int position = 0;
+        int sinceFirst = -1;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest)
+            {
+                fdc.WriteData(position++ == 3 ? (byte)1 : (byte)0);
+                if (sinceFirst < 0) { sinceFirst = 0; }
+            }
+
+            fdc.Tick();
+            if (sinceFirst >= 0) { sinceFirst++; }
+        }
+
+        fdc.Read(1).Should().Be(0);
+        disk.Track(0, 0).Should().ContainSingle();
+        sinceFirst.Should().BeGreaterThan(Intel8271.RevolutionCycles - (64 * Intel8271.ByteCycles), "gap 4 runs to the index");
+
+        // Two sectors' IDs given, then none: the third ID's request goes unanswered.
+        fdc = new();
+        disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x63, 0, 21, 0x2A, 0, 16);    // format drive 0, track 0: ten sectors of 256 bytes
+        position = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest && position < 8)
+            {
+                fdc.WriteData(position % 4 == 2 ? (byte)(position / 4) : (byte)(position % 4 == 3 ? 1 : 0));
+                position++;
+            }
+
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0x0A, "late DMA");
+        disk.Track(0, 0).Select(sector => sector.Sector).Should().Equal(0, 1);
+    }
+
     private static void Send(Intel8271 fdc, byte command, params byte[] parameters)
     {
         fdc.Write(0, command);

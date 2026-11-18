@@ -94,8 +94,9 @@ function abbreviations(words) {
 // end in & for a long integer; MBASIC's are letters, digits and dots, 40 of them significant; the other Microsoft
 // BASICs' are read by two. Color BASIC finds words only in capitals and never inside a name, which runs from a
 // capital through letters and digits. BBC BASIC also finds words only in capitals; its names are whole, with _
-// and small letters, and its DATA, like its REM, runs to the end of the line.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map() } = {}) {
+// and small letters, and its DATA, like its REM, runs to the end of the line. Its & starts a hexadecimal number,
+// whose capital digits are never searched for words, so &DEF is a number.
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
@@ -132,6 +133,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                     { include: "#data" },
                     { include: "#string" },
                     { include: "#escape" },
+                    ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
                     { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
                     ...[...nameFollows].map(word => ({
                         match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
@@ -184,7 +186,7 @@ const outputs = [
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
     ["mbasic.tmLanguage.json", grammar("mbasic", "MBASIC", mbasic, { names: "[A-Za-z][A-Za-z0-9.]*[$%!#]?", business: true })],
-    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations, hex: "&[0-9A-F]+" })],
     ["petbasic.tmLanguage.json", grammar("petbasic", "Commodore BASIC (PET)", petBasic)],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];

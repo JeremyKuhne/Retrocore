@@ -42,6 +42,10 @@
           "include": "#escape"
         },
         {
+          "match": "&[0-9A-F]+",
+          "name": "constant.numeric.hex.retrocore-bbcbasic"
+        },
+        {
           "match": "@[A-Za-z_][A-Za-z0-9_]*",
           "name": "entity.name.label.retrocore-bbcbasic"
         },

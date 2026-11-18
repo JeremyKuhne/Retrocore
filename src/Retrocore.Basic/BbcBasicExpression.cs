@@ -30,6 +30,10 @@ internal sealed class BbcBasicExpression
     private const int MaximumDepth = 32;
     private const int MaximumString = 255;
 
+    // BASIC II's reals: an 8-bit exponent around 128 and a 32-bit mantissa, so from 2^-128 to just under 2^127.
+    private const double LargestReal = 1.7014118346046923E38;
+    private const double SmallestReal = 2.938735877055719E-39;
+
     // BASIC II's zero page: LOMEM, HIMEM, ERL and TOP are words; PAGE is its high byte; COUNT a byte.
     private const int Lomem = 0x00;
     private const int Himem = 0x06;
@@ -335,12 +339,12 @@ internal sealed class BbcBasicExpression
         {
             "ABS" => IsInteger(argument)
                 ? Integer(Int(argument) < 0 ? unchecked(-Int(argument)) : Int(argument))
-                : new(Math.Abs(Number(argument))),
-            "ACS" => new(Math.Acos(Unit(Number(argument)))),
-            "ASN" => new(Math.Asin(Unit(Number(argument)))),
-            "ATN" => new(Math.Atan(Number(argument))),
-            "COS" => new(Math.Cos(Number(argument))),
-            "DEG" => new(Number(argument) * 180 / Math.PI),
+                : Real(Math.Abs(Number(argument))),
+            "ACS" => Real(Math.Acos(Unit(Number(argument)))),
+            "ASN" => Real(Math.Asin(Unit(Number(argument)))),
+            "ATN" => Real(Math.Atan(Number(argument))),
+            "COS" => Real(Math.Cos(Number(argument))),
+            "DEG" => Real(Number(argument) * 180 / Math.PI),
             "EXP" => Number(argument) switch
             {
                 >= 89.5 => throw new FormatException("Exp range."),
@@ -350,13 +354,13 @@ internal sealed class BbcBasicExpression
             "INT" => Math.Floor(Number(argument)) is >= int.MinValue and <= int.MaxValue and double whole
                 ? Integer((int)whole)
                 : throw new FormatException("Too big."),
-            "LN" => new(Logarithm(Number(argument), Math.Log)),
-            "LOG" => new(Logarithm(Number(argument), Math.Log10)),
-            "RAD" => new(Number(argument) * Math.PI / 180),
+            "LN" => Real(Logarithm(Number(argument), Math.Log)),
+            "LOG" => Real(Logarithm(Number(argument), Math.Log10)),
+            "RAD" => Real(Number(argument) * Math.PI / 180),
             "SGN" => Integer(Math.Sign(Number(argument))),
-            "SIN" => new(Math.Sin(Number(argument))),
-            "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : new(Math.Sqrt(Number(argument))),
-            "TAN" => new(Math.Tan(Number(argument))),
+            "SIN" => Real(Math.Sin(Number(argument))),
+            "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : Real(Math.Sqrt(Number(argument))),
+            "TAN" => Real(Math.Tan(Number(argument))),
             "LEN" => Integer(Text(argument).Length),
             "ASC" => Integer(Text(argument) is { Length: > 0 } text ? text[0] : -1),
             "VAL" => Value(Text(argument)),
@@ -544,14 +548,22 @@ internal sealed class BbcBasicExpression
         }
 
         string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
-        if (!BasicNumbers.TryParse(text, out double number)) { throw Syntax($"'{text}' is not a number"); }
-        return !text.Contains('.') && !text.Contains('E') && number is >= int.MinValue and <= int.MaxValue
-            ? Integer((int)number)
-            : Real(number);
+        return Classify(text, negative: false) ?? throw Syntax($"'{text}' is not a number");
+    }
+
+    // A number BASIC has read, as READ_NUMBER types it: an integer when it has no decimal point, its exponent is zero
+    // (so 1E0 is one) and its magnitude fits 31 bits; otherwise a real. The sign goes on after, so -2147483648 is real.
+    private static BasicValue? Classify(string magnitude, bool negative)
+    {
+        if (!BasicNumbers.TryParse(magnitude, out double number)) { return null; }
+        int mark = magnitude.IndexOf('E', StringComparison.Ordinal);
+        bool zeroScale = mark < 0 || int.TryParse(magnitude[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture, out int power) && power == 0;
+        bool integer = !magnitude.Contains('.') && zeroScale && number <= int.MaxValue;
+        return integer ? Integer(negative ? -(int)number : (int)number) : Real(negative ? -number : number);
     }
 
     // VAL: the number at the start of the string, or 0, read as BASIC reads one: spaces, a sign, spaces, the digits
-    // with one point, and an exponent. It is an integer when it has neither a point nor an exponent and fits.
+    // with one point, and an exponent, typed as Classify says.
     private static BasicValue Value(byte[] text)
     {
         string trimmed = Encoding.ASCII.GetString(text).TrimStart(' ');
@@ -570,7 +582,6 @@ internal sealed class BbcBasicExpression
             end++;
         }
 
-        bool exponent = false;
         if (end < trimmed.Length && trimmed[end] == 'E')
         {
             int at = end + 1;
@@ -578,14 +589,11 @@ internal sealed class BbcBasicExpression
             if (at < trimmed.Length && char.IsAsciiDigit(trimmed[at]))
             {
                 end = at;
-                exponent = true;
                 while (end < trimmed.Length && char.IsAsciiDigit(trimmed[end])) { end++; }
             }
         }
 
-        if (!BasicNumbers.TryParse(trimmed[..end], out double number)) { return Integer(0); }
-        if (negative) { number = -number; }
-        return !point && !exponent && number is >= int.MinValue and <= int.MaxValue ? Integer((int)number) : Real(number);
+        return Classify(trimmed[..end], negative) ?? Integer(0);
     }
 
     /// <summary>
@@ -625,8 +633,14 @@ internal sealed class BbcBasicExpression
     private static double Logarithm(double value, Func<double, double> logarithm) =>
         value <= 0 ? throw new FormatException("Log range.") : logarithm(value);
 
-    private static BasicValue Real(double value) =>
-        double.IsFinite(value) ? new(value) : throw new FormatException(double.IsNaN(value) ? "Log range." : "Too big.");
+    // A real as BASIC II holds one, in five bytes: past about 1.7E38 it is "Too big", and below about 2.9E-39 it is 0.
+    private static BasicValue Real(double value) => value switch
+    {
+        double.NaN => throw new FormatException("Log range."),
+        >= LargestReal or <= -LargestReal => throw new FormatException("Too big."),
+        > -SmallestReal and < SmallestReal => new(0),
+        _ => new(value)
+    };
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);
 

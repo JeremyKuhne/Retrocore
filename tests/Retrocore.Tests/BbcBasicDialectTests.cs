@@ -186,6 +186,10 @@ public sealed class BbcBasicDialectTests
     [DataRow("VAL \"+ 12\"", 12.0)]
     [DataRow("VAL \"1.2.3\"", 1.2)]
     [DataRow("EXP -100", 0.0)]
+    [DataRow("&7FFFFFFF+1E0", -2147483648.0)]  // a zero exponent keeps an integer
+    [DataRow("VAL(\"1E0\")+&7FFFFFFF", -2147483648.0)]
+    [DataRow("VAL(\"-2147483648\")-1", -2147483649.0)] // the magnitude is too big for an integer
+    [DataRow("1E-40", 0.0)]                    // below BASIC's smallest real
     [DataRow("LEN LEFT$(\"ABC\",256)", 0.0)]   // the low byte of the count
     [DataRow("LEN STRING$(256,\"X\")", 0.0)]
     public void WatchesTakeBbcGrammar(string expression, double expected)
@@ -216,7 +220,7 @@ public sealed class BbcBasicDialectTests
 
         Action outside = () => evaluator.Evaluate("ASN 2");
         outside.Should().Throw<FormatException>().WithMessage("-ve root.");
-        (string, string)[] ranges = [("(-1)^0.5", "Log range."), ("2^1024", "Too big."), ("EXP 100", "Exp range.")];
+        (string, string)[] ranges = [("(-1)^0.5", "Log range."), ("2^1024", "Too big."), ("EXP 100", "Exp range."), ("1E39", "Too big.")];
         foreach ((string expression, string error) in ranges)
         {
             Action range = () => evaluator.Evaluate(expression);
@@ -248,6 +252,23 @@ public sealed class BbcBasicDialectTests
         BasicSource source = BasicSource.Analyze(Program, BasicDialect.BbcBasic);
         string[] names = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => $"{site.Key}@{site.Line}")];
         names.Should().Equal("@%@0", "FOO@0", "X@0", "FOO@0", "FOO@2");  // by source line: none in line 20's *LOAD
+    }
+
+    /// <summary>
+    ///  A PROC or FN name may start with a digit, and a condition is true as BBC BASIC's IF takes it: 0.5 is false, as
+    ///  a 32-bit integer, and a string is refused.
+    /// </summary>
+    [TestMethod]
+    public void DigitRoutinesAndConditions()
+    {
+        BasicSource source = BasicSource.Analyze("10 PROC1\n20 END\n30 DEF PROC1:ENDPROC\n", BasicDialect.BbcBasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Function).Select(site => site.Key).Should().Equal("PROC1", "PROC1");
+
+        BasicEvaluator.IsTrue(new BasicResult(new BasicValue(0.5)), BasicDialect.BbcBasic).Should().BeFalse();
+        BasicEvaluator.IsTrue(new BasicResult(new BasicValue(-1)), BasicDialect.BbcBasic).Should().BeTrue();
+        BasicEvaluator.IsTrue(new BasicResult(new BasicValue(0.5)), BasicDialect.AppleSoft).Should().BeTrue();
+        Action text = () => BasicEvaluator.IsTrue(new BasicResult(BasicValue.Of([1])), BasicDialect.BbcBasic);
+        text.Should().Throw<FormatException>();
     }
 
     /// <summary>

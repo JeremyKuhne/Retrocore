@@ -32,6 +32,11 @@ public sealed class CommodoreDisk : IMedium
     private readonly byte[] _zones = new byte[Positions];
     private bool _writeProtected;
 
+    /// <summary>
+    ///  The most bytes a track holds: a G64 keeps each track's length in 16 bits.
+    /// </summary>
+    public const int MaximumTrackBytes = ushort.MaxValue;
+
     /// <inheritdoc/>
     public long Version { get; private set; }
 
@@ -98,9 +103,20 @@ public sealed class CommodoreDisk : IMedium
     /// <param name="bits">The cells, packed eight to a byte, first in bit 7.</param>
     /// <param name="bitCount">How many cells.</param>
     /// <param name="zone">The speed zone it is written at.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///  The count is negative, not whole bytes, more than the bits hold, or more than a G64 track's 65,535 bytes, which
+    ///  the disk's snapshot could not keep.
+    /// </exception>
     public void SetTrack(int position, ReadOnlySpan<byte> bits, int bitCount, int zone)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(bitCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(bitCount, bits.Length * 8);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(bitCount, MaximumTrackBytes * 8);
+        if (bitCount % 8 != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bitCount), bitCount, "A track is whole bytes of cells, as a G64 keeps it.");
+        }
+
         _tracks[position] = bitCount == 0 ? null : bits[..((bitCount + 7) / 8)].ToArray();
         _bits[position] = bitCount;
         _zones[position] = (byte)(zone & 3);

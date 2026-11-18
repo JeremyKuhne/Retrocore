@@ -146,6 +146,21 @@ public class BbcMachineTests
     }
 
     /// <summary>
+    ///  The uPD7002 samples its input as a conversion starts, and a 12-bit conversion keeps all twelve bits.
+    /// </summary>
+    [TestMethod]
+    public void AnalogueSamplesAtTheStartWithTwelveBits()
+    {
+        BbcAnalogue analogue = new();
+        analogue[0] = 0x4230;
+        analogue.Write(0, 0x08);                // channel 0, 12 bits
+        analogue[0] = 0xC000;                   // moved during the conversion
+        for (int cycle = 0; cycle < 10_000; cycle++) { analogue.Tick(); }
+        analogue.Read(1).Should().Be(0x42);
+        analogue.Read(2).Should().Be(0x30);
+    }
+
+    /// <summary>
     ///  Lowercase letters (through CAPS LOCK) and symbols type as the BBC's keyboard makes them; the shifted
     ///  underscore key is the BBC's £, character 96.
     /// </summary>
@@ -295,7 +310,7 @@ public class BbcMachineTests
     [TestMethod]
     public void PowerOnWithDnfsFindsTheRom()
     {
-        BbcMachine machine = Machine(filingSystem: "dnfs120.rom");
+        BbcMachine machine = Machine(filingSystem: "dnfs120.rom", diskInterface: false);
         string[] screen = RunToPrompt(machine);
         string text = string.Join('\n', screen);
         screen.Should().Contain(line => line.TrimEnd() == ">", text);

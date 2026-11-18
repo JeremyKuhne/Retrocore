@@ -1523,7 +1523,7 @@
               },
               "command": {
                 "type": "string",
-                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives."
+                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives; MBASIC by default with basic."
               },
               "controllers": {
                 "type": "boolean",

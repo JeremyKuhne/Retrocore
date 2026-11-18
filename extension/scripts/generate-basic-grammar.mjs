@@ -61,22 +61,48 @@ function bbcKeywords() {
     return {
         words: entries.map(match => match[1]),
         conditional: new Set(entries.filter(match => /\bConditional\b/.test(match[2])).map(match => match[1])),
-        nameFollows: new Set(entries.filter(match => /\bNameFollows\b/.test(match[2])).map(match => match[1]))
+        nameFollows: new Set(entries.filter(match => /\bNameFollows\b/.test(match[2])).map(match => match[1])),
+        abbreviations: abbreviations(entries.map(match => match[1]))
     };
+}
+
+// BBC BASIC's abbreviations, as its tokeniser finds them: letters then a full stop stand for the first word in the
+// table's order that starts with those letters, so P. is PRINT's only if no word before it starts with P. Each word
+// gets the prefixes shorter than itself that no word before it took.
+function abbreviations(words) {
+    const taken = new Set();
+    const result = new Map();
+    for (const word of words) {
+        const prefixes = [];
+        for (let length = 1; length < word.length; length++) {
+            const prefix = word.slice(0, length);
+            if (taken.has(prefix)) continue;
+            taken.add(prefix);
+            prefixes.push(prefix);
+        }
+
+        if (prefixes.length !== 0) result.set(word, prefixes);
+    }
+
+    return result;
 }
 
 // Integer BASIC's names are any length, letters then letters and digits, and Business BASIC's may also hold dots and
 // end in & for a long integer; the Microsoft BASICs' are read by two. Color BASIC finds words only in capitals and
 // never inside a name, which runs from a capital through letters and digits. BBC BASIC also finds words only in
 // capitals; its names are whole, with _ and small letters, and its DATA, like its REM, runs to the end of the line.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set() } = {}) {
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map() } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
     const reserved = words.filter(word => word !== "REM" && word !== "'" && word !== "DATA");
+    // A word as written in full, or as one of its abbreviations, a prefix and a full stop.
+    const written = (word, full) => abbreviated.has(word)
+        ? `(?:${full}|(?:${abbreviated.get(word).map(escape).join("|")})\\.)`
+        : full;
     const remark = words.includes("'") ? `${matching("(REM)|(')")}.*$`
         : business ? `(?i:${before}(REM)${after}|(!)).*$`
-            : `${matching("(REM)")}.*$`;
+            : `${matching(`(${written("REM", "REM")})`)}.*$`;
     const kind = word => flow.has(word) ? "keyword.control"
         : operators.has(word) ? "keyword.operator"
             : functions.has(word) || /[$(]$/.test(word) ? "support.function"
@@ -105,7 +131,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                         match: matching(`(${pattern(word)})([A-Za-z0-9_\`]*)`),
                         captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
                     })),
-                    { match: matching(reserved.map(word => `(${business ? separated(word) : conditional.has(word) ? `${pattern(word)}(?![A-Za-z0-9_\`])` : pattern(word)})`).join("|")), captures },
+                    { match: matching(reserved.map(word => `(${business ? separated(word) : written(word, conditional.has(word) ? `${pattern(word)}(?![A-Za-z0-9_\`])` : pattern(word))})`).join("|")), captures },
                     { match: "\\?", name: `keyword.other.${scope}` },
                     { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
                     { match: names, name: `variable.other.${scope}` },
@@ -119,7 +145,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                 captures: { "1": { name: `keyword.other.remark.${scope}` }, "2": { name: `keyword.other.remark.${scope}` } }
             },
             data: {
-                begin: business ? `(?i:${before}(DATA)${after})` : matching("(DATA)"),
+                begin: business ? `(?i:${before}(DATA)${after})` : matching(`(${written("DATA", "DATA")})`),
                 beginCaptures: { "1": { name: `keyword.other.${scope}` } },
                 end: wholeLineData ? "(?=$)" : "(?=:|$)",
                 contentName: `string.unquoted.data.${scope}`,
@@ -149,7 +175,7 @@ const outputs = [
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
-    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations })],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {

@@ -120,6 +120,10 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "PRINT"), "keyword.other"), "PROCREM is a name, not a remark");
     assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "REM"), "entity.name.function"));
     assert.ok(has(scopes("bbcbasic", "100 X=FNTIME", "TIME"), "entity.name.function"), "FNTIME names a function");
+    // Abbreviations: letters and a full stop are the first word in the table's order that starts with them.
+    assert.ok(has(scopes("bbcbasic", "110 P. \"HELLO\"", "P."), "keyword.other"), "P. is PRINT");
+    assert.ok(has(scopes("bbcbasic", "120 D. 1,2:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
+    assert.ok(has(scopes("bbcbasic", "130 PR.\"HI\"", "PR."), "keyword.other"));
 });
 
 test("BASIC labels have label scopes", () => {

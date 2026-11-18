@@ -177,9 +177,9 @@ public sealed class BbcBus : IProcessorBus
     public IReadOnlyList<BbcFloppyDrive> Drives { get; }
 
     /// <summary>
-    ///  Gets whether NMI is asserted: the 8271's interrupt or data request.
+    ///  Gets whether NMI is asserted: the 8271's interrupt output, which in non-DMA mode also carries data requests.
     /// </summary>
-    public bool NonMaskableInterrupt => DiskController is { } fdc && (fdc.InterruptRequest || fdc.DataRequest);
+    public bool NonMaskableInterrupt => DiskController?.InterruptOutput == true;
 
     /// <summary>
     ///  Gets the 2 MHz cycles since power-on, stretched cycles included.

@@ -388,8 +388,17 @@ public class BbcOracleTests
             start.Environment["RETRO_OUT"] = output;
             using (Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start."))
             {
-                process.StandardOutput.ReadToEnd();
-                process.WaitForExit(300_000).Should().BeTrue("MAME finishes");
+                // Both pipes drain as MAME writes, so a full one cannot stall it; the timeout holds while they do.
+                Task stdout = process.StandardOutput.ReadToEndAsync();
+                Task stderr = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(300_000))
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit();
+                    Assert.Fail("MAME did not finish in five minutes.");
+                }
+
+                Task.WaitAll(stdout, stderr);
             }
 
             File.Exists(output).Should().BeTrue("the Lua script traces");

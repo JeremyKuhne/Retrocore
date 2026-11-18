@@ -110,6 +110,12 @@ public sealed class Intel8271
     public bool DataRequest { get; private set; }
 
     /// <summary>
+    ///  Gets the INT pin: <see cref="InterruptRequest"/>, or in non-DMA mode (mode register bit 0) a
+    ///  <see cref="DataRequest"/> too. In DMA mode data requests go to the DRQ pin instead.
+    /// </summary>
+    public bool InterruptOutput => InterruptRequest || ((_mode & 1) != 0 && DataRequest);
+
+    /// <summary>
     ///  Gets whether the head load output is high, which runs the drives' motors.
     /// </summary>
     public bool HeadLoaded { get; private set; }
@@ -466,13 +472,15 @@ public sealed class Intel8271
         foreach (int wait in Steps(track)) { yield return wait; }
     }
 
-    // Steps the head until the current track register reaches a track, skipping the bad tracks, then settles.
+    // Steps the head until the current track register reaches a track, skipping the bad tracks, then settles. A
+    // track that is itself bad cannot be reached: the head stops on the first good track past it, rather than
+    // stepping back and forth across it.
     private IEnumerable<int> Steps(byte track)
     {
         bool moved = false;
-        while (_currentTracks[_drive] != track)
+        bool outward = _currentTracks[_drive] > track;
+        while (_currentTracks[_drive] != track && (_currentTracks[_drive] > track) == outward)
         {
-            bool outward = _currentTracks[_drive] > track;
             do
             {
                 _currentTracks[_drive] = (byte)(_currentTracks[_drive] + (outward ? -1 : 1));

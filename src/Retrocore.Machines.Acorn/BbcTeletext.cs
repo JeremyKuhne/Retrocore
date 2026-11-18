@@ -82,11 +82,13 @@ internal sealed class BbcTeletext
     internal int Background => _background;
 
     /// <summary>
-    ///  Starts a field, on the vertical sync: the line count starts again and the flash timer steps.
+    ///  Starts a field, on the vertical sync: the line count starts again, the first row is a top row, and the flash
+    ///  timer steps.
     /// </summary>
     internal void StartField()
     {
         _line = 9;
+        _bottomRow = _doubleHeightInRow = false;
         _frames = (_frames + 1) & 0x3F;
     }
 
@@ -116,7 +118,8 @@ internal sealed class BbcTeletext
     internal ushort Character(int code, bool oddField)
     {
         bool doubleBefore = _doubleHeight;
-        bool flashBefore = _flash;
+        // Flash is set-after, but steady is set-at: its own cell is already steady.
+        bool flashBefore = _flash && code != 0x09;
         bool graphicsBefore = _graphics;
         bool holdBefore = _hold;
 

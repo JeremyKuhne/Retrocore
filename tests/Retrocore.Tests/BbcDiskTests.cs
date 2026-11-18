@@ -222,4 +222,52 @@ public class BbcDiskTests
         screen.Should().Contain("WELCOME-DISK (04)", text);
         screen.Should().Contain(line => line.StartsWith("Drive 2", StringComparison.Ordinal), text);
     }
+
+    /// <summary>
+    ///  A seek to a track the bad-track registers skip ends on the first good track past it.
+    /// </summary>
+    [TestMethod]
+    public void SeekToABadTrackEnds()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 1, 0xFF, 0);      // drive 0: bad track 1, current track 0
+        Send(fdc, 0x69, 1);                     // seek drive 0 to track 1
+        RunWhileBusy(fdc);
+        fdc.IsBusy.Should().BeFalse();
+        fdc.InterruptRequest.Should().BeTrue();
+        fdc.Read(1).Should().Be(0, "the seek succeeds");
+        Send(fdc, 0x7D, 0x12);                  // read the current track register
+        fdc.Read(1).Should().Be(2);
+    }
+
+    /// <summary>
+    ///  A data request reaches the INT pin, and so NMI, only in non-DMA mode.
+    /// </summary>
+    /// <param name="nonDma">Whether the mode register selects non-DMA mode.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void DataRequestsInterruptOnlyWithoutDma(bool nonDma)
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);   // drive 0: no bad tracks, current track 0
+        if (nonDma) { Send(fdc, 0x7A, 0x17, 0xC1); }
+        Send(fdc, 0x53, 0, 0, 0x21);            // read drive 0, track 0, sector 0, one sector of 256 bytes
+        for (int cycle = 0; cycle < 4_000_000 && !fdc.DataRequest; cycle++) { fdc.Tick(); }
+        fdc.DataRequest.Should().BeTrue();
+        fdc.InterruptOutput.Should().Be(nonDma);
+    }
+
+    private static void Send(Intel8271 fdc, byte command, params byte[] parameters)
+    {
+        fdc.Write(0, command);
+        foreach (byte parameter in parameters) { fdc.Write(1, parameter); }
+    }
+
+    private static void RunWhileBusy(Intel8271 fdc)
+    {
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++) { fdc.Tick(); }
+    }
 }

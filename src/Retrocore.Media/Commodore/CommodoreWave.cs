@@ -47,7 +47,18 @@ public static class CommodoreWave
         while (offset + 8 <= wave.Length)
         {
             ReadOnlySpan<byte> id = wave.Slice(offset, 4);
-            int size = (int)Math.Min(BinaryPrimitives.ReadUInt32LittleEndian(wave[(offset + 4)..]), (uint)(wave.Length - offset - 8));
+            uint declared = BinaryPrimitives.ReadUInt32LittleEndian(wave[(offset + 4)..]);
+            int available = wave.Length - offset - 8;
+            bool needed = id.SequenceEqual("fmt "u8) || id.SequenceEqual("data"u8);
+
+            // A cut-short format or sample chunk would read as a shorter tape; any other chunk is skipped anyway.
+            if (needed && declared > (uint)available)
+            {
+                throw new InvalidDataException(
+                    $"The WAV file's {System.Text.Encoding.ASCII.GetString(id).Trim()} chunk says {declared} bytes, but only {available} follow.");
+            }
+
+            int size = (int)Math.Min(declared, (uint)available);
             ReadOnlySpan<byte> body = wave.Slice(offset + 8, size);
             if (id.SequenceEqual("fmt "u8) && size >= 16)
             {

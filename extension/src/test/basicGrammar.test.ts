@@ -20,7 +20,8 @@ before(async () => {
         "source.retrocore-level2": "level2.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
-        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json"
+        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
+        "source.retrocore-petbasic": "petbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -101,6 +102,16 @@ test("Color BASIC finds words only in capitals and never inside a name", () => {
     assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
     assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
     assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not in strings, DATA or REM", () => {
+    assert.ok(has(scopes("petbasic", "10 INPUT#1,A$", "INPUT#"), "keyword"), "INPUT# is one word");
+    assert.ok(has(scopes("petbasic", "20 DOPEN#2,\"DATA\",D0", "DOPEN"), "keyword"));
+    assert.ok(has(scopes("petbasic", "30 DIRECTORY D0", "DIRECTORY"), "keyword"));
+    assert.ok(has(scopes("petbasic", "40 PRINT \"DIRECTORY\"", "DIRECTORY"), "string.quoted"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
+    assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

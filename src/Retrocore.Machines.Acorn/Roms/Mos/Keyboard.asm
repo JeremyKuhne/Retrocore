@@ -1179,7 +1179,8 @@ KEYV_DEFAULT_1:
 ;;
 ;; <LAST_KEY_PRESSED> holds the most recent key and <FIRST_KEY_PRESSED> one pressed before it and still held. A key
 ;; number found by a scan has bit 7 clear; the next scan that still sees the key sets bit 7, so a key must be seen
-;; twice before it counts, and seen released twice before it is forgotten. A confirmed key gives its character when
+;; twice before it counts. The last key is forgotten once it is seen released twice, but the first key on the first
+;; scan that finds it released. A confirmed key gives its character when
 ;; <AUTO_REPEAT_TIMER> runs out: one centisecond after it is confirmed, then after the auto-repeat delay, then after
 ;; each auto-repeat period. CAPS LOCK and SHIFT LOCK change <KEYBOARD_STATUS> instead and do not repeat.
 ;;

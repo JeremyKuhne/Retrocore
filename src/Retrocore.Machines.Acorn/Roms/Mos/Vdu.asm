@@ -501,7 +501,8 @@ VDU_DO_NOTHING:
 ;;
 ;; Falls into <VDU_PRINT_NEXT>.
 ;; In: A = the parameter, X = <VDU_QUEUE_COUNT>, minus the parameters still awaited
-;; Out: carry = clear
+;; Out: carry = clear, but with the driver disabled, VDU 1's parameter returns <VDU_PRINT_NEXT>'s carry: set while
+;;   the printer is on
 ;; Uses: A, X, Y
 VDU_DRIVER_QUEUE:
     sta VDU_QUEUE_END - $FF,x       ; X = -1 for the last parameter, which lands at VDU_QUEUE_END
@@ -1148,8 +1149,8 @@ VDU_GCOL:
 ;;
 ;; The colour becomes the byte of that colour from <TWO_COLOUR_BYTES> or the tables after it. For a text colour it
 ;; also sets <TEXT_EOR_MASK> to the foreground inverted and <TEXT_OR_MASK> to that EOR the background, which turn a
-;; font byte into colours (<WRITE_CHARACTER>). For a graphics colour it stores the action in VDU_QUEUE+7 too. Teletext
-;; has no colours to set.
+;; font byte into colours (<WRITE_CHARACTER>). For a graphics colour it also stores the action from VDU_QUEUE+7 in
+;; <GRAPHICS_FOREGROUND_ACTION> or <GRAPHICS_BACKGROUND_ACTION>. Teletext has no colours to set.
 ;; In: Y = 0 for text, 2 for graphics, VDU_QUEUE_END = the colour, VDU_QUEUE+7 = the action for graphics
 ;; Uses: A, X, Y, VDU_TEMP
 SET_COLOUR:

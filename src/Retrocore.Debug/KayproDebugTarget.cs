@@ -222,6 +222,8 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
     /// <remarks>
     ///  <para>
     ///   A program loads into RAM whether or not the ROM is banked over it, as a CP/M program loads at <c>$0100</c>.
+    ///   One that reaches under the ROM banks it out, as CP/M has it, so the program runs from RAM even when the
+    ///   machine has not booted.
     ///  </para>
     /// </remarks>
     public void Load(int address, ReadOnlySpan<byte> bytes)
@@ -235,6 +237,8 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
         {
             _machine.Bus.PokeRam((ushort)(address + index), bytes[index]);
         }
+
+        if (bytes.Length > 0 && address < KayproBus.BankEnd) { _machine.Bus.BankRomOut(); }
     }
 
     /// <inheritdoc/>
@@ -366,6 +370,9 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
         ? $"line {offset / KayproVideo.LineBytes}, column {offset % KayproVideo.LineBytes}"
         : "not shown";
 
+    // Whether an address is in video RAM's window, which the video bank's accessors would otherwise wrap into.
+    private static bool IsVideo(ushort address) => address is >= KayproBus.VideoStart and < KayproBus.BankEnd;
+
     private List<DebugMemoryBank> CreateBanks()
     {
         KayproBus bus = _machine.Bus;
@@ -376,9 +383,10 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
                 "RAM under the ROM",
                 [KayproMemoryArea.Ram],
                 [(0x0000, KayproBus.BankEnd)],
-                address => bus.PeekRam(address),
+                address => address < KayproBus.BankEnd ? bus.PeekRam(address) : null,
                 (address, value) =>
                 {
+                    if (address >= KayproBus.BankEnd) { return false; }
                     bus.PokeRam(address, value);
                     return true;
                 },
@@ -395,9 +403,10 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
                 "Video RAM",
                 [KayproMemoryArea.Video],
                 [(KayproBus.VideoStart, KayproVideo.Size)],
-                address => bus.Video.Read(address - KayproBus.VideoStart),
+                address => IsVideo(address) ? bus.Video.Read(address - KayproBus.VideoStart) : null,
                 (address, value) =>
                 {
+                    if (!IsVideo(address)) { return false; }
                     bus.Video.Write(address - KayproBus.VideoStart, value);
                     return true;
                 })

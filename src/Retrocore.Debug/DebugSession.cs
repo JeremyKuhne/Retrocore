@@ -951,6 +951,12 @@ internal sealed partial class DebugSession
         // The disks the last run kept go back in their drives, over what the launch and saved machine put there.
         OpenJournal(args);
 
+        // A Kaypro's command is typed at CP/M's prompt from the disks the session mounts.
+        if (Target is KayproDebugTarget kaypro && args.String("command") is { } command)
+        {
+            kaypro.TypeAtPrompt(command, seconds: 30);
+        }
+
         // The SDK's ROM sources follow the program, each applying only where its memory area is mapped.
         // The SDK's sources can come from the repository instead, so breakpoints set in the files being edited bind.
         string? sdkRoms = args.String("sdkRoms");
@@ -1061,12 +1067,12 @@ internal sealed partial class DebugSession
         return target;
     }
 
-    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command is typed at CP/M's first prompt.
+    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command is typed at CP/M's first prompt once
+    // the saved and kept disks are in their drives.
     private static KayproDebugTarget LaunchKaypro(JsonObject args)
     {
         KayproDebugTarget target = KayproDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? 0);
-        if (args.String("command") is { } command) { target.TypeAtPrompt(command, seconds: 30); }
         return target;
     }
 

@@ -4,12 +4,12 @@
 
 // Kaypro II DAP integration: boots the SDK's build of the 81-149C ROM, which asks for a disk, and checks the display,
 // the thread, the hardware rows, stepping in Kaypro2.asm's source, a function breakpoint on a ROM routine, Retrocore
-// Memory's bank under the ROM and the reset stop. With the disk in RETROCORE_KAYPRO (or %USERPROFILE%\Retrocore\kaypro),
+// Memory's banks and the reset stop, and a program loaded under the ROM. With the disk in RETROCORE_KAYPRO (or %USERPROFILE%\Retrocore\kaypro),
 // it also boots CP/M from cpm22-rom149.img and stops in the ROM's READ through CP/M's BIOS.
 
 import { resolve, join } from "node:path";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
@@ -93,6 +93,32 @@ try {
     const banks = (await request("retro/memoryBanks")).banks?.map(bank => bank.name) ?? [];
     assert.ok(banks.includes("ram"), `the RAM under the ROM is a bank (${banks.join(", ")})`);
 
+    // Each bank has bytes only in its own range: RAM's ends with the ROM's 16K, and video RAM's at $3FFF.
+    assert.equal((await request("readMemory", { memoryReference: "ram:0x8000", count: 1 })).unreadableBytes, 1);
+    const shown = (await request("readMemory", { memoryReference: "video:0x3000", count: 1 })).data;
+    await assert.rejects(request("writeMemory", { memoryReference: "video:0x4000", data: Buffer.from([0x42]).toString("base64") }));
+    assert.equal((await request("readMemory", { memoryReference: "video:0x3000", count: 1 })).data, shown, "no write wraps into video RAM");
+
+    // A program at $0100 runs from RAM as it starts, before the ROM has booted: the ROM is banked out.
+    log("program");
+    const folder = mkdtempSync(join(tmpdir(), "retrocore-kaypro-"));
+    try {
+        const program = join(folder, "program.com");
+        writeFileSync(program, Buffer.from([0x3E, 0x2A, 0x76]));
+        drop("stopped");
+        await launch({ program, loadAddress: 0x0100, stopOnEntry: true });
+        await event("stopped");
+        assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x0100");
+        const loaded = Buffer.from((await request("readMemory", { memoryReference: "0x0100", count: 3 })).data, "base64");
+        assert.deepEqual([...loaded], [0x3E, 0x2A, 0x76], "the CPU reads the program at $0100");
+        drop("stopped");
+        await request("stepIn", { threadId: 1, granularity: "instruction" });
+        await event("stopped");
+        assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x0102");
+    } finally {
+        rmSync(folder, { recursive: true, force: true });
+    }
+
     log("reset");
     await launch({}, ["machineReset"]);
     let stopped = await event("stopped");
@@ -121,9 +147,9 @@ try {
         await screen("PIP");
         await prompt();
         log("DIR");
-        console.log("Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks and reset stop, CP/M's boot and a breakpoint in READ.");
+        console.log("Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop, CP/M's boot and a breakpoint in READ.");
     } else {
-        console.log(`Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks and reset stop (no CP/M disk in ${disks}).`);
+        console.log(`Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop (no CP/M disk in ${disks}).`);
     }
 
     await request("disconnect");

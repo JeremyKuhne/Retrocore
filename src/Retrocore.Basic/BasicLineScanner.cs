@@ -176,6 +176,9 @@ internal sealed class BasicLineScanner
                 if (word == "GOTO") { beforeGoto = previous; }
                 previous = word;
                 index = last;
+
+                // TOP has no token of its own: BBC BASIC's tokeniser makes it TO, then P, which is no variable.
+                if (Bbc && word == "TO" && index + 1 < _bytes.Length && _bytes[index + 1] == 'P') { index++; }
                 continue;
             }
 

@@ -34,6 +34,10 @@ internal static class OffMachine
     // Requests run on their own threads; one machine is built at a time.
     private static readonly Lock s_gate = new();
 
+    // The snapshot each drive's kept disk came back from, by drive, for the request being answered under the gate:
+    // its file, named afresh each time a run keeps the disk again.
+    private static Dictionary<string, string> s_snapshots = [];
+
     /// <summary>
     ///  Describes a machine with its saved cards and media.
     /// </summary>
@@ -104,6 +108,11 @@ internal static class OffMachine
                 if (configuration.String("recoveryId") is { } id && RecoveryJournal.Open(id, problems, claim: false) is { } opened)
                 {
                     journal = opened;
+                    s_snapshots = opened.Kept
+                        .Where(entry => entry["ejected"] is null && entry.String("drive") is not null)
+                        .GroupBy(entry => entry.String("drive") ?? "")
+                        .ToDictionary(group => group.Key, group => group.First().String("file") ?? "");
+
                     problems.AddRange(MediaActions.Recover(target.Devices, journal));
                 }
 
@@ -118,6 +127,7 @@ internal static class OffMachine
             }
             finally
             {
+                s_snapshots = [];
                 journal?.Release();
                 (target as IDisposable)?.Dispose();
             }
@@ -142,7 +152,9 @@ internal static class OffMachine
             path = path?.ToUpperInvariant();
         }
 
-        string held = $"{device.Id}|{path ?? device.Media?.Label}";
+        // A kept disk is told apart from the image's own, and from another run's kept disk of the same image.
+        string snapshot = MediaActions.IsKept(medium) && s_snapshots.TryGetValue(device.Id, out string? kept) ? kept : "";
+        string held = $"{device.Id}|{path ?? device.Media?.Label}|{snapshot}";
         uint hash = 2166136261;
         foreach (char character in held)
         {

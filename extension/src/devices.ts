@@ -831,7 +831,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const offTarget = (alongside = false): Target => {
         const shown = off.recoveryId ?? off.name;
         return {
-            request: async (request, args) => await off.request(request, args) as unknown as Devices & MediaAnswer,
+            request: async (request, args) => await off.request(request, args, shown) as unknown as Devices & MediaAnswer,
             still: () => (alongside || vscode.debug.activeDebugSession?.type !== "retrocore") && (off.recoveryId ?? off.name) === shown,
             show: () => undefined,
             devices: () => off.devices

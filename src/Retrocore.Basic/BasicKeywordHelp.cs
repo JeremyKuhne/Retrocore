@@ -26,7 +26,8 @@ public static class BasicKeywordHelp
             "integer" or "apple1" => 'i',
             "business" => 'b',
             "colorbasic" => 'c',
-            "bbcbasic" => 'm',
+            "mbasic" => 'm',
+            "bbcbasic" => 'o',
             "petbasic" => 'p',
             _ => 'a'
         };

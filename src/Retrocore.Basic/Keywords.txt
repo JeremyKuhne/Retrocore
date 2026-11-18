@@ -1,4 +1,4 @@
-# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC, p = Commodore PET BASIC, m = BBC BASIC) | syntax | what it does.
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC, m = MBASIC, p = Commodore PET BASIC, o = BBC BASIC) | syntax | what it does.
 # Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
 END|a2b|END|Stops the program and returns to the prompt; CONT continues after it.
 FOR|a2b|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
@@ -474,127 +474,269 @@ LOC|c|LOC(buffer)|Disk BASIC: the current record of a file.
 LOF|c|LOF(buffer)|Disk BASIC: the number of records in a file.
 MKN$|c|MKN$(x)|Disk BASIC: a number as a five-character field.
 AS|c|FIELD #buffer, width AS s$|Disk BASIC: names the string a FIELD's width goes to.
-AND|m|a AND b|Bitwise AND of two 32-bit integers; with TRUE (-1) and FALSE (0) it is the logical AND.
-DIV|m|a DIV b|Integer division: the quotient of two integers, without its fraction.
-EOR|m|a EOR b|Bitwise exclusive OR of two 32-bit integers.
-MOD|m|a MOD b|The remainder of an integer division.
-OR|m|a OR b|Bitwise OR of two 32-bit integers; with TRUE and FALSE it is the logical OR.
-ERROR|m|ON ERROR statements / ON ERROR OFF|With ON, sets the statements that run when an error happens; ON ERROR OFF goes back to BASIC's own report.
-LINE|m|INPUT LINE v$|With INPUT, reads a whole line into a string, commas and leading spaces included.
-OFF|m|ON ERROR OFF / TRACE OFF|Turns ON ERROR or TRACE off.
-STEP|m|FOR v = start TO end STEP increment|The amount NEXT adds to a FOR loop's variable; 1 when left out.
-SPC|m|SPC count|In PRINT or INPUT: prints that many spaces.
-TAB(|m|TAB(column) / TAB(column, row)|In PRINT or INPUT: moves to a column on the line, or with two numbers to a column and row on the screen.
-ELSE|m|IF condition THEN statements ELSE statements|Gives the statements, or a line number, an IF runs when its condition is false.
-THEN|m|IF condition THEN statements|Gives the statements, or a line number, an IF runs when its condition is true; it may be left out.
-OPENIN|m|channel = OPENIN name$|Opens a file to read, giving its channel number, or 0 when there is no such file.
-PTR|m|PTR#channel / PTR#channel = position|The position in an open file the next byte is read from or written at.
-PAGE|m|PAGE / PAGE = address|Where the program starts in memory; setting it, to a multiple of 256, moves where BASIC looks for it.
-TIME|m|TIME / TIME = value|The centisecond clock, which counts up 100 times a second; it can be set.
-LOMEM|m|LOMEM / LOMEM = address|Where BASIC's variables start, normally TOP, the end of the program.
-HIMEM|m|HIMEM / HIMEM = address|The top of the memory BASIC uses; lowering it keeps memory above it for machine code.
-ABS|m|ABS number|The number without its sign.
-ACS|m|ACS number|The arc cosine, in radians.
-ADVAL|m|ADVAL channel|An analogue channel's value (1-4), the fire buttons (0), or with a negative number the free space in an input or output buffer.
-ASC|m|ASC string$|The character code of the string's first character, or -1 for an empty string.
-ASN|m|ASN number|The arc sine, in radians.
-ATN|m|ATN number|The arc tangent, in radians.
-BGET|m|BGET#channel|Reads one byte from an open file.
-COS|m|COS angle|The cosine of an angle in radians.
-COUNT|m|COUNT|The characters printed since the last new line.
-DEG|m|DEG radians|Converts radians to degrees.
-ERL|m|ERL|The number of the line the last error happened in, or 0 for a typed command.
-ERR|m|ERR|The number of the last error.
-EVAL|m|EVAL string$|Evaluates an expression held in a string, as if it were typed in the program.
-EXP|m|EXP number|e raised to the power of the number.
-EXT|m|EXT#channel|The length of an open file.
-FALSE|m|FALSE|The value 0.
-FN|m|FNname[(arguments)]|Calls a function a DEF FN defines, giving the value its = returns.
-GET|m|GET|Waits for a key and gives its character code.
-INKEY|m|INKEY time / INKEY -key|Waits up to that many centiseconds for a key and gives its code, or -1 when none comes; with a negative number, tests whether that key is held down.
-INSTR(|m|INSTR(string$, find$ [, start])|The position of one string in another, from 1, or 0 when it is not there.
-INT|m|INT number|The largest whole number not greater than the number.
-LEN|m|LEN string$|The number of characters in a string.
-LN|m|LN number|The natural logarithm.
-LOG|m|LOG number|The logarithm to base 10.
-NOT|m|NOT number|Inverts every bit of a 32-bit integer; NOT TRUE is FALSE.
-OPENUP|m|channel = OPENUP name$|Opens a file to read and write, giving its channel number, or 0 when there is no such file.
-OPENOUT|m|channel = OPENOUT name$|Makes a new, empty file to write, giving its channel number.
-PI|m|PI|3.14159265.
-POINT(|m|POINT(x, y)|The logical colour of the graphics point at x, y, or -1 off the screen.
-POS|m|POS|The text cursor's column.
-RAD|m|RAD degrees|Converts degrees to radians.
-RND|m|RND / RND(n)|A random 32-bit integer; RND(1) a number from 0 to just under 1; RND(n) a whole number from 1 to n; a negative n seeds the generator.
-SGN|m|SGN number|-1, 0 or 1, by the number's sign.
-SIN|m|SIN angle|The sine of an angle in radians.
-SQR|m|SQR number|The square root.
-TAN|m|TAN angle|The tangent of an angle in radians.
-TO|m|FOR v = start TO end|Gives the value a FOR loop runs to.
-TRUE|m|TRUE|The value -1.
-USR|m|USR address|Calls machine code with A, X, Y and the carry from A%, X%, Y% and C%, and gives back P, Y, X and A as one 32-bit number.
-VAL|m|VAL string$|The number at the start of a string, or 0.
-VPOS|m|VPOS|The text cursor's row.
-CHR$|m|CHR$ code|The one-character string with that character code.
-GET$|m|GET$|Waits for a key and gives it as a one-character string.
-INKEY$|m|INKEY$ time|Waits up to that many centiseconds for a key and gives it as a string, or an empty string when none comes.
-LEFT$(|m|LEFT$(string$, count)|The first characters of a string.
-MID$(|m|MID$(string$, start [, count])|Characters from the middle of a string, from a position counted from 1.
-RIGHT$(|m|RIGHT$(string$, count)|The last characters of a string.
-STR$|m|STR$ number / STR$~ number|A number as the string PRINT would give, or with ~ in hexadecimal.
-STRING$(|m|STRING$(count, string$)|A string repeated that many times.
-EOF|m|EOF#channel|TRUE when an open file has been read to its end.
-AUTO|m|AUTO [start [, step]]|Numbers lines as they are typed, from 10 by 10 unless told otherwise; ESCAPE stops it.
-DELETE|m|DELETE first, last|Removes a range of lines from the program.
-LOAD|m|LOAD name$|Loads a program from the current filing system, replacing the one in memory.
-LIST|m|LIST [first] [, last]|Lists the program, or the lines given.
-NEW|m|NEW|Removes the program, which OLD can bring back if nothing has been typed since.
-OLD|m|OLD|Brings back the program NEW removed.
-RENUMBER|m|RENUMBER [start [, step]]|Renumbers the program, from 10 by 10 unless told otherwise, changing GOTO, GOSUB and the other references to match.
-SAVE|m|SAVE name$|Saves the program to the current filing system.
-SOUND|m|SOUND channel, amplitude, pitch, duration|Plays a note: channel 0-3 (0 is noise), an amplitude from -15 to 0 or an envelope from 1, a pitch from 0 to 255 in quarter semitones, and a duration in twentieths of a second.
-BPUT|m|BPUT#channel, byte|Writes one byte to an open file.
-CALL|m|CALL address [, parameters]|Calls machine code with A, X, Y and the carry from A%, X%, Y% and C%; parameters are described in a block at &600.
-CHAIN|m|CHAIN name$|Loads a program and runs it.
-CLEAR|m|CLEAR|Clears every variable but the resident integers @% and A% to Z%, and forgets the FNs and PROCs found.
-CLOSE|m|CLOSE#channel|Closes an open file, or with channel 0 every one.
-CLG|m|CLG|Clears the graphics window to the graphics background colour.
-CLS|m|CLS|Clears the text window and puts the cursor at its top left.
-DATA|m|DATA item [, item ...]|Holds constants for READ; the rest of the line is the items.
-DEF|m|DEF PROCname[(parameters)] / DEF FNname[(parameters)] = expression|Starts the definition of a procedure, which ENDPROC ends, or a function, which = ends with its value. A program must not run into a DEF.
-DIM|m|DIM a(size [, size ...]) / DIM v size|Makes arrays, each dimension from 0 to its size; or, with no bracket, reserves size + 1 bytes and puts their address in v.
-DRAW|m|DRAW x, y|Draws a line in the graphics foreground colour from the last point to x, y.
-END|m|END|Ends the program and returns to the prompt.
-ENDPROC|m|ENDPROC|Returns from a procedure, giving its parameters and LOCAL variables their old values back.
-ENVELOPE|m|ENVELOPE n, t, pi1, pi2, pi3, pn1, pn2, pn3, aa, ad, as, ar, ala, ald|Defines sound envelope n (1-4): the pitch's three steps and their counts, and the amplitude's attack, decay, sustain and release.
-FOR|m|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment until v passes end. The body always runs at least once.
-GOSUB|m|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
-GOTO|m|GOTO line|Continues at a line, which may be an expression.
-GCOL|m|GCOL action, colour|Sets the graphics foreground colour, or with 128 added the background, and how it is drawn: 0 plot, 1 OR, 2 AND, 3 EOR, 4 invert.
-IF|m|IF condition [THEN] statements [ELSE statements]|Runs the statements after THEN when the condition is not zero, otherwise those after ELSE, or goes on with the next line.
-INPUT|m|INPUT ["prompt"[,]] v [, v ...]|Reads values typed at the keyboard into variables; a comma after the prompt adds a question mark.
-LET|m|[LET] v = expression|Assigns a value; LET itself can be left out.
-LOCAL|m|LOCAL v [, v ...]|In a procedure or function: makes variables local, giving them their old values back when it returns.
-MODE|m|MODE n|Changes the screen mode, 0-7, clearing the screen.
-MOVE|m|MOVE x, y|Moves the graphics cursor to x, y without drawing.
+AND|o|a AND b|Bitwise AND of two 32-bit integers; with TRUE (-1) and FALSE (0) it is the logical AND.
+DIV|o|a DIV b|Integer division: the quotient of two integers, without its fraction.
+EOR|o|a EOR b|Bitwise exclusive OR of two 32-bit integers.
+MOD|o|a MOD b|The remainder of an integer division.
+OR|o|a OR b|Bitwise OR of two 32-bit integers; with TRUE and FALSE it is the logical OR.
+ERROR|o|ON ERROR statements / ON ERROR OFF|With ON, sets the statements that run when an error happens; ON ERROR OFF goes back to BASIC's own report.
+LINE|o|INPUT LINE v$|With INPUT, reads a whole line into a string, commas and leading spaces included.
+OFF|o|ON ERROR OFF / TRACE OFF|Turns ON ERROR or TRACE off.
+STEP|o|FOR v = start TO end STEP increment|The amount NEXT adds to a FOR loop's variable; 1 when left out.
+SPC|o|SPC count|In PRINT or INPUT: prints that many spaces.
+TAB(|o|TAB(column) / TAB(column, row)|In PRINT or INPUT: moves to a column on the line, or with two numbers to a column and row on the screen.
+ELSE|o|IF condition THEN statements ELSE statements|Gives the statements, or a line number, an IF runs when its condition is false.
+THEN|o|IF condition THEN statements|Gives the statements, or a line number, an IF runs when its condition is true; it may be left out.
+OPENIN|o|channel = OPENIN name$|Opens a file to read, giving its channel number, or 0 when there is no such file.
+PTR|o|PTR#channel / PTR#channel = position|The position in an open file the next byte is read from or written at.
+PAGE|o|PAGE / PAGE = address|Where the program starts in memory; setting it, to a multiple of 256, moves where BASIC looks for it.
+TIME|o|TIME / TIME = value|The centisecond clock, which counts up 100 times a second; it can be set.
+LOMEM|o|LOMEM / LOMEM = address|Where BASIC's variables start, normally TOP, the end of the program.
+HIMEM|o|HIMEM / HIMEM = address|The top of the memory BASIC uses; lowering it keeps memory above it for machine code.
+ABS|o|ABS number|The number without its sign.
+ACS|o|ACS number|The arc cosine, in radians.
+ADVAL|o|ADVAL channel|An analogue channel's value (1-4), the fire buttons (0), or with a negative number the free space in an input or output buffer.
+ASC|o|ASC string$|The character code of the string's first character, or -1 for an empty string.
+ASN|o|ASN number|The arc sine, in radians.
+ATN|o|ATN number|The arc tangent, in radians.
+BGET|o|BGET#channel|Reads one byte from an open file.
+COS|o|COS angle|The cosine of an angle in radians.
+COUNT|o|COUNT|The characters printed since the last new line.
+DEG|o|DEG radians|Converts radians to degrees.
+ERL|o|ERL|The number of the line the last error happened in, or 0 for a typed command.
+ERR|o|ERR|The number of the last error.
+EVAL|o|EVAL string$|Evaluates an expression held in a string, as if it were typed in the program.
+EXP|o|EXP number|e raised to the power of the number.
+EXT|o|EXT#channel|The length of an open file.
+FALSE|o|FALSE|The value 0.
+FN|o|FNname[(arguments)]|Calls a function a DEF FN defines, giving the value its = returns.
+GET|o|GET|Waits for a key and gives its character code.
+INKEY|o|INKEY time / INKEY -key|Waits up to that many centiseconds for a key and gives its code, or -1 when none comes; with a negative number, tests whether that key is held down.
+INSTR(|o|INSTR(string$, find$ [, start])|The position of one string in another, from 1, or 0 when it is not there.
+INT|o|INT number|The largest whole number not greater than the number.
+LEN|o|LEN string$|The number of characters in a string.
+LN|o|LN number|The natural logarithm.
+LOG|o|LOG number|The logarithm to base 10.
+NOT|o|NOT number|Inverts every bit of a 32-bit integer; NOT TRUE is FALSE.
+OPENUP|o|channel = OPENUP name$|Opens a file to read and write, giving its channel number, or 0 when there is no such file.
+OPENOUT|o|channel = OPENOUT name$|Makes a new, empty file to write, giving its channel number.
+PI|o|PI|3.14159265.
+POINT(|o|POINT(x, y)|The logical colour of the graphics point at x, y, or -1 off the screen.
+POS|o|POS|The text cursor's column.
+RAD|o|RAD degrees|Converts degrees to radians.
+RND|o|RND / RND(n)|A random 32-bit integer; RND(1) a number from 0 to just under 1; RND(n) a whole number from 1 to n; a negative n seeds the generator.
+SGN|o|SGN number|-1, 0 or 1, by the number's sign.
+SIN|o|SIN angle|The sine of an angle in radians.
+SQR|o|SQR number|The square root.
+TAN|o|TAN angle|The tangent of an angle in radians.
+TO|o|FOR v = start TO end|Gives the value a FOR loop runs to.
+TRUE|o|TRUE|The value -1.
+USR|o|USR address|Calls machine code with A, X, Y and the carry from A%, X%, Y% and C%, and gives back P, Y, X and A as one 32-bit number.
+VAL|o|VAL string$|The number at the start of a string, or 0.
+VPOS|o|VPOS|The text cursor's row.
+CHR$|o|CHR$ code|The one-character string with that character code.
+GET$|o|GET$|Waits for a key and gives it as a one-character string.
+INKEY$|o|INKEY$ time|Waits up to that many centiseconds for a key and gives it as a string, or an empty string when none comes.
+LEFT$(|o|LEFT$(string$, count)|The first characters of a string.
+MID$(|o|MID$(string$, start [, count])|Characters from the middle of a string, from a position counted from 1.
+RIGHT$(|o|RIGHT$(string$, count)|The last characters of a string.
+STR$|o|STR$ number / STR$~ number|A number as the string PRINT would give, or with ~ in hexadecimal.
+STRING$(|o|STRING$(count, string$)|A string repeated that many times.
+EOF|o|EOF#channel|TRUE when an open file has been read to its end.
+AUTO|o|AUTO [start [, step]]|Numbers lines as they are typed, from 10 by 10 unless told otherwise; ESCAPE stops it.
+DELETE|o|DELETE first, last|Removes a range of lines from the program.
+LOAD|o|LOAD name$|Loads a program from the current filing system, replacing the one in memory.
+LIST|o|LIST [first] [, last]|Lists the program, or the lines given.
+NEW|o|NEW|Removes the program, which OLD can bring back if nothing has been typed since.
+OLD|o|OLD|Brings back the program NEW removed.
+RENUMBER|o|RENUMBER [start [, step]]|Renumbers the program, from 10 by 10 unless told otherwise, changing GOTO, GOSUB and the other references to match.
+SAVE|o|SAVE name$|Saves the program to the current filing system.
+SOUND|o|SOUND channel, amplitude, pitch, duration|Plays a note: channel 0-3 (0 is noise), an amplitude from -15 to 0 or an envelope from 1, a pitch from 0 to 255 in quarter semitones, and a duration in twentieths of a second.
+BPUT|o|BPUT#channel, byte|Writes one byte to an open file.
+CALL|o|CALL address [, parameters]|Calls machine code with A, X, Y and the carry from A%, X%, Y% and C%; parameters are described in a block at &600.
+CHAIN|o|CHAIN name$|Loads a program and runs it.
+CLEAR|o|CLEAR|Clears every variable but the resident integers @% and A% to Z%, and forgets the FNs and PROCs found.
+CLOSE|o|CLOSE#channel|Closes an open file, or with channel 0 every one.
+CLG|o|CLG|Clears the graphics window to the graphics background colour.
+CLS|o|CLS|Clears the text window and puts the cursor at its top left.
+DATA|o|DATA item [, item ...]|Holds constants for READ; the rest of the line is the items.
+DEF|o|DEF PROCname[(parameters)] / DEF FNname[(parameters)] = expression|Starts the definition of a procedure, which ENDPROC ends, or a function, which = ends with its value. A program must not run into a DEF.
+DIM|o|DIM a(size [, size ...]) / DIM v size|Makes arrays, each dimension from 0 to its size; or, with no bracket, reserves size + 1 bytes and puts their address in v.
+DRAW|o|DRAW x, y|Draws a line in the graphics foreground colour from the last point to x, y.
+END|o|END|Ends the program and returns to the prompt.
+ENDPROC|o|ENDPROC|Returns from a procedure, giving its parameters and LOCAL variables their old values back.
+ENVELOPE|o|ENVELOPE n, t, pi1, pi2, pi3, pn1, pn2, pn3, aa, ad, as, ar, ala, ald|Defines sound envelope n (1-4): the pitch's three steps and their counts, and the amplitude's attack, decay, sustain and release.
+FOR|o|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment until v passes end. The body always runs at least once.
+GOSUB|o|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
+GOTO|o|GOTO line|Continues at a line, which may be an expression.
+GCOL|o|GCOL action, colour|Sets the graphics foreground colour, or with 128 added the background, and how it is drawn: 0 plot, 1 OR, 2 AND, 3 EOR, 4 invert.
+IF|o|IF condition [THEN] statements [ELSE statements]|Runs the statements after THEN when the condition is not zero, otherwise those after ELSE, or goes on with the next line.
+INPUT|o|INPUT ["prompt"[,]] v [, v ...]|Reads values typed at the keyboard into variables; a comma after the prompt adds a question mark.
+LET|o|[LET] v = expression|Assigns a value; LET itself can be left out.
+LOCAL|o|LOCAL v [, v ...]|In a procedure or function: makes variables local, giving them their old values back when it returns.
+MODE|o|MODE n|Changes the screen mode, 0-7, clearing the screen.
+MOVE|o|MOVE x, y|Moves the graphics cursor to x, y without drawing.
+NEXT|o|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
+ON|o|ON n GOTO line, ... [ELSE statements] / ON n GOSUB line, ...|Jumps to, or calls, the nth line of the list; runs the statements after ELSE when n is out of range.
+VDU|o|VDU code [, code ...]|Sends bytes to the screen driver: a semicolon after a number sends it as two bytes, low first.
+PLOT|o|PLOT k, x, y|Draws graphics: k says what, such as 4 move, 5 draw a line, 69 a point and 85 a triangle with the last two points.
+PRINT|o|PRINT [items]|Prints numbers and strings: ; keeps the cursor where it is, a comma moves to the next field, ' starts a new line, and ~ prints numbers in hexadecimal.
+PROC|o|PROCname[(arguments)]|Calls a procedure a DEF PROC defines.
+READ|o|READ v [, v ...]|Takes the next items from DATA statements into variables.
+REM|o|REM text|A remark: the rest of the line is ignored.
+REPEAT|o|REPEAT|Starts a loop that runs until the condition of its UNTIL is true.
+REPORT|o|REPORT|Prints the last error's message.
+RESTORE|o|RESTORE [line]|Makes READ start again at the program's first DATA item, or at the line given.
+RETURN|o|RETURN|Returns from a GOSUB to the statement after it.
+RUN|o|RUN|Clears the variables and runs the program from its first line.
+STOP|o|STOP|Stops the program with the message STOP, which reports its line.
+COLOUR|o|COLOUR n|Sets the text foreground colour, or with 128 added the background.
+TRACE|o|TRACE ON / TRACE OFF / TRACE line|Prints each line number as the program runs, or only those below the line given.
+UNTIL|o|UNTIL condition|Ends a REPEAT loop: goes back to the REPEAT while the condition is false.
+WIDTH|o|WIDTH n|Makes PRINT start a new line after n characters; WIDTH 0 turns it off.
+OSCLI|o|OSCLI string$|Passes a string to the operating system as a * command.
+
+# MBASIC, BASIC-80 5.21 for CP/M: % integers, ! single and # double precision, $ strings of up to 255 characters, names of up to 40 significant characters, true as -1, and reserved words set apart from names.
+END|m|END|Stops the program, closes all files and returns to Ok; CONT continues after it.
+FOR|m|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
 NEXT|m|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
-ON|m|ON n GOTO line, ... [ELSE statements] / ON n GOSUB line, ...|Jumps to, or calls, the nth line of the list; runs the statements after ELSE when n is out of range.
-VDU|m|VDU code [, code ...]|Sends bytes to the screen driver: a semicolon after a number sends it as two bytes, low first.
-PLOT|m|PLOT k, x, y|Draws graphics: k says what, such as 4 move, 5 draw a line, 69 a point and 85 a triangle with the last two points.
-PRINT|m|PRINT [items]|Prints numbers and strings: ; keeps the cursor where it is, a comma moves to the next field, ' starts a new line, and ~ prints numbers in hexadecimal.
-PROC|m|PROCname[(arguments)]|Calls a procedure a DEF PROC defines.
+DATA|m|DATA item [, item ...]|Holds constants for READ. Items are numbers or strings; quotes are needed only around commas, colons or leading spaces.
+INPUT|m|INPUT [;] ["prompt";] v [, v ...] / INPUT #file, v [, v ...]|Reads values typed at the keyboard, asking again when they do not fit, or items from a sequential file. A comma after the prompt leaves out the question mark.
+DIM|m|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from OPTION BASE (0 by default) to its size. An array used without DIM runs to 10.
 READ|m|READ v [, v ...]|Takes the next items from DATA statements into variables.
-REM|m|REM text|A remark: the rest of the line is ignored.
-REPEAT|m|REPEAT|Starts a loop that runs until the condition of its UNTIL is true.
-REPORT|m|REPORT|Prints the last error's message.
-RESTORE|m|RESTORE [line]|Makes READ start again at the program's first DATA item, or at the line given.
+LET|m|[LET] v = expression|Assigns a value; LET itself can be left out.
+GOTO|m|GOTO line|Continues at a line. GO TO, with a space, is the same.
+RUN|m|RUN [line] / RUN "file" [, R]|Clears the variables and runs the program, from its first line or the line given; with a file, loads that program first, and R leaves files open.
+IF|m|IF condition THEN statements [ELSE statements] / IF condition GOTO line [ELSE statements]|Runs what follows THEN or GOTO when the condition is not zero; otherwise what follows ELSE, or the next line. A line number alone jumps there.
+RESTORE|m|RESTORE [line]|Makes READ start again at the program's first DATA item, or at the first on or after a line.
+GOSUB|m|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
 RETURN|m|RETURN|Returns from a GOSUB to the statement after it.
-RUN|m|RUN|Clears the variables and runs the program from its first line.
-STOP|m|STOP|Stops the program with the message STOP, which reports its line.
-COLOUR|m|COLOUR n|Sets the text foreground colour, or with 128 added the background.
-TRACE|m|TRACE ON / TRACE OFF / TRACE line|Prints each line number as the program runs, or only those below the line given.
-UNTIL|m|UNTIL condition|Ends a REPEAT loop: goes back to the REPEAT while the condition is false.
-WIDTH|m|WIDTH n|Makes PRINT start a new line after n characters; WIDTH 0 turns it off.
-OSCLI|m|OSCLI string$|Passes a string to the operating system as a * command.
+REM|m|REM text|A remark: the rest of the line is ignored.
+STOP|m|STOP|Stops the program with Break in and its line, leaving files open; CONT continues after it.
+PRINT|m|PRINT [items] / PRINT #file, items / PRINT [#file,] USING "format"; items|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next 14-column zone, and no punctuation at the end starts a new line. ? is short for PRINT.
+CLEAR|m|CLEAR [, [top] [, stack]]|Closes files and clears every variable, array and string; a top sets the highest address BASIC uses, and a stack size the room for its stack.
+LIST|m|LIST [first] [- [last]]|Lists the program, or the lines given; a period is the line last listed or edited.
+NEW|m|NEW|Erases the program and its variables, and closes all files.
+ON|m|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...] / ON ERROR GOTO line|Jumps to, or calls, the nth line of the list, going on with the next statement when n is 0 or past the list. ON ERROR GOTO sends errors to a line, and ON ERROR GOTO 0 turns that off.
+NULL|m|NULL n|Sets how many null characters, 0-255, end each printed line, for slow terminals.
+WAIT|m|WAIT port, mask [, flip]|Waits until the byte read from a port, exclusive-ored with flip and then anded with mask, is not zero.
+DEF|m|DEF FNname [(parameter [, ...])] = expression / DEF USRn = address|Defines a one-line function, called as FNname(values), or where USRn's machine code is, n 0-9.
+POKE|m|POKE address, value|Stores a byte in memory.
+CONT|m|CONT|Continues a program after STOP, END or Control-C, if it has not been changed.
+OUT|m|OUT port, value|Writes a byte to a Z80 port.
+LPRINT|m|LPRINT [items] / LPRINT USING "format"; items|Prints to the printer, as PRINT does to the screen.
+LLIST|m|LLIST [first] [- [last]]|Lists the program, or the lines given, on the printer.
+WIDTH|m|WIDTH [LPRINT] n|Sets the width of a line on the terminal, or with LPRINT the printer, 15-255; 255 means lines never wrap.
+ELSE|m|IF condition THEN statements ELSE statements|Gives what IF runs when its condition does not hold; a line number alone jumps there.
+TRON|m|TRON|Prints each line number, in brackets, as it runs.
+TROFF|m|TROFF|Turns TRON off.
+SWAP|m|SWAP v1, v2|Exchanges the values of two variables, or array elements, of the same type.
+ERASE|m|ERASE array [, array ...]|Removes arrays, freeing their memory so they can be dimensioned again.
+EDIT|m|EDIT line|Edits a line with the line editor's single-key commands; a period is the current line.
+ERROR|m|ERROR code|Causes the error with that code, 1-255; a code BASIC does not use gives Unprintable error unless ON ERROR handles it.
+RESUME|m|RESUME [0 / NEXT / line]|Ends an error handler: runs the failed statement again, the one after it, or a line.
+DELETE|m|DELETE [first] [- last]|Deletes a line, or the lines from first to last.
+AUTO|m|AUTO [start] [, increment]|Numbers lines as you type them, from 10 by 10 unless told otherwise, until Control-C. An asterisk marks a line that already exists.
+RENUM|m|RENUM [new] [, old] [, increment]|Renumbers the lines from old on, beginning with new and counting by increment (10, the first line and 10 by default), and the references to them.
+DEFSTR|m|DEFSTR letter [- letter] [, ...]|Makes variables starting with those letters strings, without a $.
+DEFINT|m|DEFINT letter [- letter] [, ...]|Makes variables starting with those letters integers, without a %.
+DEFSNG|m|DEFSNG letter [- letter] [, ...]|Makes variables starting with those letters single precision, without a !.
+DEFDBL|m|DEFDBL letter [- letter] [, ...]|Makes variables starting with those letters double precision, without a #.
+LINE|m|LINE INPUT [;] ["prompt";] s$ / LINE INPUT #file, s$|Reads a whole line, commas and quotes included, from the keyboard or a sequential file into a string.
+WHILE|m|WHILE condition|Starts a loop that runs the statements up to WEND while the condition is not zero; it is tested before each pass.
+WEND|m|WEND|Ends a WHILE loop: goes back to its WHILE to test the condition again.
+CALL|m|CALL v [(argument [, argument ...])]|Calls machine code at the address a variable holds, passing the addresses of the arguments.
+WRITE|m|WRITE [#file,] items|Writes items separated by commas, with strings in quotes, to the screen or a sequential file, for INPUT to read back.
+COMMON|m|COMMON v [, v ...]|Names the variables, arrays as a(), that CHAIN passes to the program it runs.
+CHAIN|m|CHAIN [MERGE] "file" [, line] [, ALL] [, DELETE first - last]|Loads and runs another program, from its first line or the line given, passing the COMMON variables, or every one with ALL. MERGE adds its lines to the program in memory, after DELETE removes those given.
+OPTION|m|OPTION BASE 0 / OPTION BASE 1|Makes arrays' subscripts start at 0 or 1; it must come before any array is used.
+RANDOMIZE|m|RANDOMIZE [seed]|Seeds RND with a number from -32768 to 32767, asking for one when none is given.
+SYSTEM|m|SYSTEM|Closes all files and returns to CP/M.
+OPEN|m|OPEN "mode", [#]file, "name" [, length]|Opens a disk file as file n: for sequential input (I) or output (O), or random access (R) with records of length bytes (128 by default).
+FIELD|m|FIELD [#]file, width AS s$ [, ...]|Divides a random file's buffer into string fields.
+GET|m|GET [#]file [, record]|Reads a record of a random file into its buffer, the next one when no number is given.
+PUT|m|PUT [#]file [, record]|Writes a random file's buffer as a record, the next one when no number is given.
+CLOSE|m|CLOSE [[#]file [, ...]]|Closes files, all when none are named.
+LOAD|m|LOAD "file" [, R]|Loads a program from disk, closing open files, and with R runs it with them left open.
+MERGE|m|MERGE "file"|Adds the lines of a program saved as text (with SAVE "file", A) to the one in memory.
+FILES|m|FILES ["name"]|Lists the files on the disk, or those a name with ? and * wildcards matches.
+NAME|m|NAME "old" AS "new"|Renames a disk file.
+KILL|m|KILL "file"|Deletes a disk file.
+LSET|m|LSET s$ = t$|Puts a string in a field, or any string variable, on the left, padded with spaces.
+RSET|m|RSET s$ = t$|Puts a string in a field, or any string variable, on the right, padded with spaces.
+SAVE|m|SAVE "file" [, A / , P]|Saves the program to disk: tokenized, as text with A, or protected, so it cannot be listed or edited, with P.
+RESET|m|RESET|Closes all files and resets CP/M's disks, after a disk is changed.
+TO|m|FOR v = start TO end|Gives the end value of a FOR loop.
+THEN|m|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
+TAB(|m|TAB(column)|In PRINT and LPRINT: moves to a column, 1 at the left.
+STEP|m|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
+USR|m|USR[n](x)|Calls the machine code DEF USRn names, n 0-9, with x, and returns its result.
+FN|m|FNname [(value [, ...])]|Calls a function DEF FN defined.
+SPC(|m|SPC(count)|In PRINT and LPRINT: prints that many spaces.
+NOT|m|NOT x|The bitwise complement of an integer, -32768 to 32767; NOT of true (-1) is false (0).
+ERL|m|ERL|The line of the last error.
+ERR|m|ERR|The last error's code.
+STRING$|m|STRING$(n, c)|A string of n copies of a character, given by its code or a string.
+USING|m|PRINT USING "format"; items|Prints numbers and strings in a format: # digits, . and , in numbers, $$ and ** for money, ^^^^ for an exponent, !, & and \ \ for strings.
+INSTR|m|INSTR([start,] s$, t$)|Where t$ first appears in s$, looking from position start (1 by default) on, or 0.
+'|m|' text|A remark, like :REM: the rest of the line is ignored.
+VARPTR|m|VARPTR(v) / VARPTR(#file)|The address of a variable's value, or of a string's descriptor; with a file, the address of its file control block.
+INKEY$|m|INKEY$|The key being pressed, or an empty string; it does not wait or echo.
+>|m|a > b|Greater than: -1 when a is greater than b, else 0. Also part of >= and <>.
+=|m|a = b|Assigns in LET; compares elsewhere.
+<|m|a < b|Less than. Also part of <= and <>.
++|m|a + b|Adds numbers, or joins strings.
+-|m|a - b, -a|Subtracts, or negates.
+*|m|a * b|Multiplies.
+/|m|a / b|Divides.
+^|m|a ^ b|Raises a to the power b.
+AND|m|a AND b|The bitwise and of integers, -32768 to 32767; true is -1.
+OR|m|a OR b|The bitwise or of integers, -32768 to 32767; true is -1.
+XOR|m|a XOR b|The bitwise exclusive or of integers, -32768 to 32767.
+EQV|m|a EQV b|Bitwise equivalence of integers: each bit is 1 where a's and b's are the same, NOT (a XOR b).
+IMP|m|a IMP b|Bitwise implication of integers: each bit is 0 only where a's is 1 and b's is 0, (NOT a) OR b.
+MOD|m|a MOD b|The remainder of a divided by b, both rounded to integers, with the sign of a.
+\|m|a \ b|Integer division: a divided by b, both rounded to integers, the fraction dropped.
+LEFT$|m|LEFT$(s$, n)|A string's first n characters.
+RIGHT$|m|RIGHT$(s$, n)|A string's last n characters.
+MID$|m|MID$(s$, start [, n])|Characters from a string, starting at position start (1 is the first). Assigning to MID$ replaces them.
+SGN|m|SGN(x)|-1, 0 or 1 as x is negative, zero or positive.
+INT|m|INT(x)|The greatest whole number not greater than x.
+ABS|m|ABS(x)|The absolute value of x.
+SQR|m|SQR(x)|The square root of x.
+RND|m|RND[(x)]|A random number between 0 and 1: the next one, or with x 0 the last again, and with a negative x a new sequence.
+SIN|m|SIN(x)|The sine of an angle in radians.
+LOG|m|LOG(x)|The natural logarithm of x.
+EXP|m|EXP(x)|e raised to the power x.
+COS|m|COS(x)|The cosine of an angle in radians.
+TAN|m|TAN(x)|The tangent of an angle in radians.
+ATN|m|ATN(x)|The arctangent of x, in radians.
+FRE|m|FRE(x)|The free memory in bytes; FRE of a string collects unused strings first.
+INP|m|INP(port)|Reads a byte from a Z80 port.
+POS|m|POS(x)|The cursor's column, 1 at the left; x is ignored.
+LEN|m|LEN(s$)|The number of characters in a string.
+STR$|m|STR$(x)|A number as a string, as PRINT would write it.
+VAL|m|VAL(s$)|The number at the start of a string, or 0.
+ASC|m|ASC(s$)|The code of a string's first character.
+CHR$|m|CHR$(code)|A one-character string with that code.
+PEEK|m|PEEK(address)|The byte in memory at an address.
+SPACE$|m|SPACE$(n)|A string of n spaces.
+OCT$|m|OCT$(n)|A number, rounded to an integer, in octal.
+HEX$|m|HEX$(n)|A number, rounded to an integer, in hexadecimal.
+LPOS|m|LPOS(x)|The printer's column, as LPRINT has counted it; x is ignored.
+CINT|m|CINT(x)|x rounded to an integer, -32768 to 32767.
+CSNG|m|CSNG(x)|x as single precision.
+CDBL|m|CDBL(x)|x as double precision.
+FIX|m|FIX(x)|x with its fraction dropped, toward zero.
+CVI|m|CVI(s$)|The integer a two-character field holds.
+CVS|m|CVS(s$)|The single-precision number a four-character field holds.
+CVD|m|CVD(s$)|The double-precision number an eight-character field holds.
+EOF|m|EOF(file)|-1 at the end of a sequential file being read, else 0.
+LOC|m|LOC(file)|The number of the last record read or written in a random file; for a sequential file, the 128-byte sectors read or written.
+LOF|m|LOF(file)|The length of a file in 128-byte records.
+MKI$|m|MKI$(n)|An integer as a two-character field.
+MKS$|m|MKS$(x)|A single-precision number as a four-character field.
+MKD$|m|MKD$(x)|A double-precision number as an eight-character field.
 # Commodore PET BASIC 1 and 2: five-byte reals, % integers and $ strings, names read by their first two characters, true as -1, and files numbered 1-255 on devices: 0 the keyboard, 1 and 2 the cassettes, 3 the screen, 4 and up the IEEE-488 bus (a printer is usually 4, a disk drive 8).
 END|p|END|Stops the program and returns to READY.; CONT continues after it.
 FOR|p|FOR v = start TO end [STEP increment]|Starts a loop: sets v, a real variable, to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.

@@ -68,7 +68,11 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic || dialect is ColorBasicDialect))
+            {
+                break;
+            }
+
             // The PET's CRUNCH takes the first reserved word in token order at each place and goes on past it, with no
             // word boundaries, so THEN right after a digit is a jump and the end of FOR and an EM after it are no REM.
             // BASIC 1 skips spaces inside a word too, so R E M is a remark there.
@@ -103,8 +107,10 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (StartsWord(text, index, "REM")) { break; }
-            if (StartsWord(text, index, "DATA"))
+            // Business BASIC and MBASIC take REM and DATA only set apart from names, as REMAIN is a variable.
+            bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
+            if (separated ? SetApart(text, index, "REM") : StartsWord(text, index, "REM")) { break; }
+            if (separated ? SetApart(text, index, "DATA") : StartsWord(text, index, "DATA"))
             {
                 index = SkipData(text, index);
                 continue;
@@ -175,8 +181,9 @@ public sealed partial class BasicProgram
     private static (string Word, bool List, bool Required)? Jump(BasicDialect dialect, string text, int index, out int after)
     {
         after = index;
-        bool business = dialect == BasicDialect.BusinessBasic;
-        if (index > 0 && InName(text[index - 1], business)) { return null; }
+        // Business BASIC and MBASIC take a word only set apart from names, which hold periods in both.
+        bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
+        if (index > 0 && InName(text[index - 1], separated)) { return null; }
         int end = -1;
         (string Word, bool List, bool Required)? found = null;
         if (GoTo().Match(text, index) is { Success: true } go && go.Index == index)
@@ -204,14 +211,14 @@ public sealed partial class BasicProgram
         }
 
         if (found is null) { return null; }
-        if (business && end < text.Length && InName(text[end], business)) { return null; }
+        if (separated && end < text.Length && InName(text[end], separated)) { return null; }
         after = end;
         return found;
     }
 
-    // Whether a character can be part of a name; Business BASIC's names hold periods.
-    private static bool InName(char character, bool business) =>
-        char.IsAsciiLetterOrDigit(character) || (business && character == '.');
+    // Whether a character can be part of a name; Business BASIC's and MBASIC's names hold periods.
+    private static bool InName(char character, bool periods) =>
+        char.IsAsciiLetterOrDigit(character) || (periods && character == '.');
 
     // Reads the line numbers and labels after a jump word: one, or a list after GOTO and GOSUB.
     private static int Targets(
@@ -267,6 +274,19 @@ public sealed partial class BasicProgram
         }
 
         return text.Length;
+    }
+
+    // Whether a word starts at an index with no name's character, a period included, before or after it.
+    private static bool SetApart(string text, int index, string word)
+    {
+        if (index > 0 && InName(text[index - 1], periods: true)) { return false; }
+        if (string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            return false;
+        }
+
+        int end = index + word.Length;
+        return end >= text.Length || !InName(text[end], periods: true);
     }
 
     private static bool StartsWord(string text, int index, string word, bool spaced = false)

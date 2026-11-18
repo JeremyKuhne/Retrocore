@@ -94,6 +94,7 @@ function dialectName(dialect: string, machine: Machine): string {
         case "level2": return "Level II BASIC";
         case "business": return "Business BASIC";
         case "colorbasic": return "Color BASIC";
+        case "mbasic": return "MBASIC";
         // The PET's one dialect is the version its ROMs have: BASIC 1 on the 2001, BASIC 4 on the 4032, else BASIC 2.
         case "petbasic": {
             const model = String(machine.configuration.model ?? "");

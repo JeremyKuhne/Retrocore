@@ -69,11 +69,20 @@ public sealed partial class BasicProgram
             }
 
             if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
-            // BASIC 1 skips spaces inside a reserved word, so R E M is a remark there too. Its CRUNCH takes the first
-            // word in token order at each place and goes on past it, so the end of F O R and an E M after it are no REM.
-            if (Spaced(dialect))
+            // The PET's CRUNCH takes the first reserved word in token order at each place and goes on past it, with no
+            // word boundaries, so THEN right after a digit is a jump and the end of FOR and an EM after it are no REM.
+            // BASIC 1 skips spaces inside a word too, so R E M is a remark there.
+            if (dialect is PetBasicDialect)
             {
-                (string? word, int length) = SpacedKeyword(dialect, text, index);
+                // BASIC 2 and 4's GO TO, with spaces between, is the GO token then TO, a jump all the same.
+                if (!Spaced(dialect) && GoTo().Match(text, index) is { Success: true } go && go.Index == index)
+                {
+                    bool sub = go.Groups["word"].Value.Equals("SUB", StringComparison.OrdinalIgnoreCase);
+                    index = Targets(text, index + go.Length, sub ? s_jumps[0] : s_jumps[1], labels, references) - 1;
+                    continue;
+                }
+
+                (string? word, int length) = KeywordAt(dialect, text, index);
                 if (word is null) { continue; }
                 if (word == "REM") { break; }
                 if (word == "DATA")
@@ -271,13 +280,17 @@ public sealed partial class BasicProgram
         return SpacedLength(text, index, word) >= 0;
     }
 
-    // The first reserved word in token order at an index, spaces skipped inside it, as BASIC 1's CRUNCH finds it, and
-    // the characters it takes; none when the character there starts no word.
-    private static (string? Word, int Length) SpacedKeyword(BasicDialect dialect, string text, int index)
+    // The first reserved word in token order at an index, as the PET's CRUNCH finds it (on BASIC 1 with spaces skipped
+    // inside it), and the characters it takes; none when the character there starts no word.
+    private static (string? Word, int Length) KeywordAt(BasicDialect dialect, string text, int index)
     {
+        bool spaced = Spaced(dialect);
         foreach (string keyword in dialect.Keywords)
         {
-            int length = SpacedLength(text, index, keyword);
+            int length = spaced
+                ? SpacedLength(text, index, keyword)
+                : string.Compare(text, index, keyword, 0, keyword.Length, StringComparison.OrdinalIgnoreCase) == 0 ? keyword.Length : -1;
+
             if (length > 0) { return (keyword, length); }
         }
 

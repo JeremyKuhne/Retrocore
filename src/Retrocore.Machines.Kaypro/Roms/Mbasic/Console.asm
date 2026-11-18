@@ -822,7 +822,7 @@ ISSTR1:
     PUSH AF                         ; save the width
     LD A,B
     OR A
-    CALL NZ,LEFTUS                  ; take up to the width, unless & 
+    CALL NZ,LEFTUS                  ; take up to the width, unless &
     CALL STRPRT                     ; print it
     LD HL,[FACLO]
     POP AF

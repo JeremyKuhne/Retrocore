@@ -114,9 +114,9 @@ FNLOP:
 SCANWF:
     CALL CHRGTR                     ; skip to the end of the statement
     JP Z,FORTRM
-    CP $A2                          ; ELSE
+    CP TK_ELSE                      ; ELSE
     JP Z,FNNWST
-    CP $CF                          ; THEN
+    CP TK_THEN                      ; THEN
     JP NZ,SCANWF
 FORTRM:
     OR A                            ; a colon: look at the next statement
@@ -140,17 +140,17 @@ FNNWST:
     CP $1A                          ; scanning for NEXT or for WEND?
     LD A,[HL]
     JP Z,NXTLOK
-    CP $B4                          ; WHILE: one more open
+    CP TK_WHILE                     ; WHILE: one more open
     JP Z,FORINC
-    CP $B5                          ; WEND
+    CP TK_WEND                      ; WEND
     JP NZ,FNLOP
     DEC B                           ; it closes a loop: the last one?
     JP NZ,FNLOP
     RET
 NXTLOK:
-    CP $82                          ; FOR: one more open
+    CP TK_FOR                       ; FOR: one more open
     JP Z,FORINC
-    CP $83                          ; NEXT
+    CP TK_NEXT                      ; NEXT
     JP NZ,FNLOP
 DECNXT:
     DEC B                           ; it closes a loop: the last one?

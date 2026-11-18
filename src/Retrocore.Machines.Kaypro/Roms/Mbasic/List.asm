@@ -125,9 +125,9 @@ PLOOP2:
     OR A
     LD [BC],A                       ; store it as it is
     RET Z                           ; the zero ends the line
-    CP $0B                          ; below OCTCON: not a constant
+    CP OCTCON                       ; below OCTCON: not a constant
     JP C,NTEMBL
-    CP $20                          ; tokens $0B-$1F are embedded constants
+    CP DBLCON+1                     ; tokens $0B-$1F are embedded constants
     LD E,A
     JP C,PRTVAR
 NTEMBL:
@@ -172,7 +172,7 @@ PLOOPR:
     AND $7F
 NTFNTK:
     INC HL                          ; past the token
-    CP $DB                          ; ' is stored as :REM'
+    CP TK_APOSTROPHE                ; ' is stored as :REM'
     JP NZ,NTQTTK
     DEC BC                          ; take back the :REM already stored
     DEC BC
@@ -183,14 +183,14 @@ NTFNTK:
     INC D
     INC D
 NTQTTK:
-    CP $A2                          ; ELSE is stored as :ELSE
+    CP TK_ELSE                      ; ELSE is stored as :ELSE
     CALL Z,DCXBRT                   ; take back the colon
-    CP $B4                          ; WHILE may be followed by a + token
+    CP TK_WHILE                     ; WHILE may be followed by a + token
     JP NZ,BFNTWH
     LD A,[HL]
     INC HL
-    CP $F2                          ; the + token: skip it
-    LD A,$B4
+    CP TK_PLUS                      ; the + token: skip it
+    LD A,TK_WHILE
     JP Z,BFNTWH
     DEC HL
 BFNTWH:
@@ -216,9 +216,9 @@ RESSR2:
     CP B
     JP NZ,RESSR1
     EX DE,HL                        ; HL = the word, after its first letter
-    CP $D2                          ; USR and FN take no space after them
+    CP TK_USR                       ; USR and FN take no space after them
     JP Z,NOISPA
-    CP $D3
+    CP TK_FN
 NOISPA:
     LD A,C                          ; A = the word's letter
     POP DE
@@ -300,9 +300,9 @@ NUMLIN:
     POP AF                          ; A = its token
     LD BC,CONLIN                    ; the printing returns there
     PUSH BC
-    CP $0B                          ; OCTCON
+    CP OCTCON
     JP Z,FOUTO
-    CP $0C                          ; HEXCON
+    CP HEXCON
     JP Z,FOUTH
     LD HL,[CONLO]                   ; a line number constant's value
     JP FOUT
@@ -631,13 +631,13 @@ SCNEX2:
     OR A
     LD A,C
     JP Z,SCNPT2                     ; pointers to numbers
-    CP $A8                          ; ERROR
+    CP TK_ERROR                     ; ERROR
     JP NZ,NTERRG
     CALL CHRGTR
-    CP $89                          ; ERROR GOTO
+    CP TK_GOTO                      ; ERROR GOTO
     JP NZ,SCNEX2
     CALL CHRGTR
-    CP $0E                          ; LINCON
+    CP LINCON
     JP NZ,SCNEX2
     PUSH DE
     CALL LINGT3                     ; DE = the line number
@@ -646,7 +646,7 @@ SCNEX2:
     JP NZ,CHGPTR
     JP SCNEX3                       ; ON ERROR GOTO 0 stays a number
 NTERRG:
-    CP $0E                          ; LINCON: a line number
+    CP LINCON                       ; LINCON: a line number
     JP NZ,SCNEXT
     PUSH DE
     CALL LINGT3                     ; DE = the line number
@@ -654,7 +654,7 @@ CHGPTR:
     PUSH HL
     CALL FNDLIN                     ; find the line
     DEC BC                          ; BC = the zero ending the line before
-    LD A,$0D                        ; PTRCON
+    LD A,PTRCON
     JP C,MAKPTR                     ; found: make it a pointer
     CALL CRDONZ
     LD HL,LINM
@@ -679,7 +679,7 @@ JSCNXT:
 LINM:
     .byte "Undefined line ", 0
 SCNPT2:
-    CP $0D                          ; PTRCON: a pointer
+    CP PTRCON                       ; PTRCON: a pointer
     JP NZ,JSCNXT
     PUSH DE
     CALL LINGT3                     ; DE = the pointer
@@ -691,7 +691,7 @@ SCNPT2:
     LD C,[HL]                       ; BC = the line's number
     INC HL
     LD B,[HL]
-    LD A,$0E                        ; LINCON
+    LD A,LINCON
 MAKPTR:
     LD HL,SCNPOP                    ; go on scanning after the change
     PUSH HL

@@ -158,11 +158,11 @@ ALPTAB:
 ;; Each letter's list ends with a zero. ATAB is the first: the words that start with A.
 RESLST:
 ATAB:
-    RESWORD "UTO", $AB
-    RESWORD "ND", $F7
-    RESWORD "BS", $06               ; a function
-    RESWORD "TN", $0E               ; a function
-    RESWORD "SC", $15               ; a function
+    RESWORD "UTO", TK_AUTO
+    RESWORD "ND", TK_AND
+    RESWORD "BS", TF_ABS & $7F
+    RESWORD "TN", TF_ATN & $7F
+    RESWORD "SC", TF_ASC & $7F
     .byte 0
 
 ;; No reserved word starts with B: an empty list.
@@ -171,80 +171,80 @@ BTAB:
 
 ;; The reserved words that start with C.
 CTAB:
-    RESWORD "LOSE", $C3
-    RESWORD "ONT", $9A
-    RESWORD "LEAR", $92
-    RESWORD "INT", $1C              ; a function
-    RESWORD "SNG", $1D              ; a function
-    RESWORD "DBL", $1E              ; a function
-    RESWORD "VI", $2B               ; a function
-    RESWORD "VS", $2C               ; a function
-    RESWORD "VD", $2D               ; a function
-    RESWORD "OS", $0C               ; a function
-    RESWORD "HR$", $16              ; a function
-    RESWORD "ALL", $B6
-    RESWORD "OMMON", $B8
-    RESWORD "HAIN", $B9
+    RESWORD "LOSE", TK_CLOSE
+    RESWORD "ONT", TK_CONT
+    RESWORD "LEAR", TK_CLEAR
+    RESWORD "INT", TF_CINT & $7F
+    RESWORD "SNG", TF_CSNG & $7F
+    RESWORD "DBL", TF_CDBL & $7F
+    RESWORD "VI", TF_CVI & $7F
+    RESWORD "VS", TF_CVS & $7F
+    RESWORD "VD", TF_CVD & $7F
+    RESWORD "OS", TF_COS & $7F
+    RESWORD "HR$", TF_CHR & $7F
+    RESWORD "ALL", TK_CALL
+    RESWORD "OMMON", TK_COMMON
+    RESWORD "HAIN", TK_CHAIN
     .byte 0
 
 ;; The reserved words that start with D.
 DTAB:
-    RESWORD "ELETE", $AA
-    RESWORD "ATA", $84
-    RESWORD "IM", $86
-    RESWORD "EFSTR", $AD
-    RESWORD "EFINT", $AE
-    RESWORD "EFSNG", $AF
-    RESWORD "EFDBL", $B0
-    RESWORD "EF", $98
+    RESWORD "ELETE", TK_DELETE
+    RESWORD "ATA", TK_DATA
+    RESWORD "IM", TK_DIM
+    RESWORD "EFSTR", TK_DEFSTR
+    RESWORD "EFINT", TK_DEFINT
+    RESWORD "EFSNG", TK_DEFSNG
+    RESWORD "EFDBL", TK_DEFDBL
+    RESWORD "EF", TK_DEF
     .byte 0
 
 ;; The reserved words that start with E.
 ETAB:
-    RESWORD "LSE", $A2
-    RESWORD "ND", $81
-    RESWORD "RASE", $A6
-    RESWORD "DIT", $A7
-    RESWORD "RROR", $A8
-    RESWORD "RL", $D6
-    RESWORD "RR", $D7
-    RESWORD "XP", $0B               ; a function
-    RESWORD "OF", $2F               ; a function
-    RESWORD "QV", $FA
+    RESWORD "LSE", TK_ELSE
+    RESWORD "ND", TK_END
+    RESWORD "RASE", TK_ERASE
+    RESWORD "DIT", TK_EDIT
+    RESWORD "RROR", TK_ERROR
+    RESWORD "RL", TK_ERL
+    RESWORD "RR", TK_ERR
+    RESWORD "XP", TF_EXP & $7F
+    RESWORD "OF", TF_EOF & $7F
+    RESWORD "QV", TK_EQV
     .byte 0
 
 ;; The reserved words that start with F.
 FTAB:
-    RESWORD "OR", $82
-    RESWORD "IELD", $C0
-    RESWORD "ILES", $C6
-    RESWORD "N", $D3
-    RESWORD "RE", $0F               ; a function
-    RESWORD "IX", $1F               ; a function
+    RESWORD "OR", TK_FOR
+    RESWORD "IELD", TK_FIELD
+    RESWORD "ILES", TK_FILES
+    RESWORD "N", TK_FN
+    RESWORD "RE", TF_FRE & $7F
+    RESWORD "IX", TF_FIX & $7F
     .byte 0
 
 ;; The reserved words that start with G.
 GTAB:
-    RESWORD "OTO", $89
-    RESWORD "O TO", $89
-    RESWORD "OSUB", $8D
-    RESWORD "ET", $C1
+    RESWORD "OTO", TK_GOTO
+    RESWORD "O TO", TK_GOTO
+    RESWORD "OSUB", TK_GOSUB
+    RESWORD "ET", TK_GET
     .byte 0
 
 ;; The reserved words that start with H.
 HTAB:
-    RESWORD "EX$", $1A              ; a function
+    RESWORD "EX$", TF_HEX & $7F
     .byte 0
 
 ;; The reserved words that start with I.
 ITAB:
-    RESWORD "NPUT", $85
-    RESWORD "F", $8B
-    RESWORD "NSTR", $DA
-    RESWORD "NT", $05               ; a function
-    RESWORD "NP", $10               ; a function
-    RESWORD "MP", $FB
-    RESWORD "NKEY$", $DD
+    RESWORD "NPUT", TK_INPUT
+    RESWORD "F", TK_IF
+    RESWORD "NSTR", TK_INSTR
+    RESWORD "NT", TF_INT & $7F
+    RESWORD "NP", TF_INP & $7F
+    RESWORD "MP", TK_IMP
+    RESWORD "NKEY$", TK_INKEY
     .byte 0
 
 ;; No reserved word starts with J: an empty list.
@@ -253,62 +253,62 @@ JTAB:
 
 ;; The reserved words that start with K.
 KTAB:
-    RESWORD "ILL", $C8
+    RESWORD "ILL", TK_KILL
     .byte 0
 
 ;; The reserved words that start with L.
 LTAB:
-    RESWORD "PRINT", $9E
-    RESWORD "LIST", $9F
-    RESWORD "POS", $1B              ; a function
-    RESWORD "ET", $88
-    RESWORD "INE", $B1
-    RESWORD "OAD", $C4
-    RESWORD "SET", $C9
-    RESWORD "IST", $93
-    RESWORD "OG", $0A               ; a function
-    RESWORD "OC", $30               ; a function
-    RESWORD "EN", $12               ; a function
-    RESWORD "EFT$", $01             ; a function
-    RESWORD "OF", $31               ; a function
+    RESWORD "PRINT", TK_LPRINT
+    RESWORD "LIST", TK_LLIST
+    RESWORD "POS", TF_LPOS & $7F
+    RESWORD "ET", TK_LET
+    RESWORD "INE", TK_LINE
+    RESWORD "OAD", TK_LOAD
+    RESWORD "SET", TK_LSET
+    RESWORD "IST", TK_LIST
+    RESWORD "OG", TF_LOG & $7F
+    RESWORD "OC", TF_LOC & $7F
+    RESWORD "EN", TF_LEN & $7F
+    RESWORD "EFT$", TF_LEFT & $7F
+    RESWORD "OF", TF_LOF & $7F
     .byte 0
 
 ;; The reserved words that start with M.
 MTAB:
-    RESWORD "ERGE", $C5
-    RESWORD "OD", $FC
-    RESWORD "KI$", $32              ; a function
-    RESWORD "KS$", $33              ; a function
-    RESWORD "KD$", $34              ; a function
-    RESWORD "ID$", $03              ; a function
+    RESWORD "ERGE", TK_MERGE
+    RESWORD "OD", TK_MOD
+    RESWORD "KI$", TF_MKI & $7F
+    RESWORD "KS$", TF_MKS & $7F
+    RESWORD "KD$", TF_MKD & $7F
+    RESWORD "ID$", TF_MID & $7F
     .byte 0
 
 ;; The reserved words that start with N.
 NTAB:
-    RESWORD "EXT", $83
-    RESWORD "ULL", $96
-    RESWORD "AME", $C7
-    RESWORD "EW", $94
-    RESWORD "OT", $D5
+    RESWORD "EXT", TK_NEXT
+    RESWORD "ULL", TK_NULL
+    RESWORD "AME", TK_NAME
+    RESWORD "EW", TK_NEW
+    RESWORD "OT", TK_NOT
     .byte 0
 
 ;; The reserved words that start with O.
 OTAB:
-    RESWORD "PEN", $BF
-    RESWORD "UT", $9D
-    RESWORD "N", $95
-    RESWORD "R", $F8
-    RESWORD "CT$", $19              ; a function
-    RESWORD "PTION", $BA
+    RESWORD "PEN", TK_OPEN
+    RESWORD "UT", TK_OUT
+    RESWORD "N", TK_ON
+    RESWORD "R", TK_OR
+    RESWORD "CT$", TF_OCT & $7F
+    RESWORD "PTION", TK_OPTION
     .byte 0
 
 ;; The reserved words that start with P.
 PTAB:
-    RESWORD "RINT", $91
-    RESWORD "UT", $C2
-    RESWORD "OKE", $99
-    RESWORD "OS", $11               ; a function
-    RESWORD "EEK", $17              ; a function
+    RESWORD "RINT", TK_PRINT
+    RESWORD "UT", TK_PUT
+    RESWORD "OKE", TK_POKE
+    RESWORD "OS", TF_POS & $7F
+    RESWORD "EEK", TF_PEEK & $7F
     .byte 0
 
 ;; No reserved word starts with Q: an empty list.
@@ -317,70 +317,70 @@ QTAB:
 
 ;; The reserved words that start with R.
 RTAB:
-    RESWORD "ETURN", $8E
-    RESWORD "EAD", $87
-    RESWORD "UN", $8A
-    RESWORD "ESTORE", $8C
-    RESWORD "EM", $8F
-    RESWORD "ESUME", $A9
-    RESWORD "SET", $CA
-    RESWORD "IGHT$", $02            ; a function
-    RESWORD "ND", $08               ; a function
-    RESWORD "ENUM", $AC
-    RESWORD "ESET", $CC
-    RESWORD "ANDOMIZE", $BB
+    RESWORD "ETURN", TK_RETURN
+    RESWORD "EAD", TK_READ
+    RESWORD "UN", TK_RUN
+    RESWORD "ESTORE", TK_RESTORE
+    RESWORD "EM", TK_REM
+    RESWORD "ESUME", TK_RESUME
+    RESWORD "SET", TK_RSET
+    RESWORD "IGHT$", TF_RIGHT & $7F
+    RESWORD "ND", TF_RND & $7F
+    RESWORD "ENUM", TK_RENUM
+    RESWORD "ESET", TK_RESET
+    RESWORD "ANDOMIZE", TK_RANDOMIZE
     .byte 0
 
 ;; The reserved words that start with S.
 STAB:
-    RESWORD "TOP", $90
-    RESWORD "WAP", $A5
-    RESWORD "AVE", $CB
-    RESWORD "PC(", $D4
-    RESWORD "TEP", $D1
-    RESWORD "GN", $04               ; a function
-    RESWORD "QR", $07               ; a function
-    RESWORD "IN", $09               ; a function
-    RESWORD "TR$", $13              ; a function
-    RESWORD "TRING$", $D8
-    RESWORD "PACE$", $18            ; a function
-    RESWORD "YSTEM", $BD
+    RESWORD "TOP", TK_STOP
+    RESWORD "WAP", TK_SWAP
+    RESWORD "AVE", TK_SAVE
+    RESWORD "PC(", TK_SPC
+    RESWORD "TEP", TK_STEP
+    RESWORD "GN", TF_SGN & $7F
+    RESWORD "QR", TF_SQR & $7F
+    RESWORD "IN", TF_SIN & $7F
+    RESWORD "TR$", TF_STR & $7F
+    RESWORD "TRING$", TK_STRING
+    RESWORD "PACE$", TF_SPACE & $7F
+    RESWORD "YSTEM", TK_SYSTEM
     .byte 0
 
 ;; The reserved words that start with T.
 TTAB:
-    RESWORD "HEN", $CF
-    RESWORD "RON", $A3
-    RESWORD "ROFF", $A4
-    RESWORD "AB(", $D0
-    RESWORD "O", $CE
-    RESWORD "AN", $0D               ; a function
+    RESWORD "HEN", TK_THEN
+    RESWORD "RON", TK_TRON
+    RESWORD "ROFF", TK_TROFF
+    RESWORD "AB(", TK_TAB
+    RESWORD "O", TK_TO
+    RESWORD "AN", TF_TAN & $7F
     .byte 0
 
 ;; The reserved words that start with U.
 UTAB:
-    RESWORD "SING", $D9
-    RESWORD "SR", $D2
+    RESWORD "SING", TK_USING
+    RESWORD "SR", TK_USR
     .byte 0
 
 ;; The reserved words that start with V.
 VTAB:
-    RESWORD "AL", $14               ; a function
-    RESWORD "ARPTR", $DC
+    RESWORD "AL", TF_VAL & $7F
+    RESWORD "ARPTR", TK_VARPTR
     .byte 0
 
 ;; The reserved words that start with W.
 WTAB:
-    RESWORD "IDTH", $A1
-    RESWORD "AIT", $97
-    RESWORD "HILE", $B4
-    RESWORD "END", $B5
-    RESWORD "RITE", $B7
+    RESWORD "IDTH", TK_WIDTH
+    RESWORD "AIT", TK_WAIT
+    RESWORD "HILE", TK_WHILE
+    RESWORD "END", TK_WEND
+    RESWORD "RITE", TK_WRITE
     .byte 0
 
 ;; The reserved words that start with X.
 XTAB:
-    RESWORD "OR", $F9
+    RESWORD "OR", TK_XOR
     .byte 0
 
 ;; No reserved word starts with Y: an empty list.
@@ -394,19 +394,19 @@ ZTAB:
 ;; The operators that are single characters, each with bit 7 set and then its token, ending with a zero. CRUNCH
 ;; looks a character up here when no reserved word starts with it.
 SPCTAB:
-    .byte '+' | $80, $F2
-    .byte '-' | $80, $F3
-    .byte '*' | $80, $F4
-    .byte '/' | $80, $F5
-    .byte '^' | $80, $F6
-    .byte $DC, $FD                  ; the backslash | $80: integer division
-    .byte $A7, $DB                  ; the apostrophe | $80: a remark
-    .byte '>' | $80, $EF
-    .byte '=' | $80, $F0
-    .byte '<' | $80, $F1
+    .byte '+' | $80, TK_PLUS
+    .byte '-' | $80, TK_MINUS
+    .byte '*' | $80, TK_TIMES
+    .byte '/' | $80, TK_DIVIDE
+    .byte '^' | $80, TK_POWER
+    .byte $DC, TK_IDIV              ; the backslash | $80: integer division
+    .byte $A7, TK_APOSTROPHE        ; the apostrophe | $80: a remark
+    .byte '>' | $80, TK_GREATER
+    .byte '=' | $80, TK_EQUAL
+    .byte '<' | $80, TK_LESS
     .byte 0
 
-;; Each operator's precedence, by its token less $F2: + - * / ^ AND OR XOR EQV IMP MOD and the backslash. FRMEVL
+;; Each operator's precedence, by its token less TK_PLUS: + - * / ^ AND OR XOR EQV IMP MOD and the backslash. FRMEVL
 ;; applies the operator on its left first when that one's precedence is at least as high.
 OPTAB:
     .byte 121                       ; +

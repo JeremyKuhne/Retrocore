@@ -50,8 +50,8 @@
 
 .include "Equates.asm"
 
-;; A reserved word in ALPTAB: its letters after the first, the last with bit 7 set, then its token. A token below
-;; $80 is a function's, which CRUNCH stores after $FF.
+;; A reserved word in ALPTAB: its letters after the first, the last with bit 7 set, then its token. A function's
+;; is its number less $80 (TF_ABS & $7F), which CRUNCH stores after TK_FUNCTION.
 .macro RESWORD rest, token
     .repeat .strlen(rest) - 1, index
     .byte .strat(rest, index)

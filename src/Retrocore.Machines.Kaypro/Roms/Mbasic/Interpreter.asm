@@ -44,13 +44,13 @@ FNDFOR:
 LOOPER:
     LD A,[HL]                       ; A = the entry's token
     INC HL
-    CP $B4                          ; the WHILE token
+    CP TK_WHILE                     ; the WHILE token
     JP NZ,STKSRC
     LD BC,$0006                     ; step over the WHILE entry
     ADD HL,BC
     JP LOOPER
 STKSRC:
-    CP $82                          ; the FOR token
+    CP TK_FOR                       ; the FOR token
     RET NZ                          ; any other entry ends the search
     LD C,[HL]                       ; BC = the loop variable's address
     INC HL
@@ -89,74 +89,74 @@ PRGEND:
     JP Z,ENDCNJ
     LD A,[ONEFLG]                   ; nonzero while a handler runs
     OR A
-    LD E,$13                        ; No RESUME
+    LD E,ERR_NR                     ; No RESUME
     JP NZ,ERROR
 ENDCNJ:
     JP ENDCON
 
 ;; Reports a Disk full error (61) through <ERROR>.
 DERDFL:
-    LD E,$3D
+    LD E,ERR_DFL
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Disk I/O error (57) through <ERROR>.
 DERDIO:
-    LD E,$39
+    LD E,ERR_DIO
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Bad file mode error (54) through <ERROR>.
 DERBFM:
-    LD E,$36
+    LD E,ERR_BFM
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a File not found error (53) through <ERROR>.
 DERFNF:
-    LD E,$35
+    LD E,ERR_FNF
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Bad file number error (52) through <ERROR>.
 DERBFN:
-    LD E,$34
+    LD E,ERR_BFN
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports an Internal error (51) through <ERROR>.
 DERIER:
-    LD E,$33
+    LD E,ERR_IER
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports an Input past end error (62) through <ERROR>.
 DERRPE:
-    LD E,$3E
+    LD E,ERR_RPE
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a File already open error (55) through <ERROR>.
 DERFAO:
-    LD E,$37
+    LD E,ERR_FAO
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Bad file name error (64) through <ERROR>.
 DERIFN:
-    LD E,$40
+    LD E,ERR_IFN
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Bad record number error (63) through <ERROR>.
 DERBRN:
-    LD E,$3F
+    LD E,ERR_BRN
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a FIELD overflow error (50) through <ERROR>.
 DERFOV:
-    LD E,$32
+    LD E,ERR_FOV
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Too many files error (67) through <ERROR>.
 DERTMF:
-    LD E,$43
+    LD E,ERR_TMF
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a File already exists error (58) through <ERROR>.
 DERFAE:
-    LD E,$3A
+    LD E,ERR_FAE
     JP ERROR
 
 ;; Reports a Syntax error in a DATA statement against the DATA line (DATLIN), not the line READ is on.
@@ -168,47 +168,47 @@ DATSNE:
 
 ;; Reports a Syntax error (2) through <ERROR>.
 SNERR:
-    LD E,$02
+    LD E,ERR_SN
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Division by zero error (11) through <ERROR>.
 DV0ERR:
-    LD E,$0B
+    LD E,ERR_DV0
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a NEXT without FOR error (1) through <ERROR>.
 NFERR:
-    LD E,$01
+    LD E,ERR_NF
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Duplicate Definition error (10) through <ERROR>.
 DDERR:
-    LD E,$0A
+    LD E,ERR_DD
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports an Undefined user function error (18) through <ERROR>.
 UFERR:
-    LD E,$12
+    LD E,ERR_UF
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a RESUME without error error (20) through <ERROR>.
 REERR:
-    LD E,$14
+    LD E,ERR_RE
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports an Overflow error (6) through <ERROR>.
 OVERR:
-    LD E,$06
+    LD E,ERR_OV
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Missing operand error (22) through <ERROR>.
 MOERR:
-    LD E,$16
+    LD E,ERR_MO
     .byte $01                       ; LD BC,nn: skips the next LD E
 
 ;; Reports a Type mismatch error (13) through <ERROR>.
 TMERR:
-    LD E,$0D
+    LD E,ERR_TM
 
 ;; Reports the error whose code is in E: records its line for ERL, then resets the stack and goes on in
 ;; <ERRMOR>.
@@ -281,16 +281,16 @@ NOTRAP:
     CALL CRDONZ                     ; start a new line if needed
     LD HL,ERRTAB
     LD A,E
-    CP $44                          ; past the last disk error
+    CP ERR_TMF+1                    ; past the last disk error
     JP NC,UPERR
-    CP $32                          ; a disk error
+    CP ERR_FOV                      ; a disk error
     JP NC,NTDER2
-    CP $1F                          ; a general error
+    CP ERR_WE+1                     ; a general error
     JP C,LEPSKP
 UPERR:
-    LD A,$28                        ; less $13 below: 21, Unprintable error
+    LD A,ERR_UE+ERR_FOV-ERR_WE-1    ; less $13 below: 21, Unprintable error
 NTDER2:
-    SUB $13                         ; a disk error's message follows the 30 general ones
+    SUB ERR_FOV-ERR_WE-1            ; a disk error's message follows the 30 general ones
     LD E,A
 LEPSKP:
     CALL ST_REM                     ; HL = the next zero byte
@@ -346,7 +346,7 @@ READY:
 REPCAL = * + 1 ;; the address READY calls to print Ok: 0 until INIT stores STROUT's in it
     CALL $0000
     LD A,[ERRFLG]                   ; the last error's code
-    SUB $02                         ; Syntax error
+    SUB ERR_SN                      ; Syntax error
     CALL Z,ERREDT                   ; edit the line it was in
 
 ;; The command loop: reads a line, runs it when it has no line number, and otherwise stores it in the program.
@@ -545,7 +545,7 @@ CZLOOP:
 CZLOO2:
     OR A
     JP Z,CZLIN                      ; the line's end
-    CP $20                          ; past the last constant token
+    CP DBLCON+1                     ; past the last constant token
     JP NC,CZLOOP
     CP $0B                          ; before the first
     JP C,CZLOOP
@@ -576,7 +576,7 @@ SCNLIN:
     PUSH DE
     JP Z,SNGLIN                     ; that line alone
     CALL SYNCHR                     ; a dash must follow
-    .byte $F3                       ; the minus token
+    .byte TK_MINUS                  ; the minus token
 ALLLST:
     LD DE,$FFFA                     ; 65530: to the end
     CALL NZ,LINSPC                  ; DE = the last line number
@@ -684,14 +684,14 @@ STUFFH:
     POP AF
     SUB ':'                         ; a colon starts crunching again
     JP Z,COLIS
-    CP $4A                          ; the DATA token less the colon
+    CP TK_DATA-':'                  ; the DATA token less the colon
     JP NZ,NODATT
     LD A,$01                        ; DATA: copy the rest as typed
 COLIS:
     LD [DORES],A
     LD [DONUM],A
 NODATT:
-    SUB $55                         ; the REM token less the colon
+    SUB TK_REM-':'                  ; the REM token less the colon
     JP NZ,KLOOP
     PUSH AF                         ; REM: copy to the line's end (terminator 0)
 KRNSTR:
@@ -712,7 +712,7 @@ STRNG2:
     JP KRNSTR
 NTDATA:
     CP '?'                          ; ? for PRINT
-    LD A,$91                        ; the PRINT token
+    LD A,TK_PRINT                   ; the PRINT token
     PUSH DE
     PUSH BC
     JP Z,NOTFN2
@@ -727,13 +727,13 @@ NTDATA:
     CALL CHRGTR                     ; skip a character and any spaces
     LD DE,TOTEX
     CALL CHKRES
-    LD A,$89                        ; the GOTO token
+    LD A,TK_GOTO                    ; the GOTO token
     JP Z,PUTGOS                     ; lands on the LD A below, so GO TO crunches as GOSUB
     LD DE,SUBTEX
     CALL CHKRES
     JP NZ,NOTGOS
 PUTGOS:
-    LD A,$8D                        ; the GOSUB token
+    LD A,TK_GOSUB                   ; the GOSUB token
     POP BC                          ; drop the saved text pointer
     JP NOTFN2
 
@@ -799,9 +799,9 @@ LOPPSI:
     CP '('                          ; TAB( and the like need no separator
     JP Z,ISRESW
     LD A,[DE]                       ; A = the token
-    CP $D3                          ; FN
+    CP TK_FN                        ; FN
     JP Z,ISRESW
-    CP $D2                          ; USR
+    CP TK_USR                       ; USR
     JP Z,ISRESW
     CALL MAKUPL
     CP '.'                          ; a dot continues a name
@@ -819,7 +819,7 @@ ISRESW:
     POP DE
     OR $80
     PUSH AF
-    LD A,$FF                        ; functions follow $FF
+    LD A,TK_FUNCTION                ; functions follow it
     CALL KRNSAV
     XOR A
     LD [DONUM],A                    ; numbers are constants
@@ -862,20 +862,20 @@ NOTFN3:
 
 ;; The tokens a line number may follow, which NOTFN2 looks for, ending in 0.
 LINRES:
-    .byte $8C                       ; RESTORE
-    .byte $AB                       ; AUTO
-    .byte $AC                       ; RENUM
-    .byte $AA                       ; DELETE
-    .byte $A7                       ; EDIT
-    .byte $A9                       ; RESUME
-    .byte $D6                       ; ERL
-    .byte $A2                       ; ELSE
-    .byte $8A                       ; RUN
-    .byte $93                       ; LIST
-    .byte $9F                       ; LLIST
-    .byte $89                       ; GOTO
-    .byte $CF                       ; THEN
-    .byte $8D                       ; GOSUB
+    .byte TK_RESTORE                ; RESTORE
+    .byte TK_AUTO                   ; AUTO
+    .byte TK_RENUM                  ; RENUM
+    .byte TK_DELETE                 ; DELETE
+    .byte TK_EDIT                   ; EDIT
+    .byte TK_RESUME                 ; RESUME
+    .byte TK_ERL                    ; ERL
+    .byte TK_ELSE                   ; ELSE
+    .byte TK_RUN                    ; RUN
+    .byte TK_LIST                   ; LIST
+    .byte TK_LLIST                  ; LLIST
+    .byte TK_GOTO                   ; GOTO
+    .byte TK_THEN                   ; THEN
+    .byte TK_GOSUB                  ; GOSUB
     .byte $00
 NOTFN4:
     XOR A                           ; numbers are constants
@@ -887,20 +887,20 @@ NOTRS6:
     POP AF
     POP BC
     POP DE
-    CP $A2                          ; the ELSE token
+    CP TK_ELSE                      ; the ELSE token
     PUSH AF
     CALL Z,KRNSVC                   ; a colon before ELSE
     POP AF
-    CP $B4                          ; the WHILE token
+    CP TK_WHILE                     ; the WHILE token
     JP NZ,CKSNGQ
     CALL KRNSAV
-    LD A,$F2                        ; the plus token after it
+    LD A,TK_PLUS                    ; the plus token after it
 CKSNGQ:
-    CP $DB                          ; the apostrophe's token
+    CP TK_APOSTROPHE                ; the apostrophe's token
     JP NZ,NTSNGT
     PUSH AF
     CALL KRNSVC                     ; a colon
-    LD A,$8F                        ; the REM token
+    LD A,TK_REM                     ; the REM token
     CALL KRNSAV
     POP AF
     PUSH AF                         ; the terminator for KRNSTR, never found
@@ -927,7 +927,7 @@ NUMTRY:
     JP Z,FLTGET                     ; a constant
     CP '.'                          ; LIST . and EDIT .
     JP Z,STUFFH
-    LD A,$0E                        ; the line number token
+    LD A,LINCON                     ; the line number token
     CALL KRNSAV
     PUSH DE
     CALL LINGET                     ; DE = the line number
@@ -966,10 +966,10 @@ FLTGET:
     JP NZ,NTINTG
     LD A,L
     LD H,L
-    LD L,$0F                        ; token $0F and the byte
+    LD L,IN2CON                     ; token $0F and the byte
     CP $0A
     JP NC,SAVI
-    ADD A,$11                       ; 0 to 9: tokens $11 to $1A
+    ADD A,ONECON                    ; 0 to 9: tokens $11 to $1A
     JP POPSTF
 NTINTG:
     PUSH AF                         ; A = VALTYP, the bytes to copy
@@ -1020,9 +1020,9 @@ NTSNGT:
     POP HL
     CALL MAKUPS                     ; uppercase
     CP 'H'
-    LD A,$0B                        ; the octal token
+    LD A,OCTCON                     ; the octal token
     JP NZ,WUZOCT
-    LD A,$0C                        ; the hexadecimal token
+    LD A,HEXCON                     ; the hexadecimal token
 WUZOCT:
     CALL KRNSAV
     PUSH DE
@@ -1058,7 +1058,7 @@ KRNSAV:
 
 ;; Reports a Line buffer overflow error (23) through <ERROR>.
 LBOERR:
-    LD E,$17
+    LD E,ERR_LBO
     JP ERROR
 
 ;; Copies a variable's name into KBUF in uppercase, setting DONUM so that digits in it stay digits.

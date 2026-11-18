@@ -41,7 +41,7 @@ ST_FOR:
     LD [SUBFLG],A
     CALL PTRGET                     ; DE = the loop variable's address
     CALL SYNCHR                     ; an equals sign must follow
-    .byte $F0                       ; the = token
+    .byte TK_EQUAL                  ; the = token
     PUSH DE                         ; keep the variable's address
     EX DE,HL
     LD [TEMP],HL                    ; and in TEMP, for later
@@ -99,7 +99,7 @@ NOTOL:
     LD HL,[CURLIN]
     EX [SP],HL                      ; stack the FOR's line number
     CALL SYNCHR                     ; TO must follow
-    .byte $CE                       ; the TO token
+    .byte TK_TO                     ; the TO token
     CALL GETYPR                     ; the loop variable's type
     JP Z,TMERR                      ; strings cannot be loop variables
     JP NC,TMERR                     ; nor can double precision
@@ -112,7 +112,7 @@ NOTOL:
     EX [SP],HL                      ; stack the limit, HL = the text
     LD DE,$0001                     ; the default STEP of 1
     LD A,[HL]
-    CP $D1                          ; the STEP token
+    CP TK_STEP                      ; the STEP token
     CALL Z,GETINT                   ; DE = the step
     PUSH DE                         ; stack the step
     PUSH HL
@@ -131,7 +131,7 @@ SNGFOR:
     LD D,C
     LD E,D
     LD A,[HL]
-    CP $D1                          ; the STEP token
+    CP TK_STEP                      ; the STEP token
     LD A,$01                        ; the sign of the default step
     JP NZ,ONEON
     CALL FRMCHK                     ; the step
@@ -161,7 +161,7 @@ ONEON:
     LD [CURLIN],HL
     LD HL,[TEMP]
     EX [SP],HL                      ; stack the loop variable's address
-    LD B,$82                        ; the FOR token tags the entry
+    LD B,TK_FOR                     ; the FOR token tags the entry
     PUSH BC
     INC SP                          ; only the token byte stays pushed
     PUSH AF                         ; the character after NEXT
@@ -170,7 +170,7 @@ ONEON:
 
 ;; Pushes the FOR token back onto the entry NEXT keeps, and goes on to the next statement.
 NXTCON:
-    LD B,$82                        ; the FOR token
+    LD B,TK_FOR                     ; the FOR token
     PUSH BC
     INC SP                          ; only the token byte stays pushed
 
@@ -244,9 +244,9 @@ GONE:
 ;;
 ;; In:    A = the statement's first character, HL = the text at it
 GONE2:
-    SUB $81                         ; the first statement token, END
+    SUB TK_END                      ; the first statement token, END
     JP C,LET                        ; not a keyword: an assignment without LET
-    CP $4C                          ; past the last statement token
+    CP TK_RESET-TK_END+1            ; past the last statement token
     JP NC,ISMID                     ; maybe a MID$ assignment
     RLCA                            ; two bytes per entry of STMDSP
     LD C,A
@@ -283,9 +283,9 @@ CHRCON:
     JP NC,NOTLFT                    ; a printable character: is it a digit?
     OR A
     RET Z                           ; the end of the line
-    CP $0B                          ; OCTCON: below it, tabs and line feeds
+    CP OCTCON                       ; OCTCON: below it, tabs and line feeds
     JP C,NOTCON
-    CP $1E                          ; CONCON: rescanning a constant already read
+    CP CONCON                       ; CONCON: rescanning a constant already read
     JP NZ,NTRSCC
     LD A,[CONSAV]                   ; the constant's token again
     OR A                            ; neither zero nor carry
@@ -293,16 +293,16 @@ CHRCON:
 
 ;; Reads the embedded constant whose token is in A, or passes over one (CONCN2) already read.
 NTRSCC:
-    CP $10                          ; CONCN2: go past the constant
+    CP CONCN2                       ; CONCN2: go past the constant
     JP Z,CONSCN
     PUSH AF                         ; keep the token to return
     INC HL                          ; HL = the constant's value
     LD [CONSAV],A
-    SUB $1C                         ; INTCON and above: integer, single and double constants
+    SUB INTCON                      ; INTCON and above: integer, single and double constants
     JP NC,MAKTKN
-    SUB $F5                         ; ONECON-INTCON: the digits 0 to 9, in the token
+    SUB (ONECON-INTCON) & $FF       ; the digits 0 to 9, in the token
     JP NC,ONEI
-    CP $FE                          ; IN2CON-ONECON: a one-byte integer
+    CP (IN2CON-ONECON) & $FF        ; a one-byte integer
     JP NZ,FRCINC                    ; else a line number or pointer, two bytes
     LD A,[HL]
     INC HL
@@ -385,9 +385,9 @@ NUMCON:
 ;; Out:   VALTYP = the constant's type, FACLO = the value in the FAC (DFACLO for a double)
 CONFC1:
     LD A,[CONSAV]
-    CP $0F                          ; above LINCON: a number
+    CP LINCON+1                     ; above LINCON: a number
     JP NC,NTLINE
-    CP $0D                          ; below PTRCON: a number
+    CP PTRCON                       ; below PTRCON: a number
     JP C,NTLINE
     LD HL,[CONLO]
     JP NZ,FLTLIN                    ; LINCON: HL is the line number
@@ -450,7 +450,7 @@ DEFCON:
     LD C,A
     LD B,A                          ; B = the last letter, the same for one letter
     CALL CHRGTR
-    CP $F3                          ; the minus token makes a range
+    CP TK_MINUS                     ; the minus token makes a range
     JP NZ,NOTRNG
     CALL CHRGTR
     CALL ISLET                      ; a letter must end the range
@@ -502,7 +502,7 @@ INTID2:
 
 ;; Reports an FC (Illegal function call) error.
 FCERR:
-    LD E,$05                        ; ERRFC
+    LD E,ERR_FC                     ; ERRFC
     JP ERROR
 
 ;; Reads a line number at HL into DE, accepting a period for the current line (DOT).
@@ -532,9 +532,9 @@ LINGET:
     DEC HL
 LINGT2:
     CALL CHRGTR
-    CP $0E                          ; LINCON: an embedded line number
+    CP LINCON                       ; LINCON: an embedded line number
     JP Z,LINGT3
-    CP $0D                          ; PTRCON: a line already converted to a pointer
+    CP PTRCON                       ; PTRCON: a line already converted to a pointer
 LINGT3:
     EX DE,HL
     LD HL,[CONLO]                   ; the constant's value
@@ -580,9 +580,9 @@ POPHSR:
 ;; In:    A = the character after RUN, zero = set for the end of the statement, HL = the text at it
 ST_RUN:
     JP Z,RUNC                       ; no argument, run from the start
-    CP $0E                          ; LINCON: a line number
+    CP LINCON                       ; LINCON: a line number
     JP Z,CONRUN
-    CP $0D                          ; PTRCON
+    CP PTRCON
     JP NZ,LRUN                      ; a file name
 
 ;; Clears the variables and the stack, then goes to the line number at HL, returning to NEWSTT.
@@ -606,7 +606,7 @@ ST_GOSUB:
     PUSH HL
     LD HL,[CURLIN]
     EX [SP],HL                      ; stack the line of the GOSUB
-    LD A,$8D                        ; the GOSUB token tags the entry
+    LD A,TK_GOSUB                   ; the GOSUB token tags the entry
     PUSH AF
     INC SP                          ; only the token byte stays pushed
     PUSH BC
@@ -634,10 +634,10 @@ ST_GOTO:
 ;; Errors: SN, UL
 GOTO2:
     LD A,[CONSAV]                   ; what LINGET read
-    CP $0D                          ; PTRCON: DE is the line's address
+    CP PTRCON                       ; PTRCON: DE is the line's address
     EX DE,HL
     RET Z                           ; go straight on there
-    CP $0E                          ; LINCON: the only other choice
+    CP LINCON                       ; LINCON: the only other choice
     JP NZ,SNERR
     EX DE,HL
     PUSH HL
@@ -653,7 +653,7 @@ GOTO2:
     CALL NC,FNDLIN                  ; behind, or not found, search from the start
     JP NC,USERR                     ; no such line
     DEC BC                          ; BC = the zero ending the line before
-    LD A,$0D                        ; PTRCON
+    LD A,PTRCON
     LD [PTRFLG],A                   ; the program now has line pointers
     POP HL                          ; HL = just after the constant
     CALL CONCH2                     ; change the constant to a pointer
@@ -663,7 +663,7 @@ GOTO2:
 
 ;; Reports a UL (Undefined line number) error.
 USERR:
-    LD E,$08                        ; ERRUS
+    LD E,ERR_US                     ; ERRUS
     JP ERROR
 
 ;; Runs RETURN: pops the stack to the latest GOSUB entry and continues after that GOSUB, or gives an RG error.
@@ -676,8 +676,8 @@ ST_RETURN:
     CALL FNDFOR                     ; past all the FOR entries
     LD SP,HL                        ; drop them
     LD [SAVSTK],HL
-    CP $8D                          ; the GOSUB token?
-    LD E,$03                        ; ERRRG
+    CP TK_GOSUB                     ; the GOSUB token?
+    LD E,ERR_RG                     ; ERRRG
     JP NZ,ERROR                     ; no GOSUB is active
     POP HL                          ; HL = the line of the GOSUB
     LD [CURLIN],HL
@@ -726,11 +726,11 @@ REMER1:
     CP B
     RET Z                           ; the terminator, unless in quotes
     INC HL
-    CP $22                          ; a quote trades the terminators
+    CP '"'                          ; a quote trades the terminators
     JP Z,EXCHQT
     INC A                           ; $FF: a function token, skip its number
     JP Z,REMER1
-    SUB $8C                         ; the IF token
+    SUB TK_IF+1                     ; the IF token
     JP NZ,REMER
     CP B                            ; carry for DATA outside quotes
     ADC A,D                         ; which counts the IFs in D
@@ -755,7 +755,7 @@ LETCON:
 LET:
     CALL PTRGET                     ; DE = the variable's address
     CALL SYNCHR                     ; an equals sign must follow
-    .byte $F0                       ; the = token
+    .byte TK_EQUAL                  ; the = token
     EX DE,HL
     LD [TEMP],HL                    ; for FOR, and user functions
     EX DE,HL
@@ -835,11 +835,11 @@ COPNUM:
 ;; In:    A = the character after ON, HL = the text at it
 ;; Errors: SN, UL, FC
 ST_ON:
-    CP $A8                          ; the ERROR token
+    CP TK_ERROR                     ; the ERROR token
     JP NZ,NTOERR
     CALL CHRGTR
     CALL SYNCHR                     ; GOTO must follow ON ERROR
-    .byte $89                       ; the GOTO token
+    .byte TK_GOTO                   ; the GOTO token
     CALL LINGET                     ; DE = the trap line
     LD A,D
     OR E
@@ -869,10 +869,10 @@ NTOERR:
     CALL GETBYT                     ; E = n
     LD A,[HL]
     LD B,A                          ; B = the GOTO or GOSUB token
-    CP $8D                          ; the GOSUB token
+    CP TK_GOSUB                     ; the GOSUB token
     JP Z,ISGOSU
     CALL SYNCHR                     ; otherwise it must be GOTO
-    .byte $89                       ; the GOTO token
+    .byte TK_GOTO                   ; the GOTO token
     DEC HL
 ISGOSU:
     LD C,E                          ; C counts down to the line number
@@ -898,7 +898,7 @@ ST_RESUME:
     LD [ERRFLG],A                   ; ERRFLG, so Control-C gives no error
     LD [DE],A
     LD A,[HL]
-    CP $83                          ; the NEXT token, for RESUME NEXT
+    CP TK_NEXT                      ; the NEXT token, for RESUME NEXT
     JP Z,RESNXT
     CALL LINGET                     ; DE = the line, zero when none
     RET NZ                          ; anything more: syntax error
@@ -996,10 +996,10 @@ ST_IF:
     LD A,[HL]
     CP $2C                          ; a comma may come before THEN
     CALL Z,CHRGTR
-    CP $89                          ; GOTO may stand for THEN
+    CP TK_GOTO                      ; GOTO may stand for THEN
     JP Z,OKGOTO
     CALL SYNCHR                     ; otherwise THEN must follow
-    .byte $CF                       ; the THEN token
+    .byte TK_THEN                   ; the THEN token
     DEC HL
 
 ;; Tests the condition in the FAC, running the THEN part if it is true and looking for an ELSE if not.
@@ -1013,9 +1013,9 @@ OKGOTO:
 DOCOND:
     CALL CHRGTR
     RET Z                           ; THEN or ELSE with nothing after them
-    CP $0E                          ; LINCON: a line number means GOTO
+    CP LINCON                       ; LINCON: a line number means GOTO
     JP Z,ST_GOTO
-    CP $0D                          ; PTRCON: a line pointer
+    CP PTRCON                       ; PTRCON: a line pointer
     JP NZ,GONE2                     ; anything else is a statement
     LD HL,[CONLO]                   ; HL = the line, for NEWSTT
     RET
@@ -1028,7 +1028,7 @@ SKPMRF:
     OR A
     RET Z                           ; the line ended with no ELSE
     CALL CHRGTR
-    CP $A2                          ; the ELSE token
+    CP TK_ELSE                      ; the ELSE token
     JP NZ,SKPMRF
     DEC D                           ; a nested IF's ELSE: keep looking
     JP NZ,SKPMRF

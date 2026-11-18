@@ -26,7 +26,7 @@
 ;; Errors: SN without the equal sign
 FRMEQL:
     CALL SYNCHR
-    .byte $F0                       ; the = token
+    .byte TK_EQUAL                  ; the = token
     JP FRMEVL
 
 ;; Requires an opening parenthesis, then evaluates the expression after it.
@@ -78,11 +78,11 @@ RETAOP:
     POP BC                          ; B = the pending precedence
     LD A,[HL]
     LD [TEMP3],HL
-    CP $EF                          ; below >: not an operator
+    CP TK_GREATER                   ; below >: not an operator
     RET C
-    CP $F2                          ; > = <: a relation
+    CP TK_PLUS                      ; > = <: a relation, below +
     JP C,DORELS
-    SUB $F2                         ; E = the operator, 0 for +
+    SUB TK_PLUS                     ; E = the operator, 0 for +
     LD E,A
     JP NZ,NTPLUS
     LD A,[VALTYP]                   ; + of a string joins strings
@@ -180,7 +180,7 @@ FINTMP:
 DORELS:
     LD D,$00
 LOPREL:
-    SUB $EF                         ; > = < become 0 1 2
+    SUB TK_GREATER                  ; > = < become 0 1 2
     JP C,FINREL
     CP $03
     JP NC,FINREL
@@ -403,17 +403,17 @@ EVAL:
     INC A                           ; $FF starts a function
     JP Z,ISFUN
     DEC A
-    CP $F2                          ; + is ignored
+    CP TK_PLUS                      ; + is ignored
     JP Z,EVAL
-    CP $F3                          ; -
+    CP TK_MINUS                     ; -
     JP Z,DOMIN
     CP '"'                          ; a string
     JP Z,STRLTI
-    CP $D5                          ; NOT
+    CP TK_NOT                       ; NOT
     JP Z,NOTER
     CP '&'                          ; &H or &O
     JP Z,OCTCNS
-    CP $D7                          ; ERR
+    CP TK_ERR                       ; ERR
     JP NZ,NTERC
     CALL CHRGTR
     LD A,[ERRFLG]                   ; the last error's code
@@ -427,7 +427,7 @@ EVAL:
 ;; In:    A = the token, HL = the text at it
 ;; Out:   HL = the text after the operand, FACLO = the value
 NTERC:
-    CP $D6                          ; ERL
+    CP TK_ERL                       ; ERL
     JP NZ,NTERL
     CALL CHRGTR
     PUSH HL
@@ -442,7 +442,7 @@ NTERC:
 ;; Out:   HL = the text after the operand, FACLO = the address, an integer
 ;; Errors: FC for a variable that does not exist yet
 NTERL:
-    CP $DC                          ; VARPTR
+    CP TK_VARPTR                    ; VARPTR
     JP NZ,NTVARP
     CALL CHRGTR
     CALL SYNCHR
@@ -482,17 +482,17 @@ VARRET:
 ;; In:    A = the token or character, HL = the text at it
 ;; Out:   HL = the text after the operand, FACLO = the value
 NTVARP:
-    CP $D2                          ; USR
+    CP TK_USR                       ; USR
     JP Z,USRFN
-    CP $DA                          ; INSTR
+    CP TK_INSTR                     ; INSTR
     JP Z,FN_INSTR
-    CP $DD                          ; INKEY$
+    CP TK_INKEY                     ; INKEY$
     JP Z,INKEY
-    CP $D8                          ; STRING$
+    CP TK_STRING                    ; STRING$
     JP Z,FN_STRING
-    CP $85                          ; INPUT$
+    CP TK_INPUT                     ; INPUT$, which has INPUT's token
     JP Z,FIXINP
-    CP $D3                          ; FN
+    CP TK_FN                        ; FN
     JP Z,FNDOER
 
 ;; Evaluates an expression in parentheses.
@@ -672,8 +672,8 @@ HOCFIN:
 ISFUN:
     INC HL
     LD A,[HL]                       ; the function's token
-    SUB $81                         ; A = its number from 0
-    CP $07                          ; RND?
+    SUB TF_LEFT                     ; A = its number from 0
+    CP TF_RND-TF_LEFT               ; RND?
     JP NZ,NTMRND
     PUSH HL
     CALL CHRGTR
@@ -753,14 +753,14 @@ DISPAT:
 ;; Out:   D = one less for a minus, zero = set for a sign, else HL = the text before the character
 MINPLS:
     DEC D                           ; assume minus
-    CP $F3                          ; the - token
+    CP TK_MINUS                     ; the - token
     RET Z
     CP '-'
     RET Z
     INC D                           ; plus
     CP '+'
     RET Z
-    CP $F2                          ; the + token
+    CP TK_PLUS                      ; the + token
     RET Z
     DEC HL                          ; no sign: read the digit again
     RET
@@ -1010,7 +1010,7 @@ DEFUSR:
     CALL SCNUSR                     ; DE = the entry
     PUSH DE
     CALL SYNCHR
-    .byte $F0                       ; the = token
+    .byte TK_EQUAL                  ; the = token
     CALL FRMQNT                     ; DE = the address
     EX [SP],HL
     LD [HL],E
@@ -1027,7 +1027,7 @@ DEFUSR:
 ;; Out:   HL = the end of the statement
 ;; Errors: ID in direct mode, SN
 ST_DEF:
-    CP $D2                          ; DEF USR
+    CP TK_USR                       ; DEF USR
     JP Z,DEFUSR
     CALL GETFNM                     ; DE = the function's value
     CALL ERRDIR
@@ -1331,7 +1331,7 @@ ERRDIR:
     OR L
     POP HL
     RET NZ
-    LD E,$0C                        ; Illegal direct
+    LD E,ERR_ID                     ; Illegal direct
     JP ERROR
 
 ;; Requires FN, then finds the function's variable: its name with bit 7 set in the first letter.
@@ -1341,7 +1341,7 @@ ERRDIR:
 ;; Errors: SN without FN
 GETFNM:
     CALL SYNCHR
-    .byte $D3                       ; the FN token
+    .byte TK_FN                     ; the FN token
     LD A,$80                        ; no arrays
     LD [SUBFLG],A
     OR [HL]                         ; C = the first letter, bit 7 set
@@ -1350,15 +1350,15 @@ GETFNM:
 
 ;; Runs MID$ on the left of an assignment, the one function allowed there.
 ;;
-;; In:    A = the token less $81, $7E for a function, HL = the text at it
+;; In:    A = the token less TK_END, TK_FUNCTION-TK_END for a function, HL = the text at it
 ;; Errors: SN for anything but MID$
 ISMID:
-    CP $7E                          ; a function?
+    CP TK_FUNCTION-TK_END           ; a function?
     JP NZ,SNERR
     INC HL
     LD A,[HL]
     INC HL
-    CP $83                          ; MID$
+    CP TF_MID                       ; MID$
     JP Z,LHSMID
     JP SNERR
 
@@ -1429,7 +1429,7 @@ CONSOL:
 ;; Errors: FC for a width past 255
 ;; Entry: ST_WIDTH_1 = sets the console's width
 ST_WIDTH:
-    CP $9E                          ; LPRINT
+    CP TK_LPRINT                    ; LPRINT
     JP NZ,ST_WIDTH_1
     CALL CHRGTR
     CALL GETBYT

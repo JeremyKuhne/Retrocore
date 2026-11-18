@@ -47,11 +47,11 @@ NEWCHR:
     CALL Z,CRDO                     ; PRINT alone prints an empty line
 PRINTC:
     JP Z,FINPRT                     ; the statement ended
-    CP $D9                          ; the USING token
+    CP TK_USING                     ; the USING token
     JP Z,PRINUS
-    CP $D0                          ; the TAB( token
+    CP TK_TAB                       ; the TAB( token
     JP Z,TABER
-    CP $D4                          ; the SPC( token
+    CP TK_SPC                       ; the SPC( token
     JP Z,TABER
     PUSH HL                         ; keep the text pointer
     CP ','                          ; a comma moves to the next print zone
@@ -197,7 +197,7 @@ TABER:
     CALL GETIN2                     ; DE = the column or count
     POP AF
     PUSH AF
-    CP $D4                          ; SPC( counts spaces;
+    CP TK_SPC                       ; SPC( counts spaces;
     JP Z,TABER_1
     DEC DE                          ; TAB( columns start from 1
 TABER_1:
@@ -227,7 +227,7 @@ TABER_4:
     .byte ')'
     DEC HL                          ; fetch the next character again later
     POP AF
-    SUB $D4                         ; A = 0 for SPC(, the count from no column
+    SUB TK_SPC                      ; A = 0 for SPC(, the count from no column
     PUSH HL
     JP Z,DOSIZT
     LD BC,$0028                     ; TAB( counts from the column:
@@ -308,7 +308,7 @@ FINPRT:
 ;; Errors: SN if INPUT does not follow, TM if the variable is not a string
 ST_LINE:
     CALL SYNCHR                     ; INPUT must follow LINE
-    .byte $85                       ; the INPUT token
+    .byte TK_INPUT                  ; the INPUT token
     CP '#'                          ; LINE INPUT # reads a file
     JP Z,DLINE
     CALL SCNSEM                     ; a semicolon: no new line after the reply
@@ -745,7 +745,7 @@ DATLOP:
     LD A,[HL]
     INC HL
     OR [HL]                         ; zero: the end of the program
-    LD E,$04                        ; Out of DATA
+    LD E,ERR_OD                     ; Out of DATA
     JP Z,ERROR
     INC HL
     LD E,[HL]                       ; DE = the line's number
@@ -756,6 +756,6 @@ DATLOP:
     EX DE,HL
 NOWLIN:
     CALL CHRGTR                     ; the statement's token
-    CP $84                          ; DATA?
+    CP TK_DATA                      ; DATA?
     JP NZ,DATLOP
     JP DATBK

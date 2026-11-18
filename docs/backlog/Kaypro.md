@@ -13,14 +13,13 @@ display, drives, the extension's and Desktop's machine entries, and MBASIC as a 
 - `Kaypro2.asm` and `Kaypro2CharacterGenerator.asm`, byte-identical to 81-149C and 81-146A.
 - `Mbasic/`, byte-identical to MBASIC.COM 5.21: 19 modules following GW-BASIC's, with Microsoft's names from
   GW-BASIC's source and Level2.asm (descriptive ones where neither has a name), every routine documented, and
-  addresses, text and code written as such.
+  addresses, text and code written as such, and tokens (TK_), function numbers (TF_), error codes (ERR_) and
+  the crunched constants' types (LINCON and the rest) named in Equates.asm.
 - The MBASIC dialect: CRUNCH, LIST, variables, loops, tokenized files; checked against MBASIC itself.
 - `tools/Test-KayproDap.mjs` and `KayproTests`, `MbasicOracleTests`.
 
 ## Next
 
-- **MBASIC's constants.** Tokens, error codes and the embedded-constant types (LINCON, PTRCON and the rest) are
-  still numbers with comments; named constants would let the modules use them.
 - **CP/M's sources.** The system tracks of the Kaypro's CP/M 2.2 disk: the boot record, CCP, BDOS and Kaypro's BIOS,
   byte-identical, so a CP/M program's calls step into CP/M's source as an Apple II program's step into DOS 3.3's.
   `CpmBdos` call names for the Z80 call stack, as `SosCalls` names SOS's.

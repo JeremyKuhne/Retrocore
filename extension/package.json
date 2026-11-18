@@ -349,7 +349,8 @@
                   "coco1",
                   "coco2",
                   "coco3",
-                  "altair"
+                  "altair",
+                  "kaypro2"
                 ],
                 "description": "The machine, as Start Machine lists it."
               },
@@ -1319,6 +1320,7 @@
                   "apple1",
                   "coco",
                   "altair",
+                  "kaypro2",
                   "apple2e"
                 ],
                 "enumDescriptions": [
@@ -1331,14 +1333,15 @@
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
                   "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
+                  "The Kaypro II: a 2.5 MHz Z80, 64 KB, 80x24 and two drives, running CP/M 2.2.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), altair a MITS Altair 8800, and kaypro2 a Kaypro II."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder). Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -1356,12 +1359,19 @@
                 "description": "Apple-1: puts Apple-1 BASIC in the $E000 bank at power-on, as loading its tape would (basic.bin from romDirectory, or the SDK's build); E000R starts it. Needs highRam. A basic launch starts it itself."
               },
               "rom": {
-                "enum": [
-                  "level2",
-                  "level1"
+                "anyOf": [
+                  {
+                    "enum": [
+                      "level2",
+                      "level1"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
                 ],
                 "default": "level2",
-                "description": "Model I and Model III: Level II or Level I BASIC."
+                "description": "Model I and Model III: level2 or level1, Level II or Level I BASIC. Kaypro II: the monitor ROM dump's file name in romDirectory; by default 81-149c.u47 or 81-149c.rom."
               },
               "bootRom": {
                 "type": "string",
@@ -1481,11 +1491,15 @@
                   "type": "string"
                 },
                 "maxItems": 4,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B."
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II: 0 by default."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II and Kaypro II: 0 by default."
+              },
+              "command": {
+                "type": "string",
+                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives."
               },
               "controllers": {
                 "type": "boolean",
@@ -1500,7 +1514,7 @@
               "fastDisk": {
                 "type": "boolean",
                 "default": true,
-                "description": "IIe and Apple III (and the Model II while its disk controller works): run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
+                "description": "IIe and Apple III (and the Model II while its disk controller works, and the Kaypro II, which take it only from the launch): run as fast as possible while any disk drive's motor turns, then return to the chosen speed. The machine runs the same cycles either way; only how fast they pass in real time changes. The display panel's Fast disk changes it while debugging."
               },
               "speed": {
                 "enum": [
@@ -1560,7 +1574,7 @@
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
                 ],
-                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1 and the Model I, which have no color). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
+                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1, the Model I and the Kaypro II, which have no color). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
               },
               "mouse": {
                 "type": "integer",
@@ -1857,7 +1871,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), or the Kaypro II's (Kaypro2.asm and Kaypro2CharacterGenerator.asm)."
               },
               "breakpoints": {
                 "type": "array",
@@ -1969,6 +1983,20 @@
               "machine": "trs80-model1",
               "basic": "^\"\\${file}\"",
               "stopOnEntry": true
+            }
+          },
+          {
+            "label": "Retrocore: Boot a Kaypro II",
+            "description": "Start a Kaypro II, booting CP/M 2.2 from the disk in drive A.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Boot Kaypro II",
+              "machine": "kaypro2",
+              "disks": [
+                "^\"\\${workspaceFolder}/cpm.img\""
+              ],
+              "stopOnEntry": false
             }
           }
         ]

@@ -70,6 +70,10 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="2" title="F2">F2</button>
 <button id="model2-reset" title="The reset switch (or Ctrl+F12 or Ctrl+Break): the boot ROM starts again">Reset</button>
 </span>
+<span class="keys" data-machine="kaypro2">
+<button data-code="27" title="ESC (or Esc)">Esc</button>
+<button id="kaypro-reset" title="The reset button (or Ctrl+F12 or Ctrl+Break): the monitor ROM boots CP/M from drive A again">Reset</button>
+</span>
 <span class="keys" data-machine="apple1">
 <button data-code="27" title="ESC (or Esc): drops the line being typed">Esc</button>
 <button id="apple1-reset" title="RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen">Reset</button>
@@ -114,7 +118,7 @@ const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
 // border, fill a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3'};
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','kaypro2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -353,6 +357,8 @@ const keys={
     'trs80-model3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
     // The Model II's keyboard sends ASCII, with its arrows as $1C-$1F and BREAK as $03.
     'trs80-model2':{Enter:13,Backspace:8,Tab:9,ArrowLeft:28,ArrowRight:29,ArrowUp:30,ArrowDown:31,Escape:3},
+    // The Kaypro II's keyboard sends ASCII, with its arrows as $F1-$F4; it has no BREAK.
+    'kaypro2':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowUp:0xF1,ArrowDown:0xF2,ArrowLeft:0xF3,ArrowRight:0xF4},
     // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
     'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
     'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
@@ -364,6 +370,7 @@ const hints={
     'trs80-model1':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
     'trs80-model3':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
     'trs80-model2':'Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset',
+    'kaypro2':'Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset',
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
     'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
@@ -380,7 +387,7 @@ const ctrl=document.getElementById('ctrl');
 // screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
 // show its lines twice over, about 4:3. Sizes are in CSS pixels for the display's scaling, ratio physical pixels to
 // each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'kaypro2':[560,480],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480]};
 function sharpSize(machine,width,height,ratio){
     const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
     const [w,h]=sharpBase[key]??sharpBase['apple2'];
@@ -482,8 +489,10 @@ screen.addEventListener('keydown',event=>{
         return;
     }
     const special=keys[machine()]??keys['apple2'];
-    let code=event.key in special?special[event.key]:event.key.length===1?event.key.charCodeAt(0):-1;
-    if(code>=0&&code<128){send(code);event.preventDefault();}
+    // A typed character is ASCII; a special key's code can be above it, as the Kaypro II's arrows are.
+    const mapped=event.key in special;
+    let code=mapped?special[event.key]:event.key.length===1?event.key.charCodeAt(0):-1;
+    if(code>=0&&code<(mapped?256:128)){send(code);event.preventDefault();}
 });
 screen.addEventListener('keyup',event=>{
     if(forVsCode(event))return;
@@ -509,7 +518,7 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset','altair-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','kaypro-reset','apple1-reset','coco-reset','altair-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
 }
 for(const id of ['apple1-clear','altair-clear']){

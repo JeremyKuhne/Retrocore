@@ -52,7 +52,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
         "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
-        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "MITS Altair 8800"
+        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
@@ -93,6 +93,8 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         { machine: "trs80-model3", model: "3", rom: "level1" });
     assert.deepEqual(machineById("trs80-model4p")?.basicDialects, [], "the 4P boots from disk");
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
+    assert.deepEqual(machineById("kaypro2")?.diskFormats, ["img", "dsk", "imd", "dmk"]);
+    assert.deepEqual(machineById("kaypro2")?.basicDialects, [], "CP/M's programs come from disk");
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
     assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");
     assert.deepEqual(machineById("apple1")?.basicDialects, ["apple1"], "Apple-1 BASIC loads into its $E000 bank");
@@ -124,6 +126,7 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "trs80-model2" })?.id, "trs80-model2");
     assert.equal(catalogMachine({ machine: "trs80-model2", model: "16b" })?.id, "trs80-model16");
     assert.equal(catalogMachine({ machine: "altair" })?.id, "altair");
+    assert.equal(catalogMachine({ machine: "kaypro2" })?.id, "kaypro2");
     assert.equal(catalogMachine({ machine: "pdp10" }), undefined);
 });
 

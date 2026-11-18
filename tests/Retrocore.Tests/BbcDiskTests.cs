@@ -401,6 +401,70 @@ public class BbcDiskTests
         index.Should().Be(disk);
     }
 
+    /// <summary>
+    ///  An idle head unloads at its count of index pulses from when it went idle, not after that many revolutions:
+    ///  a count of 0 or 1 at the next index, which is less than a revolution away, and 2 a revolution later.
+    /// </summary>
+    [TestMethod]
+    public void HeadUnloadsAtIndexPulses()
+    {
+        int next = IdleCycles(count: 1);
+        next.Should().BeInRange(1, Intel8271.RevolutionCycles - 1, "the verify does not end exactly at an index");
+        IdleCycles(count: 0).Should().Be(next);
+        IdleCycles(count: 2).Should().Be(next + Intel8271.RevolutionCycles);
+    }
+
+    // The cycles a head stays loaded after a verify, with an index count.
+    private static int IdleCycles(int count)
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x0D, 1, 1, (byte)(count << 4));
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x5F, 0, 0, 0x21);            // verify drive 0, track 0, sector 0, which loads the head
+        RunWhileBusy(fdc);
+        fdc.HeadLoaded.Should().BeTrue();
+
+        int idle = 0;
+        while (fdc.HeadLoaded && idle < 4 * Intel8271.RevolutionCycles)
+        {
+            fdc.Tick();
+            idle++;
+        }
+
+        return idle;
+    }
+
+    /// <summary>
+    ///  Formatting stops at the next index: of sixteen 256-byte sectors, only those a revolution holds are written.
+    /// </summary>
+    [TestMethod]
+    public void FormatStopsAtTheIndex()
+    {
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x63, 0, 21, 0x30, 0, 16);    // format drive 0, track 0: gap 3 of 21, 16 sectors of 256 bytes
+        byte[] id = [0, 0, 0, 1];
+        int position = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest)
+            {
+                fdc.WriteData(position % 4 == 2 ? (byte)(position / 4) : id[position % 4]);
+                position++;
+            }
+
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0, "a full track is no error");
+        int written = disk.Track(0, 0).Count;
+        written.Should().BeInRange(1, 15, "a track holds about 3,125 bytes, not sixteen 256-byte sectors");
+        (written * 256).Should().BeLessThan(Intel8271.RevolutionCycles / Intel8271.ByteCycles);
+    }
+
     private static void Send(Intel8271 fdc, byte command, params byte[] parameters)
     {
         fdc.Write(0, command);

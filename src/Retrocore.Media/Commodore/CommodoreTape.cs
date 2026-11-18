@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Buffers.Binary;
+
 namespace Retrocore.Media.Commodore;
 
 /// <summary>
@@ -17,9 +19,10 @@ namespace Retrocore.Media.Commodore;
 public sealed class CommodoreTape : IMedium
 {
     /// <summary>
-    ///  The <see cref="MediumSnapshot.Kind"/> of a tape's snapshot, whose image is a TAP version 1 file.
+    ///  The <see cref="MediumSnapshot.Kind"/> of a tape's snapshot, whose image is each pulse's length in microseconds,
+    ///  four bytes, low first, so it holds every pulse whatever an image format could.
     /// </summary>
-    public const string SnapshotKind = "commodore-tape";
+    public const string SnapshotKind = "commodore-tape-pulses";
 
     private readonly List<int> _pulses;
     private bool _writeProtected;
@@ -103,7 +106,37 @@ public sealed class CommodoreTape : IMedium
     }
 
     /// <inheritdoc/>
-    public MediumSnapshot Snapshot() => new(SnapshotKind, Version, _writeProtected, TapFormat.Write(_pulses));
+    public MediumSnapshot Snapshot()
+    {
+        byte[] image = new byte[_pulses.Count * 4];
+        for (int i = 0; i < _pulses.Count; i++)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(i * 4), _pulses[i]);
+        }
+
+        return new(SnapshotKind, Version, _writeProtected, image);
+    }
+
+    /// <summary>
+    ///  Reads a tape back from its snapshot's image.
+    /// </summary>
+    /// <param name="image">The image of a <see cref="SnapshotKind"/> snapshot.</param>
+    /// <returns>The tape.</returns>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not a whole number of pulses, or has one under 1 µs.
+    /// </exception>
+    public static CommodoreTape FromSnapshot(ReadOnlySpan<byte> image)
+    {
+        if (image.Length % 4 != 0) { throw new InvalidDataException("A tape's snapshot is four bytes a pulse."); }
+        int[] pulses = new int[image.Length / 4];
+        for (int i = 0; i < pulses.Length; i++)
+        {
+            pulses[i] = BinaryPrimitives.ReadInt32LittleEndian(image[(i * 4)..]);
+            if (pulses[i] < 1) { throw new InvalidDataException("A tape's snapshot has a pulse under 1 µs."); }
+        }
+
+        return new(pulses);
+    }
 
     /// <summary>
     ///  Records that the tape was saved to an image that holds all of it.

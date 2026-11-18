@@ -11,9 +11,10 @@ namespace Retrocore.Media.Commodore;
 /// <remarks>
 ///  <para>
 ///   Reading lays each track out as the 4040 formats it (<see cref="GcrLayout"/>), with the disk ID from track 18
-///   sector 0's bytes <c>$A2</c> and <c>$A3</c>, as the drive's own format writes it there. The error codes, which
-///   describe damage on the original disk, are not reproduced. Writing reads each sector back from its track, as the
-///   drive would; a sector it cannot read is written as zeros and listed.
+///   sector 0's bytes <c>$A2</c> and <c>$A3</c>, as the drive's own format writes it there. An error table whose
+///   codes all say a sector is good (<c>$00</c> or <c>$01</c>) holds nothing more; one that marks a sector damaged is
+///   refused, since the damage is not reproduced and the disk would read back repaired. Writing reads each sector back
+///   from its track, as the drive would; a sector it cannot read is written as zeros and listed.
 ///  </para>
 /// </remarks>
 public static class D64Format
@@ -43,12 +44,31 @@ public static class D64Format
     /// </summary>
     /// <param name="image">The file's bytes.</param>
     /// <returns>The disk.</returns>
-    /// <exception cref="InvalidDataException">The image is not a D64 image's size.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not a D64 image's size, or its error table marks a sector damaged.
+    /// </exception>
     public static CommodoreDisk Read(ReadOnlySpan<byte> image)
     {
         if (!IsD64(image))
         {
             throw new InvalidDataException($"A D64 image is {Size} bytes, or {SizeWithErrors} with error codes.");
+        }
+
+        if (image.Length == SizeWithErrors)
+        {
+            ReadOnlySpan<byte> errors = image[Size..];
+            int damaged = errors.IndexOfAnyExcept((byte)0x00, (byte)0x01);
+            if (damaged >= 0)
+            {
+                int track = 1;
+                while (track < GcrLayout.Tracks && GcrLayout.FirstSector(track + 1) <= damaged) { track++; }
+                int count = 0;
+                foreach (byte code in errors) { if (code > 0x01) { count++; } }
+                throw new InvalidDataException(
+                    $"The D64 image's error table marks {count} sector{(count == 1 ? "" : "s")} damaged, the first "
+                        + $"track {track}, sector {damaged - GcrLayout.FirstSector(track)} (code ${errors[damaged]:X2}). "
+                        + "Retrocore cannot reproduce the damage; a G64 image of the disk keeps it.");
+            }
         }
 
         return ReadSectors(image, CommodoreDos.Dos2);
@@ -80,6 +100,8 @@ public static class D64Format
             disk.SetTrack((track - 1) * 2, bits, count, GcrLayout.Zone(track));
         }
 
+        // Laying out the tracks is reading the image, not a change to the disk.
+        disk.MarkSaved();
         return disk;
     }
 
@@ -112,7 +134,8 @@ public static class D64Format
                 track,
                 sectors,
                 dos,
-                out bool[] unwritten);
+                out bool[] unwritten,
+                out _);
 
             for (int sector = 0; sector < found.Length; sector++)
             {
@@ -124,5 +147,39 @@ public static class D64Format
         }
 
         return (image, unreadable);
+    }
+
+    /// <summary>
+    ///  Lists what a disk holds that an image of a layout's sectors has no place for: good sectors numbered past a
+    ///  track's last, and anything written at a half-track or past track 35.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <param name="dos">The layout.</param>
+    /// <returns>Each thing left out, as "track 18, sector 19" or "half-track 18.5".</returns>
+    internal static IReadOnlyList<string> Omitted(CommodoreDisk disk, CommodoreDos dos)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        List<string> omitted = [];
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        for (int position = 0; position < CommodoreDisk.Positions; position++)
+        {
+            int bits = disk.BitCount(position);
+            if (bits == 0) { continue; }
+            int track = (position / 2) + 1;
+            if (position % 2 == 1 || track > GcrLayout.Tracks)
+            {
+                if (GcrLayout.HasSync(disk.Track(position), bits))
+                {
+                    omitted.Add(position % 2 == 1 ? $"half-track {track}.5" : $"track {track}");
+                }
+
+                continue;
+            }
+
+            GcrLayout.ReadTrack(disk.Track(position), bits, track, sectors, dos, out _, out IReadOnlyList<int> beyond);
+            omitted.AddRange(beyond.Select(sector => $"track {track}, sector {sector}"));
+        }
+
+        return omitted;
     }
 }

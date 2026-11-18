@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Buffers.Binary;
 using Retrocore.Media;
 using Retrocore.Media.Commodore;
 
@@ -137,6 +138,137 @@ public class CommodoreDiskImageTests
         unreadable.Should().HaveCount(D67Format.Size / GcrLayout.SectorSize - 21);
         image.Should().OnlyContain(value => value == 0);
         D64Format.Write(disk).Unreadable.Should().HaveCount(GcrLayout.Sectors);
+    }
+
+    /// <summary>
+    ///  A disk read from an image is the image, with nothing to save, in each format.
+    /// </summary>
+    [TestMethod]
+    public void ReadingAnImageLeavesTheDiskClean()
+    {
+        CommodoreDisk d64 = D64Format.Read(RandomImage());
+        d64.IsDirty.Should().BeFalse();
+        D67Format.Read(RandomImage(D67Format.Size)).IsDirty.Should().BeFalse();
+        G64Format.Read(G64Format.Write(d64)).IsDirty.Should().BeFalse();
+        CommodoreDiskCodec.Load(RandomImage()).Disk.IsDirty.Should().BeFalse();
+
+        d64.Write(0, 100, !d64.Read(0, 100));
+        d64.IsDirty.Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  A code no nibble encodes makes its block bad, though reading it as zero would leave the checksum right, as
+    ///  the drive's byte decoding error does.
+    /// </summary>
+    [TestMethod]
+    public void AnInvalidCodeMakesTheSectorUnreadable()
+    {
+        (byte[] bits, int count) = GcrLayout.WriteTrack(1, new byte[21 * GcrLayout.SectorSize], ((byte)'A', (byte)'B'));
+        GcrLayout.ReadTrack(bits, count, 1, new byte[21 * GcrLayout.SectorSize]).Should().OnlyContain(found => found);
+
+        // Sector 0's first data byte: after a sync of 40, the header's 6 bytes, the gap's 9, a sync of 40 and the mark.
+        int first = 40 + 60 + 90 + 40 + 10;
+        for (int cell = first; cell < first + 5; cell++) { bits[cell >> 3] &= (byte)~(0x80 >> (cell & 7)); }
+
+        bool[] found = GcrLayout.ReadTrack(bits, count, 1, new byte[21 * GcrLayout.SectorSize]);
+        found[0].Should().BeFalse("00000 encodes no nibble");
+        found[1..].Should().OnlyContain(good => good);
+    }
+
+    /// <summary>
+    ///  A bad copy of a sector after a good one leaves the good one's bytes.
+    /// </summary>
+    [TestMethod]
+    public void ABadCopyAfterAGoodOneKeepsTheGoodOne()
+    {
+        GcrBitWriter writer = new(GcrLayout.TrackBits(3));
+        byte[] good = [.. Enumerable.Range(0, GcrLayout.SectorSize).Select(value => (byte)value)];
+        WriteSector(writer, good, checksum: Xor(good));
+        WriteSector(writer, new byte[GcrLayout.SectorSize], checksum: 0x55);
+
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        bool[] found = GcrLayout.ReadTrack(writer.Buffer, GcrLayout.TrackBits(3), 1, sectors);
+        found[0].Should().BeTrue();
+        sectors.AsSpan(0, GcrLayout.SectorSize).ToArray().Should().Equal(good);
+
+        static void WriteSector(GcrBitWriter writer, byte[] data, byte checksum)
+        {
+            writer.Ones(40);
+            writer.Bytes([0x08, (byte)(0 ^ 1 ^ 'B' ^ 'A'), 0, 1, (byte)'B', (byte)'A']);
+            writer.Zeros(9);
+            writer.Ones(40);
+            writer.Byte(0x07);
+            writer.Bytes(data);
+            writer.Byte(checksum);
+            writer.Zeros(12);
+        }
+
+        static byte Xor(byte[] data)
+        {
+            byte sum = 0;
+            foreach (byte value in data) { sum ^= value; }
+            return sum;
+        }
+    }
+
+    /// <summary>
+    ///  An error table whose codes all say good reads as the sectors alone; one that marks a sector damaged is refused,
+    ///  rather than read back repaired.
+    /// </summary>
+    [TestMethod]
+    public void ADamagedErrorTableIsRefused()
+    {
+        byte[] image = [.. RandomImage(), .. Enumerable.Repeat((byte)0x01, GcrLayout.Sectors)];
+        D64Format.Write(D64Format.Read(image)).Image.Should().Equal(image[..D64Format.Size]);
+
+        image[D64Format.Size + GcrLayout.FirstSector(18) + 3] = 0x05;
+        Action read = () => D64Format.Read(image);
+        read.Should().Throw<InvalidDataException>().WithMessage("*1 sector damaged, the first track 18, sector 3 (code $05)*");
+    }
+
+    /// <summary>
+    ///  A D67 written as a D64 loses each zone-2 track's 20th sector, which the save lists; as a G64 or D67 it loses
+    ///  nothing.
+    /// </summary>
+    [TestMethod]
+    public void SectorsALayoutHasNoPlaceForAreLosses()
+    {
+        MediumSnapshot snapshot = D67Format.Read(RandomImage(D67Format.Size)).Snapshot();
+        List<string> dropped = [];
+        for (int track = 18; track <= 24; track++)
+        {
+            dropped.Add($"track {track}, sector 19, which a D64 image has no place for.");
+        }
+
+        new CommodoreDiskCodec("D64").Encode(snapshot).Losses.Should().Equal(dropped);
+        new CommodoreDiskCodec("D67").Encode(snapshot).Losses.Should().BeEmpty();
+        new CommodoreDiskCodec("G64").Encode(snapshot).Losses.Should().BeEmpty();
+
+        // Anything written at a half-track is lost too.
+        CommodoreDisk disk = D64Format.Read(RandomImage());
+        disk.SetTrack(1, disk.Track(0), disk.BitCount(0), disk.Zone(0));
+        new CommodoreDiskCodec("D64").Encode(disk.Snapshot()).Losses.Should()
+            .Equal("half-track 1.5, which a D64 image has no place for.");
+    }
+
+    /// <summary>
+    ///  A G64 track whose speed table gives every byte one zone reads at that zone; one that mixes zones is refused,
+    ///  since a disk keeps one zone a track.
+    /// </summary>
+    [TestMethod]
+    public void AMixedSpeedTrackIsRefused()
+    {
+        byte[] image = G64Format.Write(D64Format.Read(RandomImage()));
+        int offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(12));
+        int length = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(offset));
+        int table = image.Length;
+        byte[] withTable = [.. image, .. Enumerable.Repeat((byte)0b10_10_10_10, (length + 3) / 4)];
+        BinaryPrimitives.WriteUInt32LittleEndian(withTable.AsSpan(12 + (image[9] * 4)), (uint)table);
+        G64Format.Read(withTable).Zone(0).Should().Be(2);
+
+        withTable[table + 10] = 0b10_10_11_10;
+        Action read = () => G64Format.Read(withTable);
+        read.Should().Throw<InvalidDataException>().WithMessage("*half-track 0 mixes speed zones 2 and 3*");
     }
 
     private static byte[] RandomImage(int size = D64Format.Size)

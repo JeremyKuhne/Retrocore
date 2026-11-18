@@ -34,7 +34,7 @@ export interface SavedMachines {
      */
     recoveryId(configuration: Record<string, unknown>, folder: string | undefined): string | undefined;
     /** The configuration a recovery id was made for: its name and workspace folder's URI, if any. */
-    recoveryOf(id: string): { name: string; folder: string | undefined } | undefined;
+    recoveryOf(id: string): { name: string; folder: string | undefined; made: boolean } | undefined;
 }
 
 /** Saves each session's machine as it changes, and gives it back to the next launch of the same configuration. */
@@ -85,7 +85,7 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             const rest = made ?? state.get<string>(`${ownerPrefix}${id}`);
             if (rest === undefined) return undefined;
             const bar = rest.indexOf("|");
-            return { name: rest.slice(bar + 1), folder: bar > 0 ? rest.slice(0, bar) : undefined };
+            return { name: rest.slice(bar + 1), folder: bar > 0 ? rest.slice(0, bar) : undefined, made: made !== undefined };
         }
     };
 

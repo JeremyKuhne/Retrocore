@@ -229,8 +229,12 @@ export class OffMachine {
             return this.saved.recoveryId(resolveVariables(entry, workspace?.uri.fsPath), workspace?.uri.toString()) === recoveryId;
         }
         const setup = this.state.get<Setup>(lastSetupKey);
-        if (!isUsable(setup) || setupConfiguration(setup).name !== owner.name) return false;
-        return this.saved.recoveryId(setupConfiguration(setup), folderOf(undefined)?.uri.toString()) === recoveryId;
+        if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
+            return this.saved.recoveryId(setupConfiguration(setup), folderOf(undefined)?.uri.toString()) === recoveryId;
+        }
+        // A machine launched from neither, as from a favorite: any launch of its name that gives no id of its own
+        // gets the id made for the name, so a made one still comes back.
+        return owner.made;
     }
 
     /** The recovery id of the machine shown, whose journal keeps the disks its last run did not save. */

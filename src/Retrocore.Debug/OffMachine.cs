@@ -138,10 +138,11 @@ internal static class OffMachine
     }
 
     // The snapshot of the kept disk in each drive, as the journal names it now.
+    // An entry whose fields are not what they should be names nothing here, rather than failing the request.
     private static Dictionary<string, string> Snapshots(RecoveryJournal journal) => journal.Named
-        .Where(entry => entry["ejected"] is null && entry.String("drive") is not null)
-        .GroupBy(entry => entry.String("drive") ?? "")
-        .ToDictionary(group => group.Key, group => group.First().String("file") ?? "");
+        .Where(entry => entry["ejected"] is null && RecoveryJournal.Text(entry, "drive") is not null)
+        .GroupBy(entry => RecoveryJournal.Text(entry, "drive") ?? "")
+        .ToDictionary(group => group.Key, group => RecoveryJournal.Text(group.First(), "file") ?? "");
 
     // A machine built for each request mounts its disks afresh each time, with new generations, so the editor is told
     // of a mount by a token of what its drive holds, which stays while the drive holds the same image. An answer back

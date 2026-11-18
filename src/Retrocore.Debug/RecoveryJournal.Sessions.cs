@@ -186,7 +186,12 @@ internal sealed partial class RecoveryJournal
         }
     }
 
-    // A field's text, or null for none or one that is not text.
-    private static string? Text(JsonObject json, string name) =>
+    /// <summary>
+    ///  Reads a journal field's text, never failing on a field that is something else.
+    /// </summary>
+    /// <param name="json">The journal's object, such as a disk's entry.</param>
+    /// <param name="name">The field.</param>
+    /// <returns>Its text, or null for none or one that is not text.</returns>
+    internal static string? Text(JsonObject json, string name) =>
         json[name] is JsonValue value && value.TryGetValue(out string? text) ? text : null;
 }

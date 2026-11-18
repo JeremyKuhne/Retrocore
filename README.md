@@ -20,7 +20,7 @@ straight into the ROM or DOS source.
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT; runs Altair BASIC from your images |
-| Kaypro II | Z80 | Monitor ROM 81-149C and its character generator | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 from your disks |
+| Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
@@ -115,9 +115,10 @@ completions, document outlines, and workspace symbol search across your code and
 ## BASIC
 
 Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II BASIC** (Level I BASIC is
-[planned](docs/backlog/BasicDebugging.md)):
+[planned](docs/backlog/BasicDebugging.md)). **MBASIC** (Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has
+`.mbasic.bas` source files with the same editing support:
 
-- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, and `.bas` files can
+- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.mbasic.bas`, and `.bas` files can
   omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate
   highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword and variable
   hovers, go to definition, find all references, completions, outlines, and line renumbering.
@@ -204,7 +205,7 @@ machine.
 | [`Editor1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Editor1.asm), [`Kernal1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Kernal1.asm), [`Editor2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Editor2.asm), [`Kernal2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Kernal2.asm), [`Editor4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Editor4.asm), [`Kernal4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Kernal4.asm) | The PET's screen editors and kernals for BASIC 1, 2 and 4, with BASIC 2's machine-language monitor; BASIC 4's editor builds the graphics or the business keyboard's. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Commodore/Roms/CharacterGenerator.asm) | The PET's character ROMs, the 2001's 901447-08 and the 2001-N's 901447-10. |
 | [`Kaypro2.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm), [`Kaypro2CharacterGenerator.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The Kaypro II's 81-149C monitor ROM and 81-146A character generator. |
-
+| [`Mbasic/`](src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, byte-identical to MBASIC.COM, in 19 modules following GW-BASIC's, with Microsoft's names and every routine documented. |
 
 All ROM sources are maintained by hand. Automated tests pin every build by SHA-256—so no ROM dumps are needed to
 verify them—and also compare against your chip dumps byte for byte when dumps are present.
@@ -228,7 +229,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
 | [`Retrocore.Machines.Chips`](src/Retrocore.Machines.Chips) | Chips more than one machine uses: the Western Digital FD1771 and FD179x floppy disk controller and its drives, and the Z80 PIO, SIO, CTC and DMA. |
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface with its drive select and doublers, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family. |
-| [`Retrocore.Machines.Kaypro`](src/Retrocore.Machines.Kaypro) | The Kaypro II: banked memory, the system PIO, serial keyboard, display and disks, and its SDK ROM sources. |
+| [`Retrocore.Machines.Kaypro`](src/Retrocore.Machines.Kaypro) | The Kaypro II: banked memory, the system PIO, serial keyboard, display and disks, and its SDK sources, MBASIC's included. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
 | [`Retrocore.Machines.Commodore`](src/Retrocore.Machines.Commodore) | The Commodore PET 2001 and 4032: its PIAs and VIA, video, keyboard, sound, Datasettes, the IEEE-488 bus and the 4040 and 2040 disk drives, and SDK ROM sources. |
 | [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--disassemble` CLI, in one host. |
@@ -261,7 +262,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_PET_ROMS` | MAME's `pet2001`, `pet2001n`, `pet4016`, `pet4032b`, `c4040` and `c2040` sets unzipped, each in its folder (default `<cache>\pet-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources), but the 4040 and 2040 drives need their `c4040` and `c2040` sets. |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III, Color Computer, PET, 4040 and 2040 oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
-| `RETROCORE_KAYPRO` | Kaypro II dumps and disk for the tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin` and `cpm22-rom149.img` (CP/M 2.2) (default `<cache>\kaypro`). |
+| `RETROCORE_KAYPRO` | Kaypro II dumps and disks for the tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin`, `cpm22-rom149.img` (CP/M 2.2) and `MBasic.img` (default `<cache>\kaypro`). |
 | `RETROCORE_KAYPRO_ROMS` | Kaypro II chip dumps for debugging in place of the SDK's builds (MAME's `kayproii` names, or the names above); optional. |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), `tools\Fetch-M6809Tests.ps1`, and `tools\Fetch-I8080Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
@@ -286,7 +287,7 @@ dotnet test Retrocore.slnx -c Release --no-build
 
 node tools/Test-Trs80Dap.mjs          # needs nothing external
 node tools/Test-Trs80Model3Dap.mjs    # needs nothing external; it writes stand-in ROMs
-node tools/Test-KayproDap.mjs         # needs nothing external; boots CP/M with RETROCORE_KAYPRO's disk
+node tools/Test-KayproDap.mjs         # needs nothing external; boots CP/M and MBASIC with RETROCORE_KAYPRO's disks
 node tools/Test-Apple1Dap.mjs         # needs nothing external
 node tools/Test-Apple1BasicDap.mjs    # needs nothing external
 node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps in RETROCORE_COCO_ROMS when set
@@ -373,12 +374,14 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md);
 - [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md);
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
-- [the Kaypro II](docs/backlog/Kaypro.md): MBASIC, CP/M's sources and its disks as a file system.
+- [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system.
 
 ## License
 
 MIT; see [LICENSE](LICENSE). Microsoft's `m6502.asm` carries its own MIT license in
 [`src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE).
+MBASIC's source ([`Mbasic/`](src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm)) takes Microsoft's names for its routines and variables
+from [GW-BASIC's source](https://github.com/microsoft/GW-BASIC), also MIT-licensed.
 The Model I lowercase kit's font follows [xtrs](https://github.com/TimothyPMann/xtrs), whose notice is kept in
 [`CharacterGeneratorKit.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm). Additional
 third-party notices for bundled extension and desktop assets are in

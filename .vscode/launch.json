@@ -99,6 +99,18 @@
         {
             "type": "retrocore",
             "request": "launch",
+            "machine": "kaypro2",
+            "name": "Kaypro II: MBASIC sample",
+            "preLaunchTask": "Build debug host",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "disks": ["${env:USERPROFILE}/Retrocore/kaypro/cpm22-rom149.img", "${env:USERPROFILE}/Retrocore/kaypro/MBasic.img"],
+            "command": "B:MBASIC",
+            "basic": "${workspaceFolder}/sample/kaypro/squares.mbasic.bas",
+            "stopOnEntry": false
+        },
+        {
+            "type": "retrocore",
+            "request": "launch",
             "machine": "apple2",
             "model": "iiplus",
             "name": "II Plus: SoftCard Z80 sample",

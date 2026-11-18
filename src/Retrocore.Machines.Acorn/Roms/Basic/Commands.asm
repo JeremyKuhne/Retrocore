@@ -657,7 +657,7 @@ CLEAR_STATEMENT:
 
 ;; TRACE: turns line number tracing on or off, TRACE ON, TRACE OFF or TRACE limit.
 ;;
-;; While it is on, BASIC prints the number of each line it runs that is no higher than the limit, in square
+;; While it is on, BASIC prints the number of each line it runs that is below the limit, in square
 ;; brackets. TRACE ON sets a limit of at least &FF00, above every line number.
 ;; In: PTR_A, PTR_A_OFFSET = just after the keyword
 ;; Out: TRACE_FLAG = &FF for on or &00 for off, TRACE_LIMIT = the limit

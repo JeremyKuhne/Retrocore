@@ -786,8 +786,8 @@ NUMBER_TO_STRING_SCALE_UP:
 ;; next. Then:
 ;;
 ;; - In general format, the trailing zeros and a trailing point are removed. The number is shown with E notation when
-;;   its power of ten is as many as the digits or more, or below -1; numbers from 0.01 up to 0.1 are shown with the
-;;   leading zeros instead.
+;;   its power of ten is as many as the digits or more, or below -1; numbers from 0.1 up to 1, whose power is -1,
+;;   are shown with a leading zero instead.
 ;; - In exponent format there is always one digit before the point, and the E part is padded with spaces to four
 ;;   characters, so that numbers line up.
 ;; - In fixed format, a number that would need more than ten significant digits is shown in general format instead.

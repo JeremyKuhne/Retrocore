@@ -303,6 +303,15 @@ internal sealed class MbasicDialect : BasicDialect
                 if (last != 0) { builder.Append(' '); }
                 last = 0;
             }
+            else if (value == GosubToken && index + 1 < line.Length && JoinsAWord(line[index + 1]))
+            {
+                // GOSUB right against a number or name, as GO  TO and GO SUB crunch: GO SUB and a space, which
+                // CRUNCH skips, crunch back to it, where LIST's "GOSUB 100" would keep the space.
+                if (last != 0) { builder.Append(' '); }
+                builder.Append("GO SUB ");
+                last = 0;
+                continue;
+            }
             else
             {
                 if (last != 0) { builder.Append(' '); }
@@ -316,6 +325,14 @@ internal sealed class MbasicDialect : BasicDialect
         }
 
         return builder.ToString();
+    }
+
+    // Whether LIST would set a byte apart from a reserved word before it with a space: a constant, or a name's
+    // character.
+    private static bool JoinsAWord(byte value)
+    {
+        bool constant = value is >= OctalConstant and < 0x20 and not 0x10 and not 0x1B and not 0x1E;
+        return constant || value == '.' || char.IsAsciiLetterOrDigit((char)value);
     }
 
     private static void AppendText(StringBuilder builder, byte value, bool escapes)
@@ -553,6 +570,13 @@ internal sealed class MbasicDialect : BasicDialect
             int upper = Fold(unit);
             if (upper is >= 'A' and <= 'Z')
             {
+                if (GoSpaces(line, x) is int goEnd)
+                {
+                    Word(GosubToken, x, output, ref data, ref numbers);
+                    x = goEnd;
+                    continue;
+                }
+
                 if (Search(line, x, upper) is ({ } token, int end))
                 {
                     if (token < 0x80)
@@ -688,6 +712,24 @@ internal sealed class MbasicDialect : BasicDialect
         }
 
         return null;
+    }
+
+    // CRUNCH's check for GO TO and GO SUB with spaces after GO, ahead of ALPTAB: after "GO " it steps over the next
+    // character and any blanks, as CHRGTR does, then looks for TO or UB. Both crunch as GOSUB, since MBASIC 5.21's
+    // jump for TO lands on the load of GOSUB's token: GO SUB with one space and GO TO with two or more are GOSUB,
+    // while GO TO with one space is left to ALPTAB's own entry, GOTO. CRUNCH then skips the character after TO or
+    // UB too, whatever it is, so GO  TO100 is GOSUB 00. The index after that character, or null.
+    private static int? GoSpaces(int[] line, int x)
+    {
+        if (Fold(At(line, x)) != 'G' || Fold(At(line, x + 1)) != 'O' || At(line, x + 2) != ' ') { return null; }
+        int at = x + 4;
+        while (At(line, at) is ' ' or '\t' or '\n') { at++; }
+        int first = Fold(At(line, at));
+        int second = Fold(At(line, at + 1));
+        if ((first, second) is not (('T', 'O') or ('U', 'B'))) { return null; }
+
+        // MBASIC would step over the line's end too; the line ends here instead.
+        return Math.Min(at + 3, line.Length);
     }
 
     // The reserved word at x, and the index after it, if one is there and set apart from what follows.

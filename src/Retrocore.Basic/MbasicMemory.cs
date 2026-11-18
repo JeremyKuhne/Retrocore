@@ -10,7 +10,7 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   <c>Mbasic.asm</c>, the SDK's source of <c>MBASIC.COM</c>, defines these too; they are here for the BASIC tools,
+///   <c>Mbasic/Storage.asm</c>, in the SDK's source of <c>MBASIC.COM</c>, defines these too; they are here for the BASIC tools,
 ///   which work without it.
 ///  </para>
 /// </remarks>

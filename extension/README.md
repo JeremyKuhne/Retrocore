@@ -1079,7 +1079,7 @@ the [Drives view](#machine-and-drives), where disks go in and out and are saved.
 default; `B:MBASIC` when it is on drive B) starts MBASIC, the program goes into memory
 and RUN starts it. While MBASIC runs, a BASIC thread steps by statement with the GOSUB
 call stack, variables, arrays and FOR loops, as on the TRS-80, and the CPU thread steps
-through `Mbasic.asm`.
+through MBASIC's source (`Mbasic/`).
 
 ## Breakpoints
 

@@ -1895,7 +1895,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), or the Kaypro II's (Kaypro2.asm and Kaypro2CharacterGenerator.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), or the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic)."
               },
               "breakpoints": {
                 "type": "array",

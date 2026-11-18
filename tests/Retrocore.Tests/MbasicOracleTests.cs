@@ -27,6 +27,28 @@ public sealed class MbasicOracleTests
     private const int BlockSize = 1024;
 
     /// <summary>
+    ///  GO with spaces before TO or SUB crunches as MBASIC 5.21's CRUNCH does, as recorded from MBASIC itself: GO
+    ///  SUB with one space and GO TO with two or more are GOSUB, the character after TO or UB is skipped, and GO TO
+    ///  with one space is GOTO. The lines list as text that crunches back to the same bytes.
+    /// </summary>
+    /// <param name="line">The line, after its number.</param>
+    /// <param name="mbasic">What MBASIC stores, in hex.</param>
+    /// <param name="listed">What the dialect lists.</param>
+    [TestMethod]
+    [DataRow("GO TO 100", "89200E6400", "GOTO 100")]
+    [DataRow("GO  TO 100", "8D0E6400", "GO SUB 100")]
+    [DataRow("GO SUB 100", "8D0E6400", "GO SUB 100")]
+    [DataRow("GO  SUB 100", "474F202053554220313030", "GO  SUB 100")]
+    [DataRow("GO  TO100", "8D0E0000", "GO SUB 0")]
+    [DataRow("GO  TO  100", "8D200E6400", "GOSUB 100")]
+    public void GoWithSpacesCrunchesAsMbasicDoes(string line, string mbasic, string listed)
+    {
+        byte[] crunched = BasicDialect.Mbasic.Tokenize(line);
+        Convert.ToHexString(crunched).Should().Be(mbasic);
+        BasicDialect.Mbasic.Detokenize(crunched).Should().Be(listed);
+    }
+
+    /// <summary>
     ///  Lines typed at MBASIC: each crunches as the dialect crunches it, and LIST shows what the dialect lists.
     /// </summary>
     [TestMethod]
@@ -59,7 +81,14 @@ public sealed class MbasicOracleTests
             "DIM A(10),B$(5,5)",
             "X = 1 2 3",
             "LIST 10-20",
-            "PRINT A.B,ITEM.COUNT"
+            "PRINT A.B,ITEM.COUNT",
+            "GO TO 100",
+            "GO  TO 100",
+            "GO SUB 100",
+            "GO  SUB 100",
+            "go   to 100:GO TOTAL",
+            "GO  TO100",
+            "GO  TO  100"
         ];
 
         KayproMachine machine = StartMbasic();

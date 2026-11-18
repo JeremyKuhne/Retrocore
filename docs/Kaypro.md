@@ -51,7 +51,7 @@ its bell.
 | --- | --- |
 | [`Kaypro2.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm) | The 81-149C monitor ROM: its CP/M-style entry points, the SIO and PIO set-up, the boot, the disk routines (blocking and deblocking with Digital Research's Appendix G algorithm and names), the transfer routines it copies to `$FECD`, the keyboard, serial and printer drivers and the screen driver with its escape sequences. |
 | [`Kaypro2CharacterGenerator.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The 81-146A character generator, a glyph a row of dots at a time. |
-| [`Mbasic.asm`](../src/Retrocore.Machines.Kaypro/Roms/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, assembling to a program compatible byte for byte with MBASIC.COM, with Microsoft's names from [GW-BASIC's MIT-licensed source](https://github.com/microsoft/GW-BASIC) for its tables, variables, statement and function handlers, errors and interpreter core. |
+| [`Mbasic/Mbasic.asm`](../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, assembling to a program compatible byte for byte with MBASIC.COM. The root includes 19 modules in address order, following the modules of [GW-BASIC's MIT-licensed source](https://github.com/microsoft/GW-BASIC): the tables and variables, the interpreter, statements, evaluator, LIST, the math package, PTRGET, the console and PRINT USING, strings, the line editor, the disk files and the CP/M file layer, and start-up. Its names are Microsoft's, from GW-BASIC's source and Level2.asm, and every routine is documented. |
 
 `KayproTests` pin each source by SHA-256, so the tests need no dumps, and compare them byte for byte with the dumps
 in `RETROCORE_KAYPRO` (`81-149c.rom`, `81-146a.bin`, and MBASIC.COM on `MBasic.img`) when they are there.
@@ -82,7 +82,7 @@ in `RETROCORE_KAYPRO` (`81-149c.rom`, `81-146a.bin`, and MBASIC.COM on `MBasic.i
 ## Debugging
 
 The CPU thread steps through the monitor ROM in `Kaypro2.asm`, including the transfer routines where the ROM copies
-them, and through MBASIC in `Mbasic.asm`: each statement applies wherever memory holds the bytes it assembled to.
+them, and through MBASIC in its modules under `Mbasic/`: each statement applies wherever memory holds the bytes it assembled to.
 Function breakpoints take the sources' names, such as `READ`, the ROM's disk read that CP/M's BIOS calls. Retrocore
 Memory has banks for the RAM under the ROM, the ROM and video RAM, so they can be read and written whichever is
 banked in.

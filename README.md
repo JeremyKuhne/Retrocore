@@ -201,7 +201,7 @@ machine.
 | [`ExtendedBasic.asm`](src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm) | TRS-80 Color Computer Extended Color BASIC, versions 1.0 and 1.1. |
 | [`DiskBasic.asm`](src/Retrocore.Machines.Coco/Roms/DiskBasic.asm) | TRS-80 Color Computer Disk Extended Color BASIC, versions 1.0 and 1.1. |
 | [`Kaypro2.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm), [`Kaypro2CharacterGenerator.asm`](src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The Kaypro II's 81-149C monitor ROM and 81-146A character generator. |
-| [`Mbasic.asm`](src/Retrocore.Machines.Kaypro/Roms/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, byte-identical to MBASIC.COM; Microsoft's names for its tables, variables, statement and function handlers and core, the rest still being named ([backlog](docs/backlog/Kaypro.md)). |
+| [`Mbasic/`](src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, byte-identical to MBASIC.COM, in 19 modules following GW-BASIC's, with Microsoft's names and every routine documented. |
 
 All ROM sources are maintained by hand. Automated tests pin every build by SHA-256—so no ROM dumps are needed to
 verify them—and also compare against your chip dumps byte for byte when dumps are present.
@@ -371,7 +371,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 
 MIT; see [LICENSE](LICENSE). Microsoft's `m6502.asm` carries its own MIT license in
 [`src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE`](src/Retrocore.Machines.Apple2/Roms/AppleSoft/LICENSE).
-[`Mbasic.asm`](src/Retrocore.Machines.Kaypro/Roms/Mbasic.asm) takes Microsoft's names for MBASIC's routines and variables
+MBASIC's source ([`Mbasic/`](src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm)) takes Microsoft's names for its routines and variables
 from [GW-BASIC's source](https://github.com/microsoft/GW-BASIC), also MIT-licensed.
 The Model I lowercase kit's font follows [xtrs](https://github.com/TimothyPMann/xtrs), whose notice is kept in
 [`CharacterGeneratorKit.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm). Additional

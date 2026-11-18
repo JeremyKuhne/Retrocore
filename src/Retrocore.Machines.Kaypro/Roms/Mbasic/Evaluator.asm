@@ -1,82 +1,149 @@
 ;; MBASIC 5.21: THE FORMULA EVALUATOR
 ;;
-;; Part of Mbasic.asm.
+;; Evaluates expressions into the floating accumulator (the FAC, at FACLO, with its type in VALTYP),
+;; and holds the functions and statements that sit beside it in Microsoft's source: user functions (DEF FN, FN,
+;; DEF USR, USR), VARPTR, INP, OUT, WAIT and WIDTH, and the GETBYT family that turns an expression into a byte
+;; or an integer. It corresponds to GW-BASIC's GWEVAL.ASM, routine for routine and in the same order, without
+;; GW-BASIC's DEF SEG and PC hardware functions; Level2.asm has the Z80 form of much of it.
+;;
+;; - FRMEVL evaluates an expression by operator precedence. LPOPER calls EVAL for an operand, then looks at the
+;;   operator after it: one that binds tighter than the pending one (OPTAB) pushes the left operand with the
+;;   address of its routine (APPLOP, EXPSTK's FPWRQ, ANDORD's DANDOR or FINREL's DOCMP) and evaluates the right
+;;   operand at its own precedence; one that does not returns, so the pending operator is applied first.
+;; - APPLOP brings the two operands of an arithmetic or comparison operator to one type and dispatches
+;;   through INTDSP, SNGDSP or DBLDSP. DANDOR applies the integer operators AND, OR, XOR, EQV, IMP, MOD and \.
+;; - EVAL evaluates one operand: a number, a variable, a string, unary minus and NOT, &H and &O constants, ERR,
+;;   ERL, VARPTR, a function through ISFUN and FUNDSP, or an expression in parentheses (PARCHK).
+;; - FNDOER calls a user function: it saves the current parameter block, binds the arguments to the
+;;   parameters in a new one (PARM2, then PARM1) and evaluates the definition's formula.
+;;
+;; Runs at $19F7-$2083. FRMEVL, FRMPRN, GETYPR, GETBYT and CONINT are used throughout the interpreter.
 
-L_19F7:
-    CALL L_43D3
-    RET P
-    JP L_1A02
-L_19FE:
-    CALL L_43D3
-    .byte $28
-L_1A02:
-    .byte $2B
-L_1A03:
-    LD D,$00
-L_1A05:
-    PUSH DE
-    LD C,$01
-    CALL L_42C7
-    CALL L_1B93
-    XOR A
-    LD [D_0C09],A
+;; Requires an equal sign, then evaluates the expression after it.
+;;
+;; In:    HL = the text, at the equal sign
+;; Out:   HL = the text after the expression, FACLO = the value, VALTYP = its type
+;; Errors: SN without the equal sign
+FRMEQL:
+    CALL SYNCHR
+    .byte $F0                       ; the = token
+    JP FRMEVL
+
+;; Requires an opening parenthesis, then evaluates the expression after it.
+;;
+;; In:    HL = the text, at the parenthesis
+;; Out:   HL = the text after the expression, FACLO = the value, VALTYP = its type
+;; Errors: SN without the parenthesis
+FRMPRN:
+    CALL SYNCHR
+    .byte '('
+
+;; Evaluates the expression at HL into the FAC.
+;;
+;; In:    HL = the text, at the character before the expression
+;; Out:   HL = the text after the expression, FACLO = the value, VALTYP = its type: 2 integer, 3 string
+;;   (FACLO = its descriptor), 4 single, 8 double
+;; Errors: MO without an operand, SN, TM, OV and the errors of the functions called
+;; Entry: FRMCHK = HL at the expression's first character, already fetched,
+;;   LPOPER = evaluates only the operators that bind tighter than the precedence in D
+FRMEVL:
+    DEC HL                          ; fetch the first character again
+FRMCHK:
+    LD D,$00                        ; any operator binds tighter than 0
+LPOPER:
+    PUSH DE                         ; keep the pending operator's precedence
+    LD C,$01                        ; room for the recursion
+    CALL GETSTK
+    CALL EVAL                       ; the operand
+    XOR A                           ; overflow messages again (FN calls set it)
+    LD [FLGOVC],A
+
+;; Goes on with an expression after an operand: keeps the text pointer, then applies the next operator.
+;;
+;; CAT (Strings.asm) has PUTNEW return here with the joined string, as an operand of its own.
+;;
+;; In:    HL = the text after the operand
+TSTOP:
     LD [TEMP2],HL
-L_1A15:
-    LD HL,[TEMP2]
-    POP BC
+
+;; Applies the operator after an operand, or returns at the end of the expression.
+;;
+;; An operator that binds no tighter than the pending one in B returns, so that the caller applies the
+;; pending one first. Relations go to DORELS, and + of two strings to CAT.
+;;
+;; In:    TEMP2 = the text after the operand, the pending precedence on the stack
+;; Out:   HL = the text at the character that ended the expression, TEMP3 = the same
+RETAOP:
+    LD HL,[TEMP2]                   ; HL = the text after the operand
+    POP BC                          ; B = the pending precedence
     LD A,[HL]
     LD [TEMP3],HL
-    CP $EF
+    CP $EF                          ; below >: not an operator
     RET C
-    CP $F2
-    JP C,L_1A8E
-    SUB $F2
+    CP $F2                          ; > = <: a relation
+    JP C,DORELS
+    SUB $F2                         ; E = the operator, 0 for +
     LD E,A
-    JP NZ,L_1A34
-    LD A,[D_0A67]
-L_1A2E:
+    JP NZ,NTPLUS
+    LD A,[VALTYP]                   ; + of a string joins strings
     CP $03
     LD A,E
-    JP Z,L_485B
-L_1A34:
-    CP $0C
+    JP Z,CAT
+
+;; Applies an arithmetic or logical operator, if it binds tighter than the pending one.
+;;
+;; Pushes the address of RETAOP, then the left operand as the operator needs it, and evaluates the right one.
+;; An operator that does not bind tighter returns at once, unapplied.
+;;
+;; In:    A, E = the operator, from 0 for + to 11 for \, B = the pending precedence, HL = the text at the
+;;   operator, the pending precedence on the stack
+NTPLUS:
+    CP $0C                          ; past \: not an operator
     RET NC
-    LD HL,$047F
+    LD HL,OPTAB
     LD D,$00
     ADD HL,DE
-    LD A,B
-    LD D,[HL]
-    CP D
+    LD A,B                          ; A = the pending precedence
+    LD D,[HL]                       ; D = this operator's
+    CP D                            ; binds no tighter: apply the pending one first
     RET NC
-    PUSH BC
-    LD BC,$1A15
+    PUSH BC                         ; keep the pending precedence
+    LD BC,RETAOP                    ; come back there after applying it
     PUSH BC
     LD A,D
-    CP $7F
-    JP Z,L_1AAC
-    CP $51
-    JP C,L_1ABA
-    AND $FE
+    CP $7F                          ; ^ works in single precision
+    JP Z,EXPSTK
+    CP $51                          ; AND, OR, XOR, EQV and IMP in integers,
+    JP C,ANDORD
+    AND $FE                         ; and so do MOD (122) and \ (123)
     CP $7A
-    JP Z,L_1ABA
-L_1A58:
-    LD HL,$0C04
-    LD A,[D_0A67]
-    SUB $03
+    JP Z,ANDORD
+
+;; Pushes the FAC as an operator's left operand, then evaluates the right one and applies them at APPLOP.
+;;
+;; The value is pushed in the FAC's order, then the type and operator as one word.
+;;
+;; In:    D = the operator's precedence, E = the operator
+;; Errors: TM for a string
+;; Entry: VPUSHD = pushes the type and operator, with A the type less 3
+NUMREL:
+    LD HL,FACLO
+    LD A,[VALTYP]
+    SUB $03                         ; zero for a string,
     JP Z,TMERR
-    OR A
+    OR A                            ; negative for an integer, odd parity for a single
+    LD C,[HL]                       ; push the low word
+    INC HL
+    LD B,[HL]
+    PUSH BC
+    JP M,VPUSHD                     ; an integer is all pushed
+    INC HL                          ; push the high word
     LD C,[HL]
     INC HL
     LD B,[HL]
     PUSH BC
-    JP M,L_1A7F
-    INC HL
-    LD C,[HL]
-    INC HL
-    LD B,[HL]
-    PUSH BC
-    JP PO,L_1A7F
-    LD HL,$0C00
+    JP PO,VPUSHD                    ; a single is all pushed
+    LD HL,DFACLO                    ; a double's low four bytes too
     LD C,[HL]
     INC HL
     LD B,[HL]
@@ -86,208 +153,463 @@ L_1A58:
     INC HL
     LD B,[HL]
     PUSH BC
-L_1A7F:
-    ADD A,$03
-    LD C,E
-    LD B,A
+VPUSHD:
+    ADD A,$03                       ; A = the type
+    LD C,E                          ; C = the operator
+    LD B,A                          ; B = the left operand's type
     PUSH BC
-    LD BC,$1AE3
-L_1A87:
+    LD BC,APPLOP                    ; apply it at APPLOP
+
+;; Pushes the routine that will apply the operator, then evaluates the right operand from the operator.
+;;
+;; Continues at LPOPER.
+;;
+;; In:    BC = the routine, D = the operator's precedence, TEMP3 = the text at the operator
+FINTMP:
     PUSH BC
     LD HL,[TEMP3]
-    JP L_1A05
-L_1A8E:
+    JP LPOPER
+
+;; Gathers the relational operators after an operand into a mask in D: 1 for >, 2 for =, 4 for <.
+;;
+;; Continues at FINREL with D = the mask.
+;;
+;; In:    A = the first relational token, HL = the text there
+;; Errors: SN for the same relation twice
+;; Entry: LOPREL = takes the next token, with D the mask so far
+DORELS:
     LD D,$00
-L_1A90:
-    SUB $EF
-    JP C,L_1AC6
+LOPREL:
+    SUB $EF                         ; > = < become 0 1 2
+    JP C,FINREL
     CP $03
-    JP NC,L_1AC6
-    CP $01
+    JP NC,FINREL
+    CP $01                          ; and 1 2 4
     RLA
-    XOR D
+    XOR D                           ; add the bit, a smaller result if it was there
     CP D
     LD D,A
     JP C,SNERR
-    LD [TEMP3],HL
+    LD [TEMP3],HL                   ; the operator's position
     CALL CHRGTR
-    JP L_1A90
-L_1AAC:
-    CALL FN_CSNG
-    CALL L_2899
-    LD BC,$36CC
-    LD D,$7F
-    JP L_1A87
-L_1ABA:
+    JP LOPREL
+
+;; Pushes the left operand of ^ in single precision, then evaluates the right one.
+;;
+;; Continues at FINTMP, to apply FPWRQ.
+;;
+;; In:    FACLO = the left operand
+EXPSTK:
+    CALL FN_CSNG                    ; ^ works in single precision
+    CALL PUSHF                      ; push it
+    LD BC,FPWRQ                     ; forces the right one too, and raises
+    LD D,$7F                        ; ^'s precedence
+    JP FINTMP
+
+;; Pushes the left operand of AND, OR, XOR, EQV, IMP, MOD or \ as an integer, then evaluates the right one.
+;;
+;; Continues at FINTMP, to apply DANDOR.
+;;
+;; In:    D = the operator's precedence, which tells DANDOR the operator
+ANDORD:
     PUSH DE
-    CALL FN_CINT
+    CALL FN_CINT                    ; HL = the integer
     POP DE
     PUSH HL
-    LD BC,$1D75
-    JP L_1A87
-L_1AC6:
-    LD A,B
+    LD BC,DANDOR
+    JP FINTMP
+
+;; Pushes the left operand of a relation and evaluates the right one, comparing them at DOCMP.
+;;
+;; Numbers go through APPLOP as operator 4, the comparison; strings push their descriptor for STRCMP. If the
+;; pending operator binds tighter, it returns at once, the relation unapplied.
+;;
+;; In:    D = the relations' mask, B = the pending precedence
+FINREL:
+    LD A,B                          ; relations have precedence 100
     CP $64
     RET NC
-    PUSH BC
-    PUSH DE
-    LD DE,$6404
-    LD HL,$1D42
+    PUSH BC                         ; keep the pending precedence
+    PUSH DE                         ; and the mask, for DOCMP
+    LD DE,$6404                     ; D = precedence 100, E = operator 4, compare
+    LD HL,DOCMP                     ; the result becomes true or false there
     PUSH HL
-    CALL L_1D64
-    JP NZ,L_1A58
-    LD HL,[D_0C04]
+    CALL GETYPR
+    JP NZ,NUMREL                    ; a number
+    LD HL,[FACLO]                   ; a string: its descriptor
     PUSH HL
-    LD BC,$465C
-    JP L_1A87
-    .byte $C1, $79, $32, $68, $0A, $3A, $67, $0A, $B8, $C2, $FC, $1A, $FE, $02, $CA, $18
-    .byte $1B, $FE, $04, $CA, $67, $1B, $D2, $2B, $1B, $57, $78, $FE, $08, $CA, $28, $1B
-    .byte $7A, $FE, $08, $CA, $4F, $1B, $78, $FE, $04, $CA, $64, $1B, $7A, $FE, $03, $CA
-    .byte $E1, $0C, $D2, $6F, $1B, $21, $A9, $04, $06, $00, $09, $09, $4E, $23, $46, $D1
-    .byte $2A, $04, $0C, $C5, $C9, $CD, $20, $2A, $CD, $F4, $28, $E1, $22, $02, $0C, $E1
-    .byte $22, $00, $0C, $C1, $D1, $CD, $A9, $28, $CD, $20, $2A, $21, $95, $04, $3A, $68
-    .byte $0A, $07, $85, $6F, $8C, $95, $67, $7E, $23, $66, $6F, $E9, $78, $F5, $CD, $F4
-    .byte $28, $F1, $32, $67, $0A, $FE, $04, $CA, $36, $1B, $E1, $22, $04, $0C, $C3, $3B
-    .byte $1B, $CD, $F4, $29, $C1, $D1, $21, $9F, $04, $C3, $41, $1B, $E1, $CD, $99, $28
-    .byte $CD, $14, $2A, $CD, $B4, $28, $E1, $22, $06, $0C, $E1, $22, $04, $0C, $C3, $69
-    .byte $1B, $E5, $EB, $CD, $14, $2A, $E1, $CD, $99, $28, $CD, $14, $2A, $C3, $67, $27
-L_1B93:
+    LD BC,STRCMP
+    JP FINTMP
+
+;; Applies an arithmetic operator or a numeric comparison to the left operand on the stack and the FAC.
+;;
+;; Both are brought to the wider of their types first. Integer routines get the left operand in DE and the
+;; right in HL; single ones the left in BC/DE and the right in the FAC; double ones the left in the FAC and
+;; the right in ARG.
+;;
+;; The stack holds the left operand's type (B) and the operator (C) as a word, then the left operand.
+;; Errors: TM for a string on the right
+APPLOP:
+    POP BC                          ; B = the left type, C = the operator
+    LD A,C
+    LD [DORES],A                    ; kept for the dispatch
+    LD A,[VALTYP]
+    CP B                            ; the same types?
+    JP NZ,VALNSM
+    CP $02
+    JP Z,INTDPC
+    CP $04
+    JP Z,SNGDPC
+    JP NC,DBLDPC
+
+;; Converts the operand of the narrower type, for APPLOP's operands of two types.
+;;
+;; In:    A = the FAC's type, B = the left operand's type
+;; Errors: TM for a string in the FAC
+VALNSM:
+    LD D,A                          ; D = the FAC's type
+    LD A,B
+    CP $08                          ; the left one double
+    JP Z,STKDBL
+    LD A,D
+    CP $08                          ; the right one double
+    JP Z,FACDBL
+    LD A,B
+    CP $04                          ; the left one single
+    JP Z,STKSNG
+    LD A,D
+    CP $03                          ; a string on the right
+    JP Z,TMERR
+    JP NC,FACSNG                    ; the right one single
+
+;; Applies an integer operator through INTDSP, with the left operand in DE and the right in HL.
+;;
+;; In:    C = the operator, the left operand on the stack
+INTDPC:
+    LD HL,INTDSP
+    LD B,$00
+    ADD HL,BC                       ; two bytes an entry
+    ADD HL,BC
+    LD C,[HL]                       ; BC = the routine
+    INC HL
+    LD B,[HL]
+    POP DE                          ; DE = the left operand
+    LD HL,[FACLO]                   ; HL = the right operand
+    PUSH BC                         ; run the routine
+    RET
+
+;; Applies a double precision operator whose left operand is double, converting the FAC to double.
+;;
+;; The left operand is on the stack.
+;; Entry: DBLDPC = the FAC already double, SNGDBL = pops a single into the FAC,
+;;   SETDBL = makes the FAC double and dispatches, DODSP = dispatches through the table in HL
+STKDBL:
+    CALL FN_CDBL
+DBLDPC:
+    CALL VMOVAF                     ; the right operand to ARG
+    POP HL                          ; the left one's low half into the FAC
+    LD [DFAC_MID],HL
+    POP HL
+    LD [DFACLO],HL
+SNGDBL:
+    POP BC                          ; and its high half
+    POP DE
+    CALL MOVFR
+SETDBL:
+    CALL FN_CDBL                    ; the left operand double
+    LD HL,DBLDSP
+DODSP:
+    LD A,[DORES]                    ; the operator's entry,
+    RLCA                            ; two bytes each
+    ADD A,L
+    LD L,A
+    ADC A,H
+    SUB L
+    LD H,A
+    LD A,[HL]                       ; HL = the routine
+    INC HL
+    LD H,[HL]
+    LD L,A
+    JP [HL]
+
+;; Applies an operator to a double FAC and an integer or single left operand, which becomes double.
+;;
+;; In:    B = the left operand's type, the left operand on the stack
+FACDBL:
+    LD A,B
+    PUSH AF
+    CALL VMOVAF                     ; the right operand to ARG
+    POP AF
+    LD [VALTYP],A                   ; the FAC takes the left one's type
+    CP $04
+    JP Z,SNGDBL                     ; a single
+    POP HL                          ; an integer
+    LD [FACLO],HL
+    JP SETDBL
+
+;; Applies an operator whose left operand is single, converting the FAC to single.
+;;
+;; The left operand is on the stack.
+;; Entry: SNGDPC = the FAC already single, SNGDO = dispatches, with BC/DE the left operand
+STKSNG:
+    CALL FN_CSNG
+SNGDPC:
+    POP BC                          ; BC/DE = the left operand
+    POP DE
+SNGDO:
+    LD HL,SNGDSP
+    JP DODSP
+
+;; Applies an operator to a single FAC and an integer left operand, which becomes single.
+;;
+;; The left operand is on the stack.
+FACSNG:
+    POP HL                          ; HL = the left integer
+    CALL PUSHF                      ; push the right operand
+    CALL CONSIH                     ; the left one single,
+    CALL MOVRF                      ; into BC/DE
+    POP HL                          ; the right one back into the FAC
+    LD [FACHI],HL
+    POP HL
+    LD [FACLO],HL
+    JP SNGDO
+
+;; Divides two integers with /, in single precision, so that 1/3 is .333333 and not 0.
+;;
+;; In:    DE = the dividend, HL = the divisor
+;; Out:   FACLO = the quotient, a single
+INTDIV:
+    PUSH HL
+    EX DE,HL
+    CALL CONSIH                     ; the dividend single,
+    POP HL
+    CALL PUSHF                      ; pushed
+    CALL CONSIH                     ; the divisor single
+    JP FDIVT
+
+;; Evaluates one operand at HL into the FAC.
+;;
+;; In:    HL = the text before the operand
+;; Out:   HL = the text after the operand, FACLO = the value, VALTYP = its type
+;; Errors: MO if there is no operand
+EVAL:
     CALL CHRGTR
-    JP Z,MOERR
-    JP C,L_2ED1
-    CALL L_4504
-    JP NC,L_1C4A
-    CP $20
-    JP C,L_135D
-    INC A
+    JP Z,MOERR                      ; nothing there
+    JP C,FIN                        ; a digit starts a number
+    CALL ISLET2                     ; a letter starts a variable
+    JP NC,ISVAR
+    CP $20                          ; a crunched constant
+    JP C,CONFAC
+    INC A                           ; $FF starts a function
     JP Z,ISFUN
     DEC A
-    CP $F2
-    JP Z,L_1B93
-    CP $F3
-    JP Z,L_1C3C
-    CP $22
-    JP Z,L_46C8
-    CP $D5
-    JP Z,L_1D4F
-    CP $26
-    JP Z,L_1C69
-    CP $D7
-    JP NZ,L_1BD6
+    CP $F2                          ; + is ignored
+    JP Z,EVAL
+    CP $F3                          ; -
+    JP Z,DOMIN
+    CP '"'                          ; a string
+    JP Z,STRLTI
+    CP $D5                          ; NOT
+    JP Z,NOTER
+    CP '&'                          ; &H or &O
+    JP Z,OCTCNS
+    CP $D7                          ; ERR
+    JP NZ,NTERC
     CALL CHRGTR
-    LD A,[D_078A]
+    LD A,[ERRFLG]                   ; the last error's code
     PUSH HL
-    CALL L_1DD5
+    CALL SNGFLT                     ; as an integer
     POP HL
     RET
-L_1BD6:
-    CP $D6
-    JP NZ,L_1BE7
+
+;; Evaluates ERL, the line of the last error, or tries the next kind of operand.
+;;
+;; In:    A = the token, HL = the text at it
+;; Out:   HL = the text after the operand, FACLO = the value
+NTERC:
+    CP $D6                          ; ERL
+    JP NZ,NTERL
     CALL CHRGTR
     PUSH HL
     LD HL,[ERRLIN]
-    CALL L_2C03
+    CALL INEG2                      ; unsigned, as a single
     POP HL
     RET
-L_1BE7:
-    CP $DC
-    JP NZ,L_1C16
+
+;; Evaluates VARPTR: the address of a variable, or of a file's block for VARPTR(#n).
+;;
+;; In:    A = the token, HL = the text at it
+;; Out:   HL = the text after the operand, FACLO = the address, an integer
+;; Errors: FC for a variable that does not exist yet
+NTERL:
+    CP $DC                          ; VARPTR
+    JP NZ,NTVARP
     CALL CHRGTR
-    CALL L_43D3
-L_1BF2:
-    JR Z,L_1BF2
-    INC HL
-    JP NZ,L_1C03
-    CALL L_2072
+    CALL SYNCHR
+    .byte '('
+    CP '#'                          ; a file?
+    JP NZ,NVRFIL
+    CALL GTBYTC                     ; the file's number
     PUSH HL
-    CALL L_5150
+    CALL GETPTR                     ; DE = its block
     POP HL
-    JP L_1C06
-L_1C03:
-    CALL L_3A89
-L_1C06:
-    CALL L_43D3
-    ADD HL,HL
+    JP VARRET
+
+;; Finds VARPTR's variable, without creating it.
+;;
+;; Continues at VARRET with DE = its address, or 0.
+;;
+;; In:    HL = the text at the variable
+;; Entry: VARRET = returns the address in DE
+NVRFIL:
+    CALL PTRGTN
+VARRET:
+    CALL SYNCHR
+    .byte ')'
     PUSH HL
     EX DE,HL
-    LD A,H
+    LD A,H                          ; zero: it does not exist
     OR L
-    JP Z,L_1418
-    CALL L_29DC
+    JP Z,FCERR
+    CALL MAKINT                     ; the address as an integer
     POP HL
     RET
-L_1C16:
-    CP $D2
-    JP Z,L_1DDB
-    CP $DA
-    JP Z,L_49CB
-    CP $DD
-    JP Z,L_426F
-    CP $D8
-    JP Z,L_4900
-    CP $85
-    JP Z,L_5527
-    CP $D3
-    JP Z,L_1E54
-L_1C34:
-    CALL L_19FE
-    CALL L_43D3
-    ADD HL,HL
+
+;; Dispatches the operands that start with a token: USR, INSTR, INKEY$, STRING$, INPUT$ and FN.
+;;
+;; Anything else must be an expression in parentheses.
+;;
+;; In:    A = the token or character, HL = the text at it
+;; Out:   HL = the text after the operand, FACLO = the value
+NTVARP:
+    CP $D2                          ; USR
+    JP Z,USRFN
+    CP $DA                          ; INSTR
+    JP Z,FN_INSTR
+    CP $DD                          ; INKEY$
+    JP Z,INKEY
+    CP $D8                          ; STRING$
+    JP Z,FN_STRING
+    CP $85                          ; INPUT$
+    JP Z,FIXINP
+    CP $D3                          ; FN
+    JP Z,FNDOER
+
+;; Evaluates an expression in parentheses.
+;;
+;; In:    HL = the text at the opening parenthesis
+;; Out:   HL = the text after the closing one, FACLO = the value, VALTYP = its type
+;; Errors: SN without either parenthesis
+PARCHK:
+    CALL FRMPRN
+    CALL SYNCHR
+    .byte ')'
     RET
-L_1C3C:
-    LD D,$7D
-    CALL L_1A05
+
+;; Evaluates unary minus: the operand, at a precedence above everything but ^, then negates it.
+;;
+;; In:    HL = the text at the minus
+;; Out:   HL = the text after the operand, FACLO = the value
+;; Entry: LABBCK = pops HL and returns, where the functions return
+DOMIN:
+    LD D,$7D                        ; below ^, above the rest
+    CALL LPOPER
     LD HL,[TEMP2]
     PUSH HL
-    CALL L_286B
+    CALL VNEG                       ; negate it
+LABBCK:
     POP HL
     RET
-L_1C4A:
-    CALL L_398B
+
+;; Evaluates a variable: a number's value into the FAC, a string's descriptor address into FACLO.
+;;
+;; In:    HL = the text at the name
+;; Out:   HL = the text after the name, FACLO = the value or descriptor
+;; Entry: RETVAR = PTRGET's return address here, which SMKVAR (Variables.asm) tests to give a missing
+;;   variable's zero or empty string rather than create it
+ISVAR:
+    CALL PTRGET                     ; DE = the variable
+RETVAR:
     PUSH HL
     EX DE,HL
-    LD [D_0C04],HL
-    CALL L_1D64
-    CALL NZ,L_28EE
+    LD [FACLO],HL                   ; a string's descriptor
+    CALL GETYPR
+    CALL NZ,VMOVFM                  ; a number's value
     POP HL
     RET
-L_1C5A:
+
+;; Turns a lowercase letter into a capital.
+;;
+;; In:    HL = the character, for MAKUPL, A = the character, for MAKUPS
+;; Out:   A = the character, in capitals
+;; Keeps: BC, DE, HL
+;; Entry: MAKUPS = takes the character in A
+MAKUPL:
     LD A,[HL]
-L_1C5B:
-    CP $61
+MAKUPS:
+    CP 'a'
     RET C
-    CP $7B
+    CP 'z'+1
     RET NC
     AND $5F
     RET
-    .byte $FE, $26, $C2, $28, $14
-L_1C69:
-    LD DE,$0000
+
+;; Reads a line number, or an &H or &O constant.
+;;
+;; Nothing in MBASIC calls it: line numbers are read by LINGET itself.
+;;
+;; In:    A = the first character, HL = the text at it
+CNSGET:
+    CP '&'
+    JP NZ,LINGET
+
+;; Reads an &H hexadecimal or &O (or plain &) octal constant into the FAC as an integer.
+;;
+;; In:    HL = the text at the &
+;; Out:   HL = the text after the constant, FACLO = the value
+;; Errors: OV for more than 4 hex digits or an octal value past 65535, SN for an 8 or 9 in an octal one
+OCTCNS:
+    LD DE,$0000                     ; DE = the value
     CALL CHRGTR
-    CALL L_1C5B
-    CP $4F
-    JP Z,L_1CAD
-    CP $48
-    JP NZ,L_1CAC
-    LD B,$05
-L_1C7E:
+    CALL MAKUPS
+    CP 'O'
+    JP Z,LOPOCT
+    CP 'H'
+    JP NZ,LOPOC2                    ; & alone is octal
+    LD B,$05                        ; at most 4 digits
+
+;; Reads the digits of an &H constant.
+;;
+;; Continues at HOCFIN.
+;;
+;; In:    HL = the text before the digit, DE = the value so far, B = the digits allowed, plus one
+;; Errors: OV for a fifth digit
+LOPHEX:
     INC HL
     LD A,[HL]
-    CALL L_1C5B
-    CALL L_4504
-    EX DE,HL
-    JP NC,L_1C97
-    CP $3A
-    JP NC,L_1CCE
-    SUB $30
-    JP C,L_1CCE
-    JP L_1C9E
-L_1C97:
-    CP $47
-    JP NC,L_1CCE
-    SUB $37
-L_1C9E:
-    ADD HL,HL
+    CALL MAKUPS
+    CALL ISLET2                     ; a letter?
+    EX DE,HL                        ; HL = the value
+    JP NC,ALPTST
+    CP '9'+1                        ; not a digit: the end
+    JP NC,HOCFIN
+    SUB '0'
+    JP C,HOCFIN
+    JP NXTHEX
+
+;; Takes a letter of an &H constant, A to F, or ends the constant at another.
+;;
+;; In:    A = the letter, HL = the value
+ALPTST:
+    CP 'F'+1
+    JP NC,HOCFIN
+    SUB 'A'-10
+
+;; Adds a hex digit to the value.
+;;
+;; In:    A = the digit, HL = the value
+NXTHEX:
+    ADD HL,HL                       ; four bits up
     ADD HL,HL
     ADD HL,HL
     ADD HL,HL
@@ -295,19 +617,27 @@ L_1C9E:
     LD L,A
     EX DE,HL
     DEC B
-    JP NZ,L_1C7E
+    JP NZ,LOPHEX
     JP OVERR
-L_1CAC:
+
+;; Reads the digits of an &O constant.
+;;
+;; Continues at HOCFIN.
+;;
+;; In:    HL = the text at the digit, for LOPOC2, or before it, DE = the value so far
+;; Errors: OV past 65535, SN for an 8 or a 9
+;; Entry: LOPOCT = HL before the digit
+LOPOC2:
     DEC HL
-L_1CAD:
+LOPOCT:
     CALL CHRGTR
-    EX DE,HL
-    JP NC,L_1CCE
-    CP $38
+    EX DE,HL                        ; HL = the value
+    JP NC,HOCFIN                    ; not a digit: the end
+    CP '8'
     JP NC,SNERR
-    LD BC,$0CDB
+    LD BC,OVERR                     ; a bit out of the top overflows
     PUSH BC
-    ADD HL,HL
+    ADD HL,HL                       ; three bits up
     RET C
     ADD HL,HL
     RET C
@@ -315,90 +645,149 @@ L_1CAD:
     RET C
     POP BC
     LD B,$00
-    SUB $30
+    SUB '0'
     LD C,A
     ADD HL,BC
     EX DE,HL
-    JP L_1CAD
-L_1CCE:
-    CALL L_29DC
+    JP LOPOCT
+
+;; Ends an &H or &O constant: the value becomes the FAC's integer.
+;;
+;; In:    HL = the value, DE = the text
+;; Out:   HL = the text, FACLO = the value
+HOCFIN:
+    CALL MAKINT
     EX DE,HL
     RET
+
+;; Calls a built-in function through FUNDSP, first evaluating its arguments.
+;;
+;; LEFT$, RIGHT$ and MID$ get the string's descriptor and the byte argument on the stack, and the text
+;; pointer in DE, and read the rest themselves. The others get their one argument in the FAC, in single
+;; precision for the functions from SQR to ATN, and return through LABBCK. RND without an argument goes to
+;; RNDMON.
+;;
+;; In:    HL = the text at the $FF before the function's token
+;; Out:   HL = the text after the function, FACLO = the value
 ISFUN:
     INC HL
-    LD A,[HL]
-    SUB $81
-    CP $07
-    JP NZ,L_1CE8
+    LD A,[HL]                       ; the function's token
+    SUB $81                         ; A = its number from 0
+    CP $07                          ; RND?
+    JP NZ,NTMRND
     PUSH HL
     CALL CHRGTR
-    CP $28
+    CP '('                          ; RND without an argument
     POP HL
-    JP NZ,L_37CC
+    JP NZ,RNDMON
     LD A,$07
-L_1CE8:
+
+;; Calls the function numbered A.
+;;
+;; In:    A = the function's number, HL = the text at its token
+;; Out:   HL = the text after the function, FACLO = the value
+NTMRND:
     LD B,$00
-    RLCA
+    RLCA                            ; BC = its offset in FUNDSP
     LD C,A
     PUSH BC
     CALL CHRGTR
     LD A,C
-    CP $05
-    JP NC,L_1D0F
-    CALL L_19FE
-    CALL L_43D3
-    INC L
-    CALL L_2A3B
+    CP $05                          ; LEFT$, RIGHT$ or MID$?
+    JP NC,OKNORM
+    CALL FRMPRN                     ; the string
+    CALL SYNCHR
+    .byte ','
+    CALL CHKSTR
     EX DE,HL
-    LD HL,[D_0C04]
-    EX [SP],HL
+    LD HL,[FACLO]                   ; its descriptor
+    EX [SP],HL                      ; under the offset
     PUSH HL
     EX DE,HL
-    CALL L_2075
-    EX DE,HL
-    EX [SP],HL
-    JP L_1D29
-L_1D0F:
-    CALL L_1C34
-    EX [SP],HL
+    CALL GETBYT                     ; E = the number
+    EX DE,HL                        ; DE = the text, HL = the number
+    EX [SP],HL                      ; under the offset
+    JP FINGO
+
+;; Evaluates a function's argument in parentheses, in single precision where needed, and calls it.
+;;
+;; In:    HL = the text at the parenthesis, the function's offset on the stack
+;; Out:   HL = the text after the function, FACLO = the value
+OKNORM:
+    CALL PARCHK
+    EX [SP],HL                      ; stack the text, HL = the offset
     LD A,L
-    CP $0C
-    JP C,L_1D20
-    CP $1B
+    CP $0C                          ; SGN, INT and ABS take any type
+    JP C,NOTFRF
+    CP $1B                          ; SQR to ATN take singles
     PUSH HL
     CALL C,FN_CSNG
     POP HL
-L_1D20:
-    LD DE,$1C48
+
+;; Calls the function at offset HL in FUNDSP, returning through LABBCK.
+;;
+;; In:    HL = the offset, the text pointer on the stack
+;; Entry: FINGO = calls it without returning through LABBCK
+NOTFRF:
+    LD DE,LABBCK                    ; restore the text pointer after
     PUSH DE
-    LD A,$01
-    LD [D_0C09],A
-L_1D29:
-    LD BC,$019F
-L_1D2C:
+    LD A,$01                        ; one overflow message at most
+    LD [FLGOVC],A
+FINGO:
+    LD BC,FUNDSP
+
+;; Jumps to the address in the table at BC, entry HL.
+;;
+;; In:    BC = the table, HL = the entry's offset
+DISPAT:
     ADD HL,BC
     LD C,[HL]
     INC HL
     LD H,[HL]
     LD L,C
     JP [HL]
-L_1D32:
-    DEC D
-    CP $F3
+
+;; Reads the sign of a number's exponent, for FIN.
+;;
+;; In:    A = the character after the E, D = the exponent's sign flag, HL = the text
+;; Out:   D = one less for a minus, zero = set for a sign, else HL = the text before the character
+MINPLS:
+    DEC D                           ; assume minus
+    CP $F3                          ; the - token
     RET Z
-    CP $2D
+    CP '-'
     RET Z
-    INC D
-    CP $2B
+    INC D                           ; plus
+    CP '+'
     RET Z
-    CP $F2
+    CP $F2                          ; the + token
     RET Z
-    DEC HL
+    DEC HL                          ; no sign: read the digit again
     RET
-    .byte $3C, $8F, $C1, $A0, $C6, $FF, $9F, $CD, $7F, $28, $C3, $61, $1D
-L_1D4F:
-    LD D,$5A
-    CALL L_1A05
+
+;; Turns a comparison's result into -1 for true or 0 for false, by the relations written.
+;;
+;; Continues at RETAOP with FACLO = the integer result.
+;;
+;; In:    A = the comparison: 1 for less, 0 for equal, -1 for greater, the mask from DORELS on the stack
+DOCMP:
+    INC A                           ; 1 2 4 for > = <
+    ADC A,A
+    POP BC                          ; B = the mask
+    AND B                           ; any match?
+    ADD A,$FF                       ; carry if so
+    SBC A,A                         ; -1 or 0
+    CALL CONIA                      ; as an integer
+    JP RETAPG
+
+;; Evaluates NOT: its operand, at the precedence above the relations, complemented as an integer.
+;;
+;; Continues at RETAOP with FACLO = the result.
+;;
+;; In:    HL = the text at the NOT
+NOTER:
+    LD D,$5A                        ; precedence 90
+    CALL LPOPER
     CALL FN_CINT
     LD A,L
     CPL
@@ -406,440 +795,717 @@ L_1D4F:
     LD A,H
     CPL
     LD H,A
-    LD [D_0C04],HL
-    POP BC
-    JP L_1A15
-L_1D64:
-    LD A,[D_0A67]
+    LD [FACLO],HL
+    POP BC                          ; drop EVAL's return: the text pointer is in TEMP2
+
+;; Goes back to RETAOP, to apply the operator after the operand.
+RETAPG:
+    JP RETAOP
+
+;; Sets the flags for the FAC's type.
+;;
+;; Out:   A = the type less 3, carry = clear for a double, zero = set for a string,
+;;   negative = set for an integer
+;; Keeps: BC, DE, HL
+GETYPR:
+    LD A,[VALTYP]
     CP $08
-    JP NC,L_1D71
+    JP NC,NCASE
+    SUB $03                         ; -1 0 1
+    OR A
+    SCF                             ; carry: not a double
+    RET
+
+;; Sets the flags for a double: carry, zero and negative clear.
+NCASE:
     SUB $03
     OR A
-    SCF
     RET
-L_1D71:
-    SUB $03
-    OR A
+
+;; Applies AND, OR, XOR, EQV, IMP, MOD or \ to the integer on the stack and the FAC.
+;;
+;; The operator's precedence in B tells which: 40 IMP, 50 EQV, 60 XOR, 70 OR, 80 AND, 122 MOD, 123 \.
+;;
+;; In:    B = the precedence, the left operand on the stack
+;; Out:   FACLO = the integer result
+DANDOR:
+    LD A,B
+    PUSH AF
+    CALL FN_CINT                    ; HL = the right operand
+    POP AF
+    POP DE                          ; DE = the left one
+    CP $7A                          ; MOD
+    JP Z,IMOD
+    CP $7B                          ; \
+    JP Z,IDIV
+    LD BC,GIVINT                    ; A and L become the result
+    PUSH BC
+    CP $46                          ; OR?
+    JP NZ,NOTOR
+    LD A,E
+    OR L
+    LD L,A
+    LD A,H
+    OR D
     RET
-    .byte $78, $F5, $CD, $7A, $29, $F1, $D1, $FE, $7A, $CA, $0D, $2C, $FE, $7B, $CA, $A8
-    .byte $2B, $01, $D7, $1D, $C5, $FE, $46, $C2, $95, $1D, $7B, $B5, $6F, $7C, $B2, $C9
-    .byte $FE, $50, $C2, $A0, $1D, $7B, $A5, $6F, $7C, $A2, $C9, $FE, $3C, $C2, $AB, $1D
-    .byte $7B, $AD, $6F, $7C, $AA, $C9, $FE, $32, $C2, $B8, $1D, $7B, $AD, $2F, $6F, $7C
-    .byte $AA, $2F, $C9, $7D, $2F, $A3, $2F, $6F, $7C, $2F, $A2, $2F, $C9
-L_1DC2:
+
+;; Applies AND, or tries the next operator, for DANDOR.
+;;
+;; In:    A = the precedence, DE, HL = the operands
+;; Out:   A, L = the result
+NOTOR:
+    CP $50                          ; AND?
+    JP NZ,NOTAND
+    LD A,E
+    AND L
+    LD L,A
+    LD A,H
+    AND D
+    RET
+
+;; Applies XOR, or tries the next operator, for DANDOR.
+;;
+;; In:    A = the precedence, DE, HL = the operands
+;; Out:   A, L = the result
+NOTAND:
+    CP $3C                          ; XOR?
+    JP NZ,NOTXOR
+    LD A,E
+    XOR L
+    LD L,A
+    LD A,H
+    XOR D
+    RET
+
+;; Applies EQV, or IMP, for DANDOR.
+;;
+;; In:    A = the precedence, DE, HL = the operands
+;; Out:   A, L = the result
+NOTXOR:
+    CP $32                          ; EQV?
+    JP NZ,NOTEQV
+    LD A,E
+    XOR L
+    CPL
+    LD L,A
+    LD A,H
+    XOR D
+    CPL
+    RET
+
+;; Applies IMP for DANDOR: left IMP right is NOT (left AND NOT right).
+;;
+;; In:    DE = the left operand, HL = the right one
+;; Out:   A, L = the result
+NOTEQV:
+    LD A,L
+    CPL
+    AND E
+    CPL
+    LD L,A
+    LD A,H
+    CPL
+    AND D
+    CPL
+    RET
+
+;; Subtracts DE from HL and floats the result, unsigned, into the FAC.
+;;
+;; In:    HL, DE = the numbers
+;; Out:   FACLO = HL - DE, a single
+GIVDBL:
     LD A,L
     SUB E
     LD L,A
     LD A,H
     SBC A,D
     LD H,A
-    JP L_2C03
+    JP INEG2
+
+;; Returns LPOS: the printer's column, from 1.
+;;
+;; Out:   FACLO = the column, an integer
 FN_LPOS:
-    LD A,[D_078C]
-    JP L_1DD4
+    LD A,[LPTPOS]
+    JP FN_POS_1
+
+;; Returns POS: the cursor's column, from 1.
+;;
+;; Out:   FACLO = the column, an integer
+;; Entry: FN_POS_1 = returns A plus one
 FN_POS:
-    LD A,[D_0A65]
-L_1DD4:
+    LD A,[TTYPOS]
+FN_POS_1:
     INC A
-L_1DD5:
+
+;; Returns the byte in A as an integer in the FAC.
+;;
+;; In:    A = the byte
+;; Out:   FACLO = the integer, VALTYP = 2
+;; Entry: GIVINT = returns A and L as the high and low bytes
+SNGFLT:
     LD L,A
     XOR A
-L_1DD7:
+GIVINT:
     LD H,A
-    JP L_29DC
-L_1DDB:
-    CALL L_1DFA
+    JP MAKINT
+
+;; Calls a USR function: its routine gets the argument in the FAC and returns through POPHRT.
+;;
+;; The routine is entered with A = the argument's type, HL = the address of the FAC, and DE = a string
+;; argument's descriptor.
+;;
+;; In:    HL = the text at the USR token
+;; Out:   HL = the text after the function, FACLO = the value the routine leaves
+USRFN:
+    CALL SCNUSR                     ; DE = the USRTAB entry
     PUSH DE
-    CALL L_1C34
-    EX [SP],HL
-    LD E,[HL]
+    CALL PARCHK                     ; the argument
+    EX [SP],HL                      ; keep the text, HL = the entry
+    LD E,[HL]                       ; DE = the routine
     INC HL
     LD D,[HL]
-    LD HL,$2757
+    LD HL,POPHRT                    ; return to restore the text pointer
     PUSH HL
-    PUSH DE
-    LD A,[D_0A67]
+    PUSH DE                         ; the routine, run by the RET
+    LD A,[VALTYP]
     PUSH AF
-    CP $03
-    CALL Z,L_48A8
-    POP AF
-    EX DE,HL
-    LD HL,$0C04
+    CP $03                          ; a string's temporary is freed
+    CALL Z,FREFAC
+    POP AF                          ; A = the type
+    EX DE,HL                        ; DE = the descriptor
+    LD HL,FACLO
     RET
-L_1DFA:
+
+;; Reads the digit after USR or DEF USR and finds its entry in USRTAB.
+;;
+;; In:    HL = the text at the USR token
+;; Out:   DE = the entry, HL = the text after the digit
+;; Entry: NOARGU = the entry at offset BC
+SCNUSR:
     CALL CHRGTR
-    LD BC,$0000
-    CP $1B
-    JP NC,L_1E13
+    LD BC,$0000                     ; USR alone is USR0
+    CP $1B                          ; a one-digit constant, $11 to $1A?
+    JP NC,NOARGU
     CP $11
-    JP C,L_1E13
+    JP C,NOARGU
     CALL CHRGTR
-    LD A,[D_0A6E]
+    LD A,[CONLO]                    ; its value
     OR A
-    RLA
+    RLA                             ; two bytes an entry
     LD C,A
-L_1E13:
+NOARGU:
     EX DE,HL
-    LD HL,$0774
+    LD HL,USRTAB
     ADD HL,BC
     EX DE,HL
     RET
-L_1E1A:
-    CALL L_1DFA
+
+;; Runs DEF USR: sets a USR function's address.
+;;
+;; In:    HL = the text at the USR token
+;; Out:   HL = the end of the statement
+;; Errors: SN without the equal sign
+DEFUSR:
+    CALL SCNUSR                     ; DE = the entry
     PUSH DE
-    CALL L_43D3
-    RET P
-    CALL L_22D1
+    CALL SYNCHR
+    .byte $F0                       ; the = token
+    CALL FRMQNT                     ; DE = the address
     EX [SP],HL
     LD [HL],E
     INC HL
     LD [HL],D
     POP HL
     RET
+
+;; Runs DEF: DEF USR, or DEF FN, which stores the definition's text pointer as the function's value.
+;;
+;; The parameters are created as variables and the formula is skipped, as DATA skips a statement.
+;;
+;; In:    HL = the text after DEF, A = its first character
+;; Out:   HL = the end of the statement
+;; Errors: ID in direct mode, SN
 ST_DEF:
-    CP $D2
-L_1E2D:
-    JP Z,L_1E1A
-    CALL L_1FD4
-    CALL L_1FC6
+    CP $D2                          ; DEF USR
+    JP Z,DEFUSR
+    CALL GETFNM                     ; DE = the function's value
+    CALL ERRDIR
     EX DE,HL
-    LD [HL],E
+    LD [HL],E                       ; the text after the name
     INC HL
     LD [HL],D
     EX DE,HL
     LD A,[HL]
-    CP $28
+    CP '('                          ; parameters?
     JP NZ,ST_DATA
     CALL CHRGTR
-L_1E44:
-    CALL L_398B
+
+;; Creates the parameters of a DEF FN, then skips the rest of the statement.
+;;
+;; In:    HL = the text at a parameter
+SCNLIS:
+    CALL PTRGET
     LD A,[HL]
-    CP $29
+    CP ')'
     JP Z,ST_DATA
-    CALL L_43D3
-    INC L
-    JP L_1E44
-L_1E54:
-    CALL L_1FD4
-    LD A,[D_0A67]
+    CALL SYNCHR
+    .byte ','
+    JP SCNLIS
+
+;; Calls a user function: binds the arguments to its parameters and evaluates its definition.
+;;
+;; Each argument is evaluated in the caller's context and converted to its parameter's type, then the
+;; parameters are put in a new block (PARM2), with the name of each. Once all are bound, the current block
+;; (PARM1) is pushed with its PRMSTK link and PARM2 becomes PARM1, so PTRGET finds the parameters first.
+;;
+;; In:    HL = the text at the FN token
+;; Out:   HL = the text after the call, FACLO = the value, of the function's type
+;; Errors: UF for an undefined function, SN when the arguments and the parameters differ, FC when the
+;;   parameter block would pass 100 bytes
+FNDOER:
+    CALL GETFNM                     ; DE = the function's value
+    LD A,[VALTYP]                   ; its type, with carry clear
     OR A
     PUSH AF
-    LD [TEMP2],HL
+    LD [TEMP2],HL                   ; the text after the name
     EX DE,HL
-    LD A,[HL]
+    LD A,[HL]                       ; HL = the definition's text
     INC HL
     LD H,[HL]
     LD L,A
-    LD A,H
+    LD A,H                          ; zero: never defined
     OR L
     JP Z,UFERR
     LD A,[HL]
-    CP $28
-    JP NZ,L_1F1E
+    CP '('                          ; parameters?
+    JP NZ,FINVLS
     CALL CHRGTR
-    LD [TEMP3],HL
+    LD [TEMP3],HL                   ; the parameter list
     EX DE,HL
-    LD HL,[TEMP2]
-    CALL L_43D3
-    JR Z,L_1E2D
+    LD HL,[TEMP2]                   ; the arguments must follow
+    CALL SYNCHR
+    .byte '('
+    XOR A                           ; zero marks the last value to bind
     PUSH AF
     PUSH HL
     EX DE,HL
-L_1E81:
-    LD A,$80
+
+;; Binds the next argument of an FN call: finds its parameter, evaluates the argument and keeps its value.
+;;
+;; In:    HL = the parameter list, the argument list on the stack
+ASGMOR:
+    LD A,$80                        ; no arrays
     LD [SUBFLG],A
-    CALL L_398B
+    CALL PTRGET                     ; DE = the parameter
     EX DE,HL
-    EX [SP],HL
-    LD A,[D_0A67]
+    EX [SP],HL                      ; stack it, HL = the argument
+    LD A,[VALTYP]                   ; the parameter's type
     PUSH AF
     PUSH DE
-    CALL L_1A02
+    CALL FRMEVL                     ; the argument
     LD [TEMP2],HL
     POP HL
     LD [TEMP3],HL
     POP AF
-    CALL L_1FAC
+    CALL DOCNVF                     ; to the parameter's type
     LD C,$04
-    CALL L_42C7
-    LD HL,$FFF8
+    CALL GETSTK                     ; room for 8 bytes
+    LD HL,$FFF8                     ; -8: the value goes on the stack
     ADD HL,SP
     LD SP,HL
-    CALL L_28F7
-    LD A,[D_0A67]
+    CALL VMOVMF
+    LD A,[VALTYP]
     PUSH AF
     LD HL,[TEMP2]
     LD A,[HL]
-    CP $29
-    JP Z,L_1ECB
-    CALL L_43D3
-    INC L
+    CP ')'                          ; the last argument
+    JP Z,POPASG
+    CALL SYNCHR
+    .byte ','
     PUSH HL
     LD HL,[TEMP3]
-    CALL L_43D3
-    INC L
-    JP L_1E81
-    .byte $F1, $32, $4E, $0B
-L_1ECB:
+    CALL SYNCHR                     ; then another parameter too
+    .byte ','
+    JP ASGMOR
+
+;; Notes the parameter just bound in PARM2's length, then binds the next value on the stack.
+;;
+;; The new length is on the stack.
+;; Entry: POPASG = binds the next value
+POPAS2:
     POP AF
+    LD [PRMLN2],A
+
+;; Binds the values on the stack to their parameters in PARM2, from the last, until the zero type.
+;;
+;; The stack holds each value's type, the value in 8 bytes, then its parameter.
+POPASG:
+    POP AF                          ; the type
     OR A
-    JP Z,L_1F0F
-    LD [D_0A67],A
+    JP Z,FINASG                     ; zero: all bound
+    LD [VALTYP],A
     LD HL,$0000
     ADD HL,SP
-    CALL L_28EE
+    CALL VMOVFM                     ; the value into the FAC
     LD HL,$0008
     ADD HL,SP
     LD SP,HL
-    POP DE
-    LD L,$03
-L_1EE2:
+    POP DE                          ; DE = the parameter
+    LD L,$03                        ; L = the name's size
+
+;; Counts the bytes of a parameter's name, back from its value, to copy the entry into PARM2.
+;;
+;; In:    DE = the parameter's value, L = the size so far
+LPSIZL:
     INC L
     DEC DE
     LD A,[DE]
-    OR A
-    JP M,L_1EE2
+    OR A                            ; bit 7 set: still the name
+    JP M,LPSIZL
+    DEC DE                          ; back over the type and length
     DEC DE
     DEC DE
-    DEC DE
-    LD A,[D_0A67]
-    ADD A,L
+    LD A,[VALTYP]
+    ADD A,L                         ; B = the entry's size
     LD B,A
-    LD A,[D_0B4E]
-    LD C,A
+    LD A,[PRMLN2]
+    LD C,A                          ; C = PARM2's length
     ADD A,B
-    CP $64
-    JP NC,L_1418
-    PUSH AF
+    CP $64                          ; at most 100 bytes
+    JP NC,FCERR
+    PUSH AF                         ; the new length
     LD A,L
     LD B,$00
-    LD HL,$0B50
-    ADD HL,BC
+    LD HL,PARM2
+    ADD HL,BC                       ; HL = its end
     LD C,A
-    CALL L_1FC0
-    LD BC,$1EC7
+    CALL BCTRAN                     ; copy the name
+    LD BC,POPAS2
     PUSH BC
     PUSH BC
-    JP L_153A
-L_1F0F:
+    JP LETCN4                       ; assign the value there
+
+;; Checks that the arguments and the parameters ended together, then evaluates the function.
+;;
+;; In:    TEMP2 = the argument list, TEMP3 = the parameter list
+FINASG:
     LD HL,[TEMP2]
-    CALL CHRGTR
+    CALL CHRGTR                     ; past the )
     PUSH HL
     LD HL,[TEMP3]
-    CALL L_43D3
-    ADD HL,HL
-    .byte $3E
-L_1F1E:
-    .byte $D5
-    LD [TEMP3],HL
-    LD A,[D_0AE6]
+    CALL SYNCHR
+    .byte ')'
+    .byte $3E                       ; LD A,$D5: skip the PUSH DE
+
+;; Makes PARM2 the active parameter block, evaluates the definition, and restores the caller's block.
+;;
+;; A string result in a parameter's space is copied to a temporary first, as the block will be overwritten.
+;;
+;; In:    HL = the definition's text, at the equal sign, the caller's text in DE
+;; Errors: SN if the definition does not end after its formula
+FINVLS:
+    PUSH DE                         ; the caller's text
+    LD [TEMP3],HL                   ; the definition's
+    LD A,[PRMLEN]                   ; PARM1 and its 4 bytes of header
     ADD A,$04
     PUSH AF
     RRCA
     LD C,A
-    CALL L_42C7
+    CALL GETSTK                     ; room on the stack
     POP AF
     LD C,A
-    CPL
+    CPL                             ; HL = SP less the size
     INC A
     LD L,A
     LD H,$FF
     ADD HL,SP
     LD SP,HL
     PUSH HL
-    LD DE,$0AE4
-    CALL L_1FC0
+    LD DE,PRMSTK                    ; push PRMSTK, PRMLEN and PARM1
+    CALL BCTRAN
     POP HL
-    LD [D_0AE4],HL
-    LD HL,[D_0B4E]
-    LD [D_0AE6],HL
+    LD [PRMSTK],HL                  ; link to them
+    LD HL,[PRMLN2]                  ; PARM2 becomes PARM1
+    LD [PRMLEN],HL
     LD B,H
     LD C,L
-    LD HL,$0AE8
-    LD DE,$0B50
-    CALL L_1FC0
-    LD H,A
+    LD HL,PARM1
+    LD DE,PARM2
+    CALL BCTRAN
+    LD H,A                          ; PARM2 empty
     LD L,A
-    LD [D_0B4E],HL
-    LD HL,[D_0BBA]
+    LD [PRMLN2],HL
+    LD HL,[FUNACT]                  ; one more function active
     INC HL
-    LD [D_0BBA],HL
+    LD [FUNACT],HL
     LD A,H
     OR L
-    LD [D_0BB7],A
+    LD [NOFUNS],A
     LD HL,[TEMP3]
-    CALL L_19F7
+    CALL FRMEQL                     ; the definition
     DEC HL
-    CALL CHRGTR
+    CALL CHRGTR                     ; which must end there
     JP NZ,SNERR
-    CALL L_1D64
-    JP NZ,L_1F88
-    LD DE,$0A98
-    LD HL,[D_0C04]
-    CALL L_43CD
-    JP C,L_1F88
-    CALL L_46A3
-    CALL L_4701
-L_1F88:
-    LD HL,[D_0AE4]
+    CALL GETYPR
+    JP NZ,NOCPRS                    ; a number
+    LD DE,DSCTMP                    ; a string in a temporary is safe
+    LD HL,[FACLO]
+    CALL DCOMPR
+    JP C,NOCPRS
+    CALL STRCPY                     ; else copy it
+    CALL PUTTMP
+
+;; Restores the caller's parameter block from the stack, then converts the result to the function's type.
+;;
+;; In:    PRMSTK = the saved block, the caller's text and the function's type above it on the stack
+NOCPRS:
+    LD HL,[PRMSTK]                  ; the saved block
     LD D,H
     LD E,L
     INC HL
     INC HL
-    LD C,[HL]
+    LD C,[HL]                       ; BC = its length and header
     INC HL
     LD B,[HL]
     INC BC
     INC BC
     INC BC
     INC BC
-    LD HL,$0AE4
-    CALL L_1FC0
-    EX DE,HL
+    LD HL,PRMSTK                    ; back into PRMSTK and on
+    CALL BCTRAN
+    EX DE,HL                        ; drop it from the stack
     LD SP,HL
-    LD HL,[D_0BBA]
+    LD HL,[FUNACT]                  ; one function less
     DEC HL
-    LD [D_0BBA],HL
+    LD [FUNACT],HL
     LD A,H
     OR L
-    LD [D_0BB7],A
-    POP HL
-    POP AF
-L_1FAC:
+    LD [NOFUNS],A
+    POP HL                          ; the caller's text
+    POP AF                          ; the function's type
+
+;; Converts the FAC to the type in A through FRCTBL.
+;;
+;; In:    A = the type
+;; Out:   FACLO = the value, of that type
+;; Errors: TM for a string to a number or a number to a string
+;; Keeps: HL
+DOCNVF:
     PUSH HL
-    AND $07
-    LD HL,$048B
+    AND $07                         ; 8 becomes 0
+    LD HL,FRCTBL
     LD C,A
     LD B,$00
     ADD HL,BC
-    CALL L_1D2C
+    CALL DISPAT
     POP HL
     RET
-L_1FBB:
+
+;; Copies BC bytes from DE to HL, forward.
+;;
+;; In:    DE = the source, HL = the destination, BC = the count
+;; Out:   DE, HL = past the bytes, BC = 0, A = 0
+;; Entry: BCTRAN = checks the count first
+BCTRAL:
     LD A,[DE]
     LD [HL],A
     INC HL
     INC DE
     DEC BC
-L_1FC0:
+BCTRAN:
     LD A,B
     OR C
-    JP NZ,L_1FBB
+    JP NZ,BCTRAL
     RET
-L_1FC6:
+
+;; Gives an ID error in direct mode.
+;;
+;; Keeps: BC, DE, HL
+;; Errors: ID
+ERRDIR:
     PUSH HL
-    LD HL,[CURLIN]
+    LD HL,[CURLIN]                  ; direct mode is line 65535
     INC HL
     LD A,H
     OR L
     POP HL
     RET NZ
-    LD E,$0C
+    LD E,$0C                        ; Illegal direct
     JP ERROR
-L_1FD4:
-    CALL L_43D3
-    OUT [$3E],A
-    ADD A,B
+
+;; Requires FN, then finds the function's variable: its name with bit 7 set in the first letter.
+;;
+;; In:    HL = the text at the FN token
+;; Out:   DE = the function's value, HL = the text after the name, VALTYP = its type
+;; Errors: SN without FN
+GETFNM:
+    CALL SYNCHR
+    .byte $D3                       ; the FN token
+    LD A,$80                        ; no arrays
     LD [SUBFLG],A
-    OR [HL]
+    OR [HL]                         ; C = the first letter, bit 7 set
     LD C,A
-    JP L_3990
-L_1FE2:
-    CP $7E
+    JP PTRGT2
+
+;; Runs MID$ on the left of an assignment, the one function allowed there.
+;;
+;; In:    A = the token less $81, $7E for a function, HL = the text at it
+;; Errors: SN for anything but MID$
+ISMID:
+    CP $7E                          ; a function?
     JP NZ,SNERR
     INC HL
     LD A,[HL]
     INC HL
-    CP $83
-    JP Z,L_4A60
+    CP $83                          ; MID$
+    JP Z,LHSMID
     JP SNERR
+
+;; Returns INP: the byte read from a port.
+;;
+;; In:    FACLO = the port
+;; Out:   FACLO = the byte, an integer
+;; Errors: FC for a port past 255
 FN_INP:
-    CALL L_2078
-    LD [D_1FF9],A
-    .byte $DB
-D_1FF9:
-    .byte $00
-    JP L_1DD5
+    CALL CONINT
+    LD [INPORT],A                   ; into the IN below
+INPORT = * + 1                      ;; FN_INP's port: the operand of its IN, which it sets
+    IN A,[$00]
+    JP SNGFLT
+
+;; Runs OUT: writes a byte to a port.
+;;
+;; In:    HL = the text after OUT
+;; Out:   HL = the end of the statement
+;; Errors: FC for a port or byte past 255
 ST_OUT:
-    CALL L_2062
-    .byte $D3
-D_2001:
-    .byte $00
+    CALL SETIO                      ; A = the byte, the port set below
+OUTPRT = * + 1                      ;; OUT's port: the operand of its OUT, which SETIO sets
+    OUT [$00],A
     RET
+
+;; Runs WAIT: waits until a port's byte, XORed with the third value and ANDed with the second, is not zero.
+;;
+;; In:    HL = the text after WAIT
+;; Out:   HL = the end of the statement
+;; Errors: FC for a value past 255
 ST_WAIT:
-    CALL L_2062
+    CALL SETIO                      ; A = the AND mask, the port set below
     PUSH AF
-    LD E,$00
+    LD E,$00                        ; the XOR mask is 0 if not given
     DEC HL
     CALL CHRGTR
-    JP Z,L_2017
-    CALL L_43D3
-    INC L
-    CALL L_2075
-L_2017:
+    JP Z,NOTTHR
+    CALL SYNCHR
+    .byte ','
+    CALL GETBYT                     ; E = the XOR mask
+
+;; Waits on WAIT's port with the masks.
+;;
+;; In:    E = the XOR mask, the AND mask on the stack
+;; Entry: LOPINP = the loop, with D the AND mask
+NOTTHR:
     POP AF
-    LD D,A
-L_2019:
-    .byte $DB
-D_201A:
-    .byte $00
+    LD D,A                          ; D = the AND mask
+LOPINP:
+WAITPT = * + 1                      ;; WAIT's port: the operand of its IN, which SETIO sets
+    IN A,[$00]
     XOR E
     AND D
-    JP Z,L_2019
+    JP Z,LOPINP                     ; Ctrl+C cannot stop it
     RET
-    .byte $C3, $C9, $0C
+
+;; Gives a syntax error, for the CONSOLE statement of other versions; nothing jumps here.
+CONSOL:
+    JP SNERR
+
+;; Runs WIDTH: sets the console's or, for WIDTH LPRINT, the printer's line width.
+;;
+;; The last print zone's column is set too, for PRINT's commas.
+;;
+;; In:    HL = the text after WIDTH, A = its first character
+;; Out:   HL = the end of the statement
+;; Errors: FC for a width past 255
+;; Entry: ST_WIDTH_1 = sets the console's width
 ST_WIDTH:
-    CP $9E
-    JP NZ,L_203A
+    CP $9E                          ; LPRINT
+    JP NZ,ST_WIDTH_1
     CALL CHRGTR
-    CALL L_2075
-    LD [D_078F],A
+    CALL GETBYT
+    LD [LPTSIZ],A                   ; the printer's width
     LD E,A
-    CALL L_2048
-    LD [D_078E],A
+    CALL CLMCAL
+    LD [NLPPOS],A                   ; its last zone
     RET
-L_203A:
-    CALL L_2075
-    LD [D_0790],A
+ST_WIDTH_1:
+    CALL GETBYT
+    LD [LINLEN],A                   ; the console's width
     LD E,A
-    CALL L_2048
-    LD [D_0791],A
+    CALL CLMCAL
+    LD [CLMLST],A                   ; its last zone
     RET
-L_2048:
-    SUB $0E
-    JP NC,L_2048
-    ADD A,$1C
-    CPL
+
+;; Works out the column of the last 14-column print zone a line of a given width can start a comma's item in.
+;;
+;; In:    A, E = the width
+;; Out:   A = the width less its remainder by 14, less 14
+CLMCAL:
+    SUB 14                          ; the remainder by 14, less 14
+    JP NC,CLMCAL
+    ADD A,28                        ; the remainder plus 14
+    CPL                             ; negated
     INC A
     ADD A,E
     RET
-L_2053:
+
+;; Evaluates the expression after the next character as an integer.
+;;
+;; In:    HL = the text, at the character before the expression's
+;; Out:   DE = the integer, HL = the text after it, A = D, zero = set if it is 0-255,
+;;   negative = set if it is negative
+;; Errors: OV past the integer range
+;; Entry: GETIN2 = HL before the expression, INTFR2 = the value is in the FAC
+GETINT:
     CALL CHRGTR
-L_2056:
-    CALL L_1A02
-L_2059:
+GETIN2:
+    CALL FRMEVL
+INTFR2:
     PUSH HL
-    CALL FN_CINT
+    CALL FN_CINT                    ; HL = the integer
     EX DE,HL
     POP HL
-    LD A,D
+    LD A,D                          ; flags for the high byte
     OR A
     RET
-L_2062:
-    CALL L_2075
-    LD [D_201A],A
-    LD [D_2001],A
-    CALL L_43D3
-    INC L
-    JP L_2075
-L_2072:
+
+;; Reads OUT's or WAIT's port and first value, setting the port in both their instructions.
+;;
+;; In:    HL = the text at the port
+;; Out:   A, E = the value, HL = the text after it
+;; Errors: SN without the comma, FC for a value past 255
+SETIO:
+    CALL GETBYT                     ; the port
+    LD [WAITPT],A
+    LD [OUTPRT],A
+    CALL SYNCHR
+    .byte ','
+    JP GETBYT
+
+;; Evaluates the expression after the next character as a byte.
+;;
+;; In:    HL = the text, at the character before the expression's
+;; Out:   A, E = the byte, HL = the text after it, zero = set at the end of the statement
+;; Errors: FC past 255
+;; Entry: GETBYT = HL before the expression, CONINT = the value is in the FAC
+GTBYTC:
     CALL CHRGTR
-L_2075:
-    CALL L_1A02
-L_2078:
-    CALL L_2059
-    JP NZ,L_1418
-    DEC HL
+GETBYT:
+    CALL FRMEVL
+CONINT:
+    CALL INTFR2
+    JP NZ,FCERR                     ; past 255
+    DEC HL                          ; flags for the character after it
     CALL CHRGTR
     LD A,E
     RET

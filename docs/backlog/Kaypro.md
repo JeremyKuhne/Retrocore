@@ -11,17 +11,16 @@ display, drives, the extension's and Desktop's machine entries, and MBASIC as a 
   `Z80Sio` gained a receive buffer), the FD1793 with its HALT-gated NMI, and the display.
 - Raw Kaypro disk images (`KayproFormat`), read and saved, beside IMD and DMK.
 - `Kaypro2.asm` and `Kaypro2CharacterGenerator.asm`, byte-identical to 81-149C and 81-146A.
-- `Mbasic.asm`, byte-identical to MBASIC.COM 5.21, with Microsoft's names for its tables, variables, statement and
-  function handlers, error entries and interpreter core.
+- `Mbasic/`, byte-identical to MBASIC.COM 5.21: 19 modules following GW-BASIC's, with Microsoft's names from
+  GW-BASIC's source and Level2.asm (descriptive ones where neither has a name), every routine documented, and
+  addresses, text and code written as such.
 - The MBASIC dialect: CRUNCH, LIST, variables, loops, tokenized files; checked against MBASIC itself.
 - `tools/Test-KayproDap.mjs` and `KayproTests`, `MbasicOracleTests`.
 
 ## Next
 
-- **Name the rest of MBASIC.** About 280 called routines and their labels are still `L_` and their address, and about
-  80 variables `D_`. [GW-BASIC's source](https://github.com/microsoft/GW-BASIC) names nearly all of them;
-  its routines can be matched to MBASIC's by their calls and by Level2.asm's math package, which MBASIC shares. Then
-  `;;` documentation for each routine, as the other ROM sources have.
+- **MBASIC's constants.** Tokens, error codes and the embedded-constant types (LINCON, PTRCON and the rest) are
+  still numbers with comments; named constants would let the modules use them.
 - **CP/M's sources.** The system tracks of the Kaypro's CP/M 2.2 disk: the boot record, CCP, BDOS and Kaypro's BIOS,
   byte-identical, so a CP/M program's calls step into CP/M's source as an Apple II program's step into DOS 3.3's.
   `CpmBdos` call names for the Z80 call stack, as `SosCalls` names SOS's.

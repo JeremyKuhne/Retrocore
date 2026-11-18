@@ -54,7 +54,8 @@ public sealed class CommodoreDiskCodec(string format = "G64") : IImageCodec
         return new(image,
         [
             .. unreadable.Select(sector => $"{sector}, which does not read, written as zeros."),
-            .. D64Format.Omitted(disk, dos).Select(place => $"{place}, which a {Format} image has no place for.")
+            .. D64Format.Omitted(disk, dos).Select(place => $"{place}, which a {Format} image has no place for."),
+            .. D64Format.Conflicting(disk, dos).Select(sector => $"{sector}, which holds two good copies that differ; the first is kept.")
         ])
         {
             // DOS 1 formats a sector's header alone; its zeros are what the sector holds until it is first written.

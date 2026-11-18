@@ -302,6 +302,46 @@ public class CommodoreDiskImageTests
         read.Should().Throw<InvalidDataException>().WithMessage("*half-track 68 starts past its end*");
     }
 
+    /// <summary>
+    ///  A G64 with more half-tracks than a disk holds is refused rather than read without the rest.
+    /// </summary>
+    [TestMethod]
+    public void TooManyHalfTracksAreRefused()
+    {
+        byte[] image = G64Format.Write(D64Format.Read(RandomImage()));
+        image[9] = CommodoreDisk.Positions + 1;
+        Action read = () => G64Format.Read(image);
+        read.Should().Throw<InvalidDataException>().WithMessage("*85 half-tracks*");
+    }
+
+    /// <summary>
+    ///  A DOS 1 sector whose data block has a damaged mark was written, so it is a loss, not a sector never written.
+    /// </summary>
+    [TestMethod]
+    public void ADamagedDataMarkIsNotAnUnwrittenSector()
+    {
+        GcrBitWriter writer = new(GcrLayout.TrackBits(3));
+        writer.Ones(20);
+        writer.Bytes([0x08, (byte)(0 ^ 1 ^ 'B' ^ 'A'), 0, 1, (byte)'B', (byte)'A']);
+        writer.Zeros(9);
+        writer.Ones(20);
+        writer.Byte(0x06);
+        writer.Bytes(Enumerable.Repeat((byte)0x55, GcrLayout.SectorSize + 1).ToArray());
+        writer.Zeros(12);
+
+        bool[] found = GcrLayout.ReadTrack(
+            writer.Buffer,
+            GcrLayout.TrackBits(3),
+            1,
+            new byte[21 * GcrLayout.SectorSize],
+            CommodoreDos.Dos1,
+            out bool[] unwritten,
+            out _);
+
+        found[0].Should().BeFalse();
+        unwritten[0].Should().BeFalse("a block followed the header, though its mark is damaged");
+    }
+
     private static byte[] RandomImage(int size = D64Format.Size)
     {
         byte[] image = new byte[size];

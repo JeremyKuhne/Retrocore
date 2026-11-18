@@ -38,6 +38,9 @@ public sealed class Cbm4040
     private readonly byte[][] _buffers = [new byte[0x400], new byte[0x400], new byte[0x400], new byte[0x400]];
     private readonly Ieee488Bus _bus;
     private bool _dosIrq;
+
+    // Whether SO was asserted for an interface clear and is let go after the DOS processor's next cycle.
+    private bool _releaseOverflow;
     private bool _controllerIrq;
 
     /// <summary>
@@ -161,7 +164,18 @@ public sealed class Cbm4040
     public Span<byte> Buffer(int index) => _buffers[index];
 
     /// <summary>
-    ///  Resets both processors and their chips, as the PET's reset line does; the disks stay.
+    ///  Takes IFC, the bus's interface clear, as the PET's reset line drives it: the DOS processor's SO input is
+    ///  pulsed, and the DOS, which polls its overflow flag for it, goes back to waiting on the bus. Neither processor
+    ///  is reset, and the disks and buffers stay, as MAME's <c>c2040</c> takes IFC.
+    /// </summary>
+    public void InterfaceClear()
+    {
+        DosProcessor.Signals |= ProcessorSignals.SetOverflow;
+        _releaseOverflow = true;
+    }
+
+    /// <summary>
+    ///  Resets both processors and their chips, as the drive's power coming on does; the disks stay.
     /// </summary>
     public void Reset()
     {
@@ -205,6 +219,12 @@ public sealed class Cbm4040
         }
 
         DosProcessor.StepCycle();
+        if (_releaseOverflow)
+        {
+            // SO acts on its edge, which the cycle just taken sampled.
+            DosProcessor.Signals &= ~ProcessorSignals.SetOverflow;
+            _releaseOverflow = false;
+        }
 
         Riot0.Tick();
         Riot1.Tick();

@@ -141,6 +141,32 @@ public sealed class PetBasicConformanceTests
         ((int)rom.Symbols["RAMLOC"] + 1).Should().Be(dialect.DefaultLoadAddress);
     }
 
+    /// <summary>
+    ///  Strings the library writes into a running BASIC 4, a simple variable's and a string array's after a new
+    ///  variable moves the arrays, survive BASIC 4's own garbage collector, which follows each string's link back to
+    ///  its descriptor.
+    /// </summary>
+    [TestMethod]
+    public void EditedStringsSurviveBasic4sCollector()
+    {
+        PetMachine machine = new(PetSdkModules.BuildRoms(PetModel.Pet4032, s_roms), PetModel.Pet4032);
+        PetMachineTests.RunToReady(machine);
+        PetMachineTests.Type(machine, "A$=\"HELLO\"+\"\":DIM B$(2):B$(1)=\"WORLD\"+\"\"\r");
+
+        BasicVariables variables = new(
+            BasicDialect.PetBasic4,
+            new DelegateBasicMemory(address => machine.Bus.Peek((ushort)address), (address, value) => machine.Bus.Write((ushort)address, value)));
+
+        BasicVariable a = variables.Find("A$") ?? throw new AssertFailedException("A$");
+        variables.Write(BasicVariableKind.String, a.ValueAddress, BasicValue.Of("NEW"u8.ToArray()));
+        BasicVariable c = variables.Create("C$");
+        variables.Write(BasicVariableKind.String, c.ValueAddress, BasicValue.Of("SEE"u8.ToArray()));
+
+        PetMachineTests.Type(machine, "X=FRE(0):X=FRE(0):PRINT A$;B$(1);C$\r");
+        string[] screen = machine.ReadTextScreen();
+        screen.Should().Contain(line => line.TrimEnd() == "NEWWORLDSEE", string.Join('\n', screen));
+    }
+
     // Puts a line in BUF, points TXTPTR at it and runs CRUNCH on flat RAM holding the assembly, page zero's initial
     // values and all. CRUNCH leaves the stored line at BUF, ended by a zero.
     private static byte[] Crunch(AssemblyResult rom, string line)

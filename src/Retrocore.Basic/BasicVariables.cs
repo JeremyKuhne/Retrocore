@@ -311,6 +311,7 @@ public sealed partial class BasicVariables
 
         BasicProgram.WriteWord(_memory, Pointers.Arrays, start + size);
         BasicProgram.WriteWord(_memory, Pointers.FreeStart, end + size);
+        if (LinksStrings) { RelinkArrayStrings(start + size, end + size, size); }
         return new(Name(first, second, kind), kind, start, start + (LevelTwo ? 3 : 2));
     }
 
@@ -478,12 +479,16 @@ public sealed partial class BasicVariables
             throw new OverflowException("?STRING TOO LONG: a string holds at most 255 characters.");
         }
 
+        // BASIC 4 marks the string the variable had as garbage, and gives the new one its link back to the variable.
+        bool linked = LinksStrings;
+        if (linked) { MarkGarbage(address); }
+
         int place = 0;
         if (text.Length > 0)
         {
             int top = Word(Pointers.StringBottom);
             int bottom = LevelTwo ? Word(LevelTwoStackTop) : _dialect.StringFloorOf(_memory);
-            place = top - text.Length;
+            place = top - text.Length - (linked ? 2 : 0);
             if (place < bottom)
             {
                 throw new InvalidOperationException(LevelTwo || ColorBasic
@@ -492,12 +497,57 @@ public sealed partial class BasicVariables
             }
 
             Store(place, text);
+            if (linked) { BasicProgram.WriteWord(_memory, place + text.Length, address); }
             BasicProgram.WriteWord(_memory, Pointers.StringBottom, place);
         }
 
         Store(address, ColorBasic
             ? [(byte)text.Length, 0, (byte)(place >> 8), (byte)place]
             : [(byte)text.Length, (byte)place, (byte)(place >> 8)]);
+    }
+
+    // BASIC 4: whether strings carry links back to their descriptors.
+    private bool LinksStrings => _dialect is PetBasicDialect { LinksStrings: true };
+
+    // STRADJ: where the link of the string a descriptor points at is, or -1 for one that has none: empty, in the
+    // program's text or above $8000, below string space, or the disk status.
+    private int LinkOf(int descriptor)
+    {
+        int length = _memory.Read(descriptor);
+        int text = Word(descriptor + 1);
+        if (length == 0 || text >= 0x8000 || text < Word(Pointers.StringBottom)) { return -1; }
+        return text == Word(PetBasicDialect.DiskStatusDescriptor + 1) ? -1 : text + length;
+    }
+
+    // Marks the string a descriptor points at as garbage, as assignment does: its length and 255 for its link.
+    private void MarkGarbage(int descriptor)
+    {
+        int link = LinkOf(descriptor);
+        if (link < 0) { return; }
+        Store(link, [_memory.Read(descriptor), 0xFF]);
+    }
+
+    // GOGO1: after the arrays move up, each string an element of a string array points at links back to where the
+    // element is now.
+    private void RelinkArrayStrings(int start, int end, int moved)
+    {
+        for (int array = start; array < end && array + 5 <= end;)
+        {
+            int size = Word(array + 2);
+            if (size < 5) { return; }
+            bool strings = (_memory.Read(array) & High) == 0 && (_memory.Read(array + 1) & High) != 0;
+            if (strings)
+            {
+                int elements = array + 5 + (2 * _memory.Read(array + 4));
+                for (int element = elements; element + 3 <= array + size; element += 3)
+                {
+                    int link = LinkOf(element);
+                    if (link >= 0) { BasicProgram.WriteWord(_memory, link, Word(link) + moved); }
+                }
+            }
+
+            array += size;
+        }
     }
 
     private void Store(int address, ReadOnlySpan<byte> bytes)

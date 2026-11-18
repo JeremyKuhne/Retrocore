@@ -314,6 +314,57 @@ public sealed class PetBasicDialectTests
     }
 
     /// <summary>
+    ///  AND, OR and NOT take their operands down to the integer below, as AYINT and QINT do, so a fraction under
+    ///  32768 is in range and a negative one goes down.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    /// <param name="result">What BASIC prints for it.</param>
+    [TestMethod]
+    [DataRow("NOT -0.5", "0")]
+    [DataRow("NOT 0.5", "-1")]
+    [DataRow("32767.5 AND 1", "1")]
+    [DataRow("-0.5 OR 0", "-1")]
+    [DataRow("-32768 AND -1", "-32768")]
+    public void LogicTakesTheFloor(string expression, string result)
+    {
+        BasicEvaluator evaluator = new(BasicDialect.PetBasic, DelegateBasicMemory.Of(new byte[0x10000]));
+        evaluator.Format(evaluator.Evaluate(expression)).Should().Be(result);
+        Action tooBig = () => evaluator.Evaluate("32768 AND 1");
+        tooBig.Should().Throw<FormatException>();
+    }
+
+    /// <summary>
+    ///  BASIC 1 skips spaces inside reserved words, so R E M and D A T A hide what follows from label checks.
+    /// </summary>
+    [TestMethod]
+    public void SpacedRemarksAndDataHideLabels()
+    {
+        BasicProgram.Parse("10 R E M GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeTrue();
+        BasicProgram.Parse("10 D A T A GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeTrue();
+        BasicProgram.Parse("10 D A T A 1:GOTO nowhere\n", BasicDialect.PetBasic1).Success.Should().BeFalse("DATA ends at the colon");
+    }
+
+    /// <summary>
+    ///  Writing a program clears BASIC 4's disk status, as CLEARC does, since its string was in the space freed.
+    /// </summary>
+    /// <param name="version">The BASIC version.</param>
+    /// <param name="cleared">Whether the disk status descriptor is cleared.</param>
+    [TestMethod]
+    [DataRow(4, true)]
+    [DataRow(2, false)]
+    public void WritingAProgramForgetsTheDiskStatus(int version, bool cleared)
+    {
+        BasicDialect dialect = BasicDialect.PetBasicVersion(version);
+        byte[] ram = new byte[0x10000];
+        Word(ram, dialect.Pointers.ProgramStart, ProgramStart);
+        Word(ram, dialect.Pointers.MemoryTop, MemoryTop);
+        ram[PetBasicDialect.DiskStatusDescriptor] = 40;
+        BasicProgram program = BasicProgram.Parse("10 END\n", dialect).Program ?? throw new AssertFailedException("parse");
+        program.Write(DelegateBasicMemory.Of(ram));
+        ram[PetBasicDialect.DiskStatusDescriptor].Should().Be(cleared ? (byte)0 : (byte)40);
+    }
+
+    /// <summary>
     ///  Every reserved word of both versions has help.
     /// </summary>
     /// <param name="version">The BASIC version.</param>

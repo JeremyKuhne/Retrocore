@@ -427,13 +427,14 @@ BSOUT_3:
     pla
 
 ;; Puts a character in the current cassette's buffer, writing the buffer as a block when it is full and starting a new
-;; one, which begins with <TAPE_DATA>. Cursor right and line feed are not written: cursor right counts in <RIGHTS>.
+;; one, which begins with <TAPE_DATA>. Line feed is not written. A cursor right counts in <RIGHTS>, and is not written
+;; when the count wraps to zero, as the first one after <CHKOUT> does; any other is written.
 ;;
 ;; In: A = the character
 ;; Keeps: A, X, Y
 BO21:
     sta KTEMP
-    cmp #CHR_RIGHT                  ; not written: counted
+    cmp #CHR_RIGHT                  ; counted; not written when the count wraps
     bne BO21_1
     inc RIGHTS
     beq BASIN_7

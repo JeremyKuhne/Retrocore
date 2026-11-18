@@ -275,8 +275,8 @@ MARKER = $0266
 ;; An index into the cassette buffer, where a header's file name is compared or copied.
 HDRIDX = $0268
 
-;; Counts the cursor-right characters sent to a cassette or the bus; <Kernal1:CHKOUT> sets it to $FF. Nothing
-;; reads it.
+;; Counts the cursor-right characters sent to a cassette; <Kernal1:CHKOUT> sets it to $FF, so the first one after
+;; it wraps the count to zero and is not written (<Kernal1:BO21>).
 RIGHTS = $026A
 
 ;; The bits of the tape byte still to go: 8, counted down, then the parity bit.

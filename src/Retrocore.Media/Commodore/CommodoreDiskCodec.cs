@@ -50,11 +50,17 @@ public sealed class CommodoreDiskCodec(string format = "G64") : IImageCodec
         if (Format == "G64") { return new(snapshot.Image.ToArray(), Losses: []); }
         CommodoreDisk disk = G64Format.Read(snapshot.Image.Span);
         CommodoreDos dos = Format == "D67" ? CommodoreDos.Dos1 : CommodoreDos.Dos2;
-        (byte[] image, IReadOnlyList<string> unreadable) = D64Format.WriteSectors(disk, dos);
+        (byte[] image, IReadOnlyList<string> unreadable) = D64Format.WriteSectors(disk, dos, out IReadOnlyList<string> unwritten);
         return new(image,
         [
             .. unreadable.Select(sector => $"{sector}, which does not read, written as zeros."),
             .. D64Format.Omitted(disk, dos).Select(place => $"{place}, which a {Format} image has no place for.")
-        ]);
+        ])
+        {
+            // DOS 1 formats a sector's header alone; its zeros are what the sector holds until it is first written.
+            Notes = unwritten.Count == 0
+                ? []
+                : [$"{unwritten.Count} sector{(unwritten.Count == 1 ? "" : "s")} DOS 1 formatted but never wrote, kept as zeros."]
+        };
     }
 }

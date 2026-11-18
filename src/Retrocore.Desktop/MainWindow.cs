@@ -664,6 +664,11 @@ internal sealed class MainWindow : Window
                 Reset("Reset", "The front panel's RESET (or Ctrl+F12 or Ctrl+Break): the 8080 starts again at $0000, keeping memory");
                 Clear();
                 break;
+            case "pet":
+                Code("Stop", 3, "STOP (or Esc)");
+                Code("Clr", 147, "CLR, the shifted HOME: clears the screen");
+                Reset("Reset", "A reset switch (or Ctrl+F12 or Ctrl+Break): the kernal starts again, keeping memory");
+                break;
             case "coco":
                 Code("Break", 1, "BREAK (or Esc)");
                 Code("Clear", 31, "CLEAR (or Home)");
@@ -679,6 +684,7 @@ internal sealed class MainWindow : Window
                 "apple2" => "Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple",
                 "trs80-model1" or "trs80-model3" or "coco" => "Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset",
                 "trs80-model2" => "Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset",
+                "pet" => "Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset",
                 "kaypro2" => "Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset",
                 "apple3" => "Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple",
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",

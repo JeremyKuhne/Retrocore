@@ -133,7 +133,7 @@ internal sealed class MachineHost : DisposableBase
     internal string? FastDriveKind => _target switch
     {
         Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget or KayproDebugTarget => "disk",
-        Apple1DebugTarget or CocoDebugTarget or Trs80DebugTarget or Trs80Model3DebugTarget or AltairDebugTarget => "tape",
+        Apple1DebugTarget or CocoDebugTarget or PetDebugTarget or Trs80DebugTarget or Trs80Model3DebugTarget or AltairDebugTarget => "tape",
         _ => null
     };
 
@@ -155,6 +155,7 @@ internal sealed class MachineHost : DisposableBase
                     KayproDebugTarget kaypro => kaypro.FastDisk,
                     Apple1DebugTarget apple1 => apple1.FastCassette,
                     CocoDebugTarget coco => coco.FastCassette,
+                    PetDebugTarget pet => pet.FastCassette,
                     Trs80DebugTarget model1 => model1.FastCassette,
                     Trs80Model3DebugTarget model3 => model3.FastCassette,
                     AltairDebugTarget altair => altair.FastCassette,
@@ -185,6 +186,9 @@ internal sealed class MachineHost : DisposableBase
                         break;
                     case CocoDebugTarget coco:
                         coco.FastCassette = value;
+                        break;
+                    case PetDebugTarget pet:
+                        pet.FastCassette = value;
                         break;
                     case Trs80DebugTarget model1:
                         model1.FastCassette = value;

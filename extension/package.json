@@ -177,6 +177,21 @@
         }
       },
       {
+        "id": "retrocore-petbasic",
+        "aliases": [
+          "Commodore BASIC (PET)",
+          "petbasic"
+        ],
+        "extensions": [
+          ".petbasic.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-basic",
         "aliases": [
           "Retrocore BASIC"
@@ -246,6 +261,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-petbasic",
+        "scopeName": "source.retrocore-petbasic",
+        "path": "./syntaxes/petbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -291,7 +311,8 @@
             "business",
             "apple1",
             "level2",
-            "colorbasic"
+            "colorbasic",
+            "petbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -349,6 +370,10 @@
                   "coco1",
                   "coco2",
                   "coco3",
+                  "pet2001-basic2",
+                  "pet2001",
+                  "pet4032",
+                  "pet4032-business",
                   "altair"
                 ],
                 "description": "The machine, as Start Machine lists it."
@@ -423,6 +448,9 @@
       },
       {
         "language": "retrocore-colorbasic"
+      },
+      {
+        "language": "retrocore-petbasic"
       },
       {
         "language": "retrocore-basic"
@@ -592,39 +620,59 @@
           "group": "inline@1"
         },
         {
+          "command": "retrocore.device.play",
+          "when": "view == retrocore.drives && viewItem =~ /\\bplay\\b/",
+          "group": "inline@2"
+        },
+        {
           "command": "retrocore.device.record",
           "when": "view == retrocore.drives && viewItem =~ /\\brecord\\b/",
-          "group": "inline@2"
+          "group": "inline@3"
+        },
+        {
+          "command": "retrocore.device.recordKey",
+          "when": "view == retrocore.drives && viewItem =~ /\\brecordKey\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "retrocore.device.stop",
+          "when": "view == retrocore.drives && viewItem =~ /\\bstop\\b/",
+          "group": "inline@4"
+        },
+        {
+          "command": "retrocore.device.rewind",
+          "when": "view == retrocore.drives && viewItem =~ /\\brewind\\b/",
+          "group": "inline@5"
         },
         {
           "command": "retrocore.device.locked",
           "when": "view == retrocore.drives && viewItem =~ /\\blocked\\b/",
-          "group": "inline@3"
+          "group": "inline@6"
         },
         {
           "command": "retrocore.device.unlocked",
           "when": "view == retrocore.drives && viewItem =~ /\\bunlocked\\b/",
-          "group": "inline@3"
+          "group": "inline@6"
         },
         {
           "command": "retrocore.device.save",
           "when": "view == retrocore.drives && viewItem =~ /\\bchanged\\b/",
-          "group": "inline@4"
+          "group": "inline@7"
         },
         {
           "command": "retrocore.device.saveStale",
           "when": "view == retrocore.drives && viewItem =~ /\\bchangedStale\\b/",
-          "group": "inline@4"
+          "group": "inline@7"
         },
         {
           "command": "retrocore.device.saveAs",
           "when": "view == retrocore.drives && viewItem =~ /\\bchangedReadOnly\\b/",
-          "group": "inline@4"
+          "group": "inline@7"
         },
         {
           "command": "retrocore.device.eject",
           "when": "view == retrocore.drives && viewItem =~ /\\beject\\b/",
-          "group": "inline@5"
+          "group": "inline@8"
         },
         {
           "command": "retrocore.device.save",
@@ -783,6 +831,22 @@
         },
         {
           "command": "retrocore.device.record",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.recordKey",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.play",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.stop",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.device.rewind",
           "when": "false"
         },
         {
@@ -1061,6 +1125,26 @@
         "icon": "$(record)"
       },
       {
+        "command": "retrocore.device.recordKey",
+        "title": "Record",
+        "icon": "$(record)"
+      },
+      {
+        "command": "retrocore.device.play",
+        "title": "Play",
+        "icon": "$(play)"
+      },
+      {
+        "command": "retrocore.device.stop",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "retrocore.device.rewind",
+        "title": "Rewind",
+        "icon": "$(debug-reverse-continue)"
+      },
+      {
         "command": "retrocore.device.eject",
         "title": "Eject",
         "icon": "$(eject)"
@@ -1318,6 +1402,7 @@
                   "trs80-model2",
                   "apple1",
                   "coco",
+                  "pet",
                   "altair",
                   "apple2e"
                 ],
@@ -1330,15 +1415,16 @@
                   "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
+                  "The Commodore PET: the 2001 with BASIC 1 or the BASIC 2 upgrade ROMs, or the 4032 with BASIC 4; model says which (pet2001-basic2 by default).",
                   "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET 2001 (model picks BASIC 1 or BASIC 2), and altair a MITS Altair 8800."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer and RETROCORE_PET_ROMS for the PET (MAME's pet2001 and pet2001n chips, in the directory or its pet2001 or pet2001n folder). Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -1377,7 +1463,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016)."
               },
               "switches": {
                 "type": "number",
@@ -1453,8 +1539,7 @@
               },
               "snow": {
                 "type": "boolean",
-                "default": false,
-                "description": "Model I: show video snow when the CPU reads or writes video RAM while the beam draws."
+                "description": "Model I: show video snow when the CPU reads or writes video RAM while the beam draws (off by default). PET: the same, as on the 2001's board (on by default on the 2001, off on the others)."
               },
               "doubler": {
                 "enum": [
@@ -1468,20 +1553,52 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. The PET's are cassette1 and cassette2."
+              },
+              "cassette1": {
+                "type": "string",
+                "description": "PET: a .tap, .wav or .prg tape in the built-in Datasette, cassette #1, with PLAY down. A .prg goes in as the tape SAVE writes."
+              },
+              "cassette2": {
+                "type": "string",
+                "description": "PET: a .tap, .wav or .prg tape in the second Datasette, cassette #2, with PLAY down."
               },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I and Color Computer: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I, Color Computer and PET: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 4,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
+                "maxItems": 16,
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8."
+              },
+              "diskUnits": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 8,
+                  "maximum": 15
+                },
+                "uniqueItems": true,
+                "description": "PET: the device numbers of the dual disk drives on the IEEE-488 bus, such as [8, 9], each the diskModel. Each needs its ROMs, MAME's c4040 or c2040 set, in driveRomDirectory or romDirectory. A 4032 has one as 8 when the ROMs are found; [] leaves it out."
+              },
+              "diskModel": {
+                "type": "string",
+                "enum": ["4040", "2040"],
+                "default": "4040",
+                "enumDescriptions": [
+                  "The 4040, with DOS 2.0: D64 disks.",
+                  "The 2040, with DOS 1.2: D67 disks, each initialized with the I command before it is read."
+                ],
+                "description": "PET: what the diskUnits are, a 4040 (DOS 2.0) or a 2040 (DOS 1.2)."
+              },
+              "driveRomDirectory": {
+                "type": "string",
+                "description": "PET: a folder with the drives' ROMs under MAME's names: the 4040's c4040 set (901468-14 to -16, 901466-04 and 901467) or the 2040's c2040 set (901468-06 and -07, 901466-01 and 901467), or a folder holding c4040 and c2040 folders, or one beside them. Defaults to romDirectory, then RETROCORE_PET_ROMS."
               },
               "bootSeconds": {
                 "type": "number",
@@ -1528,11 +1645,11 @@
                 ],
                 "enumDescriptions": [
                   "No sound, and no cost.",
-                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a PET, the VIA's CB2, as a speaker on the user port plays it.",
                   "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
                 ],
                 "default": "speaker",
-                "description": "IIe and Color Computer: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+                "description": "IIe, Color Computer and PET: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
               },
               "mockingboard": {
                 "type": "boolean",
@@ -1560,7 +1677,7 @@
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
                 ],
-                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1 and the Model I, which have no color). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
+                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1 and the Model I, which have no color; the PET 2001 is white, and with BASIC 2 green). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
               },
               "mouse": {
                 "type": "integer",
@@ -1665,6 +1782,10 @@
                   "coco1",
                   "coco2",
                   "coco3",
+                  "pet2001-basic2",
+                  "pet2001",
+                  "pet4032",
+                  "pet4032-business",
                   "3",
                   "4",
                   "4p",
@@ -1682,6 +1803,10 @@
                   "The Color Computer 1: Color BASIC with Extended Color BASIC, the MC6847 VDG and 16 KB.",
                   "The Color Computer 2: Color BASIC with Extended Color BASIC and 64 KB.",
                   "The Color Computer 3: Extended Color BASIC 2.0, the GIME and 128 KB.",
+                  "The PET 2001 with the BASIC 2 upgrade ROMs, the 2001-N's: a green screen by default.",
+                  "The 1977 PET 2001: BASIC 1, the white screen and the chiclet keyboard.",
+                  "The PET 4032 (or, with 16 KB, the 4016): BASIC 4 with its disk commands, the graphics keyboard, and a 4040 as device 8 when its ROMs are found.",
+                  "The PET 4032 with the business keyboard and its editor.",
                   "TRS-80 Model III: a 2 MHz Z80, the Model III ROM, 48 KB and 64x16.",
                   "TRS-80 Model 4: 4 MHz, the Model III ROM, 128 KB, the memory maps and 80x24.",
                   "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
@@ -1690,7 +1815,19 @@
                   "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. PET: pet2001-basic2 (the default), pet2001, pet4032 or pet4032-business. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
+              },
+              "basicRevision": {
+                "enum": [
+                  "revised",
+                  "original"
+                ],
+                "enumDescriptions": [
+                  "The revised chip: BASIC 1's 901447-09, or BASIC 4's 901465-23.",
+                  "The original chip: BASIC 1's 901447-01, or BASIC 4's 901465-19."
+                ],
+                "default": "revised",
+                "description": "PET 2001 and 4032: which of BASIC's revised chips is fitted, BASIC 1's first or BASIC 4's at $B000."
               },
               "slot0": {
                 "enum": [
@@ -1813,16 +1950,16 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, .petbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
                 "default": true,
-                "description": "With basic: RUN the program once it is loaded; false leaves BASIC at its prompt."
+                "description": "With basic, or a PET program whose .prg loads at $0401: RUN the program once it is loaded; false leaves BASIC at its prompt."
               },
               "program": {
                 "type": "string",
-                "description": "Binary to load into RAM."
+                "description": "Binary to load into RAM. PET: a .prg loads where its first two bytes say; one at $0401 is a BASIC program, which is RUN, and any other starts at its load address or entryAddress."
               },
               "debugFile": {
                 "type": "string",
@@ -1830,7 +1967,7 @@
               },
               "loadAddress": {
                 "type": "number",
-                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe and $7000 on the Model I."
+                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I and $0800 on the PET."
               },
               "entryAddress": {
                 "type": "number",
@@ -1857,7 +1994,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), or the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), or the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm)."
               },
               "breakpoints": {
                 "type": "array",
@@ -1953,6 +2090,25 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "pet",
+            "model": "pet2001-basic2",
+            "name": "Boot PET 2001 (BASIC 2)",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "pet",
+            "model": "pet2001-basic2",
+            "name": "Debug PET 6502 source",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

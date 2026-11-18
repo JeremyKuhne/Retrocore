@@ -152,8 +152,8 @@ Each stage ends with its tests passing.
 
 ### 4. The other drivers
 
-- `.GRAFIX`, `.AUDIO` and `.SILENTYPE`, written from their bytes and the Driver Writer's Guide. Same tests as
-  stage 3.
+- `.GRAFIX`, `.AUDIO` and `.SILENTYPE`, documented from the Driver Writer's Guide and byte-identical to their
+  `SOS.DRIVER` code. Same tests as stage 3.
 
 ### 5. Drivers in the debugger
 

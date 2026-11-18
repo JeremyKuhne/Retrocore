@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "apple1-reset", "apple1-clear", "coco-reset", "altair-reset", "altair-clear", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -316,6 +316,36 @@ test("the panel sends control characters, the Apple keys and CONTROL-RESET", () 
     assert.deepEqual(posted.splice(0), [{ command: "reset" }]);
 });
 
+test("the PET types PETSCII: STOP, HOME, the cursor keys, DEL and INST, and its key bar has Stop, Clr and Reset", () => {
+    const { posted, screen, byId, window } = loadPanel();
+    window.dispatch("message", { data: {
+        machine: "pet", model: "pet2001-basic2", rows: [""], cycles: 1, running: true,
+        speed: { setting: 1, accelerated: true, actual: 20, hertz: 20000000 },
+        media: { cassette1: { path: "game.tap", mode: "playing", recording: false, motor: true }, cassette2: { path: null } },
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    } });
+    assert.deepEqual(posted.filter(message => "error" in (message as object)), [], "the frame draws without an error");
+    assert.equal(byId.get("status")?.textContent, "Running · Fast tape · 20.00× · 20.00 MHz · Tape 1 playing · motor on");
+    assert.equal(byId.get("display")?.style.aspectRatio, "320/200", "the PET's dots are square");
+    assert.match(byId.get("hint")?.textContent ?? "", /^Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB \(business keyboard\) · Ctrl\+F12: reset/);
+    posted.splice(0);
+    for (const key of ["Escape", "Home", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Backspace", "Delete", "Insert", "Enter", "a"]) {
+        screen.dispatch("keydown", { key, code: "", ctrlKey: false, altKey: false, shiftKey: false });
+    }
+    assert.deepEqual(posted.splice(0).map(message => (message as { code: number }).code), [3, 19, 157, 29, 145, 17, 20, 20, 148, 13, 97]);
+    byId.get("pet-reset")?.dispatch("click");
+    assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
+});
+
+test("the PET's key bar has Stop and Clr, the shifted HOME", () => {
+    const html = webviewHtml("NONCE");
+    const bar = /<span class="keys" data-machine="pet">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? "";
+    assert.match(bar, /data-code="3"[^>]*>Stop</);
+    assert.match(bar, /data-code="147"[^>]*>Clr</);
+    assert.match(bar, /id="pet-reset"[^>]*>Reset</);
+    assert.match(html, /data-machine="apple2 apple3 coco pet"/, "the PET has the Sound button");
+});
+
 test("the Model I's Reset button, Ctrl+Break and Ctrl+F12 press its reset", () => {
     const { posted, screen, byId, window } = loadPanel();
     // A frame without pixels reports an error, but still switches the key bar to the Model I's keys.
@@ -432,6 +462,7 @@ test("sharp scales are whole physical pixels per dot, in the screen's shape, as 
     assert.deepEqual(size("apple2", 1200, 900, 1.5), { width: 1120, height: 768, scale: 3 },
         "at 150% display scaling, 3x is 1680x1152 physical pixels");
     assert.deepEqual(size("trs80-model1", 1000, 900, 1), { width: 768, height: 576, scale: 1 }, "Model I dots are 2 by 3");
+    assert.deepEqual(size("pet", 1300, 900, 1), { width: 1280, height: 800, scale: 2 }, "the PET's 320x200 square dots, doubled at 1x");
     assert.equal(size("trs80-model1", 700, 900, 1), null, "too small for 1x");
 });
 

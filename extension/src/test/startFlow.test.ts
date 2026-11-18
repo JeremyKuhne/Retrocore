@@ -36,6 +36,19 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "basic", "disk", "tape"]);
     assert.deepEqual(kinds("coco3"), ["machine", "source", "program", "disk", "tape"], "the CoCo 3's BASIC files do not launch yet");
     assert.deepEqual(kinds("altair"), ["machine", "source", "program"], "an Altair tape needs a bootstrap keyed in first");
+    assert.deepEqual(kinds("pet2001-basic2"), ["machine", "source", "program", "basic", "tape"], "the PET has tapes and no disks");
+    assert.deepEqual(kinds("pet2001"), ["machine", "source", "program", "basic", "tape"]);
+    assert.deepEqual(kinds("pet4032"), ["machine", "source", "program", "basic", "disk", "tape"], "the 4032 comes with a 4040");
+    const pet4032 = runChoices(machine("pet4032"));
+    assert.match(pet4032.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 4 \(PET\)/);
+    assert.match(pet4032.find(choice => choice.kind === "disk")?.detail ?? "", /4040/);
+    const pet = runChoices(machine("pet2001-basic2"));
+    assert.deepEqual(pet.find(choice => choice.kind === "program")?.extensions, ["prg", "bin"], "a .prg, or a plain binary");
+    assert.deepEqual(pet.find(choice => choice.kind === "tape")?.extensions, ["tap", "wav", "prg"]);
+    assert.match(pet.find(choice => choice.kind === "tape")?.detail ?? "", /Datasette/);
+    assert.match(pet.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 2 \(PET\)/);
+    assert.match(runChoices(machine("pet2001")).find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 1 \(PET\)/);
+    assert.deepEqual(runChoices(machine("coco2")).find(choice => choice.kind === "program")?.extensions, ["bin"], "other machines load binaries");
     assert.match(runChoices(machine("coco1")).find(choice => choice.kind === "basic")?.detail ?? "", /Color BASIC/);
     assert.match(runChoices(machine("apple2-ii")).find(choice => choice.kind === "basic")?.detail ?? "", /Integer BASIC/);
     assert.match(runChoices(machine("apple1")).find(choice => choice.kind === "basic")?.detail ?? "", /Apple-1 BASIC/);
@@ -54,6 +67,11 @@ test("each kind of setup becomes the launch options that run it, which package.j
         [{ machineId: "apple1", kind: "tape", path: "basic.wav", options: {} }, { machine: "apple1", cassette: "basic.wav" }],
         [{ machineId: "apple1", kind: "basic", path: "a.apple1.bas", options: {} }, { machine: "apple1", basic: "a.apple1.bas" }],
         [{ machineId: "coco3", kind: "disk", path: "games.dsk", options: {} }, { machine: "coco", model: "coco3", disks: ["games.dsk"] }],
+        [{ machineId: "pet2001-basic2", kind: "tape", path: "game.tap", options: {} }, { machine: "pet", model: "pet2001-basic2", cassette1: "game.tap", cassette: undefined }],
+        [{ machineId: "pet2001", kind: "program", path: "hello.prg", options: { ramKilobytes: 32, snow: false } },
+            { machine: "pet", model: "pet2001", program: "hello.prg", ramKilobytes: 32, snow: false }],
+        [{ machineId: "pet2001", kind: "basic", path: "a.petbasic.bas", options: { sound: "off" } }, { basic: "a.petbasic.bas", sound: "off" }],
+        [{ machineId: "pet4032", kind: "disk", path: "demo.d64", options: { ramKilobytes: 16 } }, { machine: "pet", model: "pet4032", disks: ["demo.d64"], ramKilobytes: 16 }],
         [{ machineId: "apple2-iie-enhanced", kind: "dosSource", path: "hi.s", options: {} }, { source: "hi.s", dos: "3.3", stopOnEntry: false }]
     ];
 
@@ -91,5 +109,5 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.ok(!isUsable({ machineId: "apple4", kind: "machine", options: {} }), "an unknown machine");
     assert.ok(!isUsable({ machineId: "trs80-model1-level1", kind: "disk", path: "x.dsk", options: {} }), "Level I has no disks");
     assert.ok(!isUsable({ machineId: "apple2-iie", kind: "source", options: {} }), "a source needs its file");
-    assert.equal(machines.length, 19);
+    assert.equal(machines.length, 23);
 });

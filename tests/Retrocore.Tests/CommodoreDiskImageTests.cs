@@ -345,10 +345,79 @@ public class CommodoreDiskImageTests
             new byte[21 * GcrLayout.SectorSize],
             CommodoreDos.Dos1,
             out bool[] unwritten,
+            out _,
             out _);
 
         found[0].Should().BeFalse();
         unwritten[0].Should().BeFalse("a block followed the header, though its mark is damaged");
+    }
+
+    /// <summary>
+    ///  A data block cut short by the next sector's sync is bad, and the sector after it still reads.
+    /// </summary>
+    [TestMethod]
+    public void ACutShortBlockLeavesTheNextSector()
+    {
+        GcrBitWriter writer = new(GcrLayout.TrackBits(3));
+        byte[] good = [.. Enumerable.Range(0, GcrLayout.SectorSize).Select(value => (byte)(value * 7))];
+        Header(writer, 0);
+        writer.Ones(40);
+        writer.Byte(0x07);
+        writer.Bytes(good.AsSpan(0, 100));
+        Header(writer, 1);
+        Block(writer, good);
+        writer.Zeros(12);
+
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        bool[] found = GcrLayout.ReadTrack(writer.Buffer, GcrLayout.TrackBits(3), 1, sectors);
+        found[0].Should().BeFalse("its block was cut short");
+        found[1].Should().BeTrue("the sync inside the block starts sector 1's header");
+        sectors.AsSpan(GcrLayout.SectorSize, GcrLayout.SectorSize).ToArray().Should().Equal(good);
+    }
+
+    /// <summary>
+    ///  Two good copies of a sector that differ keep the first, and a sector image lists the sector as a loss.
+    /// </summary>
+    [TestMethod]
+    public void DifferingGoodCopiesAreALoss()
+    {
+        GcrBitWriter writer = new(GcrLayout.TrackBits(3));
+        byte[] first = new byte[GcrLayout.SectorSize];
+        byte[] second = [.. Enumerable.Repeat((byte)0x5A, GcrLayout.SectorSize)];
+        Header(writer, 0);
+        Block(writer, first);
+        Header(writer, 0);
+        Block(writer, second);
+
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        GcrLayout.ReadTrack(writer.Buffer, GcrLayout.TrackBits(3), 1, sectors, CommodoreDos.Dos2, out _, out _, out IReadOnlyList<int> differ);
+        differ.Should().Equal(0);
+        sectors.AsSpan(0, GcrLayout.SectorSize).ToArray().Should().Equal(first);
+
+        CommodoreDisk disk = D64Format.Read(RandomImage());
+        disk.SetTrack(0, writer.Buffer, GcrLayout.TrackBits(3), 3);
+        new CommodoreDiskCodec("D64").Encode(disk.Snapshot()).Losses.Should()
+            .Contain("track 1, sector 0, which holds two good copies that differ; the first is kept.");
+    }
+
+    // A track 1 header for a sector of disk BA, with its gap.
+    private static void Header(GcrBitWriter writer, int sector)
+    {
+        writer.Ones(40);
+        writer.Bytes([0x08, (byte)(sector ^ 1 ^ 'B' ^ 'A'), (byte)sector, 1, (byte)'B', (byte)'A']);
+        writer.Zeros(9);
+    }
+
+    // A data block with its checksum and gap.
+    private static void Block(GcrBitWriter writer, byte[] data)
+    {
+        writer.Ones(40);
+        writer.Byte(0x07);
+        writer.Bytes(data);
+        byte sum = 0;
+        foreach (byte value in data) { sum ^= value; }
+        writer.Byte(sum);
+        writer.Zeros(12);
     }
 
     private static byte[] RandomImage(int size = D64Format.Size)

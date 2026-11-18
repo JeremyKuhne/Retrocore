@@ -4,6 +4,7 @@
 
 using System.IO.Compression;
 using Retrocore.Machines.Acorn;
+using Retrocore.Machines.Chips;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Floppy;
@@ -239,6 +240,41 @@ public class BbcDiskTests
         fdc.Read(1).Should().Be(0, "the seek succeeds");
         Send(fdc, 0x7D, 0x12);                  // read the current track register
         fdc.Read(1).Should().Be(2);
+    }
+
+    /// <summary>
+    ///  Bad track registers of &amp;FF, as the DFS sets them, skip nothing: a seek to track &amp;FF ends there.
+    /// </summary>
+    [TestMethod]
+    public void SeekToTrackFFEnds()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x0D, 1, 1, 0x02);      // fast steps
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);   // drive 0: no bad tracks, current track 0
+        Send(fdc, 0x69, 0xFF);                  // seek drive 0 to track &FF
+        RunWhileBusy(fdc);
+        fdc.IsBusy.Should().BeFalse();
+        fdc.Read(1).Should().Be(0);
+        Send(fdc, 0x7D, 0x12);
+        fdc.Read(1).Should().Be(0xFF);
+    }
+
+    /// <summary>
+    ///  With RECORD down, time spent on RS-423 goes on the tape as silence.
+    /// </summary>
+    [TestMethod]
+    public void Rs423KeepsTheTapesTime()
+    {
+        Acia6850 acia = new();
+        BbcCassette cassette = new();
+        BbcSerialUla ula = new(acia, cassette);
+        cassette.Insert(new AcornTape(), "blank");
+        cassette.Record();
+        ula.Write(0xC0);                        // motor on, RS-423
+        for (int cycle = 0; cycle < BbcTiming.CpuHertz; cycle++) { ula.Tick(); }
+        long units = (cassette.Tape ?? throw new AssertFailedException("A tape is in.")).HalfCycles.Sum(length => (long)length);
+        units.Should().BeCloseTo(AcornTape.UnitsPerSecond, 8, "a second of silence");
     }
 
     /// <summary>

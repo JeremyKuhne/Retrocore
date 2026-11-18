@@ -156,7 +156,7 @@ OSWORD_ROUTINES:
 ;;
 ;; The user's routine gets the call's X and Y.
 ;; In: X, Y = the parameters for the user's routine
-;; Out: A = 0
+;; Out: A, X, Y = as the user's routine returns them
 ;; Entry: JUMP_USERV = jumps through USERV with A unchanged, for OSWORD &E0-&FF
 ;; See: <USERV>
 CALL_USER_CODE:
@@ -1023,7 +1023,8 @@ READ_LINE_EXIT:
 ;; pending. It then tells the user print routine (UPTV, A = 5) and writes <PRINTER_DESTINATION> through
 ;; <WRITE_OS_VARIABLE_F0>.
 ;; In: A = 5, X = the printer type
-;; Out: X = the previous printer type, Y = <PRINTER_IGNORE>
+;; Out: X = the previous printer type, Y = <PRINTER_IGNORE>, once the type is changed; given up for an escape, X
+;;   and Y are as they came in
 ;; Uses: A
 ;; See: <UPTV>, <CALL_PRINTER_DRIVER_FOR>
 SELECT_PRINTER_TYPE:

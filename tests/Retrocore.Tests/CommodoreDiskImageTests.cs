@@ -400,6 +400,42 @@ public class CommodoreDiskImageTests
             .Contain("track 1, sector 0, which holds two good copies that differ; the first is kept.");
     }
 
+    /// <summary>
+    ///  A header cut short by the next sync is bad, and the sector after it still reads; a data block whose mark is
+    ///  damaged to a header's $08 still counts as written.
+    /// </summary>
+    [TestMethod]
+    public void CutShortHeadersAndDamagedMarksAreNotLost()
+    {
+        byte[] good = [.. Enumerable.Range(0, GcrLayout.SectorSize).Select(value => (byte)(value * 3))];
+        GcrBitWriter cut = new(GcrLayout.TrackBits(3));
+        cut.Ones(40);
+        cut.Bytes([0x08, 0x12, 0x00]);
+        Header(cut, 1);
+        Block(cut, good);
+        byte[] sectors = new byte[21 * GcrLayout.SectorSize];
+        GcrLayout.ReadTrack(cut.Buffer, GcrLayout.TrackBits(3), 1, sectors)[1].Should().BeTrue("the sync inside the cut header starts sector 1's");
+
+        GcrBitWriter damaged = new(GcrLayout.TrackBits(3));
+        Header(damaged, 0);
+        damaged.Ones(40);
+        damaged.Byte(0x08);
+        damaged.Bytes(good);
+        damaged.Zeros(12);
+        bool[] found = GcrLayout.ReadTrack(
+            damaged.Buffer,
+            GcrLayout.TrackBits(3),
+            1,
+            sectors,
+            CommodoreDos.Dos1,
+            out bool[] unwritten,
+            out _,
+            out _);
+
+        found[0].Should().BeFalse();
+        unwritten[0].Should().BeFalse("a block followed the header, its mark damaged to $08");
+    }
+
     // A track 1 header for a sector of disk BA, with its gap.
     private static void Header(GcrBitWriter writer, int sector)
     {

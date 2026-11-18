@@ -52,6 +52,15 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(labels);
         List<(int, int, string, bool, string)> references = [];
+
+        // BBC BASIC's jumps are where its tokeniser finds them, as the ROM's does: abbreviations such as G., words run
+        // together as in IF1THEN, and none in a * command, REM, DATA or string.
+        if (dialect is BbcBasicDialect)
+        {
+            BbcReferences(text, labels, references);
+            return Defined(references, labels);
+        }
+
         bool inString = false;
         for (int index = 0; index < text.Length; index++)
         {
@@ -107,30 +116,6 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            // BBC BASIC finds words only in capitals, so reminder is a name, and a * at a statement's start hands the
-            // rest of the line to the MOS, so *RENAME GOTO done is a file name, not a jump. A name that starts with
-            // no word is read whole, as the tokeniser copies it, so SCOREMARK holds no REM. REM and DATA both run to
-            // the end of the line.
-            if (dialect is BbcBasicDialect)
-            {
-                if (character == '*' && StatementStart(text, index)) { break; }
-                if (BbcBasicDialect.IsNameCharacter(character)
-                    && !char.IsAsciiDigit(character)
-                    && !dialect.Keywords.Any(keyword => keyword.Length != 0 && string.CompareOrdinal(text, index, keyword, 0, keyword.Length) == 0))
-                {
-                    while (index + 1 < text.Length && BbcBasicDialect.IsNameCharacter(text[index + 1])) { index++; }
-                    continue;
-                }
-
-                if (string.CompareOrdinal(text, index, "REM", 0, 3) == 0
-                    || string.CompareOrdinal(text, index, "DATA", 0, 4) == 0)
-                {
-                    break;
-                }
-
-                if (!char.IsAsciiLetterUpper(character)) { continue; }
-            }
-
             // Business BASIC and MBASIC take REM and DATA only set apart from names, as REMAIN is a variable.
             bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
             if (separated ? SetApart(text, index, "REM") : StartsWord(text, index, "REM")) { break; }
@@ -144,18 +129,60 @@ public sealed partial class BasicProgram
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
-        // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label
-        // only when one of that name is defined.
-        if (dialect is IntegerBasicDialect or BbcBasicDialect)
+        return dialect is IntegerBasicDialect ? Defined(references, labels) : references;
+    }
+
+    // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
+    // when one of that name is defined.
+    private static List<(int, int, string, bool, string)> Defined(
+        List<(int, int, string, bool, string)> references,
+        IReadOnlyDictionary<string, BasicLabel> labels)
+    {
+        references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
+        for (int index = 0; index < references.Count; index++)
         {
-            references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
-            for (int index = 0; index < references.Count; index++)
-            {
-                references[index] = references[index] with { Item4 = false };
-            }
+            references[index] = references[index] with { Item4 = false };
         }
 
         return references;
+    }
+
+    // The labels after each of BBC BASIC's jump tokens, found by its tokeniser with each byte's place in the text.
+    private static void BbcReferences(
+        string text,
+        IReadOnlyDictionary<string, BasicLabel> labels,
+        List<(int, int, string, bool, string)> references)
+    {
+        List<int> columns = [];
+        CrunchOutput output;
+        try
+        {
+            output = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text, columns));
+        }
+        catch (FormatException)
+        {
+            return;
+        }
+
+        byte[] bytes = output.ToArray();
+        IReadOnlyList<int> positions = output.Positions;
+        int Column(int index) =>
+            index < positions.Count && positions[index] < columns.Count ? columns[positions[index]] : text.Length;
+
+        bool inString = false;
+        int scanned = 0;
+        for (int index = 0; index < bytes.Length; index++)
+        {
+            if (bytes[index] == '"') { inString = !inString; }
+            if (inString || bytes[index] < 0x80 || BbcBasicDialect.Instance.Word(bytes[index]) is not { } word)
+            {
+                continue;
+            }
+
+            int jump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+            if (jump < 0 || Column(index) < scanned) { continue; }
+            scanned = Targets(text, Column(index + 1), s_jumps[jump], labels, references);
+        }
     }
 
     /// <summary>
@@ -313,15 +340,6 @@ public sealed partial class BasicProgram
         return end >= text.Length || !InName(text[end], periods: true);
     }
 
-    // Whether a place starts a statement: the line's start, after a colon, or after THEN or ELSE.
-    private static bool StatementStart(string text, int index)
-    {
-        int before = index - 1;
-        while (before >= 0 && text[before] == ' ') { before--; }
-        if (before < 0 || text[before] == ':') { return true; }
-        return before >= 3 && string.CompareOrdinal(text, before - 3, "THEN", 0, 4) == 0
-            || before >= 3 && string.CompareOrdinal(text, before - 3, "ELSE", 0, 4) == 0;
-    }
 
     private static bool StartsWord(string text, int index, string word, bool spaced = false)
     {

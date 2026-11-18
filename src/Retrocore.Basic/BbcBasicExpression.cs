@@ -648,12 +648,15 @@ internal sealed class BbcBasicExpression
         value <= 0 ? throw new FormatException("Log range.") : logarithm(value);
 
     // A real as BASIC II holds one, in five bytes: past about 1.7E38 it is "Too big", and below about 2.9E-39 it is 0.
+    // ROUND_FP_A checks the exponent again after rounding, so 1.7014118345E38, which rounds up to 2^127, is too big.
     private static BasicValue Real(double value) => value switch
     {
         double.NaN => throw new FormatException("Log range."),
         >= LargestReal or <= -LargestReal => throw new FormatException("Too big."),
         > -SmallestReal and < SmallestReal => new(0),
-        _ => new(RoundMantissa(value))
+        _ => RoundMantissa(value) is var rounded && Math.Abs(rounded) < LargestReal
+            ? new(rounded)
+            : throw new FormatException("Too big.")
     };
 
     // A real rounded to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10. The rounding byte is the

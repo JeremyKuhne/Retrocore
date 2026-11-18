@@ -173,7 +173,8 @@ internal sealed class BasicLineScanner
                 routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
-                statementStart = word is "THEN" or "ELSE";
+                // BBC BASIC's ERROR and LET start a statement as THEN and ELSE do, so ON ERROR *KEY 1 FOO is a command.
+                statementStart = word is "THEN" or "ELSE" || (Bbc && word is "ERROR" or "LET");
                 if (word == "GOTO") { beforeGoto = previous; }
                 previous = word;
                 index = last;

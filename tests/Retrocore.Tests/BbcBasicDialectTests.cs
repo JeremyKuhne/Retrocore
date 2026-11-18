@@ -263,14 +263,20 @@ public sealed class BbcBasicDialectTests
     [TestMethod]
     public void LabelsAndTopReadAsBbcBasic()
     {
-        const string Source = "REM retrocore bbcbasic\n    reminder=0:GOTO done\n    *RENAME GOTO done\ndone:\n    PRINT TOP\n";
+        const string Source = "REM retrocore bbcbasic\n    reminder=0:SCOREMARK=1:GOTO done\n    *RENAME GOTO done\n    DATA text:GOTO done\ndone:\n    PRINT TOP\n";
         BasicParseResult parsed = BasicProgram.Parse(Source, BasicDialect.BbcBasic);
         parsed.Diagnostics.Should().BeEmpty();
         string text = parsed.Program?.ToText() ?? "";
-        text.Should().Contain("reminder=0:GOTO 30").And.Contain("*RENAME GOTO done");
+        text.Should().Contain("reminder=0:SCOREMARK=1:GOTO 40").And.Contain("*RENAME GOTO done")
+            .And.Contain("DATA text:GOTO done");
 
         BasicSource source = BasicSource.Analyze("10 P=1:PRINT TOP\n", BasicDialect.BbcBasic);
         source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Should().ContainSingle();
+
+        // After an operand, TO is FOR's, and P% a variable.
+        BasicSource loop = BasicSource.Analyze("10 P%=3:FOR I%=1 TOP%:NEXT\n", BasicDialect.BbcBasic);
+        loop.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Text)
+            .Should().Equal("P%", "I%", "P%");
     }
 
     /// <summary>
@@ -280,6 +286,8 @@ public sealed class BbcBasicDialectTests
     public void FunctionsAndRealPrecision()
     {
         BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "P=PI:H=2147483649+0.5\r");
+        BbcMachineTests.RunToPrompt(machine);
         (string Parameter, string Body)? Define(string name) => name switch
         {
             "f" => ("x", "x+&7FFFFFFF"),
@@ -295,6 +303,11 @@ public sealed class BbcBasicDialectTests
         Action extra = () => evaluator.Evaluate("FNg(1)");
         extra.Should().Throw<FormatException>().WithMessage("Arguments.");
         evaluator.Evaluate("1E10+1-1E10").Value.Number.Should().Be(0, "1E10+1 rounds to 32 bits");
+
+        // PI is the ROM's packed constant, and an exact half keeps an odd mantissa, both as the ROM stored them.
+        evaluator.Evaluate("PI=P").Value.Number.Should().Be(-1);
+        evaluator.Evaluate("2147483649+0.5").Value.Number.Should().Be(2147483649.0);
+        evaluator.Evaluate("2147483649+0.5=H").Value.Number.Should().Be(-1);
     }
 
     /// <summary>

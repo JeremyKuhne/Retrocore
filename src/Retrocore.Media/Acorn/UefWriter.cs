@@ -179,18 +179,24 @@ internal sealed class UefWriter
     private void FlushGap()
     {
         if (_gap == 0) { return; }
-        if (_gap % 2 == 0 && _gap / 2 <= ushort.MaxValue)
+
+        // An odd gap starts with 3 units as a &0116, short enough that its float seconds round back exactly; the even
+        // rest goes in &0112 chunks of up to 65,535 pairs of units, which a reader runs on into it.
+        if ((_gap & 1) != 0)
         {
-            Chunk(0x0112, [(byte)(_gap / 2), (byte)(_gap / 2 >> 8)]);
-        }
-        else
-        {
+            int odd = Math.Min(_gap, AcornTones.Silence);
             byte[] seconds = new byte[4];
-            BinaryPrimitives.WriteSingleLittleEndian(seconds, (float)_gap / AcornTape.UnitsPerSecond);
+            BinaryPrimitives.WriteSingleLittleEndian(seconds, (float)odd / AcornTape.UnitsPerSecond);
             Chunk(0x0116, seconds);
+            _gap -= odd;
         }
 
-        _gap = 0;
+        while (_gap > 0)
+        {
+            int count = Math.Min(_gap / 2, ushort.MaxValue);
+            Chunk(0x0112, [(byte)count, (byte)(count >> 8)]);
+            _gap -= count * 2;
+        }
     }
 
     private void SetBaud(int baud)

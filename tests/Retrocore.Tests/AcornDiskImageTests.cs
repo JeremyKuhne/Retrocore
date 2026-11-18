@@ -93,4 +93,46 @@ public class AcornDiskImageTests
         image.Losses.Should().Contain(loss => loss.Contains("Side 1", StringComparison.Ordinal));
         image.Losses.Should().Contain(loss => loss.Contains("128 bytes", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    ///  A sector whose ID names another track or head is kept, but listed: the image gives it the track's own.
+    /// </summary>
+    [TestMethod]
+    public void ForeignSectorIdsAreListed()
+    {
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        FloppySector[] sectors = [.. disk.Track(2, 0)];
+        sectors[4] = new FloppySector(7, 1, 4, new byte[AcornDiskImage.SectorSize], doubleDensity: false);
+        disk.Format(2, 0, sectors);
+        EncodedImage image = AcornDiskImage.Encode(disk, doubleSided: false);
+        image.Losses.Should().ContainSingle().Which.Should().Contain("track 7 head 1");
+    }
+
+    /// <summary>
+    ///  A wholly unformatted track inside the disk comes back as zeroed sectors, so it is listed.
+    /// </summary>
+    [TestMethod]
+    public void UnformattedTracksAreListed()
+    {
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        disk.Format(2, 0, []);
+        EncodedImage image = AcornDiskImage.Encode(disk, doubleSided: false);
+        image.Losses.Should().ContainSingle().Which.Should().Contain("Track 2 side 0");
+    }
+
+    /// <summary>
+    ///  A short DSD takes the larger of its two catalogues' sizes.
+    /// </summary>
+    [TestMethod]
+    public void ShortDsdTakesTheLargerCatalogue()
+    {
+        byte[] image = new byte[2 * AcornDiskImage.TrackSize];
+        image[AcornDiskImage.SectorSize + 7] = 0x90;                                // side 0: 400 sectors
+        image[AcornDiskImage.SectorSize + 6] = 0x01;
+        image[AcornDiskImage.TrackSize + AcornDiskImage.SectorSize + 6] = 0x03;    // side 1: 800 sectors
+        image[AcornDiskImage.TrackSize + AcornDiskImage.SectorSize + 7] = 0x20;
+        FloppyDisk disk = AcornDiskImage.Read(image, doubleSided: true);
+        disk.Cylinders.Should().Be(80);
+        disk.Track(79, 1).Should().HaveCount(10);
+    }
 }

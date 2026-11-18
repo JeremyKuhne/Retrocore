@@ -149,6 +149,21 @@ public class AcornTapeTests
         record.Should().Throw<InvalidOperationException>();
     }
 
+    /// <summary>
+    ///  Gaps of any length come back from a UEF to the unit: odd ones, and ones past a &amp;0112 chunk's count.
+    /// </summary>
+    /// <param name="units">The gap, in units of 1/4,800 second.</param>
+    [TestMethod]
+    [DataRow(3)]
+    [DataRow(7)]
+    [DataRow(2 * 65_535)]
+    [DataRow(2 * 65_535 + 2)]
+    [DataRow(17_280_001)]
+    public void GapsRoundTrip(int units)
+    {
+        UefFormat.Read(UefFormat.Write([1, 1, units, 1, 1])).HalfCycles.Should().Equal([1, 1, units, 1, 1]);
+    }
+
     // The bytes of a UEF's &0100 chunks, in order.
     private static List<byte> DataBytes(byte[] uef)
     {

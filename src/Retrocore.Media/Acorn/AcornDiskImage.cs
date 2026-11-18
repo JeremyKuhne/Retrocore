@@ -56,12 +56,15 @@ public static class AcornDiskImage
         int imageTracks = (image.Length + (TrackSize * sides) - 1) / (TrackSize * sides);
         if (imageTracks > 80) { throw new InvalidDataException("A DFS image holds at most 80 tracks a side."); }
 
-        // The catalogue's sector count: sector 1's byte 6 bits 0-1 and byte 7.
+        // Each side's catalogue sector count, at its track 0: sector 1's byte 6 bits 0-1 and byte 7. The larger side
+        // sets the geometry, so a trimmed image still gets every track either catalogue declares.
         int catalogueTracks = 0;
-        if (image.Length >= SectorSize + 8)
+        for (int side = 0; side < sides; side++)
         {
-            int sectors = ((image[SectorSize + 6] & 3) << 8) | image[SectorSize + 7];
-            catalogueTracks = sectors / SectorsPerTrack;
+            int catalogue = (side * TrackSize) + SectorSize;
+            if (image.Length < catalogue + 8) { break; }
+            int sectors = ((image[catalogue + 6] & 3) << 8) | image[catalogue + 7];
+            catalogueTracks = Math.Max(catalogueTracks, sectors / SectorsPerTrack);
         }
 
         int tracks = Math.Max(imageTracks, catalogueTracks) > 40 ? 80 : 40;
@@ -167,9 +170,17 @@ public static class AcornDiskImage
                     {
                         losses.Add($"Track {track} side {side}: sector {sector.Sector}'s CRC error.");
                     }
+
+                    if (sector.Track != track || sector.Side != 0)
+                    {
+                        losses.Add(
+                            $"Track {track} side {side}: sector {sector.Sector}'s ID of track {sector.Track} head {sector.Side}.");
+                    }
                 }
 
-                if (found.Any(present => !present) && disk.Track(track, side).Count != 0)
+                // A track within the disk's geometry that is wholly unformatted comes back as ten zeroed sectors.
+                bool onDisk = track < disk.Cylinders && side < disk.Sides;
+                if (found.Any(present => !present) && (onDisk || disk.Track(track, side).Count != 0))
                 {
                     losses.Add($"Track {track} side {side}: missing sectors, written as zeros.");
                 }

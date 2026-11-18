@@ -177,6 +177,68 @@ public sealed class MbasicDebuggingTests
     }
 
     /// <summary>
+    ///  REM and DATA start a remark and data only set apart from names, so a label after REMAIN=1 resolves.
+    /// </summary>
+    [TestMethod]
+    public void RemNeedsToBeSetApartForLabels()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("REMAIN=1:GOTO done\nDATAX=2\ndone:\nEND\n", Mbasic);
+        parsed.Diagnostics.Should().BeEmpty();
+        parsed.Program?.ToText().Split('\n')[0].Should().Be("10 REMAIN=1:GOTO 30");
+    }
+
+    /// <summary>
+    ///  An integer variable set from the debugger rounds as MBASIC's CINT does, and overflows past 32767.
+    /// </summary>
+    [TestMethod]
+    public void IntegersRoundWhenSet()
+    {
+        byte[] memory = new byte[0x10000];
+        const int Variables = 0x7000;
+        memory[MbasicMemory.VARTAB] = Variables & 0xFF;
+        memory[MbasicMemory.VARTAB + 1] = Variables >> 8;
+        memory[MbasicMemory.ARYTAB] = Variables & 0xFF;
+        memory[MbasicMemory.ARYTAB + 1] = Variables >> 8;
+        memory[MbasicMemory.STREND] = Variables & 0xFF;
+        memory[MbasicMemory.STREND + 1] = Variables >> 8;
+        memory[MbasicMemory.MEMSIZ] = 0x00;
+        memory[MbasicMemory.MEMSIZ + 1] = 0xF0;
+        memory[MbasicMemory.FRETOP] = 0x00;
+        memory[MbasicMemory.FRETOP + 1] = 0xF0;
+        for (int letter = 0; letter < 26; letter++) { memory[MbasicMemory.DEFTBL + letter] = 4; }
+
+        BasicVariables variables = new(Mbasic, DelegateBasicMemory.Of(memory));
+        BasicVariable count = variables.Create("I%");
+        variables.Write(count.Kind, count.ValueAddress, new(1.6));
+        variables.Read(count.Kind, count.ValueAddress).Number.Should().Be(2);
+        Action overflow = () => variables.Write(count.Kind, count.ValueAddress, new(32767.6));
+        overflow.Should().Throw<OverflowException>();
+    }
+
+    /// <summary>
+    ///  A double whose 56-bit mantissa holds more than a C# double lists as its exact decimal, which crunches back.
+    /// </summary>
+    [TestMethod]
+    public void LongDoublesListExactly()
+    {
+        byte[] crunched = Mbasic.Tokenize("X=9007199254740993#");
+        string listed = Mbasic.Detokenize(crunched);
+        listed.Should().Be("X=9007199254740993#");
+        Mbasic.Tokenize(listed).Should().Equal(crunched);
+    }
+
+    /// <summary>
+    ///  WHILE, which MBASIC stores with a + after it, is the word at its place, not +.
+    /// </summary>
+    [TestMethod]
+    public void WhileIsItsOwnSite()
+    {
+        BasicSource source = BasicSource.Analyze("10 WHILE A<10:A=A+1:WEND\n", Mbasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Keyword).Select(site => site.Word)
+            .Should().Equal("WHILE", "<", "=", "+", "WEND");
+    }
+
+    /// <summary>
     ///  MBASIC takes GOTO only set apart from a name, so GOTOCOUNT=1 is an assignment, not a jump to a label.
     /// </summary>
     [TestMethod]

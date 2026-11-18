@@ -107,8 +107,10 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (StartsWord(text, index, "REM")) { break; }
-            if (StartsWord(text, index, "DATA"))
+            // Business BASIC and MBASIC take REM and DATA only set apart from names, as REMAIN is a variable.
+            bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
+            if (separated ? SetApart(text, index, "REM") : StartsWord(text, index, "REM")) { break; }
+            if (separated ? SetApart(text, index, "DATA") : StartsWord(text, index, "DATA"))
             {
                 index = SkipData(text, index);
                 continue;
@@ -272,6 +274,19 @@ public sealed partial class BasicProgram
         }
 
         return text.Length;
+    }
+
+    // Whether a word starts at an index with no name's character, a period included, before or after it.
+    private static bool SetApart(string text, int index, string word)
+    {
+        if (index > 0 && InName(text[index - 1], periods: true)) { return false; }
+        if (string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            return false;
+        }
+
+        int end = index + word.Length;
+        return end >= text.Length || !InName(text[end], periods: true);
     }
 
     private static bool StartsWord(string text, int index, string word, bool spaced = false)

@@ -235,7 +235,8 @@ public sealed partial class BasicVariables
                 WriteString(address, value.Text ?? []);
                 break;
             case BasicVariableKind.Integer:
-                double truncated = Math.Truncate(value.Number);
+                // MBASIC converts through CINT, which rounds a half away from zero; the others truncate.
+                double truncated = Mbasic ? Math.Round(value.Number, MidpointRounding.AwayFromZero) : Math.Truncate(value.Number);
                 if (truncated is < short.MinValue or > short.MaxValue)
                 {
                     throw new OverflowException("?ILLEGAL QUANTITY: integers are -32768 to 32767.");

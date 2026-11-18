@@ -127,6 +127,9 @@ internal sealed class BasicLineScanner
                 // function stored as a prefix and a token is both.
                 int last = Last(index);
                 int token = length == 2 ? (_bytes[index] << 8) | _bytes[index + 1] : _bytes[last];
+
+                // MBASIC stores WHILE with a + after it from the same text: the site is WHILE.
+                if (length == 1 && last > index && _dialect.Word(_bytes[index]) == "WHILE") { token = _bytes[index]; }
                 word = _dialect.Word(token) ?? word;
                 BasicSite site = Site(BasicSiteKind.Keyword, index, End(last)) with { Token = token, Word = word };
                 sites.Add(site);

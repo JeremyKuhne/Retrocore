@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Numerics;
 using System.Text;
 
 namespace Retrocore.Basic;
@@ -448,8 +449,73 @@ internal sealed class MbasicDialect : BasicDialect
             if (x == units.Length && crunched[0] == type && crunched.AsSpan(1).SequenceEqual(bytes)) { return text; }
         }
 
+        // A double's 56-bit mantissa can hold more than a C# double, as 9007199254740993# does: its exact decimal,
+        // rounded to as few digits as crunch back to its bytes.
+        if (isDouble)
+        {
+            for (int digits = first; digits <= first + 4; digits++)
+            {
+                string text = Typed(ExactDouble(bytes, digits), indicator, isDouble: true);
+                int[] units = [.. text.Select(character => (int)character)];
+                int x = 0;
+                byte[] crunched = MbasicNumbers.Crunch(units, ref x);
+                if (x == units.Length && crunched[0] == type && crunched.AsSpan(1).SequenceEqual(bytes))
+                {
+                    return text;
+                }
+            }
+        }
+
         return listed;
     }
+
+    // A double's value from its bytes, exactly, written with some significant digits (rounded half up) as LIST
+    // writes numbers: plainly from .001 to the digits' reach, else with a D exponent.
+    private static string ExactDouble(ReadOnlySpan<byte> bytes, int digits)
+    {
+        if (bytes[7] == 0) { return "0"; }
+        BigInteger mantissa = bytes[6] | 0x80;
+        for (int index = 5; index >= 0; index--) { mantissa = (mantissa << 8) | bytes[index]; }
+        int shift = bytes[7] - 128 - 56;
+        BigInteger numerator = shift >= 0 ? mantissa << shift : mantissa;
+        BigInteger denominator = shift >= 0 ? BigInteger.One : BigInteger.One << -shift;
+
+        // The decimal exponent: 10^exponent <= value < 10^(exponent + 1).
+        int exponent = (int)Math.Floor(BigInteger.Log10(numerator) - BigInteger.Log10(denominator));
+        while (Below(numerator, denominator, exponent)) { exponent--; }
+        while (!Below(numerator, denominator, exponent + 1)) { exponent++; }
+
+        // The digits, rounded half up; rounding up to a power of ten gains a digit.
+        int scale = exponent - digits + 1;
+        BigInteger top = scale >= 0 ? numerator : numerator * BigInteger.Pow(10, -scale);
+        BigInteger bottom = scale >= 0 ? denominator * BigInteger.Pow(10, scale) : denominator;
+        BigInteger rounded = BigInteger.Divide((top * 2) + bottom, bottom * 2);
+        if (rounded >= BigInteger.Pow(10, digits))
+        {
+            rounded /= 10;
+            exponent++;
+        }
+
+        string significant = rounded.ToString(System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0');
+        if (significant.Length == 0) { significant = "0"; }
+        string sign = (bytes[6] & 0x80) != 0 ? "-" : "";
+        if (exponent >= digits || exponent < -3)
+        {
+            string fraction = significant.Length > 1 ? "." + significant[1..] : "";
+            return $"{sign}{significant[0]}{fraction}D{(exponent < 0 ? "-" : "+")}{Math.Abs(exponent):D2}";
+        }
+
+        if (exponent < 0) { return $"{sign}.{new string('0', -exponent - 1)}{significant}"; }
+        return significant.Length <= exponent + 1
+            ? sign + significant + new string('0', exponent + 1 - significant.Length)
+            : $"{sign}{significant[..(exponent + 1)]}.{significant[(exponent + 1)..]}";
+    }
+
+    // Whether numerator / denominator is below 10^exponent.
+    private static bool Below(BigInteger numerator, BigInteger denominator, int exponent) =>
+        exponent >= 0
+            ? numerator < denominator * BigInteger.Pow(10, exponent)
+            : numerator * BigInteger.Pow(10, -exponent) < denominator;
 
     // A number below .01 without an exponent, as LIST writes one whose zeros and digits fit (.001), or null.
     private static string? Fraction(double value, int digits)

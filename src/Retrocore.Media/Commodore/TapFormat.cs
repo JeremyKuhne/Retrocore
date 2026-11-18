@@ -50,7 +50,9 @@ public static class TapFormat
     /// </summary>
     /// <param name="image">The file's bytes.</param>
     /// <returns>The tape.</returns>
-    /// <exception cref="InvalidDataException">The image is not a TAP image of version 0 or 1.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not a TAP image of version 0 or 1, or is cut short.
+    /// </exception>
     public static CommodoreTape Read(ReadOnlySpan<byte> image)
     {
         if (image.Length < HeaderLength || !IsTap(image))
@@ -65,8 +67,14 @@ public static class TapFormat
         }
 
         double clock = Clock(image[13], image[14]);
-        int length = (int)Math.Min(BinaryPrimitives.ReadUInt32LittleEndian(image[16..]), (uint)(image.Length - HeaderLength));
-        ReadOnlySpan<byte> data = image.Slice(HeaderLength, length);
+        uint declared = BinaryPrimitives.ReadUInt32LittleEndian(image[16..]);
+        if (declared > (uint)(image.Length - HeaderLength))
+        {
+            throw new InvalidDataException(
+                $"The TAP image says it holds {declared} bytes of pulses, but only {image.Length - HeaderLength} follow its header.");
+        }
+
+        ReadOnlySpan<byte> data = image.Slice(HeaderLength, (int)declared);
         List<int> pulses = [];
         for (int i = 0; i < data.Length; i++)
         {
@@ -81,7 +89,11 @@ public static class TapFormat
             }
             else
             {
-                if (i + 3 >= data.Length) { break; }
+                if (i + 3 >= data.Length)
+                {
+                    throw new InvalidDataException("The TAP image ends inside a pulse's three-byte length.");
+                }
+
                 cycles = data[i + 1] | (data[i + 2] << 8) | (data[i + 3] << 16);
                 i += 3;
                 if (cycles == 0) { continue; }

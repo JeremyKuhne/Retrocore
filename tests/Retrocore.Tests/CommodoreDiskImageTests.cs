@@ -271,6 +271,37 @@ public class CommodoreDiskImageTests
         read.Should().Throw<InvalidDataException>().WithMessage("*half-track 0 mixes speed zones 2 and 3*");
     }
 
+    /// <summary>
+    ///  A track the disk's G64 snapshot could not keep, part of a byte or longer than 65,535 bytes, is refused.
+    /// </summary>
+    [TestMethod]
+    public void ATrackG64CannotKeepIsRefused()
+    {
+        CommodoreDisk disk = new();
+        Action partial = () => disk.SetTrack(0, [0x80], 1, 3);
+        partial.Should().Throw<ArgumentOutOfRangeException>();
+        Action negative = () => disk.SetTrack(0, [0x80], -8, 3);
+        negative.Should().Throw<ArgumentOutOfRangeException>();
+        byte[] huge = new byte[CommodoreDisk.MaximumTrackBytes + 1];
+        Action tooLong = () => disk.SetTrack(0, huge, huge.Length * 8, 3);
+        tooLong.Should().Throw<ArgumentOutOfRangeException>();
+
+        disk.SetTrack(0, huge, CommodoreDisk.MaximumTrackBytes * 8, 3);
+        G64Format.Read(G64Format.Write(disk)).BitCount(0).Should().Be(CommodoreDisk.MaximumTrackBytes * 8);
+    }
+
+    /// <summary>
+    ///  A G64 whose track table points past its end was cut short, and is refused rather than read without the track.
+    /// </summary>
+    [TestMethod]
+    public void ACutShortG64IsRefused()
+    {
+        byte[] image = G64Format.Write(D64Format.Read(RandomImage()));
+        int last = (int)BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(12 + (68 * 4)));
+        Action read = () => G64Format.Read(image.AsSpan(0, last + 1));
+        read.Should().Throw<InvalidDataException>().WithMessage("*half-track 68 starts past its end*");
+    }
+
     private static byte[] RandomImage(int size = D64Format.Size)
     {
         byte[] image = new byte[size];

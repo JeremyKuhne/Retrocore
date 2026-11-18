@@ -81,6 +81,7 @@ public sealed class Cbm4040Fdc
             field = value;
             _fluxDirty = true;
             _writeCell = -1;
+            ShowWriting();
         }
     }
 
@@ -106,6 +107,16 @@ public sealed class Cbm4040Fdc
             field = value;
             _fluxDirty = true;
             _writeCell = -1;
+            ShowWriting();
+        }
+    }
+
+    // Tells each mechanism whether its head writes: the selected one while write select is active.
+    private void ShowWriting()
+    {
+        for (int drive = 0; drive < _drives.Length; drive++)
+        {
+            _drives[drive].Writing = drive == DriveSelect && !ReadSelect;
         }
     }
 

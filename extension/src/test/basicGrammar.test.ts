@@ -116,6 +116,10 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
         assert.ok(has(scopes("bbcbasic", `70 ${name}=1`, name), "variable.other"), `${name} is a name: its word is conditional`);
     }
     assert.ok(has(scopes("bbcbasic", "80 PRINT COUNT", "COUNT"), "keyword"), "COUNT alone is still a word");
+    // PROC and FN take the whole name after them, keywords and all.
+    assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "PRINT"), "keyword.other"), "PROCREM is a name, not a remark");
+    assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "REM"), "entity.name.function"));
+    assert.ok(has(scopes("bbcbasic", "100 X=FNTIME", "TIME"), "entity.name.function"), "FNTIME names a function");
 });
 
 test("BASIC labels have label scopes", () => {

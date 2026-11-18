@@ -505,7 +505,10 @@ screen.addEventListener('keydown',event=>{
         return;
     }
     const special=keys[machine()]??keys['apple2'];
-    let code=event.key in special?special[event.key]:event.key.length===1?event.key.charCodeAt(0):-1;
+    // A typed character is ASCII; only the machine's own special keys, such as the BBC's COPY, cursor and function
+    // keys, have codes above 127, so a character such as ñ cannot press f1.
+    const typed=event.key.length===1?event.key.charCodeAt(0):-1;
+    let code=event.key in special?special[event.key]:typed<128?typed:-1;
     if(code>=0&&code<256){send(code);event.preventDefault();}
 });
 screen.addEventListener('keyup',event=>{

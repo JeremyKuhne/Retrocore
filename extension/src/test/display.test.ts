@@ -296,6 +296,7 @@ test("the panel sends control characters, the Apple keys and CONTROL-RESET", () 
     key("c", { ctrlKey: true });
     key("[", { ctrlKey: true });
     key("Cancel", { ctrlKey: true });
+    key("ñ");                   // not ASCII, and no machine's key: nothing is sent
     key("a");
     screen.dispatch("keydown", { key: "Alt", code: "AltLeft" });
     screen.dispatch("keyup", { key: "Alt", code: "AltLeft" });

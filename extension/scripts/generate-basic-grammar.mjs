@@ -51,7 +51,8 @@ function separated(word) {
 }
 
 // BBC BASIC's keyword table: each word in the order the tokeniser searches it, which a test checks against the ROM,
-// and the conditional ones, which are not words when a name character follows, as in COUNTER or TIMER.
+// the conditional ones, which are not words when a name character follows, as in COUNTER or TIMER, and those a
+// name follows, PROC and FN, which take the whole name after them, as in PROCREM.
 function bbcKeywords() {
     const source = readFileSync(resolve(library, "BbcBasicDialect.cs"), "utf8");
     const table = /s_table\s*=\s*\[([\s\S]*?)\];/.exec(source);
@@ -59,7 +60,8 @@ function bbcKeywords() {
     const entries = [...table[1].matchAll(/\("([^"]+)", [^,]+, ([^)]+)\)/g)];
     return {
         words: entries.map(match => match[1]),
-        conditional: new Set(entries.filter(match => /\bConditional\b/.test(match[2])).map(match => match[1]))
+        conditional: new Set(entries.filter(match => /\bConditional\b/.test(match[2])).map(match => match[1])),
+        nameFollows: new Set(entries.filter(match => /\bNameFollows\b/.test(match[2])).map(match => match[1]))
     };
 }
 
@@ -67,7 +69,7 @@ function bbcKeywords() {
 // end in & for a long integer; the Microsoft BASICs' are read by two. Color BASIC finds words only in capitals and
 // never inside a name, which runs from a capital through letters and digits. BBC BASIC also finds words only in
 // capitals; its names are whole, with _ and small letters, and its DATA, like its REM, runs to the end of the line.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set() } = {}) {
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set() } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
@@ -99,6 +101,10 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                     { include: "#string" },
                     { include: "#escape" },
                     { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
+                    ...[...nameFollows].map(word => ({
+                        match: matching(`(${pattern(word)})([A-Za-z0-9_\`]*)`),
+                        captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
+                    })),
                     { match: matching(reserved.map(word => `(${business ? separated(word) : conditional.has(word) ? `${pattern(word)}(?![A-Za-z0-9_\`])` : pattern(word)})`).join("|")), captures },
                     { match: "\\?", name: `keyword.other.${scope}` },
                     { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
@@ -143,7 +149,7 @@ const outputs = [
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
-    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows })],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {

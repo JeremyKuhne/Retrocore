@@ -46,6 +46,28 @@
           "name": "entity.name.label.retrocore-bbcbasic"
         },
         {
+          "match": "(?:(FN)([A-Za-z0-9_`]*))",
+          "captures": {
+            "1": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "entity.name.function.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "(?:(PROC)([A-Za-z0-9_`]*))",
+          "captures": {
+            "1": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "entity.name.function.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
           "match": "(?:(AND)|(ABS)|(ACS)|(ADVAL)|(ASC)|(ASN)|(ATN)|(AUTO)|(BGET(?![A-Za-z0-9_`]))|(BPUT(?![A-Za-z0-9_`]))|(COLOUR)|(CALL)|(CHAIN)|(CHR\\$)|(CLEAR(?![A-Za-z0-9_`]))|(CLOSE(?![A-Za-z0-9_`]))|(CLG(?![A-Za-z0-9_`]))|(CLS(?![A-Za-z0-9_`]))|(COS)|(COUNT(?![A-Za-z0-9_`]))|(DEG)|(DEF)|(DELETE)|(DIV)|(DIM)|(DRAW)|(ENDPROC(?![A-Za-z0-9_`]))|(END(?![A-Za-z0-9_`]))|(ENVELOPE)|(ELSE)|(EVAL)|(ERL(?![A-Za-z0-9_`]))|(ERROR)|(EOF(?![A-Za-z0-9_`]))|(EOR)|(ERR(?![A-Za-z0-9_`]))|(EXP)|(EXT(?![A-Za-z0-9_`]))|(FOR)|(FALSE(?![A-Za-z0-9_`]))|(FN)|(G\\s*O\\s*T\\s*O)|(GET\\$)|(GET)|(GOSUB)|(GCOL)|(HIMEM(?![A-Za-z0-9_`]))|(INPUT)|(IF)|(INKEY\\$)|(INKEY)|(INT)|(INSTR\\()|(LIST)|(LINE)|(LOAD)|(LOMEM(?![A-Za-z0-9_`]))|(LOCAL)|(LEFT\\$\\()|(LEN)|(LET)|(LOG)|(LN)|(MID\\$\\()|(MODE)|(MOD)|(MOVE)|(NEXT)|(NEW(?![A-Za-z0-9_`]))|(NOT)|(OLD(?![A-Za-z0-9_`]))|(ON)|(OFF)|(OR)|(OPENIN)|(OPENOUT)|(OPENUP)|(OSCLI)|(PRINT)|(PAGE(?![A-Za-z0-9_`]))|(PTR(?![A-Za-z0-9_`]))|(PI(?![A-Za-z0-9_`]))|(PLOT)|(POINT\\()|(PROC)|(POS(?![A-Za-z0-9_`]))|(RETURN(?![A-Za-z0-9_`]))|(REPEAT)|(REPORT(?![A-Za-z0-9_`]))|(READ)|(RUN(?![A-Za-z0-9_`]))|(RAD)|(RESTORE)|(RIGHT\\$\\()|(RND(?![A-Za-z0-9_`]))|(RENUMBER)|(STEP)|(SAVE)|(SGN)|(SIN)|(SQR)|(SPC)|(STR\\$)|(STRING\\$\\()|(SOUND)|(STOP(?![A-Za-z0-9_`]))|(TAN)|(THEN)|(TO)|(TAB\\()|(TRACE)|(TIME(?![A-Za-z0-9_`]))|(TRUE(?![A-Za-z0-9_`]))|(UNTIL)|(USR)|(VDU)|(VAL)|(VPOS(?![A-Za-z0-9_`]))|(WIDTH))",
           "captures": {
             "1": {

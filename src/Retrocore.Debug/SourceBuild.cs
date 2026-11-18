@@ -34,7 +34,7 @@ internal static class SourceBuild
         AssemblyOptions options = new(cpu, origin, 0x10000 - origin)
         {
             Dialect = dialect ?? AssemblyDialect.Native,
-            SourceResolver = new FileAssemblySourceResolver(),
+            SourceResolver = new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
             SdkPaths = [SdkModules.SdkDirectory],
             PredefinedSymbols = symbols is null ? [] : new Dictionary<string, long>(symbols),
             LinkerConfiguration = linkerConfiguration is null

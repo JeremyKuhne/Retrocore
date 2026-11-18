@@ -129,7 +129,8 @@ NXTD:
 
 ;; Points <PNT> at the cursor's line and sets <LNMX> for its length, 40 or 80 columns.
 ;;
-;; A column past the first row's end, in a line of one row, is moved back by 40.
+;; A column past the first row's end is moved back by 40, whatever the line's length; a caller that keeps the column
+;; in a second row saves <PNTR> around the call, as <JSTS2> does.
 ;; In: TBLX = the line's first row
 ;; Uses: A, X
 STUPT:

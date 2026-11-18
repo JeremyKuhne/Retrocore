@@ -913,7 +913,7 @@ PR200:
     sta FNLEN
     lda INDEX
     sta FNADR
-    lda ST_CHECKSUM
+    lda INDEX+1
     sta FNADR+1
     rts
 

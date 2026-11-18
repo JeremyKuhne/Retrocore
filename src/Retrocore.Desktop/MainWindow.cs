@@ -650,6 +650,10 @@ internal sealed class MainWindow : Window
                 Code("F2", 2, "F2");
                 Reset("Reset", "The reset switch (or Ctrl+F12 or Ctrl+Break): the boot ROM starts again");
                 break;
+            case "kaypro2":
+                Code("Esc", 27, "ESC (or Esc)");
+                Reset("Reset", "The reset button (or Ctrl+F12 or Ctrl+Break): the monitor ROM boots CP/M from drive A again");
+                break;
             case "apple1":
                 Code("Esc", 27, "ESC (or Esc): drops the line being typed");
                 Reset("Reset", "RESET (or Ctrl+F12 or Ctrl+Break): restarts the Monitor, keeping memory and the screen");
@@ -659,6 +663,11 @@ internal sealed class MainWindow : Window
                 Code("Esc", 27, "ESC (or Esc)");
                 Reset("Reset", "The front panel's RESET (or Ctrl+F12 or Ctrl+Break): the 8080 starts again at $0000, keeping memory");
                 Clear();
+                break;
+            case "pet":
+                Code("Stop", 3, "STOP (or Esc)");
+                Code("Clr", 147, "CLR, the shifted HOME: clears the screen");
+                Reset("Reset", "A reset switch (or Ctrl+F12 or Ctrl+Break): the kernal starts again, keeping memory");
                 break;
             case "coco":
                 Code("Break", 1, "BREAK (or Esc)");
@@ -675,6 +684,8 @@ internal sealed class MainWindow : Window
                 "apple2" => "Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple",
                 "trs80-model1" or "trs80-model3" or "coco" => "Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset",
                 "trs80-model2" => "Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset",
+                "pet" => "Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset",
+                "kaypro2" => "Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset",
                 "apple3" => "Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple",
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",
                 "altair" => "Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET",

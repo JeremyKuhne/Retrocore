@@ -64,6 +64,26 @@ public sealed class Z80Pio : IZ80DaisyDevice
     public byte Peek(int register) => Read(register);
 
     /// <summary>
+    ///  Resets the PIO, as the Z80's reset does: both ports go to mode 1, their pins float, and their interrupts are
+    ///  disabled and masked. The output latches keep their values, as the chip's do.
+    /// </summary>
+    internal void Reset()
+    {
+        foreach (Z80PioPort port in _ports)
+        {
+            port.Mode = 1;
+            port.Direction = 0xFF;
+            port.Mask = 0xFF;
+            port.AwaitingDirection = false;
+            port.AwaitingMask = false;
+            port.Enabled = false;
+            port.Matched = false;
+            port.Pending = false;
+            port.InService = false;
+        }
+    }
+
+    /// <summary>
     ///  Writes a register.
     /// </summary>
     /// <param name="register">0 A data, 1 B data, 2 A control, 3 B control.</param>

@@ -217,7 +217,7 @@ internal sealed partial class BbcDebugTarget
             Prompt: At("IMMEDIATE_MODE"),
             Error: At("BRK_HANDLER"),
             Run: At("RUN_PROGRAM"),
-            Continue: At("RUN_PROGRAM"),
+            Continue: 0,
             Stops: new Dictionary<ushort, string>
             {
                 [At("STOP_STATEMENT")] = "STOP",

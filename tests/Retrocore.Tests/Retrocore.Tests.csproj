@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
+    <ProjectReference Include="..\..\src\Retrocore.Machines.Commodore\Retrocore.Machines.Commodore.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.I8080\Retrocore.Cpu.I8080.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />

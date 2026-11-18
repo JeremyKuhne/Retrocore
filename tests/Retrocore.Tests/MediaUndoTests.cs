@@ -286,7 +286,7 @@ public sealed class MediaUndoTests
         File.WriteAllBytes(jvc, [18, 1, .. body]);
         CocoMachine coco = CocoDiskTests.Create(CocoModel.Coco2);
         FloppyDrive cocoDrive = coco.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
-        FloppyMedia.Insert(cocoDrive, jvc, coco: true);
+        FloppyMedia.Insert(cocoDrive, jvc, FloppyFamily.Coco);
         body[(((5 * JvcFormat.SectorsPerTrack) + 2) * JvcFormat.SectorSize) + 9] = 1;
         File.WriteAllBytes(jvc, [18, 1, .. body]);
         JsonObject jvcSectors = Differences(cocoDrive) ?? throw new InvalidOperationException("No differences.");

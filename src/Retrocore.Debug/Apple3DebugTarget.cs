@@ -827,15 +827,13 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             }
         }
 
-        if (args["disks"] is JsonArray disks)
+        string?[] disks = args.ImagePaths("disks", "game.dsk");
+        if (disks.Length > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }
+        for (int drive = 0; drive < disks.Length; drive++)
         {
-            if (disks.Count > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }
-            for (int drive = 0; drive < disks.Count; drive++)
+            if (disks[drive] is { } disk)
             {
-                if (disks[drive] is JsonValue value && value.GetValue<string>() is { } disk)
-                {
-                    Apple2Loader.Insert(machine.Drives[drive], Path.GetFullPath(disk));
-                }
+                Apple2Loader.Insert(machine.Drives[drive], Path.GetFullPath(disk));
             }
         }
 

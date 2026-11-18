@@ -934,7 +934,7 @@ public class PascalDecompilerTests
               G7 := S8F3(S8F2(G3[2]))
             END.
 
-            """);
+            """.ReplaceLineEndings("\n"));
 
         result.Units[0].Source.Should().Be("""
             UNIT ALPHA;
@@ -952,7 +952,7 @@ public class PascalDecompilerTests
               END;
             END.
 
-            """);
+            """.ReplaceLineEndings("\n"));
 
         result.Units[1].Source.Should().Contain("""
               FUNCTION S8F2(A8X3: INTEGER): INTEGER;
@@ -961,7 +961,7 @@ public class PascalDecompilerTests
               FUNCTION S8F2;
                 EXTERNAL;
               FUNCTION S8F3;
-            """);
+            """.ReplaceLineEndings("\n"));
 
         result.Assembly.Should().StartWith("         .FUNC   S8F2,1\n");
     }

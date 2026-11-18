@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import {
     changeWords, crashedMessage, discardKeptQuestion, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
-    conflictQuestion, contextWords, form, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
+    conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
 
@@ -96,6 +96,24 @@ test("the menus offer Save for a changed disk, a Save that will ask for a change
     assert.deepEqual(contextWords(drive(false), false), ["device", "loaded", "insert", "eject", "unlocked"], "off, nothing to save");
     assert.deepEqual(contextWords(drive(true), false), ["device", "loaded", "insert", "eject", "unlocked", "revert", "save", "changed"],
         "off, a disk the last run kept saves and reverts");
+});
+
+test("a Datasette's keys show while the machine runs; a tape drive that cannot save records to a file instead", () => {
+    const deck: Device = {
+        ...drive(false), id: "cassette1", kind: "tapeDrive", name: "Cassette #1", formats: ["tap", "wav"],
+        saveFormats: ["tap", "wav"], operations: ["insert", "eject", "record", "save"]
+    };
+    assert.ok(hasTapeKeys(deck));
+    const words = contextWords(deck, true);
+    for (const word of ["recordKey", "play", "stop", "rewind", "save"]) assert.ok(words.includes(word), word);
+    assert.ok(!words.includes("record"), "RECORD goes down on the tape in the deck, with no file to name");
+    assert.ok(!contextWords({ ...deck, media: null }, true).includes("play"), "no keys to press with no tape");
+    assert.deepEqual(contextWords(deck, false).filter(word => ["recordKey", "play"].includes(word)), [], "nor while the machine is off");
+
+    const recorder: Device = { ...deck, operations: ["insert", "eject", "record"] };
+    assert.ok(!hasTapeKeys(recorder));
+    assert.ok(contextWords(recorder, true).includes("record"));
+    assert.ok(!contextWords(recorder, true).includes("play"));
 });
 
 test("the questions a save asks say what is off and offer the way out the plan draws", () => {

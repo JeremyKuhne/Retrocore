@@ -121,6 +121,7 @@ const level2 = keywords("Level2Dialect.cs");
 const integer = keywords("IntegerBasicDialect.cs");
 const business = [...keywords("BusinessBasicDialect.cs", "s_statements"), ...keywords("BusinessBasicDialect.cs", "s_functions")];
 const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywords("ColorBasicDialect.cs", "s_functions")];
+const petBasic = keywords("PetBasicDialect.cs");
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],
@@ -128,6 +129,7 @@ const outputs = [
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
+    ["petbasic.tmLanguage.json", grammar("petbasic", "Commodore BASIC (PET)", petBasic)],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {
@@ -135,4 +137,4 @@ for (const [file, content] of outputs) {
     writeGenerated(output, JSON.stringify(content, null, 2) + "\n", `${file} is stale. Run npm run generate:grammar.`);
 }
 console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC, `
-    + `${business.length} Business BASIC and ${colorBasic.length} Color BASIC reserved words.`);
+    + `${business.length} Business BASIC, ${colorBasic.length} Color BASIC and ${petBasic.length} PET BASIC reserved words.`);

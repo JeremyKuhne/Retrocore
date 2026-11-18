@@ -272,7 +272,7 @@ internal sealed partial class CocoDebugTarget
             throw new ArgumentException($"There is no drive {drive}; disks need the disk controller.");
         }
 
-        FloppyMedia.Insert(Drives[drive], path, coco: true);
+        FloppyMedia.Insert(Drives[drive], path, FloppyFamily.Coco);
     }
 
     private JsonObject MediaState() => new JsonObject

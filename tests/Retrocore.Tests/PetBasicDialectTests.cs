@@ -334,6 +334,40 @@ public sealed class PetBasicDialectTests
     }
 
     /// <summary>
+    ///  ST, TI and TI$, and on BASIC 4 DS and DS$, are the machine's, which the evaluator refuses rather than read as
+    ///  an empty variable; BASIC keeps two letters, so STATUS is ST.
+    /// </summary>
+    [TestMethod]
+    public void ReservedVariablesAreRefused()
+    {
+        foreach (BasicDialect dialect in (BasicDialect[])[BasicDialect.PetBasic1, BasicDialect.PetBasic, BasicDialect.PetBasic4])
+        {
+            BasicEvaluator evaluator = new(dialect, DelegateBasicMemory.Of(new byte[0x10000]));
+            foreach (string name in (string[])["ST", "TI", "TI$", "STATUS"])
+            {
+                Action evaluate = () => evaluator.Evaluate(name);
+                evaluate.Should().Throw<FormatException>().WithMessage("*cannot be evaluated without running BASIC*", name);
+            }
+
+            evaluator.Format(evaluator.Evaluate("TI%")).Should().Be("0", "an integer TI% is an ordinary variable");
+            Action status = () => evaluator.Evaluate("DS");
+            if (dialect == BasicDialect.PetBasic4)
+            {
+                status.Should().Throw<FormatException>();
+            }
+            else
+            {
+                evaluator.Format(evaluator.Evaluate("DS")).Should().Be("0", "DS is an ordinary variable before BASIC 4");
+            }
+        }
+
+        // BASIC 2 and 4 read ST AND 64 as ST, AND and 64; BASIC 1, skipping spaces in words, would crunch S, TAN and D.
+        BasicEvaluator basic2 = new(BasicDialect.PetBasic, DelegateBasicMemory.Of(new byte[0x10000]));
+        Action and = () => basic2.Evaluate("ST AND 64");
+        and.Should().Throw<FormatException>().WithMessage("ST cannot be evaluated*");
+    }
+
+    /// <summary>
     ///  BASIC 1 skips spaces inside reserved words, so R E M and D A T A hide what follows from label checks.
     /// </summary>
     [TestMethod]
@@ -347,6 +381,11 @@ public sealed class PetBasicDialectTests
         BasicParseResult spaced = BasicProgram.Parse("loop:\n    PRINT\n    G O T O loop\n", BasicDialect.PetBasic1);
         spaced.Diagnostics.Should().BeEmpty();
         spaced.Program?.ToText().Should().Be("10 PRINT\n20 GOTO 10\n", "the tokenizer stores the spaced word as GOTO");
+        // The end of F O R and an E M after it are no REM: CRUNCH takes FOR whole and goes on past it.
+        BasicParseResult overlapping = BasicProgram.Parse("loop:\n    F O R EM=1TO2:G O T O loop\n", BasicDialect.PetBasic1);
+        overlapping.Diagnostics.Should().BeEmpty();
+        overlapping.Program?.ToText().Should().Be("10 FOR EM=1TO2:GOTO 10\n");
+
         BasicParseResult missing = BasicProgram.Parse("10 G O S U B nowhere\n", BasicDialect.PetBasic1);
         missing.Success.Should().BeFalse();
         missing.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("There is no label", StringComparison.Ordinal));

@@ -124,6 +124,27 @@ internal sealed class PetBasicDialect : BasicDialect
     internal bool LinksStrings => Version == 4;
 
     /// <summary>
+    ///  Gets whether a name is one the ROM answers itself rather than from the variable table: <c>ST</c>, the I/O
+    ///  status, and <c>TI</c> and <c>TI$</c>, the jiffy clock, and on BASIC 4 <c>DS</c> and <c>DS$</c>, the disk
+    ///  status. BASIC keeps a name's first two letters, so <c>STATUS</c> is <c>ST</c>.
+    /// </summary>
+    /// <param name="name">The name, with its type suffix.</param>
+    /// <returns>Whether it is reserved.</returns>
+    internal bool IsReservedVariable(string name)
+    {
+        bool text = name.EndsWith('$');
+        string letters = name.TrimEnd('$', '%').ToUpperInvariant();
+        if (name.EndsWith('%') || letters.Length < 2) { return false; }
+        return letters[..2] switch
+        {
+            "ST" => !text,
+            "TI" => true,
+            "DS" => Version == 4,
+            _ => false
+        };
+    }
+
+    /// <summary>
     ///  The address of BASIC 4's <c>DSDESC</c>, the disk status string <c>DS$</c>'s descriptor: its length, then where
     ///  it is.
     /// </summary>

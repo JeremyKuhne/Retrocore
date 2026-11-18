@@ -187,6 +187,16 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
+            // A BBC PROC or FN name may start with a digit, as in PROC1; it is a name, not a number.
+            if (Bbc && afterFunction && char.IsAsciiDigit((char)value))
+            {
+                index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
+                split = null;
+                afterFunction = false;
+                jump = BasicJump.None;
+                continue;
+            }
+
             if (char.IsAsciiDigit((char)value) || value == '.')
             {
                 if (jump != BasicJump.None && value != '.' && !afterNumber)

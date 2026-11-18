@@ -127,6 +127,23 @@ public sealed partial class BasicEvaluator
         result.Value.IsString ? result.Value.Text?.Length > 0 : result.Value.Number != 0;
 
     /// <summary>
+    ///  Tests whether a result is true as a dialect's IF tests it: BBC BASIC's IF takes a number as a 32-bit integer,
+    ///  so 0.5 is false, and takes no string; the others as <see cref="IsTrue(BasicResult)"/>.
+    /// </summary>
+    /// <param name="result">The result.</param>
+    /// <param name="dialect">The dialect.</param>
+    /// <returns>Whether it is true.</returns>
+    /// <exception cref="FormatException">BBC BASIC, and the result is a string or too big for an integer.</exception>
+    public static bool IsTrue(BasicResult result, BasicDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        if (dialect is not BbcBasicDialect) { return IsTrue(result); }
+        if (result.Value.IsString) { throw new FormatException("Type mismatch: a condition is a number."); }
+        double whole = Math.Truncate(result.Value.Number);
+        return whole is < int.MinValue or > int.MaxValue ? throw new FormatException("Too big.") : whole != 0;
+    }
+
+    /// <summary>
     ///  Writes a result as PRINT would, without a positive number's leading space; a string is quoted.
     /// </summary>
     /// <param name="result">The result.</param>

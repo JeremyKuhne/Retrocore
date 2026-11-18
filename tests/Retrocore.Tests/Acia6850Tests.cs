@@ -70,6 +70,76 @@ public class Acia6850Tests
     }
 
     /// <summary>
+    ///  A rise of DCD interrupts, with the receive interrupt on, until the status and then the data are read: the data
+    ///  alone, the status alone or a peek leave it, and a new rise between the two reads needs a new status read.
+    /// </summary>
+    /// <param name="carrierStaysLost">Whether DCD is still high when the interrupt is acknowledged.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void CarrierInterruptNeedsStatusThenData(bool carrierStaysLost)
+    {
+        Acia6850 acia = Ready(EightNone | 0x80);
+        acia.DataCarrierDetect = true;
+        acia.Interrupt.Should().BeTrue();
+        if (!carrierStaysLost) { acia.DataCarrierDetect = false; }
+
+        acia.Read(1);
+        acia.Interrupt.Should().BeTrue("the data alone does not acknowledge it");
+        acia.Peek(0);
+        acia.Peek(1);
+        acia.Interrupt.Should().BeTrue("a peek changes nothing");
+        acia.Read(0);
+        acia.Interrupt.Should().BeTrue("the status alone does not acknowledge it");
+        acia.Read(1);
+        acia.Interrupt.Should().BeFalse();
+        ((acia.Status & Acia6850.CarrierLost) != 0).Should().Be(carrierStaysLost, "the bit then follows the input");
+
+        // A new rise between the status and the data needs the status read again.
+        acia.DataCarrierDetect = false;
+        acia.DataCarrierDetect = true;
+        acia.Read(0);
+        acia.DataCarrierDetect = false;
+        acia.DataCarrierDetect = true;
+        acia.Read(1);
+        acia.Interrupt.Should().BeTrue();
+        acia.Read(0);
+        acia.Read(1);
+        acia.Interrupt.Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  Parity is checked in seven- and eight-bit formats, even and odd: a right parity bit gives the character with
+    ///  no error, a wrong one the character with the parity error.
+    /// </summary>
+    /// <param name="format">The word format: 2 is 7E1, 3 7O1, 6 8E1 and 7 8O1.</param>
+    /// <param name="value">The character.</param>
+    [TestMethod]
+    [DataRow(2, 0x41)]
+    [DataRow(3, 0x41)]
+    [DataRow(6, 0xC3)]
+    [DataRow(7, 0xC3)]
+    [DataRow(6, 0x80)]
+    [DataRow(3, 0x00)]
+    public void ParityIsChecked(int format, int value)
+    {
+        int dataBits = format < 4 ? 7 : 8;
+        bool odd = format is 3 or 7;
+        int ones = System.Numerics.BitOperations.PopCount((uint)value);
+        bool right = ((ones & 1) != 0) ^ odd;
+        foreach (bool parity in (bool[])[right, !right])
+        {
+            Acia6850 acia = Ready((byte)(format << 2));
+            acia.ClockReceive(data: false);
+            for (int bit = 0; bit < dataBits; bit++) { acia.ClockReceive((value & (1 << bit)) != 0); }
+            acia.ClockReceive(parity);
+            acia.ClockReceive(data: true);
+            (acia.Status & Acia6850.ParityError).Should().Be(parity == right ? (byte)0 : Acia6850.ParityError);
+            acia.Read(1).Should().Be((byte)value);
+        }
+    }
+
+    /// <summary>
     ///  A carrier loss between receive clocks still drops the character being assembled.
     /// </summary>
     [TestMethod]

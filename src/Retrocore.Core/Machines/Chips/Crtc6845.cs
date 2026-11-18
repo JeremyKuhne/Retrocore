@@ -143,12 +143,12 @@ public sealed class Crtc6845
     }
 
     /// <summary>
-    ///  Reads the status (<paramref name="register"/> even), which reads as 0, or the selected register (odd). Only the
-    ///  cursor and light pen registers, R14-R17, can be read; the others read as 0.
+    ///  Reads the status (<paramref name="register"/> even), which reads as 0, or the selected register (odd). As on the
+    ///  Hitachi HD6845S, the start address, cursor and light pen registers, R12-R17, can be read; the others read as 0.
     /// </summary>
     /// <param name="register">The register select.</param>
     /// <returns>The value.</returns>
-    public byte Read(int register) => (register & 1) != 0 && _select is >= 14 and < 18 ? _registers[_select] : (byte)0;
+    public byte Read(int register) => (register & 1) != 0 && _select is >= 12 and < 18 ? _registers[_select] : (byte)0;
 
     /// <summary>
     ///  Latches the current address into the light pen registers, as a strobe on LPSTB does.
@@ -215,8 +215,15 @@ public sealed class Crtc6845
         _horizontalSyncLeft = _verticalSyncLeft = 0;
         _displayHistory = _cursorHistory = 0;
 
-        // Row 0 takes its matches at once: R6 = 0 blanks the display and R7 = 0 starts the vertical sync.
+        // Row 0 and column 0 take their matches at once: R6 = 0 blanks the display, R7 = 0 starts the vertical sync and
+        // R2 = 0 the horizontal one.
         StartRow();
+        if (_registers[2] == 0)
+        {
+            int width = _registers[3] & 0x0F;
+            _horizontalSyncLeft = width == 0 ? 16 : width;
+        }
+
         UpdateOutputs();
     }
 
@@ -224,9 +231,10 @@ public sealed class Crtc6845
 
     private bool SyncAndVideo => (_registers[8] & 3) == 3;
 
-    // The last line of a row: the maximum raster address, which in interlace sync and video mode either field reaches
-    // with its own parity.
-    private bool LastLine => SyncAndVideo ? (_line | 1) >= (_registers[9] | 1) : _line >= _registers[9];
+    // The last line of a row: the line that matches the maximum raster address, which in interlace sync and video mode
+    // either field reaches with its own parity. The 5-bit counter only matches it, so after R9 is lowered below it, it
+    // wraps round to meet it.
+    private bool LastLine => SyncAndVideo ? (_line | 1) == (_registers[9] | 1) : _line == _registers[9];
 
     private void EndLine()
     {
@@ -236,7 +244,9 @@ public sealed class Crtc6845
 
         if (_adjusting)
         {
-            if (++_adjustLine >= _registers[5]) { StartFrame(); }
+            // The adjust counter is 5 bits and matches R5, so lowering R5 below it makes it wrap round.
+            _adjustLine = (_adjustLine + 1) & 0x1F;
+            if (_adjustLine == _registers[5]) { StartFrame(); }
             else { _address = _rowStart; }
 
             return;

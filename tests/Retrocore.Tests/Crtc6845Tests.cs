@@ -149,6 +149,39 @@ public class Crtc6845Tests
     }
 
     /// <summary>
+    ///  The raster and adjust counters end on a match: lowered below the count, R9 and R5 are met only after the 5-bit
+    ///  counter wraps. R2 = 0 starts the horizontal sync on the first line after a reset, and R12 and R13 read back.
+    /// </summary>
+    [TestMethod]
+    public void CountersEndOnAMatch()
+    {
+        Crtc6845 crtc = Small();
+        crtc.Write(0, 9);
+        crtc.Write(1, 7);                       // eight lines a row
+        crtc.Reset();
+        for (int i = 0; i < 10 * 4; i++) { crtc.Tick(); }
+        crtc.RowAddress.Should().Be(4);
+        crtc.Write(1, 2);                       // R9 lowered below line 4
+        int lines = 0;
+        while (crtc.Address != 0x106 && lines < 100)
+        {
+            for (int i = 0; i < 10; i++) { crtc.Tick(); }
+            lines++;
+        }
+
+        lines.Should().Be(32 - 4 + 2 + 1, "the counter runs to 31, wraps and ends the row on line 2; the next starts R1 on");
+
+        crtc = Small();
+        crtc.Write(0, 2);
+        crtc.Write(1, 0);
+        crtc.Reset();
+        crtc.HorizontalSync.Should().BeTrue("R2 = 0 matches column 0");
+
+        crtc.Write(0, 12);
+        crtc.Read(1).Should().Be(0x01, "the HD6845S reads the start address back");
+    }
+
+    /// <summary>
     ///  A clone has registers of its own.
     /// </summary>
     [TestMethod]

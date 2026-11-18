@@ -70,6 +70,46 @@ public class Acia6850Tests
     }
 
     /// <summary>
+    ///  A carrier loss between receive clocks still drops the character being assembled.
+    /// </summary>
+    [TestMethod]
+    public void CarrierPulseDropsAPartCharacter()
+    {
+        Acia6850 acia = Ready();
+        acia.ClockReceive(data: false);
+        for (int bit = 0; bit < 4; bit++) { acia.ClockReceive(data: true); }
+        acia.DataCarrierDetect = true;
+        acia.DataCarrierDetect = false;
+        for (int bit = 0; bit < 5; bit++) { acia.ClockReceive(data: true); }
+        acia.CanReceive.Should().BeTrue("the rest of the old frame is idle line, not a character");
+    }
+
+    /// <summary>
+    ///  A format with fewer data bits, chosen while a character is under way, still lets it finish.
+    /// </summary>
+    [TestMethod]
+    public void ShorterFormatMidCharacterFinishes()
+    {
+        Acia6850 acia = Ready();
+        acia.ClockReceive(data: false);
+        for (int bit = 0; bit < 7; bit++) { acia.ClockReceive(data: true); }
+        acia.Write(0, 0x04);                    // format 1: 7 data bits, odd parity, 2 stop bits
+        acia.ClockReceive(data: true);          // the eighth bit, past the new count: then parity
+        acia.ClockReceive(data: true);          // the parity bit
+        acia.ClockReceive(data: true);          // the stop bit
+        acia.CanReceive.Should().BeFalse("the character finished");
+
+        List<byte> sent = [];
+        acia.Transmitted = sent.Add;
+        acia.Write(0, EightNone);
+        acia.Write(1, 0xFF);
+        for (int clock = 0; clock < 8; clock++) { acia.ClockTransmit(); }
+        acia.Write(0, 0x04);
+        for (int clock = 0; clock < 6; clock++) { acia.ClockTransmit(); }
+        sent.Should().HaveCount(1, "the character finished under the new format");
+    }
+
+    /// <summary>
     ///  A character from the line clears the errors of the one before it, whichever way it arrives.
     /// </summary>
     [TestMethod]

@@ -182,6 +182,9 @@ public sealed class Acia6850 : ISerialLine
                 _carrierStatusRead = false;
             }
 
+            // Losing the carrier drops a character being assembled, even if it comes back before the next clock.
+            if (value) { _receiveState = 0; }
+
             _carrierLost = value;
         }
     }
@@ -372,7 +375,7 @@ public sealed class Acia6850 : ISerialLine
             case 2:
                 if (data) { _receiveShift |= 1 << _receiveBits; }
                 _receiveParity ^= data;
-                if (++_receiveBits == dataBits) { _receiveState = parity ? 3 : 4; }
+                if (++_receiveBits >= dataBits) { _receiveState = parity ? 3 : 4; }
                 break;
             case 3:
                 // Even parity makes the ones even, odd parity odd; formats 1, 3 and 7 are odd.
@@ -447,7 +450,7 @@ public sealed class Acia6850 : ISerialLine
             case 1:
                 bool bit = (_transmitShift & (1 << _transmitBits)) != 0;
                 TransmitLevel = bit;
-                if (++_transmitBits == dataBits)
+                if (++_transmitBits >= dataBits)
                 {
                     _transmitState = parity ? 2 : 3;
                     _transmitStops = format is 0 or 1 or 4 ? 2 : 1;
@@ -461,7 +464,7 @@ public sealed class Acia6850 : ISerialLine
                 return;
             default:
                 TransmitLevel = true;
-                if (--_transmitStops == 0)
+                if (--_transmitStops <= 0)
                 {
                     _transmitState = 0;
                     _transmitDone = true;

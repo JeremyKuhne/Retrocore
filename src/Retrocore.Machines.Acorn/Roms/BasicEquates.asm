@@ -52,7 +52,7 @@ LISTO = $1F
 
 TRACE_FLAG = $20                    ;; &FF while TRACE is on, &00 while it is off
 TRACE_LIMIT = $21                   ;; TRACE's limit: line numbers from it up are not printed
-WIDTH = $23                         ;; WIDTH: the line length PRINT wraps at, or &FF for no wrapping
+WIDTH = $23                         ;; WIDTH's line length less one (WIDTH 80 stores 79), or &FF for none
 REPEAT_LEVEL = $24                  ;; the number of REPEAT loops open, the index into the REPEAT stack
 GOSUB_LEVEL = $25                   ;; the number of GOSUBs not yet returned from, the index into the GOSUB stack
 FOR_LEVEL = $26                     ;; the size of the FOR stack in bytes: 15 for each FOR loop open

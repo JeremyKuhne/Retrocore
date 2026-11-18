@@ -339,7 +339,7 @@ FLOAD = $C581
 STXTPT = $C59A
 
 ;; BASIC's STOP check: with zero and carry set, as <Kernal1:STOP1> leaves them when the STOP key is down, it
-;; ends the program with BREAK; otherwise it returns.
+;; ends the program with BREAK; with zero set and carry clear, it ends it as END does; with zero clear, it returns.
 STOP = $C71C
 
 ;; Where the NMI vector points: an instruction in BASIC's character output. Nothing on the PET 2001 drives NMI.

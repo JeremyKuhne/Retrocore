@@ -80,7 +80,7 @@ GET_LINE_NUMBER_NONE:
 ;; It falls into <EVALUATE_EQUALS>.
 ;; In: PTR_A, PTR_A_OFFSET = the text just after the name assigned to
 ;; Out:
-;;   A = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
+;;   EXPRESSION_TYPE = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
 ;;   PTR_A = the end of the statement, with PTR_A_OFFSET = 1, just past it
 ;; Uses: all
 EVALUATE_EQUALS_A:
@@ -97,7 +97,7 @@ EVALUATE_EQUALS_A:
 ;; the end of the statement is found from PTRB's offset but read and stepped over at PTRA.
 ;; In: PTR_B, PTR_B_OFFSET = the text before the "="
 ;; Out:
-;;   A = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
+;;   EXPRESSION_TYPE = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
 ;;   PTR_A = the end of the statement, with PTR_A_OFFSET = 1, just past it
 ;; Uses: all
 ;; Errors: Mistake when there is no "=", Syntax error when the statement goes on after the expression, Escape
@@ -152,7 +152,7 @@ EXPECT_EQUALS:
 ;; It falls into <CHECK_END_OF_EXPRESSION>. As there, PTRB must have the same base as PTRA.
 ;; In: PTR_B, PTR_B_OFFSET = the expression
 ;; Out:
-;;   A = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
+;;   EXPRESSION_TYPE = the value's type, with the value in the accumulators, as <EVALUATE_EXPRESSION> leaves them
 ;;   PTR_A = the end of the statement, with PTR_A_OFFSET = 1, just past it
 ;; Uses: all
 ;; Errors: Syntax error when the statement goes on after the expression, Escape

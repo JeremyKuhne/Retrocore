@@ -278,8 +278,8 @@ MULTIPLY_MANTISSA_BY_TEN:
 ;; Tests FPA for zero and its sign, and makes a zero mantissa a true zero.
 ;;
 ;; A zero mantissa also clears the sign, the exponent and its overflow byte.
-;; Out: A = 0 for zero, 1 for a positive number, the sign byte for a negative one, zero = FP_A is zero,
-;;   negative = FP_A is negative
+;; Out: A = 0 for zero, nonzero with bit 7 clear for a positive number (1, or the byte left in FP_A_SIGN by a load,
+;;   such as &40 for 1.5), the sign byte for a negative one, zero = FP_A is zero, negative = FP_A is negative
 ;; Keeps: X, Y
 TEST_FP_A:
     lda FP_A_MANTISSA

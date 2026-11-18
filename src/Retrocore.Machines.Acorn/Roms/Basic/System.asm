@@ -960,7 +960,7 @@ CLOSE_STATEMENT:
 ;; Reads a # and a file handle from the statement at PTRA, for the file statements.
 ;;
 ;; Copies PTRA to PTRB and falls into <READ_HANDLE_B>.
-;; Out:   A = Y = the handle, the low byte of INT_A
+;; Out:   A/Y = the handle, the low byte of INT_A
 ;; Uses:  X
 READ_HANDLE_A:
     lda PTR_A_OFFSET
@@ -974,7 +974,7 @@ READ_HANDLE_A:
 ;; number.
 ;;
 ;; A missing # raises "Missing #" (error 45), and a string after it "Type mismatch" (error 6).
-;; Out:   A = Y = the handle, the low byte of INT_A
+;; Out:   A/Y = the handle, the low byte of INT_A
 ;; Uses:  X
 READ_HANDLE_B:
     jsr GET_CHARACTER_B

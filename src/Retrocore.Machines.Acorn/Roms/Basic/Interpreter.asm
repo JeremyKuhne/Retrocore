@@ -56,14 +56,14 @@ SET_PTR_A_OFFSET_FROM_B:
     sty PTR_A_OFFSET
     rts
 
-;; Adds 12 to <OPCODE>, moving it three columns along the 6502's opcode table to another addressing mode.
+;; Adds 16 to <OPCODE>, moving it four columns along the 6502's opcode table to another addressing mode.
 ;;
-;; It calls <ADD_8_TO_OPCODE>, which calls <ADD_4_TO_OPCODE> and then falls into it, so that each step adds 4.
+;; It calls <ADD_8_TO_OPCODE> and then falls into it, as that does with <ADD_4_TO_OPCODE>, so 4 is added four times.
 ;; Uses: A
 ;; Entry:
 ;;   ADD_8_TO_OPCODE = adds 8
 ;;   ADD_4_TO_OPCODE = adds 4
-ADD_12_TO_OPCODE:
+ADD_16_TO_OPCODE:
     jsr ADD_8_TO_OPCODE
 ADD_8_TO_OPCODE:
     jsr ADD_4_TO_OPCODE

@@ -24,7 +24,7 @@ VDU_MOVE_TEXT_CURSOR = 31           ;; VDU 31,x,y: moves the text cursor, for TA
 STRING_SPARE = 8                    ;; the bytes a string of eight or more characters is given beyond its length
 
 ; The parameter block CALL builds in StrA's buffer.
-CALL_PARAMETER_COUNT = STRING_BUFFER    ;; the number of parameters, followed by four bytes for each
+CALL_PARAMETER_COUNT = STRING_BUFFER    ;; the number of parameters, followed by three bytes for each
 CALL_BLOCK_OFFSET = STRING_BUFFER + $FF ;; the offset of the last byte CALL has written in the block
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -503,7 +503,7 @@ PRINT_SPACING_DONE:
 ;; PTRB is set to PTRA, so that the item's argument is read through PTRB; PTRA is moved past the item.
 ;; In: A = the item's first character, PTR_A_OFFSET = just past it
 ;; Out: carry = clear when it was a spacing item and has been printed, set when it is something else
-;; Uses: X, Y
+;; Uses: A (when the item is printed), X, Y
 PRINT_SPACING_ITEM:
     ldx PTR_A
     stx PTR_B
@@ -525,7 +525,7 @@ PRINT_SPACING_ITEM_DONE:
 ;;
 ;; In the string, two quotes print one.
 ;; In: PTR_A, PTR_A_OFFSET = the item
-;; Out: carry = clear when it was printed, set when it is something else, A = its first character
+;; Out: carry = clear when it was printed, set when it is something else, A = its first character when carry is set
 ;; Uses: X, Y
 PRINT_PROMPT_ITEM:
     jsr GET_CHARACTER_A

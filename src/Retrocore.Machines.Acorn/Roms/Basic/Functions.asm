@@ -144,7 +144,7 @@ RAD_FUNCTION:
 ;; Multiplies FPA by a packed real constant, for LOG, RAD and DEG.
 ;; In: Y = the constant's address low, A = its high byte, FP_A = the number
 ;; Out: FP_A = the product, A = &FF (a real)
-;; Uses: FP_POINTER
+;; Uses: X, Y, FP_POINTER
 MULTIPLY_BY_CONSTANT:
     sty FP_POINTER
     sta FP_POINTER+1
@@ -164,7 +164,7 @@ DEG_FUNCTION:
 ;;
 ;; It loads pi/2 and doubles it by adding one to the exponent; TAY then sets the flags from A again, negative for a
 ;; real result, after INC has changed them.
-;; Out: FP_A = pi, A = Y = &FF (a real)
+;; Out: FP_A = pi, A/Y = &FF (a real)
 PI_FUNCTION:
     jsr LOAD_HALF_PI
     inc FP_A_EXPONENT
@@ -343,8 +343,8 @@ ASC_RETURN:
 ;; INKEY: waits a time for a key, or tests a key: INKEY(n).
 ;;
 ;; With n from 0 to 32767, it waits up to n hundredths of a second and gives the key's ASCII code, or -1 when no key
-;; was pressed. With n negative, it tests the key whose internal number is -n, giving -1 (TRUE) when it is pressed
-;; and 0 when it is not.
+;; was pressed. With n from -1 to -128, it tests the key whose internal number is -n-1 (INKEY(-1) is SHIFT, internal
+;; key 0), giving -1 (TRUE) when it is pressed and 0 when it is not.
 ;; Out: INT_A = the key or the result, A = &40 (an integer)
 ;; See: <READ_INKEY>
 INKEY_FUNCTION:
@@ -399,7 +399,7 @@ NOT_FUNCTION_LOOP:
 ;; being tried (INT_A), the number of positions left to try (INT_A+1) and the start less one (INT_A+3); WORK points
 ;; to the characters being compared.
 ;; Out: INT_A = the position, or 0, A = &40 (an integer)
-;; Uses: WORK
+;; Uses: X, Y, WORK
 ;; Errors: "Type mismatch" when either string is not a string, "Missing ," and "Missing )"
 INSTR_FUNCTION:
     jsr EVALUATE_EXPRESSION
@@ -694,7 +694,7 @@ NO_SUCH_VARIABLE:
 ;; <EVALUATE_FACTOR> uses it for a bracketed expression, and the functions for their last argument. TAY sets the
 ;; flags from the type again after INC and CPX have changed them.
 ;; In: PTR_B, PTR_B_OFFSET = the expression
-;; Out: A = Y = the type, zero = a string, negative = a real; PTR_B_OFFSET = after the bracket
+;; Out: A/Y = the type, zero = a string, negative = a real; PTR_B_OFFSET = after the bracket
 ;; Errors: error 27, "Missing )", and any error in the expression
 EVALUATE_TO_CLOSE_BRACKET:
     jsr EVALUATE_EXPRESSION
@@ -765,7 +765,7 @@ READ_HEX_NUMBER_BAD:
 ;;
 ;; OSWORD 1 reads the clock's five bytes into IntA and the byte after it; the low four are the result.
 ;; Out: INT_A = the time, A = &40 (an integer)
-;; Uses: FP_A_SIGN (the clock's fifth byte)
+;; Uses: X, Y, FP_A_SIGN (the clock's fifth byte)
 TIME_FUNCTION:
     ldx #INT_A
     ldy #$00
@@ -993,7 +993,7 @@ ERR_FUNCTION:
 
 ;; Evaluates INKEY's argument and calls OSBYTE &81 with it, for INKEY and INKEY$.
 ;; Out: Y = 0 with X = the key; Y = &FF when no key came in time; Y = &1B on ESCAPE; for a negative argument
-;;   X = Y = &FF when the key is pressed and 0 when it is not
+;;   X/Y = &FF when the key is pressed and 0 when it is not
 READ_INKEY:
     jsr EVALUATE_INTEGER_FACTOR
     lda #OSBYTE_INKEY
@@ -1110,7 +1110,7 @@ LEFT_STR_MISSING_COMMA:
 ;; It gives n characters from the start position, counting from 1 (0 is taken as 1), or all of them to the end when
 ;; n is left out or more than there are. A start past the end gives an empty string.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
-;; Uses: INT_A+2 (the offset of the start)
+;; Uses: X, Y, INT_A+2 (the offset of the start)
 ;; Errors: "Type mismatch", "Missing ," and "Missing )"
 MID_STR_FUNCTION:
     jsr EVALUATE_EXPRESSION
@@ -1170,7 +1170,7 @@ MID_STR_LOOP:
 ;; The string is the number as PRINT would show it, without the field width: in @%'s format when @%'s top byte is
 ;; not zero, otherwise in the general format with up to ten digits.
 ;; Out: STRING_BUFFER, STRING_LENGTH = the string, A = 0 (a string)
-;; Uses: PRINT_HEX, WORK, WORK+1
+;; Uses: X, Y, PRINT_HEX, WORK, WORK+1
 ;; Errors: "Type mismatch" for a string
 ;; See: <NUMBER_TO_STRING>
 STR_STR_FUNCTION:

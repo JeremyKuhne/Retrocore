@@ -11,12 +11,16 @@
 ;; - <EVALUATE_POWER>: ^;
 ;; - EVALUATE_FACTOR: a number, a variable, a function, a string, a unary operator or a bracketed expression.
 ;;
-;; Each level returns its value in the accumulators, IntA, FPA or StrA, with its type in A and the flags set from it
-;; (zero for a string, negative for a real), and the first character after it, spaces skipped, in X, with
-;; <PTR_B_OFFSET> just past that character. A level's loop looks at X for one of its operators; while it finds one it
-;; pushes the left operand on BASIC's stack, evaluates the right with the level below and combines the two. The
-;; operators of a level work from left to right, and only one relation is taken. Integers are kept as integers where
-;; they can be, and the operation is done in reals as soon as either operand is real.
+;; Each level returns its value in the accumulators, IntA, FPA or StrA, with its type in A, and the first character
+;; after it, spaces skipped, in X, with <PTR_B_OFFSET> just past that character. The levels below the top leave the
+;; flags from their last test of X (<EVALUATE_POWER> returns straight after a CPX), not from the type. Only the top,
+;; <EVALUATE_EXPRESSION>, sets the flags from the type (zero for a string, negative for a real) with a TAY, keeps it
+;; in EXPRESSION_TYPE, and steps <PTR_B_OFFSET> back onto X's character.
+;;
+;; A level's loop looks at X for one of its operators; while it finds one it pushes the left operand on BASIC's
+;; stack, evaluates the right with the level below and combines the two. The operators of a level work from left to
+;; right, and only one relation is taken. Integers are kept as integers where they can be, and the operation is done
+;; in reals as soon as either operand is real.
 ;;
 ;; The second half of the file converts a number to the characters PRINT and STR$ show, in StrA:
 ;; <NUMBER_TO_STRING>, with the formats @% selects, and <HEX_TO_STRING>.

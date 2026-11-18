@@ -9,7 +9,7 @@
 ;; - <ASSEMBLER_STORE>, which puts the bytes at P%, or at O% with OPT bit 2, and moves the two on.
 ;;
 ;; EQU (EQUB, EQUW, EQUD and EQUS) is assembled at <ASSEMBLE_EQU>, and the helpers that evaluate an operand and add to
-;; the opcode are at <EVALUATE_INTEGER_A> and <ADD_12_TO_OPCODE>.
+;; the opcode are at <EVALUATE_INTEGER_A> and <ADD_16_TO_OPCODE>.
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Constants
@@ -565,7 +565,7 @@ ASSEMBLE_GROUP_ONE_MEMORY:
     jsr GET_CHARACTER_A             ; (zp),Y
     cmp #','
     bne ASSEMBLE_INDEX_ERROR
-    jsr ADD_12_TO_OPCODE                       ; +16, the (zp),Y form
+    jsr ADD_16_TO_OPCODE                       ; +16, the (zp),Y form
     jsr GET_CHARACTER_A
     cmp #'Y'
     bne ASSEMBLE_INDEX_ERROR
@@ -597,7 +597,7 @@ ASSEMBLE_GROUP_ONE_ADDRESS:
     jsr GET_CHARACTER_A
     cmp #','
     bne ASSEMBLE_ADDRESS
-    jsr ADD_12_TO_OPCODE                       ; +16, the zp,X form less 4
+    jsr ADD_16_TO_OPCODE                       ; +16, the zp,X form less 4
     jsr GET_CHARACTER_A
     cmp #'X'
     beq ASSEMBLE_ADDRESS
@@ -644,7 +644,7 @@ ASSEMBLE_SHIFT_ADDRESS:
     jsr GET_CHARACTER_A
     cmp #','
     bne ASSEMBLE_ADDRESS_SIZE
-    jsr ADD_12_TO_OPCODE                       ; +16, the zp,X form
+    jsr ADD_16_TO_OPCODE                       ; +16, the zp,X form
     jsr GET_CHARACTER_A
     cmp #'X'
     beq ASSEMBLE_ADDRESS_SIZE
@@ -694,8 +694,8 @@ ASSEMBLE_THREE_BYTES:
 ASSEMBLE_JUMP_STORE:
     jmp ASSEMBLER_STORE
 ASSEMBLE_JUMP_INDIRECT:
-    jsr ADD_12_TO_OPCODE                       ; +32, &6C
-    jsr ADD_12_TO_OPCODE
+    jsr ADD_16_TO_OPCODE                       ; +32, &6C
+    jsr ADD_16_TO_OPCODE
     jsr EVALUATE_INTEGER_A
     jsr GET_CHARACTER_A
     cmp #')'
@@ -738,7 +738,7 @@ ASSEMBLE_LOAD_INDEX_INDEXED:
     and #$1F
     cmp WORK
     bne ASSEMBLE_LOAD_INDEX_ERROR
-    jsr ADD_12_TO_OPCODE                       ; +16, the indexed zero page form less 4
+    jsr ADD_16_TO_OPCODE                       ; +16, the indexed zero page form less 4
     jmp ASSEMBLE_ADDRESS
 ASSEMBLE_LOAD_INDEX_ERROR:
     jmp ASSEMBLE_INDEX_ERROR
@@ -753,7 +753,7 @@ ASSEMBLE_STORE_INDEX:
     and #$1F
     cmp WORK
     bne ASSEMBLE_LOAD_INDEX_ERROR
-    jsr ADD_12_TO_OPCODE                       ; +16, the zp,Y or zp,X form
+    jsr ADD_16_TO_OPCODE                       ; +16, the zp,Y or zp,X form
     lda INT_A+1
     beq ASSEMBLE_STORE_INDEX_SIZE
     jmp ASSEMBLE_BYTE_ERROR         ; there is no absolute indexed form

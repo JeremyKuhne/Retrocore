@@ -127,6 +127,9 @@ internal sealed partial class DebugSession
             DebugMachines.Apple1 => [reset, brk, .. checks, .. BasicFilters],
             DebugMachines.Coco => [reset, .. checks],
 
+            // A BRK on BASIC 2 enters its machine-language monitor.
+            DebugMachines.Pet => [reset, brk, .. checks, .. BasicFilters],
+
             // The Altair has no ROM, BASIC or break instruction to stop in.
             DebugMachines.Altair => [reset, .. checks],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]

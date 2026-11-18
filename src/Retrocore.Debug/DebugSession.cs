@@ -840,6 +840,7 @@ internal sealed partial class DebugSession
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
+            DebugMachines.Pet => LaunchPet(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Kaypro2 => LaunchKaypro(args),
             _ => Apple2DebugTarget.Launch(args)
@@ -933,6 +934,11 @@ internal sealed partial class DebugSession
             if (Target is Apple2DebugTarget { Dos: not null } dosTarget)
             {
                 LoadOnDosDisk(dosTarget, [(address, File.ReadAllBytes(program))], args.Int("entryAddress"), program);
+            }
+            else if (Target is PetDebugTarget pet && Path.GetExtension(program).Equals(".prg", StringComparison.OrdinalIgnoreCase))
+            {
+                // A PET program file gives its own address; one at BASIC's start is a BASIC program, which RUN starts.
+                pet.LoadPrg(File.ReadAllBytes(program), args.Bool("run") ?? true, args.Int("entryAddress"));
             }
             else
             {
@@ -1082,6 +1088,15 @@ internal sealed partial class DebugSession
     {
         CocoDebugTarget target = CocoDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a PET calls the kernal, and a BASIC program needs BASIC's pointers, so the ROMs run first, through
+    // the RAM test to READY.
+    private static PetDebugTarget LaunchPet(JsonObject args, bool loads)
+    {
+        PetDebugTarget target = PetDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
         return target;
     }
 

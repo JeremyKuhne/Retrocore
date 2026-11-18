@@ -141,18 +141,26 @@ internal sealed partial class DebugSession
 
             if (!ReachStatement(prompt))
             {
-                // In the ROM, BASIC is between statements, but only if it is the ROM paged in: a BBC Micro may be
-                // running the DFS in BASIC's place.
-                if (!Target.InRom(Target.ProgramCounter))
+                // A program that ended while it was waited for is at the prompt already, which is where it is going.
+                if (Basic.InDirectMode(memory))
                 {
-                    throw new InvalidOperationException(
-                        $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                    prompt = null;
                 }
-
-                if (!Target.BasicPagedIn)
+                else
                 {
-                    throw new InvalidOperationException(
-                        $"BASIC did not reach a statement, and another ROM is paged in at ${Target.ProgramCounter:X4}. {StopFirst}");
+                    // In the ROM, BASIC is between statements, but only if it is the ROM paged in: a BBC Micro may be
+                    // running the DFS in BASIC's place.
+                    if (!Target.InRom(Target.ProgramCounter))
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                    }
+
+                    if (!Target.BasicPagedIn)
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and another ROM is paged in at ${Target.ProgramCounter:X4}. {StopFirst}");
+                    }
                 }
             }
         }

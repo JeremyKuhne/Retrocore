@@ -158,7 +158,7 @@ public static class GcrLayout
         int count,
         int track,
         Span<byte> sectors,
-        CommodoreDos dos = CommodoreDos.Dos2) => ReadTrack(bits, count, track, sectors, dos, out _, out _);
+        CommodoreDos dos = CommodoreDos.Dos2) => ReadTrack(bits, count, track, sectors, dos, out _, out _, out _);
 
     /// <summary>
     ///  Reads a track's sectors from its cells; says which have a header but no data block after it, as DOS 1 leaves
@@ -168,7 +168,8 @@ public static class GcrLayout
     ///  <para>
     ///   A block with a code no nibble encodes is bad, as the drive's byte decoding error says, whatever its checksum.
     ///   Each data block is decoded on its own and kept only when good, so a bad copy of a sector after a good one
-    ///   leaves the good one.
+    ///   leaves the good one; a second good copy that differs is reported. GCR never holds ten 1s in a row, so a sync
+    ///   inside a data block means the block was cut short: it is bad, and reading goes on from that sync.
     ///  </para>
     /// </remarks>
     /// <param name="bits">The cells, packed eight to a byte.</param>
@@ -180,6 +181,7 @@ public static class GcrLayout
     /// <param name="beyond">
     ///  The good sectors numbered past the layout's last, such as a DOS 1 disk's 20th on a DOS 2 layout.
     /// </param>
+    /// <param name="conflicting">The sectors with two good copies that differ, of which the first is kept.</param>
     /// <returns>Which sectors were found with good checksums.</returns>
     internal static bool[] ReadTrack(
         ReadOnlySpan<byte> bits,
@@ -188,8 +190,11 @@ public static class GcrLayout
         Span<byte> sectors,
         CommodoreDos dos,
         out bool[] unwritten,
-        out IReadOnlyList<int> beyond)
+        out IReadOnlyList<int> beyond,
+        out IReadOnlyList<int> conflicting)
     {
+        SortedSet<int> differ = [];
+        conflicting = [];
         bool[] found = new bool[SectorsOn(track, dos)];
         bool[] headers = new bool[found.Length];
         bool[] blocks = new bool[found.Length];
@@ -204,9 +209,12 @@ public static class GcrLayout
         int sector = -1;
         Span<byte> header = stackalloc byte[5];
         Span<byte> data = stackalloc byte[SectorSize];
+        bool atSync = false;
         while (position < limit)
         {
-            int start = NextSync(bits, count, ref position, limit);
+            // A block cut short by a sync leaves the position just past that sync.
+            int start = atSync ? position : NextSync(bits, count, ref position, limit);
+            atSync = false;
             if (start < 0) { break; }
             bool valid = true;
             byte mark = ReadByte(bits, count, ref position, ref valid);
@@ -220,6 +228,15 @@ public static class GcrLayout
             else if (valid && mark == 0x07 && sector >= 0)
             {
                 if (sector < found.Length) { blocks[sector] = true; }
+                int probe = position;
+                if (NextSync(bits, count, ref probe, position + ((SectorSize + 1) * 10)) >= 0)
+                {
+                    position = probe;
+                    atSync = true;
+                    sector = -1;
+                    continue;
+                }
+
                 byte sum = 0;
                 for (int i = 0; i < SectorSize; i++)
                 {
@@ -237,6 +254,10 @@ public static class GcrLayout
                     data.CopyTo(sectors.Slice(sector * SectorSize, SectorSize));
                     found[sector] = true;
                 }
+                else if (good && !data.SequenceEqual(sectors.Slice(sector * SectorSize, SectorSize)))
+                {
+                    differ.Add(sector);
+                }
 
                 sector = -1;
             }
@@ -250,6 +271,7 @@ public static class GcrLayout
 
         for (int i = 0; i < found.Length; i++) { unwritten[i] = headers[i] && !blocks[i]; }
         beyond = [.. extra];
+        conflicting = [.. differ];
         return found;
     }
 

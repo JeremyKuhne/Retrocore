@@ -162,8 +162,15 @@ internal static partial class MediaActions
                 differences["differences"] = Differences(device);
                 return differences;
             case "eject":
-            case "insert" when device.Media is not null:
-                JsonObject? held = Detach([device], args, action == "eject" ? "eject it" : "insert another disk");
+            case "insert" or "record" when device.Media is not null:
+                string what = action switch
+                {
+                    "eject" => "eject it",
+                    "record" => "record a new tape",
+                    _ => "insert another disk"
+                };
+
+                JsonObject? held = Detach([device], args, what);
                 return held ?? Discard(device, action, args, machine);
             default:
                 return null;

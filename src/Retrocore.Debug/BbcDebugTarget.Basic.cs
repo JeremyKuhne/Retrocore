@@ -123,7 +123,8 @@ internal sealed partial class BbcDebugTarget
                 entries.Add(((2 * index) + 1, BbcBasicDialect.LineAt(memory, pointer) ?? 0, pointer - 1, "GOSUB"));
             }
 
-            foreach ((int line, int pointer, int open, string kind) in _basicCalls)
+            // Newest first, so calls at the same GOSUB depth stay most recent first through the stable sort.
+            foreach ((int line, int pointer, int open, string kind) in Enumerable.Reverse(_basicCalls))
             {
                 entries.Add((2 * Math.Min(open, gosubs), line, pointer, kind));
             }

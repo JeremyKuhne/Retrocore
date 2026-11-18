@@ -173,9 +173,18 @@ internal sealed partial class BbcDebugTarget
             throw new ArgumentException("device must be cassette or disk, with action insert or eject, or record for a cassette.");
         }
 
-        // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it.
-        if (MediaActions.Device(target, action, args) is { } answer) { return answer; }
-        DeviceAction(target, action, args);
+        // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it. One let go of is
+        // ejected or replaced through the host, which keeps it for Undo.
+        JsonObject? answer = MediaActions.Device(target, action, args, (what, with) => DeviceAction(target, what, with));
+        if (answer is null)
+        {
+            DeviceAction(target, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
+        }
+
         return MediaState();
     }
 

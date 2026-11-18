@@ -166,10 +166,11 @@ internal static class MachineConfiguration
         }
     }
 
-    // An image the host inserted from a file that is still there; a tape only while it plays, as a recording's file
-    // is not written until its tape is ejected.
+    // An image the host inserted from a file that is still there. A tape that records to a file named first only
+    // while it plays, as that file is not written until its tape is ejected; one that saves like a disk, as the PET's
+    // Datasettes do, always, as its file is its image.
     private static bool Reinsertable(IDevice device, MediaState media) =>
         Path.IsPathFullyQualified(media.Label)
             && File.Exists(media.Label)
-            && (device is not ITapeDrive || media.WriteProtected);
+            && (device is not ITapeDrive || media.WriteProtected || device.Info.Operations.HasFlag(MediaOperations.Save));
 }

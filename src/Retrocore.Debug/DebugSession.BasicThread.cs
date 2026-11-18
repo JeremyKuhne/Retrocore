@@ -32,7 +32,7 @@ internal sealed partial class DebugSession
     private const string NotAtStatement =
         "Set Next Statement works when BASIC is at the start of a statement: step on the BASIC thread first.";
 
-    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
+    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYS", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
 
 
     // Where the machine-program documents live, which the extension gives at the session's start.

@@ -1521,6 +1521,10 @@
                 "type": "number",
                 "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II and Kaypro II: 0 by default."
               },
+              "command": {
+                "type": "string",
+                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives."
+              },
               "controllers": {
                 "type": "boolean",
                 "default": true,

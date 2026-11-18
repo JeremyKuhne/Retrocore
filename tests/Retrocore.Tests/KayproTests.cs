@@ -120,6 +120,28 @@ public sealed class KayproTests
     }
 
     /// <summary>
+    ///  A Ctrl+C drops the keys still queued, such as the rest of a paste, and is the next key the program reads.
+    /// </summary>
+    [TestMethod]
+    public void CtrlCDropsQueuedKeys()
+    {
+        KayproMachine machine = Create();
+        Type(machine, "DIR A:");
+        machine.Bus.Keyboard.Type(0x03);
+        machine.Bus.Keyboard.IsTyping.Should().BeTrue();
+
+        // The ROM isn't reading the keyboard yet, so take the codes from the SIO as a program would.
+        List<byte> read = [];
+        for (int tick = 0; tick < 100_000 && machine.Bus.Keyboard.IsTyping; tick++)
+        {
+            machine.Bus.Tick();
+            if ((machine.Bus.In(0x07) & 1) != 0) { read.Add(machine.Bus.In(0x05)); }
+        }
+
+        read.Should().Equal([0x03]);
+    }
+
+    /// <summary>
     ///  The ROM's console handles its cursor addressing, clearing and scrolling as CP/M's programs use them.
     /// </summary>
     [TestMethod]

@@ -14,7 +14,7 @@ namespace Retrocore.Machines.Kaypro;
 ///  <para>
 ///   Typed codes wait in a queue and go to the SIO one at a time, each a short gap after the program reads the last,
 ///   so none is lost. The real keyboard sends at 300 baud, about 30 characters a second; the gap here is shorter,
-///   as a program cannot tell.
+///   as a program cannot tell. A Ctrl+C drops the codes queued ahead of it.
 ///  </para>
 /// </remarks>
 public sealed class KayproKeyboard
@@ -29,6 +29,7 @@ public sealed class KayproKeyboard
     /// </summary>
     public static ReadOnlySpan<byte> CursorKeys => [0xF1, 0xF2, 0xF3, 0xF4];
 
+    private const byte InterruptCode = 0x03;
     private const int Channel = 1;
     private const int GapCycles = 2 * KayproTiming.CyclesPerMillisecond;
 
@@ -57,10 +58,15 @@ public sealed class KayproKeyboard
     public int Bells { get; private set; }
 
     /// <summary>
-    ///  Types a key's code.
+    ///  Types a key's code. A Ctrl+C interrupts: it drops the codes still queued, such as the rest of a paste, and goes
+    ///  next.
     /// </summary>
     /// <param name="code">The code, such as ASCII or one of <see cref="CursorKeys"/>.</param>
-    public void Type(byte code) => _typed.Enqueue(code);
+    public void Type(byte code)
+    {
+        if (code == InterruptCode) { _typed.Clear(); }
+        _typed.Enqueue(code);
+    }
 
     /// <summary>
     ///  Takes a byte the SIO sends the keyboard.

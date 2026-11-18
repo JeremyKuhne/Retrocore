@@ -206,9 +206,10 @@ public sealed class Acia6850 : ISerialLine
     public bool TransmitLevel { get; private set; } = true;
 
     /// <summary>
-    ///  Gets whether the receive data register is empty, so the line can deliver another character without an overrun.
+    ///  Gets whether the line can deliver another character: the receive data register is empty, without an overrun,
+    ///  and the carrier is present, as the receiver drops characters while DCD is high.
     /// </summary>
-    public bool CanReceive => !_held && (_status & ReceiveFull) == 0;
+    public bool CanReceive => !_held && !_carrierLost && (_status & ReceiveFull) == 0;
 
     /// <summary>
     ///  Reads a register: the status, or the receive data, which clears RDRF and the overrun.

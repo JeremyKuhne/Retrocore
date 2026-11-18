@@ -58,6 +58,7 @@ public class Acia6850Tests
     {
         Acia6850 acia = Ready();
         acia.DataCarrierDetect = true;
+        acia.CanReceive.Should().BeFalse("a sender should hold its characters while the carrier is lost");
         Send(acia, 0x41);
         acia.Receive(0x42);
         acia.DataCarrierDetect = false;

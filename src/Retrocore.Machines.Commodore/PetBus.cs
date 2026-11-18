@@ -280,9 +280,11 @@ public sealed class PetBus : IProcessorBus
         TickCassettes();
 
         // A timer or an input edge can move the chips' outputs with no access: CA2's pulse mode, or a handshake on a
-        // cassette's edge. ATN and SRQ reach PIA 2's control inputs as other devices move them.
+        // cassette's edge. PIA 1's CA2 is both the screen's enable and the bus's EOI. ATN and SRQ reach PIA 2's control
+        // inputs as other devices move them.
         Video.Lowercase = Via.CA2Output;
         Video.Enabled = Pia1.CA2Output;
+        _ieeePort.Drive(Ieee488Lines.Eoi, Pia1.CA2Output);
 
         // An edge there can release PIA 2's handshake outputs, which the bus then sees.
         bool atn = Ieee.High(Ieee488Lines.Atn);

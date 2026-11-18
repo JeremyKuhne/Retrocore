@@ -146,6 +146,105 @@ public sealed class BbcBasicDialectTests
         (BasicProgram.Parse(program.ToText(), BasicDialect.BbcBasic).Program?.ToImage()).Should().Equal(image);
     }
 
+    /// <summary>
+    ///  Watches take BBC BASIC's grammar: its integer operators and their precedence, factor functions without
+    ///  brackets, constants, pseudo-variables, hexadecimal and its own LOG, STRING$ and INSTR.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    /// <param name="expected">The number it gives.</param>
+    [TestMethod]
+    [DataRow("7 DIV 2", 3.0)]
+    [DataRow("-7 MOD 2", -1.0)]
+    [DataRow("1 EOR 3", 2.0)]
+    [DataRow("NOT 1+1", -1.0)]
+    [DataRow("2^3^2", 64.0)]
+    [DataRow("-2^2", 4.0)]
+    [DataRow("TRUE", -1.0)]
+    [DataRow("FALSE OR 6 AND 3", 2.0)]
+    [DataRow("LEN \"abc\"", 3.0)]
+    [DataRow("ABS -5", 5.0)]
+    [DataRow("LOG(100)", 2.0)]
+    [DataRow("LN 1", 0.0)]
+    [DataRow("INSTR(N$,\"BC\",3)", 5.0)]
+    [DataRow("&FF", 255.0)]
+    [DataRow("&FFFFFFFF", -1.0)]
+    [DataRow("1E-3*1E+3", 1.0)]
+    [DataRow("_count+1", 2.0)]
+    [DataRow("X% DIV 2", 3.0)]
+    [DataRow("7/2", 3.5)]
+    [DataRow("\"A\"<\"B\"", -1.0)]
+    [DataRow("PAGE", 0x0E00 * 1.0)]           // no filing system ROM
+    public void WatchesTakeBbcGrammar(string expression, double expected)
+    {
+        BasicEvaluator evaluator = Variables();
+        evaluator.Evaluate(expression).Value.Number.Should().BeApproximately(expected, 1e-9, expression);
+    }
+
+    /// <summary>
+    ///  STRING$ repeats its whole string, and what needs BASIC running is refused.
+    /// </summary>
+    [TestMethod]
+    public void WatchStringsAndRefusals()
+    {
+        BasicEvaluator evaluator = Variables();
+        evaluator.Format(evaluator.Evaluate("STRING$(3,\"AB\")")).Should().Be("\"ABABAB\"");
+        evaluator.Format(evaluator.Evaluate("STR$~255")).Should().Be("\"FF\"");
+        evaluator.Evaluate("PI").Value.Number.Should().BeApproximately(Math.PI, 1e-9);
+        Action random = () => evaluator.Evaluate("RND(6)");
+        random.Should().Throw<FormatException>().WithMessage("RND* without running BASIC.");
+    }
+
+    /// <summary>
+    ///  GOTO takes an expression, so a name after it is a label only when one is defined.
+    /// </summary>
+    [TestMethod]
+    public void GotoTakesAnExpression()
+    {
+        BasicParseResult parsed = BasicProgram.Parse("10 target%=100:GOTO target%\n100 END\n", BasicDialect.BbcBasic);
+        parsed.Program.Should().NotBeNull(string.Join('\n', parsed.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    ///  PROCfoo and FNfoo are different routines.
+    /// </summary>
+    [TestMethod]
+    public void ProcAndFnAreDifferentRoutines()
+    {
+        const string Program = "10 PROCfoo:X=FNfoo\n20 END\n30 DEF PROCfoo:ENDPROC\n40 DEF FNfoo=1\n";
+        BasicSource source = BasicSource.Analyze(Program, BasicDialect.BbcBasic);
+        BasicSite[] routines = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Function)];
+        routines.Select(site => site.Key).Distinct().Should().Equal("PROCfoo", "FNfoo");
+        routines.Select(site => site.Name).Distinct().Should().Equal("foo");
+        source.References(routines[0]).Should().HaveCount(2);
+    }
+
+    /// <summary>
+    ///  A variable needs a name before its one suffix, and a long name reads back whole.
+    /// </summary>
+    [TestMethod]
+    public void VariableNamesAreChecked()
+    {
+        BbcMachine machine = Boot();
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        Action suffixOnly = () => variables.Create("$");
+        suffixOnly.Should().Throw<ArgumentException>();
+        Action twoSuffixes = () => variables.Create("A%%");
+        twoSuffixes.Should().Throw<ArgumentException>();
+
+        string name = "a" + new string('b', 70);
+        BasicVariable made = variables.Create(name);
+        variables.Find(name).Should().Be(made);
+    }
+
+    // A Model B at the prompt with X%=7, _count=1 and N$="ABCABC", and an evaluator on it.
+    private static BasicEvaluator Variables()
+    {
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "X%=7:_count=1:N$=\"ABCABC\"\r");
+        BbcMachineTests.RunToPrompt(machine);
+        return new BasicEvaluator(BasicDialect.BbcBasic, Memory(machine));
+    }
+
     // A Model B on the SDK's MOS and BASIC, at BASIC's prompt.
     private static BbcMachine Boot()
     {

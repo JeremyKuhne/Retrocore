@@ -60,6 +60,7 @@ internal sealed class BasicLineScanner
         BasicJump jump = BasicJump.None;
         bool afterNumber = false;
         bool afterFunction = false;
+        string routine = "";
         bool afterExternal = false;
         bool inString = false;
         bool inData = false;
@@ -131,6 +132,7 @@ internal sealed class BasicLineScanner
                 via = range ? via : word;
                 afterNumber = false;
                 afterFunction = word == "FN" || (Bbc && word == "PROC");
+                routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
                 if (word == "GOTO") { beforeGoto = previous; }
@@ -181,7 +183,7 @@ internal sealed class BasicLineScanner
             afterExternal = false;
             if (char.IsAsciiLetter((char)value) || (Bbc && BbcBasicDialect.IsNameCharacter(value) && !char.IsAsciiDigit((char)value)))
             {
-                index = Name(index, afterFunction, sites, diagnostics, split, out name);
+                index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
                 split = null;
                 afterFunction = false;
                 jump = BasicJump.None;
@@ -307,10 +309,12 @@ internal sealed class BasicLineScanner
         return at;
     }
 
-    // A variable or function name: letters and digits, a type suffix, and a parenthesis for an array.
+    // A variable or function name: letters and digits, a type suffix, and a parenthesis for an array. BBC BASIC's
+    // PROCfoo and FNfoo are different routines, so their keys keep the word.
     private int Name(
         int index,
         bool function,
+        string routine,
         List<BasicSite> sites,
         List<BasicDiagnostic> diagnostics,
         BasicSite? split,
@@ -342,7 +346,7 @@ internal sealed class BasicLineScanner
         string significant = letters.Length > 2 && _dialect is not IntegerBasicDialect && !Business && !Bbc ? letters[..2] : letters;
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
-            Key = $"{significant}{suffix}{(array && _dialect is not IntegerBasicDialect ? "(" : "")}",
+            Key = $"{(function ? routine : "")}{significant}{suffix}{(array && _dialect is not IntegerBasicDialect ? "(" : "")}",
             Name = letters + suffix,
             Subscripted = array
         };

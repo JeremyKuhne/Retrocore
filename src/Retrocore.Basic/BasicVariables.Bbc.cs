@@ -78,7 +78,7 @@ public sealed partial class BasicVariables
                 System.Text.StringBuilder name = new();
                 name.Append((char)first);
                 int at = link + 2;
-                for (int length = 0; length < 64 && _memory.Read(at) is byte character and not 0; length++, at++)
+                for (int length = 0; length < 255 && _memory.Read(at) is byte character and not 0; length++, at++)
                 {
                     name.Append((char)character);
                 }
@@ -186,9 +186,11 @@ public sealed partial class BasicVariables
     // of its list, with its value zero or empty.
     private BasicVariable BbcCreate(string name)
     {
-        bool named = name.Length != 0
-            && !char.IsAsciiDigit(name[0])
-            && name.TrimEnd('$', '%').All(character => BbcBasicDialect.IsNameCharacter(character));
+        // At most one suffix, after a name of its own that does not start with a digit.
+        string bare = name.EndsWith('$') || name.EndsWith('%') ? name[..^1] : name;
+        bool named = bare.Length != 0
+            && !char.IsAsciiDigit(bare[0])
+            && bare.All(character => BbcBasicDialect.IsNameCharacter(character));
 
         if (!named)
         {

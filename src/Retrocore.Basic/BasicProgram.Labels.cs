@@ -80,9 +80,9 @@ public sealed partial class BasicProgram
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
-        // Integer BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only when one of
-        // that name is defined.
-        if (dialect is IntegerBasicDialect)
+        // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label
+        // only when one of that name is defined.
+        if (dialect is IntegerBasicDialect or BbcBasicDialect)
         {
             references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
             for (int index = 0; index < references.Count; index++)

@@ -36,7 +36,7 @@ INLINC:
     JP NZ,INLCHR
     LD [HL],$00                     ; end the line, to edit it
     JP INLEDT
-INLIN_1:
+INLINC_1:
     LD [HL],B                       ; rubbed out to the start: B = 0 ends the line, and it starts again
 
 ;; Reads a line from the console into the input buffer, ending it with a zero.
@@ -70,7 +70,7 @@ RUBOUT:
     LD [RUBSW],A
     JP NZ,RUBOUT_1
     DEC B
-    JP Z,INLIN_1                    ; an empty line
+    JP Z,INLINC_1                   ; an empty line
     CALL OUTDO
     INC B
 RUBOUT_1:
@@ -105,12 +105,12 @@ INLCHR:
     JP Z,RUBOUT
     LD A,[RUBSW]
     OR A
-    JP Z,INLIN_2
+    JP Z,INLCHR_1
     LD A,$5C                        ; close the rubouts' echo
     CALL OUTDO
     XOR A
     LD [RUBSW],A
-INLIN_2:
+INLCHR_1:
     LD A,C
     CP $07                          ; bell: stored
     JP Z,GOODCH
@@ -123,17 +123,17 @@ INLIN_2:
     CP $09                          ; tab: stored
     JP Z,GOODCH
     CP $0A                          ; line feed
-    JP NZ,INLIN_3
+    JP NZ,INLCHR_2
     DEC B
     JP Z,INLIN                      ; ignored first
     INC B
     JP GOODCH
-INLIN_3:
+INLCHR_2:
     CP $15                          ; Control-U: echo "^U" and start again
     CALL Z,CTRLPT
     JP Z,INLIN
     CP $08                          ; backspace
-    JP NZ,INLIN_4
+    JP NZ,INLCHR_3
     DEC B
     JP Z,SINLIN                     ; nothing to erase
     CALL OUTDO                      ; back, a space, and back
@@ -141,14 +141,14 @@ INLIN_3:
     CALL OUTDO
     LD A,$08
     JP ECHOBS
-INLIN_4:
+INLCHR_3:
     CP $18                          ; Control-X: "#" and start again
-    JP NZ,INLIN_5
+    JP NZ,INLCHR_4
     LD A,$23
     JP INLCAN
-INLIN_5:
+INLCHR_4:
     CP $12                          ; Control-R: retype the line
-    JP NZ,INLIN_6
+    JP NZ,INLCHR_5
     PUSH BC
     PUSH DE
     PUSH HL
@@ -160,7 +160,7 @@ INLIN_5:
     POP DE
     POP BC
     JP INLINC
-INLIN_6:
+INLCHR_5:
     CP $20                          ; other control characters are ignored
     JP C,INLINC
 

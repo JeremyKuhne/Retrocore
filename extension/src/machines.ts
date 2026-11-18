@@ -525,6 +525,8 @@ export const machines: readonly Machine[] = [
         diskFormats: ["img", "dsk", "imd", "dmk"],
         tapeFormats: [],
         basicDialects: ["mbasic"],
+        // CP/M boots from drive A and the launch types MBASIC at its prompt, so the disk must have both.
+        basicDisk: "A CP/M system disk with MBASIC.COM",
         dos: false,
         choices: []
     }

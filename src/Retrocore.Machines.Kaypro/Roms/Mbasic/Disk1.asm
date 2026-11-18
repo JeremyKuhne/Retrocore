@@ -454,7 +454,7 @@ DIRDO:
     LD HL,[PTRFIL]
     LD A,H
     OR L
-    LD DE,$0042                     ; E = 66, Direct statement in file
+    LD DE,ERR_DSF                   ; Direct statement in file
     JP NZ,ERROR                     ; reading a file
     POP HL
     JP GONE

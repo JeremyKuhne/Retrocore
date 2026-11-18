@@ -88,7 +88,8 @@ internal sealed partial class DebugSession
     ];
 
     // The BASIC ROM's addresses, when its source applies to the ROM mapped now.
-    private BasicRom? ActiveBasic => Target.BasicRom is { } rom && _debug.Position(Target, rom.Gone) is not null ? rom : null;
+    private BasicRom? ActiveBasic => Target.BasicRom is { } rom
+        && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
     private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
 

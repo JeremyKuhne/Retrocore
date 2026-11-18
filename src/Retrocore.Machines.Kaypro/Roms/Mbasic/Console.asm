@@ -1281,7 +1281,7 @@ OMERR:
     DEC HL
     LD [SAVSTK],HL                  ; where the stack restarts after the error
 OMERRR:
-    LD DE,$0007                     ; Out of memory
+    LD DE,ERR_OM                    ; Out of memory
     JP ERROR
 
 ;; Checks that HL is below the strings (FRETOP), collecting garbage once if not; OM error if it still is not.

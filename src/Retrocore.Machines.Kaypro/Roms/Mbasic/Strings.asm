@@ -234,7 +234,7 @@ PUTTMP:
     POP HL
     LD A,[HL]
     RET NZ
-    LD DE,$0010                     ; String formula too complex
+    LD DE,ERR_ST                    ; String formula too complex
     JP ERROR
 
 ;; Prints the text at HL+1, up to a zero or a quotation mark.
@@ -314,7 +314,7 @@ PPSWRT:
 ;; Errors: Out of string space (14)
 GARBAG:
     POP AF
-    LD DE,$000E                     ; Out of string space
+    LD DE,ERR_SO                    ; Out of string space
     JP Z,ERROR                      ; collected already
     CP A                            ; zero: collected
     PUSH AF
@@ -529,7 +529,7 @@ CAT:
     LD HL,[FACLO]                   ; the second's descriptor
     PUSH HL
     ADD A,[HL]                      ; A = the two lengths
-    LD DE,$000F                     ; String too long
+    LD DE,ERR_LS                    ; String too long
     JP C,ERROR
     CALL STRINI
     POP DE

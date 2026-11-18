@@ -257,9 +257,8 @@ CONSTP:
     LD [TEMPPT],HL                  ; discard the string temporaries
     .byte $21                       ; LD HL,nn: skips the OR $FF
 
-;; Stops the program with the Break message, discarding the return address to NEWSTT: Control-C's entry.
-;;
-;; Microsoft's name for it is CONSTP, which this source gave CONSTP's address; see notes.
+;; Stops the program with the Break message, discarding the return address to NEWSTT: Control-C's entry from INPUT
+;; and the scans for NEXT and WEND.
 STPEND:
     OR $FF                          ; nonzero: print the Break message
     POP BC                          ; discard the return address to NEWSTT
@@ -320,7 +319,7 @@ ST_CONT:
     LD HL,[OLDTXT]                  ; zero: nothing to continue
     LD A,H
     OR L
-    LD DE,$0011                     ; error 17, Can't continue
+    LD DE,ERR_CN                    ; Can't continue
     JP Z,ERROR
     EX DE,HL                        ; keep the resume position
     LD HL,[OLDLIN]

@@ -88,7 +88,10 @@ public sealed class MbasicOracleTests
             "GO  SUB 100",
             "go   to 100:GO TOTAL",
             "GO  TO100",
-            "GO  TO  100"
+            "GO  TO  100",
+            "IF A THEN B=1 ELSE B=2",
+            "X=1 EQV 2:Y=1E2",
+            "X=1.6%+2.5%-1.4%"
         ];
 
         KayproMachine machine = StartMbasic();
@@ -167,6 +170,26 @@ public sealed class MbasicOracleTests
 
         checkedLines.Should().Be(stored.Count, "every stored line should be in the file");
         failures.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  After OPTION BASE 1, an array's elements start at 1: the variables see A(1) to A(3), and A(3) is the value
+    ///  MBASIC stored there.
+    /// </summary>
+    [TestMethod]
+    public void OptionBaseSetsTheLowestSubscript()
+    {
+        KayproMachine machine = StartMbasic();
+        Command(machine, "OPTION BASE 1:DIM A(3):A(1)=5:A(3)=7");
+        BasicVariables variables = new(BasicDialect.Mbasic, new DelegateBasicMemory(
+            address => machine.Bus.PeekRam((ushort)address),
+            (address, value) => machine.Bus.PokeRam((ushort)address, value)));
+
+        BasicArray array = variables.Arrays().Single();
+        array.LowerBound.Should().Be(1);
+        array.Count.Should().Be(3);
+        variables.Read(array.Kind, array.ElementAddress([1])).Number.Should().Be(5);
+        variables.Read(array.Kind, array.ElementAddress([3])).Number.Should().Be(7);
     }
 
     private static KayproMachine StartMbasic()

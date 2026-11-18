@@ -156,7 +156,9 @@ public sealed partial class BasicVariables
             }
 
             int elementsAt = at + header + 3 + (count * 2);
-            arrays.Add(new(full ?? Name(first, second, kind), kind, at, dimensions, elementsAt, ValueSize(kind)));
+            // MBASIC's arrays start at OPTION BASE, each dimension's count from there.
+            int lowerBound = Mbasic ? _memory.Read(MbasicMemory.OPTVAL) : 0;
+            arrays.Add(new(full ?? Name(first, second, kind), kind, at, dimensions, elementsAt, ValueSize(kind), lowerBound));
 
             // AppleSoft's size counts from the array's start; Level II's and MBASIC's from just past the size.
             at += Typed ? header + 2 + size : size;

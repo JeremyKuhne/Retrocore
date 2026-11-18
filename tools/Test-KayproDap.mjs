@@ -183,6 +183,10 @@ try {
         await request("setExceptionBreakpoints", { filters: [] });
         await request("continue", { threadId: 2 });
         await screen("TOTAL 14");
+
+        // RUN turns the program's line numbers into pointers, but it is still the launched file.
+        const stale = events.filter(message => message.event === "output" && /no longer matches/.test(message.body?.output ?? ""));
+        assert.equal(stale.length, 0, "the program in memory still matches squares.mbasic.bas after it runs");
         console.log("Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop, CP/M's boot, a breakpoint in READ, and MBASIC.");
     } else {
         console.log(`Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop (no disks in ${disks}).`);

@@ -42,7 +42,7 @@
 ;; Equates.asm holds the CP/M names the modules share. Labels are Microsoft's names where GW-BASIC's source or
 ;; Level2.asm give them, and descriptive names in Microsoft's style elsewhere; statement and function handlers are
 ;; named for their keyword (ST_FOR, FN_LEFT), as in Level2.asm. The debugger looks up NEWSTT, GONE, READY, ERROR,
-;; ST_RUN, ST_CONT, ST_STOP, ST_END and ENDCON, for MBASIC's BASIC thread.
+;; ST_RUN, ST_CONT, CONSTP, STPEND and ENDCON, for MBASIC's BASIC thread.
 ;;
 ;; Maintained by hand. KayproTests check that it assembles to a program compatible byte for byte with MBASIC.COM.
 

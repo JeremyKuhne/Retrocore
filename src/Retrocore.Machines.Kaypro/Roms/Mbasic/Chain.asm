@@ -141,7 +141,7 @@ FNDWN3:
 
 ;; Gives a WEND without WHILE error.
 WEERR:
-    LD DE,$001E                     ; error 30
+    LD DE,ERR_WE                    ; WEND without WHILE
     JP ERROR
 
 ;; Runs CALL: calls the machine-language routine whose address is in a variable, passing its parameters.

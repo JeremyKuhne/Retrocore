@@ -457,7 +457,7 @@ NAMFIL_3:
     INC HL
 NAMFIL_4:
     DEC E
-    JP M,NAMFIL_7                   ; the end of the string
+    JP M,NAMDOT_1                   ; the end of the string
     LD A,[HL]
     CP '.'
     JP NZ,NAMFIL_5
@@ -496,16 +496,16 @@ NAMDOT:
     DEC D
     JP NAMDOT
 
-NAMFIL_7:
+NAMDOT_1:
     INC D
     DEC D
     JP Z,NAMFIL_6                   ; all 11 places filled
-NAMFIL_8:
+NAMDOT_2:
     LD A,' '                        ; pad the rest with spaces
     LD [BC],A
     INC BC
     DEC D
-    JP NZ,NAMFIL_8
+    JP NZ,NAMDOT_2
     JP NAMFIL_6
 NAMERR:
     JP DERIFN

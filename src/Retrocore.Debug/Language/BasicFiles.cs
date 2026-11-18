@@ -51,7 +51,7 @@ internal static class BasicFiles
 
     /// <summary>
     ///  Tokenizes text into a file in the form it had: <c>retrocore/basic/store</c>, with <c>path</c>, <c>text</c> and
-    ///  <c>dialect</c>. A tape keeps its name, and a Level II Disk BASIC file its leading $FF.
+    ///  <c>dialect</c>. A tape keeps its name, a Level II Disk BASIC file its leading $FF, and an MBASIC file always has one.
     /// </summary>
     /// <param name="args">The request.</param>
     /// <returns>Whether it was written (<c>success</c>), and the text's <c>diagnostics</c>.</returns>
@@ -75,7 +75,10 @@ internal static class BasicFiles
         }
         else
         {
-            bytes = old.Length > 0 && old[0] == 0xFF && dialect == BasicDialect.Level2 ? [0xFF, .. program.ToImage()] : program.ToImage();
+            // A Level II disk file keeps the $FF it had; MBASIC's LOAD needs it to read the file as tokenized, not
+            // ASCII, so its files always have it.
+            bool marked = dialect == BasicDialect.Mbasic || (old.Length > 0 && old[0] == 0xFF && dialect == BasicDialect.Level2);
+            bytes = marked ? [0xFF, .. program.ToImage()] : program.ToImage();
         }
 
         File.WriteAllBytes(path, bytes);

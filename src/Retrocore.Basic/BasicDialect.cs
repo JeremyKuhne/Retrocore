@@ -325,6 +325,12 @@ public abstract partial class BasicDialect
     internal virtual byte[] FromMemory(byte[] tokens, IBasicMemory memory) => tokens;
 
     /// <summary>
+    ///  Gets whether the interpreter rewrites lines in memory as it runs (<see cref="FromMemory"/> changes them), so
+    ///  that the program's identity must come from the lines read back rather than the bytes.
+    /// </summary>
+    internal virtual bool RewritesLines => false;
+
+    /// <summary>
     ///  Gets the text the tokenizer sees after the line number's digits.
     /// </summary>
     /// <param name="line">The typed line.</param>

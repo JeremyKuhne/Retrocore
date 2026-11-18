@@ -341,6 +341,64 @@ internal sealed class MbasicDialect : BasicDialect
         else { BasicText.AppendCharacter(builder, value); }
     }
 
+    /// <summary>
+    ///  Gets how many bytes follow a crunched constant's type byte, which hold its value.
+    /// </summary>
+    /// <param name="type">The byte.</param>
+    /// <returns>The value's length, or -1 when the byte starts no constant.</returns>
+    internal static int ConstantLength(byte type) => type switch
+    {
+        >= FirstDigit and <= FirstDigit + 9 => 0,
+        ByteConstant => 1,
+        OctalConstant or HexConstant or LinePointer or LineConstant or IntegerConstant => 2,
+        SingleConstant => 4,
+        DoubleConstant => 8,
+        _ => -1
+    };
+
+    /// <summary>
+    ///  Gets whether a byte starts a crunched line-number constant, a number or a pointer to its line.
+    /// </summary>
+    /// <param name="type">The byte.</param>
+    /// <returns>Whether it does.</returns>
+    internal static bool IsLineConstant(byte type) => type is LineConstant or LinePointer;
+
+    /// <summary>
+    ///  Reads the crunched constant at an index, as CHRGTR does, moving the index past it.
+    /// </summary>
+    /// <param name="line">The crunched text.</param>
+    /// <param name="index">The constant's type byte; on return, the byte after the constant.</param>
+    /// <param name="value">
+    ///  The constant's value: an &amp;H or &amp;O constant is a signed integer, as MBASIC reads it.
+    /// </param>
+    /// <param name="isDouble">Whether it is a double-precision constant.</param>
+    /// <returns>
+    ///  Whether a constant is there and has a value: not for a line pointer, which only memory can turn back into a
+    ///  number, or a constant cut short.
+    /// </returns>
+    internal static bool TryReadConstant(ReadOnlySpan<byte> line, ref int index, out double value, out bool isDouble)
+    {
+        value = 0;
+        isDouble = false;
+        if (index >= line.Length) { return false; }
+        byte type = line[index];
+        int length = type == LinePointer ? -1 : ConstantLength(type);
+        if (length < 0 || index + length >= line.Length) { return false; }
+        ReadOnlySpan<byte> bytes = line.Slice(index + 1, length);
+        index += length + 1;
+        isDouble = type == DoubleConstant;
+        value = type switch
+        {
+            >= FirstDigit and <= FirstDigit + 9 => type - FirstDigit,
+            ByteConstant => bytes[0],
+            LineConstant => bytes[0] | (bytes[1] << 8),
+            OctalConstant or HexConstant or IntegerConstant => (short)(bytes[0] | (bytes[1] << 8)),
+            _ => BasicNumbers.ReadFloat(bytes, exponentFirst: false)
+        };
+
+        return true;
+    }
+
     // A constant's text, as LIST writes it, moving the index to its last byte; null for one cut short or a pointer.
     private static string? Constant(ReadOnlySpan<byte> line, ref int index)
     {
@@ -415,7 +473,8 @@ internal sealed class MbasicDialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   A constant's bytes are stepped over, outside strings, remarks and DATA, as they may be zero.
+    ///   A constant's bytes, and a function's number after <c>$FF</c>, are stepped over outside strings, remarks and
+    ///   DATA: a constant's may be zero, and SGN's number is DATA's token.
     ///  </para>
     /// </remarks>
     internal override int TerminatorIn(ReadOnlySpan<byte> tokens)
@@ -436,7 +495,7 @@ internal sealed class MbasicDialect : BasicDialect
 
             if (value is RemTokenByte or ApostropheToken) { remark = true; }
             else if (value == DataTokenByte) { data = true; }
-            else { index += ConstantLength(value); }
+            else { index += Following(value); }
         }
 
         return -1;
@@ -477,21 +536,17 @@ internal sealed class MbasicDialect : BasicDialect
                 result[index + 2] = (byte)(number >> 8);
             }
 
-            index += ConstantLength(value);
+            index += Following(value);
         }
 
         return result;
     }
 
-    // The bytes a constant's token is followed by.
-    private static int ConstantLength(byte value) => value switch
-    {
-        ByteConstant => 1,
-        OctalConstant or HexConstant or LinePointer or LineConstant or IntegerConstant => 2,
-        SingleConstant => 4,
-        DoubleConstant => 8,
-        _ => 0
-    };
+    /// <inheritdoc/>
+    internal override bool RewritesLines => true;
+
+    // The bytes after a token that belong to it: a constant's value, or a function's number after its prefix.
+    private static int Following(byte value) => value == FunctionPrefixByte ? 1 : Math.Max(0, ConstantLength(value));
 
     /// <inheritdoc/>
     internal override void Clear(IBasicMemory memory)

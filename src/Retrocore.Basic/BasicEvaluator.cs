@@ -92,7 +92,8 @@ public sealed partial class BasicEvaluator
             return new BusinessBasicExpression(_variables).Evaluate(expression);
         }
 
-        if (BareName().IsMatch(expression.Trim())) { return Variable(expression.Trim(), subscripts: null); }
+        string trimmed = expression.Trim();
+        if ((Mbasic ? MbasicBareName() : BareName()).IsMatch(trimmed)) { return Variable(trimmed, subscripts: null); }
         byte[] saved = _bytes;
         int savedAt = _at;
         try
@@ -135,7 +136,7 @@ public sealed partial class BasicEvaluator
             return builder.Append('"').ToString();
         }
 
-        return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 7) : 9);
+        return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 6) : 9);
     }
 
     private BasicResult Or()
@@ -268,6 +269,13 @@ public sealed partial class BasicEvaluator
         }
 
         if (value == '"') { return StringLiteral(); }
+
+        // MBASIC crunches numbers into binary constants, which are read whole.
+        if (Mbasic && value < ' ' && MbasicDialect.TryReadConstant(_bytes, ref _at, out double constant, out bool isDouble))
+        {
+            return new(new(constant), isDouble);
+        }
+
         if (char.IsAsciiDigit((char)value) || value == '.') { return NumberLiteral(); }
         if (_dialect.KeywordAt(_bytes, _at, out int length) is { } word)
         {
@@ -347,11 +355,15 @@ public sealed partial class BasicEvaluator
         return Variable(name, subscripts);
     }
 
-    // Letters and digits, as a name continues.
+    // Letters and digits, as a name continues, and periods in MBASIC's names.
     private string Letters()
     {
         int start = _at;
-        while (_at < _bytes.Length && char.IsAsciiLetterOrDigit((char)_bytes[_at])) { _at++; }
+        while (_at < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[_at]) || (Mbasic && _bytes[_at] == '.')))
+        {
+            _at++;
+        }
+
         return Encoding.ASCII.GetString(_bytes, start, _at - start);
     }
 
@@ -552,6 +564,10 @@ public sealed partial class BasicEvaluator
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9]*[$%!#]?$")]
     private static partial Regex BareName();
+
+    // MBASIC's names hold periods too.
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9.]*[$%!#]?$")]
+    private static partial Regex MbasicBareName();
 
     [GeneratedRegex(@"^\s*[-+]?(\d+\.?\d*|\.\d+)([ED][-+]?\d+)?", RegexOptions.IgnoreCase)]
     private static partial Regex LeadingNumber();

@@ -217,6 +217,13 @@ internal interface IDebugTarget : IDebugMemory
     BasicRom? BasicRom => null;
 
     /// <summary>
+    ///  Gets whether <see cref="BasicRom"/> is given only while the interpreter's code is in memory, as a target
+    ///  whose BASIC is a program checks, so that the debugger need not find <see cref="Debug.BasicRom.Gone"/>'s
+    ///  statement through the CPU's view of memory, which may have a ROM banked over it.
+    /// </summary>
+    bool BasicRomInMemory => false;
+
+    /// <summary>
     ///  Gets the number of the BASIC line running, or last run.
     /// </summary>
     int BasicCurrentLine => Basic is { } dialect

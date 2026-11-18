@@ -478,7 +478,7 @@ NMARY4:
 
 ;; Gives a BS error, a subscript out of range.
 BSERR:
-    LD DE,$0009                     ; Subscript out of range
+    LD DE,ERR_BS                    ; Subscript out of range
     JP ERROR
 LOPFDA_1:
     INC HL                          ; HL = the count of the other characters

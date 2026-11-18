@@ -68,6 +68,14 @@ internal static class MbasicNumbers
             }
             else if (!exponentSeen && upper is 'E' or 'D')
             {
+                // FIN leaves an E that starts ELSE or EQV: the next nonblank character is L or Q.
+                if (upper == 'E')
+                {
+                    int next = x + 1;
+                    while (At(line, next) is ' ' or '\t' or '\n') { next++; }
+                    if ((At(line, next) | 0x20) is 'l' or 'q') { break; }
+                }
+
                 exponentSeen = true;
                 if (upper == 'D') { type = '#'; }
                 else if (type == '\0') { type = '!'; }
@@ -115,7 +123,15 @@ internal static class MbasicNumbers
 
         if (type == '%')
         {
-            BigInteger whole = power >= 0 ? digits * BigInteger.Pow(10, power) : digits / BigInteger.Pow(10, -power);
+            // FIN converts a typed constant through FRCINT, which rounds a half away from zero.
+            BigInteger whole = digits * BigInteger.Pow(10, Math.Max(power, 0));
+            if (power < 0)
+            {
+                BigInteger divisor = BigInteger.Pow(10, -power);
+                whole = BigInteger.DivRem(digits, divisor, out BigInteger remainder);
+                if (remainder * 2 >= divisor) { whole++; }
+            }
+
             if (whole > 32767) { throw new FormatException("?Overflow: an integer is at most 32767."); }
             int value = (int)whole;
             return value switch

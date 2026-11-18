@@ -58,6 +58,22 @@ internal sealed partial class KayproDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
+    ///   <see cref="BasicRom"/> checks GONE's bytes in RAM, where MBASIC stays while the BIOS banks the ROM in.
+    ///  </para>
+    /// </remarks>
+    public bool BasicRomInMemory => true;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   From RAM, as the BIOS may have the ROM banked over CURLIN.
+    ///  </para>
+    /// </remarks>
+    public int BasicCurrentLine => Word(MbasicMemory.CURLIN);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
     ///   MBASIC's source, before CP/M has loaded it from the disk.
     ///  </para>
     /// </remarks>
@@ -149,7 +165,7 @@ internal sealed partial class KayproDebugTarget
     /// <remarks>
     ///  <para>
     ///   As STKINI does: the stack starts at TOPMEM with a zero word at its base, which FNDFOR stops at, and the
-    ///   string temporaries are freed; direct mode is marked.
+    ///   string temporaries are freed; direct mode is marked. The ROM is banked out, as the BIOS leaves it.
     ///  </para>
     /// </remarks>
     public void EnterBasicPrompt(BasicRom rom)
@@ -168,6 +184,9 @@ internal sealed partial class KayproDebugTarget
         registers.PC = rom.Prompt;
         _machine.Processor.Registers = registers;
         _calls.Reset();
+
+        // MBASIC runs with the ROM banked out; the BIOS may have left it in, partway through a console call.
+        _machine.Bus.BankRomOut();
     }
 
     /// <inheritdoc/>
@@ -208,12 +227,15 @@ internal sealed partial class KayproDebugTarget
         if (!File.Exists(source)) { return; }
         AssemblyResult result = KayproSdkModules.AssembleMbasic(source);
         debug.Add(new SourceMapModule(result, area: null));
+        // STOP, END and Control-C between statements all pass CONSTP (CNTCCN reaches ST_STOP for every key, which
+        // returns for all but Control-C), and Control-C in INPUT and the loop scans enters at STPEND; the statement
+        // tells which. ENDCON ends a program that runs off its last line.
         _mbasicRom = BasicRom.From(
             result.Symbols,
             "READY",
             run: "ST_RUN",
             resume: "ST_CONT",
-            [("ST_STOP", "STOP"), ("ST_END", "END"), ("ENDCON", "ENDCON")]);
+            [("CONSTP", "STOP"), ("STPEND", "STOP"), ("ENDCON", "ENDCON")]);
 
         if (_mbasicRom is { } rom)
         {

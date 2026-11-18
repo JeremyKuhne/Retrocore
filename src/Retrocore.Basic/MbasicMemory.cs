@@ -127,6 +127,11 @@ internal static class MbasicMemory
     internal const int DEFTBL = 0x0ACA;
 
     /// <summary>
+    ///  OPTION BASE: an array's lowest subscript, 0 or 1.
+    /// </summary>
+    internal const int OPTVAL = 0x0BC6;
+
+    /// <summary>
     ///  Nonzero while TRON traces.
     /// </summary>
     internal const int TRCFLG = 0x0BFE;

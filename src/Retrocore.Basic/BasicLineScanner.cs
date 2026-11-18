@@ -91,6 +91,34 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
+            // MBASIC crunches numbers into constants, a type byte and its value, read whole. A line number after
+            // GOTO and the others is a reference.
+            if (Mbasic && MbasicDialect.ConstantLength(value) is >= 0 and var payload)
+            {
+                int end = Math.Min(index + payload, _bytes.Length - 1);
+                if (MbasicDialect.IsLineConstant(value) && jump != BasicJump.None && !afterNumber && end == index + 2)
+                {
+                    int number = _bytes[index + 1] | (_bytes[index + 2] << 8);
+                    bool zero = previous == "RESUME" || beforeGoto is "ERROR" or "ONERR" or "ERR";
+                    if (!(zero && number == 0))
+                    {
+                        BasicSite reference = Site(BasicSiteKind.LineReference, index, End(index));
+                        sites.Add(reference with { Number = number, Via = via });
+                    }
+
+                    afterNumber = true;
+                    if (jump == BasicJump.Single) { jump = BasicJump.None; }
+                }
+                else
+                {
+                    jump = BasicJump.None;
+                }
+
+                name = null;
+                index = end;
+                continue;
+            }
+
             // A placeholder token, which Business BASIC's lists keep empty, is no word.
             if (_dialect.KeywordAt(_bytes, index, out int length) is { Length: > 0 } word)
             {
@@ -218,6 +246,13 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
+            // MBASIC's constants hold binary values, which may look like a colon or REM.
+            if (Mbasic && MbasicDialect.ConstantLength(value) is > 0 and var payload)
+            {
+                index += payload;
+                continue;
+            }
+
             if (_dialect.IsRemark(value)) { break; }
             if (value != ':') { continue; }
             statements.Add(new(index + 1, index + 1 < _bytes.Length ? FirstColumn(index + 1) : _text.Length));
@@ -307,7 +342,7 @@ internal sealed class BasicLineScanner
         out BasicSite? site)
     {
         int last = index;
-        while (last + 1 < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1]) || (Business && _bytes[last + 1] == '.')))
+        while (last + 1 < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1]) || ((Business || Mbasic) && _bytes[last + 1] == '.')))
         {
             last++;
         }
@@ -323,8 +358,10 @@ internal sealed class BasicLineScanner
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
-        // The Microsoft BASICs keep a name's first two characters; Integer BASIC and Business BASIC keep all of it.
-        string significant = letters.Length > 2 && _dialect is not IntegerBasicDialect && !Business ? letters[..2] : letters;
+        // The Microsoft BASICs keep a name's first two characters, MBASIC its first 40; Integer BASIC and Business
+        // BASIC keep all of it.
+        int kept = Mbasic ? MbasicSignificant : _dialect is IntegerBasicDialect || Business ? letters.Length : 2;
+        string significant = letters[..Math.Min(letters.Length, kept)];
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
             Key = $"{significant}{suffix}{(array && _dialect is not IntegerBasicDialect ? "(" : "")}",
@@ -365,6 +402,11 @@ internal sealed class BasicLineScanner
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;
+
+    private bool Mbasic => _dialect == BasicDialect.Mbasic;
+
+    // The characters of a name MBASIC tells apart.
+    private const int MbasicSignificant = 40;
 
     // The last byte that came from the same text as this one.
     private int Last(int index)

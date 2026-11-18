@@ -222,11 +222,25 @@ internal sealed partial class DebugSession
         NoteLaunchedFile();
     }
 
-    // Identifies the program in memory: a hash of where it is and its bytes, or "none" when BASIC is not set up.
+    // Identifies the program in memory: a hash of where it is and its bytes, or "none" when BASIC is not set up. An
+    // interpreter that rewrites its lines as it runs, as MBASIC caches line pointers, is hashed by the lines read
+    // back, as VersionOf hashes a file.
     private string BasicVersion()
     {
         (int start, int end) = Basic.ProgramBounds(new TargetBasicMemory(Target));
         if (start == 0 || end < start + 2) { return "none"; }
+        if (Basic.RewritesLines)
+        {
+            try
+            {
+                return VersionOf(BasicProgram.Read(Basic, new TargetBasicMemory(Target)));
+            }
+            catch (InvalidDataException)
+            {
+                // A program being changed: its bytes say it is a different one.
+            }
+        }
+
         IBasicMemory text = TextMemory;
         ulong hash = HashBasis;
         hash = (hash ^ (ulong)start) * HashPrime;

@@ -220,18 +220,19 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
 }
 
 /**
- * The words the drive's menus pick their actions by. While the machine is off, a tape cannot record and nothing has
- * changed a disk to save.
+ * The words the drive's menus pick their actions by. While the machine is off, a tape cannot record, and only a disk
+ * its last run kept, still changed, has anything to save or revert.
  */
 export function contextWords(device: Device, running: boolean): string[] {
     const words = ["device", device.media ? "loaded" : "empty"];
+    const live = running || device.media?.changed === true;
     if (device.operations.includes("insert")) words.push("insert");
     if (running && device.operations.includes("record")) words.push("record");
     if (device.media && device.operations.includes("eject")) words.push("eject");
     if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "locked" : "unlocked");
     // Revert reads the image again, through the drive's insert.
-    if (running && device.media?.source?.kind === "image" && device.operations.includes("insert")) words.push("revert");
-    if (running && saves(device)) {
+    if (live && device.media?.source?.kind === "image" && device.operations.includes("insert")) words.push("revert");
+    if (live && saves(device)) {
         words.push("save");
         // Save writes the disk's own image at once; for a read-only image it saves as another, and for an image changed
         // on disk, as a disk the same as its image may have, it says first that it will ask.

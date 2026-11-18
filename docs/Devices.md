@@ -215,7 +215,10 @@ lock on it gone. The language server's `retrocore/recovery/list` answers `{ jour
 disks }] }` for each such journal with disks: its recovery id, the machine's name (the launch's `name`), when the
 session started, when its disks were last kept, and their labels. `retrocore/recovery/resolve` takes `{ id, action }`:
 `recover` keeps the disks for the next launch and the machine while off and stops offering them; `discard` removes the
-journal and the snapshots it names. Either is refused while a session has the journal.
+journal and the snapshots it names. Either is refused while a session has the journal. Each journal listed also has a
+`revision`, and `retrocore/recovery/list` given `{ id }` answers for that journal alone, however its session ended; a
+discard given the `revision` it asked about lets nothing go and answers `{ outcome: "changed" }` once the journal has
+changed since, as when the machine ran again.
 
 ## A machine that is off
 

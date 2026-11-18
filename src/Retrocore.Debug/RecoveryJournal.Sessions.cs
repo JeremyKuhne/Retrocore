@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -21,20 +22,25 @@ internal sealed partial class RecoveryJournal
     private const int GlanceMilliseconds = 500;
 
     /// <summary>
-    ///  Finds the journals whose session did not end cleanly and whose process is gone, holding changed disks.
+    ///  Finds the journals whose session did not end cleanly and whose process is gone, holding changed disks; or,
+    ///  given an <c>id</c>, that journal as it is now, cleanly ended or not, while it holds disks.
     /// </summary>
+    /// <param name="args">Nothing, or <c>{ id }</c>: one journal's recovery id.</param>
     /// <returns>
-    ///  Each one's <c>{ id, name, started, kept, disks }</c>: its recovery id, the machine's name, when the session
-    ///  started, when its disks were last kept, and the disks' labels.
+    ///  Each one's <c>{ id, name, started, kept, disks, revision }</c>: its recovery id, the machine's name, when the
+    ///  session started, when its disks were last kept, the disks' labels, and the journal's revision, which a
+    ///  discard can name so that disks kept since are asked about again.
     /// </returns>
-    internal static JsonArray Unclean()
+    internal static JsonArray Unclean(JsonObject? args = null)
     {
         JsonArray found = [];
         if (!Directory.Exists(Root)) { return found; }
-        foreach (string folder in Directory.EnumerateDirectories(Root))
+        string? only = args?.String("id");
+        IEnumerable<string> folders = only is null ? Directory.EnumerateDirectories(Root) : [FolderOf(only)];
+        foreach (string folder in folders)
         {
             string id = Path.GetFileName(folder);
-            if (!IsId(id)) { continue; }
+            if (!IsId(id) || !Directory.Exists(folder)) { continue; }
             FileStream? held;
             try
             {
@@ -51,23 +57,7 @@ internal sealed partial class RecoveryJournal
             {
                 try
                 {
-                    JsonObject? session = Read(Path.Join(folder, SessionFile));
-                    JsonArray disks = Read(Path.Join(folder, JournalFile))?["disks"] as JsonArray ?? [];
-                    if (session is null || session["clean"] is not JsonValue clean || !clean.TryGetValue(out bool ended) || ended)
-                    {
-                        continue;
-                    }
-
-                    List<JsonObject> entries = [.. disks.OfType<JsonObject>()];
-                    if (entries.Count == 0) { continue; }
-                    found.Add((JsonNode)new JsonObject
-                    {
-                        ["id"] = id,
-                        ["name"] = Text(session, "name"),
-                        ["started"] = Text(session, "started"),
-                        ["kept"] = entries.Select(entry => Text(entry, "kept")).Where(kept => kept is not null).Max(StringComparer.Ordinal),
-                        ["disks"] = new JsonArray([.. entries.Select(entry => (JsonNode?)(Text(entry, "label") ?? "a disk"))]),
-                    });
+                    if (Offer(folder, id, any: only is not null) is { } offer) { found.Add((JsonNode)offer); }
                 }
                 catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
                 {
@@ -79,14 +69,48 @@ internal sealed partial class RecoveryJournal
         return found;
     }
 
+    // What a journal offers, or null when it holds no disks or, unless any session will do, its session ended cleanly.
+    private static JsonObject? Offer(string folder, string id, bool any)
+    {
+        JsonObject? session = Read(Path.Join(folder, SessionFile));
+        JsonArray disks = Read(Path.Join(folder, JournalFile))?["disks"] as JsonArray ?? [];
+        if (session is null || session["clean"] is not JsonValue clean || !clean.TryGetValue(out bool ended) || (ended && !any))
+        {
+            return null;
+        }
+
+        List<JsonObject> entries = [.. disks.OfType<JsonObject>()];
+        if (entries.Count == 0) { return null; }
+        return new JsonObject
+        {
+            ["id"] = id,
+            ["name"] = Text(session, "name"),
+            ["started"] = Text(session, "started"),
+            ["kept"] = entries.Select(entry => Text(entry, "kept")).Where(kept => kept is not null).Max(StringComparer.Ordinal),
+            ["disks"] = new JsonArray([.. entries.Select(entry => (JsonNode?)(Text(entry, "label") ?? "a disk"))]),
+            ["revision"] = Revision(folder),
+        };
+    }
+
+    // The journal's revision: a hash of what it says, which every commit changes, or empty for no journal.
+    private static string Revision(string folder)
+    {
+        string path = Path.Join(folder, JournalFile);
+        return File.Exists(path) ? Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))[..16] : "";
+    }
+
     /// <summary>
     ///  Decides for a journal whose session did not end cleanly: <c>recover</c> keeps its disks for the machine's next
     ///  launch, and the off machine, and no longer offers them; <c>discard</c> lets them go.
     /// </summary>
     /// <param name="args">
-    ///  <c>{ id, action }</c>: the journal's recovery id, and <c>recover</c> or <c>discard</c>.
+    ///  <c>{ id, action, revision }</c>: the journal's recovery id, <c>recover</c> or <c>discard</c>, and for a
+    ///  discard, the revision of the journal the person was asked about, if known.
     /// </param>
-    /// <returns>An empty answer.</returns>
+    /// <returns>
+    ///  An empty answer, or <c>{ outcome: "changed" }</c> when the journal is no longer at the revision a discard named,
+    ///  as when the machine ran and kept disks again since, and nothing was let go.
+    /// </returns>
     /// <exception cref="ArgumentException">The id or action is not one.</exception>
     /// <exception cref="InvalidOperationException">A running session has the journal.</exception>
     /// <exception cref="IOException">The journal cannot be written.</exception>
@@ -104,6 +128,11 @@ internal sealed partial class RecoveryJournal
         if (!Directory.Exists(folder)) { return []; }
         using FileStream held = Take(folder) ?? throw new InvalidOperationException("A running session has this machine's recovery journal.");
         JsonObject session = Read(Path.Join(folder, SessionFile)) ?? [];
+        if (action == "discard" && args.String("revision") is { } revision && revision != Revision(folder))
+        {
+            return new JsonObject { ["outcome"] = "changed" };
+        }
+
         if (action == "discard" && Read(Path.Join(folder, JournalFile)) is { } journal)
         {
             // The snapshots the journal names, and no other file, then the journal itself.

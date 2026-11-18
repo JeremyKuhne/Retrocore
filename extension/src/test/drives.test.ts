@@ -93,7 +93,9 @@ test("the menus offer Save for a changed disk, a Save that will ask for a change
     assert.ok(contextWords(drive(true, { readOnly: "file" }), true).includes("changedReadOnly"));
     assert.ok(contextWords(drive(true, { kind: "built", saves: false }), true).includes("changedReadOnly"), "a built disk saves as");
     assert.ok(contextWords(drive(true, {}, true), true).includes("locked"));
-    assert.deepEqual(contextWords(drive(true), false), ["device", "loaded", "insert", "eject", "unlocked"], "off, nothing to save");
+    assert.deepEqual(contextWords(drive(false), false), ["device", "loaded", "insert", "eject", "unlocked"], "off, nothing to save");
+    assert.deepEqual(contextWords(drive(true), false), ["device", "loaded", "insert", "eject", "unlocked", "revert", "save", "changed"],
+        "off, a disk the last run kept saves and reverts");
 });
 
 test("the questions a save asks say what is off and offer the way out the plan draws", () => {

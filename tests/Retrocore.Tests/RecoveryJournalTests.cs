@@ -378,6 +378,41 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A discard names the journal it asked about: once the machine kept its disks again, the discard lets nothing
+    ///  go and says so, and the journal as it is now, found by its id, can be asked about again.
+    /// </summary>
+    [TestMethod]
+    public void ADiscardAskedAboutAnEarlierJournalLetsNothingGo()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("asked.po");
+        Write(drive, block: 1, 0x51);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+        string asked = Offered(id)?.String("revision") ?? throw new InvalidOperationException("Not offered.");
+
+        // The machine runs again, changes its disk, and stops cleanly.
+        RecoveryJournal again = Open(id);
+        Write(drive, block: 2, 0x52);
+        Stop(again, drive);
+        Offered(id).Should().BeNull("a clean stop is not offered as a crash");
+        JsonObject now = RecoveryJournal.Unclean(new JsonObject
+        {
+            ["id"] = id
+        }).OfType<JsonObject>().Single();
+
+        now.String("revision").Should().NotBe(asked);
+
+        JsonObject stale = new() { ["id"] = id, ["action"] = "discard", ["revision"] = asked };
+        RecoveryJournal.Resolve(stale).String("outcome").Should().Be("changed");
+        Disks(id).Should().HaveCount(1, "the disk kept since stays");
+        JsonObject current = new() { ["id"] = id, ["action"] = "discard", ["revision"] = now.String("revision") };
+        RecoveryJournal.Resolve(current).String("outcome").Should().BeNull();
+        File.Exists(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().BeFalse();
+    }
+
+    /// <summary>
     ///  The off machine opens a journal without taking it for a session: what its last session said stays, so a
     ///  session that did not end cleanly is still offered after the off machine showed its disks.
     /// </summary>

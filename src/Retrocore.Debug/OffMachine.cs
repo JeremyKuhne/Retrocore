@@ -135,7 +135,14 @@ internal static class OffMachine
             return 0;
         }
 
-        string held = $"{device.Id}|{MediaActions.Source(medium)?.Path.ToUpperInvariant() ?? device.Media?.Label}";
+        // An image's path as files are told apart where it is: in any case on Windows and macOS, as it is elsewhere.
+        string? path = MediaActions.Source(medium)?.Path;
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            path = path?.ToUpperInvariant();
+        }
+
+        string held = $"{device.Id}|{path ?? device.Media?.Label}";
         uint hash = 2166136261;
         foreach (char character in held)
         {

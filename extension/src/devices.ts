@@ -54,6 +54,8 @@ interface Target {
     still(): boolean;
     /** Shows its devices, as an answer brings them. */
     show(body: Devices): void;
+    /** Its devices as last read, which may not be the ones the views show. */
+    devices(): Device[];
 }
 
 /** The retro/devices body. */
@@ -713,7 +715,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             // The kept disks are the off machine's now: saved there, shown in its Drives view, or let go.
             const buttons = kept.length !== 0 && recoveryId !== undefined ? ["Save All", "Review", "Discard"] : [];
             void (lost.length === 0 ? vscode.window.showInformationMessage(message, ...buttons) : vscode.window.showWarningMessage(message, ...buttons))
-                .then(choice => recoveryId === undefined ? undefined : onKeptDisks(choice, recoveryId, machine, kept, ended.id));
+                .then(choice => recoveryId === undefined ? undefined : onKeptDisks(choice, recoveryId, machine, ended.id));
         }
         const active = vscode.debug.activeDebugSession;
         void refresh(active?.id === ended.id ? undefined : active);
@@ -721,14 +723,24 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
 
     // What a person chose for a machine's kept disks, from its stop notice or its crash notice. Save All saves each
     // through the off machine, asking only as Save does; Review shows them in the Drives view; Discard asks once, as
-    // nothing can put them back.
-    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, files: string[], ended?: string): Promise<void> => {
+    // nothing can put them back. It asks about the disks the journal keeps now, as the machine may have run again
+    // since the notice, and asks again if it keeps others by the time the answer comes.
+    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, ended?: string): Promise<void> => {
         if (choice === undefined) return;
         if (choice === "Discard") {
-            const question = discardKeptQuestion(machine, files);
-            if (await ask(question) !== "Discard") return;
             try {
-                await languageRequest("retrocore/recovery/resolve", { id: recoveryId, action: "discard" });
+                for (;;) {
+                    const now = (await languageRequest<{ journals: { disks: string[]; revision: string }[] }>(
+                        "retrocore/recovery/list", { id: recoveryId })).journals[0];
+                    if (now === undefined) {
+                        void vscode.window.showInformationMessage(`Retrocore: ${machine} keeps no disks to discard now, or is running.`);
+                        break;
+                    }
+                    if (await ask(discardKeptQuestion(machine, now.disks)) !== "Discard") return;
+                    const result = await languageRequest<{ outcome?: string }>("retrocore/recovery/resolve",
+                        { id: recoveryId, action: "discard", revision: now.revision });
+                    if (result.outcome !== "changed") break;
+                }
             } catch (error) {
                 void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -793,7 +805,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         void vscode.window.showInformationMessage(`Retrocore: ${machine}'s next launch puts back the disks it kept, still changed.`);
                         return;
                     }
-                    await onKeptDisks(choice, journal.id, machine, journal.disks);
+                    await onKeptDisks(choice, journal.id, machine);
                 });
         }
     };
@@ -810,7 +822,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const onSession = (session: vscode.DebugSession): Target => ({
         request: async (request, args) => await session.customRequest(`retro/${request}`, args) as Devices & MediaAnswer,
         still: () => still(session),
-        show
+        show,
+        devices: () => sessionDevices.get(session.id)?.devices ?? (tree.session?.id === session.id ? tree.devices : [])
     });
     // The off machine as a target: a question about it stands while no session runs and it is still the one shown,
     // or, for a stopped machine's kept disks saved from its notice, while it is still the one shown. Its views follow
@@ -820,7 +833,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         return {
             request: async (request, args) => await off.request(request, args) as unknown as Devices & MediaAnswer,
             still: () => (alongside || vscode.debug.activeDebugSession?.type !== "retrocore") && (off.recoveryId ?? off.name) === shown,
-            show: () => undefined
+            show: () => undefined,
+            devices: () => off.devices
         };
     };
     // The machine the views show: the active session's, or the off one.
@@ -1055,7 +1069,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // An answer's Save As: for the disk the question was about, in its drive or ejected from it.
     const saveAsNew = async (on: Target, id: string, generation: number | undefined, args: Record<string, unknown>,
         format?: string): Promise<boolean> => {
-        const device = on.still() ? tree.devices.find(candidate => candidate.id === id) : undefined;
+        const device = on.still() ? on.devices().find(candidate => candidate.id === id) : undefined;
         const kept = typeof args.ejected === "string" ? device?.ejected?.find(candidate => candidate.id === args.ejected) : undefined;
         // An ejected disk no longer kept, put back or let go meanwhile, is not saved as the disk in the drive instead.
         if (typeof args.ejected === "string" && kept === undefined) {

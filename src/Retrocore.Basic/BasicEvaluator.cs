@@ -63,8 +63,11 @@ public sealed partial class BasicEvaluator
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
-    // Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
-    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect;
+    // BBC BASIC keeps its operators as characters, not tokens, and its integers are 32 bits.
+    private bool Bbc => _dialect is BbcBasicDialect;
+
+    // Level II, Color BASIC and BBC BASIC take true as -1, and AND, OR and NOT bit by bit on integers.
+    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect || Bbc;
 
     private double True => Bitwise ? -1 : 1;
 
@@ -94,7 +97,7 @@ public sealed partial class BasicEvaluator
         int savedAt = _at;
         try
         {
-            _bytes = _dialect.Tokenize(expression);
+            _bytes = Bbc ? BbcBasicDialect.TokenizeExpression(expression) : _dialect.Tokenize(expression);
             _at = 0;
             BasicResult result = Or();
             Skip();
@@ -344,11 +347,16 @@ public sealed partial class BasicEvaluator
         return Variable(name, subscripts);
     }
 
-    // Letters and digits, as a name continues.
+    // Letters and digits, as a name continues, and in BBC BASIC _ and £ too.
     private string Letters()
     {
         int start = _at;
-        while (_at < _bytes.Length && char.IsAsciiLetterOrDigit((char)_bytes[_at])) { _at++; }
+        while (_at < _bytes.Length
+            && (char.IsAsciiLetterOrDigit((char)_bytes[_at]) || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[_at]))))
+        {
+            _at++;
+        }
+
         return Encoding.ASCII.GetString(_bytes, start, _at - start);
     }
 
@@ -430,6 +438,9 @@ public sealed partial class BasicEvaluator
         Skip();
         if (!word.EndsWith('(')) { Expect('('); }
         List<BasicResult> arguments = Arguments();
+
+        // BBC BASIC's words take their bracket: LEFT$( is one token.
+        word = word.TrimEnd('(');
         double First() => Number(arguments[0]);
         byte[] Text0() => Text(arguments[0]);
         int Count(int index) => (int)Math.Truncate(Number(arguments[index]));
@@ -502,10 +513,19 @@ public sealed partial class BasicEvaluator
             ? new(new(bits(ToInteger(Number(left)), ToInteger(Number(right)))))
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
 
-    private static int ToInteger(double value) =>
-        value is < short.MinValue or > short.MaxValue
+    private int ToInteger(double value)
+    {
+        if (Bbc)
+        {
+            return value is < int.MinValue or > int.MaxValue
+                ? throw new FormatException("Too big: AND, OR and NOT take 32-bit integers.")
+                : (int)Math.Truncate(value);
+        }
+
+        return value is < short.MinValue or > short.MaxValue
             ? throw new FormatException("?ILLEGAL QUANTITY ERROR: AND, OR and NOT take -32768 to 32767.")
             : (short)Math.Truncate(value);
+    }
 
     private static int Compare(BasicResult left, BasicResult right)
     {
@@ -524,7 +544,17 @@ public sealed partial class BasicEvaluator
     private bool Take(string keyword)
     {
         Skip();
-        if (_at >= _bytes.Length || _dialect.KeywordAt(_bytes, _at, out int length) != keyword) { return false; }
+        if (_at >= _bytes.Length) { return false; }
+
+        // BBC BASIC's operators are characters.
+        if (Bbc && keyword.Length == 1 && !char.IsAsciiLetter(keyword[0]))
+        {
+            if (_bytes[_at] != keyword[0]) { return false; }
+            _at++;
+            return true;
+        }
+
+        if (_dialect.KeywordAt(_bytes, _at, out int length) != keyword) { return false; }
         _at += length;
         return true;
     }

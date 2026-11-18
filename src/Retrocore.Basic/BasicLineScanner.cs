@@ -91,6 +91,16 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
+            // BBC BASIC keeps a line number after GOTO and the like as a token and three bytes.
+            if (Bbc && value == BbcBasicDialect.LineNumberToken && index + 3 < _bytes.Length)
+            {
+                int number = BbcBasicDialect.UnpackLineNumber(_bytes[index + 1], _bytes[index + 2], _bytes[index + 3]);
+                sites.Add(Site(BasicSiteKind.LineReference, index, End(index + 3)) with { Number = number, Via = via });
+                index += 3;
+                name = null;
+                continue;
+            }
+
             // A placeholder token, which Business BASIC's lists keep empty, is no word.
             if (_dialect.KeywordAt(_bytes, index, out int length) is { Length: > 0 } word)
             {
@@ -120,7 +130,7 @@ internal sealed class BasicLineScanner
                 jump = range ? BasicJump.Range : JumpAfter(word);
                 via = range ? via : word;
                 afterNumber = false;
-                afterFunction = word == "FN";
+                afterFunction = word == "FN" || (Bbc && word == "PROC");
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
                 if (word == "GOTO") { beforeGoto = previous; }
@@ -169,7 +179,7 @@ internal sealed class BasicLineScanner
             }
 
             afterExternal = false;
-            if (char.IsAsciiLetter((char)value))
+            if (char.IsAsciiLetter((char)value) || (Bbc && BbcBasicDialect.IsNameCharacter(value) && !char.IsAsciiDigit((char)value)))
             {
                 index = Name(index, afterFunction, sites, diagnostics, split, out name);
                 split = null;
@@ -307,12 +317,16 @@ internal sealed class BasicLineScanner
         out BasicSite? site)
     {
         int last = index;
-        while (last + 1 < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1]) || (Business && _bytes[last + 1] == '.')))
+        while (last + 1 < _bytes.Length
+            && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1])
+                || (Business && _bytes[last + 1] == '.')
+                || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[last + 1]))))
         {
             last++;
         }
 
-        string letters = new([.. _bytes[index..(last + 1)].Select(value => char.ToUpperInvariant((char)value))]);
+        // BBC BASIC's names are case-sensitive.
+        string letters = new([.. _bytes[index..(last + 1)].Select(value => Bbc ? (char)value : char.ToUpperInvariant((char)value))]);
         string suffix = "";
         if (last + 1 < _bytes.Length && IsSuffix(_bytes[last + 1]))
         {
@@ -323,8 +337,9 @@ internal sealed class BasicLineScanner
         int next = last + 1;
         while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
-        // The Microsoft BASICs keep a name's first two characters; Integer BASIC and Business BASIC keep all of it.
-        string significant = letters.Length > 2 && _dialect is not IntegerBasicDialect && !Business ? letters[..2] : letters;
+        // The Microsoft BASICs keep a name's first two characters; Integer BASIC, Business BASIC and BBC BASIC keep all
+        // of it.
+        string significant = letters.Length > 2 && _dialect is not IntegerBasicDialect && !Business && !Bbc ? letters[..2] : letters;
         BasicSite found = Site(function ? BasicSiteKind.Function : BasicSiteKind.Variable, index, End(last)) with
         {
             Key = $"{significant}{suffix}{(array && _dialect is not IntegerBasicDialect ? "(" : "")}",
@@ -365,6 +380,8 @@ internal sealed class BasicLineScanner
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;
+
+    private bool Bbc => _dialect is BbcBasicDialect;
 
     // The last byte that came from the same text as this one.
     private int Last(int index)

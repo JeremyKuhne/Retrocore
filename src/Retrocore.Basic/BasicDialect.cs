@@ -31,7 +31,8 @@ public abstract partial class BasicDialect
         IntegerBasicDialect.Instance,
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
-        ColorBasicDialect.Disk
+        ColorBasicDialect.Disk,
+        BbcBasicDialect.Instance
     ];
 
     /// <summary>
@@ -59,6 +60,11 @@ public abstract partial class BasicDialect
     ///  Gets Apple Business BASIC 1.23, the Apple III's.
     /// </summary>
     public static BasicDialect BusinessBasic => BusinessBasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets BBC BASIC II, the BBC Micro's.
+    /// </summary>
+    public static BasicDialect BbcBasic => BbcBasicDialect.Instance;
 
     /// <summary>
     ///  Gets Apple-1 BASIC, the first form of Integer BASIC.
@@ -288,11 +294,18 @@ public abstract partial class BasicDialect
     }
 
     /// <summary>
-    ///  Formats a stored line the way the text form writes it: its number, a space and its statements.
+    ///  Formats a stored line the way the text form writes it: its number, a space and its statements; in BBC BASIC,
+    ///  which keeps the spaces after the number, its number and its text.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The text.</returns>
-    public string FormatLine(BasicLine line) => $"{line.Number} {Detokenize(line.Tokens.Span)}";
+    public string FormatLine(BasicLine line) => $"{line.Number}{LineNumberSeparator}{Detokenize(line.Tokens.Span)}";
+
+    /// <summary>
+    ///  Gets what the text form puts between a line's number and its statements: a space, or nothing in a dialect
+    ///  that keeps the spaces typed after the number in the line.
+    /// </summary>
+    internal virtual string LineNumberSeparator => " ";
 
     /// <summary>
     ///  Tokenizes text units as the ROM's <c>CRUNCH</c> does.

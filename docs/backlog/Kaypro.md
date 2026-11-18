@@ -10,7 +10,6 @@ extension's and Desktop's machine entries ([Kaypro.md](../Kaypro.md)).
   `Z80Sio` gained a receive buffer), the FD1793 with its HALT-gated NMI, and the display.
 - Raw Kaypro disk images (`KayproFormat`), read and saved, beside IMD and DMK.
 - `Kaypro2.asm` and `Kaypro2CharacterGenerator.asm`, byte-identical to 81-149C and 81-146A.
-- `--disassemble` takes `--cpu Z80` (and any CPU the catalog knows) and the hints' `"vectors": false`.
 - `tools/Test-KayproDap.mjs` and `KayproTests`.
 
 ## Next

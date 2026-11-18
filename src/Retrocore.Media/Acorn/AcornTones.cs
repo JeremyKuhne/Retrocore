@@ -46,12 +46,12 @@ internal sealed class AcornTones
     }
 
     /// <summary>
-    ///  Adds bytes as characters in a format: a start bit, the data bits from bit 0, the parity, and the stop bits, or
-    ///  for a negative count that many cycles of 2400 Hz.
+    ///  Adds bytes as characters in a format: a start bit, the data bits from bit 0, the parity, and the stop bits. A
+    ///  negative count, as UEF chunk &amp;0104 has it, is that many whole stop bits and then one more cycle of 2400 Hz.
     /// </summary>
     /// <param name="dataBits">The data bits.</param>
     /// <param name="parity"><c>N</c>, <c>E</c> or <c>O</c>.</param>
-    /// <param name="stops">The stop bits, or minus the cycles.</param>
+    /// <param name="stops">The stop bits, or minus them for the extra cycle.</param>
     /// <param name="bytes">The bytes.</param>
     public void Defined(int dataBits, char parity, int stops, ReadOnlySpan<byte> bytes)
     {
@@ -67,14 +67,8 @@ internal sealed class AcornTones
             }
 
             if (parity is 'E' or 'O') { Bit(((ones & 1) != 0) ^ (parity == 'O')); }
-            if (stops >= 0)
-            {
-                for (int stop = 0; stop < stops; stop++) { Bit(one: true); }
-            }
-            else
-            {
-                for (int cycle = 0; cycle < -stops; cycle++) { Cycle(high: true); }
-            }
+            for (int stop = 0; stop < Math.Abs(stops); stop++) { Bit(one: true); }
+            if (stops < 0) { Cycle(high: true); }
         }
     }
 

@@ -165,6 +165,22 @@ public class AcornTapeTests
     }
 
     /// <summary>
+    ///  A negative stop count in chunk &amp;0104 is that many whole stop bits and one more 2400 Hz cycle.
+    /// </summary>
+    /// <param name="baud">The baud rate.</param>
+    [TestMethod]
+    [DataRow(1200)]
+    [DataRow(300)]
+    public void NegativeStopsAddACycle(int baud)
+    {
+        AcornTones whole = new() { Baud = baud };
+        whole.Defined(dataBits: 8, parity: 'N', stops: 1, [0x55]);
+        AcornTones extra = new() { Baud = baud };
+        extra.Defined(dataBits: 8, parity: 'N', stops: -1, [0x55]);
+        extra.HalfCycles.Should().Equal([.. whole.HalfCycles, 1, 1]);
+    }
+
+    /// <summary>
     ///  A chunk whose length runs past the file, even one too large to add, is bad data.
     /// </summary>
     [TestMethod]

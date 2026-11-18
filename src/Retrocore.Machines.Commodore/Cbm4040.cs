@@ -173,6 +173,11 @@ public sealed class Cbm4040
         Fdc.Reset();
         DosProcessor.Reset();
         ControllerProcessor.Reset();
+
+        // A processor's reset keeps its inputs, and the chips' resets release the interrupt, so the lines go high here
+        // with the caches that follow them.
+        DosProcessor.Signals &= ~ProcessorSignals.InterruptRequest;
+        ControllerProcessor.Signals &= ~ProcessorSignals.InterruptRequest;
         _dosIrq = false;
         _controllerIrq = false;
         UpdateInputs();

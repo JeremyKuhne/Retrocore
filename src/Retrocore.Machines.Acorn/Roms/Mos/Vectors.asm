@@ -1,8 +1,9 @@
 ;; The copyright notice and credits, at &FC00-&FEFD.
 ;;
 ;; FRED, JIM and SHEILA cover &FC00-&FEFF, so the processor never reads these bytes; they are there for anyone who
-;; reads the ROM chip itself. The notice begins with "(C)", the string a paged ROM's copyright offset must point
-;; to, though nothing in the MOS looks for it here.
+;; reads the ROM chip itself. The notice begins with "(C)", as a paged ROM's does, though nothing in the MOS looks for
+;; it here and there is no zero before it: a paged ROM's copyright offset points to a zero, then "(C)", which is
+;; what <RESET_CHECK_COPYRIGHT> compares.
 ;; See: <FRED>, <JIM>, <SHEILA>
 CREDITS:
     .byte "(C) 1981 Acorn Computers Ltd.Thanks are due to the following contributors to the development of th"

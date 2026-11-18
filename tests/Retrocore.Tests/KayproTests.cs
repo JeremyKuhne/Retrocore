@@ -99,6 +99,27 @@ public sealed class KayproTests
     }
 
     /// <summary>
+    ///  A reset after CP/M has banked the ROM out starts the ROM again: the system PIO resets, so the latch CP/M left
+    ///  doesn't drive the port while the ROM sets the PIO up.
+    /// </summary>
+    [TestMethod]
+    public void ResetAfterCpmBanksTheRomIn()
+    {
+        KayproMachine machine = Create();
+        machine.Reset();
+
+        // As CP/M has the system port: bit control mode, bits 2 and 3 inputs, and the ROM out with drive A selected.
+        machine.Bus.Out(0x1D, 0xCF);
+        machine.Bus.Out(0x1D, 0x0C);
+        machine.Bus.Out(0x1C, 0x01);
+        machine.Bus.RomBanked.Should().BeFalse();
+
+        machine.Reset();
+        machine.Bus.RomBanked.Should().BeTrue();
+        RunUntil(machine, "Please place your diskette into Drive A", seconds: 3);
+    }
+
+    /// <summary>
     ///  The ROM's console handles its cursor addressing, clearing and scrolling as CP/M's programs use them.
     /// </summary>
     [TestMethod]

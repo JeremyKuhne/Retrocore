@@ -231,9 +231,26 @@ public sealed class KayproBus : IProcessorBus, IIoBus
     /// <summary>
     ///  Banks the ROM in and turns the motors on, as the system port reads after a reset.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The PIOs reset too, so the system port's pins float, pulled up, until the ROM sets the port up again. Its
+    ///   latch keeps what CP/M last wrote, which only drives the pins once the ROM has written its own value there.
+    ///  </para>
+    /// </remarks>
     internal void Reset()
     {
+        SystemPio.Reset();
+        GeneralPio.Reset();
         System = ResetSystem;
+        Apply(System);
+    }
+
+    /// <summary>
+    ///  Banks the ROM out, as CP/M runs, for a program loaded under it; the drives and motors stay as they are.
+    /// </summary>
+    public void BankRomOut()
+    {
+        System = (byte)(System & ~RomBit);
         Apply(System);
     }
 

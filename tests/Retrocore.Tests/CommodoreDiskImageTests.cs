@@ -436,6 +436,34 @@ public class CommodoreDiskImageTests
         unwritten[0].Should().BeFalse("a block followed the header, its mark damaged to $08");
     }
 
+    /// <summary>
+    ///  A track with cells but no sync holds no sector a drive could find: each is a loss in a D64 and a D67 save, not
+    ///  a sector DOS 1 never wrote; and a sector whose sync runs across the track's start reads on the second turn.
+    /// </summary>
+    [TestMethod]
+    public void SyncFreeTracksAndWrappedSyncsAreHandled()
+    {
+        CommodoreDisk disk = D64Format.Read(RandomImage());
+        int bits = disk.BitCount(0);
+        disk.SetTrack(0, new byte[bits / 8], bits, 3);
+        EncodedImage d64 = new CommodoreDiskCodec("D64").Encode(disk.Snapshot());
+        d64.Losses.Count(loss => loss.StartsWith("track 1, ", StringComparison.Ordinal)).Should().Be(21);
+        EncodedImage d67 = new CommodoreDiskCodec("D67").Encode(disk.Snapshot());
+        d67.Losses.Count(loss => loss.StartsWith("track 1, ", StringComparison.Ordinal)).Should().Be(21);
+        d67.Notes.Should().BeEmpty("no header says DOS 1 formatted them");
+
+        // Turn track 1 so its first sync starts 5 cells before the end and runs on from cell 0.
+        (byte[] laid, int count) = GcrLayout.WriteTrack(1, new byte[21 * GcrLayout.SectorSize], ((byte)'A', (byte)'B'));
+        byte[] turned = new byte[laid.Length];
+        for (int cell = 0; cell < count; cell++)
+        {
+            int from = (cell + 5) % count;
+            if ((laid[from >> 3] & (0x80 >> (from & 7))) != 0) { turned[cell >> 3] |= (byte)(0x80 >> (cell & 7)); }
+        }
+
+        GcrLayout.ReadTrack(turned, count, 1, new byte[21 * GcrLayout.SectorSize]).Should().OnlyContain(found => found);
+    }
+
     // A track 1 header for a sector of disk BA, with its gap.
     private static void Header(GcrBitWriter writer, int sector)
     {

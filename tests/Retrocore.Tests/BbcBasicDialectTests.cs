@@ -277,6 +277,20 @@ public sealed class BbcBasicDialectTests
         BasicSource loop = BasicSource.Analyze("10 P%=3:FOR I%=1 TOP%:NEXT\n", BasicDialect.BbcBasic);
         loop.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Text)
             .Should().Equal("P%", "I%", "P%");
+
+        // ERROR starts a statement as THEN does, so the * after it is a command: FOO in it is no variable.
+        BasicSource key = BasicSource.Analyze("10 ON ERROR *KEY 1 FOO\n", BasicDialect.BbcBasic);
+        key.Sites.Should().NotContain(site => site.Kind == BasicSiteKind.Variable);
+
+        // Jumps are where the tokeniser finds them: run together, abbreviated, and never in a * command.
+        Dictionary<string, BasicLabel> labels = new() { ["DONE"] = new("done", 1, 0, 4, 80) };
+        foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done"])
+        {
+            BasicProgram.LabelReferences(BasicDialect.BbcBasic, jump, labels).Should().ContainSingle(jump)
+                .Which.Name.Should().Be("DONE");
+        }
+
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
     }
 
     /// <summary>
@@ -308,6 +322,13 @@ public sealed class BbcBasicDialectTests
         evaluator.Evaluate("PI=P").Value.Number.Should().Be(-1);
         evaluator.Evaluate("2147483649+0.5").Value.Number.Should().Be(2147483649.0);
         evaluator.Evaluate("2147483649+0.5=H").Value.Number.Should().Be(-1);
+
+        // A real that rounds up to 2^127 is too big after rounding, as the ROM finds it.
+        BbcMachineTests.Type(machine, "PRINT 1.7014118345E38\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"));
+        Action rounded = () => evaluator.Evaluate("1.7014118345E38");
+        rounded.Should().Throw<FormatException>().WithMessage("Too big.");
     }
 
     /// <summary>

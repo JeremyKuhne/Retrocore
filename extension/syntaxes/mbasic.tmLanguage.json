@@ -484,7 +484,7 @@
       ]
     },
     "remark": {
-      "match": "(?i:(REM)|(')).*$",
+      "match": "(?i:(?<![A-Za-z0-9.])(REM)(?![A-Za-z0-9.])|(')).*$",
       "name": "comment.line.retrocore-mbasic",
       "captures": {
         "1": {

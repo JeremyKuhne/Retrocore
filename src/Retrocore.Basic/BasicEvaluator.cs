@@ -140,7 +140,31 @@ public sealed partial class BasicEvaluator
         return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 6) : 9);
     }
 
-    private BasicResult Or()
+    // MBASIC's logical operators below OR, at its precedences: IMP, then EQV, then XOR.
+    private BasicResult Or() => Mbasic ? Imp() : Disjunction();
+
+    private BasicResult Imp()
+    {
+        BasicResult left = Eqv();
+        while (Take("IMP")) { left = Logic(left, Eqv(), (a, b) => ~a | b, (a, b) => !a || b); }
+        return left;
+    }
+
+    private BasicResult Eqv()
+    {
+        BasicResult left = Xor();
+        while (Take("EQV")) { left = Logic(left, Xor(), (a, b) => ~(a ^ b), (a, b) => a == b); }
+        return left;
+    }
+
+    private BasicResult Xor()
+    {
+        BasicResult left = Disjunction();
+        while (Take("XOR")) { left = Logic(left, Disjunction(), (a, b) => a ^ b, (a, b) => a != b); }
+        return left;
+    }
+
+    private BasicResult Disjunction()
     {
         BasicResult left = And();
         while (Take("OR")) { left = Logic(left, And(), (a, b) => a | b, (a, b) => a || b); }
@@ -187,19 +211,19 @@ public sealed partial class BasicEvaluator
 
     private BasicResult Additive()
     {
-        BasicResult left = Term();
+        BasicResult left = AdditiveOperand();
         while (true)
         {
             if (Take("+"))
             {
-                BasicResult right = Term();
+                BasicResult right = AdditiveOperand();
                 left = left.Value.IsString || right.Value.IsString
                     ? new(BasicValue.Of([.. Text(left), .. Text(right)]))
                     : new(new(Number(left) + Number(right)), left.Double || right.Double);
             }
             else if (Take("-"))
             {
-                BasicResult right = Term();
+                BasicResult right = AdditiveOperand();
                 left = new(new(Number(left) - Number(right)), left.Double || right.Double);
             }
             else
@@ -207,6 +231,42 @@ public sealed partial class BasicEvaluator
                 return left;
             }
         }
+    }
+
+    // MBASIC's MOD and \ bind between + and *, MOD the looser.
+    private BasicResult AdditiveOperand() => Mbasic ? Modulus() : Term();
+
+    private BasicResult Modulus()
+    {
+        BasicResult left = IntegerQuotient();
+        while (Take("MOD"))
+        {
+            (int dividend, int divisor) = IntegerOperands(left, IntegerQuotient());
+            left = new(new(dividend % divisor));
+        }
+
+        return left;
+    }
+
+    private BasicResult IntegerQuotient()
+    {
+        BasicResult left = Term();
+        while (Take("\\"))
+        {
+            (int dividend, int divisor) = IntegerOperands(left, Term());
+            left = new(new(dividend / divisor));
+        }
+
+        return left;
+    }
+
+    // MOD's and the backslash's operands, as CINT makes them; a zero divisor is an error.
+    private (int Dividend, int Divisor) IntegerOperands(BasicResult left, BasicResult right)
+    {
+        int divisor = LogicInteger(Number(right));
+        return divisor == 0
+            ? throw new FormatException("?Division by zero.")
+            : (LogicInteger(Number(left)), divisor);
     }
 
     private BasicResult Term()
@@ -526,8 +586,12 @@ public sealed partial class BasicEvaluator
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
 
     // AND, OR and NOT's operand as an integer. The PET's BASIC converts it as AYINT and QINT do, down to the integer
-    // below; Level II and Color BASIC truncate toward zero.
-    private int LogicInteger(double value) => ToInteger(_dialect is PetBasicDialect ? Math.Floor(value) : value);
+    // below; MBASIC as CINT does, rounding a half away from zero; Level II and Color BASIC truncate toward zero.
+    private int LogicInteger(double value)
+    {
+        if (_dialect is PetBasicDialect) { return ToInteger(Math.Floor(value)); }
+        return ToInteger(Mbasic ? Math.Round(value, MidpointRounding.AwayFromZero) : value);
+    }
 
     private static int ToInteger(double value) =>
         value is < short.MinValue or > short.MaxValue

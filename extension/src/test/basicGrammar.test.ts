@@ -111,6 +111,9 @@ test("MBASIC finds reserved words only set apart from names", () => {
     assert.ok(!has(scopes("mbasic", line, "COUNT"), "keyword"), "the name holds a dot and ends in %");
     assert.ok(has(scopes("mbasic", line, "MOD"), "keyword.operator"));
     assert.ok(has(scopes("mbasic", line, "XOR"), "keyword.operator"));
+    assert.ok(has(scopes("mbasic", "50 REMAIN=1:PRINT REMAIN", "REMAIN"), "variable.other"), "REM needs a separator after it");
+    assert.ok(has(scopes("mbasic", "60 X=1 ' A NOTE", "NOTE"), "comment.line"), "an apostrophe is a remark");
+    assert.ok(has(scopes("mbasic", "70 REM A NOTE", "NOTE"), "comment.line"));
     assert.ok(has(scopes("mbasic", line, "\\"), "keyword.operator"));
     assert.ok(has(scopes("mbasic", line, "PRINT", 1), "keyword.other"));
     assert.ok(has(scopes("mbasic", line, "FN"), "support.function"), "FN before its name");

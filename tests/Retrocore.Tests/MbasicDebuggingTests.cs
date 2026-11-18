@@ -32,6 +32,16 @@ public sealed class MbasicDebuggingTests
     [DataRow("1E3", "1000")]
     [DataRow("&H10+&O10", "24")]
     [DataRow("&HFFFF", "-1")]
+    [DataRow("5 MOD 2", "1")]
+    [DataRow("-7 MOD 3", "-1")]
+    [DataRow("7\\2", "3")]
+    [DataRow("7.6\\2", "4")]
+    [DataRow("2+7 MOD 4*2", "9")]
+    [DataRow("1 XOR 3", "2")]
+    [DataRow("5 EQV 3", "-7")]
+    [DataRow("0 IMP 0", "-1")]
+    [DataRow("1 OR 2 XOR 3", "0")]
+    [DataRow("2.6 AND 3", "3")]
     public void ConstantsEvaluate(string expression, string printed)
     {
         BasicEvaluator evaluator = new(Mbasic, DelegateBasicMemory.Of(new byte[0x10000]));
@@ -111,6 +121,59 @@ public sealed class MbasicDebuggingTests
         BasicSource source = BasicSource.Analyze("10 COUNT=1:COST=2:COUNT.TOTAL%=3\n", Mbasic);
         source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key)
             .Should().Equal("COUNT", "COST", "COUNT.TOTAL%");
+    }
+
+    /// <summary>
+    ///  &amp;O and &amp;H constants crunch as OCTCNS reads them: blanks among octal digits are skipped, an 8 or 9 in
+    ///  one is a syntax error, and a fifth hexadecimal digit overflows, even a zero.
+    /// </summary>
+    [TestMethod]
+    public void RadixConstantsCrunchAsOctcnsReadsThem()
+    {
+        Convert.ToHexString(Mbasic.Tokenize("X=&O1 7")).Should().Be("58F00B0F00");
+        Convert.ToHexString(Mbasic.Tokenize("X=&HFFFF")).Should().Be("58F00CFFFF");
+        Action octal = () => Mbasic.Tokenize("X=&O8");
+        octal.Should().Throw<FormatException>();
+        Action hex = () => Mbasic.Tokenize("X=&H00000");
+        hex.Should().Throw<FormatException>();
+    }
+
+    /// <summary>
+    ///  Every line number CRUNCH makes is a reference, RESTORE's and ERL's included, so renumbering keeps them.
+    /// </summary>
+    [TestMethod]
+    public void EveryLineConstantIsAReference()
+    {
+        BasicSource source = BasicSource.Analyze("10 RESTORE 30:IF ERL=20 THEN 30\n20 END\n30 DATA 1\n", Mbasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.LineReference).Select(site => site.Number)
+            .Should().Equal(30, 20, 30);
+    }
+
+    /// <summary>
+    ///  A DEF FN's entry among the variables, its first character marked with bit 7, lists as a function with its
+    ///  name, not as a variable.
+    /// </summary>
+    [TestMethod]
+    public void DefFnEntriesAreFunctions()
+    {
+        byte[] memory = new byte[0x10000];
+        const int Variables = 0x7000;
+        memory[MbasicMemory.VARTAB] = Variables & 0xFF;
+        memory[MbasicMemory.VARTAB + 1] = Variables >> 8;
+        for (int letter = 0; letter < 26; letter++) { memory[MbasicMemory.DEFTBL + letter] = 4; }
+
+        // FNA's entry, a single with A's bit 7 set, then X, then the arrays' start.
+        byte[] entries = [4, (byte)('A' | 0x80), 0, 0, 0, 0, 0, 0, 4, (byte)'X', 0, 0, 0, 0, 0x20, 0x81];
+        entries.CopyTo(memory, Variables);
+        int arrays = Variables + entries.Length;
+        memory[MbasicMemory.ARYTAB] = (byte)arrays;
+        memory[MbasicMemory.ARYTAB + 1] = (byte)(arrays >> 8);
+        memory[MbasicMemory.STREND] = (byte)arrays;
+        memory[MbasicMemory.STREND + 1] = (byte)(arrays >> 8);
+
+        BasicVariables variables = new(Mbasic, DelegateBasicMemory.Of(memory));
+        variables.Simple().Select(variable => $"{variable.Name} {variable.Kind}")
+            .Should().Equal("A Function", "X Single");
     }
 
     /// <summary>

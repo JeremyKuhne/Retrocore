@@ -150,31 +150,59 @@ internal static class MbasicNumbers
     }
 
     /// <summary>
-    ///  Reads an <c>&amp;H</c> or <c>&amp;O</c> constant's digits.
+    ///  Reads an <c>&amp;H</c> or <c>&amp;O</c> constant's digits, as OCTCNS does.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Octal digits are read with CHRGTR, which skips blanks among them and after them; an 8 or a 9 is a syntax
+    ///   error, and a value past 16 bits overflows. Hexadecimal digits are read as they are, at most four: a fifth
+    ///   overflows, even a zero.
+    ///  </para>
+    /// </remarks>
     /// <param name="line">The line's characters.</param>
-    /// <param name="x">The first digit; left after the last.</param>
+    /// <param name="x">The first digit; left after the last, and after any blanks an octal constant skipped.</param>
     /// <param name="radix">16 or 8.</param>
     /// <returns>The value.</returns>
-    /// <exception cref="FormatException">The value does not fit in 16 bits.</exception>
+    /// <exception cref="FormatException">
+    ///  The value does not fit in 16 bits, or an octal constant has an 8 or a 9.
+    /// </exception>
     internal static int Radix(int[] line, ref int x, int radix)
     {
         int value = 0;
-        while (true)
+        if (radix == 8)
+        {
+            while (true)
+            {
+                int at = x;
+                while (At(line, at) is ' ' or '\t' or '\n') { at++; }
+                int unit = At(line, at);
+                if (unit is < '0' or > '9')
+                {
+                    x = at;
+                    return value;
+                }
+
+                if (unit >= '8') { throw new FormatException("?Syntax error: 8 and 9 are not octal digits."); }
+                if (value > 0x1FFF) { throw new FormatException("?Overflow: a constant is at most 16 bits."); }
+                value = (value * 8) + (unit - '0');
+                x = at + 1;
+            }
+        }
+
+        for (int count = 0; ; count++)
         {
             int unit = At(line, x);
             int upper = unit is >= 'a' and <= 'z' ? unit & 0x5F : unit;
             int digit = upper switch
             {
-                >= '0' and <= '7' => upper - '0',
-                '8' or '9' when radix == 16 => upper - '0',
-                >= 'A' and <= 'F' when radix == 16 => upper - 'A' + 10,
+                >= '0' and <= '9' => upper - '0',
+                >= 'A' and <= 'F' => upper - 'A' + 10,
                 _ => -1
             };
 
             if (digit < 0) { return value; }
-            value = (value * radix) + digit;
-            if (value > 0xFFFF) { throw new FormatException("?Overflow: a constant is at most 16 bits."); }
+            if (count == 4) { throw new FormatException("?Overflow: a hexadecimal constant has at most four digits."); }
+            value = (value * 16) + digit;
             x++;
         }
     }

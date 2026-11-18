@@ -91,7 +91,8 @@ public sealed class MbasicOracleTests
             "GO  TO  100",
             "IF A THEN B=1 ELSE B=2",
             "X=1 EQV 2:Y=1E2",
-            "X=1.6%+2.5%-1.4%"
+            "X=1.6%+2.5%-1.4%",
+            "X=&O1 7+& 17+&H1F"
         ];
 
         KayproMachine machine = StartMbasic();

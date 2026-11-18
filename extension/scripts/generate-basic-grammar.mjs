@@ -62,9 +62,11 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
     const reserved = words.filter(word => word !== "REM" && word !== "'" && word !== "DATA");
-    const remark = words.includes("'") ? `${matching("(REM)|(')")}.*$`
-        : business ? `(?i:${before}(REM)${after}|(!)).*$`
-            : `${matching("(REM)")}.*$`;
+    // MBASIC sets REM apart from names, as Business BASIC does, so REMAIN is a variable; its remark may also be '.
+    const remark = words.includes("'") && business ? `(?i:${before}(REM)${after}|(')).*$`
+        : words.includes("'") ? `${matching("(REM)|(')")}.*$`
+            : business ? `(?i:${before}(REM)${after}|(!)).*$`
+                : `${matching("(REM)")}.*$`;
     const kind = word => flow.has(word) ? "keyword.control"
         : operators.has(word) ? "keyword.operator"
             : functions.has(word) || /[$(]$/.test(word) ? "support.function"

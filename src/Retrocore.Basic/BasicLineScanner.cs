@@ -91,12 +91,13 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            // MBASIC crunches numbers into constants, a type byte and its value, read whole. A line number after
-            // GOTO and the others is a reference.
+            // MBASIC crunches numbers into constants, a type byte and its value, read whole. CRUNCH makes a line
+            // number constant only after the words that take lines (LINRES: GOTO, RESTORE, ERL and the others), as
+            // RENUM finds them, so each is a reference.
             if (Mbasic && MbasicDialect.ConstantLength(value) is >= 0 and var payload)
             {
                 int end = Math.Min(index + payload, _bytes.Length - 1);
-                if (MbasicDialect.IsLineConstant(value) && jump != BasicJump.None && !afterNumber && end == index + 2)
+                if (MbasicDialect.IsLineConstant(value) && end == index + 2)
                 {
                     int number = _bytes[index + 1] | (_bytes[index + 2] << 8);
                     bool zero = previous == "RESUME" || beforeGoto is "ERROR" or "ONERR" or "ERR";

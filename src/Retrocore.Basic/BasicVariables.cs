@@ -82,7 +82,10 @@ public sealed partial class BasicVariables
                 int type = _memory.Read(at);
                 if (KindOfType(type) is not { } kind) { break; }
                 int header = MbasicHeader(at);
-                variables.Add(new(MbasicName(at, kind), kind, at, at + header));
+
+                // GETFNM sets bit 7 of a DEF FN's first character; its value is the definition's text pointer.
+                bool function = (_memory.Read(at + 1) & High) != 0;
+                variables.Add(new(MbasicName(at, kind), function ? BasicVariableKind.Function : kind, at, at + header));
                 at += header + type;
             }
             else if (LevelTwo)
@@ -468,10 +471,11 @@ public sealed partial class BasicVariables
     // An MBASIC entry's header: the type, two characters and the count of the rest, then the rest.
     private int MbasicHeader(int at) => 4 + _memory.Read(at + 3);
 
-    // An MBASIC entry's whole name, with its suffix unless its type is its first letter's default.
+    // An MBASIC entry's whole name, with its suffix unless its type is its first letter's default; a DEF FN's first
+    // character has bit 7 set.
     private string MbasicName(int at, BasicVariableKind kind)
     {
-        char first = (char)_memory.Read(at + 1);
+        char first = (char)(_memory.Read(at + 1) & 0x7F);
         char second = (char)_memory.Read(at + 2);
         string rest = new([.. Enumerable.Range(at + 4, _memory.Read(at + 3)).Select(index => (char)(_memory.Read(index) & 0x7F))]);
         return Suffixed(second == '\0' ? first.ToString() : $"{first}{second}{rest}", first, kind);

@@ -26,3 +26,6 @@ characters) are SDK sources. What is left is below.
 - The 6845 starts the vertical sync at the start of a row in both fields, as MAME's does, not half a line later in
   the odd field of an interlaced picture.
 - The TRS-80's partial 6845 could move onto the shared `Crtc6845`.
+- Nothing presses SHIFT-BREAK: the display panel and the Desktop send BREAK alone, and Start Machine only inserts a
+  disk. A shifted reset, holding SHIFT until the MOS reads it, would boot a disk's `!BOOT`; until then `*EXEC !BOOT`
+  or `*RUN !BOOT` runs it.

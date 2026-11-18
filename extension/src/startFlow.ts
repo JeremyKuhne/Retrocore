@@ -60,8 +60,8 @@ export function runChoices(machine: Machine): RunChoice[] {
     }
 
     if (machine.diskFormats.length !== 0) {
-        // The BBC Micro boots a disk only with SHIFT-BREAK, which the launch does not press for it.
-        const detail = machine.configuration.machine === "bbc" ? "Puts it in drive 0, for SHIFT-BREAK to boot" : "Boots it from the first drive";
+        // The BBC Micro boots a disk only with SHIFT-BREAK, which neither the launch nor the panel can press yet.
+        const detail = machine.configuration.machine === "bbc" ? "Puts it in drive 0, without booting it" : "Boots it from the first drive";
         choices.push({ kind: "disk", label: "A disk image", detail, extensions: machine.diskFormats });
     }
 
@@ -135,6 +135,15 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
     }
 
     return configuration;
+}
+
+/** The options that remove a machine's drives when set to false: its disk controller or interface, and the Model I's
+ * Expansion Interface, which its controller needs. */
+export const driveOptions: ReadonlySet<string> = new Set(["diskController", "expansionInterface", "diskInterface"]);
+
+/** Whether a change would leave a setup that starts from a disk without drives to put it in. */
+export function removesDrives(setup: Setup, option: string, value: string | number | boolean): boolean {
+    return setup.kind === "disk" && driveOptions.has(option) && value === false;
 }
 
 /** The setup's options with one changed, dropping it when it is back to the machine's default. */

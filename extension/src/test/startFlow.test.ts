@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { machineById, machines } from "../machines";
-import { describeSetup, isUsable, optionValue, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
+import { describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, withOption, type Setup } from "../startFlow";
 
 interface OptionSchema { type?: string; enum?: unknown[]; anyOf?: OptionSchema[] }
 
@@ -94,8 +94,15 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.equal(machines.length, 21);
 });
 
-test("a BBC Micro's disk goes in drive 0 for SHIFT-BREAK, which the launch does not press", () => {
+test("a BBC Micro's disk goes in drive 0 without booting, as nothing presses SHIFT-BREAK", () => {
     const disk = (id: string) => runChoices(machineById(id)!).find(choice => choice.kind === "disk")?.detail;
-    assert.equal(disk("bbcb"), "Puts it in drive 0, for SHIFT-BREAK to boot");
+    assert.equal(disk("bbcb"), "Puts it in drive 0, without booting it");
     assert.equal(disk("apple2-iie-enhanced"), "Boots it from the first drive");
+});
+
+test("a setup that starts from a disk keeps the drives it needs", () => {
+    const disk: Setup = { machineId: "bbcb", kind: "disk", path: "welcome.ssd", options: {} };
+    assert.ok(removesDrives(disk, "diskInterface", false));
+    assert.ok(!removesDrives(disk, "diskInterface", true));
+    assert.ok(!removesDrives({ ...disk, kind: "machine" }, "diskInterface", false));
 });

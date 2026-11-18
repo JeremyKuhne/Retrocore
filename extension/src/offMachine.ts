@@ -12,7 +12,7 @@ import { changesFrom } from "./hardware";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
-import { describeSetup, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
+import { describeSetup, driveOptions, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -214,7 +214,7 @@ export class OffMachine {
         }
         // Its disks need their controller, and the Model I's controller its Expansion Interface: without them the launch
         // would have no drives to put them in.
-        if ((option === "diskController" || option === "expansionInterface") && value === false && startsWithDisks(target.configuration)) {
+        if (driveOptions.has(option) && value === false && startsWithDisks(target.configuration)) {
             throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its ${choice.label.toLowerCase()}.`);
         }
 

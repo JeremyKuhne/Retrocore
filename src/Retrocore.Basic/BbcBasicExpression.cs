@@ -85,6 +85,9 @@ internal sealed class BbcBasicExpression
             BasicValue value = Expression();
             Skip();
             if (_at < _bytes.Length) { throw Syntax($"'{Rest()}' is left over"); }
+
+            // No function may leave an infinity or NaN, which a breakpoint condition would take as true.
+            if (!value.IsString && !double.IsFinite(value.Number)) { throw new FormatException("Too big."); }
             return new(value);
         }
         finally
@@ -158,7 +161,7 @@ internal sealed class BbcBasicExpression
                 {
                     left = IsInteger(left) && IsInteger(right)
                         ? Integer(unchecked(Int(left) + Int(right)))
-                        : new(left.Number + right.Number);
+                        : Real(left.Number + right.Number);
                 }
             }
             else if (TakeCharacter('-'))
@@ -166,7 +169,7 @@ internal sealed class BbcBasicExpression
                 BasicValue right = Term();
                 left = IsInteger(left) && IsInteger(right)
                     ? Integer(unchecked(Int(left) - Int(right)))
-                    : new(Number(left) - Number(right));
+                    : Real(Number(left) - Number(right));
             }
             else
             {
@@ -183,15 +186,15 @@ internal sealed class BbcBasicExpression
             if (TakeCharacter('*'))
             {
                 BasicValue right = Power();
-                double product = Number(left) * Number(right);
-                left = IsInteger(left) && IsInteger(right) && product is >= int.MinValue and <= int.MaxValue
-                    ? Integer((int)product)
-                    : new(product);
+
+                // BASIC multiplies integers as integers only when both fit in 16 bits; otherwise in reals.
+                bool small = IsShort(left) && IsShort(right);
+                left = small ? Integer(Int(left) * Int(right)) : Real(Number(left) * Number(right));
             }
             else if (TakeCharacter('/'))
             {
                 double divisor = Number(Power());
-                left = divisor == 0 ? throw DivisionByZero() : new(Number(left) / divisor);
+                left = divisor == 0 ? throw DivisionByZero() : Real(Number(left) / divisor);
             }
             else if (TakeWord("DIV"))
             {
@@ -214,9 +217,18 @@ internal sealed class BbcBasicExpression
     private BasicValue Power()
     {
         BasicValue left = Factor();
-        while (TakeCharacter('^')) { left = new(Math.Pow(Number(left), Number(Factor()))); }
+        while (TakeCharacter('^'))
+        {
+            double power = Math.Pow(Number(left), Number(Factor()));
+
+            // A negative number to a fraction has no real power: BASIC takes its logarithm and says "Log range".
+            left = double.IsNaN(power) ? throw new FormatException("Log range.") : Real(power);
+        }
+
         return left;
     }
+
+    private static bool IsShort(BasicValue value) => IsInteger(value) && Int(value) is >= short.MinValue and <= short.MaxValue;
 
     private BasicValue Factor()
     {
@@ -244,7 +256,9 @@ internal sealed class BbcBasicExpression
                 return IsInteger(negated) ? Integer(unchecked(-Int(negated))) : new(-Number(negated));
             case (byte)'+':
                 _at++;
-                return new(Number(Factor()));
+                BasicValue plus = Factor();
+                Number(plus);
+                return plus;
             case (byte)'(':
                 _at++;
                 BasicValue inner = Expression();
@@ -319,26 +333,33 @@ internal sealed class BbcBasicExpression
         BasicValue argument = Factor();
         return word switch
         {
-            "ABS" => new(Math.Abs(Number(argument))),
+            "ABS" => IsInteger(argument)
+                ? Integer(Int(argument) < 0 ? unchecked(-Int(argument)) : Int(argument))
+                : new(Math.Abs(Number(argument))),
             "ACS" => new(Math.Acos(Unit(Number(argument)))),
             "ASN" => new(Math.Asin(Unit(Number(argument)))),
             "ATN" => new(Math.Atan(Number(argument))),
             "COS" => new(Math.Cos(Number(argument))),
             "DEG" => new(Number(argument) * 180 / Math.PI),
-            "EXP" => new(Math.Exp(Number(argument))),
+            "EXP" => Number(argument) switch
+            {
+                >= 89.5 => throw new FormatException("Exp range."),
+                <= -89.5 => new(0),
+                double power => Real(Math.Exp(power))
+            },
             "INT" => Math.Floor(Number(argument)) is >= int.MinValue and <= int.MaxValue and double whole
                 ? Integer((int)whole)
                 : throw new FormatException("Too big."),
             "LN" => new(Logarithm(Number(argument), Math.Log)),
             "LOG" => new(Logarithm(Number(argument), Math.Log10)),
             "RAD" => new(Number(argument) * Math.PI / 180),
-            "SGN" => new(Math.Sign(Number(argument))),
+            "SGN" => Integer(Math.Sign(Number(argument))),
             "SIN" => new(Math.Sin(Number(argument))),
             "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : new(Math.Sqrt(Number(argument))),
             "TAN" => new(Math.Tan(Number(argument))),
             "LEN" => Integer(Text(argument).Length),
             "ASC" => Integer(Text(argument) is { Length: > 0 } text ? text[0] : -1),
-            "VAL" => new(Value(Text(argument))),
+            "VAL" => Value(Text(argument)),
             _ => BasicValue.Of([(byte)Int(argument)])     // CHR$
         };
     }
@@ -395,7 +416,7 @@ internal sealed class BbcBasicExpression
                 byte[] text = Text(arguments[0]);
                 byte[] find = Text(arguments[1]);
                 int start = Math.Max(1, arguments.Count > 2 ? Whole(2) : 1);
-                if (start > text.Length + 1) { return new(0); }
+                if (start > text.Length + 1) { return Integer(0); }
                 int found = text.AsSpan(start - 1).IndexOf(find);
                 return Integer(found < 0 ? 0 : found + start);
         }
@@ -526,16 +547,30 @@ internal sealed class BbcBasicExpression
         if (!BasicNumbers.TryParse(text, out double number)) { throw Syntax($"'{text}' is not a number"); }
         return !text.Contains('.') && !text.Contains('E') && number is >= int.MinValue and <= int.MaxValue
             ? Integer((int)number)
-            : new(number);
+            : Real(number);
     }
 
-    // VAL: the number at the start of the string, or 0.
-    private static double Value(byte[] text)
+    // VAL: the number at the start of the string, or 0, read as BASIC reads one: spaces, a sign, spaces, the digits
+    // with one point, and an exponent. It is an integer when it has neither a point nor an exponent and fits.
+    private static BasicValue Value(byte[] text)
     {
         string trimmed = Encoding.ASCII.GetString(text).TrimStart(' ');
+        bool negative = false;
+        if (trimmed.Length != 0 && trimmed[0] is '+' or '-')
+        {
+            negative = trimmed[0] == '-';
+            trimmed = trimmed[1..].TrimStart(' ');
+        }
+
         int end = 0;
-        if (end < trimmed.Length && trimmed[end] is '+' or '-') { end++; }
-        while (end < trimmed.Length && (char.IsAsciiDigit(trimmed[end]) || trimmed[end] == '.')) { end++; }
+        bool point = false;
+        while (end < trimmed.Length && (char.IsAsciiDigit(trimmed[end]) || (trimmed[end] == '.' && !point)))
+        {
+            point |= trimmed[end] == '.';
+            end++;
+        }
+
+        bool exponent = false;
         if (end < trimmed.Length && trimmed[end] == 'E')
         {
             int at = end + 1;
@@ -543,11 +578,14 @@ internal sealed class BbcBasicExpression
             if (at < trimmed.Length && char.IsAsciiDigit(trimmed[at]))
             {
                 end = at;
+                exponent = true;
                 while (end < trimmed.Length && char.IsAsciiDigit(trimmed[end])) { end++; }
             }
         }
 
-        return BasicNumbers.TryParse(trimmed[..end], out double number) ? number : 0;
+        if (!BasicNumbers.TryParse(trimmed[..end], out double number)) { return Integer(0); }
+        if (negative) { number = -number; }
+        return !point && !exponent && number is >= int.MinValue and <= int.MaxValue ? Integer((int)number) : Real(number);
     }
 
     /// <summary>
@@ -560,6 +598,7 @@ internal sealed class BbcBasicExpression
     internal static string Format(double value)
     {
         const int Digits = 10;
+        if (!double.IsFinite(value)) { throw new FormatException("Too big."); }
         if (value == 0) { return "0"; }
 
         // The digits, rounded to ten, and the power of ten of the first.
@@ -585,6 +624,9 @@ internal sealed class BbcBasicExpression
 
     private static double Logarithm(double value, Func<double, double> logarithm) =>
         value <= 0 ? throw new FormatException("Log range.") : logarithm(value);
+
+    private static BasicValue Real(double value) =>
+        double.IsFinite(value) ? new(value) : throw new FormatException(double.IsNaN(value) ? "Log range." : "Too big.");
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);
 

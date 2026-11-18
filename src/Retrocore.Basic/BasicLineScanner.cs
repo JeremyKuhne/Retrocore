@@ -69,6 +69,7 @@ internal sealed class BasicLineScanner
         string? via = null;
         BasicSite? name = null;
         BasicSite? split = null;
+        bool statementStart = true;
         for (int index = 0; index < _bytes.Length; index++)
         {
             byte value = _bytes[index];
@@ -86,6 +87,10 @@ internal sealed class BasicLineScanner
             }
 
             if (value == ' ') { continue; }
+
+            // A BBC * command is the MOS's to read, to the end of the line: nothing in it is BASIC's.
+            if (Bbc && statementStart && value == '*') { break; }
+            statementStart = value == ':';
             if (_skip.Count != 0 && _skip.Any(range => Column(index) >= range.Start && Column(index) < range.End))
             {
                 name = null;
@@ -135,6 +140,7 @@ internal sealed class BasicLineScanner
                 routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
+                statementStart = word is "THEN" or "ELSE";
                 if (word == "GOTO") { beforeGoto = previous; }
                 previous = word;
                 index = last;
@@ -191,7 +197,10 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            if (char.IsAsciiLetter((char)value) || (Bbc && BbcBasicDialect.IsNameCharacter(value) && !char.IsAsciiDigit((char)value)))
+            // A BBC name starts with a letter, _ or £, or is the resident @%.
+            bool bbcLetter = BbcBasicDialect.IsNameCharacter(value) && !char.IsAsciiDigit((char)value);
+            bool atPercent = value == '@' && index + 1 < _bytes.Length && _bytes[index + 1] == '%';
+            if (char.IsAsciiLetter((char)value) || (Bbc && (bbcLetter || atPercent)))
             {
                 index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
                 split = null;

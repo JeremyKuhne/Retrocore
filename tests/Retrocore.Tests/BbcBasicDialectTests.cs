@@ -177,6 +177,15 @@ public sealed class BbcBasicDialectTests
     [DataRow("TOP-PAGE", 2.0)]                 // TOP is TO then P; an empty program is its end marker
     [DataRow("&7FFFFFFF+1", -2147483648.0)]    // integers wrap at 32 bits
     [DataRow("&7FFFFFFF+1.0", 2147483648.0)]   // a real operand makes the sum real
+    [DataRow("&7FFFFFFF*1+1", 2147483648.0)]  // an operand past 16 bits makes * real
+    [DataRow("(+&7FFFFFFF)+1", -2147483648.0)] // unary + keeps an integer
+    [DataRow("ABS &80000000", -2147483648.0)]  // ABS of an integer wraps
+    [DataRow("SGN(1)+&7FFFFFFF", -2147483648.0)]
+    [DataRow("VAL(\"2147483647\")+1", -2147483648.0)]
+    [DataRow("&7FFFFFFF+INSTR(\"A\",\"B\",3)+1", -2147483648.0)]
+    [DataRow("VAL \"+ 12\"", 12.0)]
+    [DataRow("VAL \"1.2.3\"", 1.2)]
+    [DataRow("EXP -100", 0.0)]
     [DataRow("LEN LEFT$(\"ABC\",256)", 0.0)]   // the low byte of the count
     [DataRow("LEN STRING$(256,\"X\")", 0.0)]
     public void WatchesTakeBbcGrammar(string expression, double expected)
@@ -207,6 +216,13 @@ public sealed class BbcBasicDialectTests
 
         Action outside = () => evaluator.Evaluate("ASN 2");
         outside.Should().Throw<FormatException>().WithMessage("-ve root.");
+        (string, string)[] ranges = [("(-1)^0.5", "Log range."), ("2^1024", "Too big."), ("EXP 100", "Exp range.")];
+        foreach ((string expression, string error) in ranges)
+        {
+            Action range = () => evaluator.Evaluate(expression);
+            range.Should().Throw<FormatException>(expression).WithMessage(error);
+        }
+
         Action missing = () => evaluator.Evaluate("missing=0");
         missing.Should().Throw<FormatException>().WithMessage("No such variable*");
     }
@@ -219,6 +235,41 @@ public sealed class BbcBasicDialectTests
     {
         BasicSource source = BasicSource.Analyze("10 BEEF=1:PRINT &BEEF\n", BasicDialect.BbcBasic);
         source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Should().Equal("BEEF");
+    }
+
+    /// <summary>
+    ///  @% is a variable, and a * command's text is the MOS's, not BASIC's: renaming FOO leaves *LOAD FOO alone, while
+    ///  * in an expression is still multiplication.
+    /// </summary>
+    [TestMethod]
+    public void StarCommandsAndAtPercent()
+    {
+        const string Program = "10 @%=0:FOO=1:X=FOO*2\n20 *LOAD FOO 2000\n30 IF FOO THEN *CAT\n";
+        BasicSource source = BasicSource.Analyze(Program, BasicDialect.BbcBasic);
+        string[] names = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => $"{site.Key}@{site.Line}")];
+        names.Should().Equal("@%@0", "FOO@0", "X@0", "FOO@0", "FOO@2");  // by source line: none in line 20's *LOAD
+    }
+
+    /// <summary>
+    ///  A string at the top of the heap grows in place, as BASIC's assignment grows it, so growing one from 1 to 255
+    ///  characters takes about 255 bytes of heap, not the sum of every length.
+    /// </summary>
+    [TestMethod]
+    public void StringsGrowInPlace()
+    {
+        BbcMachine machine = Boot();
+        DelegateBasicMemory memory = Memory(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, memory);
+        BasicVariable text = variables.Create("T$");
+        int heap = memory.Read(0x02) | (memory.Read(0x03) << 8);
+        for (int length = 1; length <= 255; length++)
+        {
+            variables.Write(text.Kind, text.ValueAddress, BasicValue.Of([.. Enumerable.Repeat((byte)'A', length)]));
+        }
+
+        int used = (memory.Read(0x02) | (memory.Read(0x03) << 8)) - heap;
+        used.Should().BeLessThan(400);
+        variables.Read(text.Kind, text.ValueAddress).Text.Should().HaveCount(255);
     }
 
     /// <summary>

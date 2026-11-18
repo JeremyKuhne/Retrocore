@@ -136,27 +136,32 @@ public sealed partial class BasicVariables
         }
     }
 
-    // A string goes where it is when it fits the bytes allocated to it, as BASIC's assignment does; otherwise it gets
-    // new room at the top of the heap, below BASIC's stack.
+    // A string goes where it is when it fits the bytes allocated to it, as BASIC's assignment does. Otherwise, as
+    // ASSIGN_STRING does, it gets room at the top of the heap, below BASIC's stack: its own room grown in place when
+    // that is already at the top, or new room. A string of eight or more characters gets eight bytes to spare.
     private void BbcWriteString(int address, byte[] text)
     {
+        const int Spare = 8;
         if (text.Length > 255)
         {
             throw new ArgumentException("String too long: a string holds at most 255 characters.");
         }
 
         int start = Word(address);
-        if (text.Length > _memory.Read(address + 2))
+        int allocated = _memory.Read(address + 2);
+        if (text.Length > allocated)
         {
-            start = Word(BbcBasicDialect.Heap);
-            if (start + text.Length > Word(BbcBasicDialect.BasicStack))
+            int size = Math.Min(255, text.Length + (text.Length >= Spare ? Spare : 0));
+            int heap = Word(BbcBasicDialect.Heap);
+            if (allocated == 0 || start + allocated != heap) { start = heap; }
+            if (start + size > Word(BbcBasicDialect.BasicStack))
             {
                 throw new InvalidOperationException("No room: there is no room on the heap for the string.");
             }
 
-            BasicProgram.WriteWord(_memory, BbcBasicDialect.Heap, start + text.Length);
+            BasicProgram.WriteWord(_memory, BbcBasicDialect.Heap, start + size);
             BasicProgram.WriteWord(_memory, address, start);
-            _memory.Write(address + 2, (byte)text.Length);
+            _memory.Write(address + 2, (byte)size);
         }
 
         for (int index = 0; index < text.Length; index++) { _memory.Write(start + index, text[index]); }

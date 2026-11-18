@@ -58,8 +58,8 @@ JIFFIES_PER_DAY = 24 * 60 * 60 * 60 + 1
 ;; The 6502's BIT absolute opcode, which as a data byte makes the next two bytes its operand, skipping them.
 BIT_ABSOLUTE = $2C
 
-TAPE_HEADER_LEADER = $69    ;; A header's leader, in groups of 80 pulses: about 2 seconds.
-TAPE_DATA_LEADER = $14      ;; A data block's leader, in groups of 80 pulses.
+TAPE_HEADER_LEADER = $69    ;; A header's leader, for <CHECKSUM>: <WRTZ> writes one group of short pulses more than this.
+TAPE_DATA_LEADER = $14      ;; A data block's leader, for <CHECKSUM>: <WRTZ> writes one group of short pulses more than this.
 
 MON_COMMAND_L = 6           ;; The index of L in <CMDS>, which <S0> leaves in <WORKA>.
 MON_COMMAND_S = 7           ;; The index of S in <CMDS>.
@@ -988,8 +988,8 @@ OPEN_1:
 OP160:
     ldy #MS4 - MSG1
 
-;; Gives a kernal error: closes all files, prints "?" and the message, and goes on through BASIC's <TYPERR>,
-;; which prints " ERROR".
+;; Gives a kernal error: forgets all files (<CLALL>, which closes none, so a cassette's buffer is not written and no
+;; device is sent CLOSE), prints "?" and the message, and goes on through BASIC's <TYPERR>, which prints " ERROR".
 ;; In: Y = the message's offset in <MSG1>
 ERMSG:
     jsr CLALL
@@ -2155,14 +2155,17 @@ WRNC_1:
 
 ;; Writes a leader of short pulses, as the interrupt handler before each copy of a block.
 ;;
-;; Groups of 80 pulses repeat <CHECKSUM> times; then <WRTN> writes the copy.
+;; It counts pulses down in <PASSES>, a group ending as the count reaches zero, so each group after the first is 256
+;; pulses; only <WRNC> seeds a first group of 80, the gap after a copy. Groups go on until <CHECKSUM>, counted down
+;; through zero, goes negative; then <WRTN> writes the copy. A header's first leader is 27,136 pulses, about 9.5
+;; seconds, and a data block's 5,376.
 WRTZ:
     lda #$78
     jsr WRT1
     bne WRTS_5
     dec PASSES
     bne WRTS_5
-    jsr NEWCH                               ; a group of 80 pulses done
+    jsr NEWCH                               ; a group of pulses done
     dec CHECKSUM
     bpl WRTS_5
     ldx #IRQV_WRITE

@@ -82,6 +82,22 @@ internal static class KeyMap
             [Key.Home] = 31,
             [Key.Escape] = 1
         },
+        ["pet"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 20,
+            [Key.Delete] = 20,
+            [Key.Insert] = 148,
+            [Key.Left] = 157,
+            [Key.Right] = 29,
+            [Key.Up] = 145,
+            [Key.Down] = 17,
+            [Key.Home] = 19,
+            [Key.Escape] = 3,
+
+            // The business keyboard's TAB; the graphics keyboard has none and ignores it.
+            [Key.Tab] = 9
+        },
         ["altair"] = new()
         {
             [Key.Enter] = 13,

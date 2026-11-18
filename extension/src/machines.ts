@@ -36,6 +36,10 @@ export interface Machine {
     diskFormats: string[];
     /** The tapes it plays. */
     tapeFormats: string[];
+    /** The launch option a tape it starts with goes in; cassette unless it says. */
+    tapeOption?: string;
+    /** The programs a program launch loads, as file extensions without the dot; bin unless it says. */
+    programFormats?: string[];
     /** The BASIC dialects a basic launch runs on it. */
     basicDialects: string[];
     /** The disk a basic launch boots for its BASIC, as the open dialog asks for it; none when BASIC is in ROM. */
@@ -125,6 +129,53 @@ const cocoDisk: MachineChoice = {
     ],
     default: false
 };
+
+const petRam: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "8 KB", value: 8 },
+        { label: "4 KB", value: 4 },
+        { label: "16 KB", value: 16 },
+        { label: "32 KB", value: 32 }
+    ],
+    default: 8
+};
+
+const petSound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "Speaker", detail: "The VIA's CB2, as a speaker on the user port plays it", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
+
+// The 4000 series came with 32K, or 16K as the 4016.
+const pet4032Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "32 KB", detail: "The 4032", value: 32 },
+        { label: "16 KB", detail: "The 4016", value: 16 },
+        { label: "8 KB", value: 8 }
+    ],
+    default: 32
+};
+
+const petSnow: MachineChoice = {
+    option: "snow",
+    label: "Snow",
+    values: [
+        { label: "Snow", detail: "Video RAM touched while a line is drawn shows as snow, as on the 2001's board", value: true },
+        { label: "No snow", value: false }
+    ],
+    default: true
+};
+
+// The 2001 with BASIC 2 launches without snow unless snow is asked for, so its choice starts off.
+const petSnowOff: MachineChoice = { ...petSnow, default: false };
 
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
@@ -470,6 +521,61 @@ export const machines: readonly Machine[] = [
             cocoSound
         ]
     },
+    // Without dumps, the PETs build BASIC, the screen editor and the kernal from the SDK's sources. A tape starts in
+    // the built-in Datasette, cassette #1, with PLAY down; a .prg goes in as the tape SAVE writes.
+    {
+        id: "pet2001-basic2",
+        label: "Commodore PET 2001 (BASIC 2)",
+        detail: "6502, BASIC 2 (the 2001-N's ROMs), 8 KB and the built-in Datasette",
+        configuration: { machine: "pet", model: "pet2001-basic2" },
+        diskFormats: [],
+        tapeFormats: ["tap", "wav", "prg"],
+        tapeOption: "cassette1",
+        programFormats: ["prg", "bin"],
+        basicDialects: ["petbasic"],
+        dos: false,
+        choices: [petRam, petSound, petSnowOff]
+    },
+    {
+        id: "pet2001",
+        label: "Commodore PET 2001",
+        detail: "6502, BASIC 1, 8 KB, the chiclet keyboard and the built-in Datasette",
+        configuration: { machine: "pet", model: "pet2001" },
+        diskFormats: [],
+        tapeFormats: ["tap", "wav", "prg"],
+        tapeOption: "cassette1",
+        programFormats: ["prg", "bin"],
+        basicDialects: ["petbasic"],
+        dos: false,
+        choices: [petRam, petSound, petSnow]
+    },
+    // BASIC 4's PETs come with a 4040 dual drive as device 8, when its ROMs are found; a disk goes in its drive 0.
+    {
+        id: "pet4032",
+        label: "Commodore PET 4032",
+        detail: "6502, BASIC 4 with its disk commands, 32 KB, the graphics keyboard and a 4040 disk drive",
+        configuration: { machine: "pet", model: "pet4032" },
+        diskFormats: ["d64", "g64"],
+        tapeFormats: ["tap", "wav", "prg"],
+        tapeOption: "cassette1",
+        programFormats: ["prg", "bin"],
+        basicDialects: ["petbasic"],
+        dos: false,
+        choices: [pet4032Ram, petSound]
+    },
+    {
+        id: "pet4032-business",
+        label: "Commodore PET 4032 (business keyboard)",
+        detail: "6502, BASIC 4 with its disk commands, 32 KB, the business keyboard and a 4040 disk drive",
+        configuration: { machine: "pet", model: "pet4032-business" },
+        diskFormats: ["d64", "g64"],
+        tapeFormats: ["tap", "wav", "prg"],
+        tapeOption: "cassette1",
+        programFormats: ["prg", "bin"],
+        basicDialects: ["petbasic"],
+        dos: false,
+        choices: [pet4032Ram, petSound]
+    },
     // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
     {
         id: "altair",
@@ -549,6 +655,7 @@ export function launchConfiguration(machine: Machine, name = `${machine.label} (
 const models: Record<string, Record<string, string>> = {
     apple2: { "": "iie-enhanced", enhanced: "iie-enhanced", original: "iie" },
     coco: { "": "coco2" },
+    pet: { "": "pet2001-basic2" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
     "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
 };

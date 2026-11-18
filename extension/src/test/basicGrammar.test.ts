@@ -21,7 +21,8 @@ before(async () => {
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
-        "source.retrocore-mbasic": "mbasic.tmLanguage.json"
+        "source.retrocore-mbasic": "mbasic.tmLanguage.json",
+        "source.retrocore-petbasic": "petbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -122,6 +123,16 @@ test("MBASIC finds reserved words only set apart from names", () => {
     assert.ok(has(scopes("mbasic", line, "WEND"), "keyword.control"));
     assert.ok(has(scopes("mbasic", "30 FORI=1TO 9", "FORI"), "variable.other"), "FOR must be set apart");
     assert.ok(has(scopes("mbasic", "40 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not in strings, DATA or REM", () => {
+    assert.ok(has(scopes("petbasic", "10 INPUT#1,A$", "INPUT#"), "keyword"), "INPUT# is one word");
+    assert.ok(has(scopes("petbasic", "20 DOPEN#2,\"DATA\",D0", "DOPEN"), "keyword"));
+    assert.ok(has(scopes("petbasic", "30 DIRECTORY D0", "DIRECTORY"), "keyword"));
+    assert.ok(has(scopes("petbasic", "40 PRINT \"DIRECTORY\"", "DIRECTORY"), "string.quoted"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
+    assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

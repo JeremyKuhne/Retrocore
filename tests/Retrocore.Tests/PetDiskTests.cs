@@ -72,11 +72,14 @@ public class PetDiskTests
         }
 
         while (machine.Keyboard.IsTyping) { machine.Run(TimeSpan.FromSeconds(0.05)); }
+
+        // A command longer than a row wraps, so the echo's last row holds only the command's last 40 or fewer.
+        string tail = command[((command.Length - 1) / 40 * 40)..];
         for (int tenth = 0; tenth < seconds * 10; tenth++)
         {
             machine.Run(TimeSpan.FromSeconds(0.1));
             string[] screen = machine.ReadTextScreen();
-            int line = Array.FindLastIndex(screen, text => text.TrimEnd().EndsWith(command, StringComparison.Ordinal));
+            int line = Array.FindLastIndex(screen, text => text.TrimEnd().EndsWith(tail, StringComparison.Ordinal));
             if (line >= 0 && screen.Skip(line + 1).Any(text => text.StartsWith("READY.", StringComparison.Ordinal)))
             {
                 return screen;

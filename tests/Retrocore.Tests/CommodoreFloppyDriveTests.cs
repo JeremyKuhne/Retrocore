@@ -41,6 +41,37 @@ public class CommodoreFloppyDriveTests
     }
 
     /// <summary>
+    ///  A Datasette recording writes a pulse at each rise of the write line; the record tab broken off while RECORD is
+    ///  down lets the key up, and the tape and its position stay as they were.
+    /// </summary>
+    [TestMethod]
+    public void BreakingTheTabStopsARecording()
+    {
+        PetDatasette deck = new(1);
+        CommodoreTape tape = new();
+        deck.Insert(tape, "blank", "TAP", changed: true);
+        deck.Record();
+        Pulse(deck, 100);
+        Pulse(deck, 100);
+        Pulse(deck, 100);
+        tape.Pulses.Should().Equal(100, 100);
+        int position = deck.Position;
+
+        tape.IsWriteProtected = true;
+        Pulse(deck, 100);
+        deck.Mode.Should().Be(TapeMode.Stopped);
+        tape.Pulses.Should().HaveCount(2);
+        deck.Position.Should().Be(position);
+
+        // A rise after the given cycles, the motor running.
+        static void Pulse(PetDatasette deck, int cycles)
+        {
+            for (int cycle = 1; cycle < cycles; cycle++) { deck.Tick(motor: true, write: false); }
+            deck.Tick(motor: true, write: true);
+        }
+    }
+
+    /// <summary>
     ///  The sound output takes a rate of a sample a CPU cycle at most.
     /// </summary>
     /// <param name="rate">The rate.</param>

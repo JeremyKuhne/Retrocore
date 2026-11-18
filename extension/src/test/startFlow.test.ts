@@ -93,3 +93,9 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.ok(!isUsable({ machineId: "apple2-iie", kind: "source", options: {} }), "a source needs its file");
     assert.equal(machines.length, 21);
 });
+
+test("a BBC Micro's disk goes in drive 0 for SHIFT-BREAK, which the launch does not press", () => {
+    const disk = (id: string) => runChoices(machineById(id)!).find(choice => choice.kind === "disk")?.detail;
+    assert.equal(disk("bbcb"), "Puts it in drive 0, for SHIFT-BREAK to boot");
+    assert.equal(disk("apple2-iie-enhanced"), "Boots it from the first drive");
+});

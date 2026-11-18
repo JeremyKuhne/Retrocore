@@ -60,7 +60,9 @@ export function runChoices(machine: Machine): RunChoice[] {
     }
 
     if (machine.diskFormats.length !== 0) {
-        choices.push({ kind: "disk", label: "A disk image", detail: "Boots it from the first drive", extensions: machine.diskFormats });
+        // The BBC Micro boots a disk only with SHIFT-BREAK, which the launch does not press for it.
+        const detail = machine.configuration.machine === "bbc" ? "Puts it in drive 0, for SHIFT-BREAK to boot" : "Boots it from the first drive";
+        choices.push({ kind: "disk", label: "A disk image", detail, extensions: machine.diskFormats });
     }
 
     if (machine.tapeFormats.length !== 0) {

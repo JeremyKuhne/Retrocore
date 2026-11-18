@@ -142,6 +142,13 @@ and Color BASIC do; the [extension's README](../extension/README.md#basic-progra
 | `BbcOracleTests` (Conformance) | Instruction traces against MAME's `bbcb` through [`tools/BbcOracle.lua`](../tools/BbcOracle.lua): from power-on to BASIC's prompt, and a DFS catalogue. |
 | [`tools/Test-BbcDap.mjs`](../tools/Test-BbcDap.mjs) | The debugger end to end: stepping from the sample into `Mos.asm` and out, a breakpoint in `BbcBasic.asm` that a typed PRINT stops at, a BBC BASIC file on the BASIC thread (stepping, a PROC's frame, variables and the FOR loop, watch expressions, setting a string, Step Out, STOP and the program as text), the reset stop, a BASIC file on the Model A, and the Model B saving a program to an SSD that saves to its image; the last parts on the dumps when they are there and otherwise on the sources. |
 
-The machine, tape, disk and source tests and the DAP script run on the dumps when they are there and otherwise on
-the ROMs built from the sources where they need them; only the comparisons with the dumps and with MAME are
-inconclusive without them.
+What each test needs:
+
+- **Nothing outside the repository:** the sources' digests and documentation lint, `Crtc6845Tests`,
+  `Sn76489Tests`, `AcornTapeTests`, `AcornDiskImageTests`, `BbcBasicDialectTests` (on the ROMs built from the
+  sources), and the DAP script, which runs on the built ROMs when the dumps are missing. These are what CI runs.
+- **MAME's `bbcb` ROM set** (`RETROCORE_BBC_ROMS`): `BbcMachineTests`, the tape and disk tests that use its machine,
+  the source tests that compare with the dumps or run a machine from each build. Without it they are inconclusive,
+  not passed.
+- **MAME's `bbcb_cass` and `bbcb_flop` software lists** (in `bbc-media`): the cases on the Welcome tape and disk.
+- **MAME itself:** `BbcOracleTests`.

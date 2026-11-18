@@ -75,7 +75,7 @@ public static class G64Format
                 throw new InvalidDataException($"The G64 image's half-track {position} runs past its end.");
             }
 
-            int zone = speed <= 3 ? (int)speed : SpeedOf(image, (int)speed, length, position);
+            int zone = speed <= 3 ? (int)speed : SpeedOf(image, speed, length, position);
             disk.SetTrack(position, image.Slice((int)offset + 2, length), length * 8, zone);
         }
 
@@ -125,13 +125,15 @@ public static class G64Format
     }
 
     // The zone of a track's bytes, from a speed table of a zone for each byte, four to a byte; all must share one.
-    private static int SpeedOf(ReadOnlySpan<byte> image, int table, int length, int position)
+    private static int SpeedOf(ReadOnlySpan<byte> image, uint offset, int length, int position)
     {
-        if (table + ((length + 3) / 4) > image.Length)
+        // Checked as a long, so a table offset past the file, however large, is a file cut short.
+        if (offset + (long)((length + 3) / 4) > image.Length)
         {
             throw new InvalidDataException($"The G64 image's speed table for half-track {position} runs past its end.");
         }
 
+        int table = (int)offset;
         int zone = -1;
         for (int index = 0; index < length; index++)
         {

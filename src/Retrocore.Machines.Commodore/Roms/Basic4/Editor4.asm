@@ -478,9 +478,10 @@ BKLN_2:
 ;;
 ;; Printable characters are stored as their screen codes. RETURN (or shifted RETURN) moves to the next line and
 ;; ends quote mode, inserts and reversing. The cursor keys, HOME, CLR, RVS, DEL and INST do their jobs, except in
-;; quote mode or while inserts are pending, where they print as reversed characters instead; DEL deletes in quote
-;; mode too, and prints reversed only while inserts are pending. The business editor
-;; also takes TAB, which moves to the next tab stop, and shifted TAB, which sets or clears one at the cursor.
+;; quote mode or while inserts are pending, where they print as reversed characters instead. Two keys differ: DEL
+;; deletes in quote mode too, printing reversed only while inserts are pending, and INST inserts while inserts are
+;; pending, printing reversed only in quote mode. The business editor also takes TAB, which moves to the next tab
+;; stop, and shifted TAB, which sets or clears one at the cursor.
 ;; In: A = the character
 ;; Keeps: A, X, Y
 PRT:

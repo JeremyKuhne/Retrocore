@@ -145,7 +145,12 @@ try {
     await type("SAVE \"PROG\"\r");
     await screen(screen => screen.includes("WRITING PROG") && ready(screen), "the save");
     await request("retro/device", { id: "cassette1", action: "stop" });
-    const tapeDevice = (await request("retro/devices")).devices.find(device => device.id === "cassette1");
+
+    // RECORD again records on, onto the same tape, so the unsaved recording is not asked about.
+    const resumed = await request("retro/device", { id: "cassette1", action: "record", supportsRetrocoreMedia: true });
+    assert.notEqual(resumed?.outcome, "changed", JSON.stringify(resumed));
+    await request("retro/device", { id: "cassette1", action: "stop" });
+    const tapeDevice =(await request("retro/devices")).devices.find(device => device.id === "cassette1");
     assert.equal(tapeDevice.media.changed, true, "a recording is a changed tape");
     const saved = await request("retro/device", { id: "cassette1", action: "save", path: tape, supportsRetrocoreMedia: true });
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));

@@ -654,8 +654,9 @@ RECEIVE_TUBE_DATA_END:
 
 ;; Ends a data frame received: finishes a PEEK's or machine type's reply, or sends the final acknowledgement.
 ;;
-;; A reply ends the transmission that asked for it, with the transmit control block's end address set to the
-;; address after the last byte received.
+;; A reply ends the transmission that asked for it. For a reply across the Tube, the transmit control block's end
+;; address is set to the address after the last byte received; for one into memory it stays as it was asked for, so
+;; it is not the length received.
 ;; Entry: SEND_FINAL_ACK = sends the final acknowledgement
 ;; See: <FINISH_TUBE_TRANSFER>, <TX_SUCCEEDED>, <FINAL_ACK_SENT>
 DATA_FRAME_RECEIVED:

@@ -304,12 +304,14 @@ NFS_ERROR_OFFSETS:
     .byte NO_REPLY_MESSAGE - NFS_ERRORS         ; 8: No reply
     .assert LINE_JAMMED_MESSAGE = NFS_ERRORS, "Error offset 0 is the zero that ends the copyright string."
 
-;; Four bytes nothing in the ROM reads: 1, 0, &60 and 3.
+;; The reply to the machine type immediate operation (&88): the machine type, 1 and 0, and the NFS's version, &60
+;; and 3 (3.60, as *HELP prints it), which <RECEIVE_MACHINE_TYPE> sends.
 ;;
-;; The last two read as &0360, the NFS's version, 3.60, as *HELP prints it; the last is also the place of an entry 0
-;; in <NFS_DISPATCH_LOW>, which no call uses.
-NFS_UNUSED_BYTES:
+;; The last byte is also the place of an entry 0 in <NFS_DISPATCH_LOW>, which no call uses.
+;; See: <ECONET_MACHINE_TYPE_BYTES>
+MACHINE_TYPE_REPLY:
     .byte $01, $00, $60, $03
+    .assert MACHINE_TYPE_REPLY = ECONET_MACHINE_TYPE_BYTES, "The machine type reply is where Econet.asm sends it from."
 
 ;; The low bytes of the addresses, less one, of the routines <NFS_DISPATCH> enters: entries 1-37.
 ;;
@@ -592,7 +594,8 @@ NFS_SERVICE_EXIT:
 
 ;; Service 4, an unrecognised command: carries out *ROFF and *NET.
 ;; In: Y = the offset of the command at (TEXT_POINTER)
-;; Out: NFS_SERVICE_RESULT = 0 if it was one of them, Y = as on entry
+;; Out: NFS_SERVICE_RESULT = 0 if it was one of them; Y = as on entry for any other command, while a command it
+;;   carries out may change it
 ;; See: <ROFF_COMMAND>, <NFS_COMMAND>
 NFS_SERVICE_UNRECOGNISED_COMMAND:
     ldx #NFS_ROFF_NAME - NFS_ROM_VERSION

@@ -375,7 +375,7 @@ NFS_OSFILE_INFO_RETURN:
 ;; zero page block with a zero top byte. Writing the pointer sets the handle's bit in NFS_EOF_FLAGS. Other values of A
 ;; do nothing. An error the server returns is raised.
 ;; In:    A = the reason, X = the zero page control block, Y = the handle, or 0
-;; Out:   A = 0, or the filing system's number for Y = 0, A = 0; the call's A for A from 3 up
+;; Out:   A = 0, or for Y = 0 the filing system's number for A = 0 and 1 for A = 2; the call's A for A from 3 up
 ;; Keeps: X, Y
 NFS_OSARGS:
     jsr SAVE_CALL_REGISTERS

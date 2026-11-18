@@ -454,7 +454,8 @@ MAKE_MIXED_BYTE:
     sta DFS_TOP_BITS
     rts
 
-;; *ENABLE: enables the next command, as *BACKUP and *DESTROY need, or they give "Not enabled".
+;; *ENABLE: lets the next command go ahead without asking: without it, *BACKUP and *DESTROY ask "Go (Y/N) ?"
+;; first, and go on only for Y. *DESTROY still asks again after listing the files.
 ;;
 ;; OSFSC 8 counts the 1 down as each command starts, so it lasts until the command after next starts.
 ENABLE_COMMAND:

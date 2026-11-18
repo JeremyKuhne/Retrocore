@@ -88,7 +88,8 @@ NFS_OSWORD_14_INDEX = OS_COMMAND_WORKSPACE + 3 ;; the offset of OSWORD &14's nex
 ;; - 0: the block, from byte 2, is a file server command. Bytes 2 and 4-6 are filled in with the reply port, &90,
 ;;   and the three handles from NFS_URD, so the caller gives the function code in byte 3, the data from byte 7
 ;;   and in byte 1 the offset of the end of the command. The command goes to the file server's port &99 through
-;;   <NFS_COMMAND_BLOCK>, and the reply comes back over the block, from byte 2. ESCAPE can abandon the wait.
+;;   <NFS_COMMAND_BLOCK>, and the reply comes back over the block, from byte 2. ESCAPE can abandon the transmission's
+;;   retries, but not the wait for the reply, which ends only with the reply or "No reply".
 ;; - 1: bytes 1 and 2 are a station and network; the text from byte 3, up to a carriage return (sent) or a zero (not
 ;;   sent), goes to that station one character at a time, each as OS procedure call 0, which puts it in that
 ;;   station's keyboard buffer. A short pause follows each.
@@ -668,7 +669,8 @@ SEND_PRINT_BUFFER:
 ;; The data transfers to the file server number their blocks with a bit for each file in NFS_SEQUENCE_BITS; the
 ;; network printer numbers them with bit 7 of NFS_PRINT_STATE, already in the control byte. The acknowledgement is
 ;; received over the same block, on port &90 for the file server or &D1 for the printer server. ESCAPE can abandon
-;; the wait when NFS_ESCAPE_ENABLE allows it.
+;; the transmission's retries when NFS_ESCAPE_ENABLE allows it, but not the wait for the acknowledgement, which
+;; ends only with one or "No reply".
 ;; In: A = the file's bit in NFS_SEQUENCE_BITS, or 0 for the printer, X/Y = the control block
 ;; Out: A = NFS_SEQUENCE_BITS with that bit flipped
 ;; Uses: X, Y, NFS_BLOCK_POINTER

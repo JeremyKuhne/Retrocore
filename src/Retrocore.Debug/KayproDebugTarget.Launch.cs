@@ -43,20 +43,15 @@ internal sealed partial class KayproDebugTarget
             FastDisk = args.Bool("fastDisk") ?? true
         };
 
-        if (args["disks"] is JsonArray disks)
+        string?[] disks = args.ImagePaths("disks", "cpm.img");
+        if (disks.Length > machine.Drives.Count)
         {
-            if (disks.Count > machine.Drives.Count)
-            {
-                throw new ArgumentException($"The Kaypro II has {KayproMachine.DriveCount} drives.");
-            }
+            throw new ArgumentException($"The Kaypro II has {KayproMachine.DriveCount} drives.");
+        }
 
-            for (int drive = 0; drive < disks.Count; drive++)
-            {
-                if (disks[drive] is JsonValue value && value.GetValue<string>() is { } disk)
-                {
-                    target.Insert(drive, disk);
-                }
-            }
+        for (int drive = 0; drive < disks.Length; drive++)
+        {
+            if (disks[drive] is { } disk) { target.Insert(drive, disk); }
         }
 
         machine.Reset();

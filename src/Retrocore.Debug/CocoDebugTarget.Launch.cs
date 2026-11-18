@@ -75,7 +75,7 @@ internal sealed partial class CocoDebugTarget
         if (string.IsNullOrWhiteSpace(directory)) { directory = null; }
         CocoRoms roms;
         CocoDiskController? disk = null;
-        JsonNode?[] disks = args["disks"] is JsonArray given ? [.. given] : [];
+        string?[] disks = args.ImagePaths("disks", "game.dsk");
         if (directory is null)
         {
             // Without dumps, the ROMs are built from the SDK's sources: Color, Extended and Disk BASIC, or the
@@ -130,7 +130,7 @@ internal sealed partial class CocoDebugTarget
         CocoConfiguration configuration,
         CocoRoms roms,
         CocoDiskController? disk,
-        JsonNode?[] disks)
+        string?[] disks)
     {
         CocoMachine machine = new(configuration, roms, disk);
         CocoDebugTarget target = new(machine) { FastCassette = args.Bool("fastCassette") ?? true };
@@ -148,7 +148,7 @@ internal sealed partial class CocoDebugTarget
 
         for (int drive = 0; drive < disks.Length; drive++)
         {
-            if (disks[drive] is JsonValue value && value.GetValue<string>() is { } image)
+            if (disks[drive] is { } image)
             {
                 target.Insert(drive, image);
             }

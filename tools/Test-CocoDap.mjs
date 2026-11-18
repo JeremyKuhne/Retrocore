@@ -160,6 +160,13 @@ try {
     await request("continue", { threadId: 1 });
     await screen(text => text.includes("EXTENDED COLOR BASIC 1.1") && text.includes("HELLO FROM THE 6809"), "the sample on the SDK's BASIC");
 
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    await assert.rejects(request("launch", { machine: "coco", model: "coco2", sdkRoms, disks: disk }), /disks must be a list/);
+    await assert.rejects(
+        request("launch", { machine: "coco", model: "coco2", sdkRoms, disks: [null, { path: disk }] }),
+        /disks\[1\] must be an image's path/);
+
     // With a disk, Disk BASIC from the SDK's source takes the console out hook: stepping from PUTCHR through the hook
     // goes into DVEC3 in DiskBasic.asm.
     events.length = 0;

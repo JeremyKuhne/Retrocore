@@ -259,7 +259,8 @@ LISTO_COMMAND:
 ;; inside strings. To indent, LIST counts the FOR, NEXT, REPEAT and UNTIL tokens as it prints them, from zero at the
 ;; start of the listing, so a NEXT or UNTIL is indented as the lines inside its loop are. The program is checked
 ;; first (a damaged one prints "Bad program" and returns to immediate mode), and listing stops at ESCAPE. LIST
-;; followed by O is <LISTO_COMMAND>. LIST ends in immediate mode, so it also ends a program that uses it.
+;; followed by O is <LISTO_COMMAND>. LIST is an immediate command: EXECUTE_STATEMENT dispatches only tokens from &CF,
+;; and LIST's is &C9, so 10 LIST in a program is a Syntax error. It ends in immediate mode.
 ;; In: Y = the offset of the LIST token, PTR_A_OFFSET = the offset after it
 ;; Errors: 16 = "Syntax error", 17 = "Escape"
 ;; Uses: A, X, Y, INT_A, LIST_FOR_DEPTH, LIST_REPEAT_DEPTH, LIST_END, LIST_QUOTE_FLAG, FP_B_EXPONENT, FP_B_MANTISSA

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Buffers.Binary;
 using System.IO.Compression;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
@@ -193,6 +194,28 @@ public class AcornTapeTests
         tones.Gap(1_440_000_000);
         tones.Gap(1_440_000_000);
         tones.HalfCycles.Should().Equal(1_440_000_000, 1_440_000_000);
+    }
+
+    /// <summary>
+    ///  A &amp;0116 gap longer than an int's units reads as whole silences that keep its length; one longer than 30
+    ///  days is bad data.
+    /// </summary>
+    [TestMethod]
+    public void LongFloatGapsKeepTheirLength()
+    {
+        static byte[] Gap(float seconds)
+        {
+            byte[] chunk = [0x16, 0x01, 4, 0, 0, 0, 0, 0, 0, 0];
+            BinaryPrimitives.WriteSingleLittleEndian(chunk.AsSpan(6), seconds);
+            return [.. "UEF File!\0"u8, 10, 0, .. chunk];
+        }
+
+        AcornTape tape = UefFormat.Read(Gap(500_000));
+        tape.HalfCycles.Sum(length => (long)length).Should().Be(500_000L * AcornTape.UnitsPerSecond);
+        tape.HalfCycles.Should().OnlyContain(length => length > 0);
+
+        Action tooLong = () => UefFormat.Read(Gap(31 * 24 * 60 * 60));
+        tooLong.Should().Throw<InvalidDataException>();
     }
 
     /// <summary>

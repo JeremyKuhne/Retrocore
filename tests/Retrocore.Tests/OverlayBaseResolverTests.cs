@@ -104,4 +104,25 @@ public sealed class OverlayBaseResolverTests
         parsedName.Should().Be(name);
         parsedValue.Should().Be(value);
     }
+
+    /// <summary>
+    ///  A predefined symbol assembles at any 64-bit value, the most negative too, used or not.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <param name="top">Its top byte.</param>
+    [TestMethod]
+    [DataRow(long.MinValue, 0x80)]
+    [DataRow(long.MaxValue, 0x7F)]
+    [DataRow(-1L, 0xFF)]
+    public void PredefinedSymbolsTakeAnyValue(long value, int top)
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
+        {
+            PredefinedSymbols = new Dictionary<string, long> { ["MASK"] = value, ["UNUSED"] = value }
+        };
+
+        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(".byte (MASK >> 56) & $FF\n", "define.asm"), options);
+        result.Success.Should().BeTrue(string.Join('\n', result.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        result.Sections[0].Bytes.Span[0].Should().Be((byte)top);
+    }
 }

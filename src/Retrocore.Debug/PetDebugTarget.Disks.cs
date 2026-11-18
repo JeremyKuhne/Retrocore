@@ -94,6 +94,12 @@ internal sealed partial class PetDebugTarget
         string model = args.String("diskModel") ?? "4040";
         if (!DiskModels.Contains(model)) { throw new ArgumentException("diskModel is 4040 or 2040."); }
 
+        // A single path, or anything but a list, is a mistake, not a launch with no disks.
+        if (args["disks"] is { } named && named is not JsonArray && named.GetValueKind() != JsonValueKind.Null)
+        {
+            throw new ArgumentException("disks must be a list of images' paths, such as [\"game.d64\"].");
+        }
+
         JsonNode?[] disks = args.Array("disks") is { } given ? [.. given] : [];
         List<int> units = [];
         if (args.Array("diskUnits") is { } numbers)

@@ -2382,7 +2382,7 @@ PUTP:
 ;; Shows bytes from <STAL>, each after a space.
 ;; In: A = the count
 ;; Out: STAL = past them
-;; Uses: A, Y
+;; Uses: A, X, Y
 DM:
     sta WORKB
     ldy #$00

@@ -1541,7 +1541,7 @@ JTP20:
 ;; number, waits for it, checking STOP, and prints OK.
 ;;
 ;; Entry: CS30 = prints the message at Y, then ON TAPE # and waits
-;; Uses: A, Y
+;; Uses: A, X, Y
 CSTE1:
     jsr CS10                        ; PLAY already down?
     beq CS10_2
@@ -1582,7 +1582,7 @@ CS10_2:
 
 ;; Waits for the current cassette's keys before writing: as <CSTE1>, asking for PLAY & RECORD.
 ;;
-;; Uses: A, Y
+;; Uses: A, X, Y
 CSTE2:
     jsr CS10
     beq CS10_2

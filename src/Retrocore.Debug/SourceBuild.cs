@@ -19,6 +19,7 @@ internal static class SourceBuild
     /// <param name="cpu">The CPU, as <c>.cpu</c> names it.</param>
     /// <param name="origin">The load address when no linker configuration places the code.</param>
     /// <param name="linkerConfiguration">An optional ld65-style linker configuration file.</param>
+    /// <param name="symbols">Symbols defined before the source, as a build's switches; null for none.</param>
     /// <returns>The assembly result.</returns>
     /// <exception cref="InvalidDataException">The source has errors, listed in the message.</exception>
     internal static AssemblyResult Assemble(
@@ -26,7 +27,8 @@ internal static class SourceBuild
         AssemblyDialect? dialect,
         string cpu,
         int origin,
-        string? linkerConfiguration)
+        string? linkerConfiguration,
+        IReadOnlyDictionary<string, long>? symbols = null)
     {
         string path = Path.GetFullPath(source);
         AssemblyOptions options = new(cpu, origin, 0x10000 - origin)
@@ -34,6 +36,7 @@ internal static class SourceBuild
             Dialect = dialect ?? AssemblyDialect.Native,
             SourceResolver = new FileAssemblySourceResolver(),
             SdkPaths = [SdkModules.SdkDirectory],
+            PredefinedSymbols = symbols is null ? [] : new Dictionary<string, long>(symbols),
             LinkerConfiguration = linkerConfiguration is null
                 ? null
                 : new(File.ReadAllText(linkerConfiguration), Path.GetFullPath(linkerConfiguration))

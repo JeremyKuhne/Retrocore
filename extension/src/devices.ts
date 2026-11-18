@@ -875,7 +875,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             on.show(body);
             const id = body.device ?? "";
             const generation = body.generation;
-            const device = body.devices?.find(candidate => candidate.id === id) ?? tree.devices.find(candidate => candidate.id === id);
+            const device = body.devices?.find(candidate => candidate.id === id) ?? on.devices().find(candidate => candidate.id === id);
             const name = device?.name ?? id;
             // The file the save was for: the one chosen in Save As, or the disk's own image.
             const target = typeof current.path === "string" ? current.path : device?.media?.source?.path ?? device?.media?.label;
@@ -981,7 +981,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     };
     // Revert to Image reads the image as it is now in place of the disk, without asking: Undo puts the disk back.
     const revert = async (on: Target, id: string, generation?: number): Promise<boolean> => {
-        const device = tree.devices.find(candidate => candidate.id === id);
+        const device = on.devices().find(candidate => candidate.id === id);
         const file = path.basename(device?.media?.source?.path ?? device?.media?.label ?? "its image");
         const differences = device?.media?.changed ? await differencesOf(on, id) : undefined;
         try {

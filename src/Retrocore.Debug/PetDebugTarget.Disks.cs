@@ -133,7 +133,13 @@ internal sealed partial class PetDebugTarget
         List<Cbm4040> added = [.. units.Select(address => _machine.AddDisk(driveRoms, address))];
         for (int index = 0; index < disks.Length; index++)
         {
-            if (disks[index] is not JsonValue value || value.GetValueKind() != JsonValueKind.String) { continue; }
+            // Null leaves a drive empty; anything but a path is a mistake, not a disk to leave out unsaid.
+            if (disks[index] is null) { continue; }
+            if (disks[index] is not JsonValue value || value.GetValueKind() != JsonValueKind.String)
+            {
+                throw new ArgumentException($"disks[{index}] must be an image's path, or null to leave the drive empty.");
+            }
+
             Cbm4040 unit = added[index / 2];
             Insert(index % 2 == 0 ? unit.Drive0 : unit.Drive1, value.GetValue<string>());
         }

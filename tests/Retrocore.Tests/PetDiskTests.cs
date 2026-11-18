@@ -73,6 +73,13 @@ public class PetDiskTests
 
         while (machine.Keyboard.IsTyping) { machine.Run(TimeSpan.FromSeconds(0.05)); }
 
+        // A numbered line is stored and BASIC goes back to its input without a new READY., so it is done once typed.
+        if (command.Length > 0 && char.IsAsciiDigit(command[0]))
+        {
+            machine.Run(TimeSpan.FromSeconds(0.2));
+            return machine.ReadTextScreen();
+        }
+
         // A command longer than a row wraps, so the echo's last row holds only the command's last 40 or fewer.
         string tail = command[((command.Length - 1) / 40 * 40)..];
         for (int tenth = 0; tenth < seconds * 10; tenth++)

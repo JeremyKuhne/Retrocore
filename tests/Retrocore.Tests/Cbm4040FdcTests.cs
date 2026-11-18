@@ -99,7 +99,7 @@ public class Cbm4040FdcTests
 
         int sectors = GcrLayout.SectorsOn(track);
         int offset = GcrLayout.FirstSector(track) * 256;
-        int good = 0;
+        HashSet<int> good = [];
         for (int index = 0; index + 1 < blocks.Count; index++)
         {
             List<byte> header = blocks[index];
@@ -110,10 +110,10 @@ public class Cbm4040FdcTests
             data.Count.Should().BeGreaterThan(257, $"sector {sector}'s data block is read whole");
             data[0].Should().Be(0x07);
             data.Skip(1).Take(256).Should().Equal(image.AsSpan(offset + (sector * 256), 256).ToArray(), $"sector {sector}");
-            good++;
+            good.Add(sector);
         }
 
-        good.Should().BeGreaterThanOrEqualTo(sectors);
+        good.Should().BeEquivalentTo(Enumerable.Range(0, sectors), "every sector reads, each counted once");
     }
 
     /// <summary>

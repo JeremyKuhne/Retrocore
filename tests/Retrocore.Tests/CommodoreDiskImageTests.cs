@@ -269,6 +269,11 @@ public class CommodoreDiskImageTests
         withTable[table + 10] = 0b10_10_11_10;
         Action read = () => G64Format.Read(withTable);
         read.Should().Throw<InvalidDataException>().WithMessage("*half-track 0 mixes speed zones 2 and 3*");
+
+        // A table offset past the file, even one too big for an int, is a file cut short.
+        BinaryPrimitives.WriteUInt32LittleEndian(withTable.AsSpan(12 + (image[9] * 4)), 0x9000_0000);
+        Action far = () => G64Format.Read(withTable);
+        far.Should().Throw<InvalidDataException>().WithMessage("*speed table for half-track 0 runs past its end*");
     }
 
     /// <summary>

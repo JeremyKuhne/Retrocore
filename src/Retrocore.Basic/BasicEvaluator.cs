@@ -360,6 +360,13 @@ public sealed partial class BasicEvaluator
     {
         string key = name.ToUpperInvariant();
         if (subscripts is null && _bound.TryGetValue(key, out BasicValue bound)) { return new(bound); }
+
+        // The PET's ST, TI, TI$, DS and DS$ are the machine's, not the variable table's, as MEM and TIME$ are elsewhere.
+        if (subscripts is null && _dialect is PetBasicDialect pet && pet.IsReservedVariable(name))
+        {
+            throw new FormatException($"{name} cannot be evaluated without running BASIC.");
+        }
+
         if (subscripts is null)
         {
             if (_variables.Find(name) is not { } variable)

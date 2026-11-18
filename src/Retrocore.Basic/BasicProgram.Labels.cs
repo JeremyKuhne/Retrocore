@@ -69,10 +69,31 @@ public sealed partial class BasicProgram
             }
 
             if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
-            // BASIC 1 skips spaces inside a reserved word, so R E M is a remark there too.
-            bool spaced = Spaced(dialect);
-            if (StartsWord(text, index, "REM", spaced)) { break; }
-            if (StartsWord(text, index, "DATA", spaced))
+            // BASIC 1 skips spaces inside a reserved word, so R E M is a remark there too. Its CRUNCH takes the first
+            // word in token order at each place and goes on past it, so the end of F O R and an E M after it are no REM.
+            if (Spaced(dialect))
+            {
+                (string? word, int length) = SpacedKeyword(dialect, text, index);
+                if (word is null) { continue; }
+                if (word == "REM") { break; }
+                if (word == "DATA")
+                {
+                    index = SkipData(text, index);
+                    continue;
+                }
+
+                if (Jump(dialect, text, index, out int jumped) is { } spacedJump)
+                {
+                    index = Targets(text, jumped, spacedJump, labels, references) - 1;
+                    continue;
+                }
+
+                index += length - 1;
+                continue;
+            }
+
+            if (StartsWord(text, index, "REM")) { break; }
+            if (StartsWord(text, index, "DATA"))
             {
                 index = SkipData(text, index);
                 continue;
@@ -246,6 +267,19 @@ public sealed partial class BasicProgram
         }
 
         return SpacedLength(text, index, word) >= 0;
+    }
+
+    // The first reserved word in token order at an index, spaces skipped inside it, as BASIC 1's CRUNCH finds it, and
+    // the characters it takes; none when the character there starts no word.
+    private static (string? Word, int Length) SpacedKeyword(BasicDialect dialect, string text, int index)
+    {
+        foreach (string keyword in dialect.Keywords)
+        {
+            int length = SpacedLength(text, index, keyword);
+            if (length > 0) { return (keyword, length); }
+        }
+
+        return (null, 0);
     }
 
     // Whether a dialect skips spaces inside reserved words, as BASIC 1's RESCON does.

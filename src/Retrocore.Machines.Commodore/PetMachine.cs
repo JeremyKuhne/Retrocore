@@ -42,6 +42,9 @@ public sealed class PetMachine : IMachine
         ArgumentNullException.ThrowIfNull(roms);
         Model = model;
         Bus = new(roms, model, ramKilobytes);
+
+        // The 2001's board shows snow; the later boards do not.
+        Bus.Video.Snow = model == PetModel.Pet2001;
         Processor = new(Bus, ProcessorVariant.Mos6502);
         Processor.Reset();
 
@@ -181,7 +184,12 @@ public sealed class PetMachine : IMachine
     ///  Runs for a span of emulated time.
     /// </summary>
     /// <param name="duration">The time to run.</param>
-    public void Run(TimeSpan duration) => Run((ulong)(duration.Ticks / (TimeSpan.TicksPerSecond / PetTiming.CpuHertz)));
+    /// <exception cref="ArgumentOutOfRangeException">The duration is negative.</exception>
+    public void Run(TimeSpan duration)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
+        Run((ulong)(duration.Ticks / (TimeSpan.TicksPerSecond / PetTiming.CpuHertz)));
+    }
 
     /// <summary>
     ///  Finishes the current instruction, or runs one, within a cycle limit.

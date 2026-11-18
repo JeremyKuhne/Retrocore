@@ -238,6 +238,9 @@ try {
         await assert.rejects(
             request("launch", { machine: "pet", sdkRoms, driveRomDirectory: driveRoms, diskUnits: [8], disks: [{ path: disk }] }),
             /disks\[0\] must be an image's path/);
+        await assert.rejects(
+            request("launch", { machine: "pet", sdkRoms, driveRomDirectory: driveRoms, diskUnits: [8], disks: disk }),
+            /disks must be a list/);
     } else {
         console.log(`Skipped the 4040: no c4040 ROM set in ${driveRoms}.`);
     }

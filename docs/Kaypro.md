@@ -4,7 +4,7 @@ Retrocore's Kaypro II is [`KayproMachine`](../src/Retrocore.Machines.Kaypro/Kayp
 Systems' 1982 luggable, a 2.5 MHz Z80 with 64K of RAM, an 80-by-24 green screen, a serial keyboard and two
 single-sided double-density drives, running CP/M 2.2. Its monitor ROM and character generator are SDK sources, so it
 needs nothing external to run; CP/M and its programs come from disk images you supply. This guide covers what it
-emulates and how to debug on it. [The backlog](backlog/Kaypro.md) has what comes next.
+emulates and how to debug on it, MBASIC included. [The backlog](backlog/Kaypro.md) has what comes next.
 
 ## The machine
 
@@ -51,10 +51,10 @@ its bell.
 | --- | --- |
 | [`Kaypro2.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm) | The 81-149C monitor ROM: its CP/M-style entry points, the SIO and PIO set-up, the boot, the disk routines (blocking and deblocking with Digital Research's Appendix G algorithm and names), the transfer routines it copies to `$FECD`, the keyboard, serial and printer drivers and the screen driver with its escape sequences. |
 | [`Kaypro2CharacterGenerator.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The 81-146A character generator, a glyph a row of dots at a time. |
-
+| [`Mbasic/Mbasic.asm`](../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, assembling to a program compatible byte for byte with MBASIC.COM. The root includes 19 modules in address order, following the modules of [GW-BASIC's MIT-licensed source](https://github.com/microsoft/GW-BASIC): the tables and variables, the interpreter, statements, evaluator, LIST, the math package, PTRGET, the console and PRINT USING, strings, the line editor, the disk files and the CP/M file layer, and start-up. Its names are Microsoft's, from GW-BASIC's source and Level2.asm, and every routine is documented. |
 
 `KayproTests` pin each source by SHA-256, so the tests need no dumps, and compare them byte for byte with the dumps
-in `RETROCORE_KAYPRO` (`81-149c.rom` and `81-146a.bin`) when they are there.
+in `RETROCORE_KAYPRO` (`81-149c.rom`, `81-146a.bin`, and MBASIC.COM on `MBasic.img`) when they are there.
 
 ## Launching
 
@@ -62,17 +62,19 @@ in `RETROCORE_KAYPRO` (`81-149c.rom` and `81-146a.bin`) when they are there.
 {
     "type": "retrocore",
     "request": "launch",
-    "name": "Kaypro II: CP/M",
+    "name": "Kaypro II: MBASIC",
     "machine": "kaypro2",
-    "disks": ["${env:USERPROFILE}/Retrocore/kaypro/cpm22-rom149.img"],
-    "command": "DIR"
+    "disks": ["${env:USERPROFILE}/Retrocore/kaypro/cpm22-rom149.img", "${env:USERPROFILE}/Retrocore/kaypro/MBasic.img"],
+    "command": "B:MBASIC",
+    "basic": "${workspaceFolder}/squares.mbasic.bas"
 }
 ```
 
 | Option | Does |
 | --- | --- |
 | `disks` | Images for drives A and B. Drive A needs a Kaypro II CP/M system disk to boot. |
-| `command` | A CP/M command typed at the first prompt, such as `DIR` or `B:STAT`. |
+| `command` | A CP/M command typed at the first prompt, such as `B:MBASIC`; `MBASIC` when the launch has `basic`. |
+| `basic` | An MBASIC program, `.mbasic.bas`: once MBASIC is at its prompt the program goes into memory, and RUN starts it. |
 | `romDirectory` | Chip dumps to run in place of the SDK's builds (or `RETROCORE_KAYPRO_ROMS`): `81-149c.u47` or `81-149c.rom`, and `81-146.u43` or `81-146a.bin`, in it or in its `kayproii` folder. `rom` names another monitor dump. |
 | `bootSeconds` | Machine time to run the ROM before the debugger takes over (0 by default). |
 | `fastDisk` | Runs unthrottled while the disk controller is busy (true by default). |
@@ -80,7 +82,22 @@ in `RETROCORE_KAYPRO` (`81-149c.rom` and `81-146a.bin`) when they are there.
 ## Debugging
 
 The CPU thread steps through the monitor ROM in `Kaypro2.asm`, including the transfer routines where the ROM copies
-them: each statement applies wherever memory holds the bytes it assembled to.
+them, and through MBASIC in its modules under `Mbasic/`: each statement applies wherever memory holds the bytes it assembled to.
 Function breakpoints take the sources' names, such as `READ`, the ROM's disk read that CP/M's BIOS calls. Retrocore
 Memory has banks for the RAM under the ROM, the ROM and video RAM, so they can be read and written whichever is
 banked in.
+
+While MBASIC is in memory, a **BASIC** thread runs beside the CPU's, as on the TRS-80 and the Apple II: breakpoints
+and steps by statement, the GOSUB call stack, variables (names up to 40 characters, integer, single, double and
+string) and arrays, FOR loops, BASIC expression watches, and stops at RUN, errors (with MBASIC's messages; ON ERROR
+GOTO's handled errors on their own filter), STOP, END, the end of the program and Ctrl-C. BASIC's memory is read
+from RAM even while the BIOS has the ROM banked in.
+
+## MBASIC files
+
+`.mbasic.bas` files are MBASIC source. The dialect's CRUNCH and LIST are MBASIC's own: reserved words must be set
+apart from names, numbers are stored in binary (line numbers, integers, singles and doubles in Microsoft's format,
+`&H` and `&O` constants), `ELSE` is stored as `:ELSE`, an apostrophe as `:REM'`, and `WHILE` with a plus after it.
+`MbasicOracleTests` check them against MBASIC itself on the emulated Kaypro, for lines typed at it and for the
+programs on its disk. A double-precision constant that needs scaling by powers of ten can differ from MBASIC's in its
+last bits, as BASIC-80's double-precision division rounds in its own way.

@@ -31,6 +31,9 @@ export interface HardwareSetting {
  */
 export interface Card { label: string; detail: string; args: Record<string, unknown>; slots?: string[]; machines?: string[] }
 
+/** The PET's IEEE-488 device numbers a disk unit can take, as the Machine view's rows name them. */
+const ieeeDevices = ["ieee8", "ieee9", "ieee10", "ieee11", "ieee12", "ieee13", "ieee14", "ieee15"];
+
 /** The cards Add Card offers. */
 export const cards: Card[] = [
     { label: "Disk II controller", detail: "16-sector: DOS 3.3 and ProDOS disks", args: { action: "addDiskII", sectors: 16 } },
@@ -62,6 +65,14 @@ export const cards: Card[] = [
     {
         label: "Firmware card", detail: "The other BASIC in ROM: AppleSoft on a II, Integer BASIC on a II Plus",
         args: { action: "addFirmwareCard" }, slots: ["slot0"]
+    },
+    {
+        label: "4040 dual disk drive", detail: "Commodore's DOS 2.0 drive on the IEEE-488 bus; insert .d64 or .g64 disks",
+        args: { action: "add4040" }, slots: ieeeDevices, machines: ["pet"]
+    },
+    {
+        label: "2040 dual disk drive", detail: "Commodore's DOS 1.2 drive on the IEEE-488 bus; insert .d67, .d64 or .g64 disks",
+        args: { action: "add2040" }, slots: ieeeDevices, machines: ["pet"]
     }
 ];
 
@@ -94,7 +105,7 @@ export const hardwareOptions = [
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
     "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "cassetteInterface",
-    "console"
+    "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */

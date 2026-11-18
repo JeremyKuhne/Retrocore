@@ -1,4 +1,4 @@
-# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC) | syntax | what it does.
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC, p = Commodore PET BASIC) | syntax | what it does.
 # Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
 END|a2b|END|Stops the program and returns to the prompt; CONT continues after it.
 FOR|a2b|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
@@ -474,3 +474,95 @@ LOC|c|LOC(buffer)|Disk BASIC: the current record of a file.
 LOF|c|LOF(buffer)|Disk BASIC: the number of records in a file.
 MKN$|c|MKN$(x)|Disk BASIC: a number as a five-character field.
 AS|c|FIELD #buffer, width AS s$|Disk BASIC: names the string a FIELD's width goes to.
+# Commodore PET BASIC 1 and 2: five-byte reals, % integers and $ strings, names read by their first two characters, true as -1, and files numbered 1-255 on devices: 0 the keyboard, 1 and 2 the cassettes, 3 the screen, 4 and up the IEEE-488 bus (a printer is usually 4, a disk drive 8).
+END|p|END|Stops the program and returns to READY.; CONT continues after it.
+FOR|p|FOR v = start TO end [STEP increment]|Starts a loop: sets v, a real variable, to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
+NEXT|p|NEXT [v [, v ...]]|Ends a FOR loop: adds the step and loops back while the variable has not passed the end.
+DATA|p|DATA item [, item ...]|Holds constants for READ. Items are numbers or strings; quotes are needed only around commas, colons or leading spaces.
+INPUT#|p|INPUT# file, v [, v ...]|Reads values from an open file into variables, as INPUT reads them from the keyboard, without a prompt.
+INPUT|p|INPUT ["prompt";] v [, v ...]|Reads values typed at the keyboard into variables, asking again when they do not fit. Only a program can use it.
+DIM|p|DIM a(size [, size ...]) [, ...]|Makes arrays; each dimension runs from 0 to its size. An array used without DIM has 11 elements per dimension (0-10).
+READ|p|READ v [, v ...]|Takes the next items from DATA statements into variables.
+LET|p|[LET] v = expression|Assigns a value; LET itself can be left out.
+GOTO|p|GOTO line|Continues at a line.
+RUN|p|RUN [line]|Clears the variables and runs the program, from its first line or from the line given.
+IF|p|IF condition THEN statements / IF condition GOTO line|Runs the rest of the line when the condition is not zero; otherwise goes on with the next line.
+RESTORE|p|RESTORE|Makes READ start again at the program's first DATA item.
+GOSUB|p|GOSUB line|Calls the subroutine at a line; RETURN comes back to the statement after the GOSUB.
+RETURN|p|RETURN|Returns from a GOSUB to the statement after it.
+REM|p|REM text|A remark: the rest of the line is ignored.
+STOP|p|STOP|Stops the program with BREAK IN and its line; CONT continues after it.
+ON|p|ON n GOTO line [, line ...] / ON n GOSUB line [, line ...]|Jumps to, or calls, the nth line of the list; goes on with the next statement when n is 0 or past the list.
+WAIT|p|WAIT address, mask [, flip]|Waits until the byte at the address, exclusive-ored with flip and then anded with mask, is not zero.
+LOAD|p|LOAD ["name" [, device]]|Loads a program from cassette 1, or from the device given; with no name, the next program on the tape.
+SAVE|p|SAVE ["name" [, device [, secondary]]]|Writes the program to cassette 1, or to the device given.
+VERIFY|p|VERIFY ["name" [, device]]|Compares a saved program with the one in memory, and reports an error when they differ.
+DEF|p|DEF FN f(x) = expression|Defines a one-line function of one parameter, called as FN f(value). Only a program can use it.
+POKE|p|POKE address, value|Stores a byte in memory.
+PRINT#|p|PRINT# file [, items]|Prints numbers and strings to an open file, as PRINT does to the screen.
+PRINT|p|PRINT [items]|Prints numbers and strings: a semicolon keeps the cursor where it is, a comma moves to the next 10-column zone, and no punctuation at the end starts a new line. ? is short for PRINT.
+CONT|p|CONT|Continues a program after STOP, END or the STOP key, if it has not been changed.
+LIST|p|LIST [first] [- last]|Lists the program, or the lines given.
+CLR|p|CLR|Clears every variable, array and string and BASIC's stack, and closes the open files, keeping the program.
+CMD|p|CMD file [, items]|Sends what PRINT and LIST write to an open file instead of the screen, until a PRINT# to that file.
+SYS|p|SYS address|Runs machine code at an address, which returns with RTS.
+OPEN|p|OPEN file [, device [, secondary [, "name"]]]|Opens a numbered file on a device; the secondary address says how, such as for reading or writing.
+CLOSE|p|CLOSE file|Closes a numbered file, finishing what was written to it.
+GET|p|GET v / GET# file, v|Takes the next key pressed, without waiting, into a string variable, empty when there is none; or a digit's value into a numeric one. GET# takes the next character from a file. Only a program can use it.
+NEW|p|NEW|Erases the program and its variables.
+TAB(|p|TAB(column)|In PRINT: moves to a column.
+TO|p|FOR v = start TO end / GO TO line|Gives the end value of a FOR loop; in BASIC 2, after GO, makes GOTO.
+FN|p|FN f(value)|Calls a function DEF FN defined.
+SPC(|p|SPC(count)|In PRINT: moves the cursor right that many columns, over what is on the screen; BASIC 2 writes spaces to a file.
+THEN|p|IF condition THEN statements / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there.
+NOT|p|NOT x|The bitwise complement of an integer, -32768 to 32767; NOT of true (-1) is false (0).
+STEP|p|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative.
++|p|a + b|Adds numbers, or joins strings.
+-|p|a - b, -a|Subtracts, or negates.
+*|p|a * b|Multiplies.
+/|p|a / b|Divides.
+^|p|a ^ b|Raises a to the power b; the key shows as an up arrow.
+AND|p|a AND b|The bitwise and of integers, -32768 to 32767; true is -1.
+OR|p|a OR b|The bitwise or of integers, -32768 to 32767; true is -1.
+>|p|a > b|Greater than: -1 when a is greater than b, else 0. Also part of >= and <>.
+=|p|a = b|Assigns in LET; compares elsewhere.
+<|p|a < b|Less than. Also part of <= and <>.
+SGN|p|SGN(x)|-1, 0 or 1 as x is negative, zero or positive.
+INT|p|INT(x)|The greatest whole number not greater than x.
+ABS|p|ABS(x)|The absolute value of x.
+USR|p|USR(x)|Calls the machine code whose address is in locations 1 and 2, with x in the floating-point accumulator, and returns what is left there.
+FRE|p|FRE(x)|The free memory in bytes, after compacting the strings; x is ignored.
+POS|p|POS(x)|The cursor's column; x is ignored.
+SQR|p|SQR(x)|The square root of x.
+RND|p|RND(x)|A random number between 0 and 1: the next of the sequence when x is positive; a negative x starts a sequence of its own, and 0 takes one from a hardware timer.
+LOG|p|LOG(x)|The natural logarithm of x.
+EXP|p|EXP(x)|e raised to the power x.
+COS|p|COS(x)|The cosine of an angle in radians.
+SIN|p|SIN(x)|The sine of an angle in radians.
+TAN|p|TAN(x)|The tangent of an angle in radians.
+ATN|p|ATN(x)|The arctangent of x, in radians.
+PEEK|p|PEEK(address)|The byte in memory at an address.
+LEN|p|LEN(s$)|The number of characters in a string.
+STR$|p|STR$(x)|A number as a string, as PRINT would write it.
+VAL|p|VAL(s$)|The number at the start of a string, or 0.
+ASC|p|ASC(s$)|The PETSCII code of a string's first character.
+CHR$|p|CHR$(code)|A one-character string with that PETSCII code; CHR$(147) clears the screen.
+LEFT$|p|LEFT$(s$, n)|A string's first n characters.
+RIGHT$|p|RIGHT$(s$, n)|A string's last n characters.
+MID$|p|MID$(s$, start [, n])|Characters from a string, starting at position start (1 is the first).
+GO|p|GO TO line|BASIC 2: GO and TO typed apart, which continues at a line as GOTO does.
+CONCAT|p|CONCAT [Ddrive,] "add" TO [Ddrive,] "file" [ON Uunit]|BASIC 4: adds one sequential disk file to the end of another.
+DOPEN|p|DOPEN #file, "name" [, Ddrive] [ON Uunit] [, W] [, Llength]|BASIC 4: opens a disk file: for reading, for writing with W, or a relative file of records of the length given.
+DCLOSE|p|DCLOSE [#file] [ON Uunit]|BASIC 4: closes a disk file, or all of the unit's files.
+RECORD|p|RECORD #file, record [, byte]|BASIC 4: moves to a record of a relative file, and to a byte in it (1 is the first).
+HEADER|p|HEADER "name", Ddrive [, Iid] [ON Uunit]|BASIC 4: formats the disk in a drive with a name and two-character ID, after ARE YOU SURE? in direct mode. Without an ID it only clears the directory of a formatted disk.
+COLLECT|p|COLLECT [Ddrive] [ON Uunit]|BASIC 4: validates a disk: frees the blocks no file uses and removes files never closed.
+BACKUP|p|BACKUP Dfrom TO Dto [ON Uunit]|BASIC 4: copies the whole disk in one drive of a dual drive to the other.
+COPY|p|COPY [Ddrive,] "file" TO [Ddrive,] "copy" [ON Uunit] / COPY Dfrom TO Dto|BASIC 4: copies a file, or every file of one drive's disk to the other's.
+APPEND|p|APPEND #file, "name" [, Ddrive] [ON Uunit]|BASIC 4: opens a sequential disk file for writing at its end.
+DSAVE|p|DSAVE "name" [, Ddrive] [ON Uunit]|BASIC 4: saves the program to disk.
+DLOAD|p|DLOAD "name" [, Ddrive] [ON Uunit]|BASIC 4: loads a program from disk; in a program, it runs the new one, keeping the variables.
+CATALOG|p|CATALOG [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without touching the program in memory, as DIRECTORY does.
+RENAME|p|RENAME [Ddrive,] "old" TO "new" [ON Uunit]|BASIC 4: renames a disk file.
+SCRATCH|p|SCRATCH [Ddrive,] "name" [ON Uunit]|BASIC 4: deletes disk files, after ARE YOU SURE? in direct mode; the name may hold the wild cards ? and *.
+DIRECTORY|p|DIRECTORY [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without touching the program in memory. DS and DS$ then hold the drive's status.

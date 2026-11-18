@@ -52,7 +52,8 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
         "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
-        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "MITS Altair 8800"
+        "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "Commodore PET 2001 (BASIC 2)", "Commodore PET 2001",
+        "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
@@ -93,6 +94,8 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         { machine: "trs80-model3", model: "3", rom: "level1" });
     assert.deepEqual(machineById("trs80-model4p")?.basicDialects, [], "the 4P boots from disk");
     assert.deepEqual(machineById("trs80-model2")?.diskFormats, ["imd", "dmk", "jv3", "dsk"]);
+    assert.deepEqual(machineById("kaypro2")?.diskFormats, ["img", "dsk", "imd", "dmk"]);
+    assert.deepEqual(machineById("kaypro2")?.basicDialects, [], "CP/M's programs come from disk");
     assert.deepEqual(machineById("apple1")?.tapeFormats, ["wav"]);
     assert.deepEqual(machineById("apple1")?.diskFormats, [], "the Apple-1 has no disks");
     assert.deepEqual(machineById("apple1")?.basicDialects, ["apple1"], "Apple-1 BASIC loads into its $E000 bank");
@@ -102,6 +105,28 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.equal(coco?.configuration.model, id);
         assert.deepEqual(coco?.diskFormats, ["dsk"]);
         assert.deepEqual(coco?.tapeFormats, ["cas"]);
+    }
+    for (const id of ["pet2001-basic2", "pet2001"]) {
+        const pet = machineById(id);
+        assert.deepEqual(pet?.configuration, { machine: "pet", model: id });
+        assert.deepEqual(pet?.diskFormats, [], "the 2001's disks are added in the Machine view");
+        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg"], "a .prg goes in as the tape SAVE writes");
+        assert.equal(pet?.tapeOption, "cassette1", "a tape starts in the built-in Datasette");
+        assert.deepEqual(pet?.programFormats, ["prg", "bin"]);
+        assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound", "snow"]);
+        assert.equal(pet?.choices[0].default, 8);
+        assert.equal(pet?.choices[2].default, id === "pet2001", "snow by default only on the 2001 with BASIC 1, as the launch has it");
+    }
+    assert.deepEqual(machineById("pet2001")?.basicDialects, ["petbasic"], "one dialect, whose version the ROMs pick");
+    assert.deepEqual(machineById("pet2001-basic2")?.basicDialects, ["petbasic"]);
+    for (const id of ["pet4032", "pet4032-business"]) {
+        const pet = machineById(id);
+        assert.deepEqual(pet?.configuration, { machine: "pet", model: id });
+        assert.deepEqual(pet?.diskFormats, ["d64", "g64"], "a disk goes in the 4040 the 4032 comes with");
+        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg"]);
+        assert.deepEqual(pet?.basicDialects, ["petbasic"]);
+        assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound"], "the 4032's board has no snow");
+        assert.equal(pet?.choices[0].default, 32);
     }
 });
 
@@ -124,6 +149,10 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "trs80-model2" })?.id, "trs80-model2");
     assert.equal(catalogMachine({ machine: "trs80-model2", model: "16b" })?.id, "trs80-model16");
     assert.equal(catalogMachine({ machine: "altair" })?.id, "altair");
+    assert.equal(catalogMachine({ machine: "pet" })?.id, "pet2001-basic2", "BASIC 2 is the PET's default");
+    assert.equal(catalogMachine({ machine: "pet", model: "pet2001" })?.id, "pet2001");
+    assert.equal(catalogMachine({ machine: "pet", model: "pet4032-business" })?.id, "pet4032-business");
+    assert.equal(catalogMachine({ machine: "kaypro2" })?.id, "kaypro2");
     assert.equal(catalogMachine({ machine: "pdp10" }), undefined);
 });
 

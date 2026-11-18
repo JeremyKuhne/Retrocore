@@ -351,6 +351,23 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  A note in parentheses after a Uses: item, as in the MOS's <c>Y (for a sound channel)</c>, still names the
+    ///  item for the debugger's check.
+    /// </summary>
+    [TestMethod]
+    public void UsesNotesNameTheirItem()
+    {
+        AssemblyResult mos = BbcSdkModules.AssembleMos(Path.Join(s_inputs, "Acorn"));
+        SourceMapModule module = new(mos, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        // FLUSH_BUFFER: "Uses: Y (for a sound channel)".
+        contracts[(ushort)mos.Symbols["FLUSH_BUFFER"]].Changes.Should().Contain("Y");
+    }
+
+    /// <summary>
     ///  Level II's Model III routines keep their contracts in the Model III's build only: CASSETTE_READ and CIO
     ///  have a Model I and a Model III version under one name, and the Model III's Keeps: sections, under
     ///  <c>not MODEL = 1</c>, apply where the build's MODEL makes that hold.

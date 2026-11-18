@@ -110,7 +110,13 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;
 
     /// <inheritdoc/>
-    public ulong CycleCount => _machine.Processor.CycleCount;
+    /// <remarks>
+    ///  <para>
+    ///   The bus's 2 MHz cycles, with those a 1 MHz device's access stretches, so running at real speed keeps to the
+    ///   machine's clock.
+    ///  </para>
+    /// </remarks>
+    public ulong CycleCount => (ulong)_machine.Bus.Cycles;
 
     /// <inheritdoc/>
     public int ClockHertz => BbcTiming.CpuHertz;

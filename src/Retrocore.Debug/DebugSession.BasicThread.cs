@@ -145,7 +145,7 @@ internal sealed partial class DebugSession
     /// <returns>Whether the run stopped.</returns>
     private bool BasicStops(ushort pc)
     {
-        if (Target.BasicRom is not { } rom || !Target.BasicPagedIn) { return false; }
+        if (Target.BasicRom is not { } rom) { return false; }
         if (_basicGoal is { } goal)
         {
             if (goal.Step == BasicStep.Into && goal.CallsMachine && !Target.InRom(pc))
@@ -154,12 +154,16 @@ internal sealed partial class DebugSession
                 return true;
             }
 
+            // A pause's deadline holds even while another ROM, such as the DFS, is paged in where BASIC is.
             if (goal.Step == BasicStep.Pause && Target.CycleCount >= goal.Deadline)
             {
                 Stopped("pause", threadId: BasicThread);
                 return true;
             }
         }
+
+        // BASIC's own addresses mean BASIC only while it is paged in.
+        if (!Target.BasicPagedIn) { return false; }
 
         if (Target.BasicStatementStart(pc) is { } start) { return StatementStops(start.Line, start.Address); }
         if (pc == rom.Run) { _basicStarting = "RUN starts"; }

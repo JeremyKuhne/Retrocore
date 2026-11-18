@@ -22,6 +22,10 @@ internal sealed partial class BbcDebugTarget
     // The 6502 stack BASIC starts each line, and each FN and PROC, with.
     private const byte EmptyStack = 0xFF;
 
+    // PTRB, the base of the text expressions are read from, and its offset (BasicEquates.asm's PTR_B, PTR_B_OFFSET).
+    private const int PtrB = 0x19;
+    private const int PtrBOffset = 0x1B;
+
     // BASIC II's hooks, from the SDK's source, and the socket it is in; none without them.
     private BasicRom? _basicRom;
     private int _basicSocket = -1;
@@ -227,15 +231,16 @@ internal sealed partial class BbcDebugTarget
     }
 
     // Follows FN and PROC calls before an instruction runs: a call starts at CALL_FN_PROC with A the FN or PROC token
-    // and PTRA in the caller's statement, and ends at CALL_FN_PROC_RETURN. An error, a typed line or RUN starts BASIC's
-    // stacks afresh.
+    // and PTRB just past it, and ends at CALL_FN_PROC_RETURN. PTRB, not PTRA, is the caller's text: PROC copies PTRA
+    // to it, and an FN in an argument, as in PROCouter(FNinner), is read through it while PTRA is in the outer DEF's
+    // parameters. An error, a typed line or RUN starts BASIC's stacks afresh.
     private void ObserveBasicCall(ushort pc)
     {
         if (_basicRom is not { } rom || _machine.Bus.Socket != _basicSocket) { return; }
         if (pc == _callStart)
         {
-            int pointer = BasicTextPointer;
-            int line = Peek(BbcBasicDialect.PtrA + 1) == BbcBasicDialect.LineBufferPage
+            int pointer = Word(PtrB) + Peek(PtrBOffset) - 1;
+            int line = Peek(PtrB + 1) == BbcBasicDialect.LineBufferPage
                 ? 0
                 : BbcBasicDialect.LineAt(new TargetBasicMemory(this), pointer + 1) ?? 0;
 

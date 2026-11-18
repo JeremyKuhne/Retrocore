@@ -177,6 +177,21 @@
         }
       },
       {
+        "id": "retrocore-mbasic",
+        "aliases": [
+          "MBASIC",
+          "mbasic"
+        ],
+        "extensions": [
+          ".mbasic.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-petbasic",
         "aliases": [
           "Commodore BASIC (PET)",
@@ -276,6 +291,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-mbasic",
+        "scopeName": "source.retrocore-mbasic",
+        "path": "./syntaxes/mbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-petbasic",
         "scopeName": "source.retrocore-petbasic",
         "path": "./syntaxes/petbasic.tmLanguage.json"
@@ -332,6 +352,7 @@
             "apple1",
             "level2",
             "colorbasic",
+            "mbasic",
             "petbasic",
             "bbcbasic"
           ],
@@ -472,6 +493,9 @@
       },
       {
         "language": "retrocore-colorbasic"
+      },
+      {
+        "language": "retrocore-mbasic"
       },
       {
         "language": "retrocore-petbasic"
@@ -1002,7 +1026,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|petbasic|bbcbasic|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|petbasic|bbcbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -1648,7 +1672,7 @@
               },
               "command": {
                 "type": "string",
-                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives."
+                "description": "Kaypro II: a command typed at CP/M's first prompt, such as DIR or B:STAT, once the machine's disks are in their drives; MBASIC by default with basic."
               },
               "controllers": {
                 "type": "boolean",
@@ -2044,7 +2068,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm), or the Kaypro II's (Kaypro2.asm and Kaypro2CharacterGenerator.asm)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm), or the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic)."
               },
               "breakpoints": {
                 "type": "array",

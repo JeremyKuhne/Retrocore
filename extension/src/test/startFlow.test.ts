@@ -49,7 +49,7 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.match(pet.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 2 \(PET\)/);
     assert.match(runChoices(machine("pet2001")).find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 1 \(PET\)/);
     assert.deepEqual(runChoices(machine("coco2")).find(choice => choice.kind === "program")?.extensions, ["bin"], "other machines load binaries");
-    assert.deepEqual(kinds("kaypro2"), ["machine", "source", "program", "disk"], "the Kaypro II boots CP/M disks");
+    assert.deepEqual(kinds("kaypro2"), ["machine", "source", "program", "basic", "disk"], "the Kaypro II boots CP/M disks and runs MBASIC");
     assert.match(runChoices(machine("coco1")).find(choice => choice.kind === "basic")?.detail ?? "", /Color BASIC/);
     assert.match(runChoices(machine("apple2-ii")).find(choice => choice.kind === "basic")?.detail ?? "", /Integer BASIC/);
     assert.match(runChoices(machine("apple1")).find(choice => choice.kind === "basic")?.detail ?? "", /Apple-1 BASIC/);
@@ -74,6 +74,7 @@ test("each kind of setup becomes the launch options that run it, which package.j
         [{ machineId: "pet2001", kind: "basic", path: "a.petbasic.bas", options: { sound: "off" } }, { basic: "a.petbasic.bas", sound: "off" }],
         [{ machineId: "pet4032", kind: "disk", path: "demo.d64", options: { ramKilobytes: 16 } }, { machine: "pet", model: "pet4032", disks: ["demo.d64"], ramKilobytes: 16 }],
         [{ machineId: "kaypro2", kind: "disk", path: "cpm.img", options: {} }, { machine: "kaypro2", disks: ["cpm.img"] }],
+        [{ machineId: "kaypro2", kind: "basic", path: "a.mbasic.bas", basicDisk: "cpm.img", options: {} }, { machine: "kaypro2", basic: "a.mbasic.bas", disks: ["cpm.img"] }],
         [{ machineId: "apple2-iie-enhanced", kind: "dosSource", path: "hi.s", options: {} }, { source: "hi.s", dos: "3.3", stopOnEntry: false }]
     ];
 

@@ -166,6 +166,13 @@ try {
     assert.ok(!filters().includes("basicStart"), "Level I has no BASIC thread");
     await assert.rejects(request("launch", { machine: "trs80-model4", rom: "level1" }), /Only the Model III has Level I/);
 
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    for (const machine of ["trs80-model3", "trs80-model2"]) {
+        await assert.rejects(request("launch", { machine, disks: "trsdos.dsk" }), /disks must be a list/);
+        await assert.rejects(request("launch", { machine, disks: [null, 7] }), /disks\[1\] must be an image's path/);
+    }
+
     if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("reset");
     // Machine reset stops at power-on, at $0000, and the Model II's reset switch restarts the boot ROM there too.
     await launch({ machine: "trs80-model2" }, ["machineReset"]);

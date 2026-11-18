@@ -174,6 +174,21 @@ internal interface IDebugTarget : IDebugMemory
     int MaximumKey => 127;
 
     /// <summary>
+    ///  Reads a byte of BASIC's memory: what the CPU reads, except on a machine whose BASIC lives in RAM a ROM can be
+    ///  banked over, as the Kaypro's does.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>The byte.</returns>
+    byte BasicPeek(ushort address) => Peek(address);
+
+    /// <summary>
+    ///  Writes a byte of BASIC's memory, as <see cref="BasicPeek"/> reads it.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <param name="value">The byte.</param>
+    void BasicPoke(ushort address, byte value) => Poke(address, value);
+
+    /// <summary>
     ///  Gets the machine's BASIC, or null when it has none the debugger knows.
     /// </summary>
     BasicDialect? Basic => null;
@@ -206,6 +221,13 @@ internal interface IDebugTarget : IDebugMemory
     ///  machine whose BASIC is a paged ROM, as the BBC Micro's is, only while it is paged in.
     /// </summary>
     bool BasicPagedIn => true;
+
+    /// <summary>
+    ///  Gets whether <see cref="BasicRom"/> is given only while the interpreter's code is in memory, as a target
+    ///  whose BASIC is a program checks, so that the debugger need not find <see cref="Debug.BasicRom.Gone"/>'s
+    ///  statement through the CPU's view of memory, which may have a ROM banked over it.
+    /// </summary>
+    bool BasicRomInMemory => false;
 
     /// <summary>
     ///  Gets the number of the BASIC line running, or last run.

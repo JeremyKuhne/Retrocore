@@ -193,6 +193,7 @@ public sealed class BasicSourceTests
     [DataRow("business")]
     [DataRow("colorbasic")]
     [DataRow("bbcbasic")]
+    [DataRow("mbasic")]
     public void EveryKeywordHasHelp(string name)
     {
         // Business BASIC keeps its lists' placeholders empty.

@@ -64,6 +64,11 @@ internal static class LanguageHost
     internal const string BbcBasicId = "retrocore-bbcbasic";
 
     /// <summary>
+    ///  The VS Code language of MBASIC (BASIC-80 5.21) documents.
+    /// </summary>
+    internal const string MbasicId = "retrocore-mbasic";
+
+    /// <summary>
     ///  The VS Code language of Commodore PET BASIC documents, BASIC 2's words.
     /// </summary>
     internal const string PetBasicId = "retrocore-petbasic";
@@ -89,6 +94,7 @@ internal static class LanguageHost
         or Level1Id
         or ColorBasicId
         or BbcBasicId
+        or MbasicId
         or PetBasicId
         or BasicId;
 

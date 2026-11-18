@@ -1164,6 +1164,11 @@ test("the inspector's values are written as typed, the selection is filled and t
     assert.equal(inputsSent[inputsSent.length - 1].title, "Word, low first at $0403");
     inputReply = { text: "-1" };
     await drive(page, [{ edit: "Signed" }], () => 0, lists);
+    // The Binary row takes its own grouping back.
+    inputReply = { text: "%1010 1001" };
+    await drive(page, [{ edit: "Binary" }], () => 0, lists);
+    assert.deepEqual(writesSent[writesSent.length - 1].data, [0xA9]);
+    writesSent.pop();
     inputReply = { text: "1000" };
     state = await drive(page, [{ edit: "Float, 5 bytes" }], () => 0, lists);
     assert.deepEqual(sent(), [[0x0403, [0x34, 0x12]], [0x0403, [0xFF]], [0x0403, [0x8A, 0x7A, 0, 0, 0]]]);
@@ -1194,6 +1199,13 @@ test("the inspector's values are written as typed, the selection is filled and t
     clipboardText = "0300: A9 C1\n0302- 20 ED FD ; JSR COUT";
     state = await drive(page, [{ goto: 0x0500 }, { paste: true }], () => 0, lists);
     assert.deepEqual([sent(), state.status], [[[0x0500, [0xA9, 0xC1, 0x20, 0xED, 0xFD]]], "Pasted 5 bytes at $0500."]);
+    // A hex digit typed before the paste does not join the next key to the pasted byte.
+    writesSent.length = 0;
+    clipboardText = "01";
+    await drive(page, [{ goto: 0x0600 }, { type: ["A"] }, { paste: true }, { type: ["2"] }], () => 0, lists);
+    assert.deepEqual(sent()[0], [0x0600, [0x01]]);
+    assert.ok(!sent().some(item => (item[1] as number[])[0] === 0xA2), JSON.stringify(sent()));
+    await drive(page, [{ goto: 0x0500 }], () => 0, lists);
     writesSent.length = 0;
     clipboardText = "HI";
     await drive(page, [{ pane: "text" }, { paste: true }], () => 0, lists);

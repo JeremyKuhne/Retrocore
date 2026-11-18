@@ -1821,7 +1821,8 @@ function editable(label) {
 // The bytes a row's value is written as, or why the text is not one.
 async function valueBytes(label, text) {
     if (byteRows.includes(label)) {
-        const value = parseByte(text);
+        // The Binary row shows its bits in two groups, as %1010 1001, which it takes back.
+        const value = parseByte(label === "Binary" ? text.split(" ").join("") : text);
         return typeof value === "string" ? value : [value];
     }
     if (label === "Word, low first" || label === "Word, high first") {
@@ -1853,11 +1854,17 @@ async function editValue(label) {
     await writeInTurn(at, values, label + " at " + where(at) + " written.");
 }
 
-// Writes as one edit, in turn with typing, undo and redo, so it is on the undo stack before either runs.
+// Writes as one edit, in turn with typing, undo and redo, so it is on the undo stack before either runs. A hex digit
+// typed and waiting for its second is dropped, so the next key starts a byte of its own. values is the bytes, or a
+// function that gives them, or null to write nothing, when its turn comes: text's bytes depend on the bytes they
+// replace, which an edit ahead in the queue may change.
 async function writeInTurn(offset, values, done) {
     let written = false;
     await new Promise(resolve => queue(async () => {
-        written = await write(offset, values, true);
+        nibble = null;
+        render();
+        const writing = typeof values === "function" ? await values() : values;
+        if (writing !== null) written = await write(offset, writing, true);
         resolve(undefined);
     }));
     if (written) status(done);
@@ -1886,17 +1893,14 @@ async function fill() {
     if (!answer || answer.cancelled) return;
     const data = parseData(answer.text);
     if (typeof data === "string") { status(data, true); return; }
-    if (!await loaded(low, count)) return;
-    const pattern = Array.isArray(data) ? data : null;
-    let values = [];
-    if (pattern !== null) {
-        for (let index = 0; index < count; index++) values.push(pattern[index % pattern.length]);
+    let values;
+    if (Array.isArray(data)) {
+        values = Array.from({ length: count }, (_, index) => data[index % data.length]);
     } else {
-        // Text repeats as characters, each chosen against the byte it replaces.
+        // Text repeats as characters, each chosen against the byte it replaces when the write's turn comes.
         const text = Array.from(data.text);
         const repeated = { text: Array.from({ length: count }, (_, index) => text[index % text.length]).join("") };
-        values = dataAt(repeated, low, count);
-        if (values === null) return;
+        values = async () => await loaded(low, count) ? dataAt(repeated, low, count) : null;
     }
     await writeInTurn(low, values, "Filled " + span + ".");
 }
@@ -1904,7 +1908,8 @@ async function fill() {
 // Pastes the clipboard at the cursor: in the text pane as the machine's characters, else as hex bytes, which may
 // be the Monitor's lines with their addresses.
 async function paste() {
-    const at = cursor;
+    // Where and in which column Ctrl+V was pressed, whatever moves while the clipboard is read.
+    const at = cursor, column = pane;
     let clipboard;
     try {
         clipboard = String((await request({ type: "paste" })).text ?? "");
@@ -1913,16 +1918,14 @@ async function paste() {
         return;
     }
     if (clipboard.length === 0) { status("The clipboard is empty.", true); return; }
-    const data = pane === "text" ? { text: clipboard.split(String.fromCharCode(13)).join("").split(String.fromCharCode(10)).join("") } : parseData(clipboard);
+    const data = column === "text" ? { text: clipboard.split(String.fromCharCode(13)).join("").split(String.fromCharCode(10)).join("") } : parseData(clipboard);
     if (typeof data === "string") { status("The clipboard does not hold hex bytes: " + data, true); return; }
     const length = Array.isArray(data) ? data.length : Array.from(data.text).length;
     const count = Math.min(length, SIZE - at);
-    if (!await loaded(at, count)) return;
-    const values = dataAt(data, at, count);
-    if (values === null) return;
-    const written = values.slice(0, count);
     const cut = length > count ? "; " + (length - count) + " more ran past " + where(SIZE - 1) : "";
-    await writeInTurn(at, written, "Pasted " + written.length + (written.length === 1 ? " byte" : " bytes") + " at " + where(at) + cut + ".");
+    // Text's bytes are chosen against the bytes they replace when the write's turn comes.
+    const values = Array.isArray(data) ? data.slice(0, count) : async () => await loaded(at, count) ? dataAt(data, at, count) : null;
+    await writeInTurn(at, values, "Pasted " + count + (count === 1 ? " byte" : " bytes") + " at " + where(at) + cut + ".");
 }
 
 // Copies the selection as memory holds it now, reading the bytes out of view first.

@@ -258,6 +258,31 @@ public class BbcDiskTests
         for (int cycle = 0; cycle < 4_000_000 && !fdc.DataRequest; cycle++) { fdc.Tick(); }
         fdc.DataRequest.Should().BeTrue();
         fdc.InterruptOutput.Should().Be(nonDma);
+        fdc.PeekData().Should().Be(fdc.ReadData(), "the debugger sees the byte the CPU would read");
+    }
+
+    /// <summary>
+    ///  The drive status shows the index hole only while a disk turns: never with no disk, and with one once the
+    ///  head is loaded.
+    /// </summary>
+    /// <param name="disk">Whether drive 0 has a disk.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void IndexNeedsATurningDisk(bool disk)
+    {
+        Intel8271 fdc = new();
+        if (disk) { fdc.Insert(0, AcornDiskImage.Blank(40)); }
+        Send(fdc, 0x7A, 0x23, 0x48);            // the output port: drive 0 selected, head loaded
+        bool index = false;
+        for (int cycle = 0; cycle < Intel8271.RevolutionCycles && !index; cycle += Intel8271.ByteCycles)
+        {
+            Send(fdc, 0x6C);                    // read drive 0's status
+            index = (fdc.Read(1) & 0x10) != 0;
+            for (int tick = 0; tick < Intel8271.ByteCycles; tick++) { fdc.Tick(); }
+        }
+
+        index.Should().Be(disk);
     }
 
     private static void Send(Intel8271 fdc, byte command, params byte[] parameters)

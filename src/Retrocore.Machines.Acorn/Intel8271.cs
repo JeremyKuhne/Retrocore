@@ -245,6 +245,12 @@ public sealed class Intel8271
     }
 
     /// <summary>
+    ///  Reads the data register without taking the byte, so the data request and NMI stay as they are.
+    /// </summary>
+    /// <returns>The byte.</returns>
+    public byte PeekData() => _data;
+
+    /// <summary>
     ///  Reads the data register, taking the byte the chip offers.
     /// </summary>
     /// <returns>The byte.</returns>
@@ -382,7 +388,8 @@ public sealed class Intel8271
     {
         FloppyDisk? disk = _disks[_drive];
         int status = Ready(1) ? 0x40 : 0;
-        if (_time % RevolutionCycles < ByteCycles * 4) { status |= 0x10; }
+        // The index hole passes only while a disk turns.
+        if (Ready(_drive) && _time % RevolutionCycles < ByteCycles * 4) { status |= 0x10; }
         if (disk is not { IsWriteProtected: true }) { status |= 0x08; }
         if (Ready(0)) { status |= 0x04; }
         if (_cylinders[_drive] != 0) { status |= 0x01; }

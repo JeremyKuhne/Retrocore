@@ -251,7 +251,7 @@ public sealed class BbcBus : IProcessorBus
             },
             2 => SystemVia.Peek((byte)(offset & 0x0F)),
             3 => UserVia?.Peek((byte)(offset & 0x0F)) ?? 0xFE,
-            4 => DiskController is { } fdc ? (offset & 4) == 0 ? fdc.Peek(offset) : (byte)0 : (byte)(_modelB ? 0xFF : 0xFE),
+            4 => DiskController is { } fdc ? (offset & 4) == 0 ? fdc.Peek(offset) : fdc.PeekData() : (byte)(_modelB ? 0xFF : 0xFE),
             6 => Analogue?.Read(offset & 3) ?? 0xFE,
             _ => 0xFE
         };

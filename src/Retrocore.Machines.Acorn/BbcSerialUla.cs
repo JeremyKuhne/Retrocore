@@ -134,7 +134,9 @@ public sealed class BbcSerialUla
     {
         if (Rs423)
         {
+            // The tape still plays while its motor runs, but its tones go nowhere.
             _acia.Tick();
+            if (!_cassette.Recording) { _cassette.Tick(); }
             return;
         }
 

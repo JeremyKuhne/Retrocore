@@ -38,6 +38,9 @@ internal static class MachineCatalog
         new("Disk controller", Value: true, "Disk Extended Color BASIC and four drives"),
     ], Default: false);
 
+    private static readonly MachineChoice s_bbcSound = new("sound", "Sound",
+        [new("On", "speaker", "The SN76489 through the internal speaker"), new("Off", "off")], "speaker");
+
     private static readonly MachineChoice s_model3Ram = new("ramKilobytes", "Memory",
         [new("48 KB", 48), new("32 KB", 32), new("16 KB", 16)], 48);
 
@@ -163,6 +166,19 @@ internal static class MachineCatalog
                 s_cocoDisk,
                 s_cocoSound,
             ]),
+        new("bbcb", "BBC Micro Model B", "6502 at 2 MHz, MOS 1.20, BASIC II, DNFS 1.20 and 32 KB",
+            Options(("machine", "bbc"), ("model", "bbcb")),
+            [
+                new("diskInterface", "Disk interface",
+                [
+                    new("Intel 8271", Value: true, "Acorn DFS and two drives"),
+                    new("None", Value: false, "Tapes only, with PAGE at &E00"),
+                ], Default: true),
+                s_bbcSound,
+            ]),
+        new("bbca", "BBC Micro Model A", "6502 at 2 MHz, MOS 1.20, BASIC II and 16 KB",
+            Options(("machine", "bbc"), ("model", "bbca")),
+            [s_bbcSound]),
         new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
             Options(("machine", "altair")),
             [
@@ -188,6 +204,7 @@ internal static class MachineCatalog
     {
         ["apple2"] = new() { [""] = "iie-enhanced", ["enhanced"] = "iie-enhanced", ["original"] = "iie" },
         ["coco"] = new() { [""] = "coco2" },
+        ["bbc"] = new() { [""] = "bbcb" },
         ["trs80-model3"] = new()
         {
             [""] = "3",

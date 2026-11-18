@@ -126,6 +126,16 @@ const cocoDisk: MachineChoice = {
     default: false
 };
 
+const bbcSound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "On", detail: "The SN76489 through the internal speaker", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
+
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
     {
@@ -470,6 +480,41 @@ export const machines: readonly Machine[] = [
             cocoSound
         ]
     },
+    // Without dumps, the BBC Micro builds its ROMs from the SDK's sources: MOS 1.20, BASIC II, DNFS 1.20 and the
+    // SAA5050's characters.
+    {
+        id: "bbcb",
+        label: "BBC Micro Model B",
+        detail: "6502 at 2 MHz, MOS 1.20, BASIC II, DNFS 1.20 and 32 KB",
+        configuration: { machine: "bbc", model: "bbcb" },
+        diskFormats: ["ssd", "dsd"],
+        tapeFormats: ["uef"],
+        basicDialects: ["bbcbasic"],
+        dos: false,
+        choices: [
+            {
+                option: "diskInterface",
+                label: "Disk interface",
+                values: [
+                    { label: "Intel 8271", detail: "Acorn DFS and two drives", value: true },
+                    { label: "None", detail: "Tapes only, with PAGE at &E00", value: false }
+                ],
+                default: true
+            },
+            bbcSound
+        ]
+    },
+    {
+        id: "bbca",
+        label: "BBC Micro Model A",
+        detail: "6502 at 2 MHz, MOS 1.20, BASIC II and 16 KB",
+        configuration: { machine: "bbc", model: "bbca" },
+        diskFormats: [],
+        tapeFormats: ["uef"],
+        basicDialects: ["bbcbasic"],
+        dos: false,
+        choices: [bbcSound]
+    },
     // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
     {
         id: "altair",
@@ -534,6 +579,7 @@ export function launchConfiguration(machine: Machine, name = `${machine.label} (
 const models: Record<string, Record<string, string>> = {
     apple2: { "": "iie-enhanced", enhanced: "iie-enhanced", original: "iie" },
     coco: { "": "coco2" },
+    bbc: { "": "bbcb" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
     "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
 };

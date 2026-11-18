@@ -1,0 +1,477 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "BBC BASIC",
+  "scopeName": "source.retrocore-bbcbasic",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-bbcbasic"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-bbcbasic"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-bbcbasic"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-bbcbasic"
+        },
+        {
+          "match": "(?:(AND)|(ABS)|(ACS)|(ADVAL)|(ASC)|(ASN)|(ATN)|(AUTO)|(BGET)|(BPUT)|(COLOUR)|(CALL)|(CHAIN)|(CHR\\$)|(CLEAR)|(CLOSE)|(CLG)|(CLS)|(COS)|(COUNT)|(DEG)|(DEF)|(DELETE)|(DIV)|(DIM)|(DRAW)|(ENDPROC)|(END)|(ENVELOPE)|(ELSE)|(EVAL)|(ERL)|(ERROR)|(EOF)|(EOR)|(ERR)|(EXP)|(EXT)|(FOR)|(FALSE)|(FN)|(G\\s*O\\s*T\\s*O)|(GET\\$)|(GET)|(GOSUB)|(GCOL)|(HIMEM)|(INPUT)|(IF)|(INKEY\\$)|(INKEY)|(INT)|(INSTR\\()|(LIST)|(LINE)|(LOAD)|(LOMEM)|(LOCAL)|(LEFT\\$\\()|(LEN)|(LET)|(LOG)|(LN)|(MID\\$\\()|(MODE)|(MOD)|(MOVE)|(NEXT)|(NEW)|(NOT)|(OLD)|(ON)|(OFF)|(OR)|(OPENIN)|(OPENOUT)|(OPENUP)|(OSCLI)|(PRINT)|(PAGE)|(PTR)|(PI)|(PLOT)|(POINT\\()|(PROC)|(POS)|(RETURN)|(REPEAT)|(REPORT)|(READ)|(RUN)|(RAD)|(RESTORE)|(RIGHT\\$\\()|(RND)|(RENUMBER)|(STEP)|(SAVE)|(SGN)|(SIN)|(SQR)|(SPC)|(STR\\$)|(STRING\\$\\()|(SOUND)|(STOP)|(TAN)|(THEN)|(TO)|(TAB\\()|(TRACE)|(TIME)|(TRUE)|(UNTIL)|(USR)|(VDU)|(VAL)|(VPOS)|(WIDTH))",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "4": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "5": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "6": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "7": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "8": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "9": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "12": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "13": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "14": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "15": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "16": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "17": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "18": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "19": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "20": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "21": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "22": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "23": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "24": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "25": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "26": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "27": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "28": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "29": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "30": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "31": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "32": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "33": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "34": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "35": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "36": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "37": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "38": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "39": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "41": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "42": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "43": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "44": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "45": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "46": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "47": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "48": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "49": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "50": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "52": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "53": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "59": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "60": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "62": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "63": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "64": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "65": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "66": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "68": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "69": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "70": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "71": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "72": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "73": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "74": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "75": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "76": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "77": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "78": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "79": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "80": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "81": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "82": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "83": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "84": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "85": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "86": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "87": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "88": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "89": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "90": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "91": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "92": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "93": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "94": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "95": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "96": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "97": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "98": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "99": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "100": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "101": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "102": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "103": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "104": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "105": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "106": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "107": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "108": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "109": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "110": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "111": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "112": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "113": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "114": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "115": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "116": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "117": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "118": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "119": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-bbcbasic"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-bbcbasic"
+        },
+        {
+          "match": "[A-Za-z_`][A-Za-z0-9_`]*[$%]?",
+          "name": "variable.other.retrocore-bbcbasic"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-bbcbasic"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-bbcbasic"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?:(REM)).*$",
+      "name": "comment.line.retrocore-bbcbasic",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-bbcbasic"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-bbcbasic"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?:(DATA))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-bbcbasic"
+        }
+      },
+      "end": "(?=$)",
+      "contentName": "string.unquoted.data.retrocore-bbcbasic",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-bbcbasic",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-bbcbasic"
+    }
+  }
+}

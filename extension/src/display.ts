@@ -80,6 +80,12 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button id="altair-reset" title="The front panel's RESET (or Ctrl+F12 or Ctrl+Break): the 8080 starts again at $0000, keeping memory">Reset</button>
 <button id="altair-clear" title="The terminal's CLEAR: blanks the screen and homes the cursor, as ^Z does">Clear Screen</button>
 </span>
+<span class="keys" data-machine="bbc">
+<button data-code="27" title="ESCAPE (or Esc)">Escape</button>
+<button data-code="135" title="COPY (or End): copies the character under the copy cursor">Copy</button>
+<button data-code="240" title="f0">f0</button><button data-code="241" title="f1">f1</button><button data-code="242" title="f2">f2</button><button data-code="243" title="f3">f3</button><button data-code="244" title="f4">f4</button><button data-code="245" title="f5">f5</button><button data-code="246" title="f6">f6</button><button data-code="247" title="f7">f7</button><button data-code="248" title="f8">f8</button><button data-code="249" title="f9">f9</button>
+<button id="bbc-reset" title="BREAK (or Ctrl+F12 or Ctrl+Break): the MOS starts again, keeping the program; OLD brings it back">Break</button>
+</span>
 <span class="keys" data-machine="coco">
 <button data-code="1" title="BREAK (or Esc)">Break</button>
 <button data-code="31" title="CLEAR (or Home)">Clear</button>
@@ -91,7 +97,7 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2 apple3 coco">
+<span class="keys" data-machine="apple2 apple3 coco bbc">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -114,7 +120,7 @@ const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
 // border, fill a 4:3 screen.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3'};
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3','bbc':'704/576'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -130,7 +136,7 @@ function speedText(frame){
     if(!speed||typeof speed.actual!=='number')return [];
     // Accelerated is the Model I's, Apple-1's or Color Computer's fast cassette or the IIe's fast disk, running flat
     // out while the media moves.
-    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='trs80-model3'||frame.machine==='apple1'||frame.machine==='coco'?'Fast tape':'Fast disk']:[];
+    const fast=speed.accelerated===true?[frame.machine==='trs80-model1'||frame.machine==='trs80-model3'||frame.machine==='apple1'||frame.machine==='coco'||frame.machine==='bbc'?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
 const fastDisk=document.getElementById('fastDisk');
@@ -356,6 +362,8 @@ const keys={
     // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
     'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
     'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
+    // The BBC Micro's DELETE is 127, and its cursor keys and COPY are the MOS's codes &88-&8B and &87.
+    'bbc':{Enter:13,Backspace:127,Delete:127,Tab:9,Escape:27,End:135,ArrowLeft:136,ArrowRight:137,ArrowDown:138,ArrowUp:139},
     // The Altair's ADM-3A sends ASCII, with its arrows as ^H, ^L, ^K and ^J.
     'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10}
 };
@@ -367,6 +375,7 @@ const hints={
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
     'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
+    'bbc':'Esc: ESCAPE · End: COPY · arrows: the cursor keys · the buttons: f0-f9 · Ctrl+F12: BREAK',
     'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET'
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
@@ -380,7 +389,7 @@ const ctrl=document.getElementById('ctrl');
 // screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
 // show its lines twice over, about 4:3. Sizes are in CSS pixels for the display's scaling, ratio physical pixels to
 // each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480],'bbc':[704,576]};
 function sharpSize(machine,width,height,ratio){
     const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
     const [w,h]=sharpBase[key]??sharpBase['apple2'];
@@ -483,7 +492,7 @@ screen.addEventListener('keydown',event=>{
     }
     const special=keys[machine()]??keys['apple2'];
     let code=event.key in special?special[event.key]:event.key.length===1?event.key.charCodeAt(0):-1;
-    if(code>=0&&code<128){send(code);event.preventDefault();}
+    if(code>=0&&code<256){send(code);event.preventDefault();}
 });
 screen.addEventListener('keyup',event=>{
     if(forVsCode(event))return;
@@ -509,7 +518,7 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset','altair-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','apple1-reset','coco-reset','altair-reset','bbc-reset']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
 }
 for(const id of ['apple1-clear','altair-clear']){

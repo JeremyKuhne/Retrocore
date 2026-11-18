@@ -665,6 +665,11 @@ internal sealed class MainWindow : Window
                 Code("Clear", 31, "CLEAR (or Home)");
                 Reset("Reset", "The RESET button (or Ctrl+F12 or Ctrl+Break): BASIC starts again with the program kept");
                 break;
+            case "bbc":
+                Code("Escape", 27, "ESCAPE (or Esc)");
+                Code("Copy", 0x87, "COPY (or End): copies the character under the copy cursor");
+                Reset("Break", "BREAK (or Ctrl+F12 or Ctrl+Break): the MOS starts again, keeping the program; OLD brings it back");
+                break;
         }
 
         // The keyboard's hint, as the panel writes it under the screen.
@@ -678,6 +683,7 @@ internal sealed class MainWindow : Window
                 "apple3" => "Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple",
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",
                 "altair" => "Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET",
+                "bbc" => "Esc: ESCAPE · End: COPY · arrows: the cursor keys · F1-F9 and F10: f1-f9 and f0 · Ctrl+F12: BREAK",
                 _ => "",
             };
 

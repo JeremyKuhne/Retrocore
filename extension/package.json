@@ -177,6 +177,21 @@
         }
       },
       {
+        "id": "retrocore-bbcbasic",
+        "aliases": [
+          "BBC BASIC",
+          "bbcbasic"
+        ],
+        "extensions": [
+          ".bbcbasic.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-basic",
         "aliases": [
           "Retrocore BASIC"
@@ -246,6 +261,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-bbcbasic",
+        "scopeName": "source.retrocore-bbcbasic",
+        "path": "./syntaxes/bbcbasic.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
         "scopeName": "source.retrocore-basic",
         "path": "./syntaxes/basic.tmLanguage.json"
@@ -291,7 +311,8 @@
             "business",
             "apple1",
             "level2",
-            "colorbasic"
+            "colorbasic",
+            "bbcbasic"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -349,6 +370,8 @@
                   "coco1",
                   "coco2",
                   "coco3",
+                  "bbcb",
+                  "bbca",
                   "altair"
                 ],
                 "description": "The machine, as Start Machine lists it."
@@ -423,6 +446,9 @@
       },
       {
         "language": "retrocore-colorbasic"
+      },
+      {
+        "language": "retrocore-bbcbasic"
       },
       {
         "language": "retrocore-basic"
@@ -911,7 +937,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|bbcbasic|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -1319,6 +1345,7 @@
                   "apple1",
                   "coco",
                   "altair",
+                  "bbc",
                   "apple2e"
                 ],
                 "enumDescriptions": [
@@ -1331,14 +1358,15 @@
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
                   "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
+                  "The BBC Micro, Model B or A; model says which (bbcb by default).",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), and altair a MITS Altair 8800."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), altair a MITS Altair 8800, and bbc a BBC Micro (model picks the Model B or A)."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin) and RETROCORE_COCO_ROMS for the Color Computer. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer and RETROCORE_BBC_ROMS for the BBC Micro. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders."
               },
               "highRam": {
                 "type": "boolean",
@@ -1420,6 +1448,10 @@
                 "type": "boolean",
                 "description": "Model I: the Expansion Interface (RAM above 16K, the clock interrupt, disks); defaults on for Level II."
               },
+              "diskInterface": {
+                "type": "boolean",
+                "description": "BBC Micro Model B: the Intel 8271 disk interface, with DNFS 1.20 in paged ROM socket 0. On by default; off, the Model B has tapes only and PAGE is &E00."
+              },
               "diskController": {
                 "anyOf": [
                   {
@@ -1468,7 +1500,7 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files."
               },
               "fastCassette": {
                 "type": "boolean",
@@ -1481,7 +1513,7 @@
                   "type": "string"
                 },
                 "maxItems": 4,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3."
               },
               "bootSeconds": {
                 "type": "number",
@@ -1528,11 +1560,11 @@
                 ],
                 "enumDescriptions": [
                   "No sound, and no cost.",
-                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a BBC Micro, the SN76489, in stereo.",
                   "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
                 ],
                 "default": "speaker",
-                "description": "IIe and Color Computer: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+                "description": "IIe, Color Computer and BBC Micro: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
               },
               "mockingboard": {
                 "type": "boolean",
@@ -1665,6 +1697,8 @@
                   "coco1",
                   "coco2",
                   "coco3",
+                  "bbcb",
+                  "bbca",
                   "3",
                   "4",
                   "4p",
@@ -1682,6 +1716,8 @@
                   "The Color Computer 1: Color BASIC with Extended Color BASIC, the MC6847 VDG and 16 KB.",
                   "The Color Computer 2: Color BASIC with Extended Color BASIC and 64 KB.",
                   "The Color Computer 3: Extended Color BASIC 2.0, the GIME and 128 KB.",
+                  "The BBC Micro Model B: MOS 1.20, BASIC II, 32 KB and, unless diskInterface is false, the 8271 with DNFS 1.20.",
+                  "The BBC Micro Model A: MOS 1.20, BASIC II and 16 KB, with no disk interface.",
                   "TRS-80 Model III: a 2 MHz Z80, the Model III ROM, 48 KB and 64x16.",
                   "TRS-80 Model 4: 4 MHz, the Model III ROM, 128 KB, the memory maps and 80x24.",
                   "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
@@ -1690,7 +1726,7 @@
                   "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. BBC Micro: bbcb or bbca. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
               },
               "slot0": {
                 "enum": [
@@ -1813,7 +1849,7 @@
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, .bbcbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -1953,6 +1989,25 @@
             "machine": "coco",
             "model": "coco2",
             "name": "Debug Color Computer 6809 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "bbc",
+            "model": "bbcb",
+            "name": "Boot BBC Micro Model B",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "bbc",
+            "model": "bbcb",
+            "name": "Debug BBC Micro 6502 source",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the BBC Micro and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -96,13 +96,13 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
-their sources.
+their sources, and the BBC Micro its MOS, BASIC, DFS and character ROM.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3, the BBC Micro Model B and Model A, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -114,7 +114,7 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
    - a binary program, loaded at the machine's usual address;
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive;
-   - a tape, on the Model I, the Apple-1 and the Color Computer;
+   - a tape, on the Model I, the Apple-1, the Color Computer and the BBC Micro;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -1033,6 +1033,34 @@ BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key ba
 TRS-80 cassette and disk commands work as on the Model I. See the
 [Color Computer guide](../docs/Coco.md) for what is emulated.
 
+## Debugging on the BBC Micro
+
+`"machine": "bbc"` debugs a BBC Micro, chosen by `model` (`bbcb`, the default, or
+`bbca`), with the same source debugging, call stack, cycle counts and `Keeps:` checks.
+The machine is configured by:
+
+- `diskInterface`: the Model B's Intel 8271 and DNFS, on by default;
+- `disks`: SSD or DSD images for drives 0 and 1, a DSD's second side being drive 2 or 3;
+- `cassette`: a `.uef` tape, or a file with an `.inf` file beside it; `fastCassette`
+  and `sound` (`speaker` or `off`).
+
+MOS 1.20, BASIC II, DNFS 1.20 and the SAA5050's characters are the SDK sources
+`Mos.asm`, `BbcBasic.asm`, `Dnfs.asm` and `Saa5050.asm`, so both models need nothing
+else, and debugging steps into the sources. Each paged ROM socket is its own memory
+area, so a breakpoint in `BbcBasic.asm` or `Dnfs.asm` stops only while ROMSEL has that
+ROM paged in. Dumps from `romDirectory` or `RETROCORE_BBC_ROMS`, under MAME's names
+(`os12.rom`, `basic2.rom`, `dnfs120.rom` and `saa5050`), replace the sources' ROMs when
+given. A program (`source` or `program`, loaded at `&2000` by default) runs after the MOS
+and BASIC have started for `bootSeconds` (2 by default); [the sample](../sample/bbc/hello.asm)
+prints through `OSASCI`.
+
+The panel shows the screen and takes keys: arrows for the cursor keys, **End** for
+COPY, **Escape** for ESCAPE, **Backspace** for DELETE, and **Ctrl+F12** or
+**Ctrl+Break** for BREAK. VS Code keeps F1-F11, so the function keys f0-f9 are on the
+key bar, with Escape, Copy and Break. The **BRK instructions** filter stops at each
+error the MOS, BASIC or the DFS raises. See the [BBC Micro guide](../docs/BbcMicro.md)
+for what is emulated.
+
 ## Debugging on the TRS-80 Model III, 4 and II
 
 `"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
@@ -1109,8 +1137,8 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I, and Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted. Level I and the CoCo 3's
+Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
+Extended Color BASIC's words when their ROMs are fitted, and BBC BASIC II on the BBC Micro. Level I and the CoCo 3's
 BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
@@ -1140,8 +1168,8 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II or Color BASIC has a **BASIC**
-thread beside the CPU's.
+A session running AppleSoft, Integer BASIC, Level II, Color BASIC or BBC BASIC has a
+**BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
 
@@ -1182,12 +1210,18 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   name runs from a capital through the letters and digits after it, so `IFA=BTHEN10`
   compares A with the variable BTHEN10. GOTO and GOSUB are stored as GO and then TO or
   SUB, and its numbers and pointers are high byte first, as the 6809 keeps them.
+- **BBC BASIC** also finds reserved words only in capitals, and keeps names whole, with
+  small letters and `_`. A line keeps the spaces typed after its number, so it lists as
+  typed. Its call stack shows each PROC and FN beside the GOSUBs, and Step Over and Step
+  Out step over them; its Variables are the resident integers A%-Z% that are not zero,
+  then the variables in the order BASIC made them, and its Program scope is PAGE to TOP,
+  the heap and BASIC's stack. STOP is an error, and there is no CONT.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas` and
-`.colorbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC, Business BASIC,
-Level II BASIC and Color BASIC. Business BASIC takes a reserved word only between
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
+`.colorbasic.bas` and `.bbcbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+Business BASIC, Level II BASIC, Color BASIC and BBC BASIC. Business BASIC takes a reserved word only between
 separators, so its highlighting leaves `PRINTER` a name, and its names count in full,
 dots included. A Color BASIC file may use every word of Disk Extended Color BASIC; a
 machine without those ROMs stores the words they add as letters. A plain `.bas` file

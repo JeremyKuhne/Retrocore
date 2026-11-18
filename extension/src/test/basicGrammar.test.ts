@@ -20,7 +20,8 @@ before(async () => {
         "source.retrocore-level2": "level2.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
-        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json"
+        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
+        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -101,6 +102,16 @@ test("Color BASIC finds words only in capitals and never inside a name", () => {
     assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
     assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
     assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("BBC BASIC finds words only in capitals, keeps small letters in names, and runs DATA to the line's end", () => {
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LEFT$(A$,2)", "PRINT"), "keyword.other"));
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LEFT$(A$,2)", "LEFT$("), "support.function"));
+    assert.ok(has(scopes("bbcbasic", "20 FOR I%=1 TO 3", "FOR"), "keyword.control"));
+    assert.ok(has(scopes("bbcbasic", "30 my_name%=2", "my_name%"), "variable.other"), "a name with small letters and _");
+    assert.ok(!has(scopes("bbcbasic", "40 print", "print"), "keyword"), "lowercase is not tokenised");
+    assert.ok(has(scopes("bbcbasic", "50 DATA 1,2:PRINT", "PRINT"), "string.unquoted.data"), "DATA runs to the end of the line");
+    assert.ok(has(scopes("bbcbasic", "60 REM a note", "note"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

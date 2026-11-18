@@ -50,10 +50,19 @@ function separated(word) {
     return /[A-Za-z0-9$]$/.test(word) && word !== "FN" ? `${before}${pattern(word)}${after}` : `${before}${pattern(word)}`;
 }
 
+// BBC BASIC's keyword table: each word in the order the tokeniser searches it, which a test checks against the ROM.
+function bbcKeywords() {
+    const source = readFileSync(resolve(library, "BbcBasicDialect.cs"), "utf8");
+    const table = /s_table\s*=\s*\[([\s\S]*?)\];/.exec(source);
+    if (table === null) throw new Error("No s_table in BbcBasicDialect.cs.");
+    return [...table[1].matchAll(/\("([^"]+)", /g)].map(match => match[1]);
+}
+
 // Integer BASIC's names are any length, letters then letters and digits, and Business BASIC's may also hold dots and
 // end in & for a long integer; the Microsoft BASICs' are read by two. Color BASIC finds words only in capitals and
-// never inside a name, which runs from a capital through letters and digits.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false } = {}) {
+// never inside a name, which runs from a capital through letters and digits. BBC BASIC also finds words only in
+// capitals; its names are whole, with _ and small letters, and its DATA, like its REM, runs to the end of the line.
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
@@ -101,7 +110,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
             data: {
                 begin: business ? `(?i:${before}(DATA)${after})` : matching("(DATA)"),
                 beginCaptures: { "1": { name: `keyword.other.${scope}` } },
-                end: "(?=:|$)",
+                end: wholeLineData ? "(?=$)" : "(?=:|$)",
                 contentName: `string.unquoted.data.${scope}`,
                 patterns: [{ include: "#string" }, { include: "#escape" }]
             },
@@ -121,6 +130,7 @@ const level2 = keywords("Level2Dialect.cs");
 const integer = keywords("IntegerBasicDialect.cs");
 const business = [...keywords("BusinessBasicDialect.cs", "s_statements"), ...keywords("BusinessBasicDialect.cs", "s_functions")];
 const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywords("ColorBasicDialect.cs", "s_functions")];
+const bbcBasic = bbcKeywords();
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],
@@ -128,6 +138,7 @@ const outputs = [
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic, { names: "[A-Za-z_`][A-Za-z0-9_`]*[$%]?", ignoreCase: false, wholeLineData: true })],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {
@@ -135,4 +146,4 @@ for (const [file, content] of outputs) {
     writeGenerated(output, JSON.stringify(content, null, 2) + "\n", `${file} is stale. Run npm run generate:grammar.`);
 }
 console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC, `
-    + `${business.length} Business BASIC and ${colorBasic.length} Color BASIC reserved words.`);
+    + `${business.length} Business BASIC, ${colorBasic.length} Color BASIC and ${bbcBasic.length} BBC BASIC reserved words.`);

@@ -228,11 +228,12 @@ export function activate(context: vscode.ExtensionContext): void {
                     const title = machine === "trs80-model1" ? "TRS-80 Model I"
                         : (machine === "trs80-model3" || machine === "trs80-model2") && model !== undefined ? `TRS-80 ${model}`
                             : machine === "apple1" ? "Apple-1"
+                                : machine === "bbc" ? `BBC Micro ${model ?? "Model B"}`
                                 : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
                     // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal does; the
                     // Model II's is green, like the IIe's.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" ? "trs80-model1"
-                        : machine === "apple1" || machine === "coco" ? machine : "apple2";
+                        : machine === "apple1" || machine === "coco" ? machine : machine === "bbc" ? "coco" : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
                     const screen = running ? phosphor : "off";

@@ -69,7 +69,8 @@ type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settin
 // Model II green like the IIe.
 const screens: Record<string, string> = {
     apple2: "apple2", apple3: "apple2", apple1: "apple1", coco: "coco", "trs80-model1": "trs80-model1",
-    "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2"
+    "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2",
+    bbc: "coco"
 };
 
 /** The icons of the Machine view's rows, by hardware id, when the row is not a slot. */

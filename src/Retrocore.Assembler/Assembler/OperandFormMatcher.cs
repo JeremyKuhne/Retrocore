@@ -53,6 +53,10 @@ internal sealed partial class OperandFormMatcher
 
     private readonly Entry[] _literals;
     private readonly Entry[] _entries;
+
+    // The literals and entries an operand starting with each ASCII character could match, in declaration order.
+    private readonly Entry[][] _literalsByFirst;
+    private readonly Entry[][] _entriesByFirst;
     private readonly ushort[] _empty;
     private readonly Pattern[][] _patterns;
     private readonly bool[] _simple;
@@ -149,6 +153,8 @@ internal sealed partial class OperandFormMatcher
         _literals = [.. literals];
         foreach (Entry entry in _literals) { _literalLengths |= LengthBit(entry.Pattern.Text.Length); }
         _entries = [.. entries];
+        _literalsByFirst = IndexByFirst(_literals);
+        _entriesByFirst = IndexByFirst(_entries);
         _empty = [.. empty];
     }
 
@@ -182,8 +188,9 @@ internal sealed partial class OperandFormMatcher
         }
 
         if (LiteralForm(set, mnemonic, text) is { } literal) { return literal; }
-        foreach (Entry entry in _entries)
+        foreach (Entry entry in Candidates(_entriesByFirst, _entries, text))
         {
+            if (EndsWrong(entry, text)) { continue; }
             if (entry.Kind == EntryKind.Exclusive)
             {
                 // The table lookup is cheaper than the syntax test.
@@ -344,12 +351,54 @@ internal sealed partial class OperandFormMatcher
 
     private static ulong LengthBit(int length) => length < 64 ? 1UL << length : 0;
 
+    // ASCII text indexes the entries; other text, which ignoring case could match beyond ASCII, scans them all.
+    private const int AsciiCount = 128;
+
+    // Folds an ASCII letter to upper case, as an ordinal case-insensitive comparison does.
+    private static char FoldAscii(char value) => value is >= 'a' and <= 'z' ? (char)(value - ('a' - 'A')) : value;
+
+    // The character every match must have at a literal's start or end; Edge when the literal is empty or not ASCII,
+    // or when the codec, rather than the pattern, decides a postbyte form's syntax.
+    private static char RequiredChar(EntryKind kind, string literal, bool last)
+    {
+        if (kind == EntryKind.Postbyte || literal.Length == 0) { return Edge; }
+        char value = last ? literal[^1] : literal[0];
+        return value is > Edge and < (char)AsciiCount ? FoldAscii(value) : Edge;
+    }
+
+    // Splits entries by the first character an operand needs, keeping declaration order within each.
+    private static Entry[][] IndexByFirst(Entry[] entries)
+    {
+        Entry[][] index = new Entry[AsciiCount][];
+        for (int value = 0; value < AsciiCount; value++)
+        {
+            char folded = FoldAscii((char)value);
+            index[value] = [.. entries.Where(entry => entry.First == Edge || entry.First == folded)];
+        }
+
+        return index;
+    }
+
+    // The entries an operand could match: those its first character allows, or all for non-ASCII text.
+    private static Entry[] Candidates(Entry[][] index, Entry[] all, ReadOnlySpan<char> text) =>
+        text[0] < AsciiCount ? index[text[0]] : all;
+
+    // Whether an entry's fixed last character rules the operand out without a comparison.
+    private static bool EndsWrong(Entry entry, ReadOnlySpan<char> text)
+    {
+        char last = text[^1];
+        return entry.Last != Edge && last < AsciiCount && FoldAscii(last) != entry.Last;
+    }
+
     private ushort? LiteralForm(InstructionSet set, int mnemonic, ReadOnlySpan<char> text)
     {
         if ((_literalLengths & LengthBit(text.Length)) == 0) { return null; }
-        foreach (Entry entry in _literals)
+        foreach (Entry entry in Candidates(_literalsByFirst, _literals, text))
         {
-            if (text.Equals(entry.Pattern.Text.AsSpan(), StringComparison.OrdinalIgnoreCase) && set.Has(mnemonic, entry.Form))
+            if (entry.Pattern.Text.Length == text.Length
+                && !EndsWrong(entry, text)
+                && text.Equals(entry.Pattern.Text.AsSpan(), StringComparison.OrdinalIgnoreCase)
+                && set.Has(mnemonic, entry.Form))
             {
                 return entry.Form;
             }

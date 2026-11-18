@@ -309,7 +309,7 @@ internal sealed class BbcBasicExpression
             case "FALSE":
                 return Truth(value: false);
             case "PI":
-                return new(Math.PI);
+                return Real(Math.PI);                   // the ROM's packed &490FDAA2 mantissa, as P=PI stores it
             case "PAGE":
                 return Integer(_memory.Read(PageHigh) << 8);
             case "TOP":
@@ -656,12 +656,26 @@ internal sealed class BbcBasicExpression
         _ => new(RoundMantissa(value))
     };
 
-    // A real rounded to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10.
+    // A real rounded to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10. The rounding byte is the
+    // eight bits after the mantissa: above &80 rounds up, &80 itself sets the mantissa's lowest bit, so an odd
+    // mantissa stays (2147483649+0.5 is 2147483649), and below &80 truncates.
     private static double RoundMantissa(double value)
     {
         if (value == 0) { return 0; }
         double scale = Math.ScaleB(1.0, 31 - Math.ILogB(value));
-        return Math.Round(value * scale, MidpointRounding.AwayFromZero) / scale;
+        double scaled = Math.Abs(value) * scale;
+        double mantissa = Math.Floor(scaled);
+        double rounding = Math.Floor((scaled - mantissa) * 256);
+        if (rounding > 0x80)
+        {
+            mantissa++;
+        }
+        else if (rounding == 0x80 && mantissa % 2 == 0)
+        {
+            mantissa++;
+        }
+
+        return Math.CopySign(mantissa / scale, value);
     }
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);

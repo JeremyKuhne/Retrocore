@@ -501,6 +501,9 @@ POWERS_OF_TEN_HIGH:
 ;; remainder a bit at a time and subtracting the divisor wherever it goes; each bit of the quotient is shifted into the
 ;; dividend's place as it moves out. Leading zero bits of the dividend are skipped first. The signs are kept for the
 ;; caller to apply: DIV's quotient is negative when the signs differ, and MOD's remainder takes the dividend's sign.
+;; One dividend is wrong: &80000000 (-2147483648) keeps its magnitude's one set bit in bit 31, which the skip of
+;; leading zeros shifts out unseen, so with any divisor both the quotient and the remainder are 0 (&80000000 MOD 3
+;; is 0, not -2).
 ;; In:
 ;;   A = the type of the left operand, the dividend, in the accumulators, with the flags set from it
 ;;   PTR_B, PTR_B_OFFSET = the divisor's factor

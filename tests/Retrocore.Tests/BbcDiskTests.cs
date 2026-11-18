@@ -262,6 +262,39 @@ public class BbcDiskTests
     }
 
     /// <summary>
+    ///  A sector count of 0 is 32: verifying 32 sectors from sector 0 of a ten-sector track runs out of sectors,
+    ///  rather than verifying none and succeeding.
+    /// </summary>
+    [TestMethod]
+    public void ZeroSectorCountIsThirtyTwo()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);   // drive 0: no bad tracks, current track 0
+        Send(fdc, 0x5F, 0, 0, 0x20);            // verify drive 0, track 0, from sector 0, a count of 0, 256 bytes
+        RunWhileBusy(fdc);
+        fdc.Read(1).Should().NotBe(0, "sector 10 is not there");
+    }
+
+    /// <summary>
+    ///  Taking the disk out of the drive a command is using ends the command, not ready.
+    /// </summary>
+    [TestMethod]
+    public void EjectingEndsTheCommand()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x53, 0, 0, 0x21);            // read drive 0, track 0, sector 0, one sector
+        for (int cycle = 0; cycle < 4_000_000 && !fdc.DataRequest; cycle++) { fdc.Tick(); }
+        fdc.Insert(0, disk: null);
+        fdc.IsBusy.Should().BeFalse();
+        fdc.DataRequest.Should().BeFalse();
+        fdc.InterruptRequest.Should().BeTrue();
+        fdc.Read(1).Should().Be(0x10, "not ready");
+    }
+
+    /// <summary>
     ///  The drive status shows the index hole only while a disk turns: never with no disk, and with one once the
     ///  head is loaded.
     /// </summary>

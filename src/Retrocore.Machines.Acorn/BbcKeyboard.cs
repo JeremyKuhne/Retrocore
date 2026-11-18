@@ -125,7 +125,18 @@ public sealed class BbcKeyboard
     {
         if (!CpuReads) { return bus; }
         _column = bus & 15;
-        bool down = IsDown(_column, (bus >> 4) & 7);
+        return Peek(bus);
+    }
+
+    /// <summary>
+    ///  Gets what <see cref="Read"/> would put on the bus, without latching the column.
+    /// </summary>
+    /// <param name="bus">The bus.</param>
+    /// <returns>The bus with bit 7 from the key.</returns>
+    public byte Peek(byte bus)
+    {
+        if (!CpuReads) { return bus; }
+        bool down = IsDown(bus & 15, (bus >> 4) & 7);
         return (byte)((bus & 0x7F) | (down ? 0x80 : 0));
     }
 

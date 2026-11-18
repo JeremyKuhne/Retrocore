@@ -36,6 +36,9 @@ public sealed class BbcSerialUla
     // The clock's dividers by the 3-bit rate: 16 MHz / 13 / divider.
     private static readonly int[] s_dividers = [1, 16, 4, 128, 2, 64, 8, 256];
 
+    // The cycles without an edge after which the carrier is gone: four units, two of the 1200 Hz tone's half-cycles.
+    private const int QuietCycles = 4 * BbcTiming.CpuHertz / Retrocore.Media.Acorn.AcornTape.UnitsPerSecond;
+
     private readonly Acia6850 _acia;
     private readonly BbcCassette _cassette;
     private int _transmitPhase;
@@ -44,6 +47,7 @@ public sealed class BbcSerialUla
     private bool _longHalf;
     private int _ones;
     private bool _carrier;
+    private int _quiet;
 
     /// <summary>
     ///  Creates the ULA.
@@ -157,7 +161,18 @@ public sealed class BbcSerialUla
 
         if (_cassette.Recording) { return; }
         int half = _cassette.Tick();
-        if (half != 0) { Separate(half); }
+        if (half != 0)
+        {
+            _quiet = 0;
+            Separate(half);
+        }
+        else if (_carrier && ++_quiet > QuietCycles)
+        {
+            // No edge for longer than the slowest tone's half-cycle: silence, or a tape that stopped, drops the carrier
+            // now rather than when the silence ends.
+            ResetSeparator();
+            UpdateLines();
+        }
     }
 
     // Records one 1200 baud bit, or its time in silence.

@@ -180,11 +180,26 @@ public sealed class Intel8271
     public int Cylinder(int drive) => _cylinders[drive];
 
     /// <summary>
-    ///  Puts a disk in a drive, or empties it.
+    ///  Puts a disk in a drive, or empties it. A command running on that drive ends at once, not ready, so it cannot
+    ///  go on reading or writing the disk that came out.
     /// </summary>
     /// <param name="drive">0 or 1.</param>
     /// <param name="disk">The disk, or null.</param>
-    public void Insert(int drive, FloppyDisk? disk) => _disks[drive] = disk;
+    public void Insert(int drive, FloppyDisk? disk)
+    {
+        if (ReferenceEquals(_disks[drive], disk)) { return; }
+        _disks[drive] = disk;
+        if (_operation is null || drive != _drive) { return; }
+
+        _operation = null;
+        Sector = null;
+        IsWriting = false;
+        DataRequest = false;
+        _idleSince = _time;
+        _result = NotReady;
+        _phase = ResultPhase;
+        InterruptRequest = true;
+    }
 
     /// <summary>
     ///  Reads a register.
@@ -533,7 +548,7 @@ public sealed class Intel8271
         bool single = (_command[0] & 1) == 0;
         byte track = _command[1];
         int sector = _command[2];
-        int count = single ? 1 : _command[3] & 0x1F;
+        int count = single ? 1 : ((_command[3] - 1) & 0x1F) + 1;  // a count of 0 is 32
         int sizeCode = single ? 0 : _command[3] >> 5;
         bool deleted = (_command[0] & 0x04) != 0;
         foreach (int wait in LoadAndSeek(track)) { yield return wait; }
@@ -720,7 +735,7 @@ public sealed class Intel8271
     {
         byte track = _command[1];
         int gap3 = _command[2];
-        int count = _command[3] & 0x1F;
+        int count = ((_command[3] - 1) & 0x1F) + 1;               // a count of 0 is 32
         int sizeCode = _command[3] >> 5;
         int gap5 = _command[4];
         int gap1 = _command[5];

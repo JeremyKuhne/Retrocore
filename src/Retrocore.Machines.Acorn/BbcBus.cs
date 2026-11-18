@@ -249,7 +249,7 @@ public sealed class BbcBus : IProcessorBus
                 0x10 => 0,
                 _ => StationNumber
             },
-            2 => SystemVia.Peek((byte)(offset & 0x0F)),
+            2 => PeekSystemVia(offset),
             3 => UserVia?.Peek((byte)(offset & 0x0F)) ?? 0xFE,
             4 => DiskController is { } fdc ? (offset & 4) == 0 ? fdc.Peek(offset) : fdc.PeekData() : (byte)(_modelB ? 0xFF : 0xFE),
             6 => Analogue?.Read(offset & 3) ?? 0xFE,
@@ -428,6 +428,13 @@ public sealed class BbcBus : IProcessorBus
         return via.Read((byte)(offset & 0x0F));
     }
 
+    // The system VIA as a CPU read would see it, its input pins brought up to date, without acknowledging anything.
+    private byte PeekSystemVia(int offset)
+    {
+        UpdateInputPins();
+        return SystemVia.Peek((byte)(offset & 0x0F));
+    }
+
     private void WriteSystemVia(int offset, byte value)
     {
         int register = offset & 0x0F;
@@ -460,6 +467,14 @@ public sealed class BbcBus : IProcessorBus
     private void UpdateInputs()
     {
         UpdateSlowBus(write: false);
+        UpdateInputPins();
+    }
+
+    // The input pins' levels alone, for a peek: the keyboard's column on port A and the fire buttons on port B,
+    // without the keyboard's CA2 edge, so looking changes no interrupt.
+    private void UpdateInputPins()
+    {
+        SystemVia.PortAInput = Keyboard.Peek(SystemVia.PortAOutput);
         int buttons = Analogue?.Buttons ?? 0;
         SystemVia.PortBInput = (byte)(0xFF & ~((buttons & 3) << 4));
     }

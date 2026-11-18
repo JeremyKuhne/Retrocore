@@ -77,6 +77,12 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   stops only while the CPU runs that bank's code there; it shows in the Breakpoints view and stays between
   sessions. Clicking a dot takes away the breakpoints that stop there, except the Disassembly view's, which are
   taken away there.
+- **Values, fill and paste.** Clicking a value in the inspector (the byte as hex, unsigned, signed or binary,
+  either word, or the BASIC's float) asks for a new one and writes it at the cursor: `$1234` as a word low first is
+  `34 12`, and `1000` as AppleSoft's float `8A 7A 00 00 00`, which the debugger encodes. **Fill** in the inspector
+  repeats a byte, bytes or text in quotes over the selection, such as `EA`, `01 02` or `"*"`. **Ctrl+V** pastes the
+  clipboard at the cursor: hex bytes, which may be the Monitor's lines with their addresses (`0300: A9 C1`); or, in
+  the text column, characters, each written as typing writes it. Each is one edit, which **Undo** takes back.
 - **Assemble in place.** **F2** in the bytes or the listing, **Assemble** in the inspector, or a double-click on a
   listing line asks for an instruction to type over the line at the cursor, as the Monitor's mini-assembler takes
   one: `LDA KBD`, `JSR COUT` or `BNE *+4`, in the CPU's native syntax with the session's labels and the hints file's
@@ -176,7 +182,8 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Moving and selecting.** The arrow keys, **Page Up**, **Page Down**, **Home** and **End** (with **Ctrl**, the
   ends of memory) move; **Shift** or dragging selects. **Tab** moves from the hex column to the text column and
   **Shift+Tab** back; past them, they move focus on to the side panel or the toolbar as usual.
-  **Ctrl+C** copies the selection as hex bytes, or as the characters it shows from the text column.
+  **Ctrl+C** copies the selection as hex bytes, or as the characters it shows from the text column, and **Ctrl+V**
+  pastes there.
 
 ## Memory references
 
@@ -300,5 +307,5 @@ to an address, and a soft switch's bits; on the Model I, the Z80's T-states; and
 Model I, and checks that assembling writes nothing.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
 banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
-breakpoints and finding instructions, the inspector with its bits, instruction and references, assembling in place, the
-map, back and forward, following, bookmarks and finding numbers.
+breakpoints and finding instructions, the inspector with its bits, instruction and references, assembling in place, writing
+the inspector's values, fill and paste, the map, back and forward, following, bookmarks and finding numbers.

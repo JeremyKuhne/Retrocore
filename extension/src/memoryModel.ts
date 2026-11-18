@@ -340,6 +340,29 @@ export function parseValue(text: string, size = 1): number | string {
     return value & 0xFFFF;
 }
 
+/**
+ * Bytes to fill or paste: hex, two digits a byte, with spaces, commas, $ or 0x between, over lines that may start
+ * with an address as the Monitor writes them (0300: A9 C1 or 0300- A9 C1) and end with a ; comment; or text in
+ * quotes, which the machine's characters write. Returns a message for anything else.
+ */
+export function parseData(text: string): number[] | { text: string } | string {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return "Type bytes such as A9 C1, or text in quotes.";
+    const quoted = /^(["'])([\s\S]*)\1$/.exec(trimmed);
+    if (quoted !== null) return quoted[2].length === 0 ? "The text is empty." : { text: quoted[2] };
+    const bytes: number[] = [];
+    for (const raw of trimmed.split(/\r?\n/)) {
+        const line = raw.replace(/;.*$/, "").trim().replace(/^[0-9A-Fa-f]{1,4}\s*[:-]\s*/, "");
+        for (const token of line.split(/[\s,]+/)) {
+            if (token.length === 0) continue;
+            const digits = token.replace(/^(\$|0[xX])/, "");
+            if (!/^[0-9A-Fa-f]+$/.test(digits) || digits.length % 2 !== 0) return `${token} is not hex bytes: each byte takes two hex digits.`;
+            for (let index = 0; index < digits.length; index += 2) bytes.push(parseInt(digits.substring(index, index + 2), 16));
+        }
+    }
+    return bytes.length === 0 ? "Type bytes such as A9 C1, or text in quotes." : bytes;
+}
+
 /** A bookmark: a name for an address in memory as the CPU maps it or in a bank. */
 export interface MemoryBookmark {
     name: string;
@@ -459,4 +482,4 @@ export function narrowSearch(
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, valueAt, searchStart, narrowSearch];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, parseData, valueAt, searchStart, narrowSearch];

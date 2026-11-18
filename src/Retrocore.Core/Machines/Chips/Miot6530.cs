@@ -40,6 +40,18 @@ public sealed class Miot6530 : RiotBase
     /// </remarks>
     public override byte PortBOutput => InterruptRequested ? (byte)(base.PortBOutput & 0x7F) : base.PortBOutput;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Port B's PB7 reads the pin, which the interrupt pulls low, so a program polling it sees the timeout.
+    ///  </para>
+    /// </remarks>
+    protected override byte ReadPort(int register)
+    {
+        byte value = base.ReadPort(register);
+        return (register & 3) == 2 && InterruptRequested ? (byte)(value & 0x7F) : value;
+    }
+
     /// <summary>
     ///  Reads an I/O register as the CPU does.
     /// </summary>

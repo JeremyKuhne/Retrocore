@@ -430,7 +430,9 @@ BKLN_2:
 ;;
 ;; Printable characters are stored as their screen codes. RETURN (or shifted RETURN) moves to the next line and
 ;; ends quote mode, inserts and reversing. The cursor keys, HOME, CLR, RVS, DEL and INST do their jobs, except in
-;; quote mode or while inserts are pending, where they print as reversed characters instead.
+;; quote mode or while inserts are pending, where they print as reversed characters instead. Two keys differ: DEL
+;; deletes in quote mode too, printing reversed only while inserts are pending, and INST inserts while inserts are
+;; pending, printing reversed only in quote mode.
 ;; In: A = the character
 ;; Keeps: A, X, Y
 PRT:
@@ -632,7 +634,7 @@ NXTX_15:
     jmp LOOP2
 
 ;; Moves the cursor down to the next logical line, scrolling at the bottom, and clears <INPUT_ROW>'s top bit.
-;; Uses: A, X
+;; Uses: A, X, Y
 NXLN:
     sec
     lsr INPUT_ROW

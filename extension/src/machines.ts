@@ -514,6 +514,19 @@ export const machines: readonly Machine[] = [
                 default: false
             }
         ]
+    },
+    // The Kaypro II boots CP/M 2.2 from drive A, with its monitor ROM a dump from romDirectory (or
+    // RETROCORE_KAYPRO_ROMS) or the SDK's build.
+    {
+        id: "kaypro2",
+        label: "Kaypro II",
+        detail: "Z80 at 2.5 MHz, 64 KB, 80x24 and two drives, running CP/M 2.2",
+        configuration: { machine: "kaypro2" },
+        diskFormats: ["img", "dsk", "imd", "dmk"],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: []
     }
 ];
 

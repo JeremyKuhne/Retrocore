@@ -68,7 +68,8 @@ const machines = [
     { name: "TRS-80 Model 4P", configuration: { machine: "trs80-model3", model: "4p" } },
     { name: "TRS-80 Model II", configuration: { machine: "trs80-model2" } },
     { name: "Color Computer 2", configuration: { machine: "coco", model: "coco2" } },
-    { name: "Altair 8800", configuration: { machine: "altair" } }
+    { name: "Altair 8800", configuration: { machine: "altair" } },
+    { name: "Kaypro II", configuration: { machine: "kaypro2" } }
 ];
 
 const lsp = startLanguageServer();

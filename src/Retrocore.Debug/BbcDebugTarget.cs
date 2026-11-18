@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Isa;
 using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Devices;
@@ -220,10 +221,14 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     public string? Trap(ushort address)
     {
         if (Peek(address) != BrkOpcode) { return null; }
+
+        // BASIC's own messages hold its keywords as tokens, such as "No " then FN's; the MOS's and the DFS's are text.
+        bool basic = address is >= 0x8000 and < 0xC000 && BasicPagedIn;
         System.Text.StringBuilder message = new();
         for (int at = address + 2; at < address + 2 + 255 && Peek((ushort)at) is byte value and not 0; at++)
         {
-            message.Append(value is >= 0x20 and < 0x7F ? (char)value : '?');
+            if (basic && BasicDialect.BbcBasic.Keyword(value) is { Length: > 0 } word) { message.Append(word); }
+            else { message.Append(value is >= 0x20 and < 0x7F ? (char)value : '?'); }
         }
 
         return $"BRK at ${address:X4}: error {Peek((ushort)(address + 1))}, \"{message}\".";

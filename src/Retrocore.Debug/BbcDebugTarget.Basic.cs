@@ -158,7 +158,8 @@ internal sealed partial class BbcDebugTarget
             else { message.Append(value is >= 0x20 and < 0x7F ? (char)value : '?'); }
         }
 
-        return (code, message.ToString(), Word(BbcBasicDialect.OnError) != _defaultErrorHandler);
+        // Error 0 is fatal: BASIC's BRK handler puts the default handler back for it, whatever ON ERROR said.
+        return (code, message.ToString(), code != 0 && Word(BbcBasicDialect.OnError) != _defaultErrorHandler);
     }
 
     /// <inheritdoc/>

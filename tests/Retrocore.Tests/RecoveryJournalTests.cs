@@ -370,6 +370,7 @@ public sealed class RecoveryJournalTests
         MediaActions.Recover([nextFloppy, nextCassette], journal).Should().BeEmpty();
         nextFloppy.Media?.Changed.Should().BeTrue();
         nextCassette.Media?.Changed.Should().BeTrue();
+        nextCassette.Mode.Should().Be(TapeMode.Playing, "a recovered tape plays, as LOAD and CHAIN need");
         FloppyDisk backDisk = nextFloppy.Disk ?? throw new InvalidOperationException("The drive is empty.");
         MediaActions.Source(backDisk)?.Codec.Should().BeOfType<AcornDiskCodec>().Which.Format.Should().Be("SSD");
         AcornTape back = nextCassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");

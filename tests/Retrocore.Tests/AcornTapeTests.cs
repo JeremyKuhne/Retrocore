@@ -164,6 +164,17 @@ public class AcornTapeTests
         UefFormat.Read(UefFormat.Write([1, 1, units, 1, 1])).HalfCycles.Should().Equal([1, 1, units, 1, 1]);
     }
 
+    /// <summary>
+    ///  A chunk whose length runs past the file, even one too large to add, is bad data.
+    /// </summary>
+    [TestMethod]
+    public void HugeChunkLengthsAreBadData()
+    {
+        byte[] uef = [.. "UEF File!\0"u8, 10, 0, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x7F];
+        Action read = () => UefFormat.Read(uef);
+        read.Should().Throw<InvalidDataException>();
+    }
+
     // The bytes of a UEF's &0100 chunks, in order.
     private static List<byte> DataBytes(byte[] uef)
     {

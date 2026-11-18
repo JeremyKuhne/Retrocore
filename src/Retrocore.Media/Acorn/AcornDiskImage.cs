@@ -64,7 +64,7 @@ public static class AcornDiskImage
             int catalogue = (side * TrackSize) + SectorSize;
             if (image.Length < catalogue + 8) { break; }
             int sectors = ((image[catalogue + 6] & 3) << 8) | image[catalogue + 7];
-            catalogueTracks = Math.Max(catalogueTracks, sectors / SectorsPerTrack);
+            catalogueTracks = Math.Max(catalogueTracks, (sectors + SectorsPerTrack - 1) / SectorsPerTrack);
         }
 
         int tracks = Math.Max(imageTracks, catalogueTracks) > 40 ? 80 : 40;

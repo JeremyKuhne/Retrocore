@@ -121,6 +121,18 @@ public class AcornDiskImageTests
     }
 
     /// <summary>
+    ///  A catalogue's sectors that run into a 41st track make the disk 80 tracks, so none is lost.
+    /// </summary>
+    [TestMethod]
+    public void PartTrackCataloguesRoundUp()
+    {
+        byte[] image = new byte[2 * AcornDiskImage.SectorSize];
+        image[AcornDiskImage.SectorSize + 6] = 0x01;
+        image[AcornDiskImage.SectorSize + 7] = 0x95;    // 405 sectors
+        AcornDiskImage.Read(image, doubleSided: false).Cylinders.Should().Be(80);
+    }
+
+    /// <summary>
     ///  A short DSD takes the larger of its two catalogues' sizes.
     /// </summary>
     [TestMethod]

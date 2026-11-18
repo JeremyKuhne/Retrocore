@@ -71,7 +71,7 @@ public static class UefFormat
             int id = BinaryPrimitives.ReadUInt16LittleEndian(file[position..]);
             int length = (int)BinaryPrimitives.ReadUInt32LittleEndian(file[(position + 2)..]);
             position += 6;
-            if (length < 0 || position + length > file.Length)
+            if (length < 0 || length > file.Length - position)
             {
                 throw new InvalidDataException("A UEF chunk runs past the file.");
             }

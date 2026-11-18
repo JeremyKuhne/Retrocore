@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Acorn;
 /// <remarks>
 ///  <para>
 ///   Writing register 0 (<c>$FEC0</c>) starts a conversion: bits 0-1 choose the channel, bit 2 is a flag and bit 3
-///   asks for 10 bits (10 ms) rather than 8 (4 ms). Reading register 0 gives the status: the channel, the flag and the
+///   asks for 12 bits (10 ms) rather than 8 (4 ms). The input is sampled as the conversion starts. Reading register 0 gives the status: the channel, the flag and the
 ///   mode, the result's top two bits in bits 5 and 4, bit 6 clear while busy and bit 7 clear once the conversion is
 ///   done. Registers 1 and 2 hold the result, left-justified: its top 8 bits, then the low bits in bits 4-7.
 ///  </para>
@@ -25,6 +25,7 @@ public sealed class BbcAnalogue
     private readonly ushort[] _inputs = [0x8000, 0x8000, 0x8000, 0x8000];
     private byte _control;
     private ushort _result;
+    private ushort _sample;
     private int _cyclesLeft;
     private bool _busy;
 
@@ -70,6 +71,7 @@ public sealed class BbcAnalogue
     {
         if ((register & 3) != 0) { return; }
         _control = value;
+        _sample = _inputs[value & 3];
         _busy = true;
         EndOfConversion = true;
         _cyclesLeft = (value & 8) != 0 ? 10_000 : 4_000;
@@ -94,8 +96,7 @@ public sealed class BbcAnalogue
     {
         if (!_busy || --_cyclesLeft > 0) { return; }
         _busy = false;
-        ushort value = _inputs[_control & 3];
-        _result = (ushort)((_control & 8) != 0 ? value & 0xFFC0 : value & 0xFF00);
+        _result = (ushort)((_control & 8) != 0 ? _sample & 0xFFF0 : _sample & 0xFF00);
         EndOfConversion = false;
     }
 }

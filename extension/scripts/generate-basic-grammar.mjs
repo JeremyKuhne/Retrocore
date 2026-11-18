@@ -134,7 +134,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                     { include: "#escape" },
                     { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
                     ...[...nameFollows].map(word => ({
-                        match: matching(`(${pattern(word)})([A-Za-z0-9_\`]*)`),
+                        match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
                         captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
                     })),
                     { match: matching(reserved.map(word => `(${business ? separated(word) : written(word, conditional.has(word) ? `${pattern(word)}(?![A-Za-z0-9_\`])` : pattern(word))})`).join("|")), captures },

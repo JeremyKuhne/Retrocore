@@ -57,7 +57,7 @@
           }
         },
         {
-          "match": "(?:(PROC)([A-Za-z0-9_`]*))",
+          "match": "(?:((?:PROC|(?:PRO)\\.))([A-Za-z0-9_`]*))",
           "captures": {
             "1": {
               "name": "keyword.other.retrocore-bbcbasic"

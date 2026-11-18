@@ -126,6 +126,9 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "110 P. \"HELLO\"", "P."), "keyword.other"), "P. is PRINT");
     assert.ok(has(scopes("bbcbasic", "120 D. 1,2:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
     assert.ok(has(scopes("bbcbasic", "130 PR.\"HI\"", "PR."), "keyword.other"));
+    // An abbreviated PROC takes its name too, so PRO.REM calls REM rather than starting a remark.
+    assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "PRINT"), "keyword.other"), "PRO.REM is a call, not a remark");
+    assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "REM"), "entity.name.function"));
 });
 
 test("MBASIC finds reserved words only set apart from names", () => {

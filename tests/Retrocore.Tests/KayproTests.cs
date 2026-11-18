@@ -14,19 +14,20 @@ namespace Retrocore.Tests;
 
 /// <summary>
 ///  The Kaypro II from the SDK's ROM sources: they assemble byte-identically to the chips, the ROM asks for a disk,
-///  and CP/M runs from its disk.
+///  and CP/M and MBASIC run from their disks.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   The chip dumps and disks are in <c>RETROCORE_KAYPRO</c> or <c>%USERPROFILE%\Retrocore\kaypro</c>:
-///   <c>81-149c.rom</c>, <c>81-146a.bin</c> and <c>cpm22-rom149.img</c> (Kaypro II CP/M 2.2). The tests that need them
-///   are inconclusive without them.
+///   <c>81-149c.rom</c>, <c>81-146a.bin</c>, <c>cpm22-rom149.img</c> (Kaypro II CP/M 2.2) and <c>MBasic.img</c>. The
+///   tests that need them are inconclusive without them.
 ///  </para>
 /// </remarks>
 [TestClass]
 public sealed class KayproTests
 {
     private const string MonitorHash = "5231E5DD0F6FB64A8EC50951269C248E00875906E391D044918E212D14B08F55";
+    private const string MbasicHash = "29D957FC6899C24F6296A1662A27ECA545D85EE3F7D70D2794C9D045D92FF157";
     private const string CharacterGeneratorHash = "CDE431C9E506EDF11261F7E7D52FD60B1A43FE2D9EA0D3E06F271D4CAB4884FA";
 
     private static string Inputs => Path.Join(AppContext.BaseDirectory, "Inputs", "Kaypro");
@@ -46,6 +47,21 @@ public sealed class KayproTests
         Hash(KayproSdkModules.AssembleMonitor(Path.Join(Inputs, KayproSdkModules.MonitorSource))).Should().Be(MonitorHash);
         Hash(KayproSdkModules.AssembleCharacterGenerator(Path.Join(Inputs, KayproSdkModules.CharacterGeneratorSource)))
             .Should().Be(CharacterGeneratorHash);
+    }
+
+    /// <summary>
+    ///  MBASIC's source assembles to MBASIC.COM's bytes, and with the disk present, to the file on it.
+    /// </summary>
+    [TestMethod]
+    public void MbasicSourceMatchesMbasicCom()
+    {
+        AssemblyResult result = KayproSdkModules.AssembleMbasic(Path.Join(Inputs, KayproSdkModules.MbasicSource));
+        result.Sections[0].Bytes.Length.Should().Be(KayproSdkModules.MbasicSize);
+        Hash(result).Should().Be(MbasicHash);
+        string disk = Path.Join(External, "MBasic.img");
+        if (!File.Exists(disk)) { return; }
+        byte[] file = MbasicOracleTests.ReadFile(disk, "MBASIC.COM");
+        result.Sections[0].Bytes.Span.CommonPrefixLength(file).Should().Be(file.Length);
     }
 
     /// <summary>
@@ -159,6 +175,21 @@ public sealed class KayproTests
         Screen(machine).Should().Contain("KAYPRO II 64k CP/M vers 2.2");
         Type(machine, "DIR\r");
         RunUntil(machine, "PIP", seconds: 10);
+    }
+
+    /// <summary>
+    ///  MBASIC loads from its disk on drive B and runs a program.
+    /// </summary>
+    [TestMethod]
+    public void RunsMbasic()
+    {
+        KayproMachine machine = Boot("cpm22-rom149.img", "MBasic.img");
+        RunUntil(machine, "A>", seconds: 10);
+        Type(machine, "B:MBASIC\r");
+        RunUntil(machine, "Ok", seconds: 20);
+        Screen(machine).Should().Contain("BASIC-80 Rev. 5.21");
+        Type(machine, "10 FOR I=1 TO 3:PRINT I*I;:NEXT\rRUN\r");
+        RunUntil(machine, " 1  4  9", seconds: 10);
     }
 
     /// <summary>

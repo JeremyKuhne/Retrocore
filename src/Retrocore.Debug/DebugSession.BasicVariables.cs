@@ -539,7 +539,17 @@ internal sealed partial class DebugSession
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9.]*[$%&]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
     private static partial Regex BusinessAssignable();
 
+    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9.]*[$%!#]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
+    private static partial Regex MbasicAssignable();
+
     // A variable or array element that can be set: Business BASIC's names hold periods and may end in & for a long
-    // integer.
-    private Regex Assignable => Target.Basic == BasicDialect.BusinessBasic ? BusinessAssignable() : MicrosoftAssignable();
+    // integer, and MBASIC's hold periods.
+    private Regex Assignable
+    {
+        get
+        {
+            if (Target.Basic == BasicDialect.BusinessBasic) { return BusinessAssignable(); }
+            return Target.Basic == BasicDialect.Mbasic ? MbasicAssignable() : MicrosoftAssignable();
+        }
+    }
 }

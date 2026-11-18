@@ -286,7 +286,8 @@ BITCNT = $026C
 PHASE = $026F
 
 ;; The cassette buffer pointers: <BUFPT>+1 for cassette 1 and <BUFPT>+2 for cassette 2, indexed by <FA>, each the
-;; offset of the next byte in its buffer.
+;; offset of the last byte used in its buffer: <Kernal1:JTP20> adds one before each byte, so OPEN's 0 puts the first
+;; byte at offset 1.
 ;;
 ;; The tape write counts the sync bytes down in <BUFPT> itself.
 BUFPT = $0270

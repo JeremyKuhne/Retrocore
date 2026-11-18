@@ -122,6 +122,7 @@ internal static class OffMachine
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => Apple1DebugTarget.Launch(args),
             DebugMachines.Coco => CocoDebugTarget.Launch(args),
+            DebugMachines.Pet => PetDebugTarget.Launch(args),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             _ => throw new ArgumentException($"A machine that is off cannot yet be a {machine}.")
         };

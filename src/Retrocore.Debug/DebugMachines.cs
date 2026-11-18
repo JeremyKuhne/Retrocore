@@ -55,6 +55,11 @@ internal static class DebugMachines
     internal const string Coco = "coco";
 
     /// <summary>
+    ///  The Commodore PET 2001; the launch's <c>model</c> says which BASIC.
+    /// </summary>
+    internal const string Pet = "pet";
+
+    /// <summary>
     ///  The MITS Altair 8800.
     /// </summary>
     internal const string Altair = "altair";
@@ -74,10 +79,11 @@ internal static class DebugMachines
         Apple3 => Apple3,
         Apple1 => Apple1,
         Coco => Coco,
+        Pet => Pet,
         Altair => Altair,
         null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
             $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\", "
-                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Coco}\" and \"{Altair}\".")
+                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Coco}\", \"{Pet}\" and \"{Altair}\".")
     };
 }

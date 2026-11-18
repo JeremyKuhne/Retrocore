@@ -386,7 +386,8 @@ LN_SERIES:
 ;;
 ;; The table's first byte is the number of coefficients less one, and five-byte packed reals follow. The value starts
 ;; as the first coefficient, then for each of the others it becomes that coefficient plus x divided by the value, so a
-;; table c0, c1, ... cn gives cn + x / (... + x / (c1 + x / c0)).
+;; table c0, c1, ... cn gives cn + x / (... + x / (c1 + x / c0)). The table needs at least two coefficients: a count
+;; byte of 0 is decremented to &FF before it is tested, and the loop runs on past the table.
 ;; In: A = the table's address, low byte, Y = its high byte, FP_A = x
 ;; Out: FP_A = the value, FP_TEMP_1 = x
 ;; Uses: A, X, Y, FP_B, FP_POINTER, SERIES_POINTER, FP_WORK..FP_WORK+5

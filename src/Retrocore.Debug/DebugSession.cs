@@ -38,6 +38,7 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
+        "retro/sound",
         "apple1/clearScreen",
         "altair/clearScreen"
     ];
@@ -436,7 +437,10 @@ internal sealed partial class DebugSession
         transport.On("retro/key", args => Reply(() =>
         {
             int code = (args.Int("code") ?? 0);
-            if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+            if (code < 0 || code > (_target?.MaximumKey ?? 127))
+            {
+                throw new ArgumentOutOfRangeException(nameof(args));
+            }
 
             // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
             // goes now and drops the rest of the paste.
@@ -837,7 +841,9 @@ internal sealed partial class DebugSession
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
+            DebugMachines.Pet => LaunchPet(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Kaypro2 => LaunchKaypro(args),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -930,6 +936,11 @@ internal sealed partial class DebugSession
             {
                 LoadOnDosDisk(dosTarget, [(address, File.ReadAllBytes(program))], args.Int("entryAddress"), program);
             }
+            else if (Target is PetDebugTarget pet && Path.GetExtension(program).Equals(".prg", StringComparison.OrdinalIgnoreCase))
+            {
+                // A PET program file gives its own address; one at BASIC's start is a BASIC program, which RUN starts.
+                pet.LoadPrg(File.ReadAllBytes(program), args.Bool("run") ?? true, args.Int("entryAddress"));
+            }
             else
             {
                 Target.Load(address, File.ReadAllBytes(program));
@@ -946,6 +957,12 @@ internal sealed partial class DebugSession
 
         // The disks the last run kept go back in their drives, over what the launch and saved machine put there.
         OpenJournal(args);
+
+        // A Kaypro's command is typed at CP/M's prompt from the disks the session mounts.
+        if (Target is KayproDebugTarget kaypro && args.String("command") is { } command)
+        {
+            kaypro.TypeAtPrompt(command, seconds: 30);
+        }
 
         // The SDK's ROM sources follow the program, each applying only where its memory area is mapped.
         // The SDK's sources can come from the repository instead, so breakpoints set in the files being edited bind.
@@ -1057,12 +1074,30 @@ internal sealed partial class DebugSession
         return target;
     }
 
+    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command is typed at CP/M's first prompt once
+    // the saved and kept disks are in their drives.
+    private static KayproDebugTarget LaunchKaypro(JsonObject args)
+    {
+        KayproDebugTarget target = KayproDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? 0);
+        return target;
+    }
+
     // A program on a Color Computer calls Color BASIC's routines through RAM hooks it sets up as it starts, so the
     // ROM runs first; Disk BASIC takes longer, as it resets the drives.
     private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
     {
         CocoDebugTarget target = CocoDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a PET calls the kernal, and a BASIC program needs BASIC's pointers, so the ROMs run first, through
+    // the RAM test to READY.
+    private static PetDebugTarget LaunchPet(JsonObject args, bool loads)
+    {
+        PetDebugTarget target = PetDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
         return target;
     }
 

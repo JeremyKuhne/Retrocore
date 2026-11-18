@@ -66,11 +66,25 @@ type Node = { machine: HardwareRow | undefined } | { switcher: true } | { settin
 
 /** The machines whose screens the media folder draws, by the launch's machine option. */
 // As the display panel picks them: the Model III, 4 and the Altair's terminal glow white like the Model I, and the
-// Model II green like the IIe.
+// Model II and the Kaypro II green like the IIe.
 const screens: Record<string, string> = {
     apple2: "apple2", apple3: "apple2", apple1: "apple1", coco: "coco", "trs80-model1": "trs80-model1",
-    "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2"
+    "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2",
+    pet: "trs80-model1",
+    kaypro2: "apple2"
 };
+
+/** What a device holds, as its questions name it: a tape or a disk (block storage's volumes are disks too). */
+export function mediumOf(device: Device): "tape" | "disk" {
+    return device.kind === "tapeDrive" ? "tape" : "disk";
+}
+
+/**
+ * The files a device's Insert offers: its formats, and on a PET a .prg too, which goes in as the tape SAVE writes.
+ */
+export function insertFormats(device: Device, machine: unknown): string[] {
+    return machine === "pet" && device.kind === "tapeDrive" && !device.formats.includes("prg") ? [...device.formats, "prg"] : device.formats;
+}
 
 /** The icons of the Machine view's rows, by hardware id, when the row is not a slot. */
 const hardwareIcons: Record<string, string> = {
@@ -750,6 +764,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             const generation = body.generation;
             const device = body.devices?.find(candidate => candidate.id === id) ?? tree.devices.find(candidate => candidate.id === id);
             const name = device?.name ?? id;
+            const medium = device === undefined ? "disk" : mediumOf(device);
             // The file the save was for: the one chosen in Save As, or the disk's own image.
             const target = typeof current.path === "string" ? current.path : device?.media?.source?.path ?? device?.media?.label;
             const file = target ? path.basename(target) : "its image";
@@ -758,7 +773,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     return true;
                 case "saved": {
                     const said = [...body.notes ?? [], ...body.losses ?? []];
-                    if (said.length !== 0) void vscode.window.showInformationMessage(`Retrocore: saved the disk in ${name} to ${file}. ${said.join(" ")}`);
+                    if (said.length !== 0) void vscode.window.showInformationMessage(`Retrocore: saved the ${medium} in ${name} to ${file}. ${said.join(" ")}`);
                     else vscode.window.setStatusBarMessage(savedMessage(file, name, body.backup !== undefined), 5000);
                     return true;
                 }
@@ -879,9 +894,18 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.insert", async (node?: Node) => {
         if (node === undefined || !("device" in node)) return;
-        const file = (await vscode.window.showOpenDialog({ title: `Insert in ${node.device.name}`, canSelectMany: false, filters: filters(node.device) }))?.[0];
+        const formats = insertFormats(node.device, (tree.session?.configuration ?? tree.off)?.machine);
+        const file = (await vscode.window.showOpenDialog({
+            title: `Insert in ${node.device.name}`, canSelectMany: false, filters: { [`${node.device.name} images`]: formats }
+        }))?.[0];
         if (file) await act(node, "insert", { path: file.fsPath });
     }));
+    // A Datasette's keys, pressed on the tape in it. RECORD with none in it puts in a blank tape, which is saved later
+    // with Save As, as a changed disk is.
+    for (const key of ["play", "stop", "rewind"]) {
+        context.subscriptions.push(vscode.commands.registerCommand(`retrocore.device.${key}`, (node?: Node) => act(node, key)));
+    }
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.recordKey", (node?: Node) => act(node, "record")));
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.record", async (node?: Node) => {
         if (node === undefined || !("device" in node)) return;
         const file = await vscode.window.showSaveDialog({ title: `Record from ${node.device.name} to`, filters: filters(node.device) });
@@ -927,9 +951,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         if (!device.media && kept === undefined) return false;
         const own = kept?.label ?? device.media?.source?.path ?? device.media?.label ?? "";
         const file = await vscode.window.showSaveDialog({
-            title: kept === undefined ? `Save the disk in ${device.name} as` : `Save the disk ejected from ${device.name} as`,
+            title: kept === undefined ? `Save the ${mediumOf(device)} in ${device.name} as` : `Save the disk ejected from ${device.name} as`,
             defaultUri: vscode.Uri.file(format === undefined ? own : path.join(path.dirname(own), `${path.parse(own).name}.${format}`)),
-            filters: { "Disk images": device.saveFormats ?? [] }
+            filters: { [mediumOf(device) === "tape" ? "Tape images" : "Disk images"]: device.saveFormats ?? [] }
         });
         if (file === undefined || (session !== undefined && !still(session))) return false;
         const chosen = await readFile(file.fsPath).then(bytes => createHash("sha256").update(bytes).digest("hex"), () => undefined);

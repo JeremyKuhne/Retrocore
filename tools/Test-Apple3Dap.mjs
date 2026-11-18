@@ -132,6 +132,10 @@ try {
     // SOS calls are BRKs: the BRK filter stops at the rest, and an sos function breakpoint at calls.
     const filters = events.filter(message => message.event === "capabilities").at(-1).body.capabilities.exceptionBreakpointFilters;
     assert.deepEqual(filters.map(filter => filter.filter), ["machineReset", "brk", "contracts"]);
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    await assert.rejects(request("launch", { machine: "apple3", sdkRoms, disks: utilities }), /disks must be a list/);
+    await assert.rejects(request("launch", { machine: "apple3", sdkRoms, disks: [null, 1] }), /disks\[1\] must be an image's path/);
     if (existsSync(utilities)) {
         events.length = 0;
         await request("launch", { machine: "apple3", sdkRoms, stopOnEntry: false, speed: "max", disks: [utilities], logpointLimit: 0 });

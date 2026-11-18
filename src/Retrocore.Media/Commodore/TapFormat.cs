@@ -30,6 +30,11 @@ public static class TapFormat
     /// </summary>
     public const byte PetMachine = 3;
 
+    /// <summary>
+    ///  The longest pulse an image holds, in microseconds: a zero's three bytes of cycles, about 16.8 seconds.
+    /// </summary>
+    public const int LongestPulse = 0xFF_FFFF;
+
     private const int HeaderLength = 20;
     private static ReadOnlySpan<byte> Signature => "C64-TAPE-RAW"u8;
 
@@ -92,6 +97,12 @@ public static class TapFormat
     ///  Writes pulses as a version 1 TAP image for the PET: a byte of 8 µs units for a pulse up to 2,040 µs, and a
     ///  zero and the exact length for a longer one or one that is not a multiple of 8.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A pulse longer than <see cref="LongestPulse"/> is written as that; <see cref="CommodoreTapeCodec"/> lists it
+    ///   as a loss.
+    ///  </para>
+    /// </remarks>
     /// <param name="pulses">The pulses, in microseconds.</param>
     /// <returns>The image.</returns>
     public static byte[] Write(IReadOnlyList<int> pulses)
@@ -106,7 +117,7 @@ public static class TapFormat
             }
             else
             {
-                int cycles = Math.Min(pulse, 0xFF_FFFF);
+                int cycles = Math.Min(pulse, LongestPulse);
                 data.Add(0);
                 data.Add((byte)cycles);
                 data.Add((byte)(cycles >> 8));

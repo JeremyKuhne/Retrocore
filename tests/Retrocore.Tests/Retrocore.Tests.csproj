@@ -124,6 +124,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\PetSdkModules.cs" Link="PetSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\OverlayBaseResolver.cs" Link="OverlayBaseResolver.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\DefineArgument.cs" Link="DefineArgument.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Coco3Assembly.cs" Link="Coco3Assembly.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceAnalysis.cs" Link="Language\SourceAnalysis.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Language\SourceText.cs" Link="Language\SourceText.cs" />

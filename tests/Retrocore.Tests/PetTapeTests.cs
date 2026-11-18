@@ -261,11 +261,7 @@ public class PetTapeTests
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
             start.Environment["RETRO_END"] = 40.ToString(CultureInfo.InvariantCulture);
             start.Environment["RETRO_OUT"] = output;
-            using (Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start."))
-            {
-                process.StandardOutput.ReadToEnd();
-                process.WaitForExit(300_000).Should().BeTrue("MAME finishes");
-            }
+            PetOracleTests.RunToExit(start);
 
             byte[] memory = File.ReadAllBytes(output).AsSpan(1000).ToArray();
             (memory[0x2A] | (memory[0x2B] << 8)).Should().Be(end, "MAME loaded the whole program");

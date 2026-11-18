@@ -262,11 +262,7 @@ public class PetOracleTests
             start.Environment["RETRO_END"] = seconds.ToString(CultureInfo.InvariantCulture);
             start.Environment["RETRO_OUT"] = output;
             foreach ((string key, string value) in environment) { start.Environment[key] = value; }
-            using (Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start."))
-            {
-                process.StandardOutput.ReadToEnd();
-                process.WaitForExit(300_000).Should().BeTrue("MAME finishes");
-            }
+            RunToExit(start);
 
             File.Exists(output).Should().BeTrue("the Lua script traces");
             List<Row> rows = [];
@@ -293,6 +289,28 @@ public class PetOracleTests
         }
 
         static byte Hex(string text) => byte.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    ///  Runs MAME to its end, draining its output and error as it writes them; one still running after five minutes
+    ///  is killed, and the test fails.
+    /// </summary>
+    /// <param name="start">How to start it, with both streams redirected.</param>
+    internal static void RunToExit(ProcessStartInfo start)
+    {
+        using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
+        process.OutputDataReceived += static (_, _) => { };
+        process.ErrorDataReceived += static (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        if (!process.WaitForExit(300_000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            Assert.Fail("MAME did not finish in five minutes.");
+        }
+
+        process.WaitForExit();
     }
 
     private static string FindTool(string name)

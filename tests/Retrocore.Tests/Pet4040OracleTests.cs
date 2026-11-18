@@ -145,10 +145,21 @@ public class Pet4040OracleTests
     }
 
     // The two sequences agree as far as the shorter goes, less the pass of the wait it ends in: the addresses, and
-    // when asked the registers, but in a row either side marks as loose.
+    // when asked the registers, but in a row either side marks as loose. The two run their waits for different times,
+    // so a long run's lengths differ by a few percent; one under nine tenths of the other stopped early and fails,
+    // rather than comparing next to nothing. A short handler's waits make up most of it, so only its addresses count.
     private static void Match(string what, List<Row> expected, List<Row> actual, bool registers)
     {
-        int count = Math.Max(0, Math.Min(expected.Count, actual.Count) - 16);
+        const int Tail = 16;
+        int longer = Math.Max(expected.Count, actual.Count);
+        if (longer > 1_000)
+        {
+            Math.Min(expected.Count, actual.Count).Should().BeGreaterThanOrEqualTo(
+                longer * 9 / 10,
+                $"{what}, MAME ran {expected.Count} instructions and ours {actual.Count}, so one stopped early");
+        }
+
+        int count = Math.Max(0, Math.Min(expected.Count, actual.Count) - Tail);
         for (int i = 0; i < count; i++)
         {
             bool loose = !registers || ((expected[i].P | actual[i].P) & Loose) != 0;

@@ -29,9 +29,12 @@ public sealed class PetAudio
     /// <summary>
     ///  Creates the sound output.
     /// </summary>
-    /// <param name="sampleRate">The sample rate in hertz.</param>
+    /// <param name="sampleRate">The sample rate in hertz, at most a sample a CPU cycle.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The rate is not 1 to the CPU's 1 MHz.</exception>
     public PetAudio(int sampleRate = 48000)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(sampleRate, PetTiming.CpuHertz);
         SampleRate = sampleRate;
         _cyclesPerSample = (double)PetTiming.CpuHertz / sampleRate;
         _highPass = MathF.Exp(-2 * MathF.PI * 20 / sampleRate);

@@ -170,7 +170,7 @@ internal sealed partial class Trs80Model2DebugTarget
             throw new ArgumentException($"There is no drive {drive}.");
         }
 
-        FloppyMedia.Insert(_machine.Drives[drive], path, coco: false);
+        FloppyMedia.Insert(_machine.Drives[drive], path, FloppyFamily.Trs80);
     }
 
     private JsonObject MediaState() => new JsonObject

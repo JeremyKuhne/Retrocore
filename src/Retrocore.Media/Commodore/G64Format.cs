@@ -45,7 +45,13 @@ public static class G64Format
             throw new InvalidDataException("The file is not a G64 image: it does not start GCR-1541.");
         }
 
-        int count = Math.Min(image[9], (byte)CommodoreDisk.Positions);
+        int count = image[9];
+        if (count > CommodoreDisk.Positions)
+        {
+            throw new InvalidDataException(
+                $"The G64 image has {count} half-tracks; a 35-track disk holds at most {CommodoreDisk.Positions}.");
+        }
+
         if (image.Length < HeaderSize + (count * 8))
         {
             throw new InvalidDataException("The G64 image's track tables are cut short.");

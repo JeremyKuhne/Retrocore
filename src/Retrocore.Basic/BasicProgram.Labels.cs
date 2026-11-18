@@ -69,8 +69,10 @@ public sealed partial class BasicProgram
             }
 
             if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
-            if (StartsWord(text, index, "REM")) { break; }
-            if (StartsWord(text, index, "DATA"))
+            // BASIC 1 skips spaces inside a reserved word, so R E M is a remark there too.
+            bool spaced = dialect is PetBasicDialect { Version: 1 };
+            if (StartsWord(text, index, "REM", spaced)) { break; }
+            if (StartsWord(text, index, "DATA", spaced))
             {
                 index = SkipData(text, index);
                 continue;
@@ -224,9 +226,23 @@ public sealed partial class BasicProgram
         return text.Length;
     }
 
-    private static bool StartsWord(string text, int index, string word) =>
-        (index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
-            && string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+    private static bool StartsWord(string text, int index, string word, bool spaced = false)
+    {
+        if (index > 0 && char.IsAsciiLetterOrDigit(text[index - 1])) { return false; }
+        if (!spaced)
+        {
+            return string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        int at = index;
+        for (int letter = 0; letter < word.Length; letter++, at++)
+        {
+            while (letter > 0 && at < text.Length && text[at] == ' ') { at++; }
+            if (at >= text.Length || char.ToUpperInvariant(text[at]) != word[letter]) { return false; }
+        }
+
+        return true;
+    }
 
     [GeneratedRegex(@"GO\s+(?<word>TO|SUB)", RegexOptions.IgnoreCase)]
     private static partial Regex GoTo();

@@ -117,6 +117,30 @@ internal sealed class PetBasicDialect : BasicDialect
     /// </summary>
     internal int Version { get; }
 
+    /// <summary>
+    ///  Gets whether each string in string space ends with two link bytes, as BASIC 4's garbage collector needs: a
+    ///  pointer back to its descriptor, or for garbage its length and 255.
+    /// </summary>
+    internal bool LinksStrings => Version == 4;
+
+    /// <summary>
+    ///  The address of BASIC 4's <c>DSDESC</c>, the disk status string <c>DS$</c>'s descriptor: its length, then where
+    ///  it is.
+    /// </summary>
+    internal const int DiskStatusDescriptor = 0x0D;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   BASIC 4's <c>CLEARC</c> also forgets the disk status, whose string was in the space it frees.
+    ///  </para>
+    /// </remarks>
+    internal override void Clear(IBasicMemory memory)
+    {
+        base.Clear(memory);
+        if (LinksStrings) { memory.Write(DiskStatusDescriptor, 0); }
+    }
+
     /// <inheritdoc/>
     public override string Name => "petbasic";
 

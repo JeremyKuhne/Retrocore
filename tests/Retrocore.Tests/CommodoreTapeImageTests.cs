@@ -61,6 +61,17 @@ public class CommodoreTapeImageTests
     }
 
     /// <summary>
+    ///  A WAV file whose samples are cut short is refused rather than read as a shorter tape.
+    /// </summary>
+    [TestMethod]
+    public void ACutShortWaveIsRefused()
+    {
+        byte[] wave = CommodoreWave.Write([1000, 2000, 3000], rate: 1_000_000);
+        Action read = () => CommodoreWave.Read(wave.AsSpan(0, wave.Length - 100));
+        read.Should().Throw<InvalidDataException>().WithMessage("*data chunk says*");
+    }
+
+    /// <summary>
     ///  A tape whose pulses TAP holds saves as TAP with no loss and reads back the same.
     /// </summary>
     [TestMethod]

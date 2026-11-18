@@ -2452,7 +2452,7 @@ ISCNTC:
 CZGETL:
     jmp GETIN
 
-;; Closes all files: <CLALL>.
+;; Inherit: <CLALL>
 CQCALL:
     jmp CLALL
 

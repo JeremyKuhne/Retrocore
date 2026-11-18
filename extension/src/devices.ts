@@ -23,7 +23,7 @@ import { languageRequest } from "./languageClient";
 import {
     changeWords, conflictQuestion, contextWords, discardedMessage, iconName, iconSvg, keptSummary, leaveQuestion,
     lockState, lossless, lossyQuestion, mark, readOnlyQuestion, revertedMessage, savedMessage, stoppedMessage, summary,
-    tooltipLines, unsavedDisks, crashedMessage, discardKeptQuestion, type Device, type Differences, type KeptDisk, type Question
+    tooltipLines, unsavedDisks, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
 } from "./drives";
 
 /** What retro/device and retro/hardware say back about media, beside the devices, to a client that speaks it. */
@@ -56,6 +56,8 @@ interface Target {
     show(body: Devices): void;
     /** Its devices as last read, which may not be the ones the views show. */
     devices(): Device[];
+    /** Whether a disk it lets go can be put back with Undo: a running machine's can, an off one's cannot. */
+    undoes: boolean;
 }
 
 /** The retro/devices body. */
@@ -743,18 +745,14 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         if (choice === undefined) return;
         if (choice === "Discard") {
             try {
-                for (;;) {
-                    const now = (await languageRequest<{ journals: { disks: string[]; revision: string }[] }>(
-                        "retrocore/recovery/list", { id: recoveryId })).journals[0];
-                    if (now === undefined) {
-                        void vscode.window.showInformationMessage(`Retrocore: ${machine} keeps no disks to discard now, or is running.`);
-                        break;
-                    }
-                    if (await ask(discardKeptQuestion(machine, now.disks)) !== "Discard") return;
-                    const result = await languageRequest<{ outcome?: string }>("retrocore/recovery/resolve",
-                        { id: recoveryId, action: "discard", revision: now.revision });
-                    if (result.outcome !== "changed") break;
-                }
+                const outcome = await discardKept(
+                    async () => (await languageRequest<{ journals: { disks: string[]; revision: string }[] }>(
+                        "retrocore/recovery/list", { id: recoveryId })).journals[0],
+                    async disks => await ask(discardKeptQuestion(machine, disks)) === "Discard",
+                    async revision => await languageRequest<{ outcome?: string }>("retrocore/recovery/resolve",
+                        { id: recoveryId, action: "discard", revision }));
+                if (outcome === "kept") return;
+                if (outcome === "none") void vscode.window.showInformationMessage(`Retrocore: ${machine} keeps no disks to discard now, or is running.`);
             } catch (error) {
                 void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -782,13 +780,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         }
         // Only the machine whose disks these are: another chosen meanwhile has its own.
         const on = offTarget(true, recoveryId);
-        for (const device of off.devices) {
-            if (!on.still()) return;
-            if (device.media?.kept && !await sendTo(on, "device", { id: device.id, action: "save" })) return;
-            for (const ejected of device.ejected ?? []) {
-                if (ejected.changed && !await sendTo(on, "device", { id: device.id, action: "save", ejected: ejected.id })) return;
-            }
-        }
+        await saveAllKept(off.devices, on.still,
+            async (id, ejected) => await sendTo(on, "device", ejected === undefined ? { id, action: "save" } : { id, action: "save", ejected }));
     };
 
     // A session that did not stop cleanly, found as the extension starts, offers the disks its journal kept: Recover
@@ -838,7 +831,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         request: async (request, args) => await session.customRequest(`retro/${request}`, args) as Devices & MediaAnswer,
         still: () => still(session),
         show,
-        devices: () => sessionDevices.get(session.id)?.devices ?? (tree.session?.id === session.id ? tree.devices : [])
+        devices: () => sessionDevices.get(session.id)?.devices ?? (tree.session?.id === session.id ? tree.devices : []),
+        undoes: true
     });
     // The off machine as a target: a question about it stands while no session runs and it is still the one shown,
     // or, for a stopped machine's kept disks saved from its notice, while it is still the one shown. Its views follow
@@ -849,7 +843,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             request: async (request, args) => await off.request(request, args, shown) as unknown as Devices & MediaAnswer,
             still: () => (alongside || vscode.debug.activeDebugSession?.type !== "retrocore") && (off.recoveryId ?? off.name) === shown,
             show: () => undefined,
-            devices: () => off.devices
+            devices: () => off.devices,
+            undoes: false
         };
     };
     // The machine the views show: the active session's, or the off one.
@@ -1000,6 +995,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const device = on.devices().find(candidate => candidate.id === id);
         const file = path.basename(device?.media?.source?.path ?? device?.media?.label ?? "its image");
         const differences = device?.media?.changed ? await differencesOf(on, id) : undefined;
+        // Off, nothing puts the changes back, so they are let go only when the person says so.
+        if (!on.undoes && device?.media?.changed && await ask(letGoQuestion(device.name, "revert", file)) !== "Revert") return false;
         try {
             if (!on.still()) return false;
             const body = await on.request("device", { id, action: "revert", generation, supportsRetrocoreMedia: 1 });
@@ -1060,6 +1057,9 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const onKept = async (node: Node | undefined, action: string): Promise<void> => {
         const on = targetNow();
         if (node === undefined || !("kept" in node) || on === undefined) return;
+        if (action === "discard" && !on.undoes && node.kept.changed
+            && await ask(letGoQuestion(node.device.name, "discard", node.kept.label)) !== "Discard") return;
+        if (!on.still()) return;
         await sendTo(on, "device", { id: node.device.id, action, ejected: node.kept.id });
     };
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.ejectedSave", (node?: Node) => onKept(node, "save")));

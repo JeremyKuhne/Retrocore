@@ -402,6 +402,52 @@ export function discardKeptQuestion(machine: string, files: string[]): Question 
     };
 }
 
+/**
+ * The question before a machine that is off lets a changed disk go, which nothing can put back: reverting the disk in
+ * a drive to its image, or discarding one the machine ejected.
+ */
+export function letGoQuestion(drive: string, action: "revert" | "discard", file: string): Question {
+    const name = path.basename(file) || file;
+    return action === "revert"
+        ? { message: `Revert the disk in ${drive} to ${name}?`, detail: "The machine is off, so its changes cannot be put back with Undo.", buttons: ["Revert"] }
+        : { message: `Discard the disk ejected from ${drive}?`, detail: `${name}. The machine is off, so its changes cannot be put back with Undo.`, buttons: ["Discard"] };
+}
+
+/**
+ * Discard for a machine's kept disks: asks about the disks its journal keeps now, and asks again when the journal
+ * changed before the answer came, as when the machine ran again. Gives what came of it: discarded, kept (the person
+ * said no), or none (the journal keeps no disks, or a running session has it).
+ */
+export async function discardKept(
+    now: () => Promise<{ disks: string[]; revision: string } | undefined>,
+    confirm: (disks: string[]) => Promise<boolean>,
+    resolve: (revision: string) => Promise<{ outcome?: string }>): Promise<"discarded" | "kept" | "none"> {
+    for (;;) {
+        const journal = await now();
+        if (journal === undefined) return "none";
+        if (!await confirm(journal.disks)) return "kept";
+        if ((await resolve(journal.revision)).outcome !== "changed") return "discarded";
+    }
+}
+
+/**
+ * Save All for a machine's kept disks: each kept disk in a drive and each changed one the machine ejected, while the
+ * question about the machine stands. Stops at the first not saved, as when the person cancels a question its save
+ * asks, leaving the rest kept. Says whether all were saved.
+ */
+export async function saveAllKept(devices: Device[], still: () => boolean,
+    save: (id: string, ejected?: string) => Promise<boolean>): Promise<boolean> {
+    for (const device of devices) {
+        if (!still()) return false;
+        if (device.media?.kept && !await save(device.id)) return false;
+        for (const ejected of device.ejected ?? []) {
+            if (!ejected.changed) continue;
+            if (!still() || !await save(device.id, ejected.id)) return false;
+        }
+    }
+    return true;
+}
+
 /** What the status bar says for a moment after a save that asked nothing. */
 export function savedMessage(file: string, drive: string, backup: boolean): string {
     return `$(check) Saved ${file} from ${drive}${backup ? "; the version it replaced is kept" : ""}`;

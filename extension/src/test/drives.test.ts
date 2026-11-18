@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, crashedMessage, discardKeptQuestion, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
+    changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
     conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
@@ -114,6 +114,53 @@ test("a Datasette's keys show while the machine runs; a tape drive that cannot s
     assert.ok(!hasTapeKeys(recorder));
     assert.ok(contextWords(recorder, true).includes("record"));
     assert.ok(!contextWords(recorder, true).includes("play"));
+});
+
+test("Discard asks about the disks kept now, again when the journal changed meanwhile, and lets nothing go unasked", async () => {
+    // The machine ran again while the first question was open: that answer lets nothing go, and the newer disks are asked about.
+    const journals = [{ disks: ["work.woz"], revision: "a" }, { disks: ["work.woz", "game.woz"], revision: "b" }];
+    const asked: string[][] = [];
+    const resolved: string[] = [];
+    const outcome = await discardKept(async () => journals.shift(), async disks => { asked.push(disks); return true; },
+        async revision => { resolved.push(revision); return revision === "a" ? { outcome: "changed" } : {}; });
+    assert.equal(outcome, "discarded");
+    assert.deepEqual(asked, [["work.woz"], ["work.woz", "game.woz"]]);
+    assert.deepEqual(resolved, ["a", "b"]);
+
+    // No to the question: nothing is resolved.
+    let sent = false;
+    assert.equal(await discardKept(async () => ({ disks: ["work.woz"], revision: "a" }), async () => false, async () => { sent = true; return {}; }), "kept");
+    assert.equal(sent, false);
+    assert.equal(await discardKept(async () => undefined, async () => true, async () => ({})), "none");
+});
+
+test("Save All saves each kept disk while the machine is the one asked about, and stops at the first not saved", async () => {
+    const kept = (id: string, ejected: string[] = []): Device => ({
+        ...drive(true), id, media: { ...drive(true).media!, kept: true },
+        ejected: ejected.map(item => ({ id: item, label: image, format: "WOZ", why: "ejected" as const, when: "", changed: true }))
+    });
+    const devices = [kept("disk0", ["k-1"]), { ...drive(false), id: "disk1" }, kept("disk2")];
+    const saved: string[] = [];
+    assert.equal(await saveAllKept(devices, () => true, async (id, ejected) => { saved.push(ejected ?? id); return true; }), true);
+    assert.deepEqual(saved, ["disk0", "k-1", "disk2"], "the unchanged disk is left alone");
+
+    // A question cancelled: the disks after it stay kept.
+    saved.length = 0;
+    assert.equal(await saveAllKept(devices, () => true, async (id, ejected) => { saved.push(ejected ?? id); return false; }), false);
+    assert.deepEqual(saved, ["disk0"]);
+
+    // Another machine chosen meanwhile: nothing more is saved to this one's images.
+    saved.length = 0;
+    let shown = true;
+    assert.equal(await saveAllKept(devices, () => shown, async (id, ejected) => { saved.push(ejected ?? id); shown = false; return true; }), false);
+    assert.deepEqual(saved, ["disk0"]);
+});
+
+test("a machine that is off asks before it lets a changed disk go, as Undo cannot put it back", () => {
+    const revert = letGoQuestion("Drive 1", "revert", image);
+    assert.equal(revert.message, "Revert the disk in Drive 1 to work.woz?");
+    assert.deepEqual(revert.buttons, ["Revert"]);
+    assert.match(letGoQuestion("Drive 1", "discard", image).detail, /^work\.woz\. .*Undo/);
 });
 
 test("the questions a save asks say what is off and offer the way out the plan draws", () => {

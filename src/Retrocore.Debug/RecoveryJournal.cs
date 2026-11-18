@@ -89,6 +89,13 @@ internal sealed partial class RecoveryJournal
     internal IReadOnlyList<JsonObject> Kept { get; }
 
     /// <summary>
+    ///  Gets the disks the journal names now: those it held when opened, until a commit names others.
+    /// </summary>
+    internal IReadOnlyList<JsonObject> Named => _named ?? Kept;
+
+    private IReadOnlyList<JsonObject>? _named;
+
+    /// <summary>
     ///  Gets the folder of the recovery journals, under local data.
     /// </summary>
     internal static string Root => Path.Join(LocalData.Root, "Recovery");
@@ -307,6 +314,7 @@ internal sealed partial class RecoveryJournal
         string temporary = Path.Join(_folder, JournalFile + ".tmp");
         WriteDurably(temporary, Utf8(new JsonObject { ["disks"] = entries }));
         File.Move(temporary, Path.Join(_folder, JournalFile), overwrite: true);
+        _named = [.. entries.OfType<JsonObject>()];
 
         // Only now is an older snapshot no longer needed; a disk saved or let go leaves the journal with them.
         // An entry kept as it was may hold anything; only a file name it gives as text keeps a snapshot.

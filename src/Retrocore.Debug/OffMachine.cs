@@ -108,16 +108,19 @@ internal static class OffMachine
                 if (configuration.String("recoveryId") is { } id && RecoveryJournal.Open(id, problems, claim: false) is { } opened)
                 {
                     journal = opened;
-                    s_snapshots = opened.Kept
-                        .Where(entry => entry["ejected"] is null && entry.String("drive") is not null)
-                        .GroupBy(entry => entry.String("drive") ?? "")
-                        .ToDictionary(group => group.Key, group => group.First().String("file") ?? "");
-
+                    s_snapshots = Snapshots(opened);
                     problems.AddRange(MediaActions.Recover(target.Devices, journal));
                 }
 
                 JsonObject? answer = act(target);
-                if (changes) { journal?.Commit(MediaActions.Journal(target.Devices, journal), close: true); }
+                if (changes && journal is not null)
+                {
+                    // The tokens answered are of the disks as the journal names them now: a disk saved has left it, and
+                    // one locked or put back in its drive is named by its new snapshot.
+                    journal.Commit(MediaActions.Journal(target.Devices, journal), close: true);
+                    s_snapshots = Snapshots(journal);
+                }
+
                 JsonObject body = DeviceJson.Write(target.Devices);
                 ToTokens(body, answer, target.Devices);
                 body["hardware"] = HardwareRow.Json(Off(target.Hardware(), configuration));
@@ -133,6 +136,12 @@ internal static class OffMachine
             }
         }
     }
+
+    // The snapshot of the kept disk in each drive, as the journal names it now.
+    private static Dictionary<string, string> Snapshots(RecoveryJournal journal) => journal.Named
+        .Where(entry => entry["ejected"] is null && entry.String("drive") is not null)
+        .GroupBy(entry => entry.String("drive") ?? "")
+        .ToDictionary(group => group.Key, group => group.First().String("file") ?? "");
 
     // A machine built for each request mounts its disks afresh each time, with new generations, so the editor is told
     // of a mount by a token of what its drive holds, which stays while the drive holds the same image. An answer back

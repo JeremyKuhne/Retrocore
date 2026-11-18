@@ -138,6 +138,8 @@ try {
     assert.ok(readFileSync(disk).includes(Buffer.from("FIRST   BAS")), "the image has the program");
     off = await language.request("retrocore/machine/describe", { configuration });
     assert.equal(off.devices.find(device => device.id === "disk0").media.changed, false);
+    assert.equal(off.devices.find(device => device.id === "disk0").media.generation,
+        saved.devices.find(device => device.id === "disk0").media.generation, "a save's answer names the disk as the next request does");
     await language.request("retrocore/recovery/resolve", { id: recoveryId, action: "recover" });
     offered = (await language.request("retrocore/recovery/list", {})).journals.find(entry => entry.id === recoveryId);
     assert.equal(offered, undefined, "a recovered session is not offered again");

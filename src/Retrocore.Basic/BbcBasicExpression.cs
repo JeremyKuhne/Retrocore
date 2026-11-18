@@ -442,10 +442,24 @@ internal sealed class BbcBasicExpression
             throw new FormatException($"FN{name} cannot be evaluated without running BASIC.");
         }
 
-        if (argument is null) { return Evaluate(function.Body).Value; }
+        // The call's argument must match the definition's parameter, as BASIC's "Arguments" error has it.
         string parameter = function.Parameter;
+        if (argument is null != (parameter.Length == 0)) { throw new FormatException("Arguments."); }
+        if (argument is not { } given) { return Evaluate(function.Body).Value; }
+
+        // The argument takes the parameter's type: a string for $, an integer, truncated, for %, else a real.
+        BasicValue value;
+        if (parameter.EndsWith('$'))
+        {
+            value = given.IsString ? given : throw new FormatException("Type mismatch.");
+        }
+        else
+        {
+            value = parameter.EndsWith('%') ? Integer(Int(given)) : Real(Number(given));
+        }
+
         bool had = _bound.TryGetValue(parameter, out BasicValue previous);
-        _bound[parameter] = argument.Value;
+        _bound[parameter] = value;
         try
         {
             return Evaluate(function.Body).Value;
@@ -639,8 +653,16 @@ internal sealed class BbcBasicExpression
         double.NaN => throw new FormatException("Log range."),
         >= LargestReal or <= -LargestReal => throw new FormatException("Too big."),
         > -SmallestReal and < SmallestReal => new(0),
-        _ => new(value)
+        _ => new(RoundMantissa(value))
     };
+
+    // A real rounded to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10.
+    private static double RoundMantissa(double value)
+    {
+        if (value == 0) { return 0; }
+        double scale = Math.ScaleB(1.0, 31 - Math.ILogB(value));
+        return Math.Round(value * scale, MidpointRounding.AwayFromZero) / scale;
+    }
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);
 

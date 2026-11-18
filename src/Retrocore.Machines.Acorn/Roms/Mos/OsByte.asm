@@ -381,8 +381,8 @@ SELECT_ADC_CHANNELS_1:
 ;; With Y negative, X is the negative INKEY number: exclusive-ORing it with &7F gives the key number exclusive-ORed with
 ;; &80 that KEYV's scan (as OSBYTE &79, with the OSBYTE's carry set) takes.
 ;; In: X, Y = the time limit in centiseconds, low byte first, or Y = &FF and X = the negative INKEY number
-;; Out: X = the character, Y = 0 for a character, &1B for an escape or &FF for a timeout; for a key test, X/Y = &FF
-;;   when the key is pressed, otherwise 0
+;; Out: X = the character when one is read (on an escape or a timeout, the time limit's low byte), Y = 0 for a
+;;   character, &1B for an escape or &FF for a timeout; for a key test, X/Y = &FF when the key is pressed, otherwise 0
 ;; Uses: A
 ;; See: <READ_HIGH_ORDER_ADDRESS>
 READ_KEY_WITH_TIME_LIMIT:

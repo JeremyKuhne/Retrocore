@@ -1117,9 +1117,9 @@ PHROM_SET_ADDRESS_DONE:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Ends a pass of the keyboard code: while no key is held, re-enables the key-pressed interrupt and stops the timer
-;; scanning the keyboard. Falls into <SET_KEYBOARD_LEDS>.
-;; Out: A = the flags on entry, negative and overflow kept
-;; Uses: X
+;; scanning the keyboard. Falls into <SET_KEYBOARD_LEDS>, which returns the flags this leaves, not the caller's.
+;; Out: X = 0 when no key is held, &FF otherwise; A = the flags then: zero set and negative clear when no key is
+;;   held, zero clear otherwise
 END_KEYBOARD_SCAN:
     ldx #$FF
     lda LAST_KEY_PRESSED

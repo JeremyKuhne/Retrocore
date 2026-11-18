@@ -220,8 +220,29 @@ public static class GcrLayout
             byte mark = ReadByte(bits, count, ref position, ref valid);
             if (valid && mark == 0x08)
             {
-                for (int i = 0; i < header.Length; i++) { header[i] = ReadByte(bits, count, ref position, ref valid); }
-                bool good = valid && (header[0] ^ header[1] ^ header[2] ^ header[3] ^ header[4]) == 0 && header[2] == track;
+                // A header cut short by a sync is bad, and reading goes on from that sync, as for a data block.
+                int probe = position;
+                bool cut = NextSync(bits, count, ref probe, position + (header.Length * 10)) >= 0;
+                bool good = false;
+                if (!cut)
+                {
+                    for (int i = 0; i < header.Length; i++)
+                    {
+                        header[i] = ReadByte(bits, count, ref position, ref valid);
+                    }
+
+                    good = valid && (header[0] ^ header[1] ^ header[2] ^ header[3] ^ header[4]) == 0 && header[2] == track;
+                }
+
+                // A bad header right after a good one is most likely that sector's data block with its mark damaged
+                // to $08: the sector was written, so it is a loss, not a sector DOS 1 never wrote.
+                if (!good && sector >= 0 && sector < found.Length) { blocks[sector] = true; }
+                if (cut)
+                {
+                    position = probe;
+                    atSync = true;
+                }
+
                 sector = good ? header[1] : -1;
                 if (sector >= 0 && sector < found.Length) { headers[sector] = true; }
             }

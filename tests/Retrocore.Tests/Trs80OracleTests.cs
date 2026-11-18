@@ -113,7 +113,11 @@ public class Trs80OracleTests
                     </input></system></mameconfig>
                     """);
 
-                arguments.AddRange(["-floppy0", "80t_qd", "-flop1", disk]);
+                // MAME opens a disk to write it back, which locks the file; a copy keeps the fixture free for the tests
+                // that read it at the same time.
+                string copy = Path.Join(work, Path.GetFileName(disk));
+                File.Copy(disk, copy);
+                arguments.AddRange(["-floppy0", "80t_qd", "-flop1", copy]);
             }
 
             string output = Path.Join(work, "memory.bin");

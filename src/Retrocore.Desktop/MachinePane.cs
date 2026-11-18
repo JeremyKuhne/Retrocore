@@ -317,7 +317,20 @@ internal sealed class MachinePane : ScrollViewer
         // While the machine is off, a tape cannot record and nothing has changed a disk to save.
         List<TreeAction> inline = [];
         if (device.Can(MediaOperations.Insert)) { inline.Add(new("add", "Insert Media...", () => _ = Insert(device))); }
-        if (running && device.Can(MediaOperations.Record))
+        // A tape drive that saves its tape, as the PET's Datasettes do, has the recorder's own keys: a recording is
+        // a changed tape, saved afterwards. Others record straight to a file.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        if (running && deck)
+        {
+            if (device.Media is not null) { inline.Add(new("play", "Play", () => Act(device, "play"))); }
+            inline.Add(new("record", "Record", () => Act(device, "record")));
+            if (device.Media is not null)
+            {
+                inline.Add(new("debug-stop", "Stop", () => Act(device, "stop")));
+                inline.Add(new("history", "Rewind", () => Act(device, "rewind")));
+            }
+        }
+        else if (running && device.Can(MediaOperations.Record))
         {
             inline.Add(new("record", "Record to...", () => _ = Record(device)));
         }
@@ -348,7 +361,8 @@ internal sealed class MachinePane : ScrollViewer
         List<IReadOnlyList<TreeAction>> menu = [];
         if (running && device.Media is not null && device.Can(MediaOperations.Save))
         {
-            menu.Add([new(Icon: null, "Save Disk As...", () => _ = SaveAs(device))]);
+            string saveAs = device.Kind == DeviceKind.TapeDrive ? "Save Tape As..." : "Save Disk As...";
+            menu.Add([new(Icon: null, saveAs, () => _ = SaveAs(device))]);
         }
 
         return new TreeNode
@@ -751,13 +765,20 @@ internal sealed class MachinePane : ScrollViewer
         _ = Send(args => _session.Hardware(row.Id, args), new JsonObject { ["action"] = "removeCard" });
     }
 
+    // The files Insert offers: the drive's formats, and for a Datasette, a tape deck that saves, a .prg too, which
+    // goes in as the tape SAVE writes.
+    private static IReadOnlyList<string> InsertFormats(DeviceState device) =>
+        device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save) && !device.Info.Formats.Contains("prg")
+            ? [.. device.Info.Formats, "prg"]
+            : device.Info.Formats;
+
     private async Task Insert(DeviceState device)
     {
         IReadOnlyList<IStorageFile> files = await _window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = $"Insert in {device.Info.Name}",
             AllowMultiple = false,
-            FileTypeFilter = Filters($"{device.Info.Name} images", device.Info.Formats),
+            FileTypeFilter = Filters($"{device.Info.Name} images", InsertFormats(device)),
         });
 
         if (files.Count != 0 && files[0].TryGetLocalPath() is { } path)

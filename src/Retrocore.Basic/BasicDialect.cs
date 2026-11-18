@@ -31,7 +31,8 @@ public abstract partial class BasicDialect
         IntegerBasicDialect.Instance,
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
-        ColorBasicDialect.Disk
+        ColorBasicDialect.Disk,
+        PetBasicDialect.Basic4
     ];
 
     /// <summary>
@@ -83,6 +84,34 @@ public abstract partial class BasicDialect
         (true, 0) => ColorBasicDialect.Extended,
         (true, 10) => ColorBasicDialect.Disk10,
         _ => ColorBasicDialect.Disk
+    };
+
+    /// <summary>
+    ///  Gets the Commodore PET's BASIC 2, the 2001-N's and the upgrade ROMs'.
+    /// </summary>
+    public static BasicDialect PetBasic => PetBasicDialect.Basic2;
+
+    /// <summary>
+    ///  Gets the PET 2001's first BASIC, BASIC 1, which skips spaces inside reserved words and has no <c>GO</c>.
+    /// </summary>
+    public static BasicDialect PetBasic1 => PetBasicDialect.Basic1;
+
+    /// <summary>
+    ///  Gets the PET 4000 series' BASIC 4, which adds the disk commands; <c>petbasic</c> names it, since it has every
+    ///  word of the others.
+    /// </summary>
+    public static BasicDialect PetBasic4 => PetBasicDialect.Basic4;
+
+    /// <summary>
+    ///  Gets the PET's BASIC by its version.
+    /// </summary>
+    /// <param name="version">1 for the PET 2001's first ROMs, 4 for the 4000 series', else BASIC 2.</param>
+    /// <returns>The dialect.</returns>
+    public static BasicDialect PetBasicVersion(int version) => version switch
+    {
+        1 => PetBasicDialect.Basic1,
+        4 => PetBasicDialect.Basic4,
+        _ => PetBasicDialect.Basic2
     };
 
     /// <summary>

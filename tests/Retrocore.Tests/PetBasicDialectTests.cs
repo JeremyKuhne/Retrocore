@@ -397,6 +397,7 @@ public sealed class PetBasicDialectTests
             BasicParseResult branch = BasicProgram.Parse("loop:\n    IF A=1THEN loop\n    GO TO loop\n", later);
             branch.Diagnostics.Should().BeEmpty();
             branch.Program?.ToText().Should().Be("10 IF A=1THEN 10\n20 GO TO 10\n");
+            BasicProgram.Parse("10 IF 1THENREM GOTO nowhere\n", later).Success.Should().BeTrue("REM right after THEN is a remark");
         }
 
         BasicParseResult missing = BasicProgram.Parse("10 G O S U B nowhere\n", BasicDialect.PetBasic1);

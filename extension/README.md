@@ -96,13 +96,13 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
-their sources.
+their sources, and the Kaypro II its monitor ROM from its source.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -1049,6 +1049,32 @@ build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
 panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
 BREAK and buttons for HOLD, F1 and F2. See the
 [Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
+
+## Debugging on the Kaypro II
+
+`"machine": "kaypro2"` debugs a Kaypro II, a 2.5 MHz Z80 with 64 KB running CP/M 2.2,
+with the same source debugging, cycle counts, `Keeps:` checks and I/O port watchpoints as
+the other Z80 machines. Without dumps it runs the SDK's builds of its monitor ROM and
+character generator (`Kaypro2.asm` and `Kaypro2CharacterGenerator.asm`; `sdkRoms` names
+another copy's directory); `romDirectory` or `RETROCORE_KAYPRO_ROMS` can hold MAME's dumps instead,
+`81-149c.u47` (or `81-149c.rom`) and `81-146.u43` (or `81-146a.bin`), in the directory
+or its `kayproii` folder, and `rom` names another monitor dump there. The options are:
+
+- `disks`: images for drive A, then drive B: raw `.img` (or `.dsk`), IMD or DMK images
+  of single-sided double-density 5.25-inch disks; changes save as `.img` or DMK;
+- `fastDisk`: run as fast as possible while a drive is busy (on by default);
+- `bootSeconds`: emulated seconds the ROM runs before a program loads (0 by default);
+- `screen` (green by default, or white or amber) and `speed`.
+
+The monitor boots CP/M from the disk in drive A as the machine powers on. A program
+(`source` or `program`, loaded at `$0100` by default, where CP/M runs its `.COM`
+files) starts as soon as it loads, unless `bootSeconds` lets the ROM run first. The
+panel shows the 80x24 screen and types ASCII: **Ctrl** with a letter types its control
+character (**Ctrl+C** is `^C`), the arrow keys send `$F1`-`$F4` as the Kaypro's own do,
+and **Ctrl+F12** or **Ctrl+Break** is the reset button. The Kaypro has no BREAK key;
+the key bar has **Esc** and **Reset**. The drives are **Drive A** and **Drive B** in
+the [Drives view](#machine-and-drives), where disks go in and out and are saved. There is
+no BASIC thread yet.
 
 ## Breakpoints
 

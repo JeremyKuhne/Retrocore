@@ -56,6 +56,27 @@ public static class Trs80DiskImage
         return dmk ? (DmkFormat.Read(image), "DMK") : (JvcFormat.Read(image), "JVC");
     }
 
+    /// <summary>
+    ///  Reads a Kaypro disk image: IMD or DMK by its extension or signature, and a raw image (<see cref="KayproFormat"/>)
+    ///  otherwise, as an <c>.img</c> or <c>.dsk</c> file is.
+    /// </summary>
+    /// <param name="image">The file's bytes.</param>
+    /// <param name="extension">The file's extension, such as <c>.img</c>.</param>
+    /// <returns>The disk and its format's name, <c>IMG</c>, <c>IMD</c> or <c>DMK</c>.</returns>
+    /// <exception cref="InvalidDataException">The image is not in the format it appears to be.</exception>
+    public static (FloppyDisk Disk, string Format) ReadKaypro(ReadOnlySpan<byte> image, string? extension)
+    {
+        if (string.Equals(extension, ".imd", StringComparison.OrdinalIgnoreCase) || ImdFormat.IsImd(image))
+        {
+            return (ImdFormat.Read(image), "IMD");
+        }
+
+        bool dmk = string.Equals(extension, ".dmk", StringComparison.OrdinalIgnoreCase)
+            || (!KayproFormat.IsImage(image.Length) && DmkFormat.IsDmk(image) && DmkFormat.ImageLength(image) == image.Length);
+
+        return dmk ? (DmkFormat.Read(image), "DMK") : (KayproFormat.Read(image), "IMG");
+    }
+
     // IMD has a signature, JV3 a table whose sectors fit the file, and DMK a header whose tracks are the whole file.
     // JV1 is any whole number of 256-byte sectors, a last track cut short included. A DMK image with more after its
     // tracks comes last, as JV1's sector data can pass for its loose header.

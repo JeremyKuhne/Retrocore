@@ -69,6 +69,10 @@ public class CommodoreTapeImageTests
         byte[] wave = CommodoreWave.Write([1000, 2000, 3000], rate: 1_000_000);
         Action read = () => CommodoreWave.Read(wave.AsSpan(0, wave.Length - 100));
         read.Should().Throw<InvalidDataException>().WithMessage("*data chunk says*");
+
+        // Cut before its data chunk, it has no samples at all, and is no empty tape.
+        Action headerOnly = () => CommodoreWave.Read(wave.AsSpan(0, 36));
+        headerOnly.Should().Throw<InvalidDataException>().WithMessage("*no data chunk*");
     }
 
     /// <summary>

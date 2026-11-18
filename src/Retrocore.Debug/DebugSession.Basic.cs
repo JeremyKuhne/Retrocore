@@ -139,10 +139,18 @@ internal sealed partial class DebugSession
                 ? rom
                 : throw new InvalidOperationException(NoPromptMessage);
 
-            if (!ReachStatement(prompt) && !Target.InRom(Target.ProgramCounter))
+            if (!ReachStatement(prompt))
             {
-                throw new InvalidOperationException(
-                    $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                // A program that ended while it was waited for is at the prompt already, which is where it is going.
+                if (Basic.InDirectMode(memory))
+                {
+                    prompt = null;
+                }
+                else if (!Target.InRom(Target.ProgramCounter))
+                {
+                    throw new InvalidOperationException(
+                        $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                }
             }
         }
 

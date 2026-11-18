@@ -22,7 +22,8 @@ namespace Retrocore.Debug;
 ///    "names": { "$0812": "ReadImage", "$F0": "Pointer" },
 ///    "comments": { "$0812": "Reads the master image." },
 ///    "noReturn": ["$0900"],
-///    "inline": { "$0950": 2, "$0960": "zero" }
+///    "inline": { "$0950": 2, "$0960": "zero" },
+///    "vectors": false
 ///  }
 ///  </code>
 ///  <para>
@@ -30,6 +31,7 @@ namespace Retrocore.Debug;
 ///   <c>names</c> inside the program are labels and outside it equates, and win over the sources' names.
 ///   <c>comments</c> go above their address. <c>noReturn</c> subroutines never return to their caller, and
 ///   <c>inline</c> ones are followed by that many bytes, or by a zero-terminated string, before execution goes on.
+///   <c>vectors</c> false leaves out the CPU's vectors and restarts as entry points.
 ///  </para>
 ///  <para>
 ///   An address with a bank's name before it, such as <c>"aux:$0400"</c>, which Retrocore Memory writes for marks
@@ -62,6 +64,12 @@ internal sealed class DisassemblyHints
     ///  Gets the subroutines that do not return, or take bytes after their JSR.
     /// </summary>
     internal Dictionary<ushort, AnalysisCall> Calls { get; } = [];
+
+    /// <summary>
+    ///  Gets whether the CPU's own vectors are entry points, such as the 6502's reset vector or the Z80's restarts;
+    ///  <c>"vectors": false</c> turns them off for a program whose bytes there are something else.
+    /// </summary>
+    internal bool CpuVectors { get; private set; } = true;
 
     /// <summary>
     ///  Reads a hints file.
@@ -109,6 +117,8 @@ internal sealed class DisassemblyHints
             bool zero = value is JsonValue text && text.TryGetValue(out string? word) && word == "zero";
             hints.Calls[Address(key)] = zero ? AnalysisCall.InlineZeroTerminated : AnalysisCall.InlineBytes(value?.GetValue<int>() ?? 0);
         }
+
+        if (root["vectors"] is JsonValue vectors) { hints.CpuVectors = vectors.GetValue<bool>(); }
 
         return hints;
     }

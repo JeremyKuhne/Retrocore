@@ -12,10 +12,17 @@ namespace Retrocore.Debug;
 /// <param name="Image">The program's bytes.</param>
 /// <param name="Origin">Where its first byte loads.</param>
 /// <param name="What">What it is, for the source's heading, such as its name and disk.</param>
-/// <param name="Cpu">Its instruction set.</param>
+/// <param name="Cpu">
+///  Its instruction set's name, as <see cref="CpuCatalog"/> knows it, such as <c>Mos6502</c> or <c>Z80</c>.
+/// </param>
 /// <param name="Hints">What following its code does not show.</param>
-internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What, ProcessorVariant Cpu, DisassemblyHints Hints)
+internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What, string Cpu, DisassemblyHints Hints)
 {
+    /// <summary>
+    ///  Gets the instruction set named by <see cref="Cpu"/>.
+    /// </summary>
+    internal Retrocore.Isa.InstructionSet Set { get; } = CpuCatalog.Get(Cpu);
+
     /// <summary>
     ///  Tests whether an address is one of the program's bytes.
     /// </summary>
@@ -30,7 +37,7 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
     /// <returns>The project.</returns>
     internal AnalysisProject Project(IReadOnlyDictionary<ushort, string> machine)
     {
-        AnalysisProject project = new(Image, Origin, Cpu);
+        AnalysisProject project = new(Image, Origin, Set) { CpuVectors = Hints.CpuVectors };
 
         // Marks made while debugging can be anywhere in memory, such as on a ROM routine the program calls; only
         // what falls in the image is the disassembler's.
@@ -56,7 +63,7 @@ internal sealed record DisassemblyProgram(byte[] Image, int Origin, string What,
         {
             if (entry < claimed) { continue; }
             int offset = entry - Origin;
-            if (!Disassembler.TryDecode(Image.AsSpan(offset), entry, Cpu, out DisassembledInstruction instruction)
+            if (!Disassembler.TryDecode(Image.AsSpan(offset), entry, Set, out DisassembledInstruction instruction)
                 || offset + instruction.Size > Image.Length
                 || Enumerable.Range(entry, instruction.Size).Any(address => InData(project, (ushort)address)))
             {

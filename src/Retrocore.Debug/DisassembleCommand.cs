@@ -21,7 +21,8 @@ namespace Retrocore.Debug;
 ///   output.asm</c> for a binary file on a DOS disk, which gives its own address. <c>--machine</c> (<c>ii</c>,
 ///   <c>iiplus</c>, <c>iie</c> or <c>iie-enhanced</c>, by default <c>iiplus</c>) picks whose Monitor, firmware and
 ///   BASIC name addresses; <c>--dos</c> (<c>3.3</c>, <c>3.3-1980</c>, <c>3.2</c> or <c>none</c>, by default
-///   <c>3.3</c>) whose DOS does, where it runs in 48K; <c>--cpu</c> the instruction set, by default <c>Mos6502</c>;
+///   <c>3.3</c>) whose DOS does, where it runs in 48K; <c>--cpu</c> the instruction set, by default <c>Mos6502</c>
+///   (another CPU's program, such as a Z80's with <c>--cpu Z80</c>, gets no machine's names, as with <c>--machine none</c>);
 ///   and <c>--hints</c> a <see cref="DisassemblyHints"/> file.
 ///  </para>
 ///  <para>
@@ -35,7 +36,8 @@ internal static class DisassembleCommand
     private const string Usage = """
         Usage: --disassemble input.bin output.asm --origin $0800
                --disassemble --disk image.dsk --file "NAME" output.asm
-        Options: --machine ii|iiplus|iie|iie-enhanced  --dos 3.3|3.3-1980|3.2|none  --cpu Mos6502  --hints hints.json
+        Options: --machine ii|iiplus|iie|iie-enhanced|none  --dos 3.3|3.3-1980|3.2|none  --cpu Mos6502|Z80|...
+                 --hints hints.json
                  --sdk-roms directory (the SDK's ROM sources, by default those beside this host)
         """;
 
@@ -77,13 +79,27 @@ internal static class DisassembleCommand
                 ? FromDisk(options["--disk"], options["--file"])
                 : FromFile(positional[0], options);
 
-            Apple2Model model = Model(options.GetValueOrDefault("--machine") ?? "iiplus");
-            string dos = options.GetValueOrDefault("--dos") ?? "3.3";
-            ProcessorVariant cpu = Enum.Parse<ProcessorVariant>(options.GetValueOrDefault("--cpu") ?? "Mos6502", ignoreCase: true);
+            string cpu = options.GetValueOrDefault("--cpu") ?? "Mos6502";
+            if (!CpuCatalog.InstructionSets.ContainsKey(cpu))
+            {
+                throw new ArgumentException($"--cpu must be one of {string.Join(", ", CpuCatalog.InstructionSets.Keys)}.");
+            }
+
+            // Only the Apple II's sources name addresses, for the 6502 family; another CPU's program gets no machine's
+            // names, so asking for an Apple II with it is a mistake.
+            bool apple = CpuCatalog.Get(cpu).Description == CpuCatalog.Get("Mos6502").Description;
+            string machineName = options.GetValueOrDefault("--machine") ?? (apple ? "iiplus" : "none");
+            if (!apple && machineName != "none")
+            {
+                throw new ArgumentException($"--machine {machineName} is an Apple II, whose names are for 6502 code; use --machine none with --cpu {cpu}.");
+            }
+
+            Apple2Model? model = Model(machineName);
+            string dos = model is null ? "none" : options.GetValueOrDefault("--dos") ?? "3.3";
             DisassemblyHints hints = options.TryGetValue("--hints", out string? path) ? DisassemblyHints.Read(path) : new();
             DisassemblyProgram program = new(image, origin, what, cpu, hints);
             string? roms = options.GetValueOrDefault("--sdk-roms");
-            Dictionary<ushort, (string Name, string File)> machine = MachineSymbols.For(model, dos, roms);
+            Dictionary<ushort, (string Name, string File)> machine = model is { } named ? MachineSymbols.For(named, dos, roms) : [];
             return Disassemble(program, positional[^1], model, dos, machine);
         }
         catch (Exception exception) when (Expected(exception))
@@ -103,7 +119,7 @@ internal static class DisassembleCommand
     private static int Disassemble(
         DisassemblyProgram program,
         string output,
-        Apple2Model model,
+        Apple2Model? model,
         string dos,
         Dictionary<ushort, (string Name, string File)> machine)
     {
@@ -137,8 +153,10 @@ internal static class DisassembleCommand
         }
 
         string heading = $"{program.What}: {program.Image.Length} bytes (${program.Image.Length:X4}) at ${program.Origin:X4}."
-            + $"\nNames outside the program are the SDK sources' for the {model.DisplayName()}"
-            + (dos == "none" ? "." : $" and DOS {dos}.");
+            + (model is not { } named
+                ? ""
+                : $"\nNames outside the program are the SDK sources' for the {named.DisplayName()}"
+                    + (dos == "none" ? "." : $" and DOS {dos}."));
 
         string source = Arrange(result.ExportSource(), heading, files, hinted);
         File.WriteAllText(output, source);
@@ -269,13 +287,14 @@ internal static class DisassembleCommand
         return (File.ReadAllBytes(path), CommandAddress.Parse(origin), Path.GetFileName(path));
     }
 
-    private static Apple2Model Model(string name) => name switch
+    private static Apple2Model? Model(string name) => name switch
     {
+        "none" => null,
         "ii" => Apple2Model.II,
         "iiplus" => Apple2Model.IIPlus,
         "iie" or "original" => Apple2Model.IIe,
         "iie-enhanced" or "enhanced" => Apple2Model.IIeEnhanced,
-        _ => throw new ArgumentException("--machine must be ii, iiplus, iie or iie-enhanced.")
+        _ => throw new ArgumentException("--machine must be ii, iiplus, iie, iie-enhanced or none.")
     };
 
     private static int Fail(string message, int code = 1)

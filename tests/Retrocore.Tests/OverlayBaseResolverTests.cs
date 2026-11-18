@@ -125,4 +125,24 @@ public sealed class OverlayBaseResolverTests
         result.Success.Should().BeTrue(string.Join('\n', result.Diagnostics.Select(diagnostic => diagnostic.Message)));
         result.Sections[0].Bytes.Span[0].Should().Be((byte)top);
     }
+
+    /// <summary>
+    ///  A MACRO-10 source takes the most negative predefined value too, through its expressions' constants.
+    /// </summary>
+    [TestMethod]
+    public void Macro10TakesTheMostNegativeValue()
+    {
+        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
+        {
+            Dialect = AssemblyDialect.Macro10,
+            PredefinedSymbols = new Dictionary<string, long> { ["MASK"] = long.MinValue }
+        };
+
+        AssemblyResult result = new Assembler.Assembler().Assemble(
+            new AssemblySource("        EXP     MASK&^D255+1\n        END\n", "define.mac"),
+            options);
+
+        result.Success.Should().BeTrue(string.Join('\n', result.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        result.Sections[0].Bytes.Span[0].Should().Be(1);
+    }
 }

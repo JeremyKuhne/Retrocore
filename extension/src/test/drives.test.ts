@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
+    changeWords, crashedMessage, discardKeptQuestion, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
     conflictQuestion, contextWords, form, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
@@ -148,6 +148,15 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
         "Apple IIe stopped with 2 disks not saved: work.woz, prodos.2mg. Their changes were not kept.");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz"], []),
         "Apple IIe stopped with 1 disk not saved: work.woz. It is kept, still changed, for its next launch.");
+    assert.equal(crashedMessage("Apple IIe", [path.join(path.sep, "disks", "work.woz"), "prodos.2mg"], undefined),
+        "Apple IIe did not stop cleanly. 2 disks had changes not saved: work.woz, prodos.2mg.");
+    assert.match(crashedMessage("Apple IIe", ["work.woz"], new Date(2026, 10, 14, 10, 52).toISOString(), new Date(2026, 10, 14, 11, 0)),
+        /^Apple IIe did not stop cleanly\. 1 disk had changes not saved: work\.woz, the last kept at .+ today\.$/);
+    const discard = discardKeptQuestion("Apple IIe", ["work.woz"]);
+    assert.equal(discard.message, "Discard the changes to the disk Apple IIe kept?");
+    assert.deepEqual(discard.buttons, ["Discard"]);
+    assert.equal(summary({ ...drive(true), media: { ...drive(true).media!, kept: true }, activity: "idle", head: undefined }),
+        "work.woz · kept from the last run");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz"], ["hello.dsk"]),
         "Apple IIe stopped with 2 disks not saved: work.woz, hello.dsk. work.woz is kept, still changed, for its next "
             + "launch; the changes to hello.dsk were not kept.");

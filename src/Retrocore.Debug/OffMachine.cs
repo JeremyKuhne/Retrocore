@@ -38,7 +38,7 @@ internal static class OffMachine
     /// <param name="parameters">The launch configuration and the saved machine.</param>
     /// <returns>Its devices, hardware rows, saved machine and restore problems.</returns>
     /// <exception cref="ArgumentException">The configuration is missing or invalid.</exception>
-    internal static JsonObject Describe(JsonObject parameters) => With(parameters, _ => { });
+    internal static JsonObject Describe(JsonObject parameters) => With(parameters, _ => null, changes: false);
 
     /// <summary>
     ///  Changes a machine's hardware or a device's media, as <c>retro/hardware</c> or <c>retro/device</c> does.
@@ -57,21 +57,32 @@ internal static class OffMachine
             throw new ArgumentException("request must be hardware or device.");
         }
 
+        // Through media's steps, as the running machine's requests are: a changed disk is asked about before it goes,
+        // and a save answers what it found.
         return With(parameters, target =>
         {
             if (request == "hardware")
             {
+                string[]? ids = target.Hardware().FirstOrDefault(row => row.Id == id)?.Devices;
+                if (MediaActions.Hardware(ids, target.Devices, action, arguments) is { } held) { return held; }
                 target.HardwareAction(id, action, arguments);
-                return;
+                return null;
             }
 
             IDevice device = target.Devices.FirstOrDefault(device => device.Id == id) ?? throw new ArgumentException($"There is no device '{id}'.");
-            target.DeviceAction(device, action, arguments);
-        });
+            JsonObject? answer = MediaActions.Device(device, action, arguments, (what, with) => target.DeviceAction(device, what, with));
+            if (answer is null) { target.DeviceAction(device, action, arguments); }
+
+            // The machine is built for each request, so nothing it let go of can be put back with Undo.
+            answer?.Remove("undo");
+            return answer;
+        }, changes: true);
     }
 
-    // Builds the machine with its saved cards and media, acts on it, and describes it.
-    private static JsonObject With(JsonObject parameters, Action<IDebugTarget> act)
+    // Builds the machine with its saved cards and media, and the disks its recovery journal kept from its last run,
+    // acts on it, and describes it, with media's answer. A change commits the journal, so a disk saved or let go
+    // leaves it; describing only looks.
+    private static JsonObject With(JsonObject parameters, Func<IDebugTarget, JsonObject?> act, bool changes)
     {
         JsonObject configuration = parameters["configuration"] as JsonObject ?? throw new ArgumentException("configuration is required: the machine's launch arguments.");
 
@@ -79,21 +90,31 @@ internal static class OffMachine
         {
             // Slot 7's image comes from the launch: one the saved machine moved builds it, while the launch stays its own.
             IDebugTarget target = Build(LaunchMedia.WithSaved(configuration, parameters["machineState"]));
+            RecoveryJournal? journal = null;
             try
             {
                 List<string> problems = parameters["machineState"] is JsonObject saved
                     ? MachineConfiguration.Restore(target, saved)
                     : [];
 
-                act(target);
+                // A journal a running session has is its own; the off machine shows the disks only once it stops.
+                if (configuration.String("recoveryId") is { } id && RecoveryJournal.Open(id, problems, claim: false) is { } opened)
+                {
+                    journal = opened;
+                    problems.AddRange(MediaActions.Recover(target.Devices, journal));
+                }
+
+                JsonObject? answer = act(target);
+                if (changes) { journal?.Commit(MediaActions.Journal(target.Devices, journal), close: true); }
                 JsonObject body = DeviceJson.Write(target.Devices);
                 body["hardware"] = HardwareRow.Json(Off(target.Hardware(), configuration));
                 body["configuration"] = MachineConfiguration.Capture(target);
                 body["problems"] = problems.ToJsonArray();
-                return body;
+                return DebugSession.WithAnswer(body, answer);
             }
             finally
             {
+                journal?.Release();
                 (target as IDisposable)?.Dispose();
             }
         }

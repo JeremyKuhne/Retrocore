@@ -9,6 +9,7 @@
 import * as vscode from "vscode";
 import { keepResolved, resolveVariables } from "./favorite";
 import { changesFrom } from "./hardware";
+import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import type { SavedMachines } from "./savedMachine";
@@ -161,7 +162,8 @@ export class OffMachine {
         if (entry === undefined) return;
         // What only a launch resolves, such as ${file}, keeps the value the session it came from resolved it to.
         const { machineState: _saved, ...fresh } = resolveVariables(entry, workspace?.uri.fsPath);
-        const configuration = keepResolved(fresh, target.configuration);
+        // The recovery id its launches gave it stays, as launch.json does not hold it.
+        const configuration = { ...keepResolved(fresh, target.configuration), recoveryId: target.configuration.recoveryId };
         if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
         this.target = { ...target, configuration };
         this.body = undefined;
@@ -172,19 +174,79 @@ export class OffMachine {
         await this.reread();
         const target = this.target;
         if (target === undefined) return;
-        await this.ask("retrocore/machine/describe", { configuration: target.configuration, machineState: this.saved.get(target.configuration) });
+        await this.ask("retrocore/machine/describe", { configuration: this.withRecovery(target), machineState: this.saved.get(target.configuration) });
+    }
+
+    /**
+     * Its configuration with the recovery id its launches use, so the language server shows and saves the disks its
+     * last run kept.
+     */
+    private withRecovery(target: OffTarget): Record<string, unknown> {
+        const recoveryId = this.saved.recoveryId(target.configuration, folderOf("folder" in target.source ? target.source.folder : undefined)?.uri.toString());
+        return recoveryId === undefined ? target.configuration : { ...target.configuration, recoveryId };
+    }
+
+    /** The off machine's devices, as the language server last described them. */
+    get devices(): Device[] {
+        return (this.body?.devices ?? []) as Device[];
+    }
+
+    /**
+     * Shows the machine whose journal has a recovery id, off, with the disks its last run kept: the one shown, or
+     * the launch configuration or Start Machine setup it was made for. Says whether it could.
+     */
+    async showRecovery(recoveryId: string): Promise<boolean> {
+        if (this.recoveryId !== recoveryId) {
+            const owner = this.saved.recoveryOf(recoveryId);
+            if (owner === undefined) return false;
+            const workspace = folderOf(owner.folder);
+            const entry = launchConfigurations(workspace).find(candidate => candidate.name === owner.name);
+            const setup = this.state.get<Setup>(lastSetupKey);
+            if (entry !== undefined) {
+                await this.select({ configuration: { ...resolveVariables(entry, workspace?.uri.fsPath), recoveryId },
+                    source: { kind: "launch", name: owner.name, folder: workspace?.uri.toString() } });
+            } else if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
+                await this.select({ configuration: { ...setupConfiguration(setup), recoveryId }, source: { kind: "setup", setup } });
+            } else {
+                return false;
+            }
+        } else {
+            await this.describe();
+        }
+        return this.recoveryId === recoveryId;
+    }
+
+    /** The recovery id of the machine shown, whose journal keeps the disks its last run did not save. */
+    get recoveryId(): string | undefined {
+        const target = this.target;
+        return target === undefined ? undefined : this.withRecovery(target).recoveryId as string | undefined;
     }
 
     /** Changes the machine as retro/hardware or retro/device would, and saves the result for its next launch. */
     async change(request: "hardware" | "device", args: Record<string, unknown>): Promise<void> {
+        await this.request(request, args);
+    }
+
+    /**
+     * Changes the machine as retro/hardware or retro/device would, saves the result for its next launch, and gives
+     * the language server's body, with media's answer beside the devices when there is one.
+     */
+    async request(request: "hardware" | "device", args: Record<string, unknown>): Promise<OffBody & Record<string, unknown>> {
         // The saved machine is read once the change before has saved its own.
-        await this.serially(async () => {
+        return await this.serially(async () => {
             await this.reread();
             const target = this.target;
-            if (target === undefined) return;
-            await this.ask("retrocore/machine/change", {
-                configuration: target.configuration, machineState: this.saved.get(target.configuration), request, arguments: args
-            }, true);
+            if (target === undefined) throw new Error("No machine is set up.");
+            const body = await languageRequest<OffBody & Record<string, unknown>>("retrocore/machine/change", {
+                configuration: this.withRecovery(target), machineState: this.saved.get(target.configuration), request, arguments: args
+            });
+            if (target === this.target) {
+                this.body = body;
+                this.error = undefined;
+                await this.saved.set(target.configuration, body.configuration);
+                this.changed.fire();
+            }
+            return body;
         });
     }
 

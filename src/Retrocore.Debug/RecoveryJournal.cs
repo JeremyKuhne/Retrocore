@@ -65,6 +65,10 @@ internal sealed partial class RecoveryJournal
 
     private readonly DateTime _started = DateTime.UtcNow;
 
+    // Whether a session has the journal, which says so in session.json; the off machine only looks and saves.
+    private bool _claimed;
+    private string? _name;
+
     private RecoveryJournal(string id, string folder, FileStream held, IReadOnlyList<JsonObject> kept, int next)
     {
         Id = id;
@@ -94,34 +98,30 @@ internal sealed partial class RecoveryJournal
     /// </summary>
     /// <param name="id">The machine's recovery id: letters, digits, <c>-</c> and <c>_</c>, at most 64.</param>
     /// <param name="problems">What it found wrong, such as a journal it could not read, which it set aside.</param>
-    /// <returns>The journal; or null when another running session has it.</returns>
+    /// <param name="name">
+    ///  The machine's name, as its launch configuration calls it, for a notice about it later.
+    /// </param>
+    /// <param name="claim">
+    ///  Whether a session takes it, marking it not yet ended cleanly until its last commit; the off machine opens it
+    ///  only to show and save its disks, and leaves what its last session said.
+    /// </param>
+    /// <returns>
+    ///  The journal; or null when another session has it, after waiting a moment for one that is closing.
+    /// </returns>
     /// <exception cref="ArgumentException">The id is not one.</exception>
     /// <exception cref="IOException">Local data cannot be written.</exception>
     /// <exception cref="UnauthorizedAccessException">Local data cannot be written.</exception>
-    internal static RecoveryJournal? Open(string id, List<string> problems)
+    internal static RecoveryJournal? Open(string id, List<string> problems, string? name = null, bool claim = true)
     {
-        if (id.Length is 0 or > 64 || !id.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
-        {
-            throw new ArgumentException("recoveryId is letters, digits, - and _, at most 64.");
-        }
-
-        string folder = Path.Join(Root, id);
+        string folder = FolderOf(id);
         Directory.CreateDirectory(Path.Join(folder, MediaFolder));
-        FileStream held;
-        try
-        {
-            held = new(Path.Join(folder, LockFile), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException)
-        {
-            // Another process, or another session in this one, has it.
-            return null;
-        }
-
+        if (Take(folder) is not { } held) { return null; }
         try
         {
             RecoveryJournal opened = Read(folder, held, id, problems);
-            opened.WriteSession(clean: false);
+            opened._claimed = claim;
+            opened._name = name;
+            if (claim) { opened.WriteSession(clean: false); }
             return opened;
         }
         catch
@@ -262,7 +262,7 @@ internal sealed partial class RecoveryJournal
                 Write(disks);
 
                 // What the last commit holds is the machine's unsaved state.
-                if (close) { WriteSession(clean: true); }
+                if (close && _claimed) { WriteSession(clean: true); }
             }
             finally
             {
@@ -322,6 +322,19 @@ internal sealed partial class RecoveryJournal
         }
     }
 
+    /// <summary>
+    ///  Lets go of the journal without a commit, as the off machine does after only showing its disks.
+    /// </summary>
+    internal void Release()
+    {
+        lock (_writing)
+        {
+            if (_closed) { return; }
+            _closed = true;
+            _lock.Dispose();
+        }
+    }
+
     private void WriteSession(bool clean)
     {
         using Process process = Process.GetCurrentProcess();
@@ -330,6 +343,7 @@ internal sealed partial class RecoveryJournal
             ["processId"] = Environment.ProcessId,
             ["processStart"] = process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
             ["started"] = _started.ToString("O", CultureInfo.InvariantCulture),
+            ["name"] = _name,
             ["clean"] = clean,
         };
 

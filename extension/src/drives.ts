@@ -37,6 +37,8 @@ export interface Media {
     medium?: string;
     version?: number;
     source?: MediaSource;
+    /** Whether the disk is one the recovery journal kept from the machine's last run, still changed. */
+    kept?: boolean;
 }
 
 /** A device as the debug host's retro/devices describes it. */
@@ -151,6 +153,7 @@ export function summary(device: Device): string {
     }
     if (device.transport && device.media) parts.push(`${device.transport.position.toLocaleString()} of ${device.transport.length.toLocaleString()} bytes`);
     if (device.blocks?.last !== null && device.blocks?.last !== undefined) parts.push(`block ${device.blocks.last}`);
+    if (device.media?.kept) parts.push("kept from the last run");
     const state = imageState(device);
     if (state !== undefined) parts.push(state);
     if (device.activity !== "idle") parts.push(device.activity);
@@ -198,7 +201,7 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
-            : media.changed ? `Changed: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
+            : media.changed ? `Changed${media.kept ? " in the last run" : ""}: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
             // A disk the machine did not change is the image as it was read, which is not the file there now.
             : source?.stale ? (source.current === null ? "Not changed by the machine; its image is gone" : "Not changed by the machine, but its image is not the file it was read from")
             : "The same as its image");
@@ -368,6 +371,23 @@ export function stoppedMessage(machine: string, kept: string[], lost: string[]):
             : `${kept.join(", ")} ${kept.length === 1 ? "is" : "are"} kept, still changed, for its next launch; `
                 + `the changes to ${lost.join(", ")} were not kept.`;
     return `${machine} stopped with ${disks} not saved: ${[...kept, ...lost].join(", ")}. ${after}`;
+}
+
+/** What a notice says of a machine whose session did not stop cleanly, with the disks its journal kept. */
+export function crashedMessage(machine: string, files: string[], kept: string | undefined, now: Date = new Date()): string {
+    const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
+    const last = kept === undefined ? "" : `, the last kept at ${when(kept, now)}`;
+    return `${machine} did not stop cleanly. ${disks} had changes not saved: ${files.map(file => path.basename(file) || file).join(", ")}${last}.`;
+}
+
+/** What a question asks before the kept disks of a machine are let go, which nothing can put back. */
+export function discardKeptQuestion(machine: string, files: string[]): Question {
+    const disks = files.length === 1 ? "the disk" : `${files.length} disks`;
+    return {
+        message: `Discard the changes to ${disks} ${machine} kept?`,
+        detail: `${files.map(file => path.basename(file) || file).join(", ")}. Their images stay as they are; the changes cannot be put back.`,
+        buttons: ["Discard"]
+    };
 }
 
 /** What the status bar says for a moment after a save that asked nothing. */

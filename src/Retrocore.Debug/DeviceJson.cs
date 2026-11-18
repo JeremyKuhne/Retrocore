@@ -116,6 +116,12 @@ internal static class DeviceJson
             ["changed"] = media.Changed
         };
 
+        // A changed disk the recovery journal kept from the last run, which a drive's row says.
+        if (device is Retrocore.Media.IMediumSlot { Medium: { IsDirty: true } kept } && MediaActions.IsKept(kept))
+        {
+            json["kept"] = true;
+        }
+
         if (device is Retrocore.Media.IMediumSlot { Medium: { } medium } slot)
         {
             json["generation"] = slot.MountGeneration;

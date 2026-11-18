@@ -174,6 +174,9 @@ const petSnow: MachineChoice = {
     default: true
 };
 
+// The 2001 with BASIC 2 launches without snow unless snow is asked for, so its choice starts off.
+const petSnowOff: MachineChoice = { ...petSnow, default: false };
+
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
     {
@@ -531,7 +534,7 @@ export const machines: readonly Machine[] = [
         programFormats: ["prg", "bin"],
         basicDialects: ["petbasic"],
         dos: false,
-        choices: [petRam, petSound, petSnow]
+        choices: [petRam, petSound, petSnowOff]
     },
     {
         id: "pet2001",

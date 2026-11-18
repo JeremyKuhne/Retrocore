@@ -113,7 +113,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.deepEqual(pet?.programFormats, ["prg", "bin"]);
         assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound", "snow"]);
         assert.equal(pet?.choices[0].default, 8);
-        assert.equal(pet?.choices[2].default, true, "snow, as on the 2001's board");
+        assert.equal(pet?.choices[2].default, id === "pet2001", "snow by default only on the 2001 with BASIC 1, as the launch has it");
     }
     assert.deepEqual(machineById("pet2001")?.basicDialects, ["petbasic"], "one dialect, whose version the ROMs pick");
     assert.deepEqual(machineById("pet2001-basic2")?.basicDialects, ["petbasic"]);

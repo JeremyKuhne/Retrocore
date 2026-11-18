@@ -38,6 +38,7 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
+        "retro/sound",
         "apple1/clearScreen",
         "altair/clearScreen"
     ];
@@ -436,7 +437,8 @@ internal sealed partial class DebugSession
         transport.On("retro/key", args => Reply(() =>
         {
             int code = (args.Int("code") ?? 0);
-            if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+            // A byte: the PET's PETSCII uses the high half for its shifted keys, such as cursor up and CLR.
+            if (code is < 0 or > 255) { throw new ArgumentOutOfRangeException(nameof(args)); }
 
             // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
             // goes now and drops the rest of the paste.

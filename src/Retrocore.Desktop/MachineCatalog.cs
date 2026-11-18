@@ -48,6 +48,9 @@ internal static class MachineCatalog
         [new("On", Value: true, "Accesses to video RAM while the screen is drawn show, as on the 2001's board"), new("Off", Value: false)],
         Default: true);
 
+    // The 2001 with BASIC 2 launches without snow, so its choice starts off.
+    private static readonly MachineChoice s_petSnowOff = s_petSnow with { Default = false };
+
     private static readonly MachineChoice s_petSound = new("sound", "Sound",
         [new("On", "speaker", "The VIA's CB2, as a speaker on the user port plays it"), new("Off", "off")], "speaker");
 
@@ -184,7 +187,7 @@ internal static class MachineCatalog
             ]),
         new("pet2001-basic2", "Commodore PET 2001 with BASIC 2", "6502, BASIC 2 (the upgrade ROMs), two Datasettes and 8 KB",
             Options(("machine", "pet"), ("model", "pet2001-basic2")),
-            [s_petRam, s_petSnow, s_petSound]),
+            [s_petRam, s_petSnowOff, s_petSound]),
         new("pet2001", "Commodore PET 2001", "6502, BASIC 1, two Datasettes and 8 KB",
             Options(("machine", "pet"), ("model", "pet2001")),
             [

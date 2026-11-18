@@ -256,7 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
                         panel.webview.html = webviewHtml(nonce);
                         panel.onDidDispose(() => { panel = undefined; panelBasic = undefined; }, undefined, context.subscriptions);
                         panel.webview.onDidReceiveMessage((input: unknown) => {
-                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 128) {
+                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 256) {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/key", { code: input.code }).then(undefined, showError);
                                 }
@@ -300,7 +300,7 @@ export function activate(context: vscode.ExtensionContext): void {
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "sound"
                                 && "mode" in input && (input.mode === "off" || input.mode === "speaker" || input.mode === "mockingboard")) {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest(`${applePrefix(displaySession)}/sound`, { mode: input.mode }).then(undefined, showError);
+                                    void displaySession.customRequest(soundRequest(displaySession), { mode: input.mode }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "fastDisk"
                                 && "enabled" in input && typeof input.enabled === "boolean") {
@@ -352,6 +352,16 @@ function petTitle(model: string | undefined): string {
 
 function applePrefix(session: vscode.DebugSession): string {
     return session.configuration.machine === "apple3" ? "apple3" : "apple2";
+}
+
+/**
+ * The request that changes what the panel hears: the Apple II's and Apple III's own (a launch naming no machine is an
+ * Apple II), and the others' retro/sound.
+ */
+function soundRequest(session: vscode.DebugSession): string {
+    const machine: unknown = session.configuration.machine;
+    const apple = machine === undefined || machine === "apple2" || machine === "apple2e" || machine === "apple3";
+    return apple ? `${applePrefix(session)}/sound` : "retro/sound";
 }
 
 /**

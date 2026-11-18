@@ -52,6 +52,9 @@ public sealed class BbcVideo : IVideoSource
     private const int FirstCycle = 26;
     private const int FirstLine = 16;
 
+    // The characters teletext's data lags its address by, through the latch and the SAA5050.
+    private const int TeletextDelay = 2;
+
     private static readonly int[] s_cursorWidths = [0, 0, 1, 2, 1, 0, 2, 4];
 
     private readonly byte[] _ram;
@@ -257,11 +260,11 @@ public sealed class BbcVideo : IVideoSource
         beam.Interlaced = crtc.Interlaced;
 
         // The skews let the picture lag the address while the byte goes through the latches and, for teletext, the
-        // SAA5050: the address, raster line and display enable go down the same pipeline, as long as the skew the
-        // path uses. Teletext lags as long as the cursor skew the MOS sets to match it (2 in mode 7); the graphics
-        // path as long as the display skew.
+        // SAA5050: the address, raster line and display enable go down the same pipeline, as long as the path's delay.
+        // Teletext's is the hardware's own two characters, which the MOS sets the cursor skew to match in mode 7, so
+        // turning the cursor off (skew 3) does not move the text; the graphics path lags as long as the display skew.
         beam.Push(crtc.Address, crtc.RowAddress, crtc.Displayed);
-        int skew = Teletext ? crtc.CursorSkew : crtc.DisplaySkew;
+        int skew = Teletext ? TeletextDelay : crtc.DisplaySkew;
         (int address, int line, bool display) = beam.Delayed(skew == 3 ? 0 : skew);
         if (crtc.DisplaySkew == 3) { display = false; }
         if (display && !beam.Display) { teletext.StartLine(); }

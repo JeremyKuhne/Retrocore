@@ -44,6 +44,7 @@ public sealed class BbcBus : IProcessorBus
     private byte _romSelect;
     private byte _latch;
     private bool _verticalSync;
+    private bool _lightPenStrobe = true;
 
     /// <summary>
     ///  Creates the bus at power-on.
@@ -319,6 +320,7 @@ public sealed class BbcBus : IProcessorBus
         {
             SystemVia.Tick();
             UserVia?.Tick();
+            UpdateLightPenStrobe();
             Keyboard.Tick();
             bool key = Keyboard.Interrupt;
             if (SystemVia.CA2 != key) { SystemVia.CA2 = key; }
@@ -451,6 +453,15 @@ public sealed class BbcBus : IProcessorBus
         }
 
         if (register is 0 or 1 or 2 or 3 or 15) { UpdateSlowBus(write: true); }
+        UpdateLightPenStrobe();
+    }
+
+    // The system VIA's CB2 output is the 6845's light pen strobe: a rising edge latches the address being drawn.
+    private void UpdateLightPenStrobe()
+    {
+        bool strobe = SystemVia.CB2Output;
+        if (strobe && !_lightPenStrobe) { Video.Crtc.StrobeLightPen(); }
+        _lightPenStrobe = strobe;
     }
 
     // The slow data bus: what the VIA drives, which the sound chip takes while its write enable is low, and onto which

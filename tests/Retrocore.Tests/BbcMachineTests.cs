@@ -228,6 +228,36 @@ public class BbcMachineTests
     }
 
     /// <summary>
+    ///  Turning the cursor off in mode 7, which sets the cursor skew to 3, leaves the text where it was: teletext's
+    ///  delay is the hardware's own.
+    /// </summary>
+    [TestMethod]
+    public void Mode7TextStaysWithTheCursorOff()
+    {
+        BbcMachine machine = Machine();
+        RunToPrompt(machine);
+        Type(machine, "CLS:PRINT \"HELLO\"\r");
+        machine.Run(TimeSpan.FromSeconds(0.1));
+        int before = LeftmostLit(machine.Video.RenderBitmap());
+        Type(machine, "VDU 23,1,0;0;0;0;\r");
+        machine.Run(TimeSpan.FromSeconds(0.1));
+        LeftmostLit(machine.Video.RenderBitmap()).Should().Be(before);
+    }
+
+    // The first column with a lit pixel, scanning the frame.
+    private static int LeftmostLit(byte[] frame)
+    {
+        int width = BbcVideo.FrameWidth;
+        int leftmost = int.MaxValue;
+        for (int pixel = 0; pixel < frame.Length / 4; pixel++)
+        {
+            if (frame[(pixel * 4) + 1] > 0x80) { leftmost = Math.Min(leftmost, pixel % width); }
+        }
+
+        return leftmost;
+    }
+
+    /// <summary>
     ///  SOUND and ENVELOPE reach the SN76489, and the output carries the tone.
     /// </summary>
     [TestMethod]

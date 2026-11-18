@@ -516,7 +516,7 @@ SELECT_DEFAULT_DRIVE:
 ;;
 ;; A colon before the number is skipped.
 ;; In: TEXT_POINTER/Y = the command line
-;; Out: DFS_CURRENT_DRIVE = the drive, carry = clear
+;; Out: DFS_CURRENT_DRIVE = the drive, carry = clear for a drive given, set for the default one
 ;; Errors: &CD = "Bad drive"
 ;; Entry: READ_DRIVE_NUMBER = the number must be there
 READ_DRIVE_ARGUMENT:

@@ -1304,6 +1304,7 @@ NFS_SET_HANDLES_NEXT:
 ;; Finds a receive control block in the second page of the NFS's private workspace, by its number in OS_X.
 ;;
 ;; The blocks are NFS_RECEIVE_BLOCK_SIZE bytes each, from the page's start, and there are NFS_RECEIVE_BLOCKS of them.
+;; The number's bits 6 and 7 are shifted out before the range is checked, so they are ignored: &40 is block 0.
 ;; In:    OS_X = the block's number, A = it for FIND_RECEIVE_BLOCK
 ;; Out:   carry = clear for a valid number, with Y = its offset and A = four times the number; set for one too
 ;;          large, with A and Y = 0

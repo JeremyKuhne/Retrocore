@@ -726,7 +726,8 @@ SEND_SEQUENCED_BLOCK_WAIT:
 ;; OS procedure call 2 (the NFS's language entry with X = 2): collects this machine's screen state at
 ;; NFS_SCREEN_STATE in the second workspace page, where the calling station can read it.
 ;;
-;; From &E9: the screen start address, as the 6845 is given it (two bytes); the physical colours of logical colours
+;; From &E9: the screen start address, the MOS's byte address (two bytes; the 6845 is given it divided by eight in
+;; modes 0-6, and converted otherwise in mode 7); the physical colours of logical colours
 ;; 0-15 (sixteen bytes); the screen mode; the bottom of that mode's screen memory (two bytes); then the two flashing
 ;; colours' durations. It falls into <RESTORE_PROTECTION>.
 ;; Uses: A, X, Y

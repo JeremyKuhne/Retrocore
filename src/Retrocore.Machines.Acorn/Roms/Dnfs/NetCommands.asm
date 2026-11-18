@@ -1666,7 +1666,7 @@ NFS_OSWORD_RECEIVE_DONE:
 ;;
 ;; The buffer starts at the control block plus one plus the carry, and ends at the control block plus its byte 1.
 ;; In:    OS_X/OS_Y = the control block, carry = added to the start
-;; Out:   Y = NFS_OSWORD_14_END+2
+;; Out:   Y = NFS_OSWORD_14_END+1
 ;; Uses:  A
 ;; Entry: SET_OSWORD_14_POINTER = stores A and OS_Y plus the carry at offsets Y and Y+1 of the second page
 SET_OSWORD_14_BUFFER:

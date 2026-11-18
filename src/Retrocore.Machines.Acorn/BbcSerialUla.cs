@@ -166,12 +166,16 @@ public sealed class BbcSerialUla
             _quiet = 0;
             Separate(half);
         }
-        else if (_carrier && ++_quiet > QuietCycles)
+        else if (++_quiet == QuietCycles)
         {
             // No edge for longer than the slowest tone's half-cycle: silence, or a tape that stopped, drops the carrier
-            // now rather than when the silence ends.
+            // now rather than when the silence ends, and restarts a run-in that had not yet made one; once a quiet spell.
             ResetSeparator();
             UpdateLines();
+        }
+        else if (_quiet > QuietCycles)
+        {
+            _quiet = QuietCycles;
         }
     }
 

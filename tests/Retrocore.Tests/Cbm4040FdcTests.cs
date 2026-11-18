@@ -21,6 +21,40 @@ public class Cbm4040FdcTests
     }
 
     /// <summary>
+    ///  A write the write-protect tab holds up resumes under the head, not where it stopped: the cells that turned past
+    ///  meanwhile stay as they were.
+    /// </summary>
+    [TestMethod]
+    public void AWriteResumesUnderTheHead()
+    {
+        CommodoreDisk disk = CommodoreDisk.Blank();
+        CommodoreFloppyDrive drive0 = new(8, drive: 0, "4040");
+        CommodoreFloppyDrive drive1 = new(8, drive: 1, "4040");
+        drive0.Insert(disk, "blank", "D64", changed: true);
+        drive0.Motor = true;
+        Cbm4040Fdc fdc = new(Gcr(), drive0, drive1) { Zone = 3, ModeSelect = true, WriteData = 0xFF };
+        fdc.ReadSelect = false;
+        int count = disk.BitCount(0);
+        int Cell() => (int)(drive0.Angle * count / CommodoreFloppyDrive.TicksPerTurn);
+
+        // Sync ones for a while, then a stretch with the tab covered, then on again.
+        for (int microsecond = 0; microsecond < 2_000; microsecond++) { fdc.Advance(ticks: 16); }
+        int stopped = Cell();
+        disk.IsWriteProtected = true;
+        for (int microsecond = 0; microsecond < 2_000; microsecond++) { fdc.Advance(ticks: 16); }
+        int resumed = Cell();
+        disk.IsWriteProtected = false;
+        for (int microsecond = 0; microsecond < 500; microsecond++) { fdc.Advance(ticks: 16); }
+
+        IEnumerable<int> before = Enumerable.Range(stopped - 40, 20);
+        IEnumerable<int> covered = Enumerable.Range(stopped + 8, resumed - stopped - 16);
+        IEnumerable<int> after = Enumerable.Range(resumed + 8, 20);
+        before.Should().Contain(cell => disk.Read(0, cell), "the first stretch wrote ones");
+        covered.Should().NotContain(cell => disk.Read(0, cell), "nothing was written while the tab was covered");
+        after.Should().Contain(cell => disk.Read(0, cell), "the write resumed under the head");
+    }
+
+    /// <summary>
     ///  Reading a track at its zone's speed, each READY after sync gives the next byte of every sector.
     /// </summary>
     /// <param name="track">The track.</param>

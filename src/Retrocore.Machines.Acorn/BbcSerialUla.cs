@@ -48,6 +48,7 @@ public sealed class BbcSerialUla
     private int _ones;
     private bool _carrier;
     private int _quiet;
+    private int _silencePhase;
 
     /// <summary>
     ///  Creates the ULA.
@@ -100,9 +101,18 @@ public sealed class BbcSerialUla
     /// <param name="value">The value.</param>
     public void Write(byte value)
     {
+        bool rs423 = Rs423;
         Control = value;
         _cassette.Motor = Motor;
-        if (!Motor) { ResetSeparator(); }
+
+        // A stopped motor, or a change between the cassette and RS-423, starts the separator again, so the cassette
+        // must hear a fresh leader before it has a carrier.
+        if (!Motor || rs423 != Rs423)
+        {
+            ResetSeparator();
+            _quiet = 0;
+        }
+
         UpdateLines();
         UpdateCharacterTime();
     }
@@ -138,9 +148,19 @@ public sealed class BbcSerialUla
     {
         if (Rs423)
         {
-            // The tape still plays while its motor runs, but its tones go nowhere.
+            // The tape still moves while its motor runs: playing, its tones go nowhere; recording, it records silence,
+            // a 1200 baud bit's worth at a time on its own clock, as the cassette's output is cut off.
             _acia.Tick();
-            if (!_cassette.Recording) { _cassette.Tick(); }
+            if (!_cassette.Recording)
+            {
+                _cassette.Tick();
+            }
+            else if ((_silencePhase += 1200) >= BbcTiming.CpuHertz)
+            {
+                _silencePhase -= BbcTiming.CpuHertz;
+                _cassette.Write(4, silence: true);
+            }
+
             return;
         }
 

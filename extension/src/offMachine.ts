@@ -142,10 +142,12 @@ export class OffMachine {
             if (setup !== undefined) source = { kind: "setup", setup };
         }
         const { machineState: _saved, [startOrigin]: _origin, ...rest } = configuration;
-        this.target = { configuration: rest, source };
+        // This session's machine, kept as it is here: another may be shown by the time an update below finishes.
+        const target: OffTarget = { configuration: rest, source };
+        this.target = target;
         this.body = undefined;
-        await this.state.update(targetKey, this.target);
-        if (typeof rest.recoveryId === "string") await this.state.update(`${recoveryTargetPrefix}${rest.recoveryId}`, this.target);
+        await this.state.update(targetKey, target);
+        if (typeof rest.recoveryId === "string") await this.state.update(`${recoveryTargetPrefix}${rest.recoveryId}`, target);
     }
 
     /** Asks the language server for the machine with its saved cards and media. */

@@ -184,8 +184,10 @@ GRAPHICS_CELL = $D6                 ;; the address of the top line of the curren
 TEXT_CELL = $D8                     ;; the address of the top scan line of the current text character
 VDU_TEMP = $DA                      ;; &DA-&DF, the VDU driver's temporary workspace
 
-;; A pointer to the row multiplication table for the current mode: <ROW_OFFSETS_640> for 80- and 40-column modes
-;; (halved for 40), or <ROW_OFFSETS_40> for teletext. The tables hold the high byte of each entry first.
+;; A pointer to the row multiplication table for the current mode: <ROW_OFFSETS_640> for modes 0-6, or
+;; <ROW_OFFSETS_40> for teletext. The tables hold the high byte of each entry first. <CALCULATE_TEXT_CURSOR> halves
+;; the 640-byte rows for the 10K and 8K memory maps (modes 4-6), whatever the columns: mode 1 has 40 columns and full
+;; rows, mode 5 has 20 and half rows.
 ROW_TABLE = $E0
 
 ;; The cassette filing system's status: input file open (bit 0), output file open (bit 1), cataloguing (bit 3), at
@@ -478,7 +480,7 @@ INPUT_BUFFER = $0A00                ;; &0A00-&0AFF, the RS-423 or cassette input
 ;; offset, and SOFT_KEYS+16 is where the free space starts.
 SOFT_KEYS = $0B00
 
-FONT_RAM = $0C00                    ;; the font for characters &E0-&FF, eight bytes each
+FONT_RAM = $0C00                    ;; the font for characters &E0-&FF, eight bytes each; &80-&DF share it until exploded
 NMI_ROUTINE = $0D00                 ;; &0D00-&0D9E, the NMI routine, where the NMI vector points
 EXTENDED_VECTORS = $0D9F            ;; &0D9F-&0DEF, three bytes per vector: a paged ROM's address and its number
 ROM_WORKSPACE_TABLE = $0DF0         ;; a byte for each paged ROM, the page its private workspace starts at

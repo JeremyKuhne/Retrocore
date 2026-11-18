@@ -533,7 +533,7 @@ VDU_DRIVER_DISABLED_QUEUE:
 ;; The driver runs it even while it is disabled.
 ;; In: A = the character, the parameter
 ;; Out: carry = clear when the printer is off
-;; Uses: A, X
+;; Uses: A, X, Y
 VDU_PRINT_NEXT:
     tax
     lda VDU_STATUS

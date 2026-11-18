@@ -321,7 +321,7 @@ SET_FILING_SYSTEM_OPTION:
 ;;
 ;; A is the OSBYTE number, &7F, whose bit 0 is the reason, 1.
 ;; In: A = &7F, X = the file's handle
-;; Out: X = &FF at the end of the file, otherwise 0
+;; Out: X = nonzero at the end of the file (&40 from the cassette and ROM filing systems), otherwise 0
 READ_END_OF_FILE:
     and #$01
     bpl CALL_FSCV                   ; always taken
@@ -1099,7 +1099,7 @@ GET_SOFT_KEY_LENGTH_NEXT:
 ;; its length. The key then starts at the free space, and the free space starts where the moved text ends.
 ;; <KEY_COMMAND> calls it again after reading a new definition into the free space: the key is then empty and at the
 ;; free space, so nothing moves and only the free space's start moves past the new text. <SOFT_KEY_CONSISTENCY> is
-;; zero while the buffer changes.
+;; &FF while the buffer changes and back to zero after, so a reset in between clears the soft keys.
 ;; In: X = the end of the text to keep, normally the free space's start, OS_WORK+2 = the key
 ;; Out: X = the free space's new start, Y = the key
 ;; Errors: "Key in use" while a soft key is being expanded

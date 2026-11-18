@@ -971,7 +971,7 @@ PHROM_FOLLOW_POINTER_BIT:
 
 ;; Reads the next byte from the ROM filing system's current ROM: from a speech PHROM through the speech processor,
 ;; or from a paged ROM through service call &0E.
-;; Out: A = Y = the byte, carry = set when no paged ROM gave one
+;; Out: A/Y = the byte, carry = set when no paged ROM gave one
 ;; Uses: X
 ;; See: <RFS_NEXT_ROM>
 RFS_GET_BYTE:
@@ -982,7 +982,7 @@ RFS_GET_BYTE:
 
 ;; Issues a ROM filing system service call to the paged ROMs.
 ;; In: X = the service call, Y = its argument
-;; Out: A = Y = the Y the ROMs returned, carry = clear when one took the call
+;; Out: A/Y = the Y the ROMs returned, carry = clear when one took the call
 ;; Uses: X
 RFS_SERVICE:
     php
@@ -994,7 +994,7 @@ RFS_SERVICE:
 
 ;; Reads the byte at the speech PHROM's current address, which then moves on, with the speech processor's Read Byte
 ;; command.
-;; Out: A = Y = the byte
+;; Out: A/Y = the byte
 ;; Keeps: X
 PHROM_READ_BYTE:
     php
@@ -1044,7 +1044,7 @@ WRITE_SPEECH:
 ;; port B's bit 7, to go low, takes what is on the bus, and raises the select again. Nothing happens without a
 ;; speech processor (<SPEECH_PRESENT> zero).
 ;; In: Y = 0 to read, 1 to write, A = the byte to write
-;; Out: A = Y = the byte on the bus: the one read, or A unchanged without a speech processor
+;; Out: A/Y = the byte on the bus: the one read, or A unchanged without a speech processor
 ;; Keeps: X
 ;; Entry: SPEECH_TRANSFER_PUSHED = for a caller that has pushed its flags and disabled interrupts
 SPEECH_TRANSFER:
@@ -1514,7 +1514,7 @@ HELP_COMMAND:
 
 ;; Scans the keyboard for a newly pressed key, for <KEYBOARD_TIMER> and <KEY_PRESSED_INTERRUPT>.
 ;; In: Y = LAST_KEY_PRESSED or FIRST_KEY_PRESSED, the zero page byte holding the key to ignore
-;; Out: X = A = the key number, or &FF for none, negative = none
+;; Out: X/A = the key number, or &FF for none, negative = none
 ;; Uses: Y
 ;; Entry:
 ;;   SCAN_FROM_16 = OSBYTE &7A: scans through <KEYV> from key 16, ignoring <KEY_IGNORED>
@@ -1534,7 +1534,7 @@ SCAN_KEYBOARD:
 ;; tested, from the lowest key number, so the key found is the first of its column. Interrupts are let in between
 ;; columns, so each kind of scan keeps the key number it started from in its own byte of <ROLLOVER_WORK>.
 ;; In: X = the key number, or the key number EOR &80 to test one key, carry = set (clear for SCAN_FOR_NEW_KEY)
-;; Out: X = A = the key number found, &FF for none, negative = none; for one key, X = the key with bit 7 set when it
+;; Out: X/A = the key number found, &FF for none, negative = none; for one key, X = the key with bit 7 set when it
 ;;   is pressed
 ;; Uses: Y
 KEYV_SCAN:
@@ -1668,7 +1668,8 @@ START_TAPE_FS_VECTORS:
 ;; Each ROM is entered at <SERVICE_ENTRY> with A = the call, X = its own number and Y = the argument, and takes the
 ;; call by returning A = 0. The ROM that was selected is selected again afterwards.
 ;; In: X = the service call, Y = its argument
-;; Out: X = A = 0 when a ROM took the call, otherwise the call; zero = set when one took it; Y = as the ROMs left it
+;; Out: X/A = 0 when a ROM took the call, otherwise &FF, not the call; zero = set when one took it; Y = as the ROMs
+;;   left it
 ;; See: <ROM_TYPE_TABLE>
 ISSUE_SERVICE_CALL:
     lda ROMSEL_COPY

@@ -2,8 +2,8 @@
 ;;
 ;; <CLOSE_EXEC> falls into it with no name. The escape acknowledgement and OSFSC 6 close the file that way.
 ;; In: X/Y = the file name, A = 0, zero = set when there is no name
+;; Out: Y = the new file's handle, or Y as it came in when there is no name
 ;; Uses: A, OS_WORK+2
-;; Keeps: Y
 ;; Errors: "File not found", from the OSFIND that opens the file
 ;; See: <EXEC_HANDLE>, <FILE_NOT_FOUND_ERROR>
 STAR_EXEC:
@@ -686,7 +686,8 @@ CHECK_BLOCK_READ:
 ;; ROM filing system or when *OPT 2 says to; then it closes the *EXEC file, releases the cassette and jumps to the
 ;; error's BRK.
 ;; Otherwise it prints the error's text as a message, through <PRINT_CFS_MESSAGE>, which returns after the text,
-;; to the BNE there. With messages off, that BNE falls into the next error's BRK.
+;; to the BNE there. Messages on or off, that BNE reaches <BLOCK_ERROR_RETRY>: the return address's increment
+;; leaves zero clear. "Block?" has no BNE and falls into it.
 ;; In: A/Y = the error's BRK (high byte in A), X = 0 to report the error and carry on, or &FF to act on it
 ;; Out: zero = set to carry on, clear to read the block again
 ;; Uses: A, X, Y, CFS_MESSAGE_POINTER, CFS_ERRORS
@@ -722,7 +723,7 @@ BLOCK_ERROR_PUSH:
     tya
     pha
 ;; Prints the zero-terminated message that follows the JSR to it, when messages are on, and returns after it.
-;; Out: A = 0, Y = 0, zero = set when messages are off
+;; Out: A = 0, Y = 0
 ;; Keeps: X
 ;; Uses: CFS_MESSAGE_POINTER
 ;; Entry: PRINT_INLINE = prints the message when Y is nonzero, whatever the options

@@ -312,7 +312,7 @@ PLOT_BYTE:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Finds the graphics cursor's window code, as <POINT_WINDOW_CODE> does.
-;; Out: A, VDU_TEMP = the window code, zero = set when the cursor is inside the window, X = its offset
+;; Out: A/VDU_TEMP = the window code, zero = set when the cursor is inside the window, X = its offset
 ;; Uses: Y
 CURSOR_WINDOW_CODE:
     ldx #<GRAPHICS_CURSOR_INTERNAL
@@ -320,7 +320,7 @@ CURSOR_WINDOW_CODE:
 ;; Finds a point's window code, which says where it lies against the graphics window: zero inside, or the bits
 ;; <OUTSIDE_LEFT>, <OUTSIDE_RIGHT>, <OUTSIDE_BELOW> and <OUTSIDE_ABOVE>.
 ;; In: X = the point's offset
-;; Out: A, VDU_TEMP = the window code, zero = set when the point is inside
+;; Out: A/VDU_TEMP = the window code, zero = set when the point is inside
 ;; Uses: Y
 ;; Keeps: X
 POINT_WINDOW_CODE:
@@ -856,7 +856,7 @@ CURSOR_DELTAS:
 
 ;; Works out the difference between two points: the point at X + 4 less the point at X.
 ;; In: X = the first point's offset, Y = where the difference goes
-;; Out: X, Y = each plus 2
+;; Out: X/Y = each plus 2
 ;; Uses: A
 ;; Entry: SUBTRACT_COORDINATE = works out only the X co-ordinates' difference
 POINT_DELTAS:
@@ -935,7 +935,7 @@ ABSOLUTE_COORDINATE_DONE:
 
 ;; Copies two points, eight bytes, in page three.
 ;; In: X = the offset to copy from, Y = the offset to copy to
-;; Out: X, Y = each plus the bytes copied, VDU_TEMP = 0
+;; Out: X/Y = each plus the bytes copied, VDU_TEMP = 0
 ;; Uses: A
 ;; Entry:
 ;;   COPY_TO_DRAW_END = copies a co-ordinate, two bytes, to DRAW_END
@@ -1068,7 +1068,7 @@ FILL_LEFT_END:
 ;; pixel in the graphics background colour (or, for 72-79, to the nearest pixel that is not), or to the window's edge.
 ;;
 ;; It scans a pixel at a time, or for 72-79 a byte at a time where the whole byte is background. The cursor ends at
-;; the right end of the line. PLOT 89 and 93 plot with masks that change nothing, so only the cursors move.
+;; the right end of the line. PLOT 88 and 92 plot with masks that change nothing, so only the cursors move.
 ;; In: NEW_POINT = the new point, VDU_TEMP+2 = 2 for PLOT 88-95, 0 for 72-79
 ;; Uses: A, X, Y, VDU_TEMP..VDU_TEMP+5, GRAPHICS_CELL, GRAPHICS_MASK, GRAPHICS_LINE
 ;; See: <READ_GRAPHICS_CURSORS>
@@ -1699,7 +1699,7 @@ READ_POINT_DONE:
 
 ;; Finds the new point's screen byte and pixel, as <FIND_POINT> does.
 ;; Out: A = the window code, zero = set when the point is inside, and then GRAPHICS_CELL, GRAPHICS_MASK,
-;;   GRAPHICS_LINE, Y = GRAPHICS_LINE
+;;   GRAPHICS_LINE, Y = GRAPHICS_LINE, X = the offset of <NEW_POINT>
 ;; Uses: VDU_TEMP
 FIND_NEW_POINT:
     ldx #<NEW_POINT

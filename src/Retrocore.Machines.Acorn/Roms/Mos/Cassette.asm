@@ -151,6 +151,7 @@ FSC_ROUTINES:
 ;; It pushes the routine's address from <FSC_ROUTINES> and returns to it, so the routine returns to the caller.
 ;; Calls 7 and above do nothing.
 ;; In: A = the call, X and Y = its parameters
+;; Out: A, X, Y = as the call's routine leaves them
 ;; Uses: FS_SCRATCH+12
 ;; See: <FSC_ROUTINES>
 FSCV_DEFAULT:

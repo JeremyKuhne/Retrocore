@@ -170,7 +170,7 @@ JUMP_USERV:
 ;; the paged mode line count, closes any *EXEC file and flushes every buffer, with interrupts enabled. The routine
 ;; then falls into <CLEAR_ESCAPE>.
 ;; Out: X = &FF when an escape was pending, otherwise 0
-;; Uses: A
+;; Uses: A, Y (when the buffers are flushed)
 ACKNOWLEDGE_ESCAPE:
     ldx #$00
     bit ESCAPE_FLAG
@@ -206,7 +206,7 @@ SET_ESCAPE_TUBE:
 ;;
 ;; It sets bit 7 of the serial ULA's control register and its copy, then joins <WRITE_SERIAL_ULA>.
 ;; In: X = 0 to turn the motor off, 1 to turn it on
-;; Out: X, Y = the serial ULA's previous setting
+;; Out: X/Y = the serial ULA's previous setting
 ;; Uses: A
 SET_CASSETTE_MOTOR:
     lda SERIAL_ULA_COPY
@@ -221,7 +221,7 @@ SET_CASSETTE_MOTOR:
 ;; It loads the mask for the transmit bits exclusive-ORed with &3F, the form <SET_RECEIVE_BAUD> expects in A, and
 ;; falls into it.
 ;; In: X = the rate: 1 for 75 baud up to 8 for 19200, or 0 for the default of 9600
-;; Out: X, Y = the serial ULA's previous setting
+;; Out: X/Y = the serial ULA's previous setting
 ;; Uses: A, OS_SCRATCH
 SET_TRANSMIT_BAUD:
     lda #SERIAL_RECEIVE_RATE            ; exclusive-ORed with &3F: the transmit bits
@@ -233,7 +233,7 @@ SET_TRANSMIT_BAUD:
 ;; selects RS-423, is set unless <CASSETTE_RS423_SELECT> says the cassette has the serial ULA. A rate of 9 or more
 ;; changes nothing.
 ;; In: A = 7, X = the rate: 1 for 75 baud up to 8 for 19200, or 0 for the default of 9600
-;; Out: X, Y = the serial ULA's previous setting
+;; Out: X/Y = the serial ULA's previous setting
 ;; Uses: A, OS_SCRATCH
 SET_RECEIVE_BAUD:
     eor #SERIAL_TRANSMIT_RATE | SERIAL_RECEIVE_RATE
@@ -271,7 +271,7 @@ RETURN_A_IN_X:
 ;; vertical sync interrupt loads when it changes the video ULA's flash bit to 0. It then joins
 ;; <SET_FLASH_SPACE_DURATION> with carry clear.
 ;; In: X = the duration, or 0 for ever, Y = 0
-;; Out: X, Y = the previous duration
+;; Out: X/Y = the previous duration
 ;; Uses: A
 SET_FLASH_MARK_DURATION:
     iny
@@ -284,7 +284,7 @@ SET_FLASH_MARK_DURATION:
 ;; flash bit to 1. When flashing has stopped, with <FLASH_COUNTER> at zero, it restarts it from this state: the
 ;; count becomes the new duration and the flash bit becomes carry, set for OSBYTE &0A and clear for OSBYTE 9.
 ;; In: X = the duration, or 0 for ever, Y = the period's offset from MARK_PERIOD, carry = the state it sets
-;; Out: X, Y = the previous duration
+;; Out: X/Y = the previous duration
 ;; Uses: A
 ;; See: <MARK_PERIOD>, <SPACE_PERIOD>, <FLASH_COUNTER>
 SET_FLASH_SPACE_DURATION:
@@ -341,14 +341,14 @@ SELECT_INPUT_STREAM_1:
 ;;
 ;; OSBYTE &00-&15 arrive with Y = 0, which is the disabled state; the routine joins <ENABLE_EVENT> with it.
 ;; In: X = the event number, Y = 0
-;; Out: X, Y = the event's previous state, 0 when disabled
+;; Out: X/Y = the event's previous state, 0 when disabled
 ;; Uses: A
 DISABLE_EVENT:
     tya
 
 ;; OSBYTE &0E: enables an event, by storing its own OSBYTE number, which is nonzero.
 ;; In: A = the new state, nonzero to enable, X = the event number
-;; Out: X, Y = the event's previous state, 0 when disabled; for an event number of 10 or more, X = A
+;; Out: X/Y = the event's previous state, 0 when disabled; for an event number of 10 or more, X = A
 ;; Uses: A
 ;; See: <EVENT_ENABLE>
 ENABLE_EVENT:
@@ -381,7 +381,7 @@ SELECT_ADC_CHANNELS_1:
 ;; With Y negative, X is the negative INKEY number: exclusive-ORing it with &7F gives the key number exclusive-ORed with
 ;; &80 that KEYV's scan (as OSBYTE &79, with the OSBYTE's carry set) takes.
 ;; In: X, Y = the time limit in centiseconds, low byte first, or Y = &FF and X = the negative INKEY number
-;; Out: X = the character and Y = 0, or Y = &1B for an escape or &FF for a timeout; for a key test X and Y are &FF
+;; Out: X = the character, Y = 0 for a character, &1B for an escape or &FF for a timeout; for a key test, X/Y = &FF
 ;;   when the key is pressed, otherwise 0
 ;; Uses: A
 ;; See: <READ_HIGH_ORDER_ADDRESS>
@@ -407,7 +407,7 @@ READ_KEY_WITH_TIME_LIMIT_SCAN:
 ;;
 ;; Other routines use it to return &FFFF or 0 by carry: OSBYTE calls arrive with carry set.
 ;; In: carry = set for &FFFF, clear for 0
-;; Out: X, Y = &FF, or 0
+;; Out: X/Y = &FF, or 0
 ;; Keeps: A
 READ_HIGH_ORDER_ADDRESS:
     ldx #$FF
@@ -420,7 +420,7 @@ READ_HIGH_ORDER_ADDRESS_1:
 
 ;; OSBYTE &80 for a buffer: counts the characters in an input buffer or the spaces left in an output buffer.
 ;; In: X = &FF minus the buffer number: &FF for the keyboard buffer down to &F7 for the speech buffer
-;; Out: X, Y = the count, low byte first
+;; Out: X/Y = the count, low byte first
 ;; Uses: A
 ;; See: <READ_ADC_OR_BUFFER>, <CNPV>
 READ_BUFFER_STATUS:
@@ -431,7 +431,7 @@ READ_BUFFER_STATUS:
 
 ;; Counts a buffer's characters or spaces through CNPV.
 ;; In: X = the buffer number, carry = clear to count the characters, set to count the spaces
-;; Out: X, Y = the count, low byte first
+;; Out: X/Y = the count, low byte first
 ;; Uses: A
 ;; See: <CNPV>, <PURGE_BUFFER>
 COUNT_BUFFER:
@@ -465,7 +465,7 @@ CHECK_RS423_INPUT_ROOM_DONE:
 ;; X = 5-&7F returns &FFFF through <READ_HIGH_ORDER_ADDRESS>.
 ;; In: X = 1-4 for a channel, 0 for the fire buttons, or negative for a buffer (<READ_BUFFER_STATUS>), zero = set
 ;;   when X is 0, negative = set when X is negative
-;; Out: X, Y = the channel's 16-bit value, low byte first; or for X = 0, X = the fire buttons in bits 0-1 and
+;; Out: X/Y = the channel's 16-bit value, low byte first; or for X = 0, X = the fire buttons in bits 0-1 and
 ;;   Y = the channel last converted, or 0
 ;; Uses: A
 READ_ADC_OR_BUFFER:
@@ -504,7 +504,7 @@ READ_FIRE_BUTTONS:
 ;; overflow clear (unless bit 6 of <ECONET_OS_INTERCEPT> is set) and zero and negative set from X, interrupts
 ;; disabled. It returns X and Y to the caller with carry, and the caller's A comes back unchanged.
 ;; In: A = the OSBYTE number, X, Y = its parameters
-;; Out: X, Y = its results, carry = as the handler returns it, overflow = set for a call nothing recognized
+;; Out: X/Y = its results, carry = as the handler returns it, overflow = set for a call nothing recognized
 ;; Keeps: A
 ;; See: <WORDV_DEFAULT>, <OSBYTE_ROUTINES>, <DISPATCH_OS_CALL>
 BYTEV_DEFAULT:
@@ -552,7 +552,7 @@ BYTEV_DEFAULT_INDEX:
 ;; carry set. The exit, <OS_CALL_EXIT>, returns the handler's carry in the caller's flags.
 ;; In: A = the entry's offset in OSBYTE_ROUTINES, X = 7 for an OSBYTE or 8 for an OSWORD, Y = the call's Y,
 ;;   carry = set for an OSBYTE, clear for an OSWORD; the stack holds the caller's A and flags
-;; Out: X, Y = the handler's results, carry = the handler's carry
+;; Out: X/Y = the handler's results, carry = the handler's carry
 ;; Keeps: A
 ;; Entry: OS_CALL_EXIT = returns to the caller with carry and X and Y as they are
 ;; See: <BYTEV_DEFAULT>, <WORDV_DEFAULT>, <NETV>

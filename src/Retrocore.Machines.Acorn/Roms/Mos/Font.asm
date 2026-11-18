@@ -1,11 +1,11 @@
 ;; The MOS's font for characters 32-127, which modes 0-6 draw text with.
 ;;
-;; Each character is eight bytes, one for each scan line from the top of its cell, with bit 7 the leftmost pixel. The
-;; VDU driver finds a character's eight bytes through <FONT_LOCATIONS>, which hold the page of each zone of 32
-;; characters: &C0, &C1 and &C2 for this font's three zones, until OSBYTE 20 explodes the font into RAM or VDU 23
-;; redefines a character there. Character 96 is the pound sign, as on the keyboard; teletext shows it through
-;; <TELETEXT_TRANSLATION>. Characters 128-255 have no ROM shapes: zone &E0-&FF is <FONT_RAM>, and the others are
-;; only in RAM after an explosion.
+;; Each character is eight bytes, one for each scan line from the top of its cell, with bit 7 the leftmost pixel.
+;; <FIND_CHARACTER_DEFINITION> works out the page of this font's three zones of 32 characters, &C0, &C1 and &C2,
+;; from the character code; only a zone that <FONT_FLAGS> marks as in RAM, after OSBYTE 20 explodes it, takes its
+;; page from <FONT_LOCATIONS>. Character 96 is the pound sign, as on the keyboard; teletext shows it through
+;; <TELETEXT_TRANSLATION>. Characters 128-255 have no ROM shapes: their four zones start out in RAM, all sharing
+;; <FONT_RAM>, and an explosion gives each a page of its own.
 ;; See: <FONT_FLAGS>, <FONT_LOCATIONS>
 FONT:
 

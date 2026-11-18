@@ -21,10 +21,15 @@ import { testDrivesView } from "./drivesView";
 import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
+import { testMemorySubscriptions } from "./memorySubscriptions";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
     if (workspace === undefined) throw new Error("M1 tests need the project workspace.");
+    if (process.env.RETROCORE_TEST_MEMORY_ONLY === "1") {
+        await testMemorySubscriptions(workspace);
+        return;
+    }
     await testAssemblyLanguage(workspace.uri.fsPath);
     await testLanguageServer(workspace.uri.fsPath);
     await testBasicLanguage(workspace.uri.fsPath);

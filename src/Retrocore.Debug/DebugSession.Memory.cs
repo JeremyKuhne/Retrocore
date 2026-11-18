@@ -83,8 +83,7 @@ internal sealed partial class DebugSession
     // The most memory references to keep sending memory events for.
     private const int MemoryViewLimit = 32;
 
-    // The memory views that have read, oldest first, each by its reference as the view gave it: a memory event must
-    // name a view's reference exactly for VS Code to refresh it.
+    // The memory views that have read, oldest first. A memory event must name a view's reference exactly.
     private readonly List<MemoryView> _memoryViews = [];
 
     // Running frames since the last memory events, which go out every few frames while the machine runs.
@@ -195,7 +194,7 @@ internal sealed partial class DebugSession
             readOnly.Add(index, value is not null && !Writable(bank, (ushort)at));
         }
 
-        Track(reference, bank, address, offset, count);
+        Track(reference, bank, address, offset, count, args.String("subscriber"));
         return new JsonObject
         {
             ["address"] = $"0x{address + offset:X4}",
@@ -443,41 +442,51 @@ internal sealed partial class DebugSession
         return new JsonObject { ["bytesWritten"] = written.Count };
     }
 
-    // Notes what a memory view has read, for the memory events that refresh it: the bytes from the lowest offset
-    // it has read to the highest, and what they are now.
-    private void Track(string reference, DebugMemoryBank? bank, long address, long offset, int count)
+    // Notes what a memory view has read, for the memory events that refresh it.
+    private void Track(string reference, DebugMemoryBank? bank, long address, long offset, int count, string? subscriber = null)
     {
-        MemoryView? view = _memoryViews.Find(item => item.Reference == reference);
+        MemoryView? view = _memoryViews.Find(item => item.Reference == reference && item.Subscriber == subscriber);
         if (view is null)
         {
-            view = new(reference) { First = offset, End = offset + count };
+            if (!_memoryViews.Any(item => item.Reference == reference)
+                && _memoryViews.Select(item => item.Reference).Distinct(StringComparer.Ordinal).Count() >= MemoryViewLimit)
+            {
+                string oldest = _memoryViews[0].Reference;
+                _memoryViews.RemoveAll(item => item.Reference == oldest);
+            }
+
+            view = new(reference, subscriber);
             _memoryViews.Add(view);
-            if (_memoryViews.Count > MemoryViewLimit) { _memoryViews.RemoveAt(0); }
         }
         else if (view.Bank != bank || view.Address != address)
         {
             // An expression such as HL that now resolves elsewhere: the view starts over there.
-            view.First = offset;
-            view.End = offset + count;
-        }
-        else
-        {
-            view.First = Math.Min(view.First, offset);
-            view.End = Math.Max(view.End, offset + count);
+            view.Ranges.Clear();
         }
 
         view.Bank = bank;
         view.Address = address;
+        view.Add(offset, offset + count);
         view.Seen = Hash(view);
+    }
+
+    private JsonObject UnsubscribeMemory(JsonObject args)
+    {
+        string subscriber = Required(args, "subscriber");
+        _memoryViews.RemoveAll(view => view.Subscriber == subscriber);
+        return [];
     }
 
     // A hash of the bytes a view has read, as they are now, with unreadable bytes apart from every value.
     private ulong Hash(MemoryView view)
     {
         ulong hash = 14695981039346656037;
-        for (long offset = view.First; offset < view.End; offset++)
+        foreach ((long first, long end) in view.Ranges)
         {
-            hash = (hash ^ (ulong)(MemoryByte(view.Bank, view.Address + offset) ?? 0x100)) * 1099511628211;
+            for (long offset = first; offset < end; offset++)
+            {
+                hash = (hash ^ (ulong)(MemoryByte(view.Bank, view.Address + offset) ?? 0x100)) * 1099511628211;
+            }
         }
 
         return hash;
@@ -489,19 +498,27 @@ internal sealed partial class DebugSession
     {
         _memoryFrames = 0;
         NotifyBasic();
+        Dictionary<string, long>? changed = null;
         foreach (MemoryView view in _memoryViews)
         {
             ulong hash = Hash(view);
             if (hash == view.Seen) { continue; }
             view.Seen = hash;
             if (view.Reference == except) { continue; }
+            changed ??= [with(StringComparer.Ordinal)];
+            long end = Math.Max(view.Ranges.Count == 0 ? 0 : view.Ranges[^1].End, 0);
+            changed[view.Reference] = Math.Max(changed.GetValueOrDefault(view.Reference), end);
+        }
 
+        if (changed is null) { return; }
+        foreach ((string reference, long end) in changed)
+        {
             // The range starts at zero: VS Code 1.100 takes count as the end offset when it invalidates a region.
             Notify("memory", new JsonObject
             {
-                ["memoryReference"] = view.Reference,
+                ["memoryReference"] = reference,
                 ["offset"] = 0,
-                ["count"] = Math.Max(view.End, 0)
+                ["count"] = end
             });
         }
     }

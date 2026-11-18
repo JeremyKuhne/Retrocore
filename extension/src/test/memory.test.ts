@@ -246,6 +246,39 @@ test("the page's script parses", () => {
     assert.doesNotThrow(() => new Script(html.slice(html.indexOf(open) + open.length, html.lastIndexOf("</script>"))));
 });
 
+test("the inspector sends only the latest cursor while a request is in flight", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    const first = page.take("inspect");
+    new Script("for (let index = 1; index <= 20; index++) { cursor = 0x0400 + index; wantInspection(); }").runInContext(page.context);
+    assert.equal(page.posted.filter(message => message.type === "inspect").length, 0);
+
+    page.send({ type: "reply", id: first.id, result: { address: 0x0400, region: "Old" } });
+    await page.settle();
+    const latest = page.take("inspect");
+    assert.equal(latest.address, 0x0414);
+    assert.doesNotMatch(page.elements.get("inspector")!.innerHTML, /Old/);
+    page.send({ type: "reply", id: latest.id, result: { address: 0x0414, region: "Latest" } });
+    await page.settle();
+    assert.match(page.elements.get("inspector")!.innerHTML, /Latest/);
+});
+
+test("the listing skips intermediate scrolls while a request is in flight", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    const first = page.take("listing");
+    new Script("grid.scrollTop = 100 * LINE; wantListing(); grid.scrollTop = 200 * LINE; wantListing();").runInContext(page.context);
+    assert.equal(page.posted.filter(message => message.type === "listing").length, 0);
+
+    page.send({ type: "reply", id: first.id, result: { lines: [] } });
+    await page.settle();
+    const latest = page.take("listing");
+    assert.equal(latest.address, 200 * 16);
+    page.send({ type: "reply", id: latest.id, result: { lines: [] } });
+    await page.settle();
+    assert.equal(page.posted.filter(message => message.type === "listing").length, 0);
+});
+
 test("the page reads what it shows, writes a byte at its second hex digit, and undoes it", async () => {
     const page = runPage();
     assert.deepEqual(page.posted.shift(), { type: "ready" });

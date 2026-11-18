@@ -97,6 +97,9 @@ internal sealed partial class DebugSession
     private ulong _typingDue;
     private readonly Dictionary<(string Path, int Line), ulong> _lineCycles = [];
     private (string Path, int Line)? _cycleSource;
+    private bool _cycleChangesOnly;
+    private Dictionary<(string Path, int Line), ulong>? _sentLineCycles;
+    private Dictionary<(string Path, int Line), ulong>? _sentCallCycles;
 
     // The cycles run on the current line since they were last added to its count, and whether the line was entered
     // since then, so its count starts over. Counting here and adding once per instruction keeps the dictionary, and
@@ -153,6 +156,7 @@ internal sealed partial class DebugSession
         transport.On("retro/breakpoints", args => Reply(() => BreakpointList(args)));
         transport.On("retro/memoryBanks", _ => Reply(MemoryBankList));
         transport.On("retro/memory/read", args => Reply(() => ReadMemoryRange(args)));
+        transport.On("retro/memory/unsubscribe", args => Reply(() => UnsubscribeMemory(args)));
         transport.On("retro/memory/labels", args => Reply(() => MemoryLabels(args)));
         transport.On("retro/memory/listing", args => Reply(() => MemoryListing(args)));
         transport.On("retro/memory/mark", args => Reply(() => MemoryMark(args)));
@@ -346,6 +350,13 @@ internal sealed partial class DebugSession
 
         transport.On("retro/cycles", args => Reply(() =>
         {
+            if (args.Bool("changesOnly") is { } changesOnly)
+            {
+                _cycleChangesOnly = changesOnly;
+                _sentLineCycles = null;
+                _sentCallCycles = null;
+            }
+
             if (args.Bool("clear") == true)
             {
                 _lineCycles.Clear();
@@ -742,6 +753,7 @@ internal sealed partial class DebugSession
         // retro/device and retro/hardware answer media's outcomes (saved, changed, conflict, losses, readOnly) to a
         // client that sends supportsRetrocoreMedia, as the media persistence plan has them.
         ["supportsRetrocoreMedia"] = 1,
+        ["supportsRetrocoreMemorySubscriptions"] = true,
         ["supportsConditionalBreakpoints"] = true,
         ["supportsHitConditionalBreakpoints"] = true,
         ["supportsLogPoints"] = true,
@@ -869,6 +881,8 @@ internal sealed partial class DebugSession
         _basicEnded = false;
         _lineCycles.Clear();
         _callCycles.Clear();
+        _sentLineCycles = null;
+        _sentCallCycles = null;
         _contracts?.Clear();
         _cycleSource = null;
         _pendingLineCycles = 0;
@@ -1775,7 +1789,7 @@ internal sealed partial class DebugSession
                             Measure();
                             NotifyFrame(running: true);
                             if (Target.TakeAudio() is { } audio) { Notify("retro/audio", audio); }
-                            Notify("retro/cycles", SourceCycles());
+                            NotifySourceCycles();
                             NotifyStatus();
                             NotifyRunningMemory();
                             frameTime = Stopwatch.GetTimestamp();
@@ -2006,7 +2020,7 @@ internal sealed partial class DebugSession
         });
 
         NotifyFrame(running: false);
-        Notify("retro/cycles", SourceCycles());
+        NotifySourceCycles(force: true);
         NotifyStatus();
         NotifyMemory();
     }
@@ -2067,6 +2081,30 @@ internal sealed partial class DebugSession
     {
         FlushLineCycles();
         return SourceCyclesJson();
+    }
+
+    private void NotifySourceCycles(bool force = false)
+    {
+        FlushLineCycles();
+        if (_cycleChangesOnly && !force)
+        {
+            if (SameCycles(_lineCycles, _sentLineCycles) && SameCycles(_callCycles.Last, _sentCallCycles)) { return; }
+        }
+
+        Notify("retro/cycles", SourceCyclesJson());
+        if (_cycleChangesOnly)
+        {
+            _sentLineCycles = _lineCycles.ToDictionary(pair => pair.Key, pair => pair.Value);
+            _sentCallCycles = _callCycles.Last.ToDictionary(pair => pair.Key, pair => pair.Value);
+        }
+    }
+
+    private static bool SameCycles(
+        IReadOnlyDictionary<(string Path, int Line), ulong> current,
+        Dictionary<(string Path, int Line), ulong>? sent)
+    {
+        if (sent is null || sent.Count != current.Count) { return false; }
+        return current.All(pair => sent.TryGetValue(pair.Key, out ulong value) && value == pair.Value);
     }
 
     private JsonObject SourceCyclesJson() => new JsonObject

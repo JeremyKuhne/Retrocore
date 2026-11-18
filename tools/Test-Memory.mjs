@@ -72,6 +72,7 @@ try {
     // VS Code's own memory icon opens only the Hex Editor, so VS Code is not told of readMemory; it still answers.
     assert.equal(capabilities.supportsReadMemoryRequest, true);
     assert.equal(capabilities.supportsWriteMemoryRequest, true);
+    assert.equal(capabilities.supportsRetrocoreMemorySubscriptions, true);
 
     // The Model I: one address space, memory as the CPU maps it, with 16K so RAM ends at $7FFF.
     at = "launching the Model I";
@@ -196,6 +197,48 @@ try {
     const told = queued("memory").map(body => body.memoryReference);
     assert.deepEqual(told, [message.memoryReference], "only views that read the byte written, except the writer, are told");
     assert.deepEqual(queued("invalidated").at(-1)?.areas, ["variables"]);
+
+    at = "tracking separate read ranges";
+    const low = (await read("0x4000", 1)).bytes[0];
+    await read("0x4000", 1, 0x1000);
+    const middle = (await read("0x4800", 1)).bytes[0];
+    drop("memory");
+    await write("0x4800", [middle ^ 0xFF]);
+    assert.equal(queued("memory").some(body => body.memoryReference === "0x4000"), false,
+        "a write between two read ranges does not invalidate either");
+    drop("memory");
+    await write("4000", [low ^ 0xFF]);
+    assert.deepEqual(queued("memory").find(body => body.memoryReference === "0x4000"),
+        { memoryReference: "0x4000", offset: 0, count: 0x1001 }, "a read range still notifies the view");
+    await write("0x4800", [middle]);
+    await write("4000", [low]);
+
+    at = "closing one memory subscriber";
+    const saved = (await read("6100", 0x21)).bytes;
+    await request("retro/memory/read", { memoryReference: "0x6100", offset: 0, count: 1, subscriber: "first" });
+    await request("retro/memory/read", { memoryReference: "0x6100", offset: 0x10, count: 1, subscriber: "second" });
+    await read("0x6100", 1, 0x20);
+    await request("retro/memory/unsubscribe", { subscriber: "first" });
+    drop("memory");
+    await write("6100", [saved[0] ^ 0xFF]);
+    assert.equal(queued("memory").some(body => body.memoryReference === "0x6100"), false,
+        "the closed editor no longer tracks its bytes");
+    await write("6110", [saved[0x10] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"), "the other editor remains subscribed");
+    await request("retro/memory/unsubscribe", { subscriber: "second" });
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/read", { memoryReference: "0x6100", count: 1, subscriber: `extra-${index}` });
+    }
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/unsubscribe", { subscriber: `extra-${index}` });
+    }
+    drop("memory");
+    await write("6120", [saved[0x20] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
+        "unsubscribing many editors does not evict a standard DAP reader of the same reference");
+    await write("6100", [saved[0]]);
+    await write("6110", [saved[0x10]]);
+    await write("6120", [saved[0x20]]);
 
     at = "writes that cannot finish";
     const rom = (await read("0x0000", 1)).bytes[0];

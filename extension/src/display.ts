@@ -119,6 +119,7 @@ const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
 let imageBytes;
+let paintedOverlay=false;
 // Speed: the setting the debug host keeps to, and while running what it measures, such as 1.00× · 1.02 MHz.
 const speedSelect=document.getElementById('speed');
 speedSelect.addEventListener('change',()=>{
@@ -143,6 +144,7 @@ function draw(frame){
         api.postMessage({error:'The display needs an updated debug host and an RGBA frame.'});return;
     }
     const iie=frame.machine==='apple2';
+    const running=frame.running===true;
     document.getElementById('display').style.aspectRatio=aspect[frame.machine]??aspect['apple2'];
     document.getElementById('text').textContent=frame.rows.join('\\n');
     const ctx=screen.getContext('2d');
@@ -158,9 +160,10 @@ function draw(frame){
     }else if(!sized){
         return;
     }
-    ctx.putImageData(image,0,0);
+    const beamOverlay=iie&&!running&&document.getElementById('overlay').checked;
+    if(typeof video.pixels==='string'||paintedOverlay||beamOverlay)ctx.putImageData(image,0,0);
+    paintedOverlay=false;
     // While running, positions change every frame; they matter once stopped.
-    const running=frame.running===true;
     document.getElementById('details').hidden=!iie;
     if(frame.machine==='apple3'){
         const drives=frame.disk?frame.disk.drives.filter(drive=>drive.mounted||drive.motor).map(drive=>'.D'+drive.drive
@@ -185,7 +188,7 @@ function draw(frame){
         document.getElementById('disk').textContent='';
         return;
     }
-    if(document.getElementById('overlay').checked)drawBeam(ctx,beam);
+    if(beamOverlay){drawBeam(ctx,beam);paintedOverlay=true;}
     document.getElementById('status').textContent=frame.cycles+' cycles · line '+beam.scanline+' · column '+beam.column
         +' · frame cycle '+beam.cycleInFrame+(beam.verticalBlank?' · VBL':beam.horizontalBlank?' · HBL':'');
     if(frame.disk){

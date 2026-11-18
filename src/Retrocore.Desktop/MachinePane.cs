@@ -765,13 +765,20 @@ internal sealed class MachinePane : ScrollViewer
         _ = Send(args => _session.Hardware(row.Id, args), new JsonObject { ["action"] = "removeCard" });
     }
 
+    // The files Insert offers: the drive's formats, and for a Datasette, a tape deck that saves, a .prg too, which
+    // goes in as the tape SAVE writes.
+    private static IReadOnlyList<string> InsertFormats(DeviceState device) =>
+        device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save) && !device.Info.Formats.Contains("prg")
+            ? [.. device.Info.Formats, "prg"]
+            : device.Info.Formats;
+
     private async Task Insert(DeviceState device)
     {
         IReadOnlyList<IStorageFile> files = await _window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = $"Insert in {device.Info.Name}",
             AllowMultiple = false,
-            FileTypeFilter = Filters($"{device.Info.Name} images", device.Info.Formats),
+            FileTypeFilter = Filters($"{device.Info.Name} images", InsertFormats(device)),
         });
 
         if (files.Count != 0 && files[0].TryGetLocalPath() is { } path)

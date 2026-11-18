@@ -459,8 +459,8 @@ PRINT_TAB_XY:
     jmp PRINT_SPACING_DONE
 ;; TAB(: moves to a column by printing spaces, or with TAB(x,y), to a position on the screen.
 ;;
-;; TAB(x) prints spaces up to column x, counting by COUNT; when the cursor is already past x, it starts a new line and
-;; prints x spaces.
+;; Only x's low byte is used, so TAB(256) is TAB(0). TAB(x) prints spaces up to column x, counting by COUNT; when the
+;; cursor is already past x, it starts a new line and prints x spaces.
 ;; In: PTR_B, PTR_B_OFFSET = just past TAB(
 PRINT_TAB:
     jsr EVALUATE_INTEGER
@@ -474,10 +474,11 @@ PRINT_TAB:
     bcs PRINT_SPACES_LOOP           ; Y = the spaces to column x
     jsr PRINT_NEWLINE
     beq PRINT_SPACES                ; always taken: PRINT_NEWLINE returns A = 0
-;; SPC: prints the number of spaces that follows, a factor.
+;; SPC: prints the number of spaces that follows, a factor, taking only its low byte: SPC 256 prints none and SPC 257
+;; one.
 ;; In: PTR_B, PTR_B_OFFSET = just past SPC
 ;; Entry:
-;;   PRINT_SPACES = prints INT_A spaces
+;;   PRINT_SPACES = prints as many spaces as INT_A's low byte, none for zero
 ;;   PRINT_SPACES_LOOP = prints Y spaces, Y not zero
 PRINT_SPC:
     jsr EVALUATE_INTEGER_FACTOR

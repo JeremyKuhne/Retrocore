@@ -37,6 +37,9 @@ export interface OffBody {
 
 const targetKey = "retrocore.offMachine";
 const lastSetupKey = "retrocore.lastSetup";
+// The machine each recovery id's session started, so its kept disks can be shown when it is in neither launch.json
+// nor the last setup, as a favorite another machine has followed is.
+const recoveryTargetPrefix = "retrocore.recoveryTarget:";
 
 export function folder(): vscode.WorkspaceFolder | undefined {
     return vscode.workspace.workspaceFolders?.[0];
@@ -142,6 +145,7 @@ export class OffMachine {
         this.target = { configuration: rest, source };
         this.body = undefined;
         await this.state.update(targetKey, this.target);
+        if (typeof rest.recoveryId === "string") await this.state.update(`${recoveryTargetPrefix}${rest.recoveryId}`, this.target);
     }
 
     /** Asks the language server for the machine with its saved cards and media. */
@@ -208,7 +212,10 @@ export class OffMachine {
             } else if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
                 await this.select({ configuration: { ...setupConfiguration(setup), recoveryId }, source: { kind: "setup", setup } });
             } else {
-                return false;
+                // The machine as its session started it, as a favorite's is.
+                const started = this.state.get<OffTarget>(`${recoveryTargetPrefix}${recoveryId}`);
+                if (started === undefined) return false;
+                await this.select({ ...started, configuration: { ...started.configuration, recoveryId } });
             }
         } else {
             await this.describe();
@@ -232,9 +239,9 @@ export class OffMachine {
         if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
             return this.saved.recoveryId(setupConfiguration(setup), folderOf(undefined)?.uri.toString()) === recoveryId;
         }
-        // A machine launched from neither, as from a favorite: any launch of its name that gives no id of its own
-        // gets the id made for the name, so a made one still comes back.
-        return owner.made;
+        // A machine launched from neither, as from a favorite: launched again as its session started it, it has
+        // this id; and any launch of its name that gives no id of its own gets the id made for the name.
+        return this.state.get(`${recoveryTargetPrefix}${recoveryId}`) !== undefined || owner.made;
     }
 
     /** The recovery id of the machine shown, whose journal keeps the disks its last run did not save. */

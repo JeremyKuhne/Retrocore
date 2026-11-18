@@ -808,6 +808,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                             + "so its next launch cannot put these disks back. They stay offered; Discard lets them go.");
                         return;
                     }
+                    // Review marks the disks recovered only once they can be shown, so they are offered again if not.
+                    if (choice === "Review" && !await off.showRecovery(journal.id)) {
+                        void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the disks it kept.`);
+                        return;
+                    }
                     if (choice !== "Discard") {
                         try {
                             await languageRequest("retrocore/recovery/resolve", { id: journal.id, action: "recover" });

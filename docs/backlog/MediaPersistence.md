@@ -951,7 +951,7 @@ After the reviews:
      crash's disk is discarded, and of two hosts launching one machine only the first keeps its journal.
      `RETROCORE_CHECKPOINT_SECONDS` shortens the checkpoint for such tests.
    - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle
-     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. Injected write
+     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the machine is not built without it. Injected write
      failures (a full disk, access denied) are not yet tested. Then built disks (kept in the history once it is
      built, with a notice), recordings as changed tapes, slot 7's device (which cannot be mounted again in a running
      machine), Retrocore Desktop's journal, and the source-aware default lock.

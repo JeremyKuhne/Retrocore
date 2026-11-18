@@ -261,7 +261,9 @@ STRING_TOO_LONG_ERROR:
 ;; +, with strings: joins the left string, in StrA, to the next power at PTRB; part of <EVALUATE_SUM>.
 ;;
 ;; The left string is pushed on BASIC's stack while the right is evaluated into StrA. The right string is then moved
-;; up in StrA to make room, and the left one copied back from the stack in front of it.
+;; up in StrA to make room, and the left one copied back from the stack in front of it. An empty right string is
+;; the exception: the move takes its length of 0 as 256 and writes as far as &05FF, past StrA, which is
+;; GOSUB_STACK_HIGH+25, so joining "" on can change the 26th GOSUB's return address.
 ;; Errors: Type mismatch when the right operand is a number, String too long
 CONCATENATE:
     jsr PUSH_STRING

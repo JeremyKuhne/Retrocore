@@ -467,7 +467,9 @@ BKLN_2:
 ;;
 ;; RETURN starts a new line and ends reverse, quote and insert modes; DEL, INST, the cursor keys, HOME, CLR and
 ;; reverse on and off do their work, except in quote mode or while inserts are pending, when they print as reversed
-;; characters. A quotation mark toggles quote mode. The kernal's <Kernal1:BSOUT> calls it for the screen.
+;; characters. Two keys differ: DEL deletes in quote mode too, printing reversed only while inserts are pending, and
+;; INST inserts while inserts are pending, printing reversed only in quote mode. A quotation mark toggles quote mode.
+;; The kernal's <Kernal1:BSOUT> calls it for the screen.
 ;;
 ;; In: A = the character
 ;; Keeps: A, X, Y
@@ -699,7 +701,8 @@ NXTX_14:
 NXTX_15:
     jmp LOOP2
 
-;; Moves the cursor to the start of the next logical line, scrolling when it is on the last one.
+;; Moves the cursor down to the next logical line, keeping its column, scrolling when it is on the last one; RETURN
+;; (<NXT1>) clears the column first.
 ;;
 ;; The SEC before its shift of <LXSP> does nothing: the shift always clears bit 7.
 ;;

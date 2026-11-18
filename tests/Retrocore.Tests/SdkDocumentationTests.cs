@@ -241,7 +241,21 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
-    private static readonly string[] s_sdkFolders = ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
+    /// <summary>
+    ///  The Kaypro II's sources, its ROMs' and MBASIC's modules, pass the lint as the editor runs it.
+    /// </summary>
+    [TestMethod]
+    public void KayproDocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Kaypro");
+        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain(["Kaypro2.asm", "Kaypro2CharacterGenerator.asm", "Mbasic.asm"]);
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    private static readonly string[] s_sdkFolders =["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
 
     // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.
     private static IEnumerable<string> SdkRoots(string roms) =>

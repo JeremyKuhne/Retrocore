@@ -4,8 +4,9 @@
 
 // Kaypro II DAP integration: boots the SDK's build of the 81-149C ROM, which asks for a disk, and checks the display,
 // the thread, the hardware rows, stepping in Kaypro2.asm's source, a function breakpoint on a ROM routine, Retrocore
-// Memory's banks and the reset stop, and a program loaded under the ROM. With the disk in RETROCORE_KAYPRO (or %USERPROFILE%\Retrocore\kaypro),
-// it also boots CP/M from cpm22-rom149.img and stops in the ROM's READ through CP/M's BIOS.
+// Memory's banks and the reset stop, and a program loaded under the ROM. With the disks in RETROCORE_KAYPRO (or
+// %USERPROFILE%\Retrocore\kaypro), it also boots CP/M from cpm22-rom149.img, stops in the ROM's READ through CP/M's
+// BIOS, and runs MBASIC from MBasic.img.
 
 import { resolve, join } from "node:path";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -17,6 +18,7 @@ const root = resolve(import.meta.dirname, "..");
 delete process.env.RETROCORE_KAYPRO_ROMS;
 const disks = process.env.RETROCORE_KAYPRO ?? join(process.env.RETROCORE_CACHE ?? join(homedir(), "Retrocore"), "kaypro");
 const cpm = join(disks, "cpm22-rom149.img");
+const mbasic = join(disks, "MBasic.img");
 const { request, event, events, fail, close, failure } = startDap(root);
 const timeout = setTimeout(() => fail(new Error("Kaypro DAP integration timed out.")), Number(process.env.RETROCORE_DAP_TIMEOUT ?? 120000));
 const verbose = process.env.RETROCORE_DAP_VERBOSE === "1";
@@ -131,16 +133,16 @@ try {
     assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x0000");
     await request("continue", { threadId: 1 });
 
-    if (existsSync(cpm)) {
+    if (existsSync(cpm) && existsSync(mbasic)) {
         log("CP/M");
-        await launch({ disks: [cpm] });
+        await launch({ disks: [cpm, mbasic] });
         await screen("A>");
         log("A>");
 
         // CP/M's BIOS reads through the ROM's READ, so a breakpoint there stops in Kaypro2.asm.
         drop("stopped");
         await request("setFunctionBreakpoints", { breakpoints: [{ name: "READ" }] });
-        await type("DIR\r");
+        await type("DIR B:\r");
         stopped = await event("stopped");
         log("stopped in READ");
         assert.equal(stopped.reason, "function breakpoint");
@@ -149,12 +151,50 @@ try {
         assert.equal(top.name, "READ");
         await request("setFunctionBreakpoints", { breakpoints: [] });
         await request("continue", { threadId: 1 });
-        await screen("PIP");
+        await screen("MBASIC");
         await prompt();
-        log("DIR");
-        console.log("Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop, CP/M's boot and a breakpoint in READ.");
+        log("DIR B:");
+
+        await type("B:MBASIC\r");
+        await screen("Ok");
+        await type("PRINT 6*7\r");
+        await screen(" 42");
+        log("PRINT 6*7");
+
+        // A BASIC file: CP/M boots, the launch starts MBASIC from drive B, and RUN stops on the BASIC thread at the
+        // first statement, with MBASIC's source on the CPU thread.
+        log("MBASIC program");
+        const program = join(mkdtempSync(join(tmpdir(), "retrocore-kaypro-")), "squares.mbasic.bas");
+        writeFileSync(program, "10 TOTAL=0\n20 FOR I%=1 TO 3\n30 GOSUB 100\n40 NEXT I%\n50 PRINT \"TOTAL\";TOTAL\n60 END\n100 TOTAL=TOTAL+I%*I%:RETURN\n");
+        await launch({ disks: [cpm, mbasic], command: "B:MBASIC", basic: program }, ["basicStart"]);
+        stopped = await event("stopped");
+        assert.equal(stopped.threadId, 2, `RUN stops on the BASIC thread (${stopped.description ?? stopped.reason})`);
+        assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: TOTAL=0");
+        for (let step = 0; step < 3; step++) {
+            drop("stopped");
+            await request("stepIn", { threadId: 2 });
+            await event("stopped");
+        }
+
+        const basicFrames = (await request("stackTrace", { threadId: 2 })).stackFrames;
+        assert.equal(basicFrames[0].name, "100: TOTAL=TOTAL+I%*I%", "a step into GOSUB goes to line 100");
+        assert.equal(basicFrames.length, 2, "GOSUB's return is on the BASIC call stack");
+        const scopes = (await request("scopes", { frameId: basicFrames[0].id })).scopes;
+        const variables = (await request("variables", { variablesReference: scopes[0].variablesReference })).variables;
+        const byName = Object.fromEntries(variables.map(variable => [variable.name, variable.value]));
+        assert.equal(byName["I%"], "1", `I% is 1 (${JSON.stringify(byName)})`);
+        const cpu = (await request("stackTrace", { threadId: 1 })).stackFrames;
+        assert.ok(cpu.some(frame => /[\\/]Mbasic[\\/]\w+\.asm$/.test(frame.source?.path ?? "")), "the CPU is in MBASIC's source");
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("continue", { threadId: 2 });
+        await screen("TOTAL 14");
+
+        // RUN turns the program's line numbers into pointers, but it is still the launched file.
+        const stale = events.filter(message => message.event === "output" && /no longer matches/.test(message.body?.output ?? ""));
+        assert.equal(stale.length, 0, "the program in memory still matches squares.mbasic.bas after it runs");
+        console.log("Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop, CP/M's boot, a breakpoint in READ, and MBASIC.");
     } else {
-        console.log(`Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop (no CP/M disk in ${disks}).`);
+        console.log(`Kaypro II DAP passed: the ROM's sign-on, thread, hardware, source, banks, a program under the ROM and reset stop (no disks in ${disks}).`);
     }
 
     await request("disconnect");

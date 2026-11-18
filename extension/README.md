@@ -1144,8 +1144,13 @@ panel shows the 80x24 screen and types ASCII: **Ctrl** with a letter types its c
 character (**Ctrl+C** is `^C`), the arrow keys send `$F1`-`$F4` as the Kaypro's own do,
 and **Ctrl+F12** or **Ctrl+Break** is the reset button. The Kaypro has no BREAK key;
 the key bar has **Esc** and **Reset**. The drives are **Drive A** and **Drive B** in
-the [Drives view](#machine-and-drives), where disks go in and out and are saved. There is
-no BASIC thread yet.
+the [Drives view](#machine-and-drives), where disks go in and out and are saved.
+
+`basic` names an MBASIC program (`.mbasic.bas`): CP/M boots, `command` (`MBASIC` by
+default; `B:MBASIC` when it is on drive B) starts MBASIC, the program goes into memory
+and RUN starts it. While MBASIC runs, a BASIC thread steps by statement with the GOSUB
+call stack, variables, arrays and FOR loops, as on the TRS-80, and the CPU thread steps
+through MBASIC's source (`Mbasic/`).
 
 ## Breakpoints
 
@@ -1282,11 +1287,12 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas` and
-`.colorbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC, Business BASIC,
-Level II BASIC and Color BASIC. Business BASIC takes a reserved word only between
-separators, so its highlighting leaves `PRINTER` a name, and its names count in full,
-dots included. A Color BASIC file may use every word of Disk Extended Color BASIC; a
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
+`.colorbasic.bas` and `.mbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+Business BASIC, Level II BASIC, Color BASIC and MBASIC (BASIC-80 5.21, the Kaypro II's
+CP/M BASIC). Business BASIC and MBASIC take a reserved word only between separators,
+so their highlighting leaves `PRINTER` a name, and their names count in full, dots
+included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
 machine without those ROMs stores the words they add as letters. A plain `.bas` file
 takes its dialect from a first line such as `REM retrocore applesoft` or
 `' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of

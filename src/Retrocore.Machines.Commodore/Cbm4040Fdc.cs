@@ -44,6 +44,10 @@ public sealed class Cbm4040Fdc
     // than a cell; following the head instead would drop or double a bit there. -1 until the next write starts.
     private int _writeCell = -1;
 
+    // The disk and head position the write cell is on.
+    private CommodoreDisk? _writeDisk;
+    private int _writePosition = -1;
+
     private int _readyChanges;
     private int _errorChanges;
 
@@ -309,10 +313,21 @@ public sealed class Cbm4040Fdc
         CommodoreFloppyDrive drive = _drives[DriveSelect];
         if (!drive.Motor || drive.Disk is not { IsWriteProtected: false } disk) { return; }
         int count = disk.BitCount(drive.Position);
-        if (count == 0) { return; }
-        if (_writeCell < 0 || _writeCell >= count)
+        if (count == 0)
+        {
+            // A track nothing was recorded on, as a G64 can leave one, takes cells at the zone it is written at.
+            count = GcrLayout.TrackBits(Zone);
+            disk.SetTrack(drive.Position, new byte[count / 8], count, Zone);
+            _fluxDirty = true;
+        }
+
+        // A write goes on cell by cell only on the track and disk it began on; after a step or a new disk it starts
+        // again at the cell under the head.
+        if (_writeCell < 0 || _writeCell >= count || !ReferenceEquals(disk, _writeDisk) || drive.Position != _writePosition)
         {
             _writeCell = (int)(drive.Angle * count / CommodoreFloppyDrive.TicksPerTurn);
+            _writeDisk = disk;
+            _writePosition = drive.Position;
         }
 
         disk.Write(drive.Position, _writeCell, bit);

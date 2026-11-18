@@ -46,7 +46,7 @@ internal sealed partial class PetDebugTarget
         string parent = Path.GetDirectoryName(full) ?? full;
         foreach (string folder in (string[])[Path.Join(full, "c4040"), full, Path.Join(full, "pet2001n"), Path.Join(full, "pet4016"), Path.Join(parent, "c4040")])
         {
-            if (File.Exists(Path.Join(folder, "901468-14.uj1")) && File.Exists(Path.Join(folder, "901466-04.uk3")))
+            if (HasAll(folder, s_4040Files))
             {
                 roms["4040"] = Cbm4040Roms.LoadFromDirectory(folder);
                 break;
@@ -55,7 +55,7 @@ internal sealed partial class PetDebugTarget
 
         foreach (string folder in (string[])[Path.Join(full, "c2040"), full, Path.Join(parent, "c2040")])
         {
-            if (File.Exists(Path.Join(folder, "901468-06.ul1")) && File.Exists(Path.Join(folder, "901466-01.uk3")))
+            if (HasAll(folder, s_2040Files))
             {
                 roms["2040"] = Cbm4040Roms.Load2040FromDirectory(folder);
                 break;
@@ -63,7 +63,13 @@ internal sealed partial class PetDebugTarget
         }
 
         return roms;
+
+        static bool HasAll(string folder, string[] files) => files.All(file => File.Exists(Path.Join(folder, file)));
     }
+
+    // The chips each drive loads, all of which a folder must hold: a set missing one falls through to the next folder.
+    private static readonly string[] s_4040Files = ["901468-14.uj1", "901468-15.ul1", "901468-16.uh1", "901466-04.uk3", "901467.uk6"];
+    private static readonly string[] s_2040Files = ["901468-06.ul1", "901468-07.uh1", "901466-01.uk3", "901467.uk6"];
 
     /// <summary>
     ///  Connects the launch's disk units and puts its disks in them.

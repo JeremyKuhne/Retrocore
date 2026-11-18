@@ -15,6 +15,12 @@ internal sealed partial class PetDebugTarget
     // Where every PET's BASIC program starts.
     private const ushort BasicStart = 0x0401;
 
+    private const byte RtiOpcode = 0x40;
+
+    // Whether the last instruction fetched was an RTI: an interrupt taken at GONE returns there, which starts nothing
+    // that GONE did not start before the interrupt.
+    private bool _returnedFromInterrupt;
+
     private BasicRom? _basicRom;
     private IReadOnlyDictionary<string, long>? _basicSymbols;
 
@@ -43,9 +49,17 @@ internal sealed partial class PetDebugTarget
     /// <inheritdoc/>
     public int BasicCurrentLine => Word(Symbol("CURLIN"));
 
+    // Whether an address is in BASIC's CHRGET, from CHRGET to its RTS at CHRRTS, in page zero.
+    private bool InChrget(ushort address) =>
+        _basicSymbols is { } symbols
+            && symbols.TryGetValue("CHRGET", out long first)
+            && symbols.TryGetValue("CHRRTS", out long last)
+            && address >= first
+            && address <= last;
+
     /// <inheritdoc/>
     public (int Line, int Address)? BasicStatementStart(ushort pc) =>
-        _basicRom is { } rom && pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null;
+        !_returnedFromInterrupt && _basicRom is { } rom && pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null;
 
     /// <inheritdoc/>
     /// <remarks>

@@ -1027,8 +1027,8 @@ OPEN_1:
 OP160:
     ldy #MS4 - MSG1
 
-;; Gives a kernal error: closes all files, prints "?" and the message, and goes on through BASIC's <TYPERR>,
-;; which prints " ERROR".
+;; Gives a kernal error: forgets all files (<CLALL>, which closes none, so a cassette's buffer is not written and no
+;; device is sent CLOSE), prints "?" and the message, and goes on through BASIC's <TYPERR>, which prints " ERROR".
 ;; In: Y = the message's offset in <MSG1>
 ERMSG:
     jsr CLALL

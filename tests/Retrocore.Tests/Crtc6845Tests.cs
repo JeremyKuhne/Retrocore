@@ -143,5 +143,61 @@ public class Crtc6845Tests
         while (crtc.Fields == fields) { crtc.Tick(); }
         crtc.OddField.Should().BeTrue();
         crtc.RowAddress.Should().Be(1, "the odd field starts on line 1");
+
+        crtc.Reset();
+        crtc.RowAddress.Should().Be(1, "a reset in the odd field starts on its line");
+    }
+
+    /// <summary>
+    ///  A clone has registers of its own.
+    /// </summary>
+    [TestMethod]
+    public void CloneKeepsItsOwnRegisters()
+    {
+        Crtc6845 crtc = Small();
+        Crtc6845 copy = crtc.Clone();
+        crtc.Write(0, 14);
+        crtc.Write(1, 0x22);
+        copy.Write(0, 14);
+        copy.Read(1).Should().Be(0x01);
+        crtc.Read(1).Should().Be(0x22);
+    }
+
+    /// <summary>
+    ///  When R0 is lowered below the current character, the 8-bit counter wraps round to meet it.
+    /// </summary>
+    [TestMethod]
+    public void LoweringTheTotalWrapsTheCounter()
+    {
+        Crtc6845 crtc = Small();
+        for (int i = 0; i < 8; i++) { crtc.Tick(); }
+        crtc.Write(0, 0);
+        crtc.Write(1, 4);
+        int ticks = 0;
+        while (crtc.RowAddress == 0 && ticks < 1000) { crtc.Tick(); ticks++; }
+        ticks.Should().Be(256 - 8 + 4 + 1, "the counter runs to 255, wraps and ends the line at the new total");
+    }
+
+    /// <summary>
+    ///  A reset takes row 0's matches at once: R6 = 0 blanks the display, R7 = 0 starts the vertical sync and R1 = 0
+    ///  blanks the first character.
+    /// </summary>
+    [TestMethod]
+    public void ResetTakesRowZeroMatches()
+    {
+        Crtc6845 crtc = Small();
+        crtc.Write(0, 6);
+        crtc.Write(1, 0);
+        crtc.Write(0, 7);
+        crtc.Write(1, 0);
+        crtc.Reset();
+        crtc.Displayed.Should().BeFalse();
+        crtc.VerticalSync.Should().BeTrue();
+
+        crtc = Small();
+        crtc.Write(0, 1);
+        crtc.Write(1, 0);
+        crtc.Reset();
+        crtc.Displayed.Should().BeFalse();
     }
 }

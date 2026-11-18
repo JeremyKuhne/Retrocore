@@ -156,6 +156,7 @@ public sealed class Sn76489
 
         _noise = (byte)(data & 7);
         _shifter = 0x4000;
+        _outputs[3] = false;
     }
 
     // The noise generator's output follows the shift register's low bit.

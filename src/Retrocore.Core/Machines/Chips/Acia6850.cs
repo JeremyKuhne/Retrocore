@@ -33,8 +33,14 @@ namespace Retrocore.Machines.Chips;
 ///  </para>
 ///  <para>
 ///   The modem lines: a rise of the DCD input sets the DCD status bit and, with the receive interrupt enabled,
-///   interrupts, until the status and then the receive data are read; after that the bit follows the input. While DCD
-///   is high, RDRF reads clear. CTS high clears TDRE as read and stops the transmitter taking a character.
+///   interrupts, until the status and then the receive data are read; after that the bit follows the input. While the
+///   DCD input is high, RDRF reads clear and the receiver is held idle, dropping a character it was assembling. CTS
+///   high clears TDRE as read and stops the transmitter taking a character; one already shifting out finishes.
+///  </para>
+///  <para>
+///   A character the bit-clocked receiver completes while the receive data register is still full is lost, and the
+///   overrun shows only once the character before it has been read: that read leaves RDRF set with OVRN, and the
+///   next read of the receive data clears them both.
 ///  </para>
 /// </remarks>
 public sealed class Acia6850 : ISerialLine
@@ -93,6 +99,7 @@ public sealed class Acia6850 : ISerialLine
     private bool _carrierLatched;
     private bool _carrierStatusRead;
     private bool _notClearToSend;
+    private bool _overrunPending;
 
     // The bit-clocked receiver: 0 idle, 1 in the start bit, 2 data bits, 3 parity, 4 stop.
     private int _receiveState;
@@ -101,8 +108,10 @@ public sealed class Acia6850 : ISerialLine
     private int _receiveShift;
     private bool _receiveParity;
 
-    // The bit-clocked transmitter: 0 idle, 1 data bits, 2 parity, 3 stop bits.
+    // The bit-clocked transmitter: 0 idle, 1 data bits, 2 parity, 3 stop bits. A character whose last stop bit is on
+    // the line is reported at the next bit boundary.
     private int _transmitState;
+    private bool _transmitDone;
     private int _transmitClocks;
     private int _transmitBits;
     private int _transmitShift;
@@ -143,7 +152,8 @@ public sealed class Acia6850 : ISerialLine
         get
         {
             int status = _status;
-            if (_carrierLost || _carrierLatched) { status = (status | CarrierLost) & ~ReceiveFull; }
+            if (_carrierLatched) { status |= CarrierLost; }
+            if (_carrierLost) { status = (status | CarrierLost) & ~ReceiveFull; }
             if (_notClearToSend) { status = (status | NotClearToSend) & ~TransmitEmpty; }
             return (byte)(status | (Interrupt ? InterruptRequest : 0));
         }
@@ -219,6 +229,14 @@ public sealed class Acia6850 : ISerialLine
             _carrierStatusRead = false;
         }
 
+        if (_overrunPending)
+        {
+            // The character before the lost one has been read: now the overrun shows, and RDRF stays set with it.
+            _overrunPending = false;
+            _status |= Overrun;
+            return _receiveData;
+        }
+
         _status &= unchecked((byte)~(ReceiveFull | Overrun));
         return _receiveData;
     }
@@ -268,7 +286,7 @@ public sealed class Acia6850 : ISerialLine
     /// <param name="value">The character.</param>
     public void Receive(byte value)
     {
-        if (_held) { return; }
+        if (_held || _carrierLost) { return; }
         if ((_status & ReceiveFull) != 0)
         {
             _status |= Overrun;
@@ -276,7 +294,7 @@ public sealed class Acia6850 : ISerialLine
         }
 
         _receiveData = value;
-        _status |= ReceiveFull;
+        _status = (byte)((_status & ~(FramingError | ParityError)) | ReceiveFull);
     }
 
     /// <summary>
@@ -291,7 +309,7 @@ public sealed class Acia6850 : ISerialLine
             Transmitted?.Invoke(_shiftData);
         }
 
-        if (!_shifting && (_status & TransmitEmpty) == 0)
+        if (!_shifting && (_status & TransmitEmpty) == 0 && !_notClearToSend)
         {
             _shiftData = _transmitData;
             _shiftCycles = CyclesPerCharacter;
@@ -309,6 +327,12 @@ public sealed class Acia6850 : ISerialLine
     public void ClockReceive(bool data)
     {
         if (_held) { return; }
+        if (_carrierLost)
+        {
+            _receiveState = 0;
+            return;
+        }
+
         int divide = Divide;
         switch (_receiveState)
         {
@@ -358,7 +382,7 @@ public sealed class Acia6850 : ISerialLine
                 _receiveState = 0;
                 if ((_status & ReceiveFull) != 0)
                 {
-                    _status |= Overrun;
+                    _overrunPending = true;
                     return;
                 }
 
@@ -392,11 +416,24 @@ public sealed class Acia6850 : ISerialLine
         switch (_transmitState)
         {
             case 0:
+                if (_transmitDone)
+                {
+                    _transmitDone = false;
+                    Transmitted?.Invoke((byte)(_transmitShift & ((1 << dataBits) - 1)));
+                }
+
                 // The bit clock runs on while the line is idle, so a character written then starts at the next bit
-                // boundary, up to a bit time later, and TDRE comes back no sooner.
+                // boundary, up to a bit time later, and TDRE comes back no sooner. A break holds the line low and
+                // keeps a waiting character until it ends.
+                if ((_control & 0x60) == 0x60)
+                {
+                    TransmitLevel = false;
+                    return;
+                }
+
                 if ((_status & TransmitEmpty) != 0 || _notClearToSend)
                 {
-                    TransmitLevel = (_control & 0x60) != 0x60;
+                    TransmitLevel = true;
                     return;
                 }
 
@@ -426,7 +463,7 @@ public sealed class Acia6850 : ISerialLine
                 if (--_transmitStops == 0)
                 {
                     _transmitState = 0;
-                    Transmitted?.Invoke((byte)(_transmitShift & ((1 << dataBits) - 1)));
+                    _transmitDone = true;
                 }
 
                 return;
@@ -444,6 +481,7 @@ public sealed class Acia6850 : ISerialLine
         _shifting = false;
         _held = true;
         _carrierLatched = _carrierStatusRead = false;
+        _overrunPending = _transmitDone = false;
         _receiveState = _transmitState = 0;
         _transmitClocks = 0;
         TransmitLevel = true;

@@ -30,7 +30,7 @@ public sealed class Crtc6845
     private static readonly byte[] s_writeMasks =
         [0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x1F, 0x7F, 0x7F, 0xF3, 0x1F, 0x7F, 0x1F, 0x3F, 0xFF, 0x3F, 0xFF, 0x3F, 0xFF];
 
-    private readonly byte[] _registers = new byte[18];
+    private byte[] _registers = new byte[18];
     private int _select;
     private int _column;
     private int _row;
@@ -172,7 +172,8 @@ public sealed class Crtc6845
         }
         else
         {
-            _column++;
+            // The counter is 8 bits, so after R0 is lowered below it, it wraps round to meet the new total.
+            _column = (_column + 1) & 0xFF;
             _address = (ushort)((_address + 1) & 0x3FFF);
         }
 
@@ -194,7 +195,7 @@ public sealed class Crtc6845
     public Crtc6845 Clone()
     {
         Crtc6845 copy = (Crtc6845)MemberwiseClone();
-        _registers.CopyTo(copy._registers, 0);
+        copy._registers = (byte[])_registers.Clone();
         return copy;
     }
 
@@ -205,13 +206,17 @@ public sealed class Crtc6845
     {
         _column = 0;
         _row = 0;
-        _line = 0;
+        _line = SyncAndVideo && OddField ? 1 : 0;
         _adjusting = false;
         _adjustLine = 0;
         _rowStart = _address = StartAddress;
-        _columnDisplay = _rowDisplay = true;
+        _columnDisplay = _registers[1] != 0;
+        _rowDisplay = true;
         _horizontalSyncLeft = _verticalSyncLeft = 0;
         _displayHistory = _cursorHistory = 0;
+
+        // Row 0 takes its matches at once: R6 = 0 blanks the display and R7 = 0 starts the vertical sync.
+        StartRow();
         UpdateOutputs();
     }
 

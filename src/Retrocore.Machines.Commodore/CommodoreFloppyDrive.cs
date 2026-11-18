@@ -95,7 +95,14 @@ public sealed class CommodoreFloppyDrive : IDiskDrive, IMediumSlot
     public MediaState? Media => _disk is null ? null : new(_label, _format, _disk.IsWriteProtected, _disk.IsDirty);
 
     /// <inheritdoc/>
-    public DeviceActivity Activity => !Motor || _disk is null ? DeviceActivity.Idle : DeviceActivity.Reading;
+    public DeviceActivity Activity => !Motor || _disk is null
+        ? DeviceActivity.Idle
+        : Writing ? DeviceActivity.Writing : DeviceActivity.Reading;
+
+    /// <summary>
+    ///  Gets whether the controller has this mechanism selected with write select active, so its head writes.
+    /// </summary>
+    internal bool Writing { get; set; }
 
     /// <inheritdoc/>
     IMedium? IMediumSlot.Medium => _disk;
@@ -193,7 +200,6 @@ public sealed class CommodoreFloppyDrive : IDiskDrive, IMediumSlot
     internal void Turn(int ticks)
     {
         if (!Motor) { return; }
-        Angle += ticks;
-        if (Angle >= TicksPerTurn) { Angle -= TicksPerTurn; }
+        Angle = (Angle + ticks) % TicksPerTurn;
     }
 }

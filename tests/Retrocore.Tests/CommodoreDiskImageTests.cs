@@ -138,6 +138,10 @@ public class CommodoreDiskImageTests
         unreadable.Should().HaveCount(D67Format.Size / GcrLayout.SectorSize - 21);
         image.Should().OnlyContain(value => value == 0);
         D64Format.Write(disk).Unreadable.Should().HaveCount(GcrLayout.Sectors);
+
+        // The D67 save says how many it kept as zeros, rather than zeroing them unsaid.
+        EncodedImage saved = new CommodoreDiskCodec("D67").Encode(disk.Snapshot());
+        saved.Notes.Should().Equal("21 sectors DOS 1 formatted but never wrote, kept as zeros.");
     }
 
     /// <summary>

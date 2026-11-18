@@ -144,8 +144,8 @@ public sealed class PetMachine : IMachine
         Bus.ResetDevices();
         Processor.Reset();
 
-        // The reset line pulls IFC, which resets the devices on the bus.
-        foreach (Cbm4040 unit in _disks) { unit.Reset(); }
+        // The reset line pulls IFC, which clears each device's interface; the drives keep running.
+        foreach (Cbm4040 unit in _disks) { unit.InterfaceClear(); }
     }
 
     private void UpdateDevices() =>

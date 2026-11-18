@@ -766,7 +766,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         } else if (running === undefined) {
             await vscode.commands.executeCommand("retrocore.drives.focus");
         }
-        const on = offTarget(true);
+        // Only the machine whose disks these are: another chosen meanwhile has its own.
+        const on = offTarget(true, recoveryId);
         for (const device of off.devices) {
             if (!on.still()) return;
             if (device.media?.kept && !await sendTo(on, "device", { id: device.id, action: "save" })) return;
@@ -828,8 +829,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // The off machine as a target: a question about it stands while no session runs and it is still the one shown,
     // or, for a stopped machine's kept disks saved from its notice, while it is still the one shown. Its views follow
     // its own changes, so an answer's devices need no showing.
-    const offTarget = (alongside = false): Target => {
-        const shown = off.recoveryId ?? off.name;
+    const offTarget = (alongside = false, machine?: string): Target => {
+        const shown = machine ?? off.recoveryId ?? off.name;
         return {
             request: async (request, args) => await off.request(request, args, shown) as unknown as Devices & MediaAnswer,
             still: () => (alongside || vscode.debug.activeDebugSession?.type !== "retrocore") && (off.recoveryId ?? off.name) === shown,

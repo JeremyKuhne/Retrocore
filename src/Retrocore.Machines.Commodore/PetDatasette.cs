@@ -280,7 +280,19 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
             if (!rose) { return; }
 
             // The first rise after the motor starts begins the first pulse.
-            if (_recordingStarted && _elapsed > 0) { _tape.Record(_index++, _elapsed); }
+            if (_tape.IsWriteProtected)
+            {
+                // The record tab broken off while RECORD was down lets the key up, as RECORD cannot stay down.
+                Stop();
+                return;
+            }
+
+            if (_recordingStarted && _elapsed > 0)
+            {
+                _tape.Record(_index, _elapsed);
+                _index++;
+            }
+
             _recordingStarted = true;
             _elapsed = 0;
         }

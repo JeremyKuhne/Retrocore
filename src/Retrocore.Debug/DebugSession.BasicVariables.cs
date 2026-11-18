@@ -485,7 +485,7 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (!BasicEvaluator.IsTrue(Evaluator.Evaluate(condition))) { return false; }
+                if (!BasicEvaluator.IsTrue(Evaluator.Evaluate(condition), Basic)) { return false; }
             }
             catch (FormatException exception)
             {

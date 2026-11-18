@@ -209,6 +209,9 @@ internal sealed partial class BbcDebugTarget
             throw new ArgumentException($"{Path.GetFileName(full)} is not a UEF tape, and has no .inf file beside it.");
         }
 
+        // A tape to play is write-protected, so the saved machine puts it back in at the next launch; a recording
+        // (RecordTape) stays writable.
+        tape.IsWriteProtected = true;
         _machine.Cassette.Eject();
         if (uef) { MediaActions.Register(tape, full, new AcornTapeCodec(), bytes); }
         _machine.Cassette.Insert(tape, full, uef ? "UEF" : "INF");

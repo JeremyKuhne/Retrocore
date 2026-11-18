@@ -784,8 +784,9 @@ public sealed class Intel8271
         IsWriting = true;
         yield return RevolutionCycles - (int)(_time % RevolutionCycles);
 
-        // Formatting stops at the next index, as the chip's does, keeping only the sectors whose data was written by
-        // then: sixteen 256-byte sectors do not fit a track.
+        // Formatting runs to the next index, as the chip's does, writing gap 4 after the last sector and keeping only
+        // the sectors whose data was written by then: sixteen 256-byte sectors do not fit a track. A late DMA ends it
+        // at once, with the sectors written before it kept.
         long end = _time + RevolutionCycles;
         yield return (gap5 == 0 ? gap1 : gap5 + 7 + gap1) * ByteCycles;
 
@@ -794,35 +795,34 @@ public sealed class Intel8271
         fill.AsSpan().Fill(0xE5);
         int field = (2 + 11 + 7 + size + 2) * ByteCycles;
         List<FloppySector> formatted = [];
-        for (int index = 0; index < count; index++)
+        for (int index = 0; index < count && _result != LateDma; index++)
         {
-            if (_time + ((7 + 4) * ByteCycles) + field > end)
-            {
-                yield return (int)Math.Max(1, end - _time);
-                break;
-            }
+            if (_time + ((7 + 4) * ByteCycles) + field > end) { break; }
 
             Sector = index;
             yield return 7 * ByteCycles;
             byte[] id = new byte[4];
-            for (int position = 0; position < 4; position++)
+            for (int position = 0; position < 4 && _result != LateDma; position++)
             {
                 DataRequest = true;
                 yield return ByteCycles;
                 if (DataRequest)
                 {
                     _result = LateDma;
-                    yield break;
                 }
-
-                id[position] = _data;
+                else
+                {
+                    id[position] = _data;
+                }
             }
 
+            if (_result == LateDma) { break; }
             yield return field;
             formatted.Add(new(id[0], id[1], id[2], fill, doubleDensity: false));
-            yield return gap3 * ByteCycles;
+            if (_time + (gap3 * ByteCycles) < end) { yield return gap3 * ByteCycles; }
         }
 
         disk.Format(_cylinders[_drive], Side, formatted);
+        if (_result != LateDma && _time < end) { yield return (int)(end - _time); }
     }
 }

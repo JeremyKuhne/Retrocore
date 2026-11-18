@@ -482,7 +482,7 @@ INSTR_NEXT_POSITION:
 ABS_TYPE_MISMATCH:
     jmp TYPE_MISMATCH_ERROR
 
-;; ABS: gives the absolute value of a number: ABS(n).
+;; ABS: gives the absolute value of a number: ABS(n). ABS(-2147483648) is still -2147483648, as <ABS_INT_A> has it.
 ;; Out: A = &40 with INT_A = the value, or A = &FF with FP_A = the value
 ;; Errors: "Type mismatch" for a string
 ABS_FUNCTION:
@@ -490,9 +490,9 @@ ABS_FUNCTION:
     beq ABS_TYPE_MISMATCH
     bmi ABS_REAL
 
-;; Makes the integer in IntA positive.
+;; Makes the integer in IntA positive, all but one: &80000000 negates to itself, so it stays -2147483648.
 ;; In: INT_A = the integer
-;; Out: INT_A = its absolute value, A = &40 (an integer)
+;; Out: INT_A = its absolute value, or &80000000 for &80000000, A = &40 (an integer)
 ;; Uses: Y
 ABS_INT_A:
     bit INT_A+3
@@ -894,7 +894,7 @@ RND_RANGE:
 RND_SEED:
     ldx #RANDOM
     jsr STORE_INT_A
-    lda #$40                        ; sets the generator's 33rd bit
+    lda #$40                        ; clears the 33rd bit, bit 0; bit 6 is outside the generator's 33
     sta RANDOM+4
     rts
 

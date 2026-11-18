@@ -1211,6 +1211,12 @@ test("the inspector's values are written as typed, the selection is filled and t
     assert.deepEqual(sent()[0], [0x0600, [0x01]]);
     assert.ok(!sent().some(item => (item[1] as number[])[0] === 0xA2), JSON.stringify(sent()));
     await drive(page, [{ goto: 0x0500 }], () => 0, lists);
+    // A key typed just before goes first, and the paste after it.
+    writesSent.length = 0;
+    clipboardText = "02";
+    await drive(page, [{ goto: 0x0700 }, { type: ["0", "1"] }, { paste: true }], () => 0, lists);
+    assert.deepEqual(sent(), [[0x0700, [0x01]], [0x0701, [0x02]]]);
+    await drive(page, [{ goto: 0x0500 }], () => 0, lists);
     writesSent.length = 0;
     clipboardText = "HI";
     await drive(page, [{ pane: "text" }, { paste: true }], () => 0, lists);

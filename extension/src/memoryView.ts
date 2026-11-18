@@ -1593,7 +1593,8 @@ side.addEventListener("click", event => {
             case "name": void mark({ what: "name" }); break;
             case "comment": void mark({ what: "comment" }); break;
             case "bookmark": void addBookmark(); break;
-            case "fill": void fill(); break;
+            // The grid has the focus while the box is up and after, so keys and undo reach it.
+            case "fill": grid.focus(); void fill(); break;
             case "start": void startSearch(Number(document.getElementById("searchSize")?.value ?? 1)); break;
             case "reset": search = null; showSearch(); break;
             case "narrow": void narrowBy(action.dataset.test, document.getElementById("searchValue").value); break;
@@ -1604,7 +1605,7 @@ side.addEventListener("click", event => {
         return;
     }
     const edited = target.closest ? target.closest("[data-edit]") : null;
-    if (edited !== null) { void editValue(edited.dataset.edit); return; }
+    if (edited !== null) { grid.focus(); void editValue(edited.dataset.edit); return; }
     const source = target.closest ? target.closest("[data-src]") : null;
     if (source !== null) {
         void request({ type: "open", path: source.dataset.src, line: Number(source.dataset.line) }).catch(error => status(String(error.message || error), true));
@@ -1921,9 +1922,11 @@ async function fill() {
 // be the Monitor's lines with their addresses. It takes its turn when Ctrl+V is pressed, so an undo or a key pressed
 // while the clipboard is read comes after it.
 async function paste() {
-    // Where and in which column Ctrl+V was pressed, whatever moves while the clipboard is read.
-    const at = cursor, column = pane;
+    // The column Ctrl+V was pressed in, and where: a key typed before it moves the cursor on when its write comes
+    // back, so where the paste goes is decided when its turn comes, unless the user has moved since.
+    const column = pane, pressed = moves, wasAt = cursor;
     await inTurn(async () => {
+        const at = moves === pressed ? cursor : wasAt;
         let clipboard;
         try {
             clipboard = String((await request({ type: "paste" })).text ?? "");

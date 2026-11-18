@@ -23,6 +23,7 @@
     <ProjectReference Include="..\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Altair\Retrocore.Machines.Altair.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Kaypro\Retrocore.Machines.Kaypro.csproj" />
     <ProjectReference Include="..\Retrocore.Input\Retrocore.Input.csproj" />
     <!-- Retrocore Desktop's spike runs the machines through the debug host's targets (docs/backlog/Desktop.md). -->
     <InternalsVisibleTo Include="retrocore-desktop" />
@@ -39,6 +40,7 @@
     <None Include="..\Retrocore.Machines.Apple2\Roms\IntegerBasic\*.asm" Link="Sdk\Roms\IntegerBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Sdk\Roms\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Kaypro\Roms\*.asm" Link="Sdk\Roms\Kaypro\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\*.asm" Link="Sdk\Roms\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Pascal\Pcode.asm" Link="Sdk\Pascal\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Sdk\Roms\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

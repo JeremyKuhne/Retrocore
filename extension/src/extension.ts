@@ -230,7 +230,7 @@ export function activate(context: vscode.ExtensionContext): void {
                             : machine === "apple1" ? "Apple-1"
                                 : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
                     // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal does; the
-                    // Model II's is green, like the IIe's.
+                    // Model II's and the Kaypro II's are green, like the IIe's. The Kaypro II's model is its title.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" ? "trs80-model1"
                         : machine === "apple1" || machine === "coco" ? machine : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
@@ -255,7 +255,7 @@ export function activate(context: vscode.ExtensionContext): void {
                         panel.webview.html = webviewHtml(nonce);
                         panel.onDidDispose(() => { panel = undefined; panelBasic = undefined; }, undefined, context.subscriptions);
                         panel.webview.onDidReceiveMessage((input: unknown) => {
-                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 128) {
+                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 256) {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest("retro/key", { code: input.code }).then(undefined, showError);
                                 }

@@ -185,7 +185,11 @@ function draw(frame){
             if(!deck?.path)continue;
             tape.push('Tape '+port+' '+(deck.recording?'recording':deck.mode==='playing'?'playing':'stopped')+(deck.motor?' · motor on':''));
         }
-        const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(disk=>'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'')):[];
+        // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track.
+        const diskLabel=disk=>typeof disk.device==='string'
+            ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
+            :'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
+        const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(diskLabel):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
         document.getElementById('disk').textContent=disks.join(' | ');
         return;

@@ -321,11 +321,18 @@ test("the PET types PETSCII: STOP, HOME, the cursor keys, DEL and INST, and its 
     window.dispatch("message", { data: {
         machine: "pet", model: "pet2001-basic2", rows: [""], cycles: 1, running: true,
         speed: { setting: 1, accelerated: true, actual: 20, hertz: 20000000 },
-        media: { cassette1: { path: "game.tap", mode: "playing", recording: false, motor: true }, cassette2: { path: null } },
+        media: {
+            cassette1: { path: "game.tap", mode: "playing", recording: false, motor: true }, cassette2: { path: null },
+            disks: [
+                { device: "disk8-0", path: "demo.d64", mounted: true, writeProtected: false, track: 18, motor: true },
+                { device: "disk8-1", path: null, mounted: false, writeProtected: false, track: 1, motor: false }
+            ]
+        },
         video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
     } });
     assert.deepEqual(posted.filter(message => "error" in (message as object)), [], "the frame draws without an error");
     assert.equal(byId.get("status")?.textContent, "Running · Fast tape · 20.00× · 20.00 MHz · Tape 1 playing · motor on");
+    assert.equal(byId.get("disk")?.textContent, "Unit 8 drive 0 track 18 · motor on", "a 4040's drive by its unit and track");
     assert.equal(byId.get("display")?.style.aspectRatio, "320/200", "the PET's dots are square");
     assert.match(byId.get("hint")?.textContent ?? "", /^Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB \(business keyboard\) · Ctrl\+F12: reset/);
     posted.splice(0);

@@ -141,6 +141,7 @@ internal sealed class BasicLineScanner
             {
                 // Level II stores ELSE as :ELSE and ' as :REM': the site is the last byte from the same text. A
                 // function stored as a prefix and a token is both.
+                int first = index;
                 int last = Last(index);
                 int token = length == 2 ? (_bytes[index] << 8) | _bytes[index + 1] : _bytes[last];
 
@@ -177,8 +178,13 @@ internal sealed class BasicLineScanner
                 previous = word;
                 index = last;
 
-                // TOP has no token of its own: BBC BASIC's tokeniser makes it TO, then P, which is no variable.
-                if (Bbc && word == "TO" && index + 1 < _bytes.Length && _bytes[index + 1] == 'P') { index++; }
+                // TOP has no token of its own: BBC BASIC's tokeniser makes it TO, then P, which is no variable. Only
+                // where an operand starts, though: after one, as in FOR I%=1 TOP%, the TO is FOR's and P% a variable.
+                if (Bbc && word == "TO" && index + 1 < _bytes.Length && _bytes[index + 1] == 'P' && OperandStarts(first))
+                {
+                    index++;
+                }
+
                 continue;
             }
 
@@ -349,6 +355,17 @@ internal sealed class BasicLineScanner
         }
 
         return last;
+    }
+
+    // Whether an operand starts at a place, rather than following one: the byte before it, past spaces, is no part
+    // of a name, number, string or bracketed expression. A token before it, such as PRINT, leaves an operand to come.
+    private bool OperandStarts(int index)
+    {
+        int before = index - 1;
+        while (before >= 0 && _bytes[before] == ' ') { before--; }
+        if (before < 0) { return true; }
+        byte value = _bytes[before];
+        return !char.IsAsciiLetterOrDigit((char)value) && !"%$)\"._`".Contains((char)value);
     }
 
     // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no

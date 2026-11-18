@@ -108,15 +108,24 @@ public sealed partial class BasicProgram
             }
 
             // BBC BASIC finds words only in capitals, so reminder is a name, and a * at a statement's start hands the
-            // rest of the line to the MOS, so *RENAME GOTO done is a file name, not a jump.
+            // rest of the line to the MOS, so *RENAME GOTO done is a file name, not a jump. A name that starts with
+            // no word is read whole, as the tokeniser copies it, so SCOREMARK holds no REM. REM and DATA both run to
+            // the end of the line.
             if (dialect is BbcBasicDialect)
             {
                 if (character == '*' && StatementStart(text, index)) { break; }
-                if (string.CompareOrdinal(text, index, "REM", 0, 3) == 0) { break; }
-                if (string.CompareOrdinal(text, index, "DATA", 0, 4) == 0)
+                if (BbcBasicDialect.IsNameCharacter(character)
+                    && !char.IsAsciiDigit(character)
+                    && !dialect.Keywords.Any(keyword => keyword.Length != 0 && string.CompareOrdinal(text, index, keyword, 0, keyword.Length) == 0))
                 {
-                    index = SkipData(text, index);
+                    while (index + 1 < text.Length && BbcBasicDialect.IsNameCharacter(text[index + 1])) { index++; }
                     continue;
+                }
+
+                if (string.CompareOrdinal(text, index, "REM", 0, 3) == 0
+                    || string.CompareOrdinal(text, index, "DATA", 0, 4) == 0)
+                {
+                    break;
                 }
 
                 if (!char.IsAsciiLetterUpper(character)) { continue; }

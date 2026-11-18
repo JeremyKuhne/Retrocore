@@ -66,8 +66,9 @@ public sealed partial class BasicEvaluator
     // MBASIC has Level II's types and suffixes, with ^ for powers.
     private bool Mbasic => _dialect == BasicDialect.Mbasic;
 
-    // Level II, MBASIC and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
-    private bool Bitwise => LevelTwo || Mbasic || _dialect is ColorBasicDialect;
+    // Level II, MBASIC, Color BASIC and the PET's BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit
+    // integers.
+    private bool Bitwise => LevelTwo || Mbasic || _dialect is ColorBasicDialect or PetBasicDialect;
 
     private double True => Bitwise ? -1 : 1;
 
@@ -157,7 +158,7 @@ public sealed partial class BasicEvaluator
     {
         if (!Take("NOT")) { return Relation(); }
         double value = Number(Not());
-        return new(new(Bitwise ? ~ToInteger(value) : (value == 0 ? 1 : 0)));
+        return new(new(Bitwise ? ~LogicInteger(value) : (value == 0 ? 1 : 0)));
     }
 
     private BasicResult Relation()
@@ -375,6 +376,13 @@ public sealed partial class BasicEvaluator
     {
         string key = name.ToUpperInvariant();
         if (subscripts is null && _bound.TryGetValue(key, out BasicValue bound)) { return new(bound); }
+
+        // The PET's ST, TI, TI$, DS and DS$ are the machine's, not the variable table's, as MEM and TIME$ are elsewhere.
+        if (subscripts is null && _dialect is PetBasicDialect pet && pet.IsReservedVariable(name))
+        {
+            throw new FormatException($"{name} cannot be evaluated without running BASIC.");
+        }
+
         if (subscripts is null)
         {
             if (_variables.Find(name) is not { } variable)
@@ -514,8 +522,12 @@ public sealed partial class BasicEvaluator
 
     private BasicResult Logic(BasicResult left, BasicResult right, Func<int, int, int> bits, Func<bool, bool, bool> logic) =>
         Bitwise
-            ? new(new(bits(ToInteger(Number(left)), ToInteger(Number(right)))))
+            ? new(new(bits(LogicInteger(Number(left)), LogicInteger(Number(right)))))
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
+
+    // AND, OR and NOT's operand as an integer. The PET's BASIC converts it as AYINT and QINT do, down to the integer
+    // below; Level II and Color BASIC truncate toward zero.
+    private int LogicInteger(double value) => ToInteger(_dialect is PetBasicDialect ? Math.Floor(value) : value);
 
     private static int ToInteger(double value) =>
         value is < short.MinValue or > short.MaxValue

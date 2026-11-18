@@ -59,7 +59,9 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 - Name things after what the code does. In the SDK's ROM sources, names follow the original documentation:
   - Apple's for the IIe;
   - the documented ROM calls and Microsoft's BASIC names for Level II;
-  - Li-Chen Wang's Tiny BASIC names for Level I.
+  - Li-Chen Wang's Tiny BASIC names for Level I;
+  - for the PET's editors and kernals, Commodore's names from its 1979 BASIC 4 kernal listing, where BASIC 4 has
+    the same code, and Microsoft's for the jump table at `$FFC0`.
 
   Labels inside a routine are named after it (`ROUTINE_1`). Never use a name that is only an address (`SUB_F8C2`,
   `LE5D1`, `unref_e5cc`): find out what the code does and name it, and drop a label that nothing refers to.

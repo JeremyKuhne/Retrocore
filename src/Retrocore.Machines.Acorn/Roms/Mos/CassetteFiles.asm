@@ -809,10 +809,10 @@ BLOCK_NUMBER_ERROR:
 ;;
 ;; With retries on, X = &FF and <CFS_ERRORS> nonzero (as <BLOCK_ERROR> leaves it), it resets the 6850, prints
 ;; "Rewind tape" and returns zero clear. Otherwise it ends the line, waits for the block's data to finish, and
-;; returns zero set.
+;; returns zero set. For the ROM filing system that wait runs <CASSETTE_INTERRUPT>, which changes X.
 ;; In: X = 0 to carry on, &FF to act on *OPT 2
 ;; Out: zero = clear to read the block again
-;; Uses: A, Y
+;; Uses: A, X, Y
 ;; Entry: BLOCK_ERROR_CONTINUE = ends the line and waits for the block to end
 BLOCK_ERROR_RETRY:
     lda CFS_ERRORS

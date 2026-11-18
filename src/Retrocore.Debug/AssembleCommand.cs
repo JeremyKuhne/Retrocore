@@ -40,8 +40,15 @@ internal static class AssembleCommand
         {
             if (string.Equals(args[index], "--define", StringComparison.OrdinalIgnoreCase))
             {
-                string[] parts = args[index + 1].Split('=', 2);
-                symbols[parts[0]] = parts.Length == 2 ? Address(parts[1]) : 1;
+                if (!DefineArgument.TryParse(args[index + 1], out string name, out long value))
+                {
+                    Console.Error.WriteLine(
+                        $"--define {args[index + 1]}: give NAME or NAME=value, the value decimal, $hex or 0xhex.");
+
+                    return 2;
+                }
+
+                symbols[name] = value;
                 continue;
             }
 

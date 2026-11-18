@@ -51,8 +51,8 @@ BLINK_JIFFIES = 20                  ;; the cursor's blink rate: three times a se
 ;; through CB1; both cassette motors are stopped and the IEEE-488 lines are let go. It also sets <BUF>-4 and <BUF>-3 for
 ;; BASIC.
 ;;
-;; Out: X = $FF
-;; Uses: A, Y
+;; Out: X = 0, Y = 0, from homing the cursor
+;; Uses: A
 ;; Entry: CINT_PAGE2 = the kernal's test enters here with X = the bytes of page 2 to clear plus one
 CINT:
     lda #$7F                        ; the VIA's interrupts off
@@ -133,8 +133,8 @@ CLSR_3:
 
 ;; Puts the cursor in the top left corner.
 ;;
-;; Out: Y = 0
-;; Uses: A, X
+;; Out: X = 0, the row from <STUPT>, Y = 0
+;; Uses: A
 NXTD:
     ldy #$00
     sty PNTR

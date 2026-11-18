@@ -391,6 +391,14 @@ public sealed class PetBasicDialectTests
         compact.Diagnostics.Should().BeEmpty();
         compact.Program?.ToText().Should().Be("10 IF A=1THEN 10\n");
 
+        // BASIC 2 and 4 crunch words with no boundaries too: THEN right after a digit is a jump, and GO TO is one.
+        foreach (BasicDialect later in (BasicDialect[])[BasicDialect.PetBasic, BasicDialect.PetBasic4])
+        {
+            BasicParseResult branch = BasicProgram.Parse("loop:\n    IF A=1THEN loop\n    GO TO loop\n", later);
+            branch.Diagnostics.Should().BeEmpty();
+            branch.Program?.ToText().Should().Be("10 IF A=1THEN 10\n20 GO TO 10\n");
+        }
+
         BasicParseResult missing = BasicProgram.Parse("10 G O S U B nowhere\n", BasicDialect.PetBasic1);
         missing.Success.Should().BeFalse();
         missing.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("There is no label", StringComparison.Ordinal));

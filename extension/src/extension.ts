@@ -18,7 +18,7 @@ import { registerBreakpoints } from "./breakpoints";
 import { registerMemory } from "./memory";
 import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
-import { webviewHtml } from "./display";
+import { panelKeyCode, soundRequest, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -256,9 +256,9 @@ export function activate(context: vscode.ExtensionContext): void {
                         panel.webview.html = webviewHtml(nonce);
                         panel.onDidDispose(() => { panel = undefined; panelBasic = undefined; }, undefined, context.subscriptions);
                         panel.webview.onDidReceiveMessage((input: unknown) => {
-                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 128) {
+                            if (panelKeyCode(input) !== undefined) {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("retro/key", { code: input.code }).then(undefined, showError);
+                                    void displaySession.customRequest("retro/key", { code: panelKeyCode(input) }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "button" in input && typeof input.button === "number"
                                 && Number.isInteger(input.button) && input.button >= 0 && input.button <= 1
@@ -300,7 +300,7 @@ export function activate(context: vscode.ExtensionContext): void {
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "sound"
                                 && "mode" in input && (input.mode === "off" || input.mode === "speaker" || input.mode === "mockingboard")) {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest(`${applePrefix(displaySession)}/sound`, { mode: input.mode }).then(undefined, showError);
+                                    void displaySession.customRequest(soundRequest(displaySession.configuration.machine), { mode: input.mode }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "fastDisk"
                                 && "enabled" in input && typeof input.enabled === "boolean") {

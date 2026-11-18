@@ -5,6 +5,20 @@
 // The machine's display panel. Its script is a template string: a backslash escape meant for the script must be
 // written doubled, or it becomes the character itself; display.test.ts checks that the script parses.
 
+/**
+ * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 255,
+ * since the BBC Micro's COPY, cursor and function keys have codes above 127.
+ */
+export function panelKeyCode(input: unknown): number | undefined {
+    return typeof input === "object" && input !== null && "code" in input && typeof input.code === "number"
+        && Number.isInteger(input.code) && input.code >= 0 && input.code < 256 ? input.code : undefined;
+}
+
+/** The request that sets a machine's sound: the Apple II's and Apple III's own, or retro/sound for the others. */
+export function soundRequest(machine: unknown): string {
+    return machine === "apple3" ? "apple3/sound" : machine === "bbc" || machine === "coco" ? "retro/sound" : "apple2/sound";
+}
+
 /** The display panel's page, with its script allowed by the nonce. */
 export function webviewHtml(nonce: string): string {
     return `<!doctype html><html><head>

@@ -112,6 +112,10 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(!has(scopes("bbcbasic", "40 print", "print"), "keyword"), "lowercase is not tokenised");
     assert.ok(has(scopes("bbcbasic", "50 DATA 1,2:PRINT", "PRINT"), "string.unquoted.data"), "DATA runs to the end of the line");
     assert.ok(has(scopes("bbcbasic", "60 REM a note", "note"), "comment.line"));
+    for (const name of ["COUNTER", "TIMER", "ENDING"]) {
+        assert.ok(has(scopes("bbcbasic", `70 ${name}=1`, name), "variable.other"), `${name} is a name: its word is conditional`);
+    }
+    assert.ok(has(scopes("bbcbasic", "80 PRINT COUNT", "COUNT"), "keyword"), "COUNT alone is still a word");
 });
 
 test("BASIC labels have label scopes", () => {

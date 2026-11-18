@@ -38,6 +38,7 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
+        "retro/sound",
         "apple1/clearScreen",
         "altair/clearScreen"
     ];

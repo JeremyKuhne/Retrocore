@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { webviewHtml } from "../display";
+import { panelKeyCode, soundRequest, webviewHtml } from "../display";
 
 function panelScript(): string {
     const html = webviewHtml("NONCE");
@@ -694,4 +694,21 @@ test("when the session ends the panel says the machine is off and offers Restart
     // The next session's first frame brings the machine back.
     window.dispatch("message", { data: frame });
     assert.equal(off.hidden, true);
+});
+
+test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys", () => {
+    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 255]) {
+        assert.equal(panelKeyCode({ code }), code);
+    }
+
+    for (const input of [{ code: 256 }, { code: -1 }, { code: 1.5 }, { code: "A" }, { button: 0 }, null, 13]) {
+        assert.equal(panelKeyCode(input), undefined);
+    }
+});
+
+test("Sound goes to each machine's own request", () => {
+    assert.equal(soundRequest("apple2e"), "apple2/sound");
+    assert.equal(soundRequest("apple3"), "apple3/sound");
+    assert.equal(soundRequest("bbc"), "retro/sound");
+    assert.equal(soundRequest("coco"), "retro/sound");
 });

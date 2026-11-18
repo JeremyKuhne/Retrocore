@@ -367,7 +367,7 @@ RESET_DISABLE_VIAS:
     sei
     bit IRQ_A
     bvc RESET_SET_UP_VIAS
-    jsr CALL_JIM_VECTOR                       ; option bit 6 clear: calls the routine whose address is at &FDFE, in JIM
+    jsr CALL_JIM_VECTOR                       ; an interrupt in the CLI-SEI window left &7F in IRQ_A: JIM's turn
 RESET_SET_UP_VIAS:
     ldx #RESET_SYS_VIA_IER
     stx SYS_VIA_IER

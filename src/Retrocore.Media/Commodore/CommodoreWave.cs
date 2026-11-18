@@ -13,7 +13,8 @@ namespace Retrocore.Media.Commodore;
 ///  <para>
 ///   The Datasette's read line is high while the signal is above its middle, and a pulse runs from one fall to the
 ///   next, as MAME and the PET's tape routines see it. A written pulse is low for its first half and high for its
-///   second.
+///   second; the file starts with a sample of high and ends with one of low, so the first and last pulses have falls
+///   at both ends and read back with the rest.
 ///  </para>
 /// </remarks>
 public static class CommodoreWave
@@ -110,7 +111,8 @@ public static class CommodoreWave
         long total = 0;
         foreach (int pulse in pulses) { total += pulse; }
 
-        long count = (total * rate / Microsecond) + 1;
+        // A sample of high before the first fall, and one of low after the last, so each pulse lies between two falls.
+        long count = Position(total) + 2;
         byte[] wave = new byte[44 + (count * 2)];
         Span<byte> span = wave;
         "RIFF"u8.CopyTo(span);
@@ -126,18 +128,23 @@ public static class CommodoreWave
         "data"u8.CopyTo(span[36..]);
         BinaryPrimitives.WriteInt32LittleEndian(span[40..], (int)(count * 2));
 
-        // Each change lands on the sample its time falls in, so lengths do not drift.
+        // Each change lands on the sample its time falls in, so lengths do not drift. The level starts high, so the
+        // first pulse begins with a fall, and ends low, so the last one ends with one.
         long sample = 0;
         long time = 0;
+        Fill(span, ref sample, Position(0), Amplitude);
         foreach (int pulse in pulses)
         {
-            Fill(span, ref sample, (time + (pulse / 2)) * rate / Microsecond, -Amplitude);
+            Fill(span, ref sample, Position(time + (pulse / 2)), -Amplitude);
             time += pulse;
-            Fill(span, ref sample, time * rate / Microsecond, Amplitude);
+            Fill(span, ref sample, Position(time), Amplitude);
         }
 
-        Fill(span, ref sample, count, Amplitude);
+        Fill(span, ref sample, count, -Amplitude);
         return wave;
+
+        // The sample a time in microseconds lands on, after the first sample's high.
+        long Position(long microseconds) => 1 + (microseconds * rate / Microsecond);
 
         static void Fill(Span<byte> span, ref long sample, long end, short level)
         {

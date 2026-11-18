@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
@@ -163,7 +164,10 @@ internal static partial class MediaActions
                 differences["differences"] = Differences(device);
                 return differences;
             case "eject":
-            case "insert" or "record" when device.Media is not null:
+            case "insert" when device.Media is not null:
+
+            // The BBC's RECORD puts a new tape in, so the one there leaves; the PET's records onto the tape in place.
+            case "record" when device is BbcCassette && device.Media is not null:
                 string what = action switch
                 {
                     "eject" => "eject it",

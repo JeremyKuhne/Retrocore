@@ -43,6 +43,24 @@ public class CommodoreTapeImageTests
     }
 
     /// <summary>
+    ///  A TAP image cut short, before the bytes its header promises or inside a pulse's three-byte length, is refused
+    ///  rather than read as a shorter tape that would save without them.
+    /// </summary>
+    [TestMethod]
+    public void ACutShortTapIsRefused()
+    {
+        byte[] image = TapFormat.Write([352, 3000, 512]);
+        Action shorter = () => TapFormat.Read(image.AsSpan(0, image.Length - 1));
+        shorter.Should().Throw<InvalidDataException>().WithMessage("*holds 6 bytes of pulses, but only 5*");
+
+        // The long pulse's zero and its length's first byte, with the header saying only those two bytes follow.
+        byte[] inside = image[..22];
+        inside[16] = 2;
+        Action cut = () => TapFormat.Read(inside);
+        cut.Should().Throw<InvalidDataException>().WithMessage("*inside a pulse's three-byte length*");
+    }
+
+    /// <summary>
     ///  A tape whose pulses TAP holds saves as TAP with no loss and reads back the same.
     /// </summary>
     [TestMethod]

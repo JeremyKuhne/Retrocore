@@ -242,6 +242,8 @@ public static class GcrLayout
             }
             else
             {
+                // Past a header, anything but another header is its data block, damaged: the sector was written.
+                if (sector >= 0 && sector < found.Length) { blocks[sector] = true; }
                 sector = -1;
             }
         }

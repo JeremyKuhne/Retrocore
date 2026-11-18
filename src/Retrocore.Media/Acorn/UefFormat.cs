@@ -30,6 +30,8 @@ namespace Retrocore.Media.Acorn;
 /// </remarks>
 public static class UefFormat
 {
+    // The longest silence a &0116 chunk may hold: 30 days, a few int-sized silences.
+    private const float MaximumGapSeconds = 30 * 24 * 60 * 60;
 
     private static ReadOnlySpan<byte> Magic => "UEF File!\0"u8;
 
@@ -108,7 +110,16 @@ public static class UefFormat
                     float seconds = BinaryPrimitives.ReadSingleLittleEndian(data);
                     if (float.IsFinite(seconds) && seconds > 0)
                     {
-                        tape.Gap((int)Math.Round(seconds * AcornTape.UnitsPerSecond));
+                        // A gap past an int's units (about five days) goes in as several silences, each whole; one
+                        // past MaximumGapSeconds is not a tape.
+                        if (seconds > MaximumGapSeconds)
+                        {
+                            throw new InvalidDataException($"A UEF gap of {seconds} seconds is longer than {MaximumGapSeconds}.");
+                        }
+
+                        long units = (long)Math.Round((double)seconds * AcornTape.UnitsPerSecond);
+                        for (; units > int.MaxValue; units -= int.MaxValue) { tape.Gap(int.MaxValue); }
+                        tape.Gap((int)units);
                     }
 
                     break;

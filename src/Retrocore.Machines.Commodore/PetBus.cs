@@ -279,6 +279,15 @@ public sealed class PetBus : IProcessorBus
         Audio.Tick(Via.CB2Output);
         TickCassettes();
 
+        // A timer or an input edge can move the chips' outputs with no access: CA2's pulse mode, or a handshake on a
+        // cassette's edge. ATN and SRQ reach PIA 2's control inputs as other devices move them.
+        Video.Lowercase = Via.CA2Output;
+        Video.Enabled = Pia1.CA2Output;
+        bool atn = Ieee.High(Ieee488Lines.Atn);
+        if (Pia2.CA1 != atn) { Pia2.CA1 = atn; }
+        bool srq = Ieee.High(Ieee488Lines.Srq);
+        if (Pia2.CB1 != srq) { Pia2.CB1 = srq; }
+
         bool wasOn = VideoOn;
         if (++_frameCycle == PetTiming.CyclesPerFrame) { _frameCycle = 0; }
         bool on = VideoOn;

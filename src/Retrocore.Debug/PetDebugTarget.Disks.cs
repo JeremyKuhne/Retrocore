@@ -102,12 +102,19 @@ internal sealed partial class PetDebugTarget
 
         JsonNode?[] disks = args.Array("disks") is { } given ? [.. given] : [];
         List<int> units = [];
+
+        // Anything but a list of numbers is a mistake, not a request for the default units.
+        if (args["diskUnits"] is { } listed && listed is not JsonArray && listed.GetValueKind() != JsonValueKind.Null)
+        {
+            throw new ArgumentException("diskUnits must be a list of device numbers, 8 to 15, such as [8].");
+        }
+
         if (args.Array("diskUnits") is { } numbers)
         {
             foreach (JsonNode? number in numbers)
             {
-                int address = number?.GetValueKind() == JsonValueKind.Number
-                    ? number.GetValue<int>()
+                int address = number is JsonValue value && value.TryGetValue(out int whole)
+                    ? whole
                     : throw new ArgumentException("diskUnits holds device numbers, 8 to 15.");
 
                 if (address is < FirstDiskAddress or > LastDiskAddress || units.Contains(address))

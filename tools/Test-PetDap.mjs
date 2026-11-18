@@ -241,6 +241,12 @@ try {
         await assert.rejects(
             request("launch", { machine: "pet", sdkRoms, driveRomDirectory: driveRoms, diskUnits: [8], disks: disk }),
             /disks must be a list/);
+        await assert.rejects(
+            request("launch", { machine: "pet", model: "pet4032", sdkRoms, driveRomDirectory: driveRoms, diskUnits: 8 }),
+            /diskUnits must be a list/);
+        await assert.rejects(
+            request("launch", { machine: "pet", sdkRoms, driveRomDirectory: driveRoms, diskUnits: [8.5] }),
+            /diskUnits holds device numbers/);
     } else {
         console.log(`Skipped the 4040: no c4040 ROM set in ${driveRoms}.`);
     }

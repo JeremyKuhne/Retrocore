@@ -132,9 +132,10 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     internal string? FastDriveKind => _target switch
     {
-        Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget => "disk",
+        Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget or KayproDebugTarget => "disk",
         Apple1DebugTarget
             or CocoDebugTarget
+            or PetDebugTarget
             or Trs80DebugTarget
             or Trs80Model3DebugTarget
             or AltairDebugTarget
@@ -157,8 +158,10 @@ internal sealed class MachineHost : DisposableBase
                     Apple2DebugTarget apple2 => apple2.FastDisk,
                     Apple3DebugTarget apple3 => apple3.FastDisk,
                     Trs80Model2DebugTarget model2 => model2.FastDisk,
+                    KayproDebugTarget kaypro => kaypro.FastDisk,
                     Apple1DebugTarget apple1 => apple1.FastCassette,
                     CocoDebugTarget coco => coco.FastCassette,
+                    PetDebugTarget pet => pet.FastCassette,
                     Trs80DebugTarget model1 => model1.FastCassette,
                     Trs80Model3DebugTarget model3 => model3.FastCassette,
                     AltairDebugTarget altair => altair.FastCassette,
@@ -182,11 +185,17 @@ internal sealed class MachineHost : DisposableBase
                     case Trs80Model2DebugTarget model2:
                         model2.FastDisk = value;
                         break;
+                    case KayproDebugTarget kaypro:
+                        kaypro.FastDisk = value;
+                        break;
                     case Apple1DebugTarget apple1:
                         apple1.FastCassette = value;
                         break;
                     case CocoDebugTarget coco:
                         coco.FastCassette = value;
+                        break;
+                    case PetDebugTarget pet:
+                        pet.FastCassette = value;
                         break;
                     case Trs80DebugTarget model1:
                         model1.FastCassette = value;
@@ -365,7 +374,7 @@ internal sealed class MachineHost : DisposableBase
     ///  but a key that interrupts goes now and drops the rest of the paste, as the debug host has it: CONTROL-C, the
     ///  Model II's BREAK, and the BREAK of the Model I and Model III.
     /// </summary>
-    /// <param name="code">The ASCII code, 0-127.</param>
+    /// <param name="code">The ASCII code, 0-127, or a Kaypro II arrow key's, $F1-$F4.</param>
     internal void Key(int code)
     {
         using (Gate())

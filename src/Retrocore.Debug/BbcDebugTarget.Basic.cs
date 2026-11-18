@@ -62,6 +62,14 @@ internal sealed partial class BbcDebugTarget
     public bool BasicPagedIn => _machine.Bus.Socket == _basicSocket;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The panel sends the BBC's COPY, cursor and function keys with codes above 127.
+    ///  </para>
+    /// </remarks>
+    public int MaximumKey => 255;
+
+    /// <inheritdoc/>
     public bool HasBasicSource => _basicRom is not null;
 
     /// <inheritdoc/>

@@ -21,6 +21,7 @@ before(async () => {
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
+        "source.retrocore-petbasic": "petbasic.tmLanguage.json",
         "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json"
     };
     registry = new Registry({
@@ -124,6 +125,16 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "110 P. \"HELLO\"", "P."), "keyword.other"), "P. is PRINT");
     assert.ok(has(scopes("bbcbasic", "120 D. 1,2:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
     assert.ok(has(scopes("bbcbasic", "130 PR.\"HI\"", "PR."), "keyword.other"));
+});
+
+test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not in strings, DATA or REM", () => {
+    assert.ok(has(scopes("petbasic", "10 INPUT#1,A$", "INPUT#"), "keyword"), "INPUT# is one word");
+    assert.ok(has(scopes("petbasic", "20 DOPEN#2,\"DATA\",D0", "DOPEN"), "keyword"));
+    assert.ok(has(scopes("petbasic", "30 DIRECTORY D0", "DIRECTORY"), "keyword"));
+    assert.ok(has(scopes("petbasic", "40 PRINT \"DIRECTORY\"", "DIRECTORY"), "string.quoted"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
+    assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

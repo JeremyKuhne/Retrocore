@@ -67,6 +67,8 @@ jobs:
           node tools/Test-Trs80Model3Dap.mjs
           node tools/Test-Apple1Dap.mjs
           node tools/Test-Apple1BasicDap.mjs
+          node tools/Test-PetDap.mjs
+          node tools/Test-PetBasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
           node tools/Test-Memory.mjs

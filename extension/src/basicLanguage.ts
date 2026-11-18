@@ -14,6 +14,7 @@ const dialects: Record<string, string> = {
     business: "retrocore-business",
     apple1: "retrocore-apple1",
     colorbasic: "retrocore-colorbasic",
+    petbasic: "retrocore-petbasic",
     bbcbasic: "retrocore-bbcbasic"
 };
 
@@ -43,6 +44,8 @@ function sessionDialect(): string | undefined {
     if (session.configuration.machine === "trs80-model1") return session.configuration.rom === "level1" ? "level1" : "level2";
     if (session.configuration.machine === "apple1") return "apple1";
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
+    // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
+    if (session.configuration.machine === "pet") return "petbasic";
     if (session.configuration.machine === "bbc") return "bbcbasic";
     return undefined;
 }

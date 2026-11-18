@@ -285,7 +285,9 @@ internal sealed partial class AssemblyPreprocessor
             return false;
         }
 
-        List<Line> lines = [];
+        // Sized from the LF count, as in Assembler.ParseNative, so a ROM-sized source is not regrown on the
+        // large-object heap.
+        List<Line> lines = [with(source.Text.Count('\n') + 1)];
         int number = 0;
         foreach (ReadOnlyMemory<char> line in new AssemblyLines(source.Text.AsMemory()))
         {

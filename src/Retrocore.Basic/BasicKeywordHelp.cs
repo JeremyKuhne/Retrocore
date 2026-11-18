@@ -27,6 +27,7 @@ public static class BasicKeywordHelp
             "business" => 'b',
             "colorbasic" => 'c',
             "bbcbasic" => 'm',
+            "petbasic" => 'p',
             _ => 'a'
         };
 

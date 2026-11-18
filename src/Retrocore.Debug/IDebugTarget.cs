@@ -168,6 +168,12 @@ internal interface IDebugTarget : IDebugMemory
     IReadOnlyList<DebugMemoryBank> Banks => [];
 
     /// <summary>
+    ///  Gets the largest code <see cref="Key"/> takes: 127, ASCII, on most machines; 255 where keys send codes with
+    ///  bit 7 set, as the Kaypro's cursor keys do.
+    /// </summary>
+    int MaximumKey => 127;
+
+    /// <summary>
     ///  Gets the machine's BASIC, or null when it has none the debugger knows.
     /// </summary>
     BasicDialect? Basic => null;

@@ -69,6 +69,40 @@ public sealed partial class BasicProgram
             }
 
             if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
+            // The PET's CRUNCH takes the first reserved word in token order at each place and goes on past it, with no
+            // word boundaries, so THEN right after a digit is a jump and the end of FOR and an EM after it are no REM.
+            // BASIC 1 skips spaces inside a word too, so R E M is a remark there.
+            if (dialect is PetBasicDialect)
+            {
+                // BASIC 2 and 4's GO TO, with spaces between, is the GO token then TO, a jump all the same.
+                if (!Spaced(dialect) && GoTo().Match(text, index) is { Success: true } go && go.Index == index)
+                {
+                    bool sub = go.Groups["word"].Value.Equals("SUB", StringComparison.OrdinalIgnoreCase);
+                    index = Targets(text, index + go.Length, sub ? s_jumps[0] : s_jumps[1], labels, references) - 1;
+                    continue;
+                }
+
+                (string? word, int length) = KeywordAt(dialect, text, index);
+                if (word is null) { continue; }
+                if (word == "REM") { break; }
+                if (word == "DATA")
+                {
+                    index = SkipData(text, index);
+                    continue;
+                }
+
+                // The word found is the jump: CRUNCH takes it whatever comes before, as in IF A=1THEN.
+                int spacedJump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+                if (spacedJump >= 0)
+                {
+                    index = Targets(text, index + length, s_jumps[spacedJump], labels, references) - 1;
+                    continue;
+                }
+
+                index += length - 1;
+                continue;
+            }
+
             if (StartsWord(text, index, "REM")) { break; }
             if (StartsWord(text, index, "DATA"))
             {
@@ -112,7 +146,13 @@ public sealed partial class BasicProgram
         List<BasicDiagnostic> diagnostics)
     {
         string text = line.Statements;
-        if (labels.Count == 0 && !text.Contains("GO", StringComparison.OrdinalIgnoreCase)) { return text; }
+
+        // BASIC 1 may spell a jump G O T O, which holds no GO.
+        if (labels.Count == 0 && !Spaced(dialect) && !text.Contains("GO", StringComparison.OrdinalIgnoreCase))
+        {
+            return text;
+        }
+
         List<(int Start, int End, string Name, bool Required, string Word)> references = LabelReferences(dialect, text, labels);
         for (int index = references.Count - 1; index >= 0; index--)
         {
@@ -147,11 +187,16 @@ public sealed partial class BasicProgram
         }
         else
         {
+            bool spaced = Spaced(dialect);
             foreach ((string word, bool list, bool required) jump in s_jumps)
             {
-                if (string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                int length = spaced
+                    ? SpacedLength(text, index, jump.word)
+                    : string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0 ? jump.word.Length : -1;
+
+                if (length >= 0)
                 {
-                    end = index + jump.word.Length;
+                    end = index + length;
                     found = jump;
                     break;
                 }
@@ -224,9 +269,50 @@ public sealed partial class BasicProgram
         return text.Length;
     }
 
-    private static bool StartsWord(string text, int index, string word) =>
-        (index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
-            && string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+    private static bool StartsWord(string text, int index, string word, bool spaced = false)
+    {
+        if (index > 0 && char.IsAsciiLetterOrDigit(text[index - 1])) { return false; }
+        if (!spaced)
+        {
+            return string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        return SpacedLength(text, index, word) >= 0;
+    }
+
+    // The first reserved word in token order at an index, as the PET's CRUNCH finds it (on BASIC 1 with spaces skipped
+    // inside it), and the characters it takes; none when the character there starts no word.
+    private static (string? Word, int Length) KeywordAt(BasicDialect dialect, string text, int index)
+    {
+        bool spaced = Spaced(dialect);
+        foreach (string keyword in dialect.Keywords)
+        {
+            int length = spaced
+                ? SpacedLength(text, index, keyword)
+                : string.Compare(text, index, keyword, 0, keyword.Length, StringComparison.OrdinalIgnoreCase) == 0 ? keyword.Length : -1;
+
+            if (length > 0) { return (keyword, length); }
+        }
+
+        return (null, 0);
+    }
+
+    // Whether a dialect skips spaces inside reserved words, as BASIC 1's RESCON does.
+    private static bool Spaced(BasicDialect dialect) => dialect is PetBasicDialect { Version: 1 };
+
+    // How many characters a reserved word takes from an index with spaces between its letters, or -1 when it is not
+    // there.
+    private static int SpacedLength(string text, int index, string word)
+    {
+        int at = index;
+        for (int letter = 0; letter < word.Length; letter++, at++)
+        {
+            while (letter > 0 && at < text.Length && text[at] == ' ') { at++; }
+            if (at >= text.Length || char.ToUpperInvariant(text[at]) != word[letter]) { return -1; }
+        }
+
+        return at - index;
+    }
 
     [GeneratedRegex(@"GO\s+(?<word>TO|SUB)", RegexOptions.IgnoreCase)]
     private static partial Regex GoTo();

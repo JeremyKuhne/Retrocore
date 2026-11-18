@@ -37,6 +37,7 @@ internal sealed class BasicDocuments
         LanguageHost.Apple1Id => BasicDialect.Apple1,
         LanguageHost.ColorBasicId => BasicDialect.ColorBasic,
         LanguageHost.BbcBasicId => BasicDialect.BbcBasic,
+        LanguageHost.PetBasicId => BasicDialect.PetBasic4,
         _ => null
     };
 

@@ -231,8 +231,9 @@ OVERFLOW_BYTE:
 
 ;; Starts the machine on power on and on BREAK, where the 6502's reset vector points, and enters a language.
 ;;
-;; The BREAK key resets only the 6502, so the system VIA's interrupt enable register tells the two apart: it reads
-;; zero only after power on. A BREAK with CTRL held is a hard BREAK and one without is a soft BREAK; OSBYTE &FD
+;; The BREAK key resets the 6502 and the user VIA but not the system VIA, so the system VIA's interrupt enable
+;; register tells the two apart: it reads &80 after power on, as its bit 7 always reads set, and shifted left past
+;; that bit it is zero only then. A BREAK with CTRL held is a hard BREAK and one without is a soft BREAK; OSBYTE &FD
 ;; reads which it was from <LAST_BREAK> (1 power on, 2 hard, 0 soft). In order, reset:
 ;;
 ;; - On power on, or on any BREAK once OSBYTE &C8 has set bit 1 of <ESCAPE_BREAK_EFFECT> (with bits 2-7 clear),
@@ -267,7 +268,7 @@ RESET:
     cld
     ldx #$FF
     txs
-    lda SYS_VIA_IER                 ; zero only after power on; shifted, the top bit (always set) is lost
+    lda SYS_VIA_IER                 ; &80 after power on: bit 7 always reads set, and shifting it out leaves zero
     asl a
     pha                             ; kept for telling power on from BREAK below
     beq RESET_CLEAR_MEMORY

@@ -1011,6 +1011,8 @@ FILL_OUTSIDE:
     pla
 
 ;; Ends a fill that fills nothing: the cursor goes to the new point, and the old cursor to the point one row above it.
+;; Only the low byte of the row is increased, so from internal row 255 the old cursor wraps to row 0, not 256, as
+;; OSWORD 13 then reads it.
 ;; Uses: A, X, Y, VDU_TEMP
 FILL_NOTHING:
     inc GRAPHICS_CURSOR_INTERNAL+2

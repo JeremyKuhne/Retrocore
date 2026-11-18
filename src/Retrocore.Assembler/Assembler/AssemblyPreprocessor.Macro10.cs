@@ -68,7 +68,12 @@ internal sealed partial class AssemblyPreprocessor
         AssemblyLocation location = new("<predefined>", line: 0);
         foreach (KeyValuePair<string, long> symbol in _options.PredefinedSymbols)
         {
-            string text = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{symbol.Key} = {symbol.Value}");
+            // The most negative value's magnitude is past the largest literal, so it is written as a sum.
+            string value = symbol.Value == long.MinValue
+                ? "(-9223372036854775807 - 1)"
+                : symbol.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            string text = $"{symbol.Key} = {value}";
             Emit(new Line(text, location, AssemblyDialect.Native), text);
         }
     }

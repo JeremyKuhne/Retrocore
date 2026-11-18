@@ -82,9 +82,11 @@ public sealed partial class BasicProgram
                     continue;
                 }
 
-                if (Jump(dialect, text, index, out int jumped) is { } spacedJump)
+                // The word found is the jump: CRUNCH takes it whatever comes before, as in IF A=1THEN.
+                int spacedJump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+                if (spacedJump >= 0)
                 {
-                    index = Targets(text, jumped, spacedJump, labels, references) - 1;
+                    index = Targets(text, index + length, s_jumps[spacedJump], labels, references) - 1;
                     continue;
                 }
 

@@ -322,7 +322,13 @@ public sealed class Cbm4040Fdc
     private void WriteBit(bool bit)
     {
         CommodoreFloppyDrive drive = _drives[DriveSelect];
-        if (!drive.Motor || drive.Disk is not { IsWriteProtected: false } disk) { return; }
+        if (!drive.Motor || drive.Disk is not { IsWriteProtected: false } disk)
+        {
+            // The spindle turns on while nothing is written, so a write that resumes starts under the head again.
+            _writeCell = -1;
+            return;
+        }
+
         int count = disk.BitCount(drive.Position);
         if (count == 0)
         {

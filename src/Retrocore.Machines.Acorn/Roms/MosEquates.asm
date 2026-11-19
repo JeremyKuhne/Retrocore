@@ -482,8 +482,9 @@ OUTPUT_BUFFER = $0900
 SPEECH_BUFFER = $09C0               ;; &09C0-&09FF, the speech buffer, which a cassette file being written also uses
 INPUT_BUFFER = $0A00                ;; &0A00-&0AFF, the RS-423 or cassette input buffer
 
-;; The soft key buffer: the start offset of soft key n is at SOFT_KEYS+n, its text begins at SOFT_KEYS+1 plus that
-;; offset, and SOFT_KEYS+16 is where the free space starts.
+;; The soft key buffer: the start offset of soft key n is at SOFT_KEYS+n, and its text begins at SOFT_KEYS+1 plus
+;; that offset. SOFT_KEYS+16 is not free space but the offset of the free space, which likewise begins at SOFT_KEYS+1
+;; plus it: <RESET_SOFT_KEYS> sets it to &10, so the first free byte after a reset is &0B11.
 SOFT_KEYS = $0B00
 
 FONT_RAM = $0C00                    ;; the font for characters &E0-&FF, eight bytes each; &80-&DF share it until exploded

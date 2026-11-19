@@ -874,8 +874,11 @@ IRQ1V_NOT_VSYNC:
     stx SYS_VIA_T2CH                ; timer 2 counts from 0 again, so the next pulse on PB6 interrupts
     ; Falls into FEED_SPEECH.
 
-;; Moves commands from the speech buffer to the speech processor, up to four of them.
+;; Moves commands from the speech buffer to the speech processor, meant to be up to four of them.
 ;;
+;; The pass counter in OS_SCRATCH+1 does not hold: each byte taken from the buffer goes through <POINT_AT_BUFFER>,
+;; which leaves the speech buffer's base high byte, &09, there, so the shift after a command leaves 4, never 0. It
+;; goes on until the buffer is empty or, for a command from 1 up, the speech processor is talking.
 ;; Each command in the buffer is three bytes: the command, then an address, high byte first. A command of 0 sends
 ;; the address's two bytes, low byte first; a command from 1 to &7F waits until the speech processor stops talking,
 ;; then sends itself and the two bytes. Commands from &80 speak from a PHROM: &80-&BF load the address into
@@ -884,8 +887,8 @@ IRQ1V_NOT_VSYNC:
 ;; Uses: A, X, Y, ROM_FS_ROM, ROM_POINTER, OS_SCRATCH+1
 ;; See: <SPEECH_BUFFER>, <SPEECH_PRESENT>
 FEED_SPEECH:
-    ldx #SPEECH_BUFFER_ID           ; also the pass counter: 8, 4, 2, 1
-    .assert SPEECH_BUFFER_ID = 8, "FEED_SPEECH counts passes with the speech buffer's number."
+    ldx #SPEECH_BUFFER_ID           ; also meant as the pass counter, 8, 4, 2, 1; REMV leaves &09 here, so it is not
+    .assert SPEECH_BUFFER_ID = 8, "FEED_SPEECH starts its pass counter at the speech buffer's number."
     stx OS_SCRATCH+1
 FEED_SPEECH_LOOP:
     jsr EXAMINE_BUFFER                       ; looks at the next byte of buffer X without taking it
@@ -923,7 +926,7 @@ FEED_SPEECH_BYTES:
     jsr WRITE_SPEECH
     ldy ROM_POINTER+1
     jsr WRITE_SPEECH
-    lsr OS_SCRATCH+1
+    lsr OS_SCRATCH+1                ; &09 from POINT_AT_BUFFER shifts to 4: never zero after a command
     bne FEED_SPEECH_LOOP
 FEED_SPEECH_DONE:
     rts

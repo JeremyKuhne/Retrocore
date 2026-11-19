@@ -108,20 +108,28 @@ public sealed class FloppyMediaSaveTests
         good.CrcError.Should().BeFalse();
         good.Data.Length.Should().Be(2048);
 
-        // A WD track: three 128-byte sectors, the first's ID changed to size code 4, which WD reads as 0.
-        FloppyDisk wd = new();
-        for (int sector = 0; sector < 3; sector++)
+        // A WD track of 128-byte sectors, one ID changed to size code 4, which WD reads as 0: the first, the last, which
+        // has only padding after it, and a sole sector all stay 128 bytes, with good CRCs.
+        foreach ((int count, int patched) in (ReadOnlySpan<(int, int)>)[(3, 0), (3, 2), (1, 0)])
         {
-            wd.Add(0, 0, Sector(0, 0, sector, size: 128, doubleDensity: false));
-        }
+            FloppyDisk wd = new();
+            for (int sector = 0; sector < count; sector++)
+            {
+                wd.Add(0, 0, Sector(0, 0, sector, size: 128, doubleDensity: false));
+            }
 
-        byte[] image = DmkFormat.Write(wd);
-        int track = 16;                                         // the DMK header, then track 0's ID table
-        int id = track + ((image[track] | (image[track + 1] << 8)) & 0x3FFF);
-        image[id].Should().Be(0xFE, "the table points at the first ID field");
-        image[id + 8].Should().Be(0, "its size code, 128 bytes");
-        image[id + 8] = image[id + 9] = 4;                      // the size code, doubled as single density is
-        DmkFormat.Read(image).Track(0, 0).Select(sector => sector.Data.Length).Should().Equal(128, 128, 128);
+            byte[] image = DmkFormat.Write(wd);
+            int track = 16;                                     // the DMK header, then track 0's ID table
+            int entry = track + (2 * patched);
+            int id = track + ((image[entry] | (image[entry + 1] << 8)) & 0x3FFF);
+            image[id].Should().Be(0xFE, "the table points at an ID field");
+            image[id + 8].Should().Be(0, "its size code, 128 bytes");
+            image[id + 8] = image[id + 9] = 4;                  // the size code, doubled as single density is
+            IReadOnlyList<FloppySector> sectors = DmkFormat.Read(image).Track(0, 0);
+            sectors.Select(sector => sector.Data.Length).Should().OnlyContain(length => length == 128, $"sector {patched} of {count}");
+            sectors.Should().HaveCount(count);
+            sectors.Should().NotContain(sector => sector.CrcError);
+        }
     }
 
     /// <summary>

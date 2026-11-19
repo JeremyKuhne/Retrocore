@@ -320,7 +320,7 @@ try {
     assert.equal((await basicFrames())[0].name, "40: PRINT A;B$");
     await request("setExceptionBreakpoints", { filters: [] });
     await request("continue", { threadId: 2 });
-    await screen(text => text.includes(" 7 BYE"), "the program's PRINT");
+    await screen(text => / 7 BYE[\s\S]*\nOK/.test(text), "the program's PRINT and BASIC's OK after it");
 
     // Writing text puts a new program in memory.
     const written = await request("retro/basic/write", { text: "10 PRINT HEX$(255)\n20 GOTO 10\n" });

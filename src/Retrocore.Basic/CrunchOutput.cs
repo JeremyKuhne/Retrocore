@@ -29,6 +29,20 @@ internal sealed class CrunchOutput
     internal IReadOnlyList<int> Positions => _positions;
 
     /// <summary>
+    ///  Gets the index of the first byte copied as it is, to the line's end, after REM, DATA, a <c>*</c> command or an
+    ///  open string, or -1 for none; only BBC BASIC's tokenizer sets it.
+    /// </summary>
+    internal int Rest { get; private set; } = -1;
+
+    /// <summary>
+    ///  Marks the bytes from here on as copied as they are.
+    /// </summary>
+    internal void StartRest()
+    {
+        if (Rest < 0) { Rest = _bytes.Count; }
+    }
+
+    /// <summary>
     ///  Stores a byte.
     /// </summary>
     /// <param name="value">The byte.</param>

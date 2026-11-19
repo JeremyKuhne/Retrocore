@@ -224,13 +224,30 @@ internal sealed class BbcBasicExpression
         BasicValue left = Factor();
         while (TakeCharacter('^'))
         {
-            double power = Math.Pow(Number(left), Number(Factor()));
-
-            // A negative number to a fraction has no real power: BASIC takes its logarithm and says "Log range".
-            left = double.IsNaN(power) ? throw new FormatException("Log range.") : Real(power);
+            left = Raise(Number(left), Number(Factor()));
         }
 
         return left;
+    }
+
+    // x^y as POWER_OPERATOR works it out. A y of 64 or more in size is all fraction; any other is split into the whole
+    // number nearest it, n, and what is left, f, of at most a half. x^n is repeated multiplication (by the reciprocal
+    // for a negative n), and any fraction is EXP(LN x * f), so x must then be above zero or it is "Log range": 0^0.5
+    // and (-1)^64 are, where 0^2 and (-2)^3 are not.
+    private static BasicValue Raise(double x, double y)
+    {
+        double whole = Math.Abs(y) >= 64 ? 0 : Math.Round(y, MidpointRounding.AwayFromZero);
+        double fraction = y - whole;
+        double power = 1;
+        if (whole < 0 && x == 0) { throw new FormatException("Division by zero."); }
+        double factor = whole < 0 ? Real(1 / x).Number : x;
+        for (int step = 0; step < Math.Abs(whole); step++) { power = Real(power * factor).Number; }
+
+        if (fraction == 0) { return Real(power); }
+        if (x <= 0) { throw new FormatException("Log range."); }
+        double exponent = Math.Log(x) * fraction;
+        if (exponent >= 89.5) { throw new FormatException("Exp range."); }
+        return Real(power * (exponent <= -89.5 ? 0 : Math.Exp(exponent)));
     }
 
     private static bool IsShort(BasicValue value) => IsInteger(value) && Int(value) is >= short.MinValue and <= short.MaxValue;

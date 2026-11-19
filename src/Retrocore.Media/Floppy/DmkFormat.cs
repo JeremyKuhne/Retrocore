@@ -256,13 +256,15 @@ public static class DmkFormat
             byte mark = track[data];
 
             // A WD controller takes the size code's low two bits, as this does; codes 4 to 7, 2048 to 16384 bytes, are
-            // the 8271's own sizes. One is taken when that data field is all on the track with a good CRC, or, for a
-            // sector written with a bad CRC, when no other ID field starts inside it, as one would in a WD track whose
-            // short sector carries a large code.
+            // the 8271's own sizes. One is taken when that data field is all on the track with a good CRC. When its
+            // CRC is bad, the short field is taken if its own CRC is good, as a WD sector's is (the last on a track
+            // has only padding after it), and otherwise the large one, unless another ID field starts inside it.
             int size = 128 << (sizeCode & 3);
             if (sizeCode is >= 4 and <= 7
                 && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { } large
-                && (!large.CrcError || !IdWithin(track, data, data + ((large.Bytes.Length + 3) * step))))
+                && (!large.CrcError
+                    || (ReadData(track, data, size, step, mark, doubleDensity) is not { CrcError: false }
+                        && !IdWithin(track, data, data + ((large.Bytes.Length + 3) * step)))))
             {
                 size = large.Bytes.Length;
             }

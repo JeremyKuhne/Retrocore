@@ -252,6 +252,17 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  An array's bracket must follow its name straight away: FIND_VARIABLE reads the next character, so A (1) is the
+    ///  variable A and then (1), and only A(1) is the array.
+    /// </summary>
+    [TestMethod]
+    public void ArrayBracketFollowsTheName()
+    {
+        BasicSource source = BasicSource.Analyze("10 PRINT A (1),B(1)\n", BasicDialect.BbcBasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Should().Equal("A", "B(");
+    }
+
+    /// <summary>
     ///  @% is a variable, and a * command's text is the MOS's, not BASIC's: renaming FOO leaves *LOAD FOO alone, while
     ///  * in an expression is still multiplication.
     /// </summary>
@@ -766,4 +777,36 @@ public sealed class BbcBasicDialectTests
 
     private static DelegateBasicMemory Memory(BbcMachine machine) =>
         new(address => machine.Bus.Peek((ushort)address), (address, value) => machine.Bus.Write((ushort)address, value));
+
+    /// <summary>
+    ///  Products and whole powers come out bit for bit as the ROM's, which truncates its partial products: 1.1*1.1 is
+    ///  1.21 in BASIC, where the exact product rounds a bit higher, and 1.1^10 drifts as BASIC's does.
+    /// </summary>
+    [TestMethod]
+    public void RealProductsAsTheRomWorksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "1.1*1.1", "1.21*3.14159", "-7.77*0.3", "123456.789*1E-5", "3.14159*-7.77", "2.5*1.1",
+            "1.1^10", "1.1^-3", "2.5^7", "0.3^5", "-7.77^3", "(1.1*1.1=1.21)"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+    }
 }

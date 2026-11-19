@@ -27,9 +27,8 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   Integers match BASIC II exactly, quirks included: <c>&amp;80000000 DIV</c> or <c>MOD</c> anything is 0. Reals are
 ///   held as BASIC II holds them, a 32-bit mantissa rounded as <c>ROUND_FP_A</c> rounds it, and addition, subtraction
-///   and division come out as the ROM's do. Multiplication is worked in the host's arithmetic and then rounded, where
-///   the ROM truncates its partial products, so a product can differ in its last bit (<c>1.1*1.1</c>), and repeated
-///   ones drift further. <c>SIN</c>, <c>COS</c>, <c>TAN</c>, <c>ATN</c>, <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and
+///   and division come out as the ROM's do. Multiplication, and the whole powers <c>^</c> makes of it, follow
+///   <c>MULTIPLY_FP_A</c> bit for bit, partial products truncated as the ROM's are. <c>SIN</c>, <c>COS</c>, <c>TAN</c>, <c>ATN</c>, <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and
 ///   <c>^</c> with a fraction or a power of 64 or more, use the host's functions, not the ROM's series: their results
 ///   can differ in the last bits, more for a large angle, and a result at the edge of the range can be a value in one
 ///   and "Too big" or 0 in the other. A condition comparing such a real for equality with one the program computed
@@ -205,7 +204,7 @@ internal sealed class BbcBasicExpression
 
                 // BASIC multiplies integers as integers only when both fit in 16 bits; otherwise in reals.
                 bool small = IsShort(left) && IsShort(right);
-                left = small ? Integer(Int(left) * Int(right)) : Real(Number(left) * Number(right));
+                left = small ? Integer(Int(left) * Int(right)) : Real(MultiplyReals(Number(Real(Number(left))), Number(Real(Number(right)))));
             }
             else if (TakeCharacter('/'))
             {
@@ -246,6 +245,61 @@ internal sealed class BbcBasicExpression
         ? angle
         : throw new FormatException("Accuracy lost.");
 
+    /// <summary>
+    ///  Multiplies two reals as BASIC II's <c>MULTIPLY_FP_A</c> does, bit for bit.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   For each of the multiplier's 32 mantissa bits from the top, the other mantissa, with a rounding byte below it,
+    ///   is halved, losing what falls off, and added when the bit is set; the 40 bits are then normalised and rounded
+    ///   as <c>ROUND_FP_A</c> rounds them. So a product can differ from the exact one in its last bit, as the ROM's
+    ///   does.
+    ///  </para>
+    /// </remarks>
+    /// <param name="shifted">The real whose mantissa is halved and added, already a BASIC II real.</param>
+    /// <param name="multiplier">The real whose mantissa bits choose the additions, already a BASIC II real.</param>
+    /// <returns>The product, before any range check.</returns>
+    internal static double MultiplyReals(double shifted, double multiplier)
+    {
+        if (shifted == 0 || multiplier == 0 || !double.IsFinite(shifted) || !double.IsFinite(multiplier))
+        {
+            return shifted * multiplier;
+        }
+
+        int shiftedPower = Math.ILogB(shifted);
+        int multiplierPower = Math.ILogB(multiplier);
+        ulong b = (ulong)Math.ScaleB(Math.Abs(shifted), 31 - shiftedPower) << 8;
+        ulong a = (ulong)Math.ScaleB(Math.Abs(multiplier), 31 - multiplierPower);
+        ulong sum = 0;
+        for (int bit = 31; bit >= 0; bit--)
+        {
+            b >>= 1;
+            if (((a >> bit) & 1) != 0) { sum += b; }
+        }
+
+        // The 40 bits are the product times 2^-24 of the mantissas': normalised so the top is bit 39, then rounded.
+        int power = shiftedPower + multiplierPower - 38;
+        while (sum < (1UL << 39))
+        {
+            sum <<= 1;
+            power--;
+        }
+
+        ulong mantissa = sum >> 8;
+        ulong rounding = sum & 0xFF;
+        if (rounding > 0x80)
+        {
+            mantissa++;
+        }
+        else if (rounding == 0x80)
+        {
+            mantissa |= 1;
+        }
+
+        double product = Math.ScaleB(mantissa, power + 8);
+        return (shifted < 0) != (multiplier < 0) ? -product : product;
+    }
+
     // DIV or MOD as DIVIDE_INTEGERS works them out: &80000000's one set bit is lost with its leading zeros, so it gives
     // 0 for both with any divisor, where everything else divides as two's complement.
     private static int Divide(int dividend, int divisor, bool remainder) => dividend == int.MinValue
@@ -263,13 +317,14 @@ internal sealed class BbcBasicExpression
         double power = 1;
         if (whole < 0 && x == 0) { throw new FormatException("Division by zero."); }
         double factor = whole < 0 ? Real(1 / x).Number : x;
-        for (int step = 0; step < Math.Abs(whole); step++) { power = Real(power * factor).Number; }
+        // RAISE_TO_POWER multiplies its running result, FPA, by x each time: x is the one shifted.
+        for (int step = 0; step < Math.Abs(whole); step++) { power = Real(MultiplyReals(factor, power)).Number; }
 
         if (fraction == 0) { return Real(power); }
         if (x <= 0) { throw new FormatException("Log range."); }
         double exponent = Math.Log(x) * fraction;
         if (exponent >= 89.5) { throw new FormatException("Exp range."); }
-        return Real(power * (exponent <= -89.5 ? 0 : Math.Exp(exponent)));
+        return Real(MultiplyReals(power, Real(exponent <= -89.5 ? 0 : Math.Exp(exponent)).Number));
     }
 
     private static bool IsShort(BasicValue value) => IsInteger(value) && Int(value) is >= short.MinValue and <= short.MaxValue;

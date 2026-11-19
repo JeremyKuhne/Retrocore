@@ -472,8 +472,10 @@ internal sealed class BasicLineScanner
             suffix = ((char)_bytes[last]).ToString();
         }
 
+        // An array's bracket follows its name; BBC BASIC takes only one straight after it, as FIND_VARIABLE reads the
+        // next character, so A (1) is the variable A and then (1), where the other BASICs pass the spaces.
         int next = last + 1;
-        while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
+        while (!Bbc && next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
         // The Microsoft BASICs keep a name's first two characters, MBASIC its first 40; Integer BASIC, Business BASIC
         // and BBC BASIC keep all of it.

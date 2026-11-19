@@ -90,6 +90,41 @@ public sealed class FloppyMediaSaveTests
     }
 
     /// <summary>
+    ///  The 8271's large sectors keep their size through DMK, a bad CRC and all, while a WD track's short sector whose
+    ///  ID carries a large size code is still read at the code's low two bits.
+    /// </summary>
+    [TestMethod]
+    public void LargeSectorsKeepTheirSize()
+    {
+        FloppyDisk disk = new();
+        byte[] data = [.. Enumerable.Range(0, 2048).Select(index => (byte)index)];
+        disk.Add(3, 0, new FloppySector(3, 0, 0, data, doubleDensity: false) { CrcError = true });
+        disk.Add(4, 0, new FloppySector(4, 0, 0, data, doubleDensity: false));
+        FloppyDisk read = DmkFormat.Read(DmkFormat.Write(disk));
+        FloppySector bad = read.Track(3, 0).Should().ContainSingle().Subject;
+        bad.CrcError.Should().BeTrue();
+        bad.Data.ToArray().Should().Equal(data, "the bad CRC's sector keeps all 2048 bytes");
+        FloppySector good = read.Track(4, 0).Should().ContainSingle().Subject;
+        good.CrcError.Should().BeFalse();
+        good.Data.Length.Should().Be(2048);
+
+        // A WD track: three 128-byte sectors, the first's ID changed to size code 4, which WD reads as 0.
+        FloppyDisk wd = new();
+        for (int sector = 0; sector < 3; sector++)
+        {
+            wd.Add(0, 0, Sector(0, 0, sector, size: 128, doubleDensity: false));
+        }
+
+        byte[] image = DmkFormat.Write(wd);
+        int track = 16;                                         // the DMK header, then track 0's ID table
+        int id = track + ((image[track] | (image[track + 1] << 8)) & 0x3FFF);
+        image[id].Should().Be(0xFE, "the table points at the first ID field");
+        image[id + 8].Should().Be(0, "its size code, 128 bytes");
+        image[id + 8] = image[id + 9] = 4;                      // the size code, doubled as single density is
+        DmkFormat.Read(image).Track(0, 0).Select(sector => sector.Data.Length).Should().Equal(128, 128, 128);
+    }
+
+    /// <summary>
     ///  A write or a format changes the disk and counts in its version; a lock change counts but is not a change to
     ///  save; a save marks it unchanged.
     /// </summary>

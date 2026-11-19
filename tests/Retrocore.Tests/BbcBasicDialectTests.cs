@@ -360,6 +360,16 @@ public sealed class BbcBasicDialectTests
         evaluator.Evaluate("VAL(\"1E001\")").Value.Number.Should().Be(1);
         Action third = () => evaluator.Evaluate("1E001");
         third.Should().Throw<FormatException>();
+
+        // An E with no digits is an exponent of 0, its sign and all.
+        BbcMachineTests.Type(machine, "CLS:PRINT 1E;\"|\";1E+;\"|\";1E-;\"|\";2E+1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "1|1|1|20");
+        foreach ((string literal, double value) in (ReadOnlySpan<(string, double)>)[("1E", 1), ("1E+", 1), ("1E-", 1), ("2E+1", 20)])
+        {
+            evaluator.Evaluate(literal).Value.Number.Should().Be(value, literal);
+        }
+
         foreach (string trig in (string[])["SIN 8388608", "COS -8388608", "TAN 1E9"])
         {
             BbcMachineTests.Type(machine, $"CLS:PRINT {trig}\r");
@@ -521,6 +531,51 @@ public sealed class BbcBasicDialectTests
         variables.Find(longest).Should().Be(madeLongest, "writing the value left the name alone");
         Action tooLong = () => variables.Create("e" + new string('f', 255));
         tooLong.Should().Throw<ArgumentException>();
+    }
+
+    /// <summary>
+    ///  Arrays as the ROM lays them out: the last subscript varies fastest, reals take five bytes and integers and
+    ///  strings four, and each element's address and subscripts agree with the value BASIC put there.
+    /// </summary>
+    [TestMethod]
+    public void ArraysAsTheRomLaysThemOut()
+    {
+        BbcMachine machine = Boot();
+        string[] lines =
+        [
+            "DIM R(2,3),I%(1,4),S$(3,1)",
+            "FOR A=0 TO 2:FOR B=0 TO 3:R(A,B)=A*10+B+0.5:NEXT:NEXT",
+            "FOR A=0 TO 1:FOR B=0 TO 4:I%(A,B)=A*100+B:NEXT:NEXT",
+            "FOR A=0 TO 3:FOR B=0 TO 1:S$(A,B)=STR$A+\",\"+STR$B:NEXT:NEXT",
+            ""
+        ];
+
+        BbcMachineTests.Type(machine, string.Join('\r', lines));
+        BbcMachineTests.RunToPrompt(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        Dictionary<string, BasicArray> arrays = variables.Arrays().ToDictionary(array => array.Name);
+
+        void Check(string name, int[] dimensions, int size, Func<int[], BasicValue, bool> holds)
+        {
+            BasicArray array = arrays[name];
+            array.Dimensions.Should().Equal(dimensions, name);
+            array.ElementSize.Should().Be(size, name);
+            array.LastFastest.Should().BeTrue();
+            for (int index = 0; index < array.Count; index++)
+            {
+                int[] subscripts = array.Subscripts(index);
+                int address = array.ElementAddress(subscripts);
+                address.Should().Be(array.ElementsAddress + (index * size), $"{name}({string.Join(',', subscripts)})");
+                holds(subscripts, variables.Read(array.Kind, address)).Should().BeTrue($"{name}({string.Join(',', subscripts)})");
+            }
+
+            // The last subscript varies fastest: the second element is (0,1).
+            array.Subscripts(1).Should().Equal(0, 1);
+        }
+
+        Check("R", [3, 4], 5, (at, value) => value.Number == (at[0] * 10) + at[1] + 0.5);
+        Check("I%", [2, 5], 4, (at, value) => value.Number == (at[0] * 100) + at[1]);
+        Check("S$", [4, 2], 4, (at, value) => System.Text.Encoding.ASCII.GetString(value.Text ?? []) == $"{at[0]},{at[1]}");
     }
 
     // A Model B at the prompt with X%=7, _count=1 and N$="ABCABC", and an evaluator on it.

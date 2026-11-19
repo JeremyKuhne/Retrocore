@@ -109,8 +109,49 @@ public sealed partial class BasicVariables
             default:
                 byte[] real = new byte[BbcReal];
                 for (int index = 0; index < real.Length; index++) { real[index] = _memory.Read(address + index); }
-                return new(BasicNumbers.ReadFloat(real, exponentFirst: true));
+                return new(ReadBbcReal(real));
         }
+    }
+
+    /// <summary>
+    ///  Reads a packed BBC BASIC real: the exponent around &amp;80, then the mantissa, top byte first, its top bit the
+    ///  sign.
+    /// </summary>
+    /// <param name="bytes">The five bytes.</param>
+    /// <returns>The real.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   Only five zero bytes are zero: exponent 0 with a mantissa is a real, from 2^-129 up.
+    ///  </para>
+    /// </remarks>
+    internal static double ReadBbcReal(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0 && bytes[4] == 0) { return 0; }
+        uint mantissa = ((uint)(bytes[1] | 0x80) << 24) | ((uint)bytes[2] << 16) | ((uint)bytes[3] << 8) | bytes[4];
+        double value = Math.ScaleB(mantissa, bytes[0] - 0x80 - 32);
+        return (bytes[1] & 0x80) != 0 ? -value : value;
+    }
+
+    /// <summary>
+    ///  Packs a real as BASIC II does: its mantissa rounded by the ROM's rounding byte, and zero below 2^-129, where
+    ///  the exponent would go below 0.
+    /// </summary>
+    /// <param name="value">The real.</param>
+    /// <returns>Its five bytes.</returns>
+    /// <exception cref="OverflowException">The real is too big for BBC BASIC.</exception>
+    internal static byte[] PackBbcReal(double value)
+    {
+        double rounded = value == 0 ? 0 : BbcBasicExpression.RoundMantissa(value);
+        if (rounded == 0 || Math.Abs(rounded) < Math.ScaleB(1.0, -129)) { return new byte[BbcReal]; }
+        int exponent = Math.ILogB(rounded) + 1 + 0x80;
+        if (exponent > 0xFF)
+        {
+            throw new OverflowException("Too big: a real variable holds less than 1.7E38.");
+        }
+
+        uint mantissa = (uint)Math.ScaleB(Math.Abs(rounded), 32 - (exponent - 0x80));
+        byte top = (byte)(((mantissa >> 24) & 0x7F) | (rounded < 0 ? 0x80u : 0));
+        return [(byte)exponent, top, (byte)(mantissa >> 16), (byte)(mantissa >> 8), (byte)mantissa];
     }
 
     private void BbcWrite(BasicVariableKind kind, int address, BasicValue value)
@@ -131,7 +172,7 @@ public sealed partial class BasicVariables
                 BbcWriteString(address, value.Text ?? []);
                 break;
             default:
-                Store(address, BasicNumbers.WriteFloat(value.Number, BbcReal, exponentFirst: true));
+                Store(address, PackBbcReal(value.Number));
                 break;
         }
     }

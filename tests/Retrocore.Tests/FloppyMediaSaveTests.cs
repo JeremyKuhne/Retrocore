@@ -108,8 +108,22 @@ public sealed class FloppyMediaSaveTests
         good.CrcError.Should().BeFalse();
         good.Data.Length.Should().Be(2048);
 
-        // A WD track of 128-byte sectors, one ID changed to size code 4, which WD reads as 0: the first, the last, which
-        // has only padding after it, and a sole sector all stay 128 bytes, with good CRCs.
+        // No payload fools a snapshot: bytes 128 and 129 that are a good CRC for the first 128 still leave 2048.
+        byte[] tricky = [.. Enumerable.Range(0, 2048).Select(index => (byte)index)];
+        tricky[128] = 0xA0;
+        tricky[129] = 0x23;
+        FloppyDisk trap = new();
+        trap.Add(5, 0, new FloppySector(5, 0, 0, tricky, doubleDensity: false) { CrcError = true });
+        FloppySector kept = DmkFormat.Read(DmkFormat.Write(trap)).Track(5, 0).Should().ContainSingle().Subject;
+        kept.CrcError.Should().BeTrue();
+        kept.Data.ToArray().Should().Equal(tricky);
+        byte[] imported = DmkFormat.Write(trap);
+        imported.AsSpan(5, 4).Clear();
+        DmkFormat.Read(imported).Track(5, 0).Single().Data.Length.Should().Be(128, "without the mark, the payload does fool the guess");
+
+        // An imported WD track of 128-byte sectors, one ID changed to size code 4, which WD reads as 0: the first, the
+        // last, which has only padding after it, and a sole sector all stay 128 bytes, with good CRCs. Clearing the
+        // writer's mark in the header's reserved bytes makes the image one from elsewhere.
         foreach ((int count, int patched) in (ReadOnlySpan<(int, int)>)[(3, 0), (3, 2), (1, 0)])
         {
             FloppyDisk wd = new();
@@ -125,6 +139,8 @@ public sealed class FloppyMediaSaveTests
             image[id].Should().Be(0xFE, "the table points at an ID field");
             image[id + 8].Should().Be(0, "its size code, 128 bytes");
             image[id + 8] = image[id + 9] = 4;                  // the size code, doubled as single density is
+            image.AsSpan(5, 4).ToArray().Should().Equal("RCSZ"u8.ToArray(), "the writer marks its exact sizes");
+            image.AsSpan(5, 4).Clear();
             IReadOnlyList<FloppySector> sectors = DmkFormat.Read(image).Track(0, 0);
             sectors.Select(sector => sector.Data.Length).Should().OnlyContain(length => length == 128, $"sector {patched} of {count}");
             sectors.Should().HaveCount(count);
@@ -400,7 +416,9 @@ public sealed class FloppyMediaSaveTests
         MediaActions.Save(drive, saveAs).String("outcome").Should().Be("saved");
 
         Digest(path).Should().Be("8172787B782528CE352BFE0EC54738A17F2B98E99038B8EA3EEB17E517EC89A1");
-        Digest(dmk).Should().Be("CDBD387B3385EC38F01D306D51CD79539303697B36ACAD4DCAE649BC8CC9841A");
+        byte[] unmarked = File.ReadAllBytes(dmk);
+        unmarked.AsSpan(5, 4).Clear();                          // the writer's mark of exact sizes aside
+        Convert.ToHexString(SHA256.HashData(unmarked)).Should().Be("CDBD387B3385EC38F01D306D51CD79539303697B36ACAD4DCAE649BC8CC9841A");
         foreach (string image in (string[])[path, dmk])
         {
             CocoMachine again = CocoDiskTests.Create(CocoModel.Coco2);

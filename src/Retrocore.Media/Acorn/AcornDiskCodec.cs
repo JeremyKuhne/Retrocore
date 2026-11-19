@@ -28,6 +28,6 @@ public sealed class AcornDiskCodec(string format = "SSD") : IImageCodec
                 nameof(snapshot));
         }
 
-        return AcornDiskImage.Encode(DmkFormat.Read(snapshot.Image.Span), Format == "DSD");
+        return AcornDiskImage.Encode(DmkFormat.ReadSnapshot(snapshot.Image.Span), Format == "DSD");
     }
 }

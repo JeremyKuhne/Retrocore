@@ -164,6 +164,7 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/map", args => Reply(() => MemoryMap(args)));
         transport.On("retro/memory/numbers", args => Reply(() => MemoryNumbers(args)));
         transport.On("retro/memory/assemble", args => Reply(() => MemoryAssemble(args)));
+        transport.On("retro/memory/export", args => Reply(() => MemoryExport(args)));
         transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
         transport.On("retro/memory/freeze", args => Reply(() => FreezeMemory(args)));
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
@@ -997,7 +998,7 @@ internal sealed partial class DebugSession
         _basicEntry = basicFile is not null && _stopOnEntry && (args.Bool("run") ?? true);
         RebindBreakpoints();
         _memoryViews.Clear();
-        _frozen.Clear();
+        ThawAll();
         _memoryFrames = 0;
         _sentPixels = [];
 
@@ -1616,6 +1617,8 @@ internal sealed partial class DebugSession
             }
 
             instruction |= cpu.StepCycle();
+
+            if (_frozen.Count is > 0 and <= FreezesChecked) { FreezeCycle(cpu); }
             if (_watches.Count != 0)
             {
                 Watch(cpu.LastCycle, cpu is SoftCardDebugTarget z80 ? z80.Card.Processor.LastCycle : null);

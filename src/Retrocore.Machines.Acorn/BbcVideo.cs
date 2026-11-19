@@ -52,10 +52,13 @@ public sealed class BbcVideo : IVideoSource
     private const int FirstCycle = 26;
     private const int FirstLine = 16;
 
-    // The characters teletext's data lags its address by, through the latch and the SAA5050.
-    private const int TeletextDelay = 2;
+    // The characters teletext's data lags its address by, through the latch and the SAA5050: three, as beebjit's
+    // pipeline has it, which the MOS's mode 7 cursor matches with a cursor skew of 2 and the cursor's segment 1.
+    private const int TeletextDelay = 3;
 
-    private static readonly int[] s_cursorWidths = [0, 0, 1, 2, 1, 0, 2, 4];
+    // The control register's bit for each character of the cursor, from the 6845's cursor output: segment 0 (bit 7)
+    // the first, segment 1 (bit 6) the second, and segment 2 (bit 5) the third and fourth.
+    private static readonly int[] s_cursorSegments = [0x80, 0x40, 0x20, 0x20];
 
     private readonly byte[] _ram;
     private readonly int _ramMask;
@@ -263,18 +266,25 @@ public sealed class BbcVideo : IVideoSource
 
         // The skews let the picture lag the address while the byte goes through the latches and, for teletext, the
         // SAA5050: the address, raster line and display enable go down the same pipeline, as long as the path's delay.
-        // Teletext's is the hardware's own two characters, which the MOS sets the cursor skew to match in mode 7, so
-        // turning the cursor off (skew 3) does not move the text; the graphics path lags as long as the display skew.
+        // Teletext's is the hardware's own three characters, which the MOS's mode 7 cursor matches with its skew of 2
+        // and segment 1, so turning the cursor off (skew 3) does not move the text; the graphics path lags as long as
+        // the display skew.
         beam.Push(crtc.Address, crtc.RowAddress, crtc.Displayed);
-        int skew = Teletext ? TeletextDelay : crtc.DisplaySkew;
-        (int address, int line, bool display) = beam.Delayed(skew == 3 ? 0 : skew);
+        // A display skew of 3 is no delay with the display off; teletext's own delay of 3 is a delay.
+        int skew = Teletext ? TeletextDelay : crtc.DisplaySkew == 3 ? 0 : crtc.DisplaySkew;
+        (int address, int line, bool display) = beam.Delayed(skew);
         if (crtc.DisplaySkew == 3) { display = false; }
         if (display && !beam.Display) { teletext.StartLine(); }
         beam.Display = display;
 
-        if (crtc.Cursor) { beam.CursorLeft = s_cursorWidths[Control >> 5]; }
-        bool cursor = beam.CursorLeft > 0;
-        if (cursor) { beam.CursorLeft--; }
+        // The cursor's four characters start with the 6845's cursor output; the control register picks which show.
+        if (crtc.Cursor) { beam.CursorLeft = s_cursorSegments.Length; }
+        bool cursor = false;
+        if (beam.CursorLeft > 0)
+        {
+            cursor = (Control & s_cursorSegments[s_cursorSegments.Length - beam.CursorLeft]) != 0;
+            beam.CursorLeft--;
+        }
 
         int width = FastClock ? 8 : 16;
         int x = (beam.Cycle - FirstCycle) * 8;

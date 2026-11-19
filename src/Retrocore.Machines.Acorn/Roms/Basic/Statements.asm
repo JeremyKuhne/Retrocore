@@ -272,9 +272,10 @@ ASSIGN_FROM_STACK_DROP:
 
 ;; PRINT#: writes values to a file: PRINT# channel, expression, ...
 ;;
-;; Each value is written as its type byte (&00 string, &40 integer, &FF real) and then its bytes in reverse order: an
-;; integer's four bytes, most significant first; a real's five bytes, packed, from the last; a string's length and
-;; then its characters, from the last. INPUT# reads them back.
+;; Each value is written as its type byte (&00 string, &40 integer, &FF real, or &80 for ASN's or ATN's negative
+;; result, as <EXPRESSION_TYPE> holds it) and then its bytes in reverse order: an integer's four bytes, most
+;; significant first; a real's five bytes, packed, from the last; a string's length and then its characters, from the
+;; last. INPUT# reads them back.
 ;; In: PTR_A_OFFSET = just past the #
 PRINT_TO_FILE:
     dec PTR_A_OFFSET
@@ -349,7 +350,8 @@ PRINT_SEMICOLON:
 ;;
 ;; - A number is printed in decimal by the format in @%, padded on the left to @%'s field width (its low byte); after
 ;;   `~`, in hexadecimal.
-;; - `,` moves on to the next field: to the next multiple of the field width.
+;; - `,` moves on to the next field: to the next multiple of the field width, unless the cursor is at one already
+;;   (COUNT 0, 10 or 20 with a width of 10), where it prints no spaces and stays.
 ;; - `;` prints the next item with no padding, and at the end stops the new line PRINT ends with.
 ;; - `'` starts a new line; TAB(x) moves to column x, starting a new line first if the cursor is past it; TAB(x,y)
 ;;   moves the cursor to x,y; SPC n prints n spaces.

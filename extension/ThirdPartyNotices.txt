@@ -143,3 +143,12 @@ The Retrocore extension includes material from the projects below.
    ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
+
+6. Codicons (https://github.com/microsoft/vscode-codicons), version 0.0.46-24
+
+   media/codicons/codicon.ttf and codicon.css are copied unchanged from the @vscode/codicons package, which
+   Retrocore Memory uses for its icons. The icons are licensed under the Creative Commons Attribution 4.0
+   International license, in media/codicons/LICENSE; codicon.css is licensed under the MIT license, in
+   media/codicons/LICENSE-CODE.
+
+   Copyright (c) Microsoft Corporation.

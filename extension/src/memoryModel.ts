@@ -363,6 +363,136 @@ export function parseData(text: string): number[] | { text: string } | string {
     return bytes.length === 0 ? "Type bytes such as A9 C1, or text in quotes." : bytes;
 }
 
+/** The forms Copy as writes bytes in, with what each is. */
+export const copyFormats = [
+    { format: "hex", label: "Hex", detail: "A9 C1 20" },
+    { format: "monitor", label: "Monitor lines", detail: "0300: A9 C1 20, which the Monitor takes typed in" },
+    { format: "byte", label: ".byte lines", detail: ".byte $A9, $C1, $20, for native assembly" },
+    { format: "data", label: "BASIC DATA statements", detail: "1000 DATA 169,193,32" },
+    { format: "c", label: "C array", detail: "unsigned char memory_0300[3] = { 0xA9, 0xC1, 0x20 };" },
+    { format: "base64", label: "Base64", detail: "qcEg" }
+];
+
+/**
+ * Bytes from an address written out as text in one of copyFormats' forms, eight bytes a line where it has lines.
+ */
+export function copyAs(values: readonly number[], start: number, format: string): string {
+    const perLine = 8;
+    const lines: string[] = [];
+    const chunks: number[][] = [];
+    for (let index = 0; index < values.length; index += perLine) chunks.push(values.slice(index, index + perLine));
+    const two = (value: number) => value.toString(16).toUpperCase().padStart(2, "0");
+    switch (format) {
+        case "monitor":
+            chunks.forEach((chunk, index) => lines.push((start + index * perLine).toString(16).toUpperCase().padStart(4, "0") + ": " + chunk.map(two).join(" ")));
+            return lines.join("\n");
+        case "byte":
+            chunks.forEach(chunk => lines.push("    .byte " + chunk.map(value => "$" + two(value)).join(", ")));
+            return lines.join("\n");
+        case "data":
+            // Lines go up by 10 while they fit under 63999, BASIC's last line number, and closer for a long listing.
+            const step = chunks.length < 2 ? 10 : Math.max(1, Math.min(10, Math.floor((63999 - 1000) / (chunks.length - 1))));
+            chunks.forEach((chunk, index) => lines.push((1000 + index * step) + " DATA " + chunk.join(",")));
+            return lines.join("\n");
+        case "c": {
+            lines.push("unsigned char memory_" + start.toString(16).toUpperCase().padStart(4, "0") + "[" + values.length + "] = {");
+            chunks.forEach((chunk, index) => lines.push("    " + chunk.map(value => "0x" + two(value)).join(", ") + (index < chunks.length - 1 ? "," : "")));
+            lines.push("};");
+            return lines.join("\n");
+        }
+        case "base64": {
+            const digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            let text = "";
+            for (let index = 0; index < values.length; index += 3) {
+                const group = (values[index] << 16) | ((values[index + 1] ?? 0) << 8) | (values[index + 2] ?? 0);
+                text += digits[(group >> 18) & 63] + digits[(group >> 12) & 63]
+                    + (index + 1 < values.length ? digits[(group >> 6) & 63] : "=")
+                    + (index + 2 < values.length ? digits[group & 63] : "=");
+            }
+            return text;
+        }
+        default:
+            return values.map(two).join(" ");
+    }
+}
+
+/** Bytes from an address as Intel HEX: data records of 16 bytes, then the end of file record. */
+export function intelHex(values: readonly number[], start: number): string {
+    const lines: string[] = [];
+    const record = (address: number, type: number, data: readonly number[]) => {
+        const fields = [data.length, (address >> 8) & 0xFF, address & 0xFF, type, ...data];
+        const sum = fields.reduce((total, value) => total + value, 0);
+        return ":" + fields.concat([(0x100 - (sum & 0xFF)) & 0xFF]).map(value => hex(value, 2)).join("");
+    };
+    for (let index = 0; index < values.length; index += 16) lines.push(record(start + index, 0, values.slice(index, index + 16)));
+    lines.push(record(0, 1, []));
+    return lines.join("\r\n") + "\r\n";
+}
+
+/** A run of bytes read from a file to write at an address. */
+export interface LoadedRun {
+    address: number;
+    data: number[];
+}
+
+/**
+ * Reads Intel HEX into the runs of bytes it puts in a 64K space, in address order, each run's addresses one after
+ * another. Start address records are ignored; an extended address that is not 0 puts bytes past $FFFF, which is a
+ * message, as is a line that is no record or whose checksum is wrong.
+ */
+export function parseIntelHex(text: string): LoadedRun[] | string {
+    const bytes = new Map<number, number>();
+    let base = 0;
+    let ended = false;
+    const lines = text.split(/\r?\n/);
+    for (let number = 1; number <= lines.length && !ended; number++) {
+        const line = lines[number - 1].trim();
+        if (line.length === 0) continue;
+        if (!/^:([0-9A-Fa-f]{2})+$/.test(line) || line.length < 11) return `Line ${number} is not an Intel HEX record.`;
+        const fields: number[] = [];
+        for (let index = 1; index < line.length; index += 2) fields.push(parseInt(line.substring(index, index + 2), 16));
+        const [length, high, low, type] = fields;
+        if (fields.length !== length + 5) return `Line ${number}'s length does not match its record.`;
+        if ((fields.reduce((total, value) => total + value, 0) & 0xFF) !== 0) return `Line ${number}'s checksum is wrong.`;
+        const data = fields.slice(4, 4 + length);
+        switch (type) {
+            case 0:
+                for (let index = 0; index < data.length; index++) {
+                    const address = base + (high << 8) + low + index;
+                    if (address > 0xFFFF) return `Line ${number} puts bytes past $FFFF.`;
+                    bytes.set(address, data[index]);
+                }
+                break;
+            case 1:
+                ended = true;
+                break;
+            case 2:
+            case 4: {
+                const segment = length === 2 ? (data[0] << 8) | data[1] : -1;
+                if (segment < 0) return `Line ${number} is not an Intel HEX record.`;
+                // Multiplied, as a shift is of a signed 32-bit number: $8000 << 16 would go negative and slip past
+                // the check that the bytes stay in 64K.
+                base = type === 2 ? segment * 16 : segment * 0x10000;
+                break;
+            }
+            case 3:
+            case 5:
+                break;
+            default:
+                return `Line ${number} is not an Intel HEX record.`;
+        }
+    }
+    // A file cut short on a record's end still reads, so the end of file record is what says it is whole.
+    if (!ended) return "The file has no end of file record, so it may be cut short.";
+    const runs: LoadedRun[] = [];
+    for (const address of Array.from(bytes.keys()).sort((a, b) => a - b)) {
+        const last = runs[runs.length - 1];
+        if (last !== undefined && last.address + last.data.length === address) last.data.push(bytes.get(address)!);
+        else runs.push({ address, data: [bytes.get(address)!] });
+    }
+    return runs.length === 0 ? "The file holds no bytes." : runs;
+}
+
 /** A bookmark: a name for an address in memory as the CPU maps it or in a bank. */
 export interface MemoryBookmark {
     name: string;
@@ -482,4 +612,4 @@ export function narrowSearch(
 }
 
 /** The functions the webview's script embeds, in the order they are declared. */
-export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, parseData, valueAt, searchStart, narrowSearch];
+export const pageFunctions = [hex, parseReference, parsePattern, findPattern, valueForms, textOf, typedText, labelOf, inspect, copyText, parseByte, parseValue, parseData, copyAs, valueAt, searchStart, narrowSearch];

@@ -80,10 +80,10 @@ public sealed class FloppyImageCodec : IImageCodec
             throw new ArgumentException($"A floppy image holds a floppy disk, not a {snapshot.Kind} snapshot.", nameof(snapshot));
         }
 
-        if (Format == "DMK") { return new(snapshot.Image.ToArray(), []); }
-        FloppyDisk disk = DmkFormat.Read(snapshot.Image.Span);
+        FloppyDisk disk = DmkFormat.ReadSnapshot(snapshot.Image.Span);
         return Format switch
         {
+            "DMK" => DmkFormat.Encode(disk),
             "JV1" => Jv1Format.Encode(disk),
             "JV3" => Jv3Format.Encode(disk),
             "IMG" => KayproFormat.Encode(disk),

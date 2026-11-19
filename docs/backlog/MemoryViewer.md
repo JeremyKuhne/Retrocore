@@ -1,6 +1,6 @@
 # Backlog: a memory viewer and editor
 
-Status: **steps 1 to 5 built, and step 6's assembling in place, values, fill and paste** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
+Status: **steps 1 to 6 built** ([Memory.md](../Memory.md#retrocore-memory)): the editor with the debug host's
 `retro/memory/read`, `retro/memory/labels`, `retro/memory/characters` and `retro/memory/freeze`. The watch list is
 VS Code's own Watch view, which the editor adds expressions such as `[$4100]` to, so data breakpoints come from
 there.
@@ -35,8 +35,9 @@ Step 6 begins with assembling in place: `retro/memory/assemble` assembles one li
 `Retrocore.Assembler`, with the session's symbols as predefined constants, and the listing types it over a line,
 padding a shorter instruction with NOPs or saying what a longer one overwrites before it writes. The inspector's
 values are then written as typed, its floats encoded by `retro/memory/numbers`; **Fill** repeats bytes or text over
-the selection; and **Ctrl+V** pastes hex, the Monitor's lines included, or the machine's characters. Left from step
-6: copy as, import and export.
+the selection; and **Ctrl+V** pastes hex, the Monitor's lines included, or the machine's characters. Last, **Copy
+as** copies the selection in the forms below, **Save** writes it as a binary, Intel HEX or native assembly from
+`retro/memory/export`, which assembles it again to check, and **Load** writes a binary or Intel HEX.
 
 Before it, memory opened in Microsoft's Hex Editor through VS Code's debug memory file system. That works, but the Hex Editor knows nothing about the machine: not its labels, its banks, its character
 sets, which bytes are code, or what a byte means. This plan adds Retrocore's own memory editor, with the Hex Editor
@@ -259,6 +260,13 @@ The Apple III's extended addressing, the CoCo 3's 512K behind its MMU and the Mo
 memory references stop at $FFFF today. A physical space, as MAME separates logical and physical addresses, would
 name these, such as `phys:0x1A000`, with the Map showing the MMU's current mapping onto it. It follows once the
 editor is built for 64K, and needs the references, `readMemory` and banks to take wider addresses.
+
+## Hovers on keyboard focus
+
+The editor draws its own hovers, in VS Code's hover colors and font size, so they grow with VS Code's zoom as the
+browser's own tooltips do not, as VS Code's workbench does with its custom hover. They show for the mouse only.
+VS Code's custom hovers also show when an item gets keyboard focus; the editor's buttons, toggles and fields should
+too, shown after the same delay on focus and hidden on blur, Escape or a key that acts.
 
 ## Steps
 

@@ -38,8 +38,9 @@ then found seven real bugs that fifteen Copilot rounds had not.
 Scripts beside this file take PR numbers and work in the current repository.
 
 - `review-state.sh <pr>`: the head commit, whether Copilot has reviewed it, the body of its newest review, every
-  unresolved thread (UNANSWERED when you have not replied), and the checks.
-- `resolve-answered.sh <pr>...`: resolves only threads that carry your reply, and lists the rest.
+  unresolved thread with its whole conversation (UNANSWERED unless its latest comment is yours, so a reviewer's
+  follow-up reopens the question), every page of threads, and the checks.
+- `resolve-answered.sh <pr>...`: resolves only threads whose latest comment is yours, and lists the rest.
 - `wait-review.sh <pr> [sha]`: run in the background after re-requesting; exits when Copilot's own account reviews
   that commit. Your replies are recorded as reviews too, so never wait on "any new review".
 

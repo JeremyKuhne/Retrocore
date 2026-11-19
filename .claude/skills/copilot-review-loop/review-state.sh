@@ -2,7 +2,8 @@
 # Shows everything a pull request's review is waiting on, so nothing is missed:
 #   - the head commit and whether Copilot has reviewed it;
 #   - the body of Copilot's newest review, whose "Needs a closer look" banner can name bugs it never posts;
-#   - every unresolved thread, marked UNANSWERED when it has no reply from you;
+#   - every unresolved thread in full, each comment with its author, marked UNANSWERED unless its latest comment is
+#     yours (a reviewer's follow-up after your reply makes it unanswered again);
 #   - the CI checks.
 # Usage: review-state.sh <pr number>
 set -e
@@ -29,14 +30,17 @@ else
     gh api "repos/$repo/pulls/$pr/reviews/$3" --jq .body | sed 's/<[^>]*>//g' | grep -v '^[[:space:]]*$' || true
 fi
 
+# Threads: every page of them (resolved threads count against the 100 a page), and each unresolved one's whole
+# conversation, up to 100 comments, said so when there are more.
 echo "-- unresolved threads:"
-query='query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-  reviewThreads(first: 100) { nodes { isResolved comments(first: 100) { nodes { databaseId author { login } path line body } } } } } } }'
-gh api graphql -f query="$query" -F owner="$owner" -F name="$name" -F number="$pr" --jq "
+query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) {
+  pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+    nodes { isResolved path line comments(first: 100) { totalCount nodes { databaseId author { login } body } } } } } } }'
+gh api graphql --paginate -f query="$query" -F owner="$owner" -F name="$name" -F number="$pr" --jq "
     .data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) |
-    (.comments.nodes[0]) as \$first |
-    ([.comments.nodes[1:][] | select(.author.login == \"$me\")] | length) as \$replies |
-    \"\(if \$replies == 0 then \"UNANSWERED\" else \"answered\" end) \(\$first.databaseId) \(\$first.path):\(\$first.line)\n  \(\$first.body | gsub(\"\n\"; \" \") | .[0:400])\""
+    \"\(if .comments.nodes[-1].author.login == \"$me\" then \"answered\" else \"UNANSWERED\" end) \(.comments.nodes[0].databaseId) \(.path):\(.line)\" +
+    ([.comments.nodes[] | \"\n  [\(.author.login)]\n\(.body | split(\"\n\") | map(\"    \" + .) | join(\"\n\"))\"] | join(\"\")) +
+    (if .comments.totalCount > (.comments.nodes | length) then \"\n  (\(.comments.totalCount - (.comments.nodes | length)) more comments; open the thread)\" else \"\" end)"
 
 echo "-- checks:"
 gh pr checks "$pr" --repo "$repo" || true

@@ -1,6 +1,7 @@
 #!/bin/sh
-# Resolves a pull request's open review threads that already carry a reply from you, and only those. Every open
-# thread with no reply is listed and left open: a thread that arrived after you last looked is never closed unread.
+# Resolves a pull request's open review threads whose latest comment is yours, and only those. A thread with no reply
+# from you, or with a reviewer's follow-up after your reply, is listed and left open, so nothing is closed unread.
+# Every page of threads is checked.
 # Usage: resolve-answered.sh <pr number> [<pr number> ...]
 set -e
 [ $# -gt 0 ] || { echo "usage: resolve-answered.sh <pr number> ..." >&2; exit 2; }
@@ -8,14 +9,15 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 owner=${repo%/*}
 name=${repo#*/}
 me=$(gh api user --jq .login)
-query='query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {
-  reviewThreads(first: 100) { nodes { id isResolved comments(first: 100) { nodes { databaseId author { login } } } } } } } }'
+query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) {
+  pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+    nodes { id isResolved first: comments(first: 1) { nodes { databaseId } } last: comments(last: 1) { nodes { author { login } } } } } } } }'
 for pr in "$@"; do
-    gh api graphql -f query="$query" -F owner="$owner" -F name="$name" -F number="$pr" --jq "
+    gh api graphql --paginate -f query="$query" -F owner="$owner" -F name="$name" -F number="$pr" --jq "
         .data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) |
-        \"\(.id) \(.comments.nodes[0].databaseId) \([.comments.nodes[1:][] | select(.author.login == \"$me\")] | length)\"" |
-    while read -r thread first replies; do
-        if [ "$replies" -eq 0 ]; then
+        \"\(.id) \(.first.nodes[0].databaseId) \(.last.nodes[0].author.login == \"$me\")\"" |
+    while read -r thread first answered; do
+        if [ "$answered" != "true" ]; then
             echo "#$pr UNANSWERED, left open: $first"
             continue
         fi

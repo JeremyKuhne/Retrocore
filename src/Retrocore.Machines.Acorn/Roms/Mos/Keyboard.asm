@@ -153,9 +153,10 @@ GSINIT_HANDLER_QUOTED:
 ;; GSREAD: reads the next character of a string that <GSINIT_HANDLER> started.
 ;;
 ;; | brings in control codes and other characters: |@ and |A to |Z give 0-26 (|a to |z give the same), |[, |\, |],
-;; |^, |_ and |£ give 27-31, |? gives DELETE (127), || gives |, |" gives a quotation mark, and |! sets bit 7 of the
-;; character that follows it, which may itself use |. A | before any other character leaves it as it is. Inside
-;; quotation marks, two quotation marks give one.
+;; |^, |_ and |£ give 27-31, and |{, |} and |~ give 27, 29 and 30. |? gives DELETE (127), || gives |, |" gives a
+;; quotation mark, and |! sets bit 7 of the character that follows it, which may itself use |. Every other
+;; character after | goes through <CTRL_CHARACTER>: one from space to > is left as it is, and one from &80 up is
+;; changed as that routine changes the function keys' codes. Inside quotation marks, two quotation marks give one.
 ;;
 ;; The string ends at a carriage return, at the closing quotation mark of a quoted string, or at a space when
 ;; GSINIT was called with carry clear. A carriage return before the closing quotation mark, or any control character

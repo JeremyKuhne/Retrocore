@@ -27,8 +27,10 @@ namespace Retrocore.Machines.Acorn;
 ///   is high it records silence.
 ///  </para>
 ///  <para>
-///   With RS-423 selected, the ACIA works a character at a time with the host's line: a character takes the time
-///   its bits take at the transmit clock and the ACIA's divide. Its DCD is low, and CTS is the line's.
+///   With RS-423 selected, the ACIA's output goes to the host's line, a character as its stop bits end, and the
+///   host's characters come in a character time apart: the time their bits take at the clock and the ACIA's divide.
+///   Its DCD is low, and CTS is the line's. The ACIA has one shift register in either mode, clocked by the transmit
+///   clock, so a character part way out when the mode changes finishes.
 ///  </para>
 /// </remarks>
 public sealed class BbcSerialUla
@@ -150,11 +152,21 @@ public sealed class BbcSerialUla
     /// </summary>
     internal void Tick()
     {
+        // The transmit clock: 16 MHz / 13 / divider is a CPU cycle times 13/8 times the divider. It clocks the ACIA's
+        // one shift register in either mode, which only chooses where its output goes, so a character part way out
+        // when the mode changes finishes, on the other side.
+        _transmitPhase += 8;
+        int period = 13 * s_dividers[Control & 7];
+        if (_transmitPhase >= period)
+        {
+            _transmitPhase -= period;
+            _acia.ClockTransmit();
+        }
+
         if (Rs423)
         {
             // The tape still moves while its motor runs: playing, its tones go nowhere; recording, it records silence,
             // a 1200 baud bit's worth at a time on its own clock, as the cassette's output is cut off.
-            _acia.Tick();
             if (!_cassette.Recording)
             {
                 _cassette.Tick();
@@ -165,15 +177,6 @@ public sealed class BbcSerialUla
             }
 
             return;
-        }
-
-        // The transmit clock: 16 MHz / 13 / divider is a CPU cycle times 13/8 times the divider.
-        _transmitPhase += 8;
-        int period = 13 * s_dividers[Control & 7];
-        if (_transmitPhase >= period)
-        {
-            _transmitPhase -= period;
-            _acia.ClockTransmit();
         }
 
         if (_cassette.Recording)

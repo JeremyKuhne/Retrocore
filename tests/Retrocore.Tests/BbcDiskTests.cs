@@ -300,6 +300,33 @@ public class BbcDiskTests
     }
 
     /// <summary>
+    ///  The ACIA has one shift register in either mode: a character part way out when the serial ULA switches between
+    ///  RS-423 and the cassette finishes on the other side, rather than waiting for the first mode to come back.
+    /// </summary>
+    /// <param name="startOnRs423">Whether the character starts on RS-423 and finishes on the cassette.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void ModeChangeFinishesTheCharacter(bool startOnRs423)
+    {
+        Acia6850 acia = new();
+        BbcSerialUla ula = new(acia, new BbcCassette());
+        List<byte> sent = [];
+        acia.Transmitted = sent.Add;
+        acia.Write(0, 0x03);                    // master reset
+        acia.Write(0, 0x16);                    // divide by 64, 8 bits, 1 stop, RTS low
+        byte rs423 = 0x40;
+        byte cassette = 0x00;
+        ula.Write(startOnRs423 ? rs423 : cassette);
+        acia.Write(1, (byte)'A');
+        for (int cycle = 0; cycle < 300; cycle++) { ula.Tick(); }
+        sent.Should().BeEmpty("the character is still going out");
+        ula.Write(startOnRs423 ? cassette : rs423);
+        for (int cycle = 0; cycle < 2_000 && sent.Count == 0; cycle++) { ula.Tick(); }
+        sent.Should().Equal((byte)'A');
+    }
+
+    /// <summary>
     ///  A reset, or the disk changed, part way through writing a sector keeps the bytes written, with a CRC error, on
     ///  the disk being written; a reset part way through formatting keeps the sectors formatted.
     /// </summary>

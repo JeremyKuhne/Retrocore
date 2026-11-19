@@ -373,6 +373,28 @@ public class BbcMachineTests
         return rom;
     }
 
+    /// <summary>
+    ///  A frame drawn from video memory is opaque everywhere, as <see cref="Retrocore.Machines.IVideoSource"/> asks,
+    ///  even where the beam does not reach: here a short vertical total leaves the lower rows undrawn.
+    /// </summary>
+    [TestMethod]
+    public void UnscannedFrameIsOpaque()
+    {
+        BbcMachine machine = Machine();
+        RunToPrompt(machine);
+        machine.Bus.Write(0xFE00, 4);                       // the 6845's vertical total
+        machine.Bus.Write(0xFE01, 10);
+        byte[] pixels = new byte[BbcVideo.FrameWidth * BbcVideo.FrameHeight * 4];
+        machine.Video.Render(pixels, scanned: false);
+        int transparent = 0;
+        for (int index = 3; index < pixels.Length; index += 4)
+        {
+            if (pixels[index] != 0xFF) { transparent++; }
+        }
+
+        transparent.Should().Be(0);
+    }
+
     // The first column with a lit pixel, scanning the frame.
     private static int LeftmostLit(byte[] frame)
     {

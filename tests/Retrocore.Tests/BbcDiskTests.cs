@@ -584,6 +584,55 @@ public class BbcDiskTests
         disk.Track(0, 0).Select(sector => sector.Sector).Should().Equal(0, 1);
     }
 
+    /// <summary>
+    ///  The track register never wraps: seeking outward past bad tracks 1 and 0 stops rather than stepping round from
+    ///  0 to 255 for ever.
+    /// </summary>
+    [TestMethod]
+    public void SeekPastBadTrackZeroEnds()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 1, 0, 3);                 // drive 0: bad tracks 1 and 0, current track 3
+        Send(fdc, 0x53, 1, 0, 0x21);                    // read drive 0, track 1, sector 0
+        RunWhileBusy(fdc);
+        fdc.IsBusy.Should().BeFalse("the seek ends");
+        fdc.Read(1).Should().Be(0x18, "track 1 cannot be reached, so its sector is not found");
+        Send(fdc, 0x7D, 0x12);                          // read the current track register
+        fdc.Read(1).Should().Be(2, "the last good track that way");
+    }
+
+    /// <summary>
+    ///  A write that a late DMA cuts short leaves the bytes written before it on the disk, and the field with a CRC
+    ///  error, as the chip stops writing partway; it does not leave the old data looking whole.
+    /// </summary>
+    [TestMethod]
+    public void LateDmaWriteKeepsWhatWasWritten()
+    {
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x4B, 0, 2, 0x21);                    // write drive 0, track 0, sector 2, one 256-byte sector
+        int written = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest && written < 100)
+            {
+                fdc.WriteData(0x5A);
+                written++;
+            }
+
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0x0A, "late DMA");
+        FloppySector sector = disk.Track(0, 0).Single(found => found.Sector == 2);
+        sector.CrcError.Should().BeTrue();
+        sector.Data[..100].ToArray().Should().OnlyContain(value => value == 0x5A, "the bytes written before the late one");
+        sector.Data[100..].ToArray().Should().OnlyContain(value => value == 0xE5, "the rest is what was there");
+    }
+
     private static void Send(Intel8271 fdc, byte command, params byte[] parameters)
     {
         fdc.Write(0, command);

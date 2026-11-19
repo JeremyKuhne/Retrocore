@@ -40,6 +40,11 @@ public static class DmkFormat
     private const byte IdMark = 0xFE;
     private const int StandardTrackLength = 0x1900;
 
+    // Written in the header's reserved bytes, 5 to 8, by this writer: its size codes are exact, so no sector size is
+    // guessed when it is read back, as a snapshot is.
+    private static ReadOnlySpan<byte> ExactSizes => "RCSZ"u8;
+    private const int ExactSizesOffset = 5;
+
     // An ID mark's offset is 14 bits.
     private const int MaximumTrackLength = 0x4000;
 
@@ -77,6 +82,7 @@ public static class DmkFormat
         int length = image[2] | (image[3] << 8);
         bool singleSided = (image[4] & 0x10) != 0;
         bool singleOnly = (image[4] & 0x40) != 0;
+        bool exactSizes = image.Slice(ExactSizesOffset, ExactSizes.Length).SequenceEqual(ExactSizes);
         FloppyDisk disk = new() { IsWriteProtected = image[0] == 0xFF };
         int sides = singleSided ? 1 : 2;
         for (int cylinder = 0; cylinder < image[1]; cylinder++)
@@ -84,7 +90,7 @@ public static class DmkFormat
             for (int side = 0; side < sides; side++)
             {
                 ReadOnlySpan<byte> track = image.Slice(HeaderSize + (((cylinder * sides) + side) * length), length);
-                ReadTrack(disk, cylinder, side, track, singleOnly);
+                ReadTrack(disk, cylinder, side, track, singleOnly, exactSizes);
             }
         }
 
@@ -116,6 +122,7 @@ public static class DmkFormat
         image[2] = (byte)length;
         image[3] = (byte)(length >> 8);
         image[4] = sides == 1 ? (byte)0x10 : (byte)0;
+        ExactSizes.CopyTo(image.AsSpan(ExactSizesOffset));
         for (int index = 0; index < tracks.Count; index++)
         {
             (byte[] bytes, byte gap) = tracks[index];
@@ -231,7 +238,13 @@ public static class DmkFormat
         return Crc(crc, [IdMark, sector.Track, sector.Side, sector.Sector, sector.SizeCode]);
     }
 
-    private static void ReadTrack(FloppyDisk disk, int cylinder, int side, ReadOnlySpan<byte> track, bool singleOnly)
+    private static void ReadTrack(
+        FloppyDisk disk,
+        int cylinder,
+        int side,
+        ReadOnlySpan<byte> track,
+        bool singleOnly,
+        bool exactSizes)
     {
         for (int entry = 0; entry < TableEntries; entry++)
         {
@@ -255,12 +268,14 @@ public static class DmkFormat
             if (data >= limit) { continue; }
             byte mark = track[data];
 
-            // A WD controller takes the size code's low two bits, as this does; codes 4 to 7, 2048 to 16384 bytes, are
-            // the 8271's own sizes. One is taken when that data field is all on the track with a good CRC. When its
-            // CRC is bad, the short field is taken if its own CRC is good, as a WD sector's is (the last on a track
-            // has only padding after it), and otherwise the large one, unless another ID field starts inside it.
-            int size = 128 << (sizeCode & 3);
-            if (sizeCode is >= 4 and <= 7
+            // An image this writer made, such as a snapshot, has exact size codes, 0 to 7 for 128 to 16384 bytes. In
+            // one from elsewhere, a WD controller takes a size code's low two bits, as this does; codes 4 to 7 are the
+            // 8271's own sizes, taken when that data field is all on the track with a good CRC. When its CRC is bad,
+            // the short field is taken if its own CRC is good, as a WD sector's is (the last on a track has only
+            // padding after it), and otherwise the large one, unless another ID field starts inside it.
+            int size = 128 << (sizeCode & (exactSizes ? 7 : 3));
+            if (!exactSizes
+                && sizeCode is >= 4 and <= 7
                 && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { } large
                 && (!large.CrcError
                     || (ReadData(track, data, size, step, mark, doubleDensity) is not { CrcError: false }

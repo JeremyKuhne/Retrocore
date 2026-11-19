@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Apple3\Retrocore.Machines.Apple3.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Coco\Retrocore.Machines.Coco.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Acorn\Retrocore.Machines.Acorn.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Commodore\Retrocore.Machines.Commodore.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Altair\Retrocore.Machines.Altair.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
@@ -52,6 +53,10 @@
     <None Include="..\Retrocore.Machines.Apple1\Roms\*.asm" Link="Sdk\Roms\Apple1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple1\Roms\Basic\*.asm" Link="Sdk\Roms\Apple1\Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Coco\Roms\*.asm" Link="Sdk\Roms\Coco\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Acorn\Roms\*.asm" Link="Sdk\Roms\Acorn\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Acorn\Roms\Mos\*.asm" Link="Sdk\Roms\Acorn\Mos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Acorn\Roms\Basic\*.asm" Link="Sdk\Roms\Acorn\Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Acorn\Roms\Dnfs\*.asm" Link="Sdk\Roms\Acorn\Dnfs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Commodore\Roms\**\*.asm;..\Retrocore.Machines.Commodore\Roms\**\*.mac" Link="Sdk\Roms\Pet\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

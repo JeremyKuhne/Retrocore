@@ -163,6 +163,7 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/map", args => Reply(() => MemoryMap(args)));
         transport.On("retro/memory/numbers", args => Reply(() => MemoryNumbers(args)));
         transport.On("retro/memory/assemble", args => Reply(() => MemoryAssemble(args)));
+        transport.On("retro/memory/export", args => Reply(() => MemoryExport(args)));
         transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
         transport.On("retro/memory/freeze", args => Reply(() => FreezeMemory(args)));
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));

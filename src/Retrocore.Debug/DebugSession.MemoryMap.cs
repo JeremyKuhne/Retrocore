@@ -19,8 +19,10 @@ internal sealed partial class DebugSession
     ///   addresses that read the same part of the machine now, to the byte, each with its <c>start</c>,
     ///   <c>length</c>, <c>name</c>, such as <c>main RAM</c>, its <c>kind</c> (<c>ram</c>, <c>rom</c>, <c>io</c>,
     ///   <c>video</c> or <c>none</c>) and whether it is <c>mapped</c>: in the CPU's view always; in a bank's, whether
-    ///   the CPU reads the bank there now. A bank's gaps are <c>none</c>. A coprocessor's view, whose addresses are its
-    ///   own, has neither.
+    ///   the CPU reads the bank there now, and whether it is <c>written</c>, as the CPU can write a bank it does not
+    ///   read, such as the IIe's auxiliary RAM with RAMWRT on. A bank's runs split at its parts, the pieces one switch
+    ///   puts in the CPU's view, such as the IIe's alternate zero page and stack, which name them. A bank's gaps are
+    ///   <c>none</c>. A coprocessor's view, whose addresses are its own, has neither.
     ///  </para>
     /// </remarks>
     private JsonObject MemoryMap(JsonObject args)
@@ -41,12 +43,12 @@ internal sealed partial class DebugSession
             });
         }
 
-        (string Name, string Kind, bool Mapped)? run = null;
+        (string Name, string Kind, bool Mapped, bool Written)? run = null;
         int start = 0;
         // Every byte, as some areas are a byte or two, such as the Model III's printer registers at $37E8.
         for (int address = 0; address <= 0x10000; address++)
         {
-            (string Name, string Kind, bool Mapped)? here = address == 0x10000 ? null : MapArea(bank, (ushort)address);
+            (string Name, string Kind, bool Mapped, bool Written)? here = address == 0x10000 ? null : MapArea(bank, (ushort)address);
             if (here == run && address != 0x10000) { continue; }
             if (run is { } previous)
             {
@@ -56,7 +58,8 @@ internal sealed partial class DebugSession
                     ["length"] = address - start,
                     ["name"] = previous.Name,
                     ["kind"] = previous.Kind,
-                    ["mapped"] = previous.Mapped
+                    ["mapped"] = previous.Mapped,
+                    ["written"] = previous.Written
                 });
             }
 
@@ -67,15 +70,24 @@ internal sealed partial class DebugSession
         return new JsonObject { ["regions"] = regions, ["areas"] = areas };
     }
 
-    // What an address reads now: in the CPU's view, the area there; in a bank's, the bank, and whether the CPU reads
-    // it there, or none where the bank has no byte.
-    private (string Name, string Kind, bool Mapped) MapArea(DebugMemoryBank? bank, ushort address)
+    // What an address reads now: in the CPU's view, the area there; in a bank's, the bank's part there, and whether
+    // the CPU reads and writes it there, or none where the bank has no byte.
+    private (string Name, string Kind, bool Mapped, bool Written) MapArea(DebugMemoryBank? bank, ushort address)
     {
         Enum read = Target.ReadArea(address);
-        if (bank is null) { return (AreaName(read), Target.KindAt(address) ?? AreaKind(read), true); }
-        if (bank.AreaOf(address) is not { } area) { return ($"{bank.Label} has no byte here", "none", false); }
-        bool mapped = bank.ReadBy(Target, address);
-        return (mapped ? $"{bank.Label}, which the CPU reads here now" : $"{bank.Label}; the CPU reads {AreaName(read)} here", AreaKind(area), mapped);
+        if (bank is null) { return (AreaName(read), Target.KindAt(address) ?? AreaKind(read), true, true); }
+        if (bank.AreaOf(address) is not { } area) { return ($"{bank.Label} has no byte here", "none", false, false); }
+        bool reads = bank.ReadBy(Target, address), writes = bank.WrittenBy(Target, address);
+        string part = bank.PartAt?.Invoke(address) ?? bank.Label;
+        string access = (reads, writes) switch
+        {
+            (true, true) => "the CPU reads and writes it here now",
+            (true, false) => $"the CPU reads it here now, and writes {AreaName(Target.WriteArea(address))}",
+            (false, true) => $"the CPU writes it here now, and reads {AreaName(read)}",
+            _ => $"the CPU reads {AreaName(read)} here now"
+        };
+
+        return ($"{part}: {access}", AreaKind(area), reads, writes);
     }
 
     // What an area holds, from the names the machines give their areas.

@@ -34,6 +34,10 @@ namespace Retrocore.Debug;
 ///  Whether the CPU reads the bank's byte at an address now, for a bank its areas do not tell apart from the CPU's
 ///  memory, such as an Apple III X-byte's view; null to go by the areas.
 /// </param>
+/// <param name="PartAt">
+///  The part of the bank an address is in, named by the switch that puts it in the CPU's view, such as the IIe's
+///  alternate zero page and stack (ALTZP), for the memory map; null for a bank that is all one part.
+/// </param>
 internal sealed record DebugMemoryBank(
     string Name,
     string Label,
@@ -43,7 +47,8 @@ internal sealed record DebugMemoryBank(
     Func<ushort, byte, bool>? Poke,
     Retrocore.Isa.InstructionSet? InstructionSet = null,
     Func<ushort, bool>? CanPoke = null,
-    Func<ushort, bool>? ReadsHere = null)
+    Func<ushort, bool>? ReadsHere = null,
+    Func<ushort, string?>? PartAt = null)
 {
     /// <summary>
     ///  Gets whether the CPU reads the bank's byte at an address now: where it reads one of the bank's areas, or, for
@@ -55,6 +60,15 @@ internal sealed record DebugMemoryBank(
     /// <returns>True when the CPU reads the bank's byte there.</returns>
     internal bool ReadBy(IDebugMemory cpu, ushort address) =>
         ReadsHere?.Invoke(address) ?? Areas.Contains(cpu.ReadArea(address));
+
+    /// <summary>
+    ///  Gets whether the CPU writes the bank's byte at an address now, which it can where it does not read it, such
+    ///  as the IIe's auxiliary RAM with RAMWRT on and RAMRD off.
+    /// </summary>
+    /// <param name="cpu">The CPU's memory.</param>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>True when the CPU's writes there go to one of the bank's areas.</returns>
+    internal bool WrittenBy(IDebugMemory cpu, ushort address) => Areas.Contains(cpu.WriteArea(address));
 
     /// <summary>
     ///  Gets whether a write reaches an address of the bank now.

@@ -125,6 +125,10 @@ try {
     assert.deepEqual([await z80("LD A,[HL]"), await z80("JP NZ,$0000"), await z80("XOR A")], [[0x7E], [0xC2, 0, 0], [0xAF]]);
     // AF's apostrophe opens no quoted text.
     assert.deepEqual(await z80("EX AF,AF'"), [0x08]);
+    // The ROM's start saved as Z80 assembly, which assembles back to the same bytes.
+    const saved = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x0000, count: 0x40 });
+    assert.equal(saved.exact, true, saved.source);
+    assert.ok(saved.source.includes(".cpu Z80") && saved.source.includes("DI"), saved.source);
     // The instruction at the ROM's start, with the T-states the Z80's instruction set gives.
     const reset = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0 })).instruction;
     assert.deepEqual([reset.text, reset.size, reset.cycles, reset.cyclesTaken], ["DI", 1, 4, null], JSON.stringify(reset));
@@ -657,6 +661,25 @@ try {
     await rejects(assemble("LDA NOSUCH"), /NOSUCH/);
     await rejects(assemble("  "), /Type an instruction/);
     assert.deepEqual((await read("0x6560", 3)).bytes, unassembled, "assembling writes nothing");
+    // Each label's kind, and the size of a label's data, which the editor shades.
+    at = "the kinds and data sizes of labels";
+    const labelled = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.name, label]));
+    assert.deepEqual([labelled.get("TABLE").kind, labelled.get("TABLE").size], ["data", 11], JSON.stringify(labelled.get("TABLE")));
+    assert.deepEqual([labelled.get("BANK2").kind, labelled.get("BANK2").size], ["code", null]);
+    assert.equal(labelled.get("CH").kind, "constant", JSON.stringify(labelled.get("CH")));
+    // A constant names main RAM's byte, which the CPU reads, not auxiliary RAM's at the same address.
+    assert.equal(labelled.get("BRKV")?.address, 0x03F0);
+    const auxNames = (await request("retro/memory/labels", { memoryReference: "aux:0x0000" })).labels;
+    assert.equal(auxNames.find(label => label.address === 0x03F0), undefined, JSON.stringify(auxNames.filter(label => label.address < 0x0400)));
+    // Saving as assembly: the program as native source that assembles back to its bytes, by the session's labels.
+    at = "saving memory as assembly";
+    const exported = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x0300, count: 0x28 });
+    assert.equal(exported.exact, true, exported.source);
+    for (const expected of ["BANK2:", "SWITCHED:", "JMP SWITCHED", "TABLE:", ".byte $01, $02", "RTS", ".org $0300"]) {
+        assert.ok(exported.source.includes(expected), `${expected} in:\n${exported.source}`);
+    }
+    assert.ok(exported.source.startsWith("; Memory: $0300-$0327, 40 bytes, saved from Retrocore Memory."), exported.source);
+    await rejects(request("retro/memory/export", { memoryReference: "0x0000", address: 0xFFFF, count: 2 }), /\$0000-\$FFFF/);
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;
@@ -678,6 +701,14 @@ try {
     mapped = await memoryMap("aux:0x0000");
     assert.equal(areaAt(mapped.areas, 0x0400).mapped, false);
     assert.equal(areaAt(mapped.areas, 0xC000).kind, "none");
+    // Its runs split at the parts one switch puts in the CPU's view, each named by that switch, with whether the CPU
+    // reads and writes it now: at power-on, neither.
+    const zeroPage = areaAt(mapped.areas, 0x0000);
+    assert.deepEqual([zeroPage.start, zeroPage.length, zeroPage.mapped, zeroPage.written], [0x0000, 0x0200, false, false]);
+    assert.equal(zeroPage.name, "Alternate zero page and stack (ALTZP): the CPU reads main RAM here now");
+    assert.match(areaAt(mapped.areas, 0x0400).name, /^Text page 1 \(80STORE with PAGE2, else RAMRD and RAMWRT\): /);
+    assert.match(areaAt(mapped.areas, 0x0800).name, /^RAM from \$0200 \(RAMRD and RAMWRT\): /);
+    assert.match(areaAt(mapped.areas, 0xD000).name, /^Alternate language card bank 2 \(ALTZP and the language card's switches\): /);
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

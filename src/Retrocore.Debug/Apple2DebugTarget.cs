@@ -900,6 +900,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         List<DebugMemoryBank> banks =
         [
             Bank("main", "Main RAM", [(0x0000, 0xC000), (0xD000, 0x3000)], Apple2MemoryArea.MainRam, Apple2MemoryArea.MainLanguageCard)
+                with { PartAt = address => RamPart(auxiliary: false, address) }
         ];
 
         if (_model.IsIIe())
@@ -909,7 +910,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
                 "Auxiliary RAM",
                 [(0x0000, 0xC000), (0xD000, 0x3000)],
                 Apple2MemoryArea.AuxiliaryRam,
-                Apple2MemoryArea.AuxiliaryLanguageCard));
+                Apple2MemoryArea.AuxiliaryLanguageCard) with { PartAt = address => RamPart(auxiliary: true, address) });
         }
 
         banks.Add(Bank("bank1", "Main language card bank 1", [(0xD000, 0x1000)], Apple2MemoryArea.MainLanguageCardBank1));
@@ -945,6 +946,34 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         }
 
         return banks;
+    }
+
+    // The part of main or auxiliary RAM an address is in, by the soft switch that puts it in the CPU's view: on the
+    // IIe, ALTZP the zero page, stack and language card, 80STORE with PAGE2 the display pages, and RAMRD and RAMWRT
+    // the rest; on the II and II Plus, the language card's own switches.
+    private string? RamPart(bool auxiliary, ushort address)
+    {
+        if (!_model.IsIIe())
+        {
+            return address switch
+            {
+                >= 0xE000 => "Language card RAM (the language card's switches)",
+                >= 0xD000 => "Language card bank 2 (the language card's switches)",
+                _ => null
+            };
+        }
+
+        string alternate = auxiliary ? "Alternate " : "";
+        return address switch
+        {
+            < 0x0200 => $"{alternate}{(auxiliary ? "zero page" : "Zero page")} and stack (ALTZP)",
+            >= 0x0400 and < 0x0800 => "Text page 1 (80STORE with PAGE2, else RAMRD and RAMWRT)",
+            >= 0x2000 and < 0x4000 => "Hi-res page 1 (80STORE with PAGE2 and HIRES, else RAMRD and RAMWRT)",
+            < 0xC000 => "RAM from $0200 (RAMRD and RAMWRT)",
+            >= 0xE000 => $"{alternate}{(auxiliary ? "language" : "Language")} card RAM (ALTZP and the language card's switches)",
+            >= 0xD000 => $"{alternate}{(auxiliary ? "language" : "Language")} card bank 2 (ALTZP and the language card's switches)",
+            _ => null
+        };
     }
 
     // A bank of storage areas, each holding the range at the same index.

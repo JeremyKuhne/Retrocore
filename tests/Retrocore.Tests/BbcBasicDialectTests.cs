@@ -222,7 +222,7 @@ public sealed class BbcBasicDialectTests
 
         Action outside = () => evaluator.Evaluate("ASN 2");
         outside.Should().Throw<FormatException>().WithMessage("-ve root.");
-        (string, string)[] ranges = [("(-1)^0.5", "Log range."), ("2^1024", "Too big."), ("EXP 100", "Exp range."), ("1E39", "Too big.")];
+        (string, string)[] ranges = [("(-1)^0.5", "Log range."), ("2^1024", "Exp range."), ("EXP 100", "Exp range."), ("1E39", "Too big.")];
         foreach ((string expression, string error) in ranges)
         {
             Action range = () => evaluator.Evaluate(expression);
@@ -281,6 +281,8 @@ public sealed class BbcBasicDialectTests
         // ERROR starts a statement as THEN does, so the * after it is a command: FOO in it is no variable.
         BasicSource key = BasicSource.Analyze("10 ON ERROR *KEY 1 FOO\n", BasicDialect.BbcBasic);
         key.Sites.Should().NotContain(site => site.Kind == BasicSiteKind.Variable);
+        BasicSource repeat = BasicSource.Analyze("10 REPEAT *KEY 1 FOO\n", BasicDialect.BbcBasic);
+        repeat.Sites.Should().NotContain(site => site.Kind == BasicSiteKind.Variable, "REPEAT leaves a statement starting");
 
         // Jumps are where the tokeniser finds them: run together, abbreviated, and never in a * command.
         Dictionary<string, BasicLabel> labels = new() { ["DONE"] = new("done", 1, 0, 4, 80) };
@@ -292,6 +294,12 @@ public sealed class BbcBasicDialectTests
 
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "GOTO done%", labels).Should().BeEmpty("done% is another name");
+
+        // A byte the tokeniser copies as it is, after REM, DATA or a * command, is no GOTO even when it is &E5.
+        foreach (string literal in (string[])["DATA {$E5} done", "REM {$E5} done", "REPEAT *KEY 1 {$E5} done"])
+        {
+            BasicProgram.LabelReferences(BasicDialect.BbcBasic, literal, labels).Should().BeEmpty(literal);
+        }
 
         // FALSE is a whole value, so the TO after it is FOR's, and P% a variable.
         BasicSource falseLoop = BasicSource.Analyze("10 P%=3:FOR I%=FALSE TOP%:NEXT\n", BasicDialect.BbcBasic);
@@ -335,6 +343,32 @@ public sealed class BbcBasicDialectTests
         machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"));
         Action rounded = () => evaluator.Evaluate("1.7014118345E38");
         rounded.Should().Throw<FormatException>().WithMessage("Too big.");
+
+        // ^ splits off the whole power nearest its right side, and takes the rest, or all of a power of 64 or more, by
+        // LN and EXP, so 0^0.5 and (-1)^64 are Log range and 2^1024 Exp range, as in the ROM, while whole powers below
+        // 64 of anything are not.
+        foreach ((string power, string error) in (ReadOnlySpan<(string, string)>)[("0^0.5", "Log range"), ("(-1)^64", "Log range"), ("2^1024", "Exp range")])
+        {
+            BbcMachineTests.Type(machine, $"CLS:PRINT {power}\r");
+            BbcMachineTests.RunToPrompt(machine);
+            machine.ReadTextScreen().Should().Contain(line => line.Contains(error), power);
+            Action raise = () => evaluator.Evaluate(power);
+            raise.Should().Throw<FormatException>().WithMessage(error + ".", power);
+        }
+
+        BbcMachineTests.Type(machine, "A=2^0.5:B=(-2)^3:C=2^-3:D=3^70:E=0^2\r");
+        BbcMachineTests.RunToPrompt(machine);
+        foreach (string same in (string[])["(-2)^3=B", "2^-3=C", "0^2=E"])
+        {
+            evaluator.Evaluate(same).Value.Number.Should().Be(-1, same);
+        }
+
+        // Through LN and EXP the ROM's series and the host's functions differ: in the last bit for 2^0.5, and by about
+        // 3E-8 for 3^70, whose LN error the ROM multiplies by 70.
+        double rootTwo = evaluator.Evaluate("A").Value.Number;
+        evaluator.Evaluate("2^0.5").Value.Number.Should().BeApproximately(rootTwo, rootTwo * 1e-9);
+        double large = evaluator.Evaluate("D").Value.Number;
+        evaluator.Evaluate("3^70").Value.Number.Should().BeApproximately(large, large * 1e-7);
 
         // Exponent 0 holds reals down to 2^-129: 3E-39/2 is no zero in the ROM or the watch, and an exact half keeps
         // an odd mantissa when BASIC stores it.

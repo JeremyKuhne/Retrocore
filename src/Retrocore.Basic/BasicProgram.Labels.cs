@@ -169,9 +169,11 @@ public sealed partial class BasicProgram
         int Column(int index) =>
             index < positions.Count && positions[index] < columns.Count ? columns[positions[index]] : text.Length;
 
+        // Nothing the tokeniser copied as it is, after REM, DATA or a * command, holds a jump, whatever its bytes.
+        int tokenised = output.Rest >= 0 ? output.Rest : bytes.Length;
         bool inString = false;
         int scanned = 0;
-        for (int index = 0; index < bytes.Length; index++)
+        for (int index = 0; index < tokenised; index++)
         {
             if (bytes[index] == '"') { inString = !inString; }
             if (inString || bytes[index] < 0x80 || BbcBasicDialect.Instance.Word(bytes[index]) is not { } word)

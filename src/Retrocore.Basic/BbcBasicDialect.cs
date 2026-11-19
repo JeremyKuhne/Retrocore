@@ -196,6 +196,27 @@ internal sealed partial class BbcBasicDialect : BasicDialect
     internal override int StackGosubToken => -1;
 
     /// <summary>
+    ///  Tests whether a statement starts after a word, as the tokeniser decides where a <c>*</c> command can begin.
+    /// </summary>
+    /// <param name="word">The word.</param>
+    /// <param name="before">Whether one started before it.</param>
+    /// <returns>
+    ///  True after a word that starts a statement, such as THEN or ERROR; false after one that is in the middle of one,
+    ///  such as PRINT; and as before for any other, such as REPEAT.
+    /// </returns>
+    internal static bool StatementStartsAfter(string word, bool before)
+    {
+        foreach ((string entry, _, int flags) in s_table)
+        {
+            if (entry != word) { continue; }
+            if ((flags & StartStatement) != 0) { return true; }
+            return (flags & MidStatement) == 0 && before;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///  Tests whether a byte can be part of a name: a capital, a digit, <c>_</c>, <c>£</c> (&amp;60) or a small
     ///  letter, as the ROM's <c>IS_NAME_CHARACTER</c> has it.
     /// </summary>
@@ -519,6 +540,7 @@ internal sealed partial class BbcBasicDialect : BasicDialect
     // The rest of the line, copied as it is.
     private static void CopyRest(ReadOnlySpan<int> text, int x, CrunchOutput output)
     {
+        output.StartRest();
         for (; x < text.Length; x++) { output.Add(text[x], x); }
     }
 

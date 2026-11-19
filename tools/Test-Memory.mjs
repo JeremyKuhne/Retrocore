@@ -307,6 +307,19 @@ try {
     await request("pause", { threadId: 1 });
     await event("stopped");
     assert.equal((await read("0x5000", 1)).bytes[0], 0x55, "the run wrote the frozen value back");
+    // A frozen byte goes back as soon as the instruction that writes it ends, so the program never reads a value of
+    // its own there: LD ($5000),A then LD A,($5000) reads the frozen $55, which LD ($5001),A copies out.
+    at = "an instruction writing a frozen byte";
+    const stoppedAt = (await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference;
+    assert.ok(Number(stoppedAt) >= 0x7000 && Number(stoppedAt) < 0x8000, `stopped in the program's RAM, at ${stoppedAt}`);
+    await write(stoppedAt, [0x3E, 0x05, 0x32, 0x00, 0x50, 0x3A, 0x00, 0x50, 0x32, 0x01, 0x50, 0x18, 0xFE]);
+    await write("0x5001", [0x00]);
+    for (let step = 0; step < 4; step++) {
+        drop("stopped");
+        await request("next", { threadId: 1, granularity: "instruction" });
+        await event("stopped");
+    }
+    assert.deepEqual([(await read("0x5000", 1)).bytes[0], (await read("0x5001", 1)).bytes[0]], [0x55, 0x55]);
     assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000", thaw: [0x5000] })).frozen, []);
     assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result.endsWith("(frozen)"), false);
     console.log("Memory DAP integration passed on the Model I.");

@@ -932,7 +932,7 @@ test("the inspector watches bytes in VS Code's Watch view, freezes them, and typ
     assert.deepEqual(Array.from(lists.frozen), [[0x0400, 0xA0]]);
     assert.match(page.elements.get("rows")!.innerHTML, /class="[^"]*frz[^"]*" data-o="1024"/);
     // Watch, Freeze, Name and Comment are buttons; the rest are in the Mark, Edit and Export menus.
-    assert.match(page.elements.get("inspector")!.innerHTML, /Watch<\/button><button data-act="freeze" title="Stop holding these bytes[^"]*">Thaw</);
+    assert.match(page.elements.get("inspector")!.innerHTML, /Watch<\/button><button data-act="freeze" title="Thaw: let the program change these bytes again\.">Thaw</);
     assert.match(page.elements.get("inspector")!.innerHTML, /data-act="name".*data-act="comment".*data-menu="mark".*data-menu="edit".*data-menu="export"/);
     assert.doesNotMatch(page.elements.get("inspector")!.innerHTML, /data-act="fill"/);
     page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "menu", menu: "edit" } } : null } });

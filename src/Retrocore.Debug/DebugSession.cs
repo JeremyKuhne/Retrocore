@@ -1617,6 +1617,9 @@ internal sealed partial class DebugSession
             }
 
             instruction |= cpu.StepCycle();
+
+            // A frozen byte the instruction writes goes back as it ends, before the next can read it.
+            if (_frozen.Count != 0) { FreezeCycle(cpu); }
             if (_watches.Count != 0)
             {
                 Watch(cpu.LastCycle, cpu is SoftCardDebugTarget z80 ? z80.Card.Processor.LastCycle : null);

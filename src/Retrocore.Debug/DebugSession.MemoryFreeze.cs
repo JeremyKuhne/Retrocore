@@ -15,6 +15,11 @@ internal sealed partial class DebugSession
     // so switching to bank 1 does not write the value into bank 1.
     private readonly Dictionary<(string? Bank, ushort Address), (byte Value, Enum? Area)> _frozen = [];
 
+    // The CPU addresses any frozen byte has, in any bank, which a write the CPU makes there is checked against; and
+    // whether the instruction running now has written one, which it then puts back as it ends.
+    private readonly bool[] _frozenAt = new bool[0x10000];
+    private bool _freezeWritten;
+
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
     ///  reference's space.
@@ -22,8 +27,9 @@ internal sealed partial class DebugSession
     /// <remarks>
     ///  <para>
     ///   <c>freeze</c> lists <c>{ offset, value }</c> and <c>thaw</c> offsets, from the reference. A frozen byte is
-    ///   written at once, and again at the start of each slice the machine runs, every few milliseconds, so the
-    ///   program cannot keep another value there. Only bytes a write can reach now can be frozen.
+    ///   written at once, and again as soon as an instruction that writes it ends, so the program never reads a value
+    ///   of its own there; the bytes are also written at the start of each slice the machine runs, for writes that are
+    ///   not the CPU's. Only bytes a write can reach now can be frozen.
     ///  </para>
     ///  <para>
     ///   A request is all or nothing: every byte is checked before any changes, and should a write still fail, the
@@ -108,6 +114,7 @@ internal sealed partial class DebugSession
             }
 
             _frozen[(bank?.Name, address)] = (value, bank is null ? Target.WriteArea(address) : null);
+            _frozenAt[address] = true;
             done.Add((address, old, before));
         }
     }
@@ -167,6 +174,29 @@ internal sealed partial class DebugSession
         {
             _frozen.Remove(key);
         }
+
+        // The addresses checked are the frozen bytes' now, as bytes thawed since go.
+        Array.Clear(_frozenAt);
+        foreach ((string? _, ushort address) in _frozen.Keys)
+        {
+            _frozenAt[address] = true;
+        }
+    }
+
+    // Notes a write the CPU's last bus cycle made to a frozen byte's address, in any bank, and puts the frozen bytes back
+    // once its instruction ends: a write to another bank's byte at the address changes nothing they hold, so it writes
+    // nothing.
+    private void FreezeCycle(IDebugTarget cpu)
+    {
+        ProcessorCycle cycle = cpu.LastCycle;
+        if (cycle.Operation == BusOperation.Write && !cycle.IsStalled && _frozenAt[cycle.Address])
+        {
+            _freezeWritten = true;
+        }
+
+        if (!_freezeWritten || !cpu.IsInstructionBoundary) { return; }
+        _freezeWritten = false;
+        ApplyFreezes();
     }
 
     // Whether an expression reads a frozen byte, as [$4100], [aux:$0400] or [$4100].w do, so a watch expression can

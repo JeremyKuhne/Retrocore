@@ -1311,9 +1311,10 @@ function where(offset) {
 
 // What freezing and thawing do, for their buttons' hover text.
 const freezeTitle = {
-    freeze: "Hold these bytes at their values now while the machine runs: the debugger writes them back every few "
-        + "milliseconds, so the program cannot change them. Typing here changes the value they are held at.",
-    thaw: "Stop holding these bytes, so the program can change them again."
+    freeze: "Freeze: keep these bytes at their values now while the machine runs, as for a game's lives. A write the "
+        + "program makes to one is undone as its instruction ends, so the program never reads its own value there. "
+        + "Typing a new value changes what they are held at; the Frozen tab lists them, and Thaw lets them go.",
+    thaw: "Thaw: let the program change these bytes again."
 };
 
 // The actions on the selection, by what they are for: the ones used most while debugging as buttons, and the rest

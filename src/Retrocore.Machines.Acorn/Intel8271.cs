@@ -819,7 +819,9 @@ public sealed class Intel8271
             if (_result == LateDma) { break; }
             yield return field;
             formatted.Add(new(id[0], id[1], id[2], fill, doubleDensity: false));
-            if (_time + (gap3 * ByteCycles) < end) { yield return gap3 * ByteCycles; }
+            // Gap 3 that reaches the index ends the track there: no sector follows it.
+            if (_time + (gap3 * ByteCycles) >= end) { break; }
+            yield return gap3 * ByteCycles;
         }
 
         disk.Format(_cylinders[_drive], Side, formatted);

@@ -203,8 +203,9 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            // A BBC PROC or FN name may start with a digit, as in PROC1; it is a name, not a number.
-            if (Bbc && afterFunction && char.IsAsciiDigit((char)value))
+            // A BBC PROC or FN name may start with a digit, as in PROC1, or an @, as in PROC@foo: SCAN_VARIABLE_NAME
+            // takes digits and @ anywhere in a routine's name. It is a name, not a number or the resident @%.
+            if (Bbc && afterFunction && (char.IsAsciiDigit((char)value) || value == '@'))
             {
                 index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
                 split = null;
@@ -425,7 +426,8 @@ internal sealed class BasicLineScanner
         while (last + 1 < _bytes.Length
             && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1])
                 || ((Business || Mbasic) && _bytes[last + 1] == '.')
-                || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[last + 1]))))
+                || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[last + 1]))
+                || (Bbc && function && _bytes[last + 1] == '@')))
         {
             last++;
         }

@@ -162,13 +162,18 @@ public sealed partial class BasicVariables
         switch (kind)
         {
             case BasicVariableKind.Integer:
-                double truncated = Math.Truncate(value.Number);
-                if (truncated is < int.MinValue or > int.MaxValue)
+                // An integer goes in as it is; a real is truncated, and one of 2^31 or more in size, -2^31 included,
+                // is too big, as BASIC's assignment has it.
+                bool fits = value.Long is long whole
+                    ? whole is >= int.MinValue and <= int.MaxValue
+                    : Math.Abs(value.Number) < BbcBasicExpression.TwoToThe31;
+
+                if (!fits)
                 {
                     throw new OverflowException("Too big: an integer variable holds -2147483648 to 2147483647.");
                 }
 
-                int integer = (int)truncated;
+                int integer = value.Long is long exact ? (int)exact : (int)Math.Truncate(value.Number);
                 Store(address, [(byte)integer, (byte)(integer >> 8), (byte)(integer >> 16), (byte)(integer >> 24)]);
                 break;
             case BasicVariableKind.String:

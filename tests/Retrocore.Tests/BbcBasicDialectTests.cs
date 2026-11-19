@@ -328,6 +328,7 @@ public sealed class BbcBasicDialectTests
         {
             "f" => ("x", "x+&7FFFFFFF"),
             "g" => ("", "42"),
+            "a@b" => ("", "7"),
             _ => null
         };
 
@@ -445,6 +446,22 @@ public sealed class BbcBasicDialectTests
         Action condition = () => BasicEvaluator.IsTrue(evaluator.Evaluate("-2147483648"), BasicDialect.BbcBasic);
         condition.Should().Throw<FormatException>().WithMessage("Too big.");
 
+        // Assigning to an integer variable takes the integer &80000000 and refuses the real -2147483648, as BASIC does.
+        BbcMachineTests.Type(machine, "CLS:Z%=-2147483648\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"));
+        BasicVariable z = variables.Find("Z%") ?? throw new InvalidOperationException("No Z%.");
+        variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("&80000000").Value);
+        variables.Read(z.Kind, z.ValueAddress).Number.Should().Be(-2147483648);
+        Action realWrite = () => variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("-2147483648").Value);
+        realWrite.Should().Throw<OverflowException>();
+
+        // An FN's name takes @ anywhere, in the ROM and the watch.
+        BbcMachineTests.Type(machine, "10 DEF FNa@b=7\rCLS:PRINT FNa@b\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Trim() == "7");
+        evaluator.Evaluate("FNa@b").Value.Number.Should().Be(7);
+
         // With @%'s top byte set, STR$ takes @%'s format (STR$1 is 1.00 here, in the ROM), which the watch says it does
         // not show rather than give the general format; STR$~ is hexadecimal either way.
         BbcMachineTests.Type(machine, "@%=&0102020A:CLS:PRINT STR$1\r");
@@ -534,6 +551,12 @@ public sealed class BbcBasicDialectTests
         routines.Select(site => site.Key).Distinct().Should().Equal("PROCfoo", "FNfoo");
         routines.Select(site => site.Name).Distinct().Should().Equal("foo");
         source.References(routines[0]).Should().HaveCount(2);
+
+        // A routine's name takes @ anywhere, as SCAN_VARIABLE_NAME reads it: PROC@foo, PROCfoo@a and PROCfoo@b are
+        // three routines, none of them foo.
+        BasicSource at = BasicSource.Analyze("10 PROC@foo:PROCfoo@a:PROCfoo@b\n", BasicDialect.BbcBasic);
+        at.Sites.Where(site => site.Kind == BasicSiteKind.Function).Select(site => site.Key)
+            .Should().Equal("PROC@foo", "PROCfoo@a", "PROCfoo@b");
     }
 
     /// <summary>

@@ -462,7 +462,7 @@ internal sealed class BbcBasicExpression
     // FNname or FNname(argument): a one-line DEF FN's body, with its parameter bound to the argument.
     private BasicValue Function()
     {
-        string name = Letters();
+        string name = RoutineName();
         BasicValue? argument = null;
         if (TakeCharacter('('))
         {
@@ -534,6 +534,14 @@ internal sealed class BbcBasicExpression
 
     private static BasicValue Typed(BasicVariableKind kind, BasicValue value) =>
         kind == BasicVariableKind.Integer ? Integer((int)value.Number) : value;
+
+    // A PROC or FN name, as SCAN_VARIABLE_NAME reads one after the word: name characters, digits and @, anywhere.
+    private string RoutineName()
+    {
+        int start = _at;
+        while (_at < _bytes.Length && (BbcBasicDialect.IsNameCharacter(_bytes[_at]) || _bytes[_at] == '@')) { _at++; }
+        return Encoding.ASCII.GetString(_bytes, start, _at - start);
+    }
 
     private string Letters()
     {

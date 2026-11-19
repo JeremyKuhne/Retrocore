@@ -365,6 +365,26 @@ public class BbcMachineTests
         teletext.Character('A', oddField: false).Should().NotBe(0);
     }
 
+    /// <summary>
+    ///  Concealed text stays hidden until the next colour code: a black background code after conceal does not show
+    ///  it, as the BBC has no reveal, and a colour code after the text shows the text after it again.
+    /// </summary>
+    [TestMethod]
+    public void ConcealHoldsUntilAColourCode()
+    {
+        BbcTeletext teletext = new(TeletextRom());
+        teletext.StartField();
+        teletext.StartLine();
+        foreach (int code in (int[])[0x01, 0x1D, 0x18, 0x1C])  // red, new background, conceal, black background
+        {
+            teletext.Character(code, oddField: false);
+        }
+
+        teletext.Character('A', oddField: false).Should().Be(0, "still concealed");
+        teletext.Character(0x02, oddField: false);              // green ends the conceal, after itself
+        teletext.Character('A', oddField: false).Should().NotBe(0);
+    }
+
     // A teletext character ROM with every dot lit but the space's.
     private static byte[] TeletextRom()
     {

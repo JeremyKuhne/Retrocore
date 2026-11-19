@@ -40,6 +40,7 @@ internal sealed class BbcTeletext
     private bool _graphics;
     private bool _separated;
     private bool _flash;
+    private bool _conceal;
     private bool _hold;
     private bool _doubleHeight;
     private bool _doubleHeightInRow;
@@ -102,7 +103,7 @@ internal sealed class BbcTeletext
 
         _foreground = 7;
         _background = 0;
-        _graphics = _separated = _flash = _hold = _doubleHeight = false;
+        _graphics = _separated = _flash = _hold = _doubleHeight = _conceal = false;
         _doubleHeightInRow = false;
         _held = 0x20;
         _heldSeparated = false;
@@ -122,6 +123,7 @@ internal sealed class BbcTeletext
         bool flashBefore = _flash && code != 0x09;
         bool graphicsBefore = _graphics;
         bool holdBefore = _hold;
+        bool concealBefore = _conceal;
 
         _previousForeground = _foreground;
         _currentGraphics = _nextGraphics;
@@ -162,7 +164,10 @@ internal sealed class BbcTeletext
             if (_bottomRow) { half += 10; }
         }
 
-        if ((flashBefore && (_frames & 0x30) == 0) || (_bottomRow && !_doubleHeight)) { code = 0x20; }
+        // Conceal is set-at and ends after the next colour code, which is set-after: concealed cells show as spaces,
+        // whatever the background does, as the BBC has no reveal.
+        bool concealed = concealBefore || _conceal;
+        if ((flashBefore && (_frames & 0x30) == 0) || (_bottomRow && !_doubleHeight) || concealed) { code = 0x20; }
 
         return _currentGraphics && (code & 0x20) != 0
             ? Mosaic(code, half, _currentSeparated)
@@ -209,7 +214,7 @@ internal sealed class BbcTeletext
         switch (code)
         {
             case >= 0x01 and <= 0x07:
-                _graphics = false;
+                _graphics = _conceal = false;
                 _foreground = code;
                 SetNextType();
                 break;
@@ -228,11 +233,12 @@ internal sealed class BbcTeletext
                 break;
             case >= 0x11 and <= 0x17:
                 _graphics = true;
+                _conceal = false;
                 _foreground = code & 7;
                 SetNextType();
                 break;
             case 0x18:
-                _foreground = _previousForeground = _background;
+                _conceal = true;
                 break;
             case 0x19:
                 _separated = false;

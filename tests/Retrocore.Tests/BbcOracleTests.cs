@@ -234,8 +234,10 @@ public class BbcOracleTests
     // The system VIA's interrupt flags show when its timers ran out, which is timing: after a BIT of them ($FE4D),
     // negative and overflow are left out until an instruction sets each again. The 8271's drive status shows the
     // index hole, which is where the disk is in its turn, and drive 1's ready line, which MAME's board ties to the
-    // motor where ours, like a drive, is ready only with a disk in: after a read drive status command, the result's
-    // bits 4 and 6 are left out of the accumulator until it is next written.
+    // motor where ours, like a drive, is ready only with a disk in. MAME also gives the drive's active-low lines, not
+    // the datasheet's: track 0 in bit 0 as "not on track 0", and bit 3 for a disk not write protected, where the
+    // 8271's drive status has TRK0 in bit 1 and WR PROT in bit 3, set for a protected disk. After a read drive status
+    // command, the result's bits 0, 1, 3, 4 and 6 are left out of the accumulator until it is next written.
     private static IEnumerable<Row> Normalize(IEnumerable<Row> rows, BbcMachine machine)
     {
         bool negative = false;
@@ -274,7 +276,7 @@ public class BbcOracleTests
 
             previous = row;
             byte mask = (byte)((negative ? 0x80 : 0) | (overflow ? 0x40 : 0));
-            yield return row with { P = (byte)(row.P & ~mask), A = (byte)(index ? row.A & ~0x50 : row.A) };
+            yield return row with { P = (byte)(row.P & ~mask), A = (byte)(index ? row.A & ~0x5B : row.A) };
         }
     }
 

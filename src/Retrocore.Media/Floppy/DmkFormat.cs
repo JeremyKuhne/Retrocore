@@ -69,7 +69,7 @@ public static class DmkFormat
         HeaderSize + ((image[2] | (image[3] << 8)) * image[1] * ((image[4] & 0x10) != 0 ? 1 : 2));
 
     /// <summary>
-    ///  Reads an image from a file, sizing sectors as a WD controller does but for the 8271's large sectors.
+    ///  Reads an image from a file, sizing sectors as a WD controller does, by their size code's low two bits.
     /// </summary>
     /// <param name="image">The file's bytes.</param>
     /// <returns>The disk.</returns>
@@ -296,20 +296,9 @@ public static class DmkFormat
             if (data >= limit) { continue; }
             byte mark = track[data];
 
-            // A snapshot, which this writer made, has exact size codes, 0 to 7 for 128 to 16384 bytes. In a file, a WD controller takes a size code's low two bits, as this does; codes 4 to 7 are the
-            // 8271's own sizes, taken when that data field is all on the track with a good CRC. When its CRC is bad,
-            // the short field is taken if its own CRC is good, as a WD sector's is (the last on a track has only
-            // padding after it), and otherwise the large one, unless another ID field starts inside it.
+            // A snapshot, which this writer made, has exact size codes, 0 to 7 for 128 to 16384 bytes. A file is read
+            // as a WD controller reads it, by the code's low two bits: only the TRS-80, CoCo and Kaypro load DMK files.
             int size = 128 << (sizeCode & (exactSizes ? 7 : 3));
-            if (!exactSizes
-                && sizeCode is >= 4 and <= 7
-                && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { } large
-                && (!large.CrcError
-                    || (ReadData(track, data, size, step, mark, doubleDensity) is not { CrcError: false }
-                        && !IdWithin(track, data, data + ((large.Bytes.Length + 3) * step)))))
-            {
-                size = large.Bytes.Length;
-            }
 
             if (ReadData(track, data, size, step, mark, doubleDensity) is not (byte[] bytes, bool crcError))
             {
@@ -323,20 +312,6 @@ public static class DmkFormat
 
             disk.Add(cylinder, side, sector);
         }
-    }
-
-    // Whether the track's ID table points at an ID field from start up to, not including, end.
-    private static bool IdWithin(ReadOnlySpan<byte> track, int start, int end)
-    {
-        for (int entry = 0; entry < TableEntries; entry++)
-        {
-            int pointer = track[entry * 2] | (track[(entry * 2) + 1] << 8);
-            if (pointer == 0) { break; }
-            int offset = pointer & 0x3FFF;
-            if (offset > start && offset < end) { return true; }
-        }
-
-        return false;
     }
 
     // A data field's bytes after its mark, and whether its CRC, which follows high byte first, is wrong; a track cut

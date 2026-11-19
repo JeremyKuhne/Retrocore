@@ -111,7 +111,7 @@ public sealed class FloppyMediaSaveTests
         good.Data.Length.Should().Be(2048);
 
         // No payload fools a snapshot: bytes 128 and 129 that are a good CRC for the first 128 still leave 2048. Read
-        // as a file from elsewhere, the same image is sized by guessing, which that payload does fool.
+        // as a file, the same image is sized as a WD controller sizes it, by the code's low two bits.
         byte[] tricky = [.. Enumerable.Range(0, 2048).Select(index => (byte)index)];
         tricky[128] = 0xA0;
         tricky[129] = 0x23;

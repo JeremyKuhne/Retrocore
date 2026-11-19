@@ -238,7 +238,8 @@ public sealed class Intel8271
         switch (register & 3)
         {
             case 0:
-                if (_phase != Idle) { return; }
+                // A command is taken when the chip is not busy; a result not read is lost.
+                if (_phase is not (Idle or ResultPhase)) { return; }
                 _command[0] = value;
                 _commandCount = 1;
                 if (Length(value) is int length && length != 0)
@@ -357,7 +358,7 @@ public sealed class Intel8271
         {
             case 0x2C:
                 _result = DriveStatus();
-                _phase = Idle;
+                _phase = ResultPhase;                       // result full, with no interrupt, as for any result
                 return;
             case 0x35:
                 Specify();
@@ -365,7 +366,7 @@ public sealed class Intel8271
                 return;
             case 0x3D:
                 _result = ReadSpecial(_command[1]);
-                _phase = Idle;
+                _phase = ResultPhase;
                 return;
             case 0x3A:
                 WriteSpecial(_command[1], _command[2]);
@@ -407,9 +408,9 @@ public sealed class Intel8271
         int status = Ready(1) ? 0x40 : 0;
         // The index hole passes only while a disk turns.
         if (Ready(_drive) && _time % RevolutionCycles < ByteCycles * 4) { status |= 0x10; }
-        if (disk is not { IsWriteProtected: true }) { status |= 0x08; }
+        if (disk is { IsWriteProtected: true }) { status |= 0x08; }       // WR PROT: the disk is protected
         if (Ready(0)) { status |= 0x04; }
-        if (_cylinders[_drive] != 0) { status |= 0x01; }
+        if (_cylinders[_drive] == 0) { status |= 0x02; }                   // TRK0: the head is on track 0
         return (byte)status;
     }
 
@@ -503,31 +504,38 @@ public sealed class Intel8271
         foreach (int wait in Steps(track)) { yield return wait; }
     }
 
-    // Steps the head until the current track register reaches a track, skipping the bad tracks, then settles. A
-    // track that is itself bad cannot be reached: the head stops on the first good track past it, rather than
-    // stepping back and forth across it. The register runs from 0 to 255 and never wraps: with no good track left
-    // that way, as when tracks 1 and 0 are both bad and track 1 is sought from 3, the head stops where it is.
+    // Steps the head to a track, then settles. The command's track is logical: the bad tracks, physical positions,
+    // are left out of the numbering, so each one at or below where the track lands moves it a position further out,
+    // and the IDs there still name the logical track. The current track register holds the physical position, and
+    // the head steps one physical track at a time.
     private IEnumerable<int> Steps(byte track)
     {
+        int physical = Physical(track);
         bool moved = false;
-        bool outward = _currentTracks[_drive] > track;
-        while (_currentTracks[_drive] != track && (_currentTracks[_drive] > track) == outward)
+        while (_currentTracks[_drive] != physical)
         {
-            int next = _currentTracks[_drive];
-            do
-            {
-                next += outward ? -1 : 1;
-            }
-            while (next is >= 0 and <= 0xFF && IsBadTrack((byte)next));
-
-            if (next is < 0 or > 0xFF) { break; }
-            _currentTracks[_drive] = (byte)next;
+            bool outward = _currentTracks[_drive] > physical;
+            _currentTracks[_drive] = (byte)(_currentTracks[_drive] + (outward ? -1 : 1));
             _cylinders[_drive] = Math.Clamp(_cylinders[_drive] + (outward ? -1 : 1), 0, 83);
             moved = true;
             yield return _stepRate * 2 * Milliseconds;
         }
 
         if (moved) { yield return _settle * 2 * Milliseconds; }
+    }
+
+    // A logical track's physical position: past each bad track at or below it, in order, up to 255.
+    private int Physical(byte track)
+    {
+        int physical = track;
+        byte first = Math.Min(_badTracks[_drive][0], _badTracks[_drive][1]);
+        byte second = Math.Max(_badTracks[_drive][0], _badTracks[_drive][1]);
+        foreach (byte bad in (ReadOnlySpan<byte>)[first, second])
+        {
+            if (IsBadTrack(bad) && bad <= physical) { physical++; }
+        }
+
+        return Math.Min(physical, 0xFF);
     }
 
     // A bad track register skips its track, but &FF, as the DFS sets them, is no bad track at all.
@@ -585,17 +593,20 @@ public sealed class Intel8271
         for (int index = 0; index < count; index++, sector++)
         {
             Sector = sector;
-            foreach (int wait in FindSector(track, sector, sizeCode)) { yield return wait; }
+            foreach (int wait in FindSector(track, sector)) { yield return wait; }
             if (_found is not { } found)
             {
                 _result = SectorNotFound;
                 yield break;
             }
 
-            // The data field: gap 2, the sync bytes and the mark, then the bytes.
+            // The data field: gap 2, the sync bytes and the mark, then as many bytes as the command's length, whatever
+            // the sector holds. A read past a shorter sector's end takes the gap's &FF bytes; a write past it runs
+            // into the gap, which nothing keeps. Either way the CRC is not where the field's own length puts it.
             yield return 18 * ByteCycles;
-            int size = found.Data.Length;                               // FindSector matched the size code
-            byte[] buffer = new byte[size];
+            int size = 128 << sizeCode;
+            int held = found.Data.Length;
+            byte[] buffer = found.Data.ToArray();
             for (int position = 0; position < size; position++)
             {
                 if (kind == ReadKind)
@@ -606,7 +617,7 @@ public sealed class Intel8271
                         yield break;
                     }
 
-                    _data = found.Data[position];
+                    _data = position < held ? found.Data[position] : (byte)0xFF;
                     DataRequest = true;
                 }
                 else if (kind == WriteKind)
@@ -621,25 +632,24 @@ public sealed class Intel8271
                     {
                         // The bytes before the late one are on the disk already; the rest of the field is what was
                         // there, with no CRC to match.
-                        found.Data[position..].CopyTo(buffer.AsSpan(position));
                         disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB, crcError: true);
                         _result = LateDma;
                         yield break;
                     }
 
-                    buffer[position] = _data;
+                    if (position < held) { buffer[position] = _data; }
                 }
             }
 
-            // The CRC.
+            // The CRC, which matches the field only when the command's length is the sector's.
             yield return 2 * ByteCycles;
             if (kind == WriteKind)
             {
-                disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB);
+                disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB, crcError: size != held);
                 continue;
             }
 
-            if (found.CrcError)
+            if (found.CrcError || size != held)
             {
                 _result = DataCrcError;
                 yield break;
@@ -651,7 +661,7 @@ public sealed class Intel8271
 
     // Waits for the sector's ID to come under the head, into _found: up to two revolutions, or an ID from
     // another track, finds none.
-    private IEnumerable<int> FindSector(byte track, int sector, int sizeCode)
+    private IEnumerable<int> FindSector(byte track, int sector)
     {
         _found = null;
         IReadOnlyList<FloppySector> sectors = _disks[_drive]?.Track(_cylinders[_drive], Side) ?? [];
@@ -676,7 +686,8 @@ public sealed class Intel8271
             FloppySector candidate = sectors[index];
             if (candidate.Track != track) { yield break; }
 
-            if (candidate.Sector == sector && candidate.SizeCode == sizeCode)
+            // The chip matches the track and sector only: the length is the command's.
+            if (candidate.Sector == sector)
             {
                 _found = candidate;
                 yield break;

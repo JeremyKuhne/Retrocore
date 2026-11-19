@@ -584,23 +584,6 @@ public class BbcDiskTests
         disk.Track(0, 0).Select(sector => sector.Sector).Should().Equal(0, 1);
     }
 
-    /// <summary>
-    ///  The track register never wraps: seeking outward past bad tracks 1 and 0 stops rather than stepping round from
-    ///  0 to 255 for ever.
-    /// </summary>
-    [TestMethod]
-    public void SeekPastBadTrackZeroEnds()
-    {
-        Intel8271 fdc = new();
-        fdc.Insert(0, AcornDiskImage.Blank(40));
-        Send(fdc, 0x35, 0x10, 1, 0, 3);                 // drive 0: bad tracks 1 and 0, current track 3
-        Send(fdc, 0x53, 1, 0, 0x21);                    // read drive 0, track 1, sector 0
-        RunWhileBusy(fdc);
-        fdc.IsBusy.Should().BeFalse("the seek ends");
-        fdc.Read(1).Should().Be(0x18, "track 1 cannot be reached, so its sector is not found");
-        Send(fdc, 0x7D, 0x12);                          // read the current track register
-        fdc.Read(1).Should().Be(2, "the last good track that way");
-    }
 
     /// <summary>
     ///  A write that a late DMA cuts short leaves the bytes written before it on the disk, and the field with a CRC
@@ -631,6 +614,114 @@ public class BbcDiskTests
         sector.CrcError.Should().BeTrue();
         sector.Data[..100].ToArray().Should().OnlyContain(value => value == 0x5A, "the bytes written before the late one");
         sector.Data[100..].ToArray().Should().OnlyContain(value => value == 0xE5, "the rest is what was there");
+    }
+
+    /// <summary>
+    ///  Bad tracks are left out of the track numbering: with track 5 bad, logical track 6 is physical track 7, the
+    ///  head steps one physical track at a time, and the current track register holds the physical position. With
+    ///  tracks 0 and 1 bad, logical track 1 is physical 3.
+    /// </summary>
+    [TestMethod]
+    public void BadTracksAreLeftOutOfTheNumbering()
+    {
+        Intel8271 fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 5, 0xFF, 0);              // drive 0: bad track 5, current track 0
+        Send(fdc, 0x69, 6);                             // seek drive 0 to track 6
+        RunWhileBusy(fdc);
+        fdc.Read(1).Should().Be(0);
+        fdc.Cylinder(0).Should().Be(7, "the head is past the bad track, not on it");
+        Send(fdc, 0x7D, 0x12);                          // read the current track register
+        fdc.Read(1).Should().Be(7);
+
+        fdc = new();
+        fdc.Insert(0, AcornDiskImage.Blank(40));
+        Send(fdc, 0x35, 0x10, 1, 0, 0);                 // drive 0: bad tracks 1 and 0, current track 0
+        Send(fdc, 0x69, 1);                             // seek drive 0 to track 1
+        RunWhileBusy(fdc);
+        fdc.IsBusy.Should().BeFalse("the seek ends");
+        fdc.Read(1).Should().Be(0);
+        fdc.Cylinder(0).Should().Be(3);
+    }
+
+    /// <summary>
+    ///  The chip finds a sector by its track and sector and takes the length from the command: reading 128 bytes of a
+    ///  256-byte sector gives them and a data CRC error, and writing 128 leaves the rest as it was, with a CRC that no
+    ///  longer matches the sector.
+    /// </summary>
+    [TestMethod]
+    public void CommandLengthNotIdLength()
+    {
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x52, 0, 2);                          // read drive 0, track 0, sector 2: 128 bytes
+        int read = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest)
+            {
+                fdc.ReadData().Should().Be(0xE5);
+                read++;
+            }
+
+            fdc.Tick();
+        }
+
+        read.Should().Be(128);
+        fdc.Read(1).Should().Be(0x0E, "the data CRC is not after 128 bytes");
+
+        Send(fdc, 0x4A, 0, 3);                          // write drive 0, track 0, sector 3: 128 bytes
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest) { fdc.WriteData(0x11); }
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0);
+        FloppySector sector = disk.Track(0, 0).Single(found => found.Sector == 3);
+        sector.Data.Length.Should().Be(256);
+        sector.Data[..128].ToArray().Should().OnlyContain(value => value == 0x11);
+        sector.Data[128..].ToArray().Should().OnlyContain(value => value == 0xE5);
+        sector.CrcError.Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  The drive status has TRK0 in bit 1 and WR PROT in bit 3 for a protected disk; reading it, or a special
+    ///  register, fills the result register, as status bit 4 shows, without an interrupt.
+    /// </summary>
+    [TestMethod]
+    public void DriveStatusAsTheDatasheetHasIt()
+    {
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x69, 0);                             // seek drive 0 to track 0
+        RunWhileBusy(fdc);
+        fdc.Read(1);
+        Send(fdc, 0x6C);                                // read drive 0's status
+        (fdc.Status & 0x10).Should().Be(0x10, "the result register is full");
+        (fdc.Status & 0x08).Should().Be(0, "no interrupt");
+        byte status = fdc.Read(1);
+        (status & 0x02).Should().Be(0x02, "TRK0");
+        (status & 0x08).Should().Be(0, "not write protected");
+        (fdc.Status & 0x10).Should().Be(0, "reading the result empties it");
+
+        Send(fdc, 0x69, 3);                             // seek drive 0 to track 3
+        RunWhileBusy(fdc);
+        fdc.Read(1);
+        disk.IsWriteProtected = true;
+        Send(fdc, 0x6C);
+        status = fdc.Read(1);
+        (status & 0x02).Should().Be(0, "off track 0");
+        (status & 0x08).Should().Be(0x08, "WR PROT");
+
+        Send(fdc, 0x7D, 0x12);                          // read the current track register
+        (fdc.Status & 0x10).Should().Be(0x10);
+        Send(fdc, 0x6C);                                // a result not read is lost to the next command
+        fdc.Read(1).Should().Be(status);
     }
 
     private static void Send(Intel8271 fdc, byte command, params byte[] parameters)

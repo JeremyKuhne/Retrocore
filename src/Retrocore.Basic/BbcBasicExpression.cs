@@ -573,19 +573,18 @@ internal sealed class BbcBasicExpression
     {
         int start = _at;
         while (_at < _bytes.Length && (char.IsAsciiDigit((char)_bytes[_at]) || _bytes[_at] == '.')) { _at++; }
+        string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
         if (_at < _bytes.Length && _bytes[_at] == 'E')
         {
-            int at = _at + 1;
-            if (at < _bytes.Length && _bytes[at] is (byte)'+' or (byte)'-') { at++; }
-            if (at < _bytes.Length && char.IsAsciiDigit((char)_bytes[at]))
-            {
-                // READ_EXPONENT takes at most two digits: a third is left over.
-                _at = at;
-                while (_at < _bytes.Length && _at - at < 2 && char.IsAsciiDigit((char)_bytes[_at])) { _at++; }
-            }
+            // READ_EXPONENT takes the E and a sign whatever follows, then at most two digits: none is an exponent of 0,
+            // so 1E and 1E- are 1, and a third digit is left over.
+            int sign = _at + 1;
+            int at = sign < _bytes.Length && _bytes[sign] is (byte)'+' or (byte)'-' ? sign + 1 : sign;
+            _at = at;
+            while (_at < _bytes.Length && _at - at < 2 && char.IsAsciiDigit((char)_bytes[_at])) { _at++; }
+            if (_at > at) { text += Encoding.ASCII.GetString(_bytes, start + text.Length, _at - start - text.Length); }
         }
 
-        string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
         return Classify(text, negative: false) ?? throw Syntax($"'{text}' is not a number");
     }
 

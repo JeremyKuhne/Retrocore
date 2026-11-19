@@ -259,6 +259,120 @@ public class BbcMachineTests
         LeftmostLit(machine.Video.RenderBitmap()).Should().Be(before);
     }
 
+    /// <summary>
+    ///  An access to a 1 MHz device stretches the CPU's cycle until it ends with a 1 MHz cycle: by one 2 MHz cycle
+    ///  when it starts on the 1 MHz clock's phase, by two when it starts off it. FRED, JIM and the slow parts of
+    ///  SHEILA stretch; RAM, the ROMs, ROMSEL and the Tube's addresses do not.
+    /// </summary>
+    [TestMethod]
+    public void SlowDevicesStretchTheCycle()
+    {
+        BbcMachine machine = Machine();
+        BbcBus bus = machine.Bus;
+        long Extra(ushort address)
+        {
+            long before = bus.Cycles;
+            bus.Read(address);
+            return bus.Cycles - before;
+        }
+
+        foreach (ushort slow in (ushort[])[0xFC00, 0xFD00, 0xFE00, 0xFE40, 0xFE60, 0xFEC0])
+        {
+            // Every stretch ends on the 1 MHz edge, an odd count: an access from there is off the phase, and one a
+            // cycle later is on it.
+            Extra(slow);
+            (bus.Cycles & 1).Should().Be(1);
+            Extra(slow).Should().Be(2, $"&{slow:X4} off the 1 MHz phase");
+            bus.Tick();
+            Extra(slow).Should().Be(1, $"&{slow:X4} on the 1 MHz phase");
+        }
+
+        foreach (ushort fast in (ushort[])[0x1000, 0x8000, 0xC000, 0xFE30, 0xFEE0, 0xFF00])
+        {
+            Extra(fast).Should().Be(0, $"&{fast:X4} is on the 2 MHz bus");
+        }
+    }
+
+    /// <summary>
+    ///  The system VIA's CB2 output is the 6845's light pen strobe: only its rising edge latches the address being
+    ///  drawn into R16 and R17.
+    /// </summary>
+    [TestMethod]
+    public void Cb2RisingEdgeStrobesTheLightPen()
+    {
+        BbcMachine machine = Machine();
+        RunToPrompt(machine);
+        BbcBus bus = machine.Bus;
+        int LightPen()
+        {
+            bus.Write(0xFE00, 16);
+            int high = bus.Read(0xFE01);
+            bus.Write(0xFE00, 17);
+            return (high << 8) | bus.Read(0xFE01);
+        }
+
+        int controls = bus.Read(0xFE4C) & 0x1F;
+        bus.Write(0xFE4C, (byte)(controls | 0xE0));         // CB2 held high: no edge yet
+        int before = LightPen();
+        machine.Run(TimeSpan.FromMilliseconds(3));
+        bus.Write(0xFE4C, (byte)(controls | 0xE0));         // still high: no edge, nothing latched
+        LightPen().Should().Be(before);
+
+        bus.Write(0xFE4C, (byte)(controls | 0xC0));         // CB2 low
+        LightPen().Should().Be(before, "a falling edge latches nothing");
+        bus.Write(0xFE4C, (byte)(controls | 0xE0));         // CB2 high: the rising edge
+        int latched = LightPen();
+        latched.Should().NotBe(before, "the beam moved on in 3 ms, and the rising edge latched where it is now");
+        latched.Should().BeInRange(0x2000, 0x3FFF, "mode 7's addresses have bit 13 set");
+    }
+
+    /// <summary>
+    ///  Teletext's steady (&amp;09) is set-at: a held mosaic in its own cell is shown steady while flash hides the
+    ///  ones before it.
+    /// </summary>
+    [TestMethod]
+    public void SteadyIsSetAt()
+    {
+        BbcTeletext teletext = new(TeletextRom());
+        teletext.StartField();                              // the flash timer's hidden phase
+        teletext.StartLine();
+        foreach (int code in (int[])[0x11, 0x1E, 0x08])     // red graphics, hold, flash
+        {
+            teletext.Character(code, oddField: false);
+        }
+
+        teletext.Character(0x7F, oddField: false).Should().Be(0, "flash hides the mosaic");
+        teletext.Character(0x09, oddField: false).Should().NotBe(0, "steady shows the held mosaic in its own cell");
+    }
+
+    /// <summary>
+    ///  A field starts on a top row: double height in the last row of the field before does not make the first row a
+    ///  bottom row, which would hide its normal-height text.
+    /// </summary>
+    [TestMethod]
+    public void FieldStartsOnATopRow()
+    {
+        BbcTeletext teletext = new(TeletextRom());
+        teletext.StartField();
+        for (int line = 0; line < 10; line++)
+        {
+            teletext.StartLine();
+            teletext.Character(0x0D, oddField: false);      // double height on every line of the row
+        }
+
+        teletext.StartField();
+        teletext.StartLine();
+        teletext.Character('A', oddField: false).Should().NotBe(0);
+    }
+
+    // A teletext character ROM with every dot lit but the space's.
+    private static byte[] TeletextRom()
+    {
+        byte[] rom = new byte[960];
+        rom.AsSpan(10).Fill(0x1F);
+        return rom;
+    }
+
     // The first column with a lit pixel, scanning the frame.
     private static int LeftmostLit(byte[] frame)
     {

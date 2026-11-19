@@ -610,7 +610,12 @@
         {
           "command": "retrocore.memory.open",
           "when": "view == workbench.debug.variablesView && debugType == retrocore",
-          "group": "navigation"
+          "group": "navigation@-1"
+        },
+        {
+          "command": "retrocore.memory.open",
+          "when": "view == workbench.debug.watchExpressionsView && debugType == retrocore",
+          "group": "navigation@-1"
         }
       ],
       "view/item/context": [

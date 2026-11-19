@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { addressAt, parseData, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
+import { addressAt, copyAs, intelHex, parseIntelHex, parseData, breakpointAt, breakpointName, copyText, cpuWatches, findPattern, hex, inspect, labelOf, narrowSearch, parseByte, parsePattern, parseValue, parseReference, referenceIn, resolveIn, searchStart, textOf, typedText, valueAt, valueForms, withBookmark, bookmarkStore, type PatternByte } from "../memoryModel";
 import { memoryEditorHtml } from "../memoryView";
 
 test("memory references split into a bank and an address; expressions do not", () => {
@@ -184,6 +184,13 @@ class Element {
     readonly listeners = new Map<string, Listener[]>();
     readonly style: Record<string, string> = {};
     readonly dataset: Record<string, string> = {};
+    readonly classes = new Set<string>();
+    readonly classList = {
+        toggle: (name: string, on?: boolean) => { if (on ?? !this.classes.has(name)) this.classes.add(name); else this.classes.delete(name); },
+        add: (name: string) => { this.classes.add(name); },
+        remove: (name: string) => { this.classes.delete(name); },
+        contains: (name: string) => this.classes.has(name)
+    };
     hidden = true;
     textContent = "";
     innerHTML = "";
@@ -220,6 +227,7 @@ function runPage() {
         document: { getElementById: (id: string) => elements.get(id) ?? elements.set(id, new Element()).get(id) },
         window,
         atob: (text: string) => Buffer.from(text, "base64").toString("latin1"),
+        setTimeout, clearTimeout,
         // Messages cross into this realm as the webview would send them, as JSON.
         acquireVsCodeApi: () => ({ postMessage: (message: Record<string, unknown>) => posted.push(JSON.parse(JSON.stringify(message))) })
     });
@@ -417,10 +425,19 @@ let confirmChoice: string | null = null;
 let inputReply: Record<string, unknown> = { cancelled: true };
 const inputsSent: Record<string, unknown>[] = [];
 let clipboardText = "";
+// What Copy as copied and the choice it was given, and what Save and Load were sent and give back.
+const copiesSent: string[] = [];
+let pickReply: Record<string, unknown> = { cancelled: true };
+const savesSent: Record<string, unknown>[] = [];
+let saveReply: Record<string, unknown> = { cancelled: true };
+let loadReply: Record<string, unknown> = { cancelled: true };
 // The inspect requests the page sent.
 const inspectsSent: Record<string, unknown>[] = [];
 // The Decode from here starts the page asked about after a mark.
 const startsSent: Record<string, unknown>[] = [];
+
+// The spaces the page asked to show in an editor's place.
+const switchesSent: Record<string, unknown>[] = [];
 
 // The breakpoints the page set or took away, and the instructions it looked for.
 const breakpointsSent: Record<string, unknown>[] = [];
@@ -475,6 +492,16 @@ function answer(
             page.send({ type: "reply", id: sent.id, result: inputReply });
         } else if (sent.type === "paste") {
             page.send({ type: "reply", id: sent.id, result: { text: clipboardText } });
+        } else if (sent.type === "pick") {
+            page.send({ type: "reply", id: sent.id, result: pickReply });
+        } else if (sent.type === "copy") {
+            copiesSent.push(String(sent.text));
+            page.send({ type: "reply", id: sent.id, result: null });
+        } else if (sent.type === "save") {
+            savesSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: saveReply });
+        } else if (sent.type === "load") {
+            page.send({ type: "reply", id: sent.id, result: loadReply });
         } else if (sent.type === "confirm") {
             confirmsSent.push(sent);
             page.send({ type: "reply", id: sent.id, result: { choice: confirmChoice } });
@@ -491,7 +518,7 @@ function answer(
                     areas: [
                         { start: 0x0000, length: 0xC000, name: "main RAM", kind: "ram", mapped: true },
                         { start: 0xC000, length: 0x1000, name: "I/O", kind: "io", mapped: false },
-                        { start: 0xD000, length: 0x3000, name: "system ROM", kind: "rom", mapped: true }
+                        { start: 0xD000, length: 0x3000, name: "system ROM", kind: "rom", mapped: false, written: true }
                     ]
                 }
             });
@@ -531,7 +558,15 @@ function answer(
         } else if (sent.type === "bookmarks") {
             page.send({ type: "reply", id: sent.id, result: { bookmarks: [{ address: 0x0400, name: "TEXT_PAGE" }], address: 0x0400, name: "TEXT_PAGE" } });
         } else if (sent.type === "banks") {
-            page.send({ type: "reply", id: sent.id, result: { banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }] } });
+            page.send({
+                type: "reply", id: sent.id, result: {
+                    banks: [{ memoryReference: "aux:0x0000", label: "Auxiliary RAM (aux)" }],
+                    spaces: [{ name: null, label: "Memory as the CPU maps it now" }, { name: "aux", label: "Auxiliary RAM (aux)" }]
+                }
+            });
+        } else if (sent.type === "switch") {
+            switchesSent.push(sent);
+            page.send({ type: "reply", id: sent.id, result: null });
         } else if (sent.type === "readOther") {
             // Auxiliary RAM differs from what the editor shows only at $0481.
             const data = Buffer.alloc(sent.count as number);
@@ -541,6 +576,78 @@ function answer(
     }
 }
 
+test("tooltips are drawn in the page, taking over an element's title", async () => {
+    const page = runPage();
+    const attributes = new Map<string, string>([["title", "Snapshot: keep a copy of every byte now"]]);
+    const button = {
+        dataset: {} as Record<string, string>, isConnected: true,
+        hasAttribute: (name: string) => attributes.has(name),
+        getAttribute: (name: string) => attributes.get(name) ?? null,
+        setAttribute: (name: string, value: string) => { attributes.set(name, value); },
+        removeAttribute: (name: string) => { attributes.delete(name); },
+        getBoundingClientRect: () => ({ left: 10, top: 10, bottom: 30, width: 24 }),
+        closest: () => button
+    };
+    page.window.dispatch("mouseover", { target: button });
+    assert.equal(attributes.has("title"), false, "the browser shows no tooltip of its own");
+    assert.equal(attributes.get("aria-description"), "Snapshot: keep a copy of every byte now");
+    await new Promise(resolve => setTimeout(resolve, 600));
+    const tip = page.elements.get("tip")!;
+    assert.deepEqual([tip.hidden, tip.textContent], [false, "Snapshot: keep a copy of every byte now"]);
+    page.window.dispatch("mousedown", {});
+    assert.equal(tip.hidden, true, "a click hides it");
+});
+
+test("the label, byte and text columns collapse into strips and expand again", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
+    for (let round = 0; round < 3; round++) {
+        answer(page, () => 0xA0);
+        await page.settle();
+    }
+    const fold = (name: string) => page.window.dispatch("click", { target: { closest: (selector: string) => selector === "[data-fold]" ? { dataset: { fold: name } } : null } });
+    // The headings that collapse their columns are buttons, which Tab reaches and Enter or Space press.
+    assert.match(page.elements.get("head")!.innerHTML, /<button class="hex heading" data-fold="bytes" aria-label="Collapse the Bytes column">/);
+    fold("label");
+    fold("bytes");
+    const heading = page.elements.get("head")!.innerHTML, html = page.elements.get("rows")!.innerHTML;
+    assert.match(heading, /<span class="fold" data-strip="label"><\/span><span class="fold" data-strip="bytes"><\/span><span class="txt">/);
+    assert.match(html, /<span class="addr">0400<\/span><span class="fold"><\/span><span class="fold"><\/span><span class="txt">/);
+    assert.doesNotMatch(html, /class="hex"/);
+    // With the bytes collapsed, the cursor is in the text, and stays there when a label is clicked.
+    page.elements.get("grid")!.dispatch("mousedown", {
+        button: 0, shiftKey: false, preventDefault: () => undefined,
+        target: { closest: (selector: string) => selector === ".lab[data-a]" ? { dataset: { a: "1026" } } : null }
+    });
+    page.key("ArrowRight");
+    assert.match(page.elements.get("rows")!.innerHTML, /cur on" data-o="1027" data-t="1"/);
+    fold("bytes");
+    assert.match(page.elements.get("rows")!.innerHTML, /<span class="hex">/);
+    // The bytes and the text cannot both collapse, as the cursor edits in one of them.
+    fold("text");
+    fold("bytes");
+    assert.match(page.elements.get("rows")!.innerHTML, /<span class="hex">/, "the bytes stay");
+    // With the text collapsed, Tab leaves the grid rather than typing into the hidden text.
+    page.key("Tab");
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    assert.equal((await drive(page, [], () => 0xA0, lists)).pane, "hex");
+    fold("text");
+});
+
+test("the inspector starts beside the bytes, and its dock buttons move it under them and back", async () => {
+    const page = runPage();
+    page.send({ type: "init", address: 0x0400, info: { bank: null, label: "Memory", readOnly: false } });
+    const docks = () => page.elements.get("docks")!.innerHTML;
+    assert.match(docks(), /codicon-layout-sidebar-right" disabled aria-pressed="true"/);
+    assert.match(docks(), /codicon-layout-panel-dock" data-dock="bottom"/);
+    const dockTo = (place: string) => page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-dock]" ? { dataset: { dock: place } } : null } });
+    dockTo("bottom");
+    assert.match(docks(), /codicon-layout-sidebar-right-dock" data-dock="right"/);
+    assert.match(docks(), /codicon-layout-panel" disabled aria-pressed="true"/);
+    dockTo("right");
+    assert.match(docks(), /codicon-layout-panel-dock" data-dock="bottom"/);
+});
+
 test("labels show in the gutter and the inspector", async () => {
     const page = runPage();
     page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
@@ -548,14 +655,25 @@ test("labels show in the gutter and the inspector", async () => {
         answer(page, () => 0xA0);
         await page.settle();
     }
-    assert.match(page.elements.get("rows")!.innerHTML, /class="lab" style="width:9ch" title="TEXT_PAGE">TEXT_PAGE</);
+    assert.match(page.elements.get("rows")!.innerHTML, /class="lab" style="width:10ch" data-a="1024" title="TEXT_PAGE at \$0400&#10;Click to go to \$0400.">TEXT_PAGE</);
+    // The headings name the columns, the label column's at its width.
+    const heading = page.elements.get("head")!.innerHTML;
+    assert.match(heading, /<span class="addr"[^>]*>Addr<\/span><span class="lab" style="width:10ch"><button class="heading" data-fold="label" aria-label="Collapse the Label column" title="The first label starting in each row[^"]*">Label<\/button><button class="tog codicon codicon-list-tree" data-toggle="align" aria-pressed="false" aria-label="Align to labels"/);
+    assert.match(heading, />00<\/span>.*>0F<\/span><\/button><span class="txt"><button class="heading" data-fold="text" aria-label="Collapse the Text column" title="The bytes as text\. Click to collapse the column\.">Text</);
     assert.match(page.elements.get("rows")!.innerHTML, /class=" lb" data-o="1024" title="TEXT_PAGE"/);
-    assert.match(page.elements.get("inspector")!.innerHTML, /\$0402 · TEXT_PAGE\+2/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /\$0402  TEXT_PAGE\+2/);
+    // Clicking a name goes to its label's byte.
+    page.elements.get("grid")!.dispatch("mousedown", {
+        button: 0, shiftKey: false, preventDefault: () => undefined,
+        target: { closest: (selector: string) => selector === ".lab[data-a]" ? { dataset: { a: "1024" } } : null }
+    });
+    await page.settle();
+    assert.match(page.elements.get("inspector")!.innerHTML, /class="where">\$0400  TEXT_PAGE</);
 });
 
 test("rows aligned to labels start where each label does, and moving keeps the column", async () => {
     const page = runPage();
-    const labels = [{ address: 0x0400, name: "TEXT_PAGE" }, { address: 0x0405, name: "MSG" }];
+    const labels = [{ address: 0x0400, name: "TEXT_PAGE" }, { address: 0x0405, name: "MSG", kind: "data", size: 3 }];
     // The cursor's address, as the inspector shows it.
     const at = () => parseInt(/class="where">\$([0-9A-F]{4})/.exec(page.elements.get("inspector")!.innerHTML)![1], 16);
     page.send({ type: "init", address: 0x0402, info: { bank: null, label: "Memory", readOnly: false } });
@@ -563,18 +681,28 @@ test("rows aligned to labels start where each label does, and moving keeps the c
         answer(page, () => 0xA0, () => false, labels);
         await page.settle();
     }
-    // Rows of 16 until asked.
+    // Rows of 16 until asked, with the row's first label and how many more start in it, which its tooltip lists; the
+    // gutter is wide enough for +1.
+    assert.match(page.elements.get("rows")!.innerHTML,
+        /<span class="lab" style="width:13ch" data-a="1024" title="TEXT_PAGE at \$0400&#10;MSG at \$0405, data, 3 bytes&#10;Click to go to \$0400."><span class="nm">TEXT_PAGE<\/span><span class="more" aria-label="1 more labels">&#8943;1</);
+    // A label on data shades its bytes.
+    assert.match(page.elements.get("rows")!.innerHTML, /class=" dt" data-o="1031"/);
+    assert.match(page.elements.get("rows")!.innerHTML, /class="mid" data-o="1032"/);
     page.key("ArrowDown");
     assert.equal(at(), 0x0412);
     page.key("ArrowUp");
-    const align = page.elements.get("align")!;
-    assert.equal(page.elements.get("alignLabel")!.hidden, false, "the toggle shows once there are labels");
-    (align as unknown as { checked: boolean }).checked = true;
-    align.dispatch("change", {});
+    // Align to labels is a toggle in the Label heading, which shows once there are labels.
+    assert.match(page.elements.get("head")!.innerHTML, /data-toggle="align" aria-pressed="false"/);
+    page.elements.get("head")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-toggle]" ? { dataset: { toggle: "align" } } : null } });
+    assert.match(page.elements.get("head")!.innerHTML, /data-toggle="align" aria-pressed="true"/);
+    // The marks on the bytes labels start at show until the Label heading's other toggle hides them.
+    assert.match(page.elements.get("head")!.innerHTML, /data-toggle="marks" aria-pressed="true"/);
+    page.elements.get("head")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-toggle]" ? { dataset: { toggle: "marks" } } : null } });
+    assert.match(page.elements.get("head")!.innerHTML, /data-toggle="marks" aria-pressed="false"/);
     await page.settle();
     const html = page.elements.get("rows")!.innerHTML;
     assert.match(html, /<span class="addr">0400<\/span>/);
-    assert.match(html, /<span class="addr">0405<\/span><span class="lab" style="width:9ch" title="MSG">MSG</);
+    assert.match(html, /<span class="addr">0405<\/span><span class="lab" style="width:13ch" data-a="1029" title="MSG at \$0405, data, 3 bytes&#10;Click to go to \$0405.">MSG</);
     // Row $0400 ends before MSG, and row $0405 leaves its first five columns empty.
     page.key("End");
     assert.equal(at(), 0x0404);
@@ -637,7 +765,12 @@ test("a stop colors the bytes that changed since the stop before", async () => {
     }
     assert.match(page.elements.get("rows")!.innerHTML, /class=" chg lb[^"]*" data-o="1024"/);
     assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /data-o="1025"[^>]*chg|chg[^"]*" data-o="1025"/);
-    assert.match(page.elements.get("inspector")!.innerHTML, /At the last stop.*\$A0/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /Was<\/span> \$A0 <span class="meta">at the last stop/);
+    // The highlight toggle turns the highlighting off and on.
+    page.elements.get("highlight")!.dispatch("click", {});
+    assert.doesNotMatch(page.elements.get("rows")!.innerHTML, /chg/);
+    page.elements.get("highlight")!.dispatch("click", {});
+    assert.match(page.elements.get("rows")!.innerHTML, /class=" chg lb[^"]*" data-o="1024"/);
 
     // A read between stops, such as after a memory event, keeps what the stop found.
     page.send({ type: "changed" });
@@ -812,7 +945,14 @@ test("the inspector watches bytes in VS Code's Watch view, freezes them, and typ
     assert.equal(state.frozen, 0xA0);
     assert.deepEqual(Array.from(lists.frozen), [[0x0400, 0xA0]]);
     assert.match(page.elements.get("rows")!.innerHTML, /class="[^"]*frz[^"]*" data-o="1024"/);
-    assert.match(page.elements.get("inspector")!.innerHTML, /Watch<\/button><button data-act="freeze" title="Stop holding these bytes[^"]*">Thaw</);
+    // Watch, Freeze, Name and Comment are buttons; the rest are in the Mark, Edit and Export menus.
+    assert.match(page.elements.get("inspector")!.innerHTML, /Watch<\/button><button data-act="freeze" title="Thaw: let the program change these bytes again\.">Thaw</);
+    assert.match(page.elements.get("inspector")!.innerHTML, /data-act="name".*data-act="comment".*data-menu="mark".*data-menu="edit".*data-menu="export"/);
+    assert.doesNotMatch(page.elements.get("inspector")!.innerHTML, /data-act="fill"/);
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "menu", menu: "edit" } } : null } });
+    assert.equal(page.elements.get("actionMenu")!.hidden, false, "Edit opens its menu");
+    assert.match(page.elements.get("actionMenu")!.innerHTML, /role="menuitem" data-act="fill".*data-act="load"/);
+    assert.doesNotMatch(page.elements.get("actionMenu")!.innerHTML, /data-act="copyAs"/, "Edit lists only its own");
     assert.equal(page.elements.get("frozenTab")!.textContent, "Frozen (1)");
 
     state = await drive(page, [{ type: "41" }], () => 0xA0, lists);
@@ -908,15 +1048,24 @@ test("a RAM search narrows all of RAM to the byte that holds a value", async () 
     page.send({ type: "changed" });
     state = await drive(page, [{ goto: 0x0480 }], fill, lists);
     assert.equal(state.differs, true);
-    assert.match(page.elements.get("inspector")!.innerHTML, /In the snapshot.*\$02/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /Was<\/span> \$02 <span class="meta">in the snapshot/);
     assert.match(page.elements.get("compareWith")!.innerHTML, /<option value="snapshot">the snapshot<\/option><option value="aux:0x0000">Auxiliary RAM \(aux\)<\/option>/);
+    // The space list shows this editor's space, and picking another asks for it in this editor's place, at the cursor.
+    const space = page.elements.get("space")!;
+    assert.equal(space.hidden, false, "a machine with banks lists its spaces");
+    assert.match(space.innerHTML, /<option value="" selected>Memory as the CPU maps it now<\/option><option value="aux">Auxiliary RAM \(aux\)<\/option>/);
+    switchesSent.length = 0;
+    space.value = "aux";
+    space.dispatch("change", {});
+    await drive(page, [], fill, lists);
+    assert.deepEqual(switchesSent.map(sent => [sent.bank, sent.address]), [["aux", 0x0480]]);
     state = await drive(page, [{ compare: false }], fill, lists);
     assert.equal(state.differs, false, "without comparing, changes count from the last stop");
 
     // Another bank highlights the bytes that differ from it at the same addresses, and not where it has none.
     state = await drive(page, [{ compare: "aux:0x0000" }, { goto: 0x0481 }], fill, lists);
     assert.equal(state.differs, true);
-    assert.match(page.elements.get("inspector")!.innerHTML, /In Auxiliary RAM \(aux\).*\$FF/);
+    assert.match(page.elements.get("inspector")!.innerHTML, /Was<\/span> \$FF <span class="meta">in Auxiliary RAM \(aux\)/);
     assert.equal(page.elements.get("status")!.textContent, "The bytes that differ from Auxiliary RAM (aux) are highlighted.");
     state = await drive(page, [{ goto: 0x0480 }], fill, lists);
     assert.equal(state.differs, false);
@@ -1005,7 +1154,12 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     state = await drive(page, [{ goto: 0x0301 }, { decode: true }], () => 0, lists);
     assert.ok(listingStarts.some(starts => starts.includes(0x0301)), JSON.stringify(listingStarts));
     assert.equal(state.status, "The listing decodes an instruction from $0301.");
-    assert.match(page.elements.get("inspector")!.innerHTML, /data-act="decode"/);
+    // The right button selects nothing, so its menu acts on the selection it opens over.
+    page.elements.get("grid")!.dispatch("mousedown", { button: 2, shiftKey: false, preventDefault: () => undefined, target: { closest: () => null } });
+    // The bytes' right-click menu lists every action, Decode from here among them while the listing shows.
+    page.elements.get("grid")!.dispatch("contextmenu", { target: {}, clientX: 10, clientY: 20, preventDefault: () => undefined });
+    assert.match(page.elements.get("actionMenu")!.innerHTML, /data-act="freeze".*role="separator".*data-act="name".*data-act="decode".*role="separator".*data-act="fill".*role="separator".*data-act="copyAs"/);
+    assert.equal(page.elements.get("actionMenu")!.style.left, "10px");
 
     // Marking the selection as data keeps it in the hints file, and reads the labels and listing again.
     marksSent.length = 0;
@@ -1016,7 +1170,7 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     assert.deepEqual(startsSent.map(sent => [sent.address, sent.count]), [[0x0300, 1]]);
     assert.equal(state.status, "Kept in hello.hints.json.");
     assert.ok(listingStarts.length > 0, "the listing is asked for again");
-    assert.match(page.elements.get("inspector")!.innerHTML, /data-act="markData"/);
+    assert.match(page.elements.get("actionMenu")!.innerHTML, /data-act="markData"/);
 
     // Where nothing lists, the old lines go.
     await drive(page, [{ goto: 0xE100 }], () => 0, lists);
@@ -1043,14 +1197,13 @@ test("the listing's gutter sets breakpoints, and Find finds instructions", async
     assert.equal(state.status, `Breakpoint at $${hex(top, 4)}.`);
 
     // While the listing is hidden, its old lines don't say where a line starts, so F9 sets nothing.
-    const box = page.elements.get("listingBox")! as unknown as { checked: boolean; dispatch(name: string, event: object): void };
-    box.checked = false;
-    box.dispatch("change", {});
+    // The Disassembly heading collapses the listing, and its strip expands it.
+    const box = { dispatch: (_name: string, _event: object) => page.window.dispatch("click", { target: { closest: (selector: string) => selector === "[data-fold]" ? { dataset: { fold: "listing" } } : null } }) };
+    box.dispatch("click", {});
     breakpointsSent.length = 0;
     state = await drive(page, [{ breakpoint: true }], () => 0, lists);
     assert.deepEqual([breakpointsSent.length, state.status], [0, "Show the listing to set a breakpoint."]);
-    box.checked = true;
-    box.dispatch("change", {});
+    box.dispatch("click", {});
     await drive(page, [], () => 0, lists);
 
     // Clicking a filled dot sends the breakpoints that stop there, to take them away.
@@ -1092,12 +1245,13 @@ test("the map bar shows what memory reads across the space, the bytes in view, a
     assert.equal(bar.hidden, false);
     assert.ok(bar.innerHTML.includes('<div class="seg ram" style="left:0%;width:75%"></div>'), bar.innerHTML);
     assert.ok(bar.innerHTML.includes('<div class="seg io off" style="left:75%;width:6.25%"></div>'), bar.innerHTML);
+    assert.ok(bar.innerHTML.includes('<div class="seg rom wo" style="left:81.25%;width:18.75%"></div>'), "striped where the CPU only writes: " + bar.innerHTML);
     assert.ok(bar.innerHTML.includes('<div class="edge" style="left:1.5625%"></div>'), "a line where text page 1 starts");
     assert.equal(page.elements.get("mapView")!.style.left, "0%");
 
     // Hovering names the address, its region and what reads there; a click goes there.
     bar.dispatch("mousemove", { clientX: 4 });
-    assert.equal((bar as unknown as { title: string }).title, "$0400 · Text page 1 · main RAM");
+    assert.equal(bar.dataset.tip, "$0400 · Text page 1 · main RAM", "in the page's own hover, not the browser's");
     const state = await drive(page, [], () => 0, lists);
     bar.dispatch("click", { clientX: 208 });
     const moved = await drive(page, [], () => 0, lists);
@@ -1111,19 +1265,25 @@ test("the inspector says where the cursor's address is, what it is and what the 
     page.send({ type: "init", address: 0x0024, info: { bank: null, label: "Memory", readOnly: false } });
     await drive(page, [{ goto: 0x0024 }], () => 0, lists);
     let html = page.elements.get("inspector")!.innerHTML;
-    assert.ok(html.includes('<span class="k">Region</span><span class="v">Zero page</span>'), html);
-    assert.ok(html.includes('<span class="k">Map</span><span class="v">Reads and writes main RAM</span>'), html);
+    assert.ok(html.includes('<span class="meta">In</span> Zero page</div>'), html);
+    assert.ok(html.includes('<div class="line">Reads and writes main RAM</div>'), html);
     assert.ok(html.includes('<div class="doc">The cursor&#39;s column.</div>') || html.includes("<div class=\"doc\">The cursor's column.</div>"), html);
 
     // Inside a label, the label and offset, its documentation, the source line and the BASIC's floats.
     await drive(page, [{ goto: 0x0403 }], () => 0, lists);
     html = page.elements.get("inspector")!.innerHTML;
-    assert.ok(html.includes('<span class="v">Text page 1, row 0, column 3</span>'), html);
-    assert.ok(html.includes('<span class="k">In</span><span class="v">START+3</span>'), html);
+    assert.ok(html.includes('<span class="meta">In</span> Text page 1, row 0, column 3</div>'), html);
+    assert.ok(html.includes('<span class="meta">Inside</span> START+3</div>'), html);
     assert.ok(html.includes("START: Starts it."), html);
     assert.ok(html.includes('data-src="C:/src/hello.s" data-line="4"') && html.includes('<button class="link" data-src="C:/src/hello.s"') && html.includes(">hello.s:4</button>"), html);
-    assert.ok(html.includes('<span class="k">Float, 5 bytes</span><span class="v"><button class="link" data-edit="Float, 5 bytes" title="Write float, 5 bytes at $0403">1</button></span>'), html);
-    assert.ok(!html.includes(">Map<"), "no map line on a machine without banks");
+    assert.ok(html.includes('<span class="meta">Float, 5 bytes</span> <button class="link" data-edit="Float, 5 bytes" title="Float, 5 bytes: click to write a new value at $0403">1</button>'), html);
+    assert.ok(!html.includes("Reads and writes"), "no map line on a machine without banks");
+    // The inspector's groups, the byte's forms on one line, and the word in the CPU's byte order until asked for both.
+    assert.ok(html.includes('<section class="group" aria-label="Where"><h3>Where</h3>') && html.includes('aria-label="As a number"'), html);
+    assert.match(html, /<div class="line values"><button class="link" data-edit="Byte"[^>]*>\$00<\/button><button class="link" data-edit="Unsigned"/);
+    assert.ok(html.includes(">Word, low byte first<") && !html.includes(">Word, high byte first<"), html);
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "orders" } } : null } });
+    assert.ok(page.elements.get("inspector")!.innerHTML.includes(">Word, high byte first<"), "both byte orders when asked");
 });
 
 test("the inspector names a byte's bits, shows the instruction starting there and goes to the code that uses it", async () => {
@@ -1132,12 +1292,12 @@ test("the inspector names a byte's bits, shows the instruction starting there an
     page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
     await drive(page, [{ goto: 0x0300 }], () => 0x81, lists);
     const html = page.elements.get("inspector")!.innerHTML;
-    assert.ok(html.includes('<span class="k">Bit 7</span><span class="v">1</span></div><div class="doc">is set when ready</div>'), html);
-    assert.ok(html.includes('<span class="k">Bit 0 BUSY</span><span class="v">1</span>'), html);
-    assert.ok(html.includes('<span class="k">Instruction</span><span class="v">BNE READY</span>'), html);
-    assert.ok(html.includes('<span class="k">Size</span><span class="v">2 bytes, 2 cycles, 3 taken</span>'), html);
+    assert.ok(html.includes('<span class="meta">Bit 7</span> 1 <span class="meta">is set when ready</span>'), html);
+    assert.ok(html.includes('<span class="meta">Bit 0 BUSY</span> 1 '), html);
+    assert.ok(html.includes('<span class="v">BNE READY</span> <span class="meta">2 bytes · 2 cycles, 3 taken · leaves the flags alone</span>'), html);
+    assert.ok(!html.includes("As a number") && !html.includes("Word, low byte first"), "an instruction's bytes are no number");
     assert.ok(html.includes('<div class="doc">Branches when Z is clear.</div>'), html);
-    assert.ok(html.includes('<span class="k">References</span><span class="v">34</span>') && html.includes("and 33 more"), html);
+    assert.ok(html.includes('<h3>Used by</h3>') && html.includes("and 33 more"), html);
     assert.ok(html.includes('<button class="hit ref" data-go="784"') && html.includes("$0310 WAIT+2") && html.includes("BIT READY"), html);
 
     // Decode from here's starts go with the request, as the listing's do.
@@ -1227,6 +1387,87 @@ test("the inspector's values are written as typed, the selection is filled and t
     assert.deepEqual([sent().length, state.status], [0, "The clipboard does not hold hex bytes: not is not hex bytes: each byte takes two hex digits."]);
 });
 
+test("the selection is copied in another form, saved and loaded, a file's bytes undone as one edit", async () => {
+    const page = runPage();
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    page.send({ type: "init", address: 0x0300, info: { bank: null, label: "Memory", readOnly: false } });
+    const fill = (offset: number) => offset & 0xFF;
+    let state = await drive(page, [{ goto: 0x0300 }], fill, lists);
+    const top = parseInt((state.listing as string[])[0].substring(0, 4), 16);
+
+    // Copy as asks which form, then copies the selection in it: a listing line's two bytes here.
+    copiesSent.length = 0;
+    pickReply = { index: 1 };
+    state = await drive(page, [{ listingLine: 0 }, { copyAs: true }], fill, lists);
+    assert.deepEqual(copiesSent, [`${hex(top, 4)}: ${hex(top & 0xFF, 2)} ${hex((top + 1) & 0xFF, 2)}`]);
+    assert.equal(state.status, `Copied 2 bytes from $${hex(top, 4)} as Monitor lines.`);
+
+    // Save sends the selection's bytes and the starts; the host says where and how it saved them.
+    savesSent.length = 0;
+    saveReply = { path: "memory.asm", form: "assembly", exact: true };
+    state = await drive(page, [{ listingLine: 0 }, { save: true }], fill, lists);
+    assert.deepEqual([savesSent[0].offset, savesSent[0].data], [top, [top & 0xFF, (top + 1) & 0xFF]]);
+    assert.equal(state.status, `Saved 2 bytes from $${hex(top, 4)} to memory.asm, which assembles back to the same bytes.`);
+    saveReply = { path: "memory.asm", form: "assembly", exact: false };
+    state = await drive(page, [{ listingLine: 0 }, { save: true }], fill, lists);
+    assert.equal(state.status, `Saved 2 bytes from $${hex(top, 4)} to memory.asm as .byte lines, as its instructions would not assemble back to the same bytes.`);
+
+    // A binary loads at the cursor, and Intel HEX at its addresses, which one undo takes back together.
+    writesSent.length = 0;
+    loadReply = { name: "game.bin", data: [0xA9, 0xC1] };
+    state = await drive(page, [{ goto: 0x0800 }, { load: true }], fill, lists);
+    assert.deepEqual(writesSent.map(item => [item.offset, item.data]), [[0x0800, [0xA9, 0xC1]]]);
+    assert.equal(state.status, "Loaded 2 bytes from game.bin at $0800.");
+    writesSent.length = 0;
+    loadReply = { name: "game.hex", runs: [{ address: 0x0900, data: [1, 2] }, { address: 0x0A00, data: [3] }] };
+    state = await drive(page, [{ load: true }], fill, lists);
+    assert.deepEqual(writesSent.map(item => [item.offset, item.data]), [[0x0900, [1, 2]], [0x0A00, [3]]]);
+    assert.equal(state.status, "Loaded 3 bytes from game.hex in 2 runs from $0900.");
+    writesSent.length = 0;
+    await drive(page, [{ undo: true }], fill, lists);
+    assert.deepEqual(writesSent.map(item => [item.offset, item.data]), [[0x0A00, [0x00]], [0x0900, [0x00, 0x01]]]);
+    // A binary longer than what is left of memory stops at $FFFF.
+    writesSent.length = 0;
+    loadReply = { name: "big.bin", data: [1, 2, 3, 4] };
+    state = await drive(page, [{ goto: 0xFFFE }, { load: true }], fill, lists);
+    assert.deepEqual(writesSent.map(item => [item.offset, item.data]), [[0xFFFE, [1, 2]]]);
+    assert.equal(state.status, "Loaded 2 bytes from big.bin at $FFFE; 2 more ran past $FFFF.");
+    loadReply = { cancelled: true };
+});
+
+test("Copy as writes hex, the Monitor's lines, .byte lines, BASIC DATA, a C array and base64", () => {
+    const values = [0xA9, 0xC1, 0x20, 0xED, 0xFD, 0x60, 0x00, 0x01, 0xFF];
+    assert.equal(copyAs(values.slice(0, 3), 0x0300, "hex"), "A9 C1 20");
+    assert.equal(copyAs(values, 0x0300, "monitor"), "0300: A9 C1 20 ED FD 60 00 01\n0308: FF");
+    assert.equal(copyAs(values.slice(0, 2), 0x0300, "byte"), "    .byte $A9, $C1");
+    assert.equal(copyAs(values, 0x0300, "data"), "1000 DATA 169,193,32,237,253,96,0,1\n1010 DATA 255");
+    assert.equal(copyAs(values.slice(0, 2), 0x0300, "c"), "unsigned char memory_0300[2] = {\n    0xA9, 0xC1\n};");
+    assert.equal(copyAs([0xA9, 0xC1, 0x20], 0, "base64"), Buffer.from([0xA9, 0xC1, 0x20]).toString("base64"));
+    assert.equal(copyAs([0xA9, 0xC1], 0, "base64"), Buffer.from([0xA9, 0xC1]).toString("base64"));
+    assert.equal(copyAs([0xA9], 0, "base64"), Buffer.from([0xA9]).toString("base64"));
+    // A long listing's lines step closer, staying under BASIC's last line number, 63999.
+    const listing = copyAs(new Array(0x10000).fill(0), 0, "data").split(String.fromCharCode(10));
+    assert.ok(Number(listing[listing.length - 1].split(" ")[0]) <= 63999, listing[listing.length - 1].slice(0, 20));
+});
+
+test("Intel HEX is written in 16-byte records and read back into runs", () => {
+    const values = Array.from({ length: 20 }, (_, index) => index);
+    const text = intelHex(values, 0x0300);
+    assert.equal(text.split("\r\n")[0], ":10030000000102030405060708090A0B0C0D0E0F75");
+    assert.ok(text.endsWith(":00000001FF\r\n"));
+    assert.deepEqual(parseIntelHex(text), [{ address: 0x0300, data: values }]);
+    // Two places, a start address record ignored, and the errors.
+    assert.deepEqual(parseIntelHex(":0103000001FB\n:0104000002F9\n:0400000300000300F6\n:00000001FF"), [{ address: 0x0300, data: [1] }, { address: 0x0400, data: [2] }]);
+    assert.equal(parseIntelHex(":0103000001FC"), "Line 1's checksum is wrong.");
+    assert.equal(parseIntelHex("hello"), "Line 1 is not an Intel HEX record.");
+    assert.equal(parseIntelHex(":020000040001F9\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
+    assert.equal(parseIntelHex(":00000001FF"), "The file holds no bytes.");
+    // A file cut short on a record's end has no end of file record.
+    assert.equal(parseIntelHex(":0103000001FB"), "The file has no end of file record, so it may be cut short.");
+    // An extended linear address of $8000 or more stays positive, so its bytes are refused as past $FFFF.
+    assert.equal(parseIntelHex(":0200000480007A\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
+});
+
 test("bytes to fill or paste are hex, the Monitor's lines, or text in quotes", () => {
     assert.deepEqual(parseData("A9 C1,20 $ED 0xFD"), [0xA9, 0xC1, 0x20, 0xED, 0xFD]);
     assert.deepEqual(parseData("0300: A9C1\n0302- 20 ; JSR\n"), [0xA9, 0xC1, 0x20]);
@@ -1300,12 +1541,14 @@ test("assembling in place types an instruction over a listing line, padding or o
     assembleReply = { bytes: [0xA9, 0x01], text: "LDA #$01", nop: [0xEA], line: "LDA #1" };
     await drive(page, [{ listingLine: 0 }, { assemble: true }], () => 0, lists);
     assert.deepEqual([confirmsSent.length, writesSent.map(sent => sent.data)], [0, [[0xA9, 0x01]]]);
-    assert.ok(page.elements.get("inspector")!.innerHTML.includes('data-act="assemble"'));
+    // Assemble is in the Edit menu while the listing shows.
+    page.elements.get("side")!.dispatch("click", { target: { closest: (selector: string) => selector === "[data-act]" ? { dataset: { act: "menu", menu: "edit" } } : null } });
+    assert.ok(page.elements.get("actionMenu")!.innerHTML.includes('data-act="assemble"'));
 
     // A double-click while the listing is hidden asks for nothing, as its old lines may be of other bytes.
-    const box = page.elements.get("listingBox")! as unknown as { checked: boolean; dispatch(name: string, event: object): void };
-    box.checked = false;
-    box.dispatch("change", {});
+    // The Disassembly heading collapses the listing, and its strip expands it.
+    const box = { dispatch: (_name: string, _event: object) => page.window.dispatch("click", { target: { closest: (selector: string) => selector === "[data-fold]" ? { dataset: { fold: "listing" } } : null } }) };
+    box.dispatch("click", {});
     assemblesSent.length = 0;
     const line = { dataset: { a: String(top), s: "2" } };
     page.elements.get("listing")!.dispatch("dblclick", { target: { closest: (selector: string) => selector === "[data-a]" ? line : null } });
@@ -1314,8 +1557,7 @@ test("assembling in place types an instruction over a listing line, padding or o
 
     // With it shown, a double-click that reaches the listing itself, as when its first click drew it again, types
     // over the cursor's line.
-    box.checked = true;
-    box.dispatch("change", {});
+    box.dispatch("click", {});
     await drive(page, [{ listingLine: 0 }], () => 0, lists);
     assembleReply = { cancelled: true };
     page.elements.get("listing")!.dispatch("dblclick", { target: { closest: () => null } });

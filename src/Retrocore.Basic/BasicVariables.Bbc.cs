@@ -144,6 +144,12 @@ public sealed partial class BasicVariables
     /// <exception cref="OverflowException">The real is too big for BBC BASIC.</exception>
     internal static byte[] PackBbcReal(double value)
     {
+        // NaN and infinity have no packed form; they are too big, not a garbage exponent.
+        if (!double.IsFinite(value))
+        {
+            throw new OverflowException("Too big: a real variable holds less than 1.7E38.");
+        }
+
         double rounded = value == 0 ? 0 : BbcBasicExpression.RoundMantissa(value);
         if (rounded == 0 || Math.Abs(rounded) < Math.ScaleB(1.0, -129)) { return new byte[BbcReal]; }
         int exponent = Math.ILogB(rounded) + 1 + 0x80;

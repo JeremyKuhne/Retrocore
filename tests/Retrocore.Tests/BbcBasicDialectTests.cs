@@ -303,6 +303,10 @@ public sealed class BbcBasicDialectTests
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "GOTO done%", labels).Should().BeEmpty("done% is another name");
 
+        // TRACE takes a line, its limit, which the tokeniser keeps as a line number: a label there is the line.
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "TRACE done", labels).Should().ContainSingle()
+            .Which.Name.Should().Be("DONE");
+
         // A byte the tokeniser copies as it is, after REM, DATA or a * command, is no GOTO even when it is &E5.
         foreach (string literal in (string[])["DATA {$E5} done", "REM {$E5} done", "REPEAT *KEY 1 {$E5} done"])
         {
@@ -426,6 +430,14 @@ public sealed class BbcBasicDialectTests
         packed.Should().Equal(0, 0x40, 0, 0, 0);
         variables.Write(small.Kind, small.ValueAddress, new BasicValue(2147483649.5));
         variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
+
+        // NaN and infinity have no packed form: writing one is too big, and the variable keeps its value.
+        foreach (double unpackable in (double[])[double.NaN, double.PositiveInfinity, double.NegativeInfinity])
+        {
+            Action write = () => variables.Write(small.Kind, small.ValueAddress, new BasicValue(unpackable));
+            write.Should().Throw<OverflowException>(unpackable.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
+        }
 
         // The integer &80000000 is an integer, but the real -2147483648 is too big to be made one, as the ROM has it.
         BbcMachineTests.Type(machine, "CLS:PRINT STR$(NOT &80000000);\"|\";STR$INT(&80000000)\r");

@@ -26,6 +26,9 @@ public sealed partial class BasicProgram
         ("RUN", false, false)
     ];
 
+    // BBC BASIC's words that take a line: the others' and TRACE, whose limit is a line number, kept as one.
+    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps = [.. s_jumps, ("TRACE", false, false)];
+
     /// <summary>
     ///  Finds where a statement line names a label in place of a line number.
     /// </summary>
@@ -181,10 +184,10 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            int jump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+            int jump = Array.FindIndex(s_bbcJumps, candidate => candidate.Word == word);
             if (jump < 0 || Column(index) < scanned) { continue; }
             int found = references.Count;
-            scanned = Targets(text, Column(index + 1), s_jumps[jump], labels, references);
+            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references);
 
             // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
             // is a computed jump.

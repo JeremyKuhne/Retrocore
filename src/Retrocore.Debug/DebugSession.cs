@@ -998,7 +998,7 @@ internal sealed partial class DebugSession
         _basicEntry = basicFile is not null && _stopOnEntry && (args.Bool("run") ?? true);
         RebindBreakpoints();
         _memoryViews.Clear();
-        _frozen.Clear();
+        ThawAll();
         _memoryFrames = 0;
         _sentPixels = [];
 

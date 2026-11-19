@@ -38,6 +38,10 @@ namespace Retrocore.Debug;
 ///  The part of the bank an address is in, named by the switch that puts it in the CPU's view, such as the IIe's
 ///  alternate zero page and stack (ALTZP), for the memory map; null for a bank that is all one part.
 /// </param>
+/// <param name="HostAddressOf">
+///  The machine's address a byte of the bank is at, for a coprocessor's space whose addresses are its own, such as
+///  the SoftCard Z80's, whose $0200 is the Apple's $1200; null where the bank's addresses are the machine's.
+/// </param>
 internal sealed record DebugMemoryBank(
     string Name,
     string Label,
@@ -48,7 +52,8 @@ internal sealed record DebugMemoryBank(
     Retrocore.Isa.InstructionSet? InstructionSet = null,
     Func<ushort, bool>? CanPoke = null,
     Func<ushort, bool>? ReadsHere = null,
-    Func<ushort, string?>? PartAt = null)
+    Func<ushort, string?>? PartAt = null,
+    Func<ushort, ushort>? HostAddressOf = null)
 {
     /// <summary>
     ///  Gets whether the CPU reads the bank's byte at an address now: where it reads one of the bank's areas, or, for

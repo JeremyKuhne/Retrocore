@@ -396,7 +396,14 @@ const side = document.getElementById("side"), searchPanel = document.getElementB
 const compareSelect = document.getElementById("compareWith");
 let tab = "inspector";
 let info = { bank: null, label: "", readOnly: false, bigEndian: false };
-let cursor = 0, anchor = 0, pane = "hex", nibble = null, ended = false, dragging = false, generation = 0;
+let cursor = 0, anchor = 0, pane = visiblePane("hex"), nibble = null, ended = false, dragging = false, generation = 0;
+
+// The column the cursor edits: the one asked for, unless it is collapsed and the other shows.
+function visiblePane(wanted) {
+    if (folded.bytes && !folded.text) return "text";
+    if (folded.text && !folded.bytes) return "hex";
+    return wanted;
+}
 // Counts the cursor's moves and pane switches, so an edit still waiting on the debugger knows the user went elsewhere.
 let moves = 0;
 const undoStack = [], redoStack = [];
@@ -603,6 +610,8 @@ function mapTitle(address) {
 // The bar's hover follows the mouse along it, saying what is at the address under it.
 mapBar.addEventListener("mousemove", event => {
     setTip(mapBar, mapTitle(mapAddress(event)));
+    // Its text is first known here, after the mouse came over it, so its tip starts here too.
+    if (tipFor !== mapBar) startTip(mapBar);
     if (tipFor === mapBar && !tip.hidden) {
         tip.textContent = mapBar.dataset.tip;
         tip.style.left = Math.max(4, Math.min(event.clientX, window.innerWidth - tip.offsetWidth - 4)) + "px";
@@ -2484,7 +2493,7 @@ grid.addEventListener("mousedown", event => {
     if (event.button !== undefined && event.button !== 0) return;
     const label = gutterLabel(event);
     if (label !== null) {
-        pane = "hex";
+        pane = visiblePane("hex");
         moveTo(label, event.shiftKey, false);
         grid.focus();
         event.preventDefault();
@@ -2595,10 +2604,15 @@ function hideTip() {
 }
 window.addEventListener("mouseover", event => {
     const target = event.target && event.target.closest ? event.target.closest("[title], [data-tip]") : null;
+    startTip(target);
+});
+
+// Shows an element's tip after a moment, taking over its title.
+function startTip(target) {
     if (target === tipFor) return;
     hideTip();
     if (target === null) return;
-    if (target.hasAttribute("title")) {
+    if (target.hasAttribute && target.hasAttribute("title")) {
         target.dataset.tip = target.getAttribute("title");
         target.setAttribute("aria-description", target.dataset.tip);
         target.removeAttribute("title");
@@ -2615,7 +2629,7 @@ window.addEventListener("mouseover", event => {
         tip.style.left = Math.max(4, Math.min(box.left, window.innerWidth - width - 4)) + "px";
         tip.style.top = (below ? box.bottom + 4 : Math.max(4, box.top - height - 4)) + "px";
     }, 500);
-});
+}
 window.addEventListener("mousedown", hideTip, true);
 window.addEventListener("keydown", hideTip, true);
 window.addEventListener("wheel", hideTip, true);
@@ -2710,8 +2724,7 @@ function toggleFold(name) {
         listingKey = "";
     }
     // The cursor's column goes to the one that shows, where the bytes or the text collapse.
-    if (folded.bytes && !folded.text) pane = "text";
-    else if (folded.text && !folded.bytes) pane = "hex";
+    pane = visiblePane(pane);
     narrow = null;
     remember();
     render();

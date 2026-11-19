@@ -15,10 +15,40 @@ internal sealed partial class DebugSession
     // so switching to bank 1 does not write the value into bank 1.
     private readonly Dictionary<(string? Bank, ushort Address), (byte Value, Enum? Area)> _frozen = [];
 
-    // The CPU addresses any frozen byte has, in any bank, which a write the CPU makes there is checked against; and
-    // whether the instruction running now has written one, which it then puts back as it ends.
-    private readonly bool[] _frozenAt = new bool[0x10000];
+    // How many frozen bytes, in any bank, are at each of the machine's addresses, which a write on the bus there is
+    // checked against, and the addresses each frozen byte counts at: its own, and for a coprocessor's byte the
+    // machine's address it is at too, where the Z80's stores and the 6502's writes to it both land. Then whether the
+    // instruction running now has written one, which it then puts back as it ends.
+    private readonly int[] _frozenAt = new int[0x10000];
+    private readonly Dictionary<(string? Bank, ushort Address), (ushort Own, ushort Host)> _frozenMarks = [];
     private bool _freezeWritten;
+
+    // Counts a frozen byte at its addresses, once however often it is frozen again.
+    private void MarkFrozen(DebugMemoryBank? bank, ushort address)
+    {
+        if (_frozenMarks.ContainsKey((bank?.Name, address))) { return; }
+        ushort host = bank?.HostAddressOf?.Invoke(address) ?? address;
+        _frozenMarks[(bank?.Name, address)] = (address, host);
+        _frozenAt[address]++;
+        if (host != address) { _frozenAt[host]++; }
+    }
+
+    // Takes a byte no longer frozen off the addresses it counted at.
+    private void UnmarkFrozen((string? Bank, ushort Address) key)
+    {
+        if (!_frozenMarks.Remove(key, out (ushort Own, ushort Host) marks)) { return; }
+        _frozenAt[marks.Own]--;
+        if (marks.Host != marks.Own) { _frozenAt[marks.Host]--; }
+    }
+
+    // Thaws every byte, as a new launch does.
+    private void ThawAll()
+    {
+        _frozen.Clear();
+        _frozenMarks.Clear();
+        Array.Clear(_frozenAt);
+        _freezeWritten = false;
+    }
 
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
@@ -65,7 +95,7 @@ internal sealed partial class DebugSession
 
         foreach (ushort address in thaws)
         {
-            _frozen.Remove((bank?.Name, address));
+            if (_frozen.Remove((bank?.Name, address))) { UnmarkFrozen((bank?.Name, address)); }
         }
 
         if (freezes.Count != 0)
@@ -107,14 +137,14 @@ internal sealed partial class DebugSession
                 {
                     Write(bank, written, restore);
                     if (frozen is { } kept) { _frozen[(bank?.Name, written)] = kept; }
-                    else { _frozen.Remove((bank?.Name, written)); }
+                    else if (_frozen.Remove((bank?.Name, written))) { UnmarkFrozen((bank?.Name, written)); }
                 }
 
                 throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
             }
 
             _frozen[(bank?.Name, address)] = (value, bank is null ? Target.WriteArea(address) : null);
-            _frozenAt[address] = true;
+            MarkFrozen(bank, address);
             done.Add((address, old, before));
         }
     }
@@ -173,13 +203,7 @@ internal sealed partial class DebugSession
         foreach ((string? Bank, ushort Address) key in gone ?? [])
         {
             _frozen.Remove(key);
-        }
-
-        // The addresses checked are the frozen bytes' now, as bytes thawed since go.
-        Array.Clear(_frozenAt);
-        foreach ((string? _, ushort address) in _frozen.Keys)
-        {
-            _frozenAt[address] = true;
+            UnmarkFrozen(key);
         }
     }
 
@@ -189,7 +213,16 @@ internal sealed partial class DebugSession
     private void FreezeCycle(IDebugTarget cpu)
     {
         ProcessorCycle cycle = cpu.LastCycle;
-        if (cycle.Operation == BusOperation.Write && !cycle.IsStalled && _frozenAt[cycle.Address])
+        if (cycle.Operation == BusOperation.Write && !cycle.IsStalled && _frozenAt[cycle.Address] != 0)
+        {
+            _freezeWritten = true;
+        }
+
+        // The 6502 runs beside the SoftCard's Z80 as it finishes an instruction, and its writes count too.
+        if (cpu is SoftCardDebugTarget { HostCycle: { } beside }
+            && beside.Operation == BusOperation.Write
+            && !beside.IsStalled
+            && _frozenAt[beside.Address] != 0)
         {
             _freezeWritten = true;
         }

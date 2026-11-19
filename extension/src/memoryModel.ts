@@ -390,7 +390,9 @@ export function copyAs(values: readonly number[], start: number, format: string)
             chunks.forEach(chunk => lines.push("    .byte " + chunk.map(value => "$" + two(value)).join(", ")));
             return lines.join("\n");
         case "data":
-            chunks.forEach((chunk, index) => lines.push((1000 + index * 10) + " DATA " + chunk.join(",")));
+            // Lines go up by 10 while they fit under 63999, BASIC's last line number, and closer for a long listing.
+            const step = chunks.length < 2 ? 10 : Math.max(1, Math.min(10, Math.floor((63999 - 1000) / (chunks.length - 1))));
+            chunks.forEach((chunk, index) => lines.push((1000 + index * step) + " DATA " + chunk.join(",")));
             return lines.join("\n");
         case "c": {
             lines.push("unsigned char memory_" + start.toString(16).toUpperCase().padStart(4, "0") + "[" + values.length + "] = {");
@@ -480,6 +482,8 @@ export function parseIntelHex(text: string): LoadedRun[] | string {
                 return `Line ${number} is not an Intel HEX record.`;
         }
     }
+    // A file cut short on a record's end still reads, so the end of file record is what says it is whole.
+    if (!ended) return "The file has no end of file record, so it may be cut short.";
     const runs: LoadedRun[] = [];
     for (const address of Array.from(bytes.keys()).sort((a, b) => a - b)) {
         const last = runs[runs.length - 1];

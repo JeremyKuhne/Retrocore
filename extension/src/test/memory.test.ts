@@ -614,7 +614,11 @@ test("the label, byte and text columns collapse into strips and expand again", a
     assert.match(heading, /<span class="fold" data-strip="label"><\/span><span class="fold" data-strip="bytes"><\/span><span class="txt">/);
     assert.match(html, /<span class="addr">0400<\/span><span class="fold"><\/span><span class="fold"><\/span><span class="txt">/);
     assert.doesNotMatch(html, /class="hex"/);
-    // With the bytes collapsed, the cursor is in the text.
+    // With the bytes collapsed, the cursor is in the text, and stays there when a label is clicked.
+    page.elements.get("grid")!.dispatch("mousedown", {
+        button: 0, shiftKey: false, preventDefault: () => undefined,
+        target: { closest: (selector: string) => selector === ".lab[data-a]" ? { dataset: { a: "1026" } } : null }
+    });
     page.key("ArrowRight");
     assert.match(page.elements.get("rows")!.innerHTML, /cur on" data-o="1027" data-t="1"/);
     fold("bytes");
@@ -1438,6 +1442,9 @@ test("Copy as writes hex, the Monitor's lines, .byte lines, BASIC DATA, a C arra
     assert.equal(copyAs([0xA9, 0xC1, 0x20], 0, "base64"), Buffer.from([0xA9, 0xC1, 0x20]).toString("base64"));
     assert.equal(copyAs([0xA9, 0xC1], 0, "base64"), Buffer.from([0xA9, 0xC1]).toString("base64"));
     assert.equal(copyAs([0xA9], 0, "base64"), Buffer.from([0xA9]).toString("base64"));
+    // A long listing's lines step closer, staying under BASIC's last line number, 63999.
+    const listing = copyAs(new Array(0x10000).fill(0), 0, "data").split(String.fromCharCode(10));
+    assert.ok(Number(listing[listing.length - 1].split(" ")[0]) <= 63999, listing[listing.length - 1].slice(0, 20));
 });
 
 test("Intel HEX is written in 16-byte records and read back into runs", () => {
@@ -1452,6 +1459,8 @@ test("Intel HEX is written in 16-byte records and read back into runs", () => {
     assert.equal(parseIntelHex("hello"), "Line 1 is not an Intel HEX record.");
     assert.equal(parseIntelHex(":020000040001F9\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
     assert.equal(parseIntelHex(":00000001FF"), "The file holds no bytes.");
+    // A file cut short on a record's end has no end of file record.
+    assert.equal(parseIntelHex(":0103000001FB"), "The file has no end of file record, so it may be cut short.");
     // An extended linear address of $8000 or more stays positive, so its bytes are refused as past $FFFF.
     assert.equal(parseIntelHex(":0200000480007A\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
 });

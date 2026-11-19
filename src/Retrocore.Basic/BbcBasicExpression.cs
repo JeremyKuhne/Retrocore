@@ -28,10 +28,11 @@ namespace Retrocore.Basic;
 ///   Integers match BASIC II exactly, quirks included: <c>&amp;80000000 DIV</c> or <c>MOD</c> anything is 0. Reals are
 ///   held as BASIC II holds them, a 32-bit mantissa rounded as <c>ROUND_FP_A</c> rounds it, and addition, subtraction
 ///   and division come out as the ROM's do. Multiplication, and the whole powers <c>^</c> makes of it, follow
-///   <c>MULTIPLY_FP_A</c> bit for bit, partial products truncated as the ROM's are. <c>SIN</c>, <c>COS</c>, <c>TAN</c>, <c>ATN</c>, <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and
-///   <c>^</c> with a fraction or a power of 64 or more, use the host's functions, not the ROM's series: their results
-///   can differ in the last bits, more for a large angle, and a result at the edge of the range can be a value in one
-///   and "Too big" or 0 in the other. A condition comparing such a real for equality with one the program computed
+///   <c>MULTIPLY_FP_A</c> bit for bit, partial products truncated as the ROM's are, and numbers, typed or from
+///   <c>VAL</c>, are read as <c>READ_NUMBER</c> reads them, so 4294967295.5 is 2^32. <c>SIN</c>, <c>COS</c>,
+///   <c>TAN</c>, <c>ATN</c>, <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and <c>^</c> with a fraction or a power of 64 or
+///   more, use the host's functions, not the ROM's series: their results can differ in the last bits, more for a large
+///   angle, and a result at the edge of the range can be a value in one and "Too big" or 0 in the other. A condition comparing such a real for equality with one the program computed
 ///   may therefore disagree with BASIC.
 ///  </para>
 /// </remarks>
@@ -682,19 +683,126 @@ internal sealed class BbcBasicExpression
     // (so 1E0 is one) and its magnitude fits 31 bits; otherwise a real. The sign goes on after, so -2147483648 is real.
     private static BasicValue? Classify(string magnitude, bool negative)
     {
-        // BASIC takes a point with no digits around it, as in . (real zero) or 5., which the host's parser does not.
-        string digits = magnitude.StartsWith('.') ? "0" + magnitude : magnitude;
-        int point = digits.IndexOf('.', StringComparison.Ordinal);
-        if (point >= 0 && (point + 1 == digits.Length || !char.IsAsciiDigit(digits[point + 1])))
+        if (magnitude.Length == 0) { return null; }
+        if (ReadNumber(magnitude) is not (ulong digits, int scale, bool point)) { return null; }
+
+        if (!point && scale == 0 && digits <= int.MaxValue)
         {
-            digits = digits.Insert(point + 1, "0");
+            return Integer(negative ? -(int)digits : (int)digits);
         }
 
-        if (!BasicNumbers.TryParse(digits, out double number)) { return null; }
-        int mark = magnitude.IndexOf('E', StringComparison.Ordinal);
-        bool zeroScale = mark < 0 || int.TryParse(magnitude[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture, out int power) && power == 0;
-        bool integer = !magnitude.Contains('.') && zeroScale && number <= int.MaxValue;
-        return integer ? Integer(negative ? -(int)number : (int)number) : Real(negative ? -number : number);
+        double number = ScaleByTens(digits, scale);
+        return Real(negative ? -number : number);
+    }
+
+    // READ_NUMBER's first part: the digits as a 40-bit integer, and the power of ten to scale it by. Once the top byte
+    // reaches &18 the next digit is dropped, adding one to the scale before the point and nothing after it, and the
+    // scale is a byte, so it wraps as the ROM's does.
+    private static (ulong Digits, int Scale, bool Point)? ReadNumber(string magnitude)
+    {
+        ulong digits = 0;
+        sbyte scale = 0;
+        bool point = false;
+        bool any = false;
+        int at = 0;
+        for (; at < magnitude.Length; at++)
+        {
+            char character = magnitude[at];
+            if (character == '.')
+            {
+                if (point) { break; }
+                point = true;
+                continue;
+            }
+
+            if (!char.IsAsciiDigit(character)) { break; }
+            any = true;
+            if (digits >> 32 >= 0x18)
+            {
+                if (!point) { scale++; }
+                continue;
+            }
+
+            if (point) { scale--; }
+            digits = (digits * 10) + (ulong)(character - '0');
+        }
+
+        if (!any && !point) { return null; }
+        if (at < magnitude.Length && magnitude[at] == 'E')
+        {
+            at++;
+            bool minus = at < magnitude.Length && magnitude[at] == '-';
+            if (at < magnitude.Length && magnitude[at] is '+' or '-') { at++; }
+            int exponent = 0;
+            for (int count = 0; count < 2 && at < magnitude.Length && char.IsAsciiDigit(magnitude[at]); count++, at++)
+            {
+                exponent = (exponent * 10) + (magnitude[at] - '0');
+            }
+
+            scale = unchecked((sbyte)(scale + (minus ? -exponent : exponent)));
+        }
+
+        return (digits, scale, point);
+    }
+
+    // READ_NUMBER's real part: the 40-bit integer normalised, then multiplied or divided by ten once for each power of
+    // the scale with MULTIPLY_FP_A_BY_TEN and DIVIDE_FP_A_BY_TEN, which keep 40 bits and truncate, and rounded once at
+    // the end by ROUND_FP_A. The mantissa is held with its top bit at bit 39, the value mantissa * 2^(power - 40).
+    private static double ScaleByTens(ulong mantissa, int scale)
+    {
+        const ulong Top = 1UL << 39;
+        if (mantissa == 0) { return 0; }
+
+        int power = 40;
+        while ((mantissa & Top) == 0)
+        {
+            mantissa <<= 1;
+            power--;
+        }
+
+        for (; scale > 0; scale--)
+        {
+            // Eight times it plus a quarter of that, the bit below the quarter carried in.
+            power += 3;
+            mantissa = AddShifted(mantissa, mantissa >> 2, (mantissa >> 1) & 1, ref power);
+        }
+
+        for (; scale < 0; scale++)
+        {
+            // A sixteenth of it times 1.5, 1.0625, 1 + 2^-8, 1 + 2^-16 and 1 + 2^-32, which make 1.6, each copy with
+            // the bit below it carried in.
+            power -= 4;
+            mantissa = AddShifted(mantissa, mantissa >> 1, mantissa & 1, ref power);
+            mantissa = AddShifted(mantissa, mantissa >> 4, (mantissa >> 3) & 1, ref power);
+            mantissa = AddShifted(mantissa, mantissa >> 8, (mantissa >> 7) & 1, ref power);
+            mantissa = AddShifted(mantissa, mantissa >> 16, (mantissa >> 15) & 1, ref power);
+            mantissa = AddShifted(mantissa, mantissa >> 32, (mantissa >> 31) & 1, ref power);
+        }
+
+        // ROUND_FP_A: above &80 rounds up, carrying back into the top; exactly &80 sets the lowest bit.
+        ulong rounded = mantissa >> 8;
+        ulong rounding = mantissa & 0xFF;
+        if (rounding > 0x80 && ++rounded == 1UL << 32)
+        {
+            rounded >>= 1;
+            power++;
+        }
+        else if (rounding == 0x80)
+        {
+            rounded |= 1;
+        }
+
+        return Math.ScaleB(rounded, power - 32);
+    }
+
+    // ADD_FP_B_MANTISSA_CARRY: adds a copy and the carry in, and a carry out of the 40 bits shifts back in at the top.
+    private static ulong AddShifted(ulong mantissa, ulong copy, ulong carry, ref int power)
+    {
+        ulong sum = mantissa + copy + carry;
+        if (sum < 1UL << 40) { return sum; }
+
+        power++;
+        return sum >> 1;
     }
 
     // VAL: the number at the start of the string, or 0, read as BASIC reads one: spaces, a sign, spaces, the digits

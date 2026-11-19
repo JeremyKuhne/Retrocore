@@ -305,7 +305,7 @@ public sealed class BbcBasicDialectTests
 
         // Jumps are where the tokeniser finds them: run together, abbreviated, and never in a * command.
         Dictionary<string, BasicLabel> labels = new() { ["done"] = new("done", 1, 0, 4, 80) };
-        foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done"])
+        foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done", "IFX PRINT EL.done", "IF X THEN 10 EL. done"])
         {
             BasicProgram.LabelReferences(BasicDialect.BbcBasic, jump, labels).Should().ContainSingle(jump)
                 .Which.Name.Should().Be("done");
@@ -808,5 +808,40 @@ public sealed class BbcBasicDialectTests
             double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
             evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
         }
+    }
+
+    /// <summary>
+    ///  Numbers are read as READ_NUMBER reads them, bit for bit: the digits as a 40-bit integer, scaled by ten a step
+    ///  at a time with the ROM's truncating multiply and divide, then rounded once, which is not always the nearest
+    ///  real to the decimal (4294967295.5 is 2^32).
+    /// </summary>
+    [TestMethod]
+    public void NumbersReadAsTheRomReadsThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "4294967295.5", "512330.05169784", "598.23534", "0.1", "3.14159265", "1.7E-38", "12345678901234",
+            "0.123456789012", "65536.00001", "1E-10", "VAL\"4294967295.5\"", "VAL\"-598.23534\"", "VAL\"1.7E-38\""
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        evaluator.Evaluate("4294967295.5").Value.Number.Should().Be(4294967296);
     }
 }

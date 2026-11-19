@@ -365,6 +365,85 @@ public class BbcMachineTests
         teletext.Character('A', oddField: false).Should().NotBe(0);
     }
 
+    /// <summary>
+    ///  Concealed text stays hidden until the next colour code: a black background code after conceal does not show
+    ///  it, as the BBC has no reveal, and a colour code after the text shows the text after it again.
+    /// </summary>
+    [TestMethod]
+    public void ConcealHoldsUntilAColourCode()
+    {
+        BbcTeletext teletext = new(TeletextRom());
+        teletext.StartField();
+        teletext.StartLine();
+        foreach (int code in (int[])[0x01, 0x1D, 0x18, 0x1C])  // red, new background, conceal, black background
+        {
+            teletext.Character(code, oddField: false);
+        }
+
+        teletext.Character('A', oddField: false).Should().Be(0, "still concealed");
+        teletext.Character(0x02, oddField: false);              // green ends the conceal, after itself
+        teletext.Character('A', oddField: false).Should().NotBe(0);
+    }
+
+    /// <summary>
+    ///  Mode 7's cursor sits on the character at the text cursor: teletext lags its address by three characters, and
+    ///  the MOS's cursor matches with a skew of 2 and segment 1 (&amp;4B). Segment 2 alone (&amp;2B, which the MOS
+    ///  never sets) covers the next two characters instead.
+    /// </summary>
+    /// <param name="control">The video ULA's control register, set with *FX 154.</param>
+    /// <param name="from">The cursor's first column after the text cursor's.</param>
+    /// <param name="characters">The characters it covers.</param>
+    [TestMethod]
+    [DataRow(0x4B, 0, 1)]
+    [DataRow(0x2B, 1, 2)]
+    public void Mode7CursorSegments(int control, int from, int characters)
+    {
+        BbcMachine machine = Machine();
+        RunToPrompt(machine);
+
+        // A steady cursor (R10 &12) on the second of two Bs, held there by a loop.
+        Type(machine, $"VDU 23,0,10,&12;0;0;0;:*FX154,{control}\r");
+        RunToPrompt(machine);
+        Type(machine, "CLS:PRINT\"BB\";:VDU 31,1,0:REPEAT UNTIL FALSE\r");
+        machine.Run(TimeSpan.FromSeconds(0.2));
+        byte[] frame = machine.Video.RenderBitmap();
+
+        int width = BbcVideo.FrameWidth;
+        bool Lit(int x, int y) => frame[(((y * width) + x) * 4) + 1] > 0x80;
+        int cursorLeft = -1;
+        int cursorRight = -1;
+        List<int> glyph = [];
+        for (int y = 0; y < 120; y++)
+        {
+            List<int> lit = [.. Enumerable.Range(0, width).Where(x => Lit(x, y))];
+            if (lit.Count == 0) { continue; }
+            bool run = lit.Count >= 8 && lit[^1] - lit[0] + 1 == lit.Count;
+            if (run && cursorLeft < 0)
+            {
+                cursorLeft = lit[0];
+                cursorRight = lit[^1] + 1;
+            }
+            else if (!run)
+            {
+                glyph.AddRange(lit);
+            }
+        }
+
+        cursorLeft.Should().BeGreaterThanOrEqualTo(0, "the cursor shows");
+        glyph.Should().NotBeEmpty();
+        glyph.Sort();
+        int split = Enumerable.Range(1, glyph.Count - 1).First(index => glyph[index] - glyph[index - 1] > 2);
+        int first = glyph[0];
+        int second = glyph[split];
+        int pitch = second - first;
+        (cursorRight - cursorLeft).Should().Be(characters * pitch, "the characters the segments cover");
+
+        // The second B's cell starts at most a pitch before its first lit dot; the cursor starts that cell's start
+        // plus its columns past the text cursor.
+        int offset = cursorLeft - (from * pitch) - second;
+        offset.Should().BeInRange(-pitch + 1, 0, "the cursor starts on the cell it should");
+    }
+
     // A teletext character ROM with every dot lit but the space's.
     private static byte[] TeletextRom()
     {

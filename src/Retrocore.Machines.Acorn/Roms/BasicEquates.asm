@@ -59,6 +59,9 @@ FOR_LEVEL = $26                     ;; the size of the FOR stack in bytes: 15 fo
 
 ;; The type of the value in the accumulators: &00 for a string, &40 for an integer, &FF for a real.
 ;;
+;; A real is any type with bit 7 set: ASN and ATN return &80 for a negative angle, and every test of the type is a
+;; branch on the negative flag, so &80 is taken as a real as &FF is.
+;;
 ;; The expression evaluator returns the type in A as well, and sets this byte so that a routine called later knows
 ;; which accumulator holds the value. Routines also keep other things here for a while: the evaluator the next
 ;; operator across a call, a FN or PROC call its token, and NUMBER_TO_STRING the rounding byte of FPA.

@@ -92,11 +92,12 @@ public sealed class FloppySector
     }
 
     /// <summary>
-    ///  Writes the data field: new data and mark, recorded with a good CRC.
+    ///  Writes the data field: new data and mark, recorded with a good CRC unless the write was cut short.
     /// </summary>
     /// <param name="data">The data, the sector's size.</param>
     /// <param name="dataAddressMark">The data address mark.</param>
-    internal void Overwrite(ReadOnlySpan<byte> data, byte dataAddressMark)
+    /// <param name="crcError">Whether the field was left without its CRC.</param>
+    internal void Overwrite(ReadOnlySpan<byte> data, byte dataAddressMark, bool crcError = false)
     {
         if (data.Length != _data.Length)
         {
@@ -106,7 +107,7 @@ public sealed class FloppySector
         CheckMark(dataAddressMark);
         data.CopyTo(_data);
         DataAddressMark = dataAddressMark;
-        _crcError = false;
+        _crcError = crcError;
     }
 
     private static void CheckMark(byte dataAddressMark)

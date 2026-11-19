@@ -355,8 +355,9 @@ PRINT_SEMICOLON:
 ;;   moves the cursor to x,y; SPC n prints n spaces.
 ;; - A string in quotes, or any string expression, is printed as it is.
 ;;
-;; A separator puts the field width and decimal back. The items end at a colon, a carriage return or ELSE, with a new
-;; line unless the last was `;`.
+;; `,` puts @%'s field width and decimal back, `;` sets the field width to 0 and decimal, and `'`, TAB and SPC leave
+;; both as they were, so PRINT ~15'15 prints both numbers in hexadecimal. The items end at a colon, a carriage return
+;; or ELSE, with a new line unless the last was `;`.
 ;; See: <PRINT_TO_FILE>, <NUMBER_TO_STRING>
 PRINT_STATEMENT:
     jsr GET_CHARACTER_A

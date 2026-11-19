@@ -349,7 +349,8 @@ PRINT_SEMICOLON:
 ;;
 ;; - A number is printed in decimal by the format in @%, padded on the left to @%'s field width (its low byte); after
 ;;   `~`, in hexadecimal.
-;; - `,` moves on to the next field: to the next multiple of the field width.
+;; - `,` moves on to the next field: to the next multiple of the field width, unless the cursor is at one already
+;;   (COUNT 0, 10 or 20 with a width of 10), where it prints no spaces and stays.
 ;; - `;` prints the next item with no padding, and at the end stops the new line PRINT ends with.
 ;; - `'` starts a new line; TAB(x) moves to column x, starting a new line first if the cursor is past it; TAB(x,y)
 ;;   moves the cursor to x,y; SPC n prints n spaces.

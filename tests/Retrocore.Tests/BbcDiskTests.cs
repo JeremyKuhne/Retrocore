@@ -522,7 +522,7 @@ public class BbcDiskTests
 
         track[0].Data.Length.Should().Be(2048);
         track[0].SizeCode.Should().Be(4);
-        IReadOnlyList<FloppySector> again = DmkFormat.Read(DmkFormat.Write(disk)).Track(3, 0);
+        IReadOnlyList<FloppySector> again = DmkFormat.ReadSnapshot(DmkFormat.Write(disk)).Track(3, 0);
         again.Should().ContainSingle().Which.Data.Length.Should().Be(2048);
 
         // Read back: verify track 3, sector 0, one 2048-byte sector.

@@ -374,9 +374,11 @@ internal sealed class BbcBasicExpression
                 <= -89.5 => new(0),
                 double power => Real(Math.Exp(power))
             },
-            "INT" => Math.Floor(Number(argument)) is >= int.MinValue and <= int.MaxValue and double whole
-                ? Integer((int)whole)
-                : throw new FormatException("Too big."),
+            "INT" => IsInteger(argument)
+                ? Integer(Int(argument))
+                : Math.Abs(Number(argument)) < TwoToThe31
+                    ? Integer((int)Math.Floor(Number(argument)))
+                    : throw new FormatException("Too big."),
             "LN" => Real(Logarithm(Number(argument), Math.Log)),
             "LOG" => Real(Logarithm(Number(argument), Math.Log10)),
             "RAD" => Real(Number(argument) * Math.PI / 180),
@@ -396,6 +398,14 @@ internal sealed class BbcBasicExpression
     {
         bool hex = TakeCharacter('~');
         BasicValue argument = Factor();
+
+        // With @%'s top byte set, STR$ takes @%'s format and digits, which a watch does not reproduce: it says so rather
+        // than give the general format the program would not. STR$~ is hexadecimal either way.
+        if (!hex && _memory.Read(BbcBasicDialect.ResidentIntegers + 3) != 0)
+        {
+            throw new FormatException("STR$ uses @%'s format here, as @%'s top byte is set, which a watch does not show.");
+        }
+
         string text = hex
             ? Int(argument).ToString("X", System.Globalization.CultureInfo.InvariantCulture)
             : Format(Number(argument));
@@ -726,12 +736,23 @@ internal sealed class BbcBasicExpression
     private static byte[] Text(BasicValue value) =>
         value.Text ?? throw new FormatException("Type mismatch: a number where a string is needed.");
 
-    // A number as a 32-bit integer, truncated, as BASIC's integer operators take it.
+    // A number as a 32-bit integer, as BASIC's integer operators take it: an integer as it is, and a real truncated,
+    // which REAL_TO_INTEGER refuses from 2^31 up in size, -2^31 included, though the integer &80000000 is fine.
     private static int Int(BasicValue value)
     {
-        double truncated = Math.Truncate(Number(value));
-        return truncated is < int.MinValue or > int.MaxValue ? throw new FormatException("Too big.") : (int)truncated;
+        if (value.Long is long whole)
+        {
+            return whole is >= int.MinValue and <= int.MaxValue ? (int)whole : throw new FormatException("Too big.");
+        }
+
+        double real = Number(value);
+        return Math.Abs(real) >= TwoToThe31 ? throw new FormatException("Too big.") : (int)Math.Truncate(real);
     }
+
+    /// <summary>
+    ///  2^31: the size from which a real is too big to be made an integer, -2^31 included.
+    /// </summary>
+    internal const double TwoToThe31 = 2147483648.0;
 
     private static FormatException DivisionByZero() => new("Division by zero.");
 

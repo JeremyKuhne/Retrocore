@@ -139,8 +139,10 @@ public sealed partial class BasicEvaluator
         ArgumentNullException.ThrowIfNull(dialect);
         if (dialect is not BbcBasicDialect) { return IsTrue(result); }
         if (result.Value.IsString) { throw new FormatException("Type mismatch: a condition is a number."); }
-        double whole = Math.Truncate(result.Value.Number);
-        return whole is < int.MinValue or > int.MaxValue ? throw new FormatException("Too big.") : whole != 0;
+        // An integer is true when not zero; a real is made one first, which refuses one of 2^31 or more in size.
+        if (result.Value.Long is long integer) { return integer != 0; }
+        double real = result.Value.Number;
+        return Math.Abs(real) >= BbcBasicExpression.TwoToThe31 ? throw new FormatException("Too big.") : Math.Truncate(real) != 0;
     }
 
     /// <summary>

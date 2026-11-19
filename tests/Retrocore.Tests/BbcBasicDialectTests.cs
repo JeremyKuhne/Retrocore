@@ -425,6 +425,37 @@ public sealed class BbcBasicDialectTests
         packed.Should().Equal(0, 0x40, 0, 0, 0);
         variables.Write(small.Kind, small.ValueAddress, new BasicValue(2147483649.5));
         variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
+
+        // The integer &80000000 is an integer, but the real -2147483648 is too big to be made one, as the ROM has it.
+        BbcMachineTests.Type(machine, "CLS:PRINT STR$(NOT &80000000);\"|\";STR$INT(&80000000)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "2147483647|-2147483648");
+        evaluator.Evaluate("NOT &80000000").Value.Number.Should().Be(2147483647);
+        evaluator.Evaluate("INT(&80000000)").Value.Number.Should().Be(-2147483648);
+        BasicEvaluator.IsTrue(evaluator.Evaluate("&80000000"), BasicDialect.BbcBasic).Should().BeTrue();
+        foreach (string real in (string[])["NOT -2147483648", "INT(-2147483648)"])
+        {
+            BbcMachineTests.Type(machine, $"CLS:PRINT {real}\r");
+            BbcMachineTests.RunToPrompt(machine);
+            machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"), real);
+            Action tooBig = () => evaluator.Evaluate(real);
+            tooBig.Should().Throw<FormatException>().WithMessage("Too big.", real);
+        }
+
+        Action condition = () => BasicEvaluator.IsTrue(evaluator.Evaluate("-2147483648"), BasicDialect.BbcBasic);
+        condition.Should().Throw<FormatException>().WithMessage("Too big.");
+
+        // With @%'s top byte set, STR$ takes @%'s format (STR$1 is 1.00 here, in the ROM), which the watch says it does
+        // not show rather than give the general format; STR$~ is hexadecimal either way.
+        BbcMachineTests.Type(machine, "@%=&0102020A:CLS:PRINT STR$1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == "1.00");
+        Action formatted = () => evaluator.Evaluate("STR$1");
+        formatted.Should().Throw<FormatException>().WithMessage("*@%*");
+        System.Text.Encoding.ASCII.GetString(evaluator.Evaluate("STR$~255").Value.Text ?? []).Should().Be("FF");
+        BbcMachineTests.Type(machine, "@%=&90A\r");
+        BbcMachineTests.RunToPrompt(machine);
+        System.Text.Encoding.ASCII.GetString(evaluator.Evaluate("STR$1").Value.Text ?? []).Should().Be("1");
     }
 
     /// <summary>

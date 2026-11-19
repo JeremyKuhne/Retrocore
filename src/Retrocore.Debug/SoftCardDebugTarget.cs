@@ -51,8 +51,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
             address => host.InstalledSoftCard is { } current ? current.Peek(address) : null,
             (address, value) => host.InstalledSoftCard is { } current && PokeHost(host, current.Translate(address), value),
             Z80Isa.InstructionSet,
-            address => host.InstalledSoftCard is { } current && host.CanPoke(current.Translate(address)),
-            HostAddressOf: address => host.InstalledSoftCard is { } current ? current.Translate(address) : address);
+            address => host.InstalledSoftCard is { } current && host.CanPoke(current.Translate(address)));
     }
 
     // Writes a byte the Z80 reaches, or reports that ROM or I/O is there, so a write can roll back or stop part way.

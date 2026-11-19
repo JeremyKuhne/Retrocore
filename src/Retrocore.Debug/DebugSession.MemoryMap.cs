@@ -82,6 +82,8 @@ internal sealed partial class DebugSession
         string access = (reads, writes) switch
         {
             (true, true) => "the CPU reads and writes it here now",
+            // A read-only bank's writes go nowhere, though the target names its own area as where they go.
+            (true, false) when bank.Poke is null || bank.Areas.Contains(Target.WriteArea(address)) => "the CPU reads it here now",
             (true, false) => $"the CPU reads it here now, and writes {AreaName(Target.WriteArea(address))}",
             (false, true) => $"the CPU writes it here now, and reads {AreaName(read)}",
             _ => $"the CPU reads {AreaName(read)} here now"

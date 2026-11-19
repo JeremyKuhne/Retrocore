@@ -293,6 +293,7 @@ try {
     if (saved && typeof saved.following === "string") following = saved.following;
     if (saved && typeof saved.showListing === "boolean") showListing = saved.showListing;
     if (saved && saved.folded && typeof saved.folded === "object") folded = { ...folded, ...saved.folded };
+    if (folded.bytes && folded.text) folded.text = false;
     if (saved && (saved.dock === "right" || saved.dock === "bottom")) dock = saved.dock;
     if (saved && typeof saved.sideWidth === "number") sideWidth = saved.sideWidth;
     if (saved && typeof saved.sideHeight === "number") sideHeight = saved.sideHeight;
@@ -2716,6 +2717,12 @@ sash.addEventListener("keydown", event => {
 
 // Collapses a column into a vertical strip, or expands it again.
 function toggleFold(name) {
+    // The cursor edits in the bytes or the text, so one of them stays.
+    const other = name === "bytes" ? "text" : name === "text" ? "bytes" : null;
+    if (other !== null && !folded[name] && folded[other]) {
+        status("Keep the bytes or the text showing, to see and edit the byte at the cursor.", true);
+        return;
+    }
     folded[name] = !folded[name];
     if (name === "listing") {
         showListing = !folded.listing;

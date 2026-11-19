@@ -99,9 +99,10 @@ internal sealed partial class DebugSession
             if (start) { entries.Add((ushort)address); }
         }
 
-        // The session's names that the native assembler takes, each once, the first address's winning.
+        // The session's names that the native assembler takes, each once, the first address's winning; names are
+        // case-sensitive, so TABLE and table are two.
         Dictionary<ushort, string> names = [];
-        HashSet<string> used = [with(StringComparer.OrdinalIgnoreCase)];
+        HashSet<string> used = [with(StringComparer.Ordinal)];
         foreach ((int address, string name) in analysis.Labels.Concat(analysis.Names))
         {
             if (names.ContainsKey((ushort)address) || !ExportName().IsMatch(name) || !used.Add(name)) { continue; }

@@ -623,8 +623,11 @@ test("the label, byte and text columns collapse into strips and expand again", a
     assert.match(page.elements.get("rows")!.innerHTML, /cur on" data-o="1027" data-t="1"/);
     fold("bytes");
     assert.match(page.elements.get("rows")!.innerHTML, /<span class="hex">/);
-    // With the text collapsed, Tab leaves the grid rather than typing into the hidden text.
+    // The bytes and the text cannot both collapse, as the cursor edits in one of them.
     fold("text");
+    fold("bytes");
+    assert.match(page.elements.get("rows")!.innerHTML, /<span class="hex">/, "the bytes stay");
+    // With the text collapsed, Tab leaves the grid rather than typing into the hidden text.
     page.key("Tab");
     const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
     assert.equal((await drive(page, [], () => 0xA0, lists)).pane, "hex");

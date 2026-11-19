@@ -34,13 +34,14 @@ namespace Retrocore.Debug;
 ///  Whether the CPU reads the bank's byte at an address now, for a bank its areas do not tell apart from the CPU's
 ///  memory, such as an Apple III X-byte's view; null to go by the areas.
 /// </param>
+/// <param name="WritesHere">
+///  Whether the CPU's write at an address changes the bank's byte now, for a bank whose writes go other than its reads,
+///  such as the Apple III's RAM under its ROM, written unless write protection is on; null to go by
+///  <paramref name="ReadsHere"/>, or by the areas.
+/// </param>
 /// <param name="PartAt">
 ///  The part of the bank an address is in, named by the switch that puts it in the CPU's view, such as the IIe's
 ///  alternate zero page and stack (ALTZP), for the memory map; null for a bank that is all one part.
-/// </param>
-/// <param name="HostAddressOf">
-///  The machine's address a byte of the bank is at, for a coprocessor's space whose addresses are its own, such as
-///  the SoftCard Z80's, whose $0200 is the Apple's $1200; null where the bank's addresses are the machine's.
 /// </param>
 internal sealed record DebugMemoryBank(
     string Name,
@@ -53,7 +54,7 @@ internal sealed record DebugMemoryBank(
     Func<ushort, bool>? CanPoke = null,
     Func<ushort, bool>? ReadsHere = null,
     Func<ushort, string?>? PartAt = null,
-    Func<ushort, ushort>? HostAddressOf = null)
+    Func<ushort, bool>? WritesHere = null)
 {
     /// <summary>
     ///  Gets whether the CPU reads the bank's byte at an address now: where it reads one of the bank's areas, or, for
@@ -76,7 +77,7 @@ internal sealed record DebugMemoryBank(
     /// <param name="address">The CPU address.</param>
     /// <returns>True when the CPU's writes there change the bank's byte.</returns>
     internal bool WrittenBy(IDebugMemory cpu, ushort address) => Poke is not null
-        && (ReadsHere?.Invoke(address) ?? Areas.Contains(cpu.WriteArea(address)));
+        && (WritesHere?.Invoke(address) ?? ReadsHere?.Invoke(address) ?? Areas.Contains(cpu.WriteArea(address)));
 
     /// <summary>
     ///  Gets whether a write reaches an address of the bank now.

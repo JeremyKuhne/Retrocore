@@ -15,40 +15,8 @@ internal sealed partial class DebugSession
     // so switching to bank 1 does not write the value into bank 1.
     private readonly Dictionary<(string? Bank, ushort Address), (byte Value, Enum? Area)> _frozen = [];
 
-    // How many frozen bytes, in any bank, are at each of the machine's addresses, which a write on the bus there is
-    // checked against, and the addresses each frozen byte counts at: its own, and for a coprocessor's byte the
-    // machine's address it is at too, where the Z80's stores and the 6502's writes to it both land. Then whether the
-    // instruction running now has written one, which it then puts back as it ends.
-    private readonly int[] _frozenAt = new int[0x10000];
-    private readonly Dictionary<(string? Bank, ushort Address), (ushort Own, ushort Host)> _frozenMarks = [];
-    private bool _freezeWritten;
-
-    // Counts a frozen byte at its addresses, once however often it is frozen again.
-    private void MarkFrozen(DebugMemoryBank? bank, ushort address)
-    {
-        if (_frozenMarks.ContainsKey((bank?.Name, address))) { return; }
-        ushort host = bank?.HostAddressOf?.Invoke(address) ?? address;
-        _frozenMarks[(bank?.Name, address)] = (address, host);
-        _frozenAt[address]++;
-        if (host != address) { _frozenAt[host]++; }
-    }
-
-    // Takes a byte no longer frozen off the addresses it counted at.
-    private void UnmarkFrozen((string? Bank, ushort Address) key)
-    {
-        if (!_frozenMarks.Remove(key, out (ushort Own, ushort Host) marks)) { return; }
-        _frozenAt[marks.Own]--;
-        if (marks.Host != marks.Own) { _frozenAt[marks.Host]--; }
-    }
-
     // Thaws every byte, as a new launch does.
-    private void ThawAll()
-    {
-        _frozen.Clear();
-        _frozenMarks.Clear();
-        Array.Clear(_frozenAt);
-        _freezeWritten = false;
-    }
+    private void ThawAll() => _frozen.Clear();
 
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
@@ -57,9 +25,10 @@ internal sealed partial class DebugSession
     /// <remarks>
     ///  <para>
     ///   <c>freeze</c> lists <c>{ offset, value }</c> and <c>thaw</c> offsets, from the reference. A frozen byte is
-    ///   written at once, and again as soon as an instruction that writes it ends, so the program never reads a value
-    ///   of its own there; the bytes are also written at the start of each slice the machine runs, for writes that are
-    ///   not the CPU's. Only bytes a write can reach now can be frozen.
+    ///   written at once, and again as each instruction ends wherever it no longer holds its value, so the program never
+    ///   reads a value of its own there, however the write reached it: through another address for the same byte, as
+    ///   the Apple III's zero page or a SoftCard's translation give, or from a device. The bytes are also written at
+    ///   the start of each slice the machine runs. Only bytes a write can reach now can be frozen.
     ///  </para>
     ///  <para>
     ///   A request is all or nothing: every byte is checked before any changes, and should a write still fail, the
@@ -95,7 +64,7 @@ internal sealed partial class DebugSession
 
         foreach (ushort address in thaws)
         {
-            if (_frozen.Remove((bank?.Name, address))) { UnmarkFrozen((bank?.Name, address)); }
+            _frozen.Remove((bank?.Name, address));
         }
 
         if (freezes.Count != 0)
@@ -137,14 +106,13 @@ internal sealed partial class DebugSession
                 {
                     Write(bank, written, restore);
                     if (frozen is { } kept) { _frozen[(bank?.Name, written)] = kept; }
-                    else if (_frozen.Remove((bank?.Name, written))) { UnmarkFrozen((bank?.Name, written)); }
+                    else { _frozen.Remove((bank?.Name, written)); }
                 }
 
                 throw new ArgumentException($"{Reference(bank, address)} is not RAM now, so it cannot be frozen.");
             }
 
             _frozen[(bank?.Name, address)] = (value, bank is null ? Target.WriteArea(address) : null);
-            MarkFrozen(bank, address);
             done.Add((address, old, before));
         }
     }
@@ -203,33 +171,7 @@ internal sealed partial class DebugSession
         foreach ((string? Bank, ushort Address) key in gone ?? [])
         {
             _frozen.Remove(key);
-            UnmarkFrozen(key);
         }
-    }
-
-    // Notes a write the CPU's last bus cycle made to a frozen byte's address, in any bank, and puts the frozen bytes back
-    // once its instruction ends: a write to another bank's byte at the address changes nothing they hold, so it writes
-    // nothing.
-    private void FreezeCycle(IDebugTarget cpu)
-    {
-        ProcessorCycle cycle = cpu.LastCycle;
-        if (cycle.Operation == BusOperation.Write && !cycle.IsStalled && _frozenAt[cycle.Address] != 0)
-        {
-            _freezeWritten = true;
-        }
-
-        // The 6502 runs beside the SoftCard's Z80 as it finishes an instruction, and its writes count too.
-        if (cpu is SoftCardDebugTarget { HostCycle: { } beside }
-            && beside.Operation == BusOperation.Write
-            && !beside.IsStalled
-            && _frozenAt[beside.Address] != 0)
-        {
-            _freezeWritten = true;
-        }
-
-        if (!_freezeWritten || !cpu.IsInstructionBoundary) { return; }
-        _freezeWritten = false;
-        ApplyFreezes();
     }
 
     // Whether an expression reads a frozen byte, as [$4100], [aux:$0400] or [$4100].w do, so a watch expression can

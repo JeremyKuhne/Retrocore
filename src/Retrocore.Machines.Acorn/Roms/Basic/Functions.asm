@@ -200,6 +200,10 @@ EVAL_TYPE_MISMATCH:
 ;; The string, with a carriage return added, is pushed on BASIC's stack and tokenised there, as if it were the middle
 ;; of a statement, so that PAGE and the other pseudo-variables become their function tokens, and numbers are not line
 ;; numbers. Then PTRB is pointed at it and the expression is evaluated. PTRB is kept on the 6502 stack meanwhile.
+;;
+;; The string can be at most 254 characters. At 255 the length wraps to 0 when the carriage return is counted: the
+;; carriage return goes to &05FF, GOSUB_STACK_HIGH+25, changing a 26th GOSUB's return address, and an empty string is
+;; pushed, so EVAL reads whatever is on BASIC's stack instead.
 ;; Out: A = EXPRESSION_TYPE = the type of the result, with the result in its accumulator
 ;; Errors: "Type mismatch" when the argument is not a string, and any error in the expression
 ;; Entry: EVAL_RESTORE_PTR_B = pulls PTRB's offset and address from the 6502 stack and returns the type in

@@ -14,7 +14,7 @@ metadata:
 
 # Retrocore media lifecycle
 
-Use when changing save, save-as, eject, insert, replace, record, revert, discard, Undo, crash recovery, kept media, confirmation, or actions on a stopped/off-machine session. Begin with the existing ownership flow in `src/Retrocore.Debug/MediaActions.Kept.cs` and its caller in `src/Retrocore.Debug/DebugSession.cs`; preserve that convention unless the design is deliberately changed.
+Use when changing save, save-as, eject, insert, replace, record, revert, discard, Undo, crash recovery, kept media, confirmation, or actions on a stopped/off-machine session. Begin with the `MediaActions.Device` dispatcher in `src/Retrocore.Debug/MediaActions.cs`, which branches save, revert, eject, insert, record and Undo; the retained-media helpers it uses in `src/Retrocore.Debug/MediaActions.Kept.cs`; and its caller in `src/Retrocore.Debug/DebugSession.cs`. Preserve that ownership convention unless the design is deliberately changed.
 
 ## Identify the action and its owner
 

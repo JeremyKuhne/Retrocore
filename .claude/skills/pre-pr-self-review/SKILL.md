@@ -54,9 +54,9 @@ Prefer a small matrix of behavioral boundaries over a long list of nominal cases
 | Identity | Same target, replaced target, newer revision, another session |
 | Variant | Machine, CPU, dialect, media format, OS, protocol client |
 
-Add a regression test that fails on the original defect and asserts the externally observable result. For data-changing behavior, check the data remains recoverable on failure. For shared code, include at least one sibling variant that must keep its old behavior. For parser or format logic, use independent input vectors where possible; a writer and reader that share assumptions are not an independent oracle.
+Add a focused test that fails before the change and asserts the externally observable result: for a fix, a regression test that reproduces the original defect; for a new feature, a test of the new behavior that fails without it. For data-changing behavior, check the data remains recoverable on failure. For shared code, include at least one sibling variant that must keep its old behavior. For parser or format logic, use independent input vectors where possible; a writer and reader that share assumptions are not an independent oracle.
 
-Do not add every matrix combination. State omitted combinations and why. Use the existing test framework and helpers; favor controlled barriers and injected errors over timing sleeps. A test that would also pass before the fix is not evidence that the defect is covered.
+Do not add every matrix combination. State omitted combinations and why. Use the existing test framework and helpers; favor controlled barriers and injected errors over timing sleeps. A test that would also pass before the change is not evidence that the defect or feature is covered.
 
 ## Validate and hand off
 

@@ -212,7 +212,9 @@ RS423_TIMEOUT = $EA
 CASSETTE_CRITICAL = $EB             ;; bit 7 set while the CFS is called for an EXEC BGET or a SPOOL BPUT, to keep quiet
 LAST_KEY_PRESSED = $EC              ;; the internal key number of the most recent key pressed, or 0
 FIRST_KEY_PRESSED = $ED             ;; the first key pressed of those still held, or 0, for two-key rollover
-KEY_IGNORED = $EE                   ;; the internal key number that OSBYTE &79's keyboard scan ignores
+;; Not a key the scan ignores: only its address is used, in Y, to pick OSBYTE &79 and &7A's byte of <ROLLOVER_WORK>,
+;; the third. OSBYTE's scan takes the first pressed key it reaches, whatever is stored here.
+OSBYTE_SCAN_SELECTOR = $EE
 OS_A = $EF                          ;; the A register for the most recent OSBYTE or OSWORD
 OS_X = $F0                          ;; the X register for the most recent OSBYTE or OSWORD, or S at the last BRK
 OS_Y = $F1                          ;; the Y register for the most recent OSBYTE or OSWORD

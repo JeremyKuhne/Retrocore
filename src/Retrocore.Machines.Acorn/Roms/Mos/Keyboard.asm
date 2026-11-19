@@ -1519,7 +1519,7 @@ HELP_COMMAND:
 ;; Out: X/A = the key number, or &FF for none, negative = none
 ;; Uses: Y
 ;; Entry:
-;;   SCAN_FROM_16 = OSBYTE &7A: scans through <KEYV> from key 16, ignoring <KEY_IGNORED>
+;;   SCAN_FROM_16 = OSBYTE &7A: scans through <KEYV> from key 16
 ;;   SCAN_KEYBOARD = OSBYTE &79: scans through KEYV as X says
 SCAN_FOR_NEW_KEY:
     clc
@@ -1530,11 +1530,12 @@ SCAN_KEYBOARD:
 
 ;; KEYV with carry set and overflow clear: scans the keyboard, or tests one key, as OSBYTE &79 does.
 ;;
-;; With X negative, it tests key X EOR &80. Otherwise it looks for a pressed key numbered X or more, ignoring the key
-;; in <KEY_IGNORED>, or for <SCAN_FOR_NEW_KEY>, the key in <LAST_KEY_PRESSED> or <FIRST_KEY_PRESSED>. It goes down
-;; the columns from 9 to 0: a pressed key in the selected column raises CA2, and only then are the column's rows
-;; tested, from the lowest key number, so the key found is the first of its column. Interrupts are let in between
-;; columns, so each kind of scan keeps the key number it started from in its own byte of <ROLLOVER_WORK>.
+;; With X negative, it tests key X EOR &80. Otherwise it looks for a pressed key numbered X or more: OSBYTE's scan,
+;; with carry set, takes the first it reaches, and only <SCAN_FOR_NEW_KEY>'s, with carry clear, passes over the key
+;; in <LAST_KEY_PRESSED> or <FIRST_KEY_PRESSED>. It goes down the columns from 9 to 0: a pressed key in the
+;; selected column raises CA2, and only then are the column's rows tested, from the lowest key number, so the key
+;; found is the first of its column. Interrupts are let in between columns, so each kind of scan keeps the key number
+;; it started from in its own byte of <ROLLOVER_WORK>.
 ;; In: X = the key number, or the key number EOR &80 to test one key, carry = set (clear for SCAN_FOR_NEW_KEY)
 ;; Out: X/A = the key number found, &FF for none, negative = none; for one key, X = the key with bit 7 set when it
 ;;   is pressed
@@ -1547,7 +1548,7 @@ KEYV_SCAN:
 KEYV_SCAN_MATRIX:
     php
     bcc KEYV_SCAN_START
-    ldy #KEY_IGNORED
+    ldy #OSBYTE_SCAN_SELECTOR       ; OSBYTE's byte of ROLLOVER_WORK
 KEYV_SCAN_START:
     sta ROLLOVER_WORK - LAST_KEY_PRESSED,y ; the lowest key number to report, for this kind of scan
     ldx #$09

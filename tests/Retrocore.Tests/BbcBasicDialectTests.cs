@@ -704,6 +704,13 @@ public sealed class BbcBasicDialectTests
             evaluator.Evaluate(expression).Value.Number.Should().Be(value, expression);
         }
 
+        // READ_NUMBER stops at a second point, which BASIC then finds where no operator can be.
+        BbcMachineTests.Type(machine, "CLS:X=1.2.3\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.StartsWith("Syntax error", StringComparison.Ordinal));
+        Action points = () => evaluator.Evaluate("1.2.3");
+        points.Should().Throw<FormatException>();
+
         // @loop is not LOOP: GOTO LOOP stays a computed jump through the variable LOOP.
         const string Source = "REM retrocore bbcbasic\n    LOOP=20:GOTO LOOP\n@loop\n    GOTO loop\n";
         string program = BasicProgram.Parse(Source, BasicDialect.BbcBasic).Program?.ToText() ?? "";

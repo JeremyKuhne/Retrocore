@@ -663,7 +663,14 @@ internal sealed class BbcBasicExpression
     private BasicValue NumberLiteral()
     {
         int start = _at;
-        while (_at < _bytes.Length && (char.IsAsciiDigit((char)_bytes[_at]) || _bytes[_at] == '.')) { _at++; }
+        // READ_NUMBER stops at a second point and leaves it unread, so 1.2.3 is 1.2 and then .3, which is no operator.
+        bool point = false;
+        while (_at < _bytes.Length && (char.IsAsciiDigit((char)_bytes[_at]) || (_bytes[_at] == '.' && !point)))
+        {
+            point |= _bytes[_at] == '.';
+            _at++;
+        }
+
         string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
         if (_at < _bytes.Length && _bytes[_at] == 'E')
         {

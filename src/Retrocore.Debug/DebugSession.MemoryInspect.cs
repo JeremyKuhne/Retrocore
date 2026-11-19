@@ -434,10 +434,14 @@ internal sealed partial class DebugSession
 
         if (bank.AreaOf(address) is null) { return $"{bank.Label} has no byte here"; }
         bool reads = bank.ReadBy(Target, address), writes = bank.WrittenBy(Target, address);
+        // A read-only or protected bank's writes go nowhere, though a target that names no write area of its own
+        // gives the bank's own area, so that is no write destination to name.
+        bool elsewhere = !bank.Areas.Contains(write);
         return (reads, writes) switch
         {
             (true, true) => "The CPU reads and writes it here now",
-            (true, false) => $"The CPU reads it here now, and writes {AreaName(write)}",
+            (true, false) when elsewhere => $"The CPU reads it here now, and writes {AreaName(write)}",
+            (true, false) => "The CPU reads it here now",
             (false, true) => $"The CPU writes it here now, and reads {AreaName(read)}",
             _ => $"Not mapped now: the CPU reads {AreaName(read)} here"
         };

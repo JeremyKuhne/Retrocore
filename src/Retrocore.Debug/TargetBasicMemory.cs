@@ -13,10 +13,10 @@ namespace Retrocore.Debug;
 internal sealed class TargetBasicMemory(IDebugTarget target) : IBasicMemory
 {
     /// <inheritdoc/>
-    public byte Read(int address) => target.Peek((ushort)address);
+    public byte Read(int address) => target.BasicPeek((ushort)address);
 
     /// <inheritdoc/>
-    public void Write(int address, byte value) => target.Poke((ushort)address, value);
+    public void Write(int address, byte value) => target.BasicPoke((ushort)address, value);
 
     /// <inheritdoc/>
     public byte ReadFar(byte xByte, int address) => target.PeekFar(xByte, (ushort)address);

@@ -32,7 +32,7 @@ internal sealed partial class DebugSession
     private const string NotAtStatement =
         "Set Next Statement works when BASIC is at the start of a statement: step on the BASIC thread first.";
 
-    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
+    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYS", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
 
 
     // Where the machine-program documents live, which the extension gives at the session's start.
@@ -88,7 +88,8 @@ internal sealed partial class DebugSession
     ];
 
     // The BASIC ROM's addresses, when its source applies to the ROM mapped now.
-    private BasicRom? ActiveBasic => Target.BasicRom is { } rom && _debug.Position(Target, rom.Gone) is not null ? rom : null;
+    private BasicRom? ActiveBasic => Target.BasicRom is { } rom
+        && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
     private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
 
@@ -337,7 +338,7 @@ internal sealed partial class DebugSession
         int at = BasicStackTop;
         for (int count = 0; count < MaximumStackEntries && at < 0xFFFB; count++)
         {
-            int token = Target.Peek((ushort)at);
+            int token = Target.BasicPeek((ushort)at);
             if (token == forToken)
             {
                 at += Target.BasicForSize;

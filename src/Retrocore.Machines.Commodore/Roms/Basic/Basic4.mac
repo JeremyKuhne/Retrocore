@@ -1,0 +1,2448 @@
+; retrocore: dialect=macro10 overlay=../../../Retrocore.Machines.Apple2/Roms/AppleSoft/m6502.asm sha256=F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC
+; COMMODORE BASIC 4 FOR THE PET: COMMODORE'S CHANGES TO MICROSOFT BASIC 1.1 (M6502.ASM), MAINTAINED BY HAND.
+; IT ASSEMBLES BYTE-IDENTICALLY TO THE BASIC 4 ROMS AT $B000-$DFFF: 901465-23 (REVISD=1, THE DEFAULT) OR
+; 901465-19 (REVISD=0) AT $B000, THEN 901465-20 AT $C000 AND 901465-21 AT $D000. BASIC 4 IS BASIC 2 (THE BASE'S
+; REALIO=3 BUILD) MOVED DOWN TO $B000, WITH THE DISK COMMANDS DOPEN, DCLOSE, RECORD, HEADER, COLLECT, BACKUP,
+; COPY, APPEND, DSAVE, DLOAD, CATALOG (OR DIRECTORY), RENAME, SCRATCH AND CONCAT, THE DISK STATUS VARIABLES
+; DS AND DS$, AND COMMODORE'S FASTER GARBAGE COLLECTOR (ITS "VERSION 3"), WHICH LINKS EACH STRING BACK TO ITS
+; DESCRIPTOR. THE $D000 ROM ALSO HOLDS THE MACHINE-LANGUAGE MONITOR AND THE CODE BEHIND THE DISK COMMANDS,
+; WHICH THE OPERATING SYSTEM'S JUMP TABLE CALLS. NOTHING SPILLS INTO THE SCREEN EDITOR'S ROM.
+; EACH ROM ENDS ITS CODE WITH A CHECKSUM BYTE AND ROOM FOR PATCHES. THE TWO $B000 ROMS DIFFER IN 60 BYTES:
+; THE REVISED ROM'S CHECKSUM BYTE AND THREE PATCHES IN THAT ROOM, CALLED FROM GONE (PI IS NOT A STATEMENT),
+; STRADJ (A STRING IS DS$ ONLY WHEN THERE IS A DISK STATUS) AND INPUT (A BLANK LINE AT THE END OF A FILE IS
+; TAKEN, NOT READ AGAIN).
+
+; COMMODORE: THE COMMODORE BUILD, AND REVISD PICKS THE $B000 ROM.
+;@REPLACE 10-10
+REALIO=3                        ;3=COMMODORE: THE PET 2001.
+IFNDEF  REVISD,<REVISD==1>      ;1 FOR THE REVISED $B000 ROM (901465-23), 0 FOR THE ORIGINAL (901465-19).
+;@END
+; COMMODORE: LONG ERROR MESSAGES.
+;@REPLACE 18-18
+LNGERR==1                       ;LONG ERROR MESSAGES.
+;@END
+; COMMODORE: BASIC 4 STARTS AT $B000.
+;@REPLACE 43-43
+        ROMLOC=^O130000
+;@END
+; COMMODORE: THE OPERATING SYSTEM'S JUMP TABLE FOR THE DISK COMMANDS AND THE DISK STATUS, BELOW THE OTHER
+; ENTRIES.
+;@INSERT BEFORE 48
+        CQCONC=^O177623         ;LINK TWO FILES
+        CQDOPN= ^O177626         ;OPEN DISK FILE
+        CQDCLS=^O177631         ;CLOSE DISK FILE(S)
+        CQRECD=^O177634         ;POSITION REL. RECORD
+        CQFORM=^O177637         ;PREPARE MEDIA
+        CQCOLL=^O177642         ;VERIFY DISK BAM
+        CQBACK=^O177645         ;COPY WHOLE DISK
+        CQCOPY= ^O177650         ;COPY ONE FILE
+        CQAPND=^O177653         ;OPEN TO ADD TO FILE
+        CQDSAV= ^O177656         ;SAVE BASIC PRG
+        CQDLOD= ^O177661         ;LOAD BASIC PRG
+        CQDCAT=  ^O177664         ;LIST DIRECTORY
+        CQRENM=^O177667         ;CHANGE FILE NAME
+        CQSCRA=^O177672         ;SCRATCH DISK FILE
+        CQRDDS=^O177675         ;READ DISK STATUS
+;@END
+; COMMODORE: A NEW LINE IS A CARRIAGE RETURN ALONE.
+;@REPLACE 117-119
+DEFINE ACRLF,<
+        13>
+;@END
+; COMMODORE: THE DISK STATUS STRING DS$'S DESCRIPTOR TAKES THE PLACE OF THE OUTPUT-SUPPRESS FLAG.
+;@REPLACE 785-785
+DSDESC: BLOCK   3>              ;DISK STATUS STRING
+;@END
+; COMMODORE: NO LINE WIDTH OR LAST COMMA COLUMN.
+;@DELETE 798-800
+; COMMODORE: "GO" AND THE DISK COMMANDS ARE STATEMENTS. EACH DISK COMMAND GOES TO THE OPERATING SYSTEM'S
+; JUMP TABLE; DIRECTORY IS CATALOG.
+;@INSERT AFTER 1052
+        ADR(GO-1)
+        ADR(CQCONC-1)
+        ADR(CQDOPN-1)
+        ADR(CQDCLS-1)
+        ADR(CQRECD-1)
+        ADR(CQFORM-1)
+        ADR(CQCOLL-1)
+        ADR(CQBACK-1)
+        ADR(CQCOPY-1)
+        ADR(CQAPND-1)
+        ADR(CQDSAV-1)
+        ADR(CQDLOD-1)
+        ADR(CQDCAT-1)
+        ADR(CQRENM-1)
+        ADR(CQSCRA-1)
+        ADR(CQDCAT-1)
+;@END
+; COMMODORE: THE DISK COMMANDS' RESERVED WORDS FOLLOW "GO". HEADER IS CQFORM'S.
+;@INSERT AFTER 1244
+        DCI"CONCAT"
+        DCI"DOPEN"
+        DCI"DCLOSE"
+        DCI"RECORD"
+        DCI"HEADER"
+        DCI"COLLECT"
+        DCI"BACKUP"
+        DCI"COPY"
+        DCI"APPEND"
+        DCI"DSAVE"
+        DCI"DLOAD"
+        DCI"CATALOG"
+        DCI"RENAME"
+        DCI"SCRATCH"
+        DCI"DIRECTORY"
+;@END
+; COMMODORE: NO OUTPUT-SUPPRESS FLAG.
+;@DELETE 1518-1519
+; COMMODORE: NO OUTPUT-SUPPRESS FLAG.
+;@DELETE 1549-1550
+; COMMODORE: LNKPRG ADDS INDEX+1 TO THE ZERO IN [Y].
+;@REPLACE 1664-1665
+        TYA
+        ADC     INDEX+1
+;@END
+; COMMODORE: INLIN CALLS THE OPERATING SYSTEM FOR EACH CHARACTER AND GIVES "STRING TOO LONG" WHEN BUF
+; FILLS. THERE IS NO INCHR AND NO ^O.
+;@REPLACE 1711-1770
+INLINC: JSR     CQINCH          ;GET A CHARACTER.
+        CMPI    13              ;CARRIAGE RETURN?
+        BEQ     FININ1          ;YES, FINISH UP.
+        STA     BUF,X
+        INX
+        CPXI    BUFLEN          ;IS THE BUFFER FULL?
+        BNE     INLINC
+        LDXI    ERRLS           ;YES, "STRING TOO LONG".
+        JMP     ERROR
+FININ1: JMP     FININL>         ;GO TO FININL FAR, FAR AWAY.
+;@END
+; COMMODORE: THE RESERVED WORDS TAKE MORE THAN 256 BYTES, SO CRUNCH SEARCHES THEM THROUGH THE POINTER
+; INDEX1 RATHER THAN INDEXING RESLST BY [Y].
+;@REPLACE 1814-1825
+        STX     TXTPTR          ;SAVE TEXT POINTER FOR LATER USE.
+        LDAI    RESLST/256      ;POINT INDEX1 AT THE RESERVED WORDS.
+        STA     INDEX1+1
+        LDAI    RESLST&255
+        STA     INDEX1
+        BNE     RESCON          ;BRANCH ALWAYS
+RESER:  INX
+        INC     INDEX1
+        BNE     RESCON
+        INC     INDEX1+1
+RESCON: LDA     BUFOFS,X
+        SEC                     ;PREPARE TO SUBSTARCT.
+        SBCDY   INDEX1          ;CHARACTERS EQUAL?
+        BEQ     RESER           ;YES, CONTINUE SEARCH.
+        CMPI    128             ;NO BUT MAYBE THE END IS HERE.
+        BNE     NTHIS           ;NO, TRULY UNEQUAL.
+        ORA     COUNT
+;@END
+; COMMODORE: CRUNCH STEPS TO THE NEXT RESERVED WORD THROUGH INDEX1.
+;@REPLACE 1852-1856
+NTHIS1: LDADY   INDEX1          ;LOOK FOR THE END OF THE RESERVED WORD.
+        PHP
+        INC     INDEX1
+        BNE     NTHIS2
+        INC     INDEX1+1
+NTHIS2: PLP
+        BPL     NTHIS1
+        LDADY   INDEX1          ;LOOK FOR THE END OF RESLST.
+        BNE     RESCON          ;NO, TRY THE NEXT WORD.
+;@END
+; COMMODORE: CLEARC FORGETS THE DISK STATUS.
+;@INSERT BEFORE 1937
+        LDAI    0               ;CLEAR THE DISK STATUS STRING.
+        STA     DSDESC
+;@END
+; COMMODORE: LIST FINDS A RESERVED WORD THROUGH INDEX1 TOO.
+;@REPLACE 2047-2062
+        TAX                     ;MAKE IT A COUNTER.
+        STY     LSTPNT          ;SAVE POINTER TO LINE.
+        LDYI    RESLST/256      ;POINT INDEX1 AT THE RESERVED WORDS.
+        STY     INDEX1+1
+        LDYI    RESLST&255
+        STY     INDEX1
+        LDYI    0
+        ASL     A,              ;THE FIRST WORD?
+        BEQ     PRIT3B          ;YES, GO TOSS IT UP.
+RESRCH: DEX                     ;IS THIS THE RES'D WORD?
+        BPL     PRIT3           ;YES, GO TOSS IT UP..
+RESCR1: INC     INDEX1          ;POINT INDEX1 AT THE START OF THE NEXT WORD.
+        BNE     RESCR2
+        INC     INDEX1+1
+RESCR2: LDADY   INDEX1          ;END OF ENTRY?
+        BPL     RESCR1          ;NO, CONTINUE PASSING.
+        BMI     RESRCH
+PRIT3:  INY
+PRIT3B: LDADY   INDEX1
+        BMI     PRIT4           ;END OF RESERVED WORD.
+        JSR     OUTDO           ;PRINT IT.
+        BNE     PRIT3           ;END OF ENTRY? NO, TYPE REST.
+;@END
+; COMMODORE: THE REVISED ROM GETS THE STATEMENT TYPE THROUGH A PATCH, GONEGT, THAT GIVES A SYNTAX ERROR FOR
+; PI, WHOSE TOKEN WOULD OTHERWISE DISPATCH THROUGH THE BYTES AFTER STMDSP.
+;@REPLACE 2165-2165
+IFN     REVISD,<
+GONE:   JSR     GONEGT>         ;GET THE STATEMENT TYPE.
+IFE     REVISD,<
+GONE:   JSR     CHRGET>         ;GET THE STATEMENT TYPE.
+;@END
+; COMMODORE: THE DISK COMMANDS' TOKENS FOLLOW GOTK, SO GONE TAKES THEM OUT OF THE GAP; "GO" IS A
+; STATEMENT OF ITS OWN.
+;@REPLACE 2173-2192
+        BCC     GLET
+        CMPI    SCRATK-ENDTK+1
+        BCC     GONE4
+        CMPI    GOTK-ENDTK
+        BCC     SNERR1          ;SOME RES'D WORD BUT NOT
+                                ;A STATEMENT RES'D WORD.
+        SBCI    GOTK-SCRATK-1   ;A DISK COMMAND: ITS DISPATCH FOLLOWS "GO".
+GONE4:  ASL     A,              ;MULTIPLY BY TWO.
+        TAY                     ;MAKE AN INDEX.
+        LDA     STMDSP+1,Y
+        PHA
+        LDA     STMDSP,Y
+        PHA                     ;PUT DISP ADDR ONTO STACK.
+        JMP     CHRGET
+GLET:   JMP     LET             ;MUST BE A LET
+MORSTS: CMPI    ":"
+        BEQ     GONE            ;IF A ":" CONTINUE STATEMENT
+SNERR1: JMP     SNERR           ;NEITHER 0 OR ":" SO SYNTAX ERROR
+GO:     JSR     CHRGOT          ;THE CHARACTER AFTER "GO".
+        SYNCHK  TOTK
+        JMP     GOTO
+;@END
+; COMMODORE: NO OUTPUT-SUPPRESS FLAG TO CLEAR.
+;@DELETE 2243-2245
+; COMMODORE: A STRING THAT IS DS$, WHOSE TEXT IS IN THE DISK STATUS BUFFER, IS ALWAYS COPIED, SINCE THE
+; BUFFER CHANGES WHEN THE STATUS IS READ AGAIN.
+;@REPLACE 2618-2618
+        CMP     DSDESC+2        ;DOES IT POINT AT THE DISK STATUS?
+        BNE     NOTDS           ;NO.
+        PHA
+        DEY
+        LDA     DSDESC          ;IS THERE A DISK STATUS?
+        BEQ     NOTDS1          ;NO.
+        LDADY   FACMO
+        CMP     DSDESC+1
+        BNE     NOTDS1
+        PLA                     ;YES, IT IS DS$: COPY IT.
+        JMP     COPY
+NOTDS1: PLA
+        INY
+NOTDS:  CMP     FRETOP+1        ;SEE IF IT POINTS INTO STRING SPACE.
+;@END
+; COMMODORE: THE FASTER GARBAGE COLLECTOR (VERSION 3) NEEDS EACH STRING IN STRING SPACE TO END WITH A LINK
+; BACK TO ITS DESCRIPTOR. ASSIGNMENT POINTS THE NEW STRING'S LINK AT THE VARIABLE AND MARKS THE STRING THE
+; VARIABLE HAD AS GARBAGE: A 255 AND ITS LENGTH IN PLACE OF THE LINK. STRADJ FINDS A STRING'S LINK.
+;@REPLACE 2639-2653
+        JSR     MOVINS          ;COPY IT.
+        LDWD    STRNG1          ;FREE THE OLD DESCRIPTOR IF IT IS A TEMPORARY.
+        JSR     FRETMS
+        LDWDI   DSCTMP          ;GET POINTER TO OLD DESCRIPTOR.
+COPYZC: STWD    DSCPNT          ;REMEMBER POINTER TO DESCRIPTOR.
+        STWD    INDEX           ;INDEX POINTS TO THE NEW DESCRIPTOR.
+        JSR     FRETMS          ;FREE UP THE TEMPORARY WITHOUT
+                                ;FREEING UP ANY STRING SPACE.
+        JSR     STRADJ          ;SET UP THE NEW STRING'S LINK.
+        BCC     COPY00          ;LEAVE IT IF NOT IN STRING SPACE.
+        LDYI    0
+        LDA     FORPNT          ;PUT IN THE BACKWARDS LINK.
+        STADY   INDEX
+        INY
+        LDA     FORPNT+1
+        STADY   INDEX
+COPY00: LDA     FORPNT          ;FIX THE OLD STRING.
+        STA     INDEX
+        LDA     FORPNT+1
+        STA     INDEX+1
+        JSR     STRADJ          ;POINT TO THE OLD STRING.
+        BCC     COPY01          ;IN TEXT: DO NOT FIX.
+        DEY                     ;RESTORE [Y].
+        LDAI    255             ;GARBAGE FLAG.
+        STADY   INDEX
+        DEY
+        TXA
+        STADY   INDEX           ;STORE THE LENGTH.
+COPY01: LDYI    2
+COPY02: LDADY   DSCPNT          ;SET THE VARIABLE'S DESCRIPTOR.
+        STADY   FORPNT
+        DEY
+        BPL     COPY02
+        RTS
+;
+; STRADJ TAKES INDEX, WHICH POINTS TO A DESCRIPTOR, AND INDEXES TO THE
+; DESCRIPTOR'S STRING DATA. IF THE STRING IS BELOW FRETOP (NO ACTION TO
+; TAKE) IT RETURNS WITH THE CARRY CLEAR. ELSE IT RETURNS WITH INDEX
+; POINTING TO THE LINK BYTES IN THE STRING, THE LENGTH IN [A] AND [X]
+; AND THE CARRY SET.
+;
+STRADJ: LDYI    0
+        LDADY   INDEX           ;PUSH LENGTH ON STACK.
+        PHA
+        BEQ     ADJ01           ;LENGTH 0: DO NOTHING.
+        INY
+        LDADY   INDEX           ;LO BYTE TO X.
+        TAX
+        INY
+        LDADY   INDEX           ;HI BYTE IN A.
+        BMI     ADJ01           ;PREVENTS WRITING ABOVE $8000.
+        CMPI    ROMLOC/256
+        BCS     ADJ01
+        CMP     FRETOP+1        ;IF BELOW FRETOP
+        BCC     ADJ01           ;THEN RETURN TO CALLER.
+        BNE     ADJ
+        CPX     FRETOP
+        BCC     ADJ01
+IFN     REVISD,<
+ADJ:    JMP     ADJDS           ;IS IT DS$?
+        NOP>
+IFE     REVISD,<
+ADJ:    CMP     DSDESC+2        ;IS IT DS$?
+        BNE     ADJ02>
+ADJDS1: CPX     DSDESC+1
+        BEQ     ADJ01           ;YES, LEAVE IT.
+ADJ02:  STX     INDEX           ;OK: SET POINTER.
+        STA     INDEX+1
+        PLA                     ;GET BACK LENGTH
+        TAX                     ;INTO X ALSO.
+        CLC
+        ADC     INDEX
+        STA     INDEX
+        BCC     ADJ00
+        INC     INDEX+1
+ADJ00:  SEC                     ;CARRY SET.
+        RTS
+ADJ01:  PLA                     ;CLEAN UP STACK.
+        CLC
+        RTS
+;@END
+; COMMODORE: CRDO TYPES A LINE FEED AFTER THE CARRIAGE RETURN ONLY TO A LOGICAL FILE NUMBERED 128 OR MORE.
+;@REPLACE 2722-2722
+        LDA     CHANNL          ;A LINE FEED TOO?
+        BPL     CRFIN           ;NO.
+        LDAI    10
+;@END
+; COMMODORE: OUTPUT IS NEVER SUPPRESSED.
+;@REPLACE 2818-2820
+OUTDO:
+;@END
+; COMMODORE: THE NAME GETRTS IS GETSPA'S NOW.
+;@REPLACE 2849-2849
+        RTS
+;@END
+; COMMODORE: NO OUTPUT-SUPPRESS FLAG.
+;@REPLACE 2913-2914
+INPUT:
+;@END
+; COMMODORE: A TIME-OUT READING OR WRITING ENDS INPUT# FROM A FILE.
+;@REPLACE 2929-2929
+        ANDI    3
+;@END
+; COMMODORE: AN EMPTY LINE FROM A FILE MEANS GET ANOTHER. THE REVISED ROM ACCEPTS IT INSTEAD AT THE END OF
+; THE FILE, THROUGH A PATCH, INPNUL.
+;@REPLACE 2937-2939
+IFN     REVISD,<
+        JMP     INPNUL          ;BLANK LINE MEANS GET ANOTHER.
+        NOP>
+IFE     REVISD,<
+        LDA     CHANNL          ;BLANK LINE MEANS GET ANOTHER.
+        BNE     GETAGN>>        ;IF NOT TERMINAL.
+INPSTP: CLC                     ;MAKE SURE DONT PRINT BREAK
+;@END
+; COMMODORE: PUSHF INCREMENTS THE RETURN ADDRESS AFTER PUSHING THE SIGN, CARRYING INTO THE HIGH BYTE, SO A
+; CALL WHOSE RETURN ADDRESS ENDS A PAGE RETURNS TO THE RIGHT PLACE.
+;@REPLACE 3275-3280
+        PLA
+        STA     INDEX1+1
+        TYA
+                                ;STORE FAC ON STACK UNPACKED.
+        PHA                     ;START WITH SIGN SET UP.
+        INC     INDEX1
+        BNE     FORPSH
+        INC     INDEX1+1
+;@END
+; COMMODORE: THE $B000 ROM ENDS WITH A BYTE THAT ADJUSTS ITS CHECKSUM, A JUMP TO ISVAR'S CODE, WHICH STARTS
+; THE $C000 ROM, AND ROOM FOR PATCHES, FILLED WITH 252 OCTAL. THE REVISED ROM'S PATCHES ARE THERE.
+;@REPLACE 3399-3399
+IFN     REVISD,<^O270>          ;THE CHECKSUM BYTE.
+IFE     REVISD,<^O341>
+ISVAR:  JMP     ISVAR1
+IFN     REVISD,<
+ADJDS:  PHA                     ;STRADJ: IS IT DS$?
+        LDA     DSDESC          ;ONLY IF THERE IS A DISK STATUS.
+        BEQ     ADJDS2
+        PLA
+        CMP     DSDESC+2
+        BNE     ADJDS3
+        JMP     ADJDS1
+ADJDS2: PLA
+ADJDS3: JMP     ADJ02
+GONEGT: JSR     CHRGET          ;GONE: GET THE STATEMENT TYPE.
+        CMPI    PI              ;PI IS NOT A STATEMENT.
+        BNE     GONEG1
+        JMP     SNERR
+GONEG1: JMP     CHRGOT
+INPNUL: LDA     CHANNL          ;INPUT: A BLANK LINE.
+        BNE     INPNU1          ;IF NOT TERMINAL.
+        JMP     INPSTP          ;STOP.
+INPNU1: LDA     CQSTAT
+        ANDI    64              ;THE END OF THE FILE?
+        BNE     INPNU2
+        JMP     GETAGN          ;NO, GET ANOTHER.
+INPNU2: JMP     INPCON>         ;YES, TAKE THE BLANK LINE.
+        REPEAT  ^O137614-.,<^O252>
+ISVAR1: JSR     PTRGET          ;GET A PNTR TO VARIABLE.
+;@END
+; COMMODORE: THE CLOCK, STATUS AND DISK STATUS VARIABLES ARE TOLD FROM ARRAYS BY A POINTER AT OR ABOVE $8B00.
+; COMMODORE'S TEST IS AGAINST THE HIGH BYTE OF 3000 PLUS THE OFFSET ^O100000, DECIMAL 3000 WHERE BASIC'S
+; START, $3000, WAS MEANT; EITHER WORKS, AS THOSE VARIABLES POINT INTO THE ROM AND ARRAYS INTO RAM.
+; DS$ IS THE DISK STATUS STRING, READ FROM THE DISK THE FIRST TIME IT IS USED.
+;@REPLACE 3408-3409
+        LDX     FACLO           ;IS IT AN ARRAY?
+        CPXI    <^D3000+^O100000>/^D256
+        BCC     STRRTS          ;YES.
+;@END
+; COMMODORE: NOT TI$: MAYBE DS$.
+;@REPLACE 3411-3411
+        BNE     ISVDS
+;@END
+; COMMODORE: NOT TI$: MAYBE DS$.
+;@REPLACE 3413-3413
+        BNE     ISVDS
+;@END
+; COMMODORE: DS$.
+;@INSERT AFTER 3422
+ISVDS:  CMPI    "D"             ;DS$?
+        BNE     STRRTS
+        CPYI    "S"+128
+        BNE     STRRTS
+        JSR     CHKDS           ;YES. READ THE DISK STATUS IF NEED BE.
+        LDWD    DSDESC+1
+        JMP     STRLIT          ;MAKE IT A STRING.
+;@END
+; COMMODORE: DS IS THE DISK STATUS'S NUMBER, ITS FIRST TWO DIGITS, AND IS NOT AN ARRAY EITHER.
+;@REPLACE 3438-3439
+        LDX     FACLO           ;AN ARRAY?
+        CPXI    <^D3000+^O100000>/^D256
+        BCC     GOMOVF          ;YES.
+;@END
+; COMMODORE: CHKDS READS THE DISK STATUS UNLESS DS$ HOLDS IT ALREADY.
+;@INSERT AFTER 3447
+CHKDS:  LDA     DSDESC          ;IS THERE A DISK STATUS?
+        BNE     STRRTS          ;YES.
+        JMP     CQRDDS          ;NO, READ IT FROM THE DISK.
+;@END
+; COMMODORE: NOT ST: MAYBE DS.
+;@REPLACE 3457-3457
+        BNE     QDSAV
+;@END
+; COMMODORE: NOT ST: MAYBE DS.
+;@REPLACE 3459-3459
+        BNE     QDSAV
+;@END
+; COMMODORE: DS, TEN TIMES THE STATUS'S FIRST DIGIT PLUS ITS SECOND.
+;@INSERT AFTER 3461
+QDSAV:  CMPI    "D"             ;DS?
+        BNE     GOMOVF
+        CPYI    "S"
+        BNE     GOMOVF
+        JSR     CHKDS           ;YES. READ THE DISK STATUS IF NEED BE.
+        LDYI    0
+        LDADY   DSDESC+1        ;TEN TIMES THE FIRST DIGIT
+        ANDI    15
+        ASL     A,
+        STA     GARBFL
+        ASL     A,
+        ASL     A,
+        ADC     GARBFL
+        STA     GARBFL
+        INY
+        LDADY   DSDESC+1        ;PLUS THE SECOND.
+        ANDI    15
+        ADC     GARBFL
+        JMP     FLOAT
+;@END
+; COMMODORE: PTRGET CLEARS SUBFLG WITH THE ZERO IT NEEDS IN [Y].
+;@REPLACE 3673-3676
+        LDYI    0
+        STY     SUBFLG          ;ALLOW SUBSCRIPTS AGAIN.
+        LDA     VARTAB          ;PLACE TO START SEARCH.
+        LDX     VARTAB+1
+;@END
+; COMMODORE: FINPTR IS TOO FAR FOR A BRANCH.
+;@REPLACE 3689-3690
+        BNE     NXTPTR
+        JMP     FINPTR          ;THAT'S IT ! THAT'S IT !
+NXTPTR: DEY
+;@END
+; COMMODORE: DS AND DS$ CANNOT BE ASSIGNED TO EITHER.
+;@REPLACE 3736-3736
+        BNE     QDSVAR
+;@END
+; COMMODORE: DS AND DS$.
+;@INSERT AFTER 3738
+QDSVAR: CMPI    "D"             ;DISK STATUS?
+        BNE     VAROK
+        CPYI    "S"
+        BEQ     GOBADV          ;CANNOT MODIFY DS.
+        CPYI    "S"+128
+        BEQ     GOBADV          ;CANNOT MODIFY DS$.
+;@END
+; COMMODORE: MAKING ROOM FOR A NEW SIMPLE VARIABLE MOVES THE ARRAYS UP, SO THE LINKS OF THE STRINGS THAT
+; STRING ARRAY ELEMENTS POINT TO ARE MOVED UP WITH THEM.
+;@INSERT AFTER 3752
+        STWD    ARYPNT          ;SET POINTER TO ARRAYS.
+ARYVA2: LDA     ARYPNT
+        LDX     ARYPNT+1
+ARYVA3: CPX     STREND+1        ;END OF ARRAYS?
+        BNE     ARYVGO
+        CMP     STREND
+        BEQ     ARYDON          ;FINISHED...
+ARYVGO: STWX    INDEX1          ;PARSE THE ARRAY.
+        LDYI    1-ADDPRC
+        LDADY   INDEX1          ;ARRAY NAME.
+        TAX
+        INY
+        LDADY   INDEX1          ;NAME 2ND CHAR.
+        PHP                     ;SAVE STATUS REG.
+        INY
+        LDADY   INDEX1          ;POINT TO NEXT ARRAY.
+        ADC     ARYPNT
+        STA     ARYPNT
+        INY
+        LDADY   INDEX1
+        ADC     ARYPNT+1
+        STA     ARYPNT+1
+        PLP                     ;RESTORE STATUS.
+        BPL     ARYVA2          ;NOT A STRING TYPE.
+        TXA
+        BMI     ARYVA2          ;NOT A STRING ARRAY.
+        INY                     ;OK WE HAVE A STRING ARRAY.
+        LDADY   INDEX1
+        LDYI    0
+        ASL     A,
+        ADCI    5
+        ADC     INDEX1
+        STA     INDEX1
+        BCC     ARYGET
+        INC     INDEX1+1
+ARYGET: LDX     INDEX1+1        ;PARSE ARRAY.
+        CPX     ARYPNT+1        ;DONE WITH THIS ARRAY?
+        BNE     GOGO
+        CMP     ARYPNT
+        BEQ     ARYVA3          ;YES...
+GOGO:   LDYI    0               ;PROCESS STRING POINTER.
+        LDADY   INDEX1
+        BEQ     DVARTS          ;NO STRING...GO ON...
+        INY
+        CLC
+        ADCDY   INDEX1
+        STA     HIGHTR
+        TAX                     ;SAVE IN X FOR CHECK.
+        INY
+        LDADY   INDEX1
+        ADCI    0               ;ADJUST HIGH BYTE.
+        STA     HIGHTR+1
+        CMP     FRETOP+1        ;NO FIX IF BELOW FRETOP.
+        BCC     DVARTS
+        BNE     GOGO1
+        CPX     FRETOP
+        BCC     DVARTS
+GOGO1:  LDYI    0               ;FIX BACKWARDS POINTER BY ADDING
+        LDADY   HIGHTR          ;MOVE LENGTH TO IT.
+        ADCI    6+ADDPRC-1      ;CARRY SET (CAREFUL).
+        STADY   HIGHTR
+        INY
+        LDADY   HIGHTR
+        ADCI    0
+        STADY   HIGHTR          ;DONE WITH THIS STR.
+DVARTS: LDAI    STRSIZ          ;FIX THE NEXT STRING IN THE ARRAY.
+        CLC
+        ADC     INDEX1
+        STA     INDEX1
+        BCC     ARYGET
+        INC     INDEX1+1
+        BNE     ARYGET          ;BRANCH ALWAYS.
+ARYDON:
+;@END
+; COMMODORE: NOTFDD ZEROES [Y] AND CURTOL+1 WITHOUT [A].
+;@REPLACE 3925-3927
+        LDYI    0
+        STY     CURTOL+1
+;@END
+; COMMODORE: GETSPA TAKES TWO MORE BYTES FOR THE STRING'S LINK, WHICH IT SETS TO MARK THE NEW SPACE AS
+; GARBAGE UNTIL THE STRING IS ASSIGNED. A LENGTH OF ZERO TAKES NO SPACE.
+;@REPLACE 4345-4369
+TRYAG2: TAX                     ;SAVE IN X ALSO.
+        BEQ     GETRTS          ;LENGTH OF 0: NO GO...
+        PHA                     ;SAVE [A] (LENGTH) ON STACK.
+        LDA     FRETOP          ;LO BYTE.
+        SEC                     ;FOR SUBTRACT
+        SBCI    2               ;MINUS 2 (LINK BYTES).
+        LDY     FRETOP+1
+        BCS     TRYAG3
+        DEY
+TRYAG3: STWD    INDEX1          ;SAVE FOR LATER.
+        TXA
+        EORI    255
+        SEC                     ;ADD ONE TO COMPLETE NEGATION.
+        ADC     INDEX1
+        BCS     TRYAG4
+        DEY
+TRYAG4: CPY     STREND+1        ;COMPARE HIGH ORDERS.
+        BCC     GARBAG          ;MAKE ROOM FOR MORE.
+        BNE     STRFRE
+        CMP     STREND          ;COMPARE LOW ORDERS.
+        BCC     GARBAG          ;CLEAN UP.
+STRFRE: STWD    FRESPC
+        LDYI    1               ;FLAG STRING AS GARBAGE.
+        LDAI    255
+        STADY   INDEX1
+        DEY
+        PLA                     ;LENGTH.
+        STADY   INDEX1
+        LDXY    FRESPC
+        STXY    FRETOP          ;SAVE NEW [FRETOP].
+GETRTS: RTS
+GARBAG: LDXI    ERROM           ;"OUT OF MEMORY"
+        LDA     GARBFL
+        BMI     ERRGO2
+        JSR     GARBA2
+        SEC
+        ROR     GARBFL
+        PLA                     ;GET BACK STRING LENGTH.
+        BNE     TRYAG2          ;ALWAYS BRANCHES.
+;@END
+; COMMODORE: THE FASTER GARBAGE COLLECTOR, VERSION 3. EACH STRING IN STRING SPACE IS FOLLOWED BY TWO LINK
+; BYTES: A POINTER BACK TO ITS DESCRIPTOR, OR, FOR GARBAGE, 255 AND ITS LENGTH. ONE PASS DOWN FROM MEMSIZ
+; SQUASHES THE GOOD STRINGS UP OVER THE GARBAGE, FIXING THEIR DESCRIPTORS THROUGH THE LINKS, INSTEAD OF A
+; SEARCH OF ALL THE VARIABLES FOR EACH STRING MOVED.
+;@REPLACE 4370-4516
+GARBA2: LDYI    0               ;SET UP FLAG.
+        STY     HIGHDS
+        LDWD    MEMSIZ          ;START AT TOP OF RAM.
+        STA     GRBTOP          ;SET BOTH POINTERS.
+        STA     GRBPNT
+        STA     FRESPC
+        STY     GRBTOP+1
+        STY     GRBPNT+1
+        STY     FRESPC+1
+;
+; DO WHILE (GRBPNT <> FRETOP)
+;
+GLOOP:  CPY     FRETOP+1        ;END OF STRINGS?
+        BCC     GRBEND
+        BNE     COL00
+        CMP     FRETOP
+        BEQ     GRBEND
+        BCC     GRBEND
+;
+; IF [A] = 255 THEN STRING IS GARBAGE
+;
+COL00:  LDX     HIGHDS          ;CHECK FLAG.
+        BMI     COL00B
+        LDAI    2
+        JSR     MOVTOP
+COL00B: JSR     SKIP2A
+        LDYI    1
+        LDADY   GRBPNT          ;GARBAGE?
+        CMPI    255
+        BNE     COL01           ;NO, A GOOD STRING.
+COL00A: DEY                     ;BACK UP TO LENGTH.
+        LDADY   GRBPNT
+        JSR     MOVPNT          ;MOVE GRBPNT TO NEXT.
+        SEC
+        ROR     HIGHDS          ;SET FLAG FOR SQUASH.
+        BNE     GLOOP           ;(JMP) GO GET MORE.
+;
+; ELSE
+;
+COL01:  JSR     SETINX          ;POINT INDEX TO DEST.
+        LDX     HIGHDS          ;IF ON DO SQUASH.
+        BPL     COL03
+        LSR     HIGHDS          ;RESET FLAG.
+;
+; MOVE A STRING OVER GARBAGE
+;
+COL02:  LDYI    0               ;MOVE THE LINK BYTES.
+        LDADY   GRBPNT
+        STADY   GRBTOP
+        INY
+        LDADY   GRBPNT
+        STADY   GRBTOP
+        DEY                     ;GET LENGTH OF STRING.
+        LDADY   INDEX1
+        TAX
+        JSR     MOVTOP          ;MOVE TOP POINTER.
+        STWD    FRESPC          ;SAVE IN FRESPC.
+        TXA
+        JSR     MOVPNT          ;MOVE GRBPNT.
+        TXA                     ;PUT LENGTH-1 IN [Y].
+        TAY
+GLOP1:  DEY
+        LDADY   GRBPNT
+        STADY   GRBTOP
+        DEX
+        BNE     GLOP1
+        LDYI    2               ;FIX THE DESCRIPTOR.
+COL02B: LDA     GRBTOP-1,Y
+        STADY   INDEX1
+        DEY
+        BNE     COL02B
+        LDWD    GRBPNT          ;CHECK POINTER.
+        CPY     FRETOP+1
+        BCC     GRBEND
+        BNE     COL02A
+        CMP     FRETOP
+        BEQ     GRBEND
+        BCC     GRBEND
+COL02A: JSR     SKIP2           ;SKIP LINK BYTES.
+        LDYI    1               ;IS IT GARBAGE?
+        LDADY   GRBPNT
+        CMPI    255
+        BEQ     COL00A
+        JSR     SETINX          ;RETURNS N SET.
+        BMI     COL02
+GRBEND: JMP     ENDGRB
+COL03:  LDYI    0               ;SKIP OVER GOOD STRINGS.
+        LDADY   INDEX1
+        TAX
+        JSR     MOVTOP
+        STWD    FRESPC
+        TXA
+        JSR     MOVPNT
+        JMP     GLOOP
+;
+; DONE: FIX FRETOP AND FRESPC
+;
+ENDGRB: LDWD    FRESPC
+        STWD    FRETOP
+        RTS
+;
+; SUBROUTINES USED FOR GARBAGE COLLECTION
+;
+SKIP2:  LDAI    2               ;SKIP POINTERS FAST:
+        JSR     MOVTOP          ;THE LINK BYTES IN
+SKIP2A: LDAI    2               ;THE STRING DATA.
+MOVPNT: EORI    255             ;COMP AND ADD.
+        SEC
+        ADC     GRBPNT
+        LDY     GRBPNT+1
+        BCS     MOV00
+        DEY
+MOV00:  STWD    GRBPNT
+        RTS
+MOVTOP: EORI    255             ;COMP AND ADD.
+        SEC
+        ADC     GRBTOP
+        LDY     GRBTOP+1
+        BCS     MOV01
+        DEY
+MOV01:  STWD    GRBTOP
+        RTS
+SETINX: LDYI    1               ;SET INDEX1 AS POINTER
+SET00:  LDADY   GRBPNT          ;TO THE LENGTH BYTE IN
+        STA     INDEX1,Y        ;THE DESCRIPTOR.
+        DEY
+        BPL     SET00
+        RTS
+;@END
+; COMMODORE: FRETMP MARKS A FREED STRING AS GARBAGE THROUGH ITS LINK, AND A STRING THAT WAS THE LAST INTO
+; STRING SPACE GIVES BACK ITS LINK BYTES TOO.
+;@REPLACE 4591-4617
+        JSR     FRETMS          ;CHECK DESC. IF LAST
+        BNE     FRE02           ;ONE THEN SCRATCH IT.
+        JSR     STRADJ          ;INDEX POINTS TO LINK.
+        BCC     FRE02           ;LITERAL: NO FIX.
+        DEY                     ;[Y]=1.
+        LDAI    255             ;FLAG STRING AS GARBAGE.
+        STADY   INDEX
+        DEY
+        TXA
+        STADY   INDEX           ;PUT IN LENGTH.
+        PHA                     ;SAVE LENGTH ON STACK.
+        EORI    255             ;PUT INDEX BACK
+        SEC                     ;TO FIRST BYTE.
+        ADC     INDEX
+        LDY     INDEX+1
+        BCS     RES00
+        DEY
+RES00:  STWD    INDEX
+        TAX                     ;LO INTO X.
+        PLA                     ;PULL LENGTH FROM STACK.
+        CPY     FRETOP+1        ;TEST FOR EQ TO FRETOP.
+        BNE     FRERTS
+        CPX     FRETOP
+        BNE     FRERTS
+;
+; STRING WAS LAST INTO STRING SPACE. SAVE GARBAGE COLLECTION SOME TIME
+; BY FREEING UP (LENGTH + 2).
+;
+        PHA                     ;SAVE LENGTH ON STACK.
+        SEC                     ;PLUS ONE.
+        ADC     FRETOP
+        STA     FRETOP
+        BCC     FRE01
+        INC     FRETOP+1
+FRE01:  INC     FRETOP          ;+ ONE MORE.
+        BNE     FREPLA
+        INC     FRETOP+1
+FREPLA: PLA                     ;PULL LENGTH OFF STACK.
+        RTS
+FRE02:  LDYI    0               ;SET UP [X,Y,A] AND INDEX.
+        LDADY   INDEX           ;LENGTH
+        PHA                     ;ON STACK.
+        INY
+        LDADY   INDEX           ;POINTER LO.
+        TAX
+        INY
+        LDADY   INDEX           ;POINTER HI.
+        TAY
+        STX     INDEX
+        STY     INDEX+1
+        PLA                     ;GET BACK LENGTH.
+        RTS
+;@END
+; COMMODORE: VAL SETS THE TERMINATOR WITH THE ZERO IN [Y].
+;@REPLACE 4780-4780
+        TYA                     ;SET A TERMINATOR.
+;@END
+; COMMODORE: PEEK READS THE BASIC ROM TOO.
+;@DELETE 4811-4815
+; COMMODORE: NO HIDDEN MESSAGE BEHIND WAIT.
+;@REPLACE 4836-4836
+        BEQ     STORDO
+;@END
+; COMMODORE: NO ZSTORD.
+;@DELETE 4910-4941
+; COMMODORE: THE $C000 ROM ENDS WITH A BYTE THAT ADJUSTS ITS CHECKSUM AND ROOM FOR PATCHES, FILLED WITH
+; 252 OCTAL. INPRT STARTS PAST IT.
+;@INSERT AFTER 5839
+        ^O371                   ;THE CHECKSUM BYTE.
+        REPEAT  ^O147570-.,<^O252>
+;@END
+; COMMODORE: NO CONSTANTS FOR THE HIDDEN MESSAGE AFTER SINCON.
+;@REPLACE 6529-6539
+        242>
+;@END
+; COMMODORE: NO LINWID OR NCMWID TO SET UP.
+;@DELETE 6728-6732
+; COMMODORE: INIT CLEARS THE DISK STATUS STRING.
+;@REPLACE 6747-6750
+        STA     DSDESC          ;NO DISK STATUS.
+        PHA                     ;PUT ZERO AT THE END OF THE STACK
+                                ;SO FNDFOR WILL STOP
+;@END
+; COMMODORE: ^O100000 IS COMMODORE'S OFFSET, THE DISTANCE FROM WHERE THE CODE WAS ASSEMBLED ($3000) TO THE
+; ROM: WITH NO OFFSET, AS IN RAM, MEMORY WOULD END AT ROMLOC.
+;@INSERT AFTER 6782
+        LDAI    ^O100000/^D256  ;CREATE RAM INITIALIZATION IF NEEDED.
+        BNE     LOOPMM
+        LDWDI   ROMLOC
+        JMP     USEDEF
+;@END
+; COMMODORE: TXTTAB IS ALREADY SET UP.
+;@DELETE 6873-6875
+; COMMODORE: NO CHECK FOR ROOM.
+;@DELETE 6883-6884
+; COMMODORE: BASIC 4'S SIGN-ON MESSAGE.
+;@REPLACE 6886-6886
+        LDWDI   SIGNON
+;@END
+; COMMODORE: THE MACHINE-LANGUAGE MONITOR AND THE DISK COMMANDS, WHICH THE OPERATING SYSTEM'S JUMP TABLE
+; CALLS, FOLLOW INIT IN THE $D000 ROM. THEIR NAMES ARE THOSE OF COMMODORE'S OPERATING SYSTEM, BUT FOR
+; THOSE BASIC ALREADY USES: KCOUNT, PRSCHK AND RECPOS ARE ITS COUNT, PARCHK AND POS; MGO, DCOPY, DSCRTC
+; AND GTVLCN ARE ITS GO, COPY, SCRTCH AND CONT. THE ROM ENDS WITH A BYTE THAT ADJUSTS ITS CHECKSUM, A PATCH
+; TO GETDS, BASIC 4'S SIGN-ON MESSAGE AND ROOM FOR PATCHES, FILLED WITH 252 OCTAL.
+;@INSERT AFTER 6947
+;
+; THE OPERATING SYSTEM'S STORAGE THAT THE MONITOR AND THE DISK COMMANDS USE.
+;
+CINV=   ^O220                   ;IRQ RAM VECTOR.
+SATUS=  ^O226                   ;OPERATION STATUS BYTE (CQSTAT).
+VERCK=  ^O235                   ;LOAD OR VERIFY FLAG.
+LDTND=  ^O256                   ;INDEX TO LOGICAL FILE.
+DFLTO=  ^O260                   ;DEFAULT OUTPUT DEVICE #.
+WSW=    ^O263                   ;CASSETTE WRITE ENABLE.
+SAVX=   ^O264                   ;TEMPORARY 1.
+TMPC=   ^O265                   ;TEMPORARY 2.
+CNTDN=  ^O272                   ;CASSETTE SYNC COUNTDOWN.
+EAL=    ^O311
+EAH=    ^O312
+FNLEN=  ^O321                   ;LENGTH CURRENT FILE N STR.
+LA=     ^O322                   ;CURRENT FILE LOGICAL ADDR.
+SA=     ^O323                   ;CURRENT FILE 2ND ADDR.
+FA=     ^O324                   ;CURRENT FILE PRIMARY ADDR.
+FNADR=  ^O332                   ;ADDR CURRENT FILE NAME STR.
+WRAP=   ^O336
+TMP0=   ^O373
+TMP2=   ^O375
+FNADR2= ^O375
+BAD=    ^O400
+PCH=    ^O1000                  ;VIRTUAL REGS FOR MACHINE LANGUAGE MONITOR.
+PCL=    ^O1001
+FLGS=   ^O1002
+ACC=    ^O1003
+XR=     ^O1004
+YR=     ^O1005
+SP=     ^O1006
+INVH=   ^O1007                  ;USER MODIFIABLE IRQ.
+INVL=   ^O1010
+SAVNAM= ^O1011                  ;BUFFER.
+LAT=    ^O1121                  ;LOGICAL FILE NUMBERS.
+FAT=    ^O1133                  ;PRIMARY DEVICE NUMBERS.
+SAT=    ^O1145                  ;SECONDARY ADDRESSES.
+FNLEN2= ^O1472
+RECPOS= ^O1472                  ;THE OPERATING SYSTEM'S POS.
+DRIVE1= ^O1473
+DRIVE2= ^O1474
+DIDCHK= ^O1475
+LRECL=  ^O1475
+PRSCHK= ^O1476                  ;THE OPERATING SYSTEM'S PARCHK.
+DISKID= ^O1477
+KCOUNT= ^O1501                  ;THE OPERATING SYSTEM'S COUNT.
+TBUF2=  ^O1502                  ;FN1 STORAGE.
+TBUFF=  ^O1523
+USRCMD= ^O1772                  ;RAM VECTOR FOR USER INTERP OF MONITOR CMDS.
+;
+; THE OPERATING SYSTEM'S ROUTINES AND MESSAGES THAT THEY CALL.
+;
+PRT=    ^O161002                ;THE SCREEN EDITOR'S PRINT.
+MS1=    ^O170000                ;THE OPERATING SYSTEM'S MESSAGES.
+MSG1=   ^O170000
+MS3=    ^O170027                ;"FILE NOT OPEN".
+MSG30=  ^O170266                ;"ARE YOU SURE ?".
+MSG31=  ^O170305                ;"? BAD DISK".
+TALK=   ^O170322
+LISTN=  ^O170325
+MSG=    ^O170605
+SECND=  ^O170623
+UNTLK=  ^O170656
+UNLSN=  ^O170671
+ACPTR=  ^O170700
+GETIN=  ^O171005
+BASIN=  ^O171025
+BSOUT=  ^O171146
+CLRCH=  ^O171246
+CLRCHN= ^O171246
+JLTLK=  ^O171301
+JZ100=  ^O171315
+CLOS5=  ^O171342
+FCLOSE= ^O171342
+CLOS10= ^O171347
+STOP1=  ^O171465
+LD15=   ^O171526
+LOADNP= ^O172010
+OPENIB= ^O172264
+OP94=   ^O172543
+FOPEN=  ^O172545
+ERMSG=  ^O172657
+SV3=    ^O173340
+SV5=    ^O173343
+CHKIN=  ^O173657
+CHKOUT= ^O173776
+TWAIT=  ^O174453
+SPERR=  16                      ;THE STATUS BIT FOR A VERIFY OR LOAD ERROR.
+CR=     ^O15
+ONTK=   ^O221                   ;THE "ON" TOKEN.
+NCMDS=8
+CALLE:  LDAI    "C"             ;SET A=C TO INDICATE
+        STA     TMPC
+        BNE     B3              ;CALL ENTRY, THEN JMP TO B3
+BRKE:   JSR     CLRCH           ;CLR CHANNELS
+        LDAI    "B"
+        STA     TMPC
+        CLD
+        LSR     A,              ;SET CY FOR PC CORRECTION
+        PLA
+        STA     YR              ;SAVE Y
+        PLA
+        STA     XR              ;AND X
+        PLA
+        STA     ACC             ;AND ACCUMULATOR
+        PLA
+        STA     FLGS            ;AND FLAGS
+B3:     PLA
+        ADCI    ^O377           ;CY SET TO PC-1 FOR BREAK
+        STA     PCL
+        PLA
+        ADCI    ^O377
+        STA     PCH
+        LDA     CINV
+        STA     INVL
+        LDA     CINV+1
+        STA     INVH
+        TSX
+        STX     SP              ;SAVE ORIGINAL SP
+        CLI                     ;CLEAR INTS
+B5:     JSR     CRLF
+        LDX     TMPC            ;SET X EQUAL TO B OR C
+        LDAI    "*"
+        JSR     WRTWO
+        LDAI    "R"             ;SET FOR R DISPLAY TO
+;                      PERMIT IMMEDIATE
+;                      ALTER FOLLOWING
+;                      BREAKPOINT
+        BNE     S0
+STRT:   LDAI    2             ;NEXT COMMAND FROM USER
+        STA     TXTPTR
+        LDAI    0
+        STA     WRAP            ;CLEAR ADR WRAPAROUND FLAG
+        LDXI    CR
+        LDAI    "."             ;TYPE A PROMPTING '. '
+        JSR     WRTWO
+ST1:    JSR     RDOC            ;READ COMMAND. CHARACTER
+;                      IS RETURNED IN A
+        CMPI    "."             ;IGNORE PROMPTING '. '
+        BEQ     ST1
+        CMPI    ^O40            ;IGNORE SPACES
+        BEQ     ST1
+S0:     LDXI    NCMDS-1       ;LOOKUP COMMAND
+S1:     CMP     CMDS,X
+        BNE     S2
+        STX     SAVX            ;SAVE CURRENT COMMAND INDEX
+;INDIRECT JMP FROM TABLE BY
+; PUSHING TARGET ADDRESS-1
+;  THEN RTS
+        LDA     ADRH,X
+        PHA
+        LDA     ADRL,X
+        PHA
+        RTS
+S2:     DEX
+        BPL     S1              ;LOOP FOR ALL. COMMANDS
+        JMPD    USRCMD
+PUTP:   LDA     TMP0            ;MOVE TMP0 TO PCH,PCL
+        STA     PCL
+        LDA     TMP0+1
+        STA     PCH
+        RTS
+;
+;DISPLAY MEM SUBR. SET AR=NUMBER
+;OF MEMORY BYTES DISPLAYED.
+;TMP0=ADR OF MEM DISPLAYED
+;
+DM:     STA     TMPC
+        LDYI    0
+DM1:    JSR     SPACE           ;WR N BYTES
+        LDADY   TMP0            ;(TMP0)=ADR
+        JSR     WROB
+        JSR     INCTMP
+        DEC     TMPC
+        BNE     DM1
+        RTS
+;READ AND STORE BYTE.
+;NO STORE IF SPACE OR TMPC = 0.
+BYTE:   JSR     RDOB            ;CHAR IN A, CY=0 IF SP
+        BCC     BY3             ;SPACE
+        LDXI    0             ;STORE BYTE
+        STADX   TMP0
+        CMPDX   TMP0            ;TEST FOR VALID WRITE (RAM)
+        BEQ     BY3
+        PLA                     ;ERROR: CLEAR JSR ADR IN STACK
+        PLA
+        JMP     ERROPR
+BY3:    JSR     INCTMP          ;GO INC TMP0 ADR
+        DEC     TMPC
+        RTS
+SETR:   LDAI    <FLGS>&^O377    ;SET TO ACCESS REGS
+        STA     TMP0
+        LDAI    <FLGS>/256
+        STA     TMP0+1
+        LDAI    5
+        RTS
+SPAC2:  JSR     SPACE
+SPACE:  LDAI    ^O40
+        SKIP2
+CRLF:   LDAI    ^O15
+        JMP     BSOUT
+;INCREMENT (TMP0,TMP0+1) BY 1
+INCTMP: INC     TMP0            ;LOW BYTE
+        BNE     SETWR
+        INC     TMP0+1        ;HIGH BYTE
+        BNE     SETWR
+        INC     WRAP
+SETWR:  RTS
+CMDS:   ":"                     ;MODIFY MEMORY
+        ^O73                    ;ALTER REGISTERS
+        "R"                     ;DISPLAY REGS
+        "M"                     ;DISPLAY MEMORY
+        "G"                     ;START EXECUTION
+        "X"                     ;WARM START BASIC
+        "L"                     ;LOAD MEMORY
+        "S"                     ;SAVE MEMORY
+ADRH:   <ALTM-1>/256
+        <ALTR-1>/256
+        <DSPLYR-1>/256
+        <DSPLYM-1>/256
+        <MGO-1>/256
+        <EXIT-1>/256
+        <LD-1>/256
+        <LD-1>/256
+ADRL:   <ALTM-1>&^O377
+        <ALTR-1>&^O377
+        <DSPLYR-1>&^O377
+        <DSPLYM-1>&^O377
+        <MGO-1>&^O377
+        <EXIT-1>&^O377
+        <LD-1>&^O377
+        <LD-1>&^O377
+REGK:   CR                      ;4 SPACES
+        ^O40
+        ^O40
+        ^O40
+        ^O40
+        DT" PC "
+        DT" IRQ "
+        DT" SR AC XR YR SP"
+ALTRIT: TYA
+        PHA
+        JSR     CRLF
+        PLA
+        LDXI    "."
+        JSR     WRTWO
+        JMP     SPAC2
+DSPLYR: LDXI    0
+D2:     LDA     REGK,X
+        JSR     BSOUT
+        INX
+        CPXI    29
+        BNE     D2
+        LDYI    ^O73
+        JSR     ALTRIT
+        LDA     PCH
+        JSR     WROB
+        LDA     PCL
+        JSR     WROB
+        JSR     SPACE
+        LDA     INVH
+        JSR     WROB
+        LDA     INVL
+        JSR     WROB
+        JSR     SETR
+        JSR     DM              ;USE DM SUBR.
+        BEQ     BEQS1
+DSPLYM: JSR     RDOC
+        JSR     RDOA            ;READ START ADR
+        BCC     ERRS1           ;ERR IF NO SA
+        JSR     T2T2            ;SA TO TMP2
+        JSR     RDOC            ;SKIP DELIMITER
+        JSR     RDOA            ;READ END ADR
+        BCC     ERRS1           ;ERR IF NO EA
+        JSR     T2T2            ;SA TO TMP0, EA TO TMP2
+DSP1:   JSR     STOP1           ;TEST FOR STOP KEY
+        BEQ     BEQS1
+        LDX     WRAP
+        BNE     BEQS1
+        SEC                     ;DOUBLE BYTE COMPARE
+        LDA     TMP2
+        SBC     TMP0
+        LDA     TMP2+1
+        SBC     TMP0+1
+        BCC     BEQS1           ;STOP IF EA LESS THAN SA
+        LDYI    ":"
+        JSR     ALTRIT
+        JSR     WROA
+        LDAI    8
+        JSR     DM              ;DISPLAY 8, INCR TMP0
+        BEQ     DSP1
+BEQS1:  JMP     STRT
+ERRS1:  JMP     ERROPR
+;ALTER REGISTERS
+ALTR:   JSR     RDOB            ;SKIP 2 SPACES
+        JSR     RDOA            ;CY=0 IF SP
+        BCC     AL2             ;SPACE
+        JSR     PUTP            ;ALTER PC
+AL2:    JSR     BASIN
+        JSR     RDOA
+        BCC     AL3
+        LDA     TMP0
+        STA     INVL
+        LDA     TMP0+1
+        STA     INVH
+AL3:    JSR     SETR            ;SET TO ALTER R'S
+        BNE     A4
+; ALTER MEMORY - READ ADR AND DATA
+ALTM:   JSR     RDOB            ;SKIP 2 SPACES
+        JSR     RDOA            ;READ MEM ALTER ADR
+        BCC     ERRS1           ;CY=0, IF SPACE,ERR
+        LDAI    8             ;SET CNT = 8
+A4:     STA     TMPC
+A5:     JSR     RDOC
+        JSR     BYTE
+        BNE     A5
+A9:     BEQ     BEQS1
+MGO:    JSR     BASIN
+        CMPI    ^O15            ;IF CR, EXIT
+        BEQ     G1
+        CMPI    ^O40            ;IF NOT SPACE, ERR
+        BNE     ERRS1
+        JSR     RDOA
+        BCC     G1
+        JSR     PUTP
+G1:     LDX     SP
+        TXS                     ;ORIG OR NEW SP VALUE TO SP
+        SEI
+        LDA     INVH
+        STA     CINV+1
+        LDA     INVL
+        STA     CINV
+        LDA     PCH
+        PHA
+        LDA     PCL
+        PHA
+        LDA     FLGS
+        PHA
+        LDA     ACC
+        LDX     XR
+        LDY     YR
+        RTI
+EXIT:   LDX     SP
+        TXS
+        JMP     READY           ;EXIT TO BASIC WARM START
+ERRL:   JMP     ERROPR
+LD:     LDYI    1
+        STY     FA              ;DEFAULT DEVICE #1
+        DEY
+        STY     FNLEN
+        STY     SATUS           ;CLEAR STATUS ON LOAD
+        STY     VERCK
+        LDAI    <SAVNAM>/256    ;PLACE TO STORE NAME
+        STA     FNADR+1
+        LDAI    <SAVNAM>&^O377
+        STA     FNADR
+L1:     JSR     BASIN
+        CMPI    " "
+        BEQ     L1              ;SPAN BLANKS
+        CMPI    CR
+        BEQ     L5              ;DEFAULT TO LOAD
+        CMPI    ^O42
+L2:     BNE     ERRL            ;FILE NAME MUST BE NEXT
+L3:     JSR     BASIN
+        CMPI    ^O42
+        BEQ     L8              ;END OF NAME
+        CMPI    CR              ;DEFAULT A LOAD
+        BEQ     L5
+        STADY   FNADR
+        INC     FNLEN
+        INY
+        CPYI    16
+L4:     BEQ     ERRL            ;FILE NAME TOO LONG
+        BNE     L3
+L5:     LDA     SAVX
+        CMPI    6
+L6:     BNE     L2              ;NOT A LOAD
+        JSR     LD15
+        JSR     TWAIT
+        LDA     SATUS
+        ANDI    SPERR
+L7:     BNE     L6              ;LOAD ERROR
+        JMP     STRT
+L8:     JSR     BASIN
+        CMPI    CR
+        BEQ     L5              ;DEFAULT LOAD
+        CMPI    ^O54
+L9:     BNE     L7              ;BAD SYNTAX
+        JSR     RDOB
+        ANDI    ^O17
+L10:    BEQ     L4              ;DEVICE 0
+        CMPI    3
+L11:    BEQ     L10             ;DEVICE 3
+        STA     FA
+        JSR     BASIN
+        CMPI    CR
+        BEQ     L5              ;DEFAULT LOAD
+        CMPI    ^O54
+L12:    BNE     L9              ;BAD SYNTAX
+        JSR     RDOA
+        JSR     T2T2
+        JSR     BASIN
+        CMPI    ^O54
+L13:    BNE     L12             ;MISSING END ADDR
+        JSR     RDOA
+        LDA     TMP0
+        STA     EAL
+        LDA     TMP0+1
+        STA     EAH
+        JSR     T2T2
+L20:    JSR     BASIN
+        CMPI    ^O40
+        BEQ     L20
+        CMPI    CR
+L14:    BNE     L13             ;MISSING CR AT END
+        LDA     SAVX
+        CMPI    7
+        BNE     L14
+        JSR     SV5
+        JMP     STRT
+;WRITE ADR FROM TMP0 STORES
+WROA:   LDXI    1
+WROA1:  LDA     TMP0-1,X
+        PHA
+        LDA     TMP0,X
+        JSR     WROB
+        PLA
+;WRITE BYTE --- A = BYTE
+;UNPACK BYTE DATA INTO TWO ASCII
+;CHARACTERS. A=BYTE; X,A=CHARS
+WROB:   PHA
+        LSR     A,
+        LSR     A,
+        LSR     A,
+        LSR     A,
+        JSR     ASCII           ;CONVERT TO ASCII
+        TAX
+        PLA
+        ANDI    ^O17
+        JSR     ASCII
+;WRITE 2 CHARS--X,A=CHARS
+WRTWO:  PHA
+        TXA
+        JSR     BSOUT
+        PLA
+        JMP     BSOUT
+ASCII:  CLC
+        ADCI    ^O366
+        BCC     ASC1
+        ADCI    ^O6
+ASC1:   ADCI    ^O72
+        RTS
+T2T2:   LDXI    2
+T2T21:  LDA     TMP0-1,X
+        PHA
+        LDA     TMP2-1,X
+        STA     TMP0-1,X
+        PLA
+        STA     TMP2-1,X
+        DEX
+        BNE     T2T21
+        RTS
+;READ HEX ADR,RETURN HI IN TMP0,
+;LO IN TMP0+1,AND CY=1
+;IF SP CY=0
+RDOA:   JSR     RDOB            ;READ 2-CHAR BYTE
+        BCC     RDOA2           ;SPACE
+        STA     TMP0+1
+RDOA2:  JSR     RDOB
+        BCC     RDEXIT          ;SP
+        STA     TMP0
+RDEXIT: RTS
+;READ HEX BYTE AND RETURN IN A
+;AND CY=1 IF SP CY=0
+RDOB:   LDAI    0             ;SPACE
+        STA     BAD             ;READ NEXT CHAR
+        JSR     RDOC
+RDOB1:  CMPI    " "
+        BNE     RDOB2
+        JSR     RDOC            ;READ NEXT CHAR
+        CMPI    " "
+        BNE     RDOB3
+        CLC                     ;CY=0
+        RTS
+RDOB2:  JSR     HEXIT           ;TO HEX
+        ASL     A,
+        ASL     A,
+        ASL     A,
+        ASL     A,
+        STA     BAD
+        JSR     RDOC            ;2ND CHAR ASSUMED HEX
+RDOB3:  JSR     HEXIT
+        ORA     BAD
+        SEC                     ;CY=1
+        RTS
+HEXIT:  CMPI    ^O72
+        PHP                     ;SAVE FLAGS
+        ANDI    ^O17
+        PLP
+        BCC     HEX09           ;0-9
+        ADCI    8             ;ALPHA ADD 8+CY=9
+HEX09:  RTS
+RDOC:   JSR     BASIN           ;READ CHAR
+        CMPI    ^O15            ;IS IT A CR
+        BNE     HEX09           ;NO,RTS
+        PLA
+        PLA                     ;YES, CLEAN STACK,EXIT
+        JMP     STRT
+ERROPR: LDAI    ^O77
+        JSR     BSOUT
+        JMP     STRT
+;*******************************
+;*   COMMODORE DOS PARSER      *
+;*                             *
+;*     -MGM  7/11/79-          *
+;*                             *
+;* THIS SET OF ROUTINES TAKES  *
+;* TOKENS AND VALUES AFTER THE *
+;* THE FOLLOWING BASIC KEYWORDS*
+;*  DOPEN; DCLOSE ; RECORD ;   *
+;*  FORMAT ; COLLECT ; BACKUP ;*
+;*  COPY   ; CONCAT  ; DSAVE  ;*
+;* DLOAD  ; CATLOG ; RENAME ;  *
+;* APPEND ; SCRTCH             *
+;*******************************
+;
+;IT THEN PARSES THE FOLLOWING LINE
+; AND FINDS SYNTAX ERRORS, CHECKS
+;FOR OUT OF RANGE VALUES, AND SETS
+; VARIABLES IN THE ZERO-PAGE TO BE
+; PASSED TO THE DISK MESSAGE GEN-
+; ERATOR (DMG)
+;
+;
+SYNERR: JMP     SNERR           ;SYNTAX ERROR
+;
+;************************************
+;* "RECORD" PARSER & SYNTAX CHECKER *
+;*   NOTE: POSITION DEPENDENT       *
+;************************************
+RECORD: LDAI    1            ;FIX POS
+        STA     RECPOS
+        JSR     CHRGOT
+        LDAI    "#"
+        JSR     SYNCHR          ;NXT CHR MUST BE '#'
+        JSR     GTVL2           ;GET NXT VALUE
+        CPXI    0
+        BEQ     QTYER1          ;ADDR CAN'T BE < 1
+        STX     LA              ;STORE LOGICAL ADDR
+        JSR     CHKCOM          ;NXT MUST BE COMMA
+        BEQ     SYNERR          ;<CR>/<:>  NOT ALLOWED
+        BCC     NUMADR          ;MUST BE NUM OR "("
+        JSR     CHKOPN          ;MUST BE "("
+        JSR     FRMEVL
+        JSR     GETADR
+        JSR     CHKCLS
+        JMP     REXNEX
+NUMADR: JSR     FRMEVL
+        JSR     GETADR          ;SEE WHAT NXT IS
+REXNEX: JSR     CHRGOT          ;SEE WHAT NXT IS
+        BEQ     DONER           ;<CR>/<:> => DONE
+        JSR     CHKCOM          ;ELSE MUST BE COMMA
+        BEQ     SYNERR          ;CANT BE <CR> OR <:>
+        JSR     GTVL2
+        CPXI    0
+        BEQ     QTYER1          ;OUT OF RANGE
+        CPXI    ^O377
+        BEQ     QTYER1          ;OUT OF RANGE
+        STX     RECPOS          ;STORE POSITION OF REC
+        JSR     CHRGOT
+        BNE     SYNERR          ;MUST BE <CR> OR <:>
+DONER:  JMP     BOBREC
+;
+QTYER1: JMP     QTYERR
+;
+;**********************************
+;*          SYNTAX CHECKER        *
+;* ROUTINES FOR DOS WRITE         *
+;**********************************
+CHK1:   ANDI    ^O346           ;FOR HEADER,DLOAD,SCRTCH
+        BEQ     CHK2            ;CHK OPT PARMS
+CHKER1: JMP     SNERR
+CHK2:   LDA     PRSCHK          ;FOR DSAVE
+        ANDI    1
+        CMPI    1             ;CHK REQ'D PARMS
+        BNE     CHKER1          ;ERROR IF 1 MISSING
+        LDA     PRSCHK          ;RELOAD FOR RETURN
+        RTS
+;
+CHK3:   ANDI    ^O347           ;FOR COLECT,CATLOG
+        BNE     CHKER1          ;CHK OPT PARMS
+        RTS
+;
+CHK4:   ANDI    ^O304           ;FOR COPY,CONCAT
+        BNE     CHKER1          ;CHK OPT PARMS
+        LDA     PRSCHK
+CHK5:   ANDI    3             ;FOR RENAME
+        CMPI    3             ;CHK REQ'D PARMS
+        BNE     CHKER1
+        LDA     PRSCHK          ;RELOAD FOR RETURN
+        RTS
+;
+CHK6:   ANDI    5             ;FOR APPEND,DOPEN
+        CMPI    5             ;CHK REQ'D PARMS
+        BNE     CHKER1
+        LDA     PRSCHK          ;RELOAD FOR RTS
+        RTS
+;
+;********************************
+;*
+;*  PET2001 DISK ROUTINES
+;*  --RSR--7/24/79--
+;*
+;********************************
+;
+; TABLD SYMBOLS
+XFN1=^O361	;SENDS FILENAME1
+XFN2=^O362	;SENDS FILENAME2
+XID=^O320	;SENDS DISK ID
+XREC=^O340	;SENDS S FOR SEG OR LRECL
+XWRT=^O341	;SENDS W OR L
+XD1=^O321	;SENDS DRIVE1
+XD2=^O322	;SENDS DRIVE2
+;
+; TABLD
+;
+TABLD:	;USED TO BUILD DISK STRINGS
+; CATALOG
+        ^O377
+        "$"
+        XD1
+; DOPEN  DSAVE DLOAD
+        XD1
+        ":"
+        XFN1
+        ^O54
+        XWRT
+        ^O54
+        XREC
+; APPEND
+        XD1
+        ":"
+        XFN1
+        ^O54
+        "A"
+; HEADER
+        "N"
+        XD1
+        ":"
+        XFN1
+        ^O54
+        XID
+; COLLECT
+        "V"
+        XD1
+; BACKUP
+        "D"
+        XD2
+        "="
+        XD1
+; COPY
+        "C"
+        XD2
+        ":"
+        XFN2
+        "="
+        XD1
+        ":"
+        XFN1
+; CONCAT
+        "C"
+        XD2
+        ":"
+        XFN2
+        "="
+        XD2
+        ":"
+        XFN2
+        ^O54
+        XD1
+        ":"
+        XFN1
+; RENAME
+        "R"
+        XD1
+        ":"
+        XFN2
+        "="
+        XD1
+        ":"
+        XFN1
+; SCRATCH
+        "S"
+        XD1
+        ":"
+        XFN1
+;
+;
+; CATALOG  (BOB F'S)
+;
+CATLOG: LDA     LA              ;SAVE LA
+        STA     WSW
+        JSR     DOSPAR          ;PARSE THE LINE
+        JSR     CHK3            ;CHK OPT PARMS
+CATALG: LDYI    0             ;TABLD OFFSET
+        LDXI    1             ;JUST $
+        LDA     PRSCHK          ;CHK FOR DEFAULT
+        ANDI    ^O20            ;NO DRIVE?
+        BEQ     CATBLD
+        INX
+CATBLD: TXA                     ;A NOW HAS LENGTH
+        JSR     SENDP           ;BUILD
+        LDA     DFLTO           ;SAVE DFLTO
+        STA     CNTDN
+        LDAI    ^O140           ;SECONDARY ADDR
+        STA     SA
+        LDAI    14            ;OPEN THE FILE
+        STA     LA
+        JSR     UNLSN           ;DON'T LISTEN TO FLOPPY
+        JSR     FOPEN
+        LDAI    0
+        STA     SATUS           ;SET STATUS TO 0
+        LDYI    ^O3             ;LOOP THREE TIMES
+;
+WG220:  STY     FNLEN           ;SAVE NEW COUNT
+        LDXI    14            ;DISK CHANNEL
+        JSR     CHKIN
+        JSR     BASIN
+        STA     TMP2
+        LDY     SATUS           ;CHECK STATUS
+        BNE     WG230           ;BAD STATUS
+        JSR     BASIN
+        STA     TMP2+1
+        LDY     SATUS           ;CHECK STATUS
+        BNE     WG230
+        LDY     FNLEN           ;MORE TO DO?
+        DEY
+        BNE     WG220           ;NOT DONE YET
+        JSR     CLRCHN          ;CLEAR CHANNEL
+        JSR     SUBB
+        LDX     TMP2
+        LDA     TMP2+1
+        JSR     LINPRT          ;PRINT LINE NUMBER
+        LDAI    ^O40            ;PRINT A SPACE
+SKIPB:  JSR     BSOUT
+        JSR     CLRCHN
+WG250:  LDXI    14            ;DISK CHANNEL
+        JSR     CHKIN
+        JSR     BASIN
+        PHA
+        JSR     CLRCHN
+        PLA
+        LDX     SATUS
+        BNE     WG230           ;BAD
+        CMPI    0             ;EOL
+        BEQ     WG240
+        JSR     SUBA
+        JSR     STOP1           ;STOP KEY
+        BEQ     WG230           ;YES...
+        JSR     GETIN           ;GET CHAR FROM KBYD
+        BEQ     WG250           ;NOTHING...
+        CMPI    ^O40            ;SPACE BAR?
+        BNE     WG250           ;NO...
+WG255:  JSR     GETIN           ;ANY KEY STARTS
+        BEQ     WG255
+        BNE     WG250           ;(JMP)
+WG240:  LDAI    CR
+        JSR     SUBA
+        JSR     UNLSN
+        LDYI    2            ;DO TWICE
+        BNE     WG220
+WG235:  PLA                     ;CLEAN UP
+WG230:  JSR     CLRCHN
+        LDAI    14            ;CLOSE FLOPPY
+        JMP     FCLOSE
+;
+SUBA:   JSR     SUBB
+        JSR     BSOUT
+        JMP     CLRCHN
+;
+SUBB:   LDX     CNTDN
+        CPXI    3
+        BEQ     SUBBR
+        LDX     WSW
+        JSR     CHKOUT
+SUBBR:  RTS
+;
+;
+;ENTRY LOOK UP SUBROUTINE
+;
+ENTRY0: LDYI    ^O141           ;CALC SA >APPEND ENTRY
+ENTRY1: INY
+        TYA
+        LDX     LDTND
+ENTRY2: DEX
+        BMI     RFOUND          ;ALL THRU STK?
+        CMP     SAT,X
+        BEQ     ENTRY1          ;THIS SA USED
+        BNE     ENTRY2          ;CONT DOWN
+RFOUND: STY     SA              ;.Y=SA
+        RTS
+;
+; DOPEN CODE D:FN[,T[,R]]
+;
+DOPEN:  JSR     DOSPAR          ;CALL PARSER SUB
+        JSR     CHK6
+        ANDI    ^O42
+        BEQ     DOPEN2
+        JMP     SNERR
+DOPEN2: JSR     ENTRY0          ;GET SA
+        LDYI    2             ;INFO OFFSET
+        LDXI    3             ;BASIC LENGTH
+        BIT     PRSCHK          ;REL RECORD?
+        BVC     LEAV            ;Z=NO
+RECLCK: LDXI    7             ;LENGTH NOW 7
+LEAV:   BIT     PRSCHK          ;CHK FOR @
+        BPL     LEAV1           ;NO @
+        LDAI    "@"
+        STA     TBUFF
+        TXA
+        LDXI    1
+        JSR     SENDP1
+        JMP     OP94
+LEAV1:  TXA
+        JSR     SENDP
+        JMP     OP94
+;
+; APPEND CODE
+;
+APPEND: JSR     DOSPAR          ;PARSE IT
+        JSR     CHK6            ;CHK REQ'D PARMS
+        ANDI    ^O342           ;CHK OPT PARMS
+        BEQ     DAPPEN
+        JMP     SNERR
+DAPPEN: JSR     ENTRY0          ;GET A SA
+        LDYI    9             ;TABLD INDEX
+        LDAI    5             ;LENGTH
+        JSR     SENDP           ;BUILD
+        JMP     OP94            ;GO OPEN
+;
+;
+;ERROR CHANNEL READ
+;
+ERRCHL: LDA     DSDESC          ;ENTRY FOR USER
+        BNE     ECHKS           ;CHK OLD STATUS
+GETDS:  LDAI    40            ;GET 40 CHAR STR
+        STA     DSDESC          ;WE HAVE 40 CHRS
+        JSR     GETSPA
+        STX     DSDESC+1      ;RETURN LOW
+        STY     DSDESC+2      ;RETURN HIGH
+        LDAI    0            ;BACKLINK STRING
+        LDYI    41
+        JSR     DSLINK          ;UPPER, AND CLEAR THE STATUS.
+        LDAI    ^O15            ;ADDRESS $0D
+        STADY   DSDESC+1      ;LOWER
+ECHKS:  LDA     FA              ;CHK BUS <=DS READ
+        BNE     EREAD           ;IF =0 DEFAULT
+        LDAI    8
+        STA     FA
+EREAD:  JSR     TALK
+        LDAI    ^O157
+        STA     SA
+        JSR     SECND
+        LDYI    ^O377           ;FOR OFFSET
+LOOP1:  INY
+        JSR     ACPTR
+        CMPI    CR              ;CHECK FOR END
+        BEQ     ERREND
+        STADY   DSDESC+1
+        BNE     LOOP1           ;BR ALWAYS
+ERREND: LDAI    0
+        STADY   DSDESC+1
+        JMP     UNTLK           ;GOT ALL
+;
+;FORMAT ND:DN[,ID]
+;
+FORMAT: JSR     DOSPAR
+        JSR     CHK1            ;CHK OPT PARMS
+        ANDI    ^O21            ;CHK REQ'D PARMS
+        CMPI    ^O21
+        BEQ     DFORMA
+FERRO:  JMP     SNERR
+DFORMA: JSR     DCLALL          ;CLOSE ALL FILES
+        JSR     RUSURE          ;R-U-SURE PRPT
+        BCC     FBUILD          ;C-NO & DIRECT
+        RTS                     ;Z SET IF FOUND ELSE NO
+;
+FBUILD: LDYI    14            ;TABLD INDEX
+        LDAI    4             ;LENGTH
+        LDX     DISKID          ;CHECK FOR DISKID
+        BEQ     FCONT
+        LDAI    6             ;LENGTH WITH ID
+FCONT:  JSR     TRANS           ;BUILD AND SEND
+;
+FERRS:  JSR     ERRCHL          ;ERRS?
+        LDYI    0
+        LDADY   DSDESC+1
+        CMPI    "2"
+        BCS     FERRP           ;>=2 IS ERROR
+        RTS                     ;ELSE BYE
+;
+FERRP:  JMP     BADDIS          ;PRINT ?BAD DISK
+;
+; DCLOSE
+;
+DCLOSE: JSR     DOSPAR
+        ANDI    ^O363           ;CHECK OPT PARMS
+        BEQ     DCLSE           ;EXTRA STUFF ERR?
+        JMP     SNERR
+DCLSE:  JSR     OLDCLR
+        LDA     LA              ;CHK FOR ALL DEFALT
+        BEQ     DCLALL
+        JMP     CLOS5           ;GO REMOVE
+;
+DCLALL: LDA     FA              ;GET DISK #
+        LDX     LDTND           ;SRCH FOR DISK REFS
+DCLLP:  DEX
+        BMI     DCLBYE          ;DONE?
+        CMP     FAT,X
+        BNE     DCLLP
+        LDA     LAT,X           ;GET LA & REMOVE
+        JSR     CLOS10          ;.X=POS .A=LA
+        CLV
+        BVC     DCLALL          ;BRA
+DCLBYE: RTS                     ;BYE
+;
+; DRECORD
+; --P<CHL><RECNUML><RECNUMH><POS>
+;
+BOBREC: LDA     LA              ;CHK TABLES
+        JSR     JLTLK
+        BEQ     DRECG
+        LDYI    MS3-MS1         ;FILE NOT FOUND ERR
+        JMP     ERMSG
+DRECG:  JSR     JZ100           ;GET RECORD
+        JSR     OLDCLR
+DREBLD: LDAI    "P"             ;BUILD
+        STA     TBUFF
+        LDA     SA              ;GET CHL
+        STA     TBUFF+1
+        LDA     POKER           ;GET RECNUML
+        STA     TBUFF+2
+        LDA     POKER+1       ;GET RECNUMH
+        STA     TBUFF+3
+        LDA     FNLEN2          ;GET POS
+        STA     TBUFF+4
+        LDXI    5            ;FNLEN
+        JSR     TRANR           ;SET POINTERS
+        JMP     TRANS1          ;CHNL 15
+;
+;COLLECT V<DRIVE#>
+;
+COLECT: JSR     DOSPAR
+        JSR     CHK3            ;CHK OPT PARMS
+DCOLLE: JSR     DCLALL          ;CLOSE ALL FILES
+        LDYI    20            ;TABLD OFFSET
+        LDXI    1             ;LENGTH
+        LDA     PRSCHK
+        ANDI    ^O20
+        BEQ     DCOLL0
+        INX                     ;INCLUDE DRIVE
+DCOLL0: TXA                     ;PLACE IN A
+        JMP     TRANS
+;
+; BACKUP D<DD>=<SD>
+;
+BACKUP: JSR     DOSPAR
+        ANDI    ^O60            ;REG'D PARMS
+        CMPI    ^O60
+        BEQ     BBACK
+BERRO:  JMP     SNERR
+BBACK:  LDA     PRSCHK          ;MISSING PARMS ERR?
+        ANDI    ^O307           ;OPT PARMS
+        BNE     BERRO
+DBACKU: JSR     DCLALL          ;CLOSE DISK
+        LDYI    22
+        LDAI    4             ;LENGTH
+;
+; TRANS SUBROUTINE
+;
+TRANS:  JSR     SENDP           ;BUILD
+TRANS1: LDAI    ^O157           ;OPEN CHL 15
+        STA     SA
+        JSR     LISTN           ;DON'T OPEN15
+        LDA     SA
+        JMP     OPENIB          ;SEND MESSAGE
+;
+; COPY ROUTINES CDD:DFN=SD:SFN
+;
+DCOPY:  JSR     DOSPAR          ;PARSE IT
+        ANDI    ^O60
+        CMPI    ^O60            ;CHK REQ'D PARMS
+        BNE     COPY2
+        LDA     PRSCHK
+        ANDI    ^O307
+        BEQ     COPY3
+COPY2:  LDA     PRSCHK
+        JSR     CHK4
+COPCON: LDA     PRSCHK
+COPY3:  LDYI    26            ;TABLD OFFSET
+        LDAI    8             ;LENGTH
+        JMP     TRANS           ;GO DO IT
+;
+; CONCAT ROUTINES
+; --CDD:DFN=DD:DFN,SD:SFN
+;
+CONCAT: JSR     DOSPAR          ;PARSE IT
+        JSR     CHK4
+        LDYI    34            ;OFFSET
+        LDAI    12            ;LENGTH
+        JMP     TRANS           ;GO DO IT
+;
+; COPY ROUTINES
+;
+RSFN:   LDA     FNLEN
+        STA     FNLEN2
+        LDA     FNADR
+        STA     FNADR2
+        LDA     FNADR+1
+        STA     FNADR2+1
+;
+; MOVE INFO INTO TBUFF
+;
+RDFN:   TYA                     ;SAVE Y
+        PHA
+        LDY     FNLEN2          ;CHK FOR NO FILENAME
+        BEQ     RDRT0
+        LDYI    0             ;MOVE NAME TO TBUFF
+RDMOV:  LDADY   FNADR2
+        STA     TBUFF,X
+        INX
+        INY
+        CPY     FNLEN2          ;ALL DONE?
+        BNE     RDMOV
+        BEQ     RDRT1           ;BRA AROUND
+RDRT0:  DEX                     ;CASE CDD=SD
+RDRT1:  PLA                     ;RESTORE Y
+        TAY
+        SEC                     ;RETURN FLAG
+        RTS
+;
+; ID SUBROUTINE
+;
+RID:    LDA     DISKID          ;INCLUDE ID
+        STA     TBUFF,X
+        INX
+        LDA     DISKID+1
+        STA     TBUFF,X
+        INX
+        TXA                     ;KILL WEIRD .A JUST IN CASE
+        RTS
+;
+;DSAVE D:FN
+;
+DSAVE:  JSR     DOSPAR
+        JSR     CHK2
+        ANDI    ^O146
+        BEQ     DSAVE2
+        JMP     SNERR
+DSAVE2: LDYI    2             ;TABLE OFFSET
+        LDA     PRSCHK          ;CHK FOR @
+        ANDI    ^O200
+        BEQ     SAVLD1
+SAVLD0: LDAI    "@"             ;@SYMBOL
+        STA     TBUFF
+        LDXI    1             ;ONE CHAR IN
+        LDAI    3
+        JSR     SENDP1
+        JMP     SV3
+SAVLD1: LDAI    3             ;LENGTH
+        JSR     SENDP
+        JMP     SV3
+;
+; DLOAD D:FN
+;
+DLOAD:  JSR     DOSPAR
+        JSR     CHK2
+        ANDI    ^O346
+        BEQ     DLOAD2
+DLOERR: JMP     SNERR
+DLOAD2: LDYI    2
+        LDAI    3             ;LENGTH
+        JSR     SENDP           ;BUILD
+        LDAI    0             ;CLR VERIFY FLAG
+        STA     VERCK
+        JMP     LOADNP
+;RENAME RDD: DFN=SD: SFN
+;
+RENAME: JSR     DOSPAR
+        JSR     CHK5
+        ANDI    ^O344
+        BNE     DLOERR
+DREN:   LDYI    46            ;OFFSET
+        LDAI    8             ;LENGTH
+        JMP     TRANS           ;GO DO IT
+;SCRATCH SD: FN
+;
+DSCRTC: JSR     DOSPAR
+        JSR     CHK1
+DSCRAT: JSR     RUSURE          ;DIRECT=>R-U-SURE
+        BCS     NUMBYE          ;C-NO&DIRECT
+        LDYI    54            ;OFFSET
+        LDAI    4             ;LENGTH
+        JSR     TRANS
+;
+NUMSCR: JSR     DDIREC          ;DIRECT?
+        BNE     NUMBYE          ;Z CLR-NOT DIRECT
+        JSR     ERRCHL          ;READ ERRS
+        LDAI    ^O15            ;PRINT C/R
+        JSR     PRT
+        LDYI    0             ;CLR TO READ ERRCHL
+NUMLP:  LDADY   DSDESC+1      ;GET MESG
+        CMPI    0
+        BEQ     NUMPRT
+        JSR     PRT             ;TO SCRN
+        INY
+        BNE     NUMLP
+NUMPRT: LDAI    ^O15
+        JSR     PRT
+NUMBYE: RTS
+;DIRECT CHECK SUBROUTINE
+DDIREC: LDA     TXTPTR+1
+        CMPI    2
+DXCR0:  RTS
+;
+;R-U-SURE SUBROUTINE
+RUSURE: JSR     DDIREC          ;CHK FOR DIRECT
+        BNE     ANSYES          ;Z CLR=NOT DIRECT
+RUSUR1: LDYI    MSG30-MSG1      ;ARE YOU SURE ?
+        JSR     MSG
+        JSR     CLRCH           ;CLR CHL FOR BASIN
+RUSUR2: JSR     BASIN           ;GET BASIC INPUT
+        CMPI    "Y"             ;MUST START WITH Y
+        BNE     ANSNO
+        JSR     BASIN           ;NEXT CHR
+        CMPI    ^O15            ;CR?
+        BEQ     ANSYES          ;Y CR
+        CMPI    "E"             ;THEN E
+        BNE     ANSNO
+        JSR     BASIN           ;NEXT CHR
+        CMPI    "S"             ;THEN S
+        BNE     ANSNO
+        JSR     BASIN           ;NEXT CHR
+        CMPI    ^O15            ;CR?
+        BEQ     ANSYES
+ANSNO:  CMPI    CR              ;LOOK FOR END
+        SEC                     ;CARRY SET =NO&DIRECT
+        BEQ     ANSBYE
+        JSR     BASIN           ;GET NEXT CHR
+        BNE     ANSNO           ;BRA TO DUMP INPUT
+ANSYES: CLC                     ;CARRY CLR =NOT DIRECT
+ANSBYE: RTS
+;
+;BAD DISK SUBROUTINE
+BADDIS: JSR     DDIREC          ;DIRECT?
+        BNE     ANSBYE          ;NEED RTN
+        LDYI    MSG31-MSG1      ;? BAD DISK
+        JMP     MSG
+;
+;OLDCLR SUBROUTINE
+;CLEARS DISK STATUS & SATUS
+;
+OLDCLR: TYA                     ;SAVE Y
+        PHA
+        LDA     DSDESC          ;CHK FOR ALLOCATION
+        BEQ     OLDCL1          ;BRA IF NOT
+        LDYI    40
+        TYA
+        STADY   DSDESC+1      ;LENGTH OF GARBAGE
+        INY
+        LDAI    ^O377
+        STADY   DSDESC+1      ;GARBAGE FLAGED
+OLDCL1: LDAI    0
+        STA     SATUS           ;ZAP STATUS
+        STA     DSDESC          ;KILL DS$
+        PLA                     ;RESTORE Y
+        TAY
+        RTS
+;
+;
+SENDP:  LDXI    0             ;ZERO OFFSET
+SENDP1: STA     KCOUNT          ;NON ZERO ENTRY
+        JSR     OLDCLR          ;CLR OLD STATUS
+SENDP2: DEC     KCOUNT
+        BMI     TRANR
+        INY                     ;MOVE DOWN TABLE
+        LDA     TABLD,Y         ;GET NEXT ENTRY
+        BPL     RPLCE           ;IF N CLR THEN CHAR
+RXFN1:  CMPI    XFN1            ;FILE NAME 1
+        BNE     RXFN2
+        JSR     RSFN
+RXFN2:  CMPI    XFN2
+        BNE     RXREC
+        JSR     RDFN
+RXREC:  CMPI    XREC
+        BNE     RXID
+        LDA     LRECL           ;GET REC#
+        BNE     RPLCE           ;BRA
+RXID:   CMPI    XID
+        BNE     RXWRT
+        JSR     RID
+RXWRT:  CMPI    XWRT            ;CHK FOR W OR L
+        BNE     RXD1
+        JSR     RWRT
+        BNE     RPLCE           ;BRA
+RXD1:   CMPI    XD1
+        BNE     RXD2
+        LDA     DRIVE1
+        BPL     RXDD            ;BRA
+RXD2:   CMPI    XD2
+        BNE     SENDP2          ;END OF TABLE BRA
+        LDA     DRIVE2
+RXDD:   ORAI    48            ;CHANGE TO ASCII
+;
+RPLCE:  STA     TBUFF,X         ;ELSE INTO BUFFER
+        INX
+        BNE     SENDP2          ;BRA TO RESTART
+;
+TRANR:  STX     FNLEN           ;X IS LENGTH TO SEND
+        LDAI    <TBUFF>&^O377   ;MOVE POINTERS
+        STA     FNADR
+        LDAI    <TBUFF>/256
+        STA     FNADR+1
+        RTS
+;
+RWRT:   LDA     LRECL           ;CHA FOR L OR W
+        BEQ     RWRT1           ;ZERO THEN WRITE
+        LDAI    "L"
+        BNE     RWRTS           ;BRA
+RWRT1:  LDAI    "S"             ;SEND W,S
+        STA     LRECL
+        LDAI    "W"
+RWRTS:  RTS
+;******* DOSPAR **************
+;*
+;*       -MGM 7/23/79-
+;*
+;* THIS IS THE PARSER ROUTINE
+;* IT LOOKS AT LINES PASSED TO
+;* IT AND MAKES SURE THAT THE
+;* SYNTAX IS ALL PROPER.
+;*
+;* IT RETURNS WITH PRSCHK
+;* IN THE .ACC
+;*
+;* PRSCHK IS THE
+;*   "PARSING CHECK BYTE".
+;* FLAGS ARE SET ACCORDINGLY
+;* AS VALUES ARE PARSED  AND SET
+;*
+;* STRUCTURE OF PRSCHK:
+;*
+;*I-I-I-I-I-I-I-I-I
+;*I7+6+5+4+3+2+1+0I
+;*I-I-I-I-I-I-I-I-I
+;* ^ ^ ^ ^ ^ ^ ^ ^=> FN1:  THIS BIT
+;* ! ! ! ! ! ! !   IS SET WHEN THE FIRST
+;* ! ! ! ! ! ! !   FILENAME IS PARSED
+;* ! ! ! ! ! ! !=> FN2: " FOR SECOND FILENAME
+;* ! ! ! ! ! !=> LA: BIT SET WHEN #L IS PARSED
+;* ! ! ! ! !=> FA: BIT SET WHEN UNIT# IS PARSED
+;* ! ! ! !=> D1: BIT SET WHEN DRIVE1 PARSED
+;* ! ! !=> D2: DITTO - WHEN DRIVE2 PARSED
+;* ! !=> LRECL: SET WHEN LRECL PARSED
+;* !=> @RPL: SET ON REPLCMNT OPERATOR IN FN1
+;*
+;*  THE FOLLOWING ARE THE VALID BIT-
+;*     PATTERNS FOR PRSCHK AFTER PARSING
+;*   FOR THE VARIOUS KEYWORDS:
+;*
+;*             PRSCHK
+;*          7 6 5 4   3 2 1 0
+;*(FORMAT)
+;* HEADER   0 0 0 1   * 0 0 1
+;* COLECT   0 0 0 *   * 0 0 0
+;* BACKUP   0 0 1 1   * 0 0 0
+;* COPY     0 0 1 1   * 0 0 0
+;*   OR..   0 0 * *   * 0 1 1
+;* CONCAT   0 0 * *   * 0 1 1
+;* DSAVE    * 0 0 *   * 0 0 1
+;* DLOAD    0 0 0 *   * 0 0 1
+;* CATLOG   0 0 0 *   * 0 0 0
+;* RENAME   0 0 0 *   * 0 1 1
+;* APPEND   0 0 0 *   * 1 0 1
+;* SCRTCH   0 0 0 *   * 0 0 1
+;* DOPEN    * * 0 *   * 1 0 1
+;* DCLOSE   0 0 0 0   * * 0 0
+;*          ^ ^ ^ ^   ^ ^ ^ ^
+;*          @ L D D   F L F F
+;*          R R 2 1   A A N N
+;*          P E           2 1
+;*          L L
+;*   "1" BITS ARE REQ'D PARAMETERS
+;*   "*" BITS ARE OPTIONAL PARMS
+;************************************
+;
+DOSPAR: LDXI    0
+        STX     PRSCHK
+        STX     LA
+        STX     LRECL           ;INIT VARS
+        STX     DRIVE1
+        STX     DRIVE2
+        STX     FNLEN
+        STX     FNLEN2
+        STX     DISKID
+        LDXI    8
+        STX     FA
+        JSR     CHRGOT          ;GET CURRENT CHR
+        BEQ     DONE1           ;<CR> OR <:> => DONE
+;
+PARSEL: CMPI    "#"
+        BEQ     LOGADR
+        CMPI    "W"
+        BEQ     RECLEN
+        CMPI    "L"
+        BEQ     RECLEN
+        CMPI    "R"
+        BNE     PARNXT
+        JSR     CHRGET          ;MOVE ON
+        JMP     DELIM1
+PARNXT: CMPI    "D"
+        BEQ     DRV1
+        CMPI    ONTK            ;"ON" TOKEN
+        BEQ     ON1
+        CMPI    "U"
+        BEQ     UNIT1
+        CMPI    "I"
+        BNE     NEXT7
+        JMP     IDENT
+NEXT7:  CMPI    ^O42
+        BEQ     NAME11
+        CMPI    "("
+        BEQ     NAME11
+SNER1:  JMP     SNERR           ;SYNTAX ERROR
+; OF THE ABOVE
+;
+;
+LOGADR: LDA     PRSCHK          ;CHK SYNTAX
+        ANDI    4
+        BNE     SNER1           ;ONLY ONE LA ALLOWED
+        JSR     GETVAL
+        CPXI    0
+        BEQ     QTYER2          ;ZERO NOT ALLOWED
+        STX     LA
+        LDA     PRSCHK
+        ORAI    4             ;SET LA FLAG &
+        STA     PRSCHK
+        JMP     DELIM1          ;CONTINUE
+;
+;
+RECLEN: TAX                     ;SAVE CHAR
+        LDA     PRSCHK          ;CHK SYNTAX
+        ANDI    ^O100
+        BNE     SNER1           ;ONLY 1 LRECL ALLOWED
+        CPXI    "W"
+        BNE     RECOO
+        JSR     CHRGET
+        JMP     RECON           ;ONLY SET PRSCHK
+RECOO:  JSR     GETVAL
+        CPXI    0
+        BEQ     QTYER2          ;ZERO ILLEGAL. LRECL
+        CPXI    255
+        BEQ     QTYER2          ;ILLEGAL LRECL
+        STX     LRECL           ;STORE PARCEL
+RECON:  LDA     PRSCHK
+        ORAI    ^O100           ;SET LRECL FLAG &
+        STA     PRSCHK
+        JMP     DELIM1          ;CONTINUE
+;
+DONE1:  JMP     DONE
+;
+NAME11: JMP     NAME1
+ON1:    JSR     ON
+        JMP     DELIM1
+UNIT1:  JSR     UNIT            ;DO UNIT# PARSING
+        JMP     DELIM1
+;
+;
+DRV1:   LDA     PRSCHK
+        ANDI    ^O20
+        BNE     SNER1           ;DRIVE1 ALLOWED ONCE
+        JSR     GETVAL
+        CPXI    2
+        BCS     QTYER2          ;ILLEGAL DRV# IF >1
+        STX     DRIVE1
+        STX     DRIVE2
+        LDA     PRSCHK
+        ORAI    ^O20
+        STA     PRSCHK          ;SET DRIVE1 FLAG &
+        JMP     DELIM1          ;CONTINUE
+;
+QTYER2: JMP     QTYERR
+;
+IDENT:  LDA     DIDCHK
+        ANDI    ^O377
+        BEQ     IDCON           ;ONLY 1 DISKID ALLOWED
+        JMP     SNERR
+IDCON:  LDYI    0
+        LDXI    0
+NEXT3:  INC     TXTPTR
+        BNE     NEXT4
+        INC     TXTPTR+1
+NEXT4:  LDADY   TXTPTR
+        STA     DISKID,X        ;M(TXTPTR => DISKID
+        INX
+        CPXI    2
+        BCC     NEXT3
+        LDAI    ^O377
+        STA     DIDCHK          ;SET DISKID FLAG &
+        JSR     CHRGET          ;CONTINUE
+        JMP     DELIM1
+;
+;
+NAME1:  LDA     PRSCHK
+        ANDI    1             ;NAME1 ALLOWED ONLY ONCE
+        JSR     NEWNAM          ;DO NAME PARSING
+        STA     FNLEN
+        STA     KCOUNT          ;SAVE TEMP VALUE
+        LDAI    <TBUF2>&^O377
+        STA     FNADR
+        LDAI    <TBUF2>/256
+        STA     FNADR+1       ;RESET FNADR VALUE
+        LDYI    0
+LOOP6:  LDADY   INDEX1          ;TBUF2 XFER LOOP
+        CPYI    0
+        BNE     NAMCON
+        CMPI    "@"
+        BNE     NAMCON
+        INC     FNADR           ;AND ERASE IT
+        DEC     FNLEN
+NAMCON: STA     TBUF2,Y
+        INY
+        CPY     KCOUNT
+        BCC     LOOP6
+        LDA     PRSCHK
+        ORAI    1             ;SET NAME1 FLAG
+        STA     PRSCHK
+;
+DELIM1: JSR     CHRGOT
+        BNE     NXXX
+        JMP     DONE1           ;<CR>/<:> => DONE
+NXXX:   CMPI    ^O54
+        BNE     NEXT6
+        JSR     CHRGET
+        JMP     PARSEL
+NEXT6:  CMPI    ONTK
+        BNE     NEXT6A
+        JMP     ON1
+NEXT6A: CMPI    TOTK            ;"TO" TOKEN
+        BEQ     PARSE2
+SNER8:  JMP     SNERR           ;SYNTAX ERROR
+;
+;
+PARSE2: JSR     CHRGET
+        CMPI    "D"
+        BEQ     DRV2
+        CMPI    ONTK            ;"ON" TOKEN
+        BEQ     ON2
+        CMPI    "U"
+        BEQ     UNIT2
+        CMPI    ^O42
+        BEQ     NAME2
+        CMPI    "("
+        BEQ     NAME2
+SNER2:  JMP     SNERR           ;ERROR
+;
+;
+DRV2:   LDA     PRSCHK
+        ANDI    ^O40
+        BNE     SNER2           ;ONLY ONE DRIVE2 ALLOWED
+        JSR     GETVAL
+        CPXI    2
+        BCS     QTYERR          ;ILLEGAL DRIVE #
+        STX     DRIVE2
+        LDA     PRSCHK
+        ORAI    ^O40
+        STA     PRSCHK          ;GET DRIVE2 FLAG &
+        JMP     DELIM2
+;
+;
+ON2:    JSR     ON
+        JMP     DELIM2
+UNIT2:  JSR     UNIT            ;DO UNIT# PARSING
+        JMP     DELIM2
+;
+;
+NAME2:  LDA     PRSCHK
+        ANDI    2             ;NAME2 ALLOWED ONLY ONCE
+        JSR     NEWNAM
+        STA     FNLEN2
+        STX     FNADR2
+        STY     FNADR2+1
+        LDA     PRSCHK
+        ORAI    2             ;SET FILENAME2 FLAG &
+        STA     PRSCHK
+;CONTINUE
+;
+DELIM2: JSR     CHRGOT
+        BEQ     DONE            ;DONE ON <CR>/<:>
+        CMPI    ^O54
+        BEQ     PARSE2
+        CMPI    ONTK            ;"ON" TOKEN
+        BEQ     ON2
+        CMPI    "U"
+        BEQ     UNIT2
+SNER3:  JMP     SNERR           ;ERROR
+;
+;
+DONE:   LDA     PRSCHK          ;LOAD PARSER CHK
+        RTS                     ;BYTE FOR CALLING PROG TO CHECK
+;
+;***************************************
+;* DOSPAR SUPPORT ROUTINES             *
+;***************************************
+;
+;
+QTYERR: LDXI    ERRFC
+        JMP     ERROR           ;"ILLEGAL QUANTITY"
+;
+;
+ON:     JSR     CHRGET
+        CMPI    "U"
+        BNE     SNER3           ;NXT CHR MUST BE "U"
+UNIT:   JSR     GETVAL
+        CPXI    32
+        BCS     QTYERR          ;ERROR IF >31
+        CPXI    3
+        BCC     QTYERR          ;ERROR IF <3
+        STX     FA
+        LDA     PRSCHK
+        ORAI    8
+        STA     PRSCHK          ;SET UNIT# FLAG
+        RTS
+;
+;
+NEWNAM: BNE     SNER3
+        JSR     FRMEVL
+        JSR     FRESTR
+        TAX                     ;SAVE LENGTH IN .X
+        CMPI    0
+        BEQ     QTYERR          ;0 LENGTH NOT ALLOWED
+        CMPI    18
+        BCS     ERRLEN
+        LDYI    0
+        LDADY   INDEX1
+        CMPI    "@"
+        BNE     LENCHK
+        LDA     PRSCHK
+        ANDI    ^O200           ;IF T => SNERR
+        BEQ     NXXT5
+        JMP     SNERR
+LENCHK: TXA
+        CMPI    17            ;"STRING TOO LONG ?
+        BCS     ERRLEN
+        JMP     NXX5
+ERRLEN: LDXI    ERRLS
+        JMP     ERROR           ;"STRING TOO LONG"
+NXXT5:  LDA     PRSCHK
+        ORAI    ^O200           ;SET "@" FLAG
+        STA     PRSCHK
+NEXT5:  TXA                     ;.A = FNLEN NOW
+NXX5:   LDX     INDEX1
+        LDY     INDEX1+1
+        RTS
+;
+;
+GETVAL:	;GET NEXTVALUE ROUTINE
+        JSR     CHRGET          ;GET NXT CHR
+GTVL2:  BNE     GTVLCN
+        JMP     SNERR           ;CANT BE <CR>/<:>
+GTVLCN: BCC     NUMERC          ;CAN BE NUMERIC
+        JSR     CHKOPN          ;OR A "("
+        JSR     GETBYT          ;ANYTHING ELSE IS AN ERROR
+        JMP     CHKCLS          ;NEED CLOSING ")"
+NUMERC: JMP     GETBYT          ;EVALUATE IT
+;
+CKSUMD: ^O364                   ;D-PAGE CHECKSUM BYT
+DSLINK: STA     SATUS           ;GETDS: CLEAR THE STATUS
+        STADY   DSDESC+1        ;AS IT STORES THE LINK'S HIGH BYTE.
+        DEY
+        RTS
+SIGNON: DT"*** COMMODORE BASIC 4.0 ***"
+        ^O15
+        ^O15
+        0
+        REPEAT  ^O160000-.,<^O252>
+;
+;@END
+; COMMODORE: NO TEMPORARY STACK.
+;@DELETE 6948-6948

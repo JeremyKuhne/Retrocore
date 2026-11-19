@@ -20,7 +20,9 @@ before(async () => {
         "source.retrocore-level2": "level2.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
-        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json"
+        "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
+        "source.retrocore-mbasic": "mbasic.tmLanguage.json",
+        "source.retrocore-petbasic": "petbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -101,6 +103,36 @@ test("Color BASIC finds words only in capitals and never inside a name", () => {
     assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
     assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
     assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("MBASIC finds reserved words only set apart from names", () => {
+    const line = "20 WHILE PRINTER.COUNT% MOD 2 = 0 XOR A \\ 3: PRINT FNA(2);USR1(0);MID$(B$,1,1): WEND";
+    assert.ok(has(scopes("mbasic", line, "WHILE"), "keyword.control"));
+    assert.ok(has(scopes("mbasic", line, "PRINTER"), "variable.other"), "PRINT inside PRINTER");
+    assert.ok(!has(scopes("mbasic", line, "COUNT"), "keyword"), "the name holds a dot and ends in %");
+    assert.ok(has(scopes("mbasic", line, "MOD"), "keyword.operator"));
+    assert.ok(has(scopes("mbasic", line, "XOR"), "keyword.operator"));
+    assert.ok(has(scopes("mbasic", "50 REMAIN=1:PRINT REMAIN", "REMAIN"), "variable.other"), "REM needs a separator after it");
+    assert.ok(has(scopes("mbasic", "60 X=1 ' A NOTE", "NOTE"), "comment.line"), "an apostrophe is a remark");
+    assert.ok(has(scopes("mbasic", "70 REM A NOTE", "NOTE"), "comment.line"));
+    assert.ok(has(scopes("mbasic", line, "\\"), "keyword.operator"));
+    assert.ok(has(scopes("mbasic", line, "PRINT", 1), "keyword.other"));
+    assert.ok(has(scopes("mbasic", line, "FN"), "support.function"), "FN before its name");
+    assert.ok(has(scopes("mbasic", line, "USR"), "support.function"), "USR before its number");
+    assert.ok(has(scopes("mbasic", line, "MID$("), "support.function"));
+    assert.ok(has(scopes("mbasic", line, "WEND"), "keyword.control"));
+    assert.ok(has(scopes("mbasic", "30 FORI=1TO 9", "FORI"), "variable.other"), "FOR must be set apart");
+    assert.ok(has(scopes("mbasic", "40 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not in strings, DATA or REM", () => {
+    assert.ok(has(scopes("petbasic", "10 INPUT#1,A$", "INPUT#"), "keyword"), "INPUT# is one word");
+    assert.ok(has(scopes("petbasic", "20 DOPEN#2,\"DATA\",D0", "DOPEN"), "keyword"));
+    assert.ok(has(scopes("petbasic", "30 DIRECTORY D0", "DIRECTORY"), "keyword"));
+    assert.ok(has(scopes("petbasic", "40 PRINT \"DIRECTORY\"", "DIRECTORY"), "string.quoted"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
+    assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
+    assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
 });
 
 test("BASIC labels have label scopes", () => {

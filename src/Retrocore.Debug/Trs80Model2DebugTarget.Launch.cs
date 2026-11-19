@@ -70,20 +70,15 @@ internal sealed partial class Trs80Model2DebugTarget
             FastDisk = args.Bool("fastDisk") ?? true
         };
 
-        if (args["disks"] is JsonArray disks)
+        string?[] disks = args.ImagePaths("disks", "trsdos.dsk");
+        if (disks.Length > machine.Drives.Count)
         {
-            if (disks.Count > machine.Drives.Count)
-            {
-                throw new ArgumentException($"The {target.ModelName} has {WesternDigitalFloppyDiskController.DriveCount} drives.");
-            }
+            throw new ArgumentException($"The {target.ModelName} has {WesternDigitalFloppyDiskController.DriveCount} drives.");
+        }
 
-            for (int drive = 0; drive < disks.Count; drive++)
-            {
-                if (disks[drive] is JsonValue value && value.GetValue<string>() is { } disk)
-                {
-                    target.Insert(drive, disk);
-                }
-            }
+        for (int drive = 0; drive < disks.Length; drive++)
+        {
+            if (disks[drive] is { } disk) { target.Insert(drive, disk); }
         }
 
         return target;
@@ -170,7 +165,7 @@ internal sealed partial class Trs80Model2DebugTarget
             throw new ArgumentException($"There is no drive {drive}.");
         }
 
-        FloppyMedia.Insert(_machine.Drives[drive], path, coco: false);
+        FloppyMedia.Insert(_machine.Drives[drive], path, FloppyFamily.Trs80);
     }
 
     private JsonObject MediaState() => new JsonObject

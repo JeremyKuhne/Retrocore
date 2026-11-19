@@ -31,7 +31,9 @@ public abstract partial class BasicDialect
         IntegerBasicDialect.Instance,
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
-        ColorBasicDialect.Disk
+        ColorBasicDialect.Disk,
+        MbasicDialect.Instance,
+        PetBasicDialect.Basic4
     ];
 
     /// <summary>
@@ -72,6 +74,11 @@ public abstract partial class BasicDialect
     public static BasicDialect ColorBasic => ColorBasicDialect.Disk;
 
     /// <summary>
+    ///  Gets MBASIC, Microsoft's BASIC-80 5.21 for CP/M.
+    /// </summary>
+    public static BasicDialect Mbasic => MbasicDialect.Instance;
+
+    /// <summary>
     ///  Gets the Color Computer's BASIC as the ROMs fitted know it, which crunch only their own words.
     /// </summary>
     /// <param name="extended">Whether Extended Color BASIC is fitted.</param>
@@ -83,6 +90,34 @@ public abstract partial class BasicDialect
         (true, 0) => ColorBasicDialect.Extended,
         (true, 10) => ColorBasicDialect.Disk10,
         _ => ColorBasicDialect.Disk
+    };
+
+    /// <summary>
+    ///  Gets the Commodore PET's BASIC 2, the 2001-N's and the upgrade ROMs'.
+    /// </summary>
+    public static BasicDialect PetBasic => PetBasicDialect.Basic2;
+
+    /// <summary>
+    ///  Gets the PET 2001's first BASIC, BASIC 1, which skips spaces inside reserved words and has no <c>GO</c>.
+    /// </summary>
+    public static BasicDialect PetBasic1 => PetBasicDialect.Basic1;
+
+    /// <summary>
+    ///  Gets the PET 4000 series' BASIC 4, which adds the disk commands; <c>petbasic</c> names it, since it has every
+    ///  word of the others.
+    /// </summary>
+    public static BasicDialect PetBasic4 => PetBasicDialect.Basic4;
+
+    /// <summary>
+    ///  Gets the PET's BASIC by its version.
+    /// </summary>
+    /// <param name="version">1 for the PET 2001's first ROMs, 4 for the 4000 series', else BASIC 2.</param>
+    /// <returns>The dialect.</returns>
+    public static BasicDialect PetBasicVersion(int version) => version switch
+    {
+        1 => PetBasicDialect.Basic1,
+        4 => PetBasicDialect.Basic4,
+        _ => PetBasicDialect.Basic2
     };
 
     /// <summary>
@@ -300,6 +335,29 @@ public abstract partial class BasicDialect
     /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int})"/> gives them.</param>
     /// <returns>The stored bytes, without the zero that ends the line, with the unit each came from.</returns>
     internal abstract CrunchOutput Crunch(ReadOnlySpan<int> text);
+
+    /// <summary>
+    ///  Finds the zero that ends a line's tokens, which a dialect that stores numbers in binary does not take from
+    ///  inside a number.
+    /// </summary>
+    /// <param name="tokens">The bytes from the line's first token.</param>
+    /// <returns>The zero's index, or -1 for none.</returns>
+    internal virtual int TerminatorIn(ReadOnlySpan<byte> tokens) => tokens.IndexOf((byte)0);
+
+    /// <summary>
+    ///  Turns a line's tokens as the interpreter keeps them in memory back into those CRUNCH made, such as line
+    ///  pointers back into line numbers.
+    /// </summary>
+    /// <param name="tokens">The tokens.</param>
+    /// <param name="memory">The machine's memory.</param>
+    /// <returns>The tokens CRUNCH made.</returns>
+    internal virtual byte[] FromMemory(byte[] tokens, IBasicMemory memory) => tokens;
+
+    /// <summary>
+    ///  Gets whether the interpreter rewrites lines in memory as it runs (<see cref="FromMemory"/> changes them), so
+    ///  that the program's identity must come from the lines read back rather than the bytes.
+    /// </summary>
+    internal virtual bool RewritesLines => false;
 
     /// <summary>
     ///  Gets the text the tokenizer sees after the line number's digits.

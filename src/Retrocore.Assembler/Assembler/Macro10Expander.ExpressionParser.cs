@@ -103,6 +103,7 @@ internal sealed partial class Macro10Expander
                 if (right.Value is not { } count) { throw new AssemblyError(0, "A shift count must be a constant."); }
                 long? value = null;
                 if (left.Value is { } a) { value = count >= 0 ? a << (int)count : a >> (int)-count; }
+                if (count == long.MinValue) { throw new AssemblyError(0, "A shift count must be within the 64 bits."); }
                 (string Text, long? Value) amount = Constant(Math.Abs(count));
                 left = Binary(left, count >= 0 ? "<<" : ">>", amount, value);
             }
@@ -206,6 +207,8 @@ internal sealed partial class Macro10Expander
 
         private static (string Text, long? Value) Constant(long value)
         {
+            // The most negative value's magnitude is past the largest literal, so it is written as a sum.
+            if (value == long.MinValue) { return ("(-9223372036854775807 - 1)", value); }
             string digits = Math.Abs(value).ToString(CultureInfo.InvariantCulture);
             return (value < 0 ? $"(-{digits})" : digits, value);
         }

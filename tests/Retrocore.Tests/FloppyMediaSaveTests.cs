@@ -291,7 +291,7 @@ public sealed class FloppyMediaSaveTests
         FloppyDrive drive = controller.Drives[0];
         string path = Path.Join(s_root, $"host-{Guid.NewGuid():N}.dsk");
         File.WriteAllBytes(path, JvcFormat.Write(JvcFormat.Formatted()));
-        FloppyMedia.Insert(drive, path, coco: true);
+        FloppyMedia.Insert(drive, path, FloppyFamily.Coco);
         drive.Media?.Format.Should().Be("JVC");
         int generation = drive.MountGeneration;
 
@@ -345,7 +345,7 @@ public sealed class FloppyMediaSaveTests
         string path = Path.Join(s_root, $"basic-{Guid.NewGuid():N}.dsk");
         File.WriteAllBytes(path, JvcFormat.Write(JvcFormat.Formatted()));
         FloppyDrive drive = machine.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException("No disk controller.");
-        FloppyMedia.Insert(drive, path, coco: true);
+        FloppyMedia.Insert(drive, path, FloppyFamily.Coco);
         CocoMachineTests.Type(machine, "10 print \"saved\";6*7\rsave \"hello\"\r");
         CocoDiskTests.WaitForOk(machine, limit: 10);
         drive.Media?.Changed.Should().BeTrue();
@@ -361,7 +361,7 @@ public sealed class FloppyMediaSaveTests
         foreach (string image in (string[])[path, dmk])
         {
             CocoMachine again = CocoDiskTests.Create(CocoModel.Coco2);
-            FloppyMedia.Insert(again.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException(), image, coco: true);
+            FloppyMedia.Insert(again.Bus.DiskController?.Drives[0] ?? throw new InvalidOperationException(), image, FloppyFamily.Coco);
             CocoMachineTests.Type(again, "load \"hello\"\r");
             CocoDiskTests.WaitForOk(again, limit: 10);
             CocoMachineTests.Type(again, "run\r");

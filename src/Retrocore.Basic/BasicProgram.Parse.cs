@@ -129,8 +129,9 @@ public sealed partial class BasicProgram
             if (LabelLine().Match(trimmed) is { Success: true } label
                 && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(label.Groups["name"].Value.ToUpperInvariant())))
             {
+                // BBC BASIC's names are case-sensitive, so its labels are too: @loop is not LOOP.
                 string name = label.Groups["name"].Value;
-                labels.Add(new(name.ToUpperInvariant(), index, indent, indent + trimmed.Length, -1));
+                labels.Add(new(dialect is BbcBasicDialect ? name : name.ToUpperInvariant(), index, indent, indent + trimmed.Length, -1));
                 continue;
             }
 

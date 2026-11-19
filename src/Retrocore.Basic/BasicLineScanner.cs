@@ -64,6 +64,9 @@ internal sealed class BasicLineScanner
         bool afterExternal = false;
         bool inString = false;
         bool inData = false;
+
+        // BBC BASIC's AUTO and RENUMBER take a new first line and a step, kept as line numbers but naming no line.
+        bool newLines = false;
         string? previous = null;
         string? beforeGoto = null;
         string? via = null;
@@ -92,6 +95,7 @@ internal sealed class BasicLineScanner
             if (Bbc && statementStart && value == '*') { break; }
             bool wasStart = statementStart;
             statementStart = value == ':';
+            if (value == ':') { newLines = false; }
             if (_skip.Count != 0 && _skip.Any(range => Column(index) >= range.Start && Column(index) < range.End))
             {
                 name = null;
@@ -102,7 +106,15 @@ internal sealed class BasicLineScanner
             if (Bbc && value == BbcBasicDialect.LineNumberToken && index + 3 < _bytes.Length)
             {
                 int number = BbcBasicDialect.UnpackLineNumber(_bytes[index + 1], _bytes[index + 2], _bytes[index + 3]);
-                sites.Add(Site(BasicSiteKind.LineReference, index, End(index + 3)) with { Number = number, Via = via });
+                if (!newLines)
+                {
+                    sites.Add(Site(BasicSiteKind.LineReference, index, End(index + 3)) with
+                    {
+                        Number = number,
+                        Via = via
+                    });
+                }
+
                 index += 3;
                 name = null;
                 continue;
@@ -174,6 +186,7 @@ internal sealed class BasicLineScanner
                 routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
+                if (Bbc && word is "AUTO" or "RENUMBER") { newLines = true; }
 
                 // BBC BASIC's tokeniser decides by each word's flags: ERROR and LET start a statement as THEN and ELSE
                 // do, and REPEAT leaves one starting, so ON ERROR *KEY 1 FOO and REPEAT *KEY 1 FOO are commands.

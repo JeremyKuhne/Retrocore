@@ -24,6 +24,17 @@ namespace Retrocore.Basic;
 ///   <c>COUNT</c> and <c>ERL</c> are read from BASIC's zero page. Numbers can be hexadecimal, <c>&amp;FF</c>. What
 ///   needs BASIC or the MOS running, such as <c>RND</c>, <c>TIME</c>, <c>GET</c> and <c>EVAL</c>, is refused.
 ///  </para>
+///  <para>
+///   Integers match BASIC II exactly, quirks included: <c>&amp;80000000 DIV</c> or <c>MOD</c> anything is 0. Reals are
+///   held as BASIC II holds them, a 32-bit mantissa rounded as <c>ROUND_FP_A</c> rounds it, and addition, subtraction
+///   and division come out as the ROM's do. Multiplication is worked in the host's arithmetic and then rounded, where
+///   the ROM truncates its partial products, so a product can differ in its last bit (<c>1.1*1.1</c>), and repeated
+///   ones drift further. <c>SIN</c>, <c>COS</c>, <c>TAN</c>, <c>ATN</c>, <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and
+///   <c>^</c> with a fraction or a power of 64 or more, use the host's functions, not the ROM's series: their results
+///   can differ in the last bits, more for a large angle, and a result at the edge of the range can be a value in one
+///   and "Too big" or 0 in the other. A condition comparing such a real for equality with one the program computed
+///   may therefore disagree with BASIC.
+///  </para>
 /// </remarks>
 internal sealed class BbcBasicExpression
 {
@@ -204,12 +215,12 @@ internal sealed class BbcBasicExpression
             else if (TakeWord("DIV"))
             {
                 int divisor = Int(Power());
-                left = divisor == 0 ? throw DivisionByZero() : Integer((int)((long)Int(left) / divisor));
+                left = divisor == 0 ? throw DivisionByZero() : Integer(Divide(Int(left), divisor, remainder: false));
             }
             else if (TakeWord("MOD"))
             {
                 int divisor = Int(Power());
-                left = divisor == 0 ? throw DivisionByZero() : Integer((int)((long)Int(left) % divisor));
+                left = divisor == 0 ? throw DivisionByZero() : Integer(Divide(Int(left), divisor, remainder: true));
             }
             else
             {
@@ -234,6 +245,12 @@ internal sealed class BbcBasicExpression
     private static double Angle(BasicValue argument) => Number(argument) is var angle && Math.Abs(angle) < 8388608
         ? angle
         : throw new FormatException("Accuracy lost.");
+
+    // DIV or MOD as DIVIDE_INTEGERS works them out: &80000000's one set bit is lost with its leading zeros, so it gives
+    // 0 for both with any divisor, where everything else divides as two's complement.
+    private static int Divide(int dividend, int divisor, bool remainder) => dividend == int.MinValue
+        ? 0
+        : (int)(remainder ? (long)dividend % divisor : (long)dividend / divisor);
 
     // x^y as POWER_OPERATOR works it out. A y of 64 or more in size is all fraction; any other is split into the whole
     // number nearest it, n, and what is left, f, of at most a half. x^n is repeated multiplication (by the reciprocal

@@ -209,7 +209,8 @@ public sealed partial class BasicVariables
             int size = Math.Min(255, text.Length + (text.Length >= Spare ? Spare : 0));
             int heap = Word(BbcBasicDialect.Heap);
             if (allocated == 0 || start + allocated != heap) { start = heap; }
-            if (start + size > Word(BbcBasicDialect.BasicStack))
+            // CLAIM_HEAP refuses a heap top that reaches BASIC's stack, not only one past it.
+            if (start + size >= Word(BbcBasicDialect.BasicStack))
             {
                 throw new InvalidOperationException("No room: there is no room on the heap for the string.");
             }
@@ -279,7 +280,7 @@ public sealed partial class BasicVariables
         BasicVariableKind kind = BbcKind(name);
         int size = 2 + (name.Length - 1) + 1 + ValueSize(kind);
         int block = Word(BbcBasicDialect.Heap);
-        if (block + size > Word(BbcBasicDialect.BasicStack))
+        if (block + size >= Word(BbcBasicDialect.BasicStack))
         {
             throw new InvalidOperationException("No room: there is no room on the heap for another variable.");
         }

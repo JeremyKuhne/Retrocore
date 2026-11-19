@@ -674,6 +674,57 @@ public sealed class BbcBasicDialectTests
         Check("S$", [4, 2], 4, (at, value) => System.Text.Encoding.ASCII.GetString(value.Text ?? []) == $"{at[0]},{at[1]}");
     }
 
+    /// <summary>
+    ///  Edge cases the ROM decides: &amp;80000000 DIV or MOD anything is 0, as DIVIDE_INTEGERS loses its one set bit;
+    ///  labels are case-sensitive, as BBC names are; AUTO's and RENUMBER's numbers name no line; and the heap is full
+    ///  when a new block would reach BASIC's stack.
+    /// </summary>
+    [TestMethod]
+    public void RomEdgeCases()
+    {
+        BbcMachine machine = Boot();
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BbcMachineTests.Type(machine, "CLS:PRINT &80000000 DIV 2;\"|\";&80000000 MOD 3;\"|\";-7 DIV 2;\"|\";-7 MOD 2\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "0|0|-3|-1");
+        foreach ((string expression, double value) in (ReadOnlySpan<(string, double)>)[
+            ("&80000000 DIV 2", 0), ("&80000000 MOD 3", 0), ("&80000000 DIV -1", 0), ("-7 DIV 2", -3), ("-7 MOD 2", -1)])
+        {
+            evaluator.Evaluate(expression).Value.Number.Should().Be(value, expression);
+        }
+
+        // @loop is not LOOP: GOTO LOOP stays a computed jump through the variable LOOP.
+        const string Source = "REM retrocore bbcbasic\n    LOOP=20:GOTO LOOP\n@loop\n    GOTO loop\n";
+        string program = BasicProgram.Parse(Source, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        program.Should().Contain("GOTO LOOP").And.Contain("GOTO 20");
+
+        // AUTO and RENUMBER take a new first line and a step; DELETE's lines are references.
+        BasicSource renumber = BasicSource.Analyze("10 RENUMBER 100,10:AUTO 500,5\n20 DELETE 30,40\n", BasicDialect.BbcBasic);
+        renumber.Sites.Where(site => site.Kind == BasicSiteKind.LineReference).Select(site => site.Number)
+            .Should().Equal(30, 40);
+
+        // A real variable's block is 2 + 2 + 1 + 5 bytes for abc: reaching the stack is no room, one short is.
+        DelegateBasicMemory memory = Memory(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, memory);
+        int heap = memory.Read(0x02) | (memory.Read(0x03) << 8);
+        int stack = memory.Read(0x04) | (memory.Read(0x05) << 8);
+        try
+        {
+            memory.Write(0x04, (byte)(heap + 10));
+            memory.Write(0x05, (byte)((heap + 10) >> 8));
+            Action reaching = () => variables.Create("abc");
+            reaching.Should().Throw<InvalidOperationException>().WithMessage("No room*");
+            memory.Write(0x04, (byte)(heap + 11));
+            memory.Write(0x05, (byte)((heap + 11) >> 8));
+            variables.Create("abc").Name.Should().Be("abc");
+        }
+        finally
+        {
+            memory.Write(0x04, (byte)stack);
+            memory.Write(0x05, (byte)(stack >> 8));
+        }
+    }
+
     // A Model B at the prompt with X%=7, _count=1 and N$="ABCABC", and an evaluator on it.
     private static BasicEvaluator Variables()
     {

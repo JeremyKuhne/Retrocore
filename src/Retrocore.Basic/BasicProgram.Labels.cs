@@ -187,7 +187,7 @@ public sealed partial class BasicProgram
             int jump = Array.FindIndex(s_bbcJumps, candidate => candidate.Word == word);
             if (jump < 0 || Column(index) < scanned) { continue; }
             int found = references.Count;
-            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references);
+            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references, caseSensitive: true);
 
             // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
             // is a computed jump.
@@ -291,14 +291,15 @@ public sealed partial class BasicProgram
         int at,
         (string Word, bool List, bool Required) jump,
         IReadOnlyDictionary<string, BasicLabel> labels,
-        List<(int, int, string, bool, string)> references)
+        List<(int, int, string, bool, string)> references,
+        bool caseSensitive = false)
     {
         while (true)
         {
             at = SkipSpaces(text, at);
             if (Name().Match(text, at) is { Success: true } name && name.Index == at)
             {
-                string label = name.Groups["name"].Value.ToUpperInvariant();
+                string label = caseSensitive ? name.Groups["name"].Value : name.Groups["name"].Value.ToUpperInvariant();
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
                 bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");

@@ -293,11 +293,11 @@ public sealed class BbcBasicDialectTests
         repeat.Sites.Should().NotContain(site => site.Kind == BasicSiteKind.Variable, "REPEAT leaves a statement starting");
 
         // Jumps are where the tokeniser finds them: run together, abbreviated, and never in a * command.
-        Dictionary<string, BasicLabel> labels = new() { ["DONE"] = new("done", 1, 0, 4, 80) };
+        Dictionary<string, BasicLabel> labels = new() { ["done"] = new("done", 1, 0, 4, 80) };
         foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done"])
         {
             BasicProgram.LabelReferences(BasicDialect.BbcBasic, jump, labels).Should().ContainSingle(jump)
-                .Which.Name.Should().Be("DONE");
+                .Which.Name.Should().Be("done");
         }
 
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
@@ -305,7 +305,7 @@ public sealed class BbcBasicDialectTests
 
         // TRACE takes a line, its limit, which the tokeniser keeps as a line number: a label there is the line.
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "TRACE done", labels).Should().ContainSingle()
-            .Which.Name.Should().Be("DONE");
+            .Which.Name.Should().Be("done");
 
         // A byte the tokeniser copies as it is, after REM, DATA or a * command, is no GOTO even when it is &E5.
         foreach (string literal in (string[])["DATA {$E5} done", "REM {$E5} done", "REPEAT *KEY 1 {$E5} done"])

@@ -22,9 +22,9 @@ namespace Retrocore.Machines.Acorn;
 ///   1200 baud bit with 16 receive clocks for the ACIA; at 300 baud the ACIA divides by 64 and a bit is four of
 ///   these. Silence starts it again. The run-in detector raises the ACIA's DCD after 100 1s in a row, a twelfth of a
 ///   second of carrier, which interrupts the MOS as a block's leader starts; a 0 or silence lowers it. Recording,
-///   while the ACIA's RTS is low, the modulator takes the ACIA's transmit data every 16 transmit clocks (1/1200 second
-///   at the cassette's clock): two cycles of 2400 Hz for a 1, one of 1200 Hz for a 0. While RTS is high it records
-///   silence.
+///   while the ACIA's RTS is low, the modulator's tones come from the crystal, whatever the transmit rate: every
+///   1/1200 second it takes the ACIA's transmit data, two cycles of 2400 Hz for a 1, one of 1200 Hz for a 0. While RTS
+///   is high it records silence.
 ///  </para>
 ///  <para>
 ///   With RS-423 selected, the ACIA works a character at a time with the host's line: a character takes the time
@@ -42,13 +42,15 @@ public sealed class BbcSerialUla
     private readonly Acia6850 _acia;
     private readonly BbcCassette _cassette;
     private int _transmitPhase;
-    private int _transmitClocks;
     private int _shortHalves;
     private bool _longHalf;
     private int _ones;
     private bool _carrier;
     private int _quiet;
-    private int _silencePhase;
+    // The modulator's clock: "1200 Hz" from the crystal, 16 MHz / 13 / 1024, so 1201.9 Hz, a tape bit every 1664 CPU
+    // cycles, which is also the ACIA's bit at 1200 baud, so the two keep step.
+    private const int TapeBitCycles = 13 * 1024 / 8;
+    private int _tapeCycles;
 
     /// <summary>
     ///  Creates the ULA.
@@ -113,6 +115,8 @@ public sealed class BbcSerialUla
             _quiet = 0;
         }
 
+        // The transmit clock's next edge comes within the new rate's period.
+        _transmitPhase %= 13 * s_dividers[Control & 7];
         UpdateLines();
         UpdateCharacterTime();
     }
@@ -155,31 +159,29 @@ public sealed class BbcSerialUla
             {
                 _cassette.Tick();
             }
-            else if ((_silencePhase += 1200) >= BbcTiming.CpuHertz)
+            else if (TapeBit())
             {
-                _silencePhase -= BbcTiming.CpuHertz;
                 _cassette.Write(4, silence: true);
             }
 
             return;
         }
 
-        // The transmit clock: 16 MHz / 13 / divider is a CPU cycle times 13/8 times the divider. The modulator works
-        // from the same clock, a tape bit every 16 of its edges, so it keeps step with the ACIA's bits.
+        // The transmit clock: 16 MHz / 13 / divider is a CPU cycle times 13/8 times the divider.
         _transmitPhase += 8;
         int period = 13 * s_dividers[Control & 7];
         if (_transmitPhase >= period)
         {
             _transmitPhase -= period;
             _acia.ClockTransmit();
-            if (_cassette.Recording && ++_transmitClocks == 16)
-            {
-                _transmitClocks = 0;
-                Modulate();
-            }
         }
 
-        if (_cassette.Recording) { return; }
+        if (_cassette.Recording)
+        {
+            if (TapeBit()) { Modulate(); }
+            return;
+        }
+
         int half = _cassette.Tick();
         if (half != 0)
         {
@@ -197,6 +199,14 @@ public sealed class BbcSerialUla
         {
             _quiet = QuietCycles;
         }
+    }
+
+    // Whether the modulator's clock has a tape bit's time ready.
+    private bool TapeBit()
+    {
+        if (++_tapeCycles < TapeBitCycles) { return false; }
+        _tapeCycles = 0;
+        return true;
     }
 
     // Records one 1200 baud bit, or its time in silence.

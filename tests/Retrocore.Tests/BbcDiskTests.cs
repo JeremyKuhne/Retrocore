@@ -278,6 +278,97 @@ public class BbcDiskTests
     }
 
     /// <summary>
+    ///  Recording, the tones come from the crystal whatever the transmit rate: a second at the fastest or slowest rate
+    ///  is a second of tape.
+    /// </summary>
+    /// <param name="rate">The transmit and receive rate bits.</param>
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(7)]
+    public void RecordingKeepsTimeAtAnyRate(int rate)
+    {
+        Acia6850 acia = new();
+        BbcCassette cassette = new();
+        BbcSerialUla ula = new(acia, cassette);
+        cassette.Insert(new AcornTape(), "blank");
+        cassette.Record();
+        acia.Write(0, 0x15);                    // divide by 16, 8 bits, 1 stop, RTS low: tones
+        ula.Write((byte)(0x80 | rate | (rate << 3)));
+        for (int cycle = 0; cycle < BbcTiming.CpuHertz; cycle++) { ula.Tick(); }
+        long units = (cassette.Tape ?? throw new AssertFailedException("A tape is in.")).HalfCycles.Sum(length => (long)length);
+        units.Should().BeCloseTo(AcornTape.UnitsPerSecond, 8, "a second of tone");
+    }
+
+    /// <summary>
+    ///  A reset, or the disk changed, part way through writing a sector keeps the bytes written, with a CRC error, on
+    ///  the disk being written; a reset part way through formatting keeps the sectors formatted.
+    /// </summary>
+    [TestMethod]
+    public void CutOffWritesKeepWhatWasWritten()
+    {
+        FloppySector Cut(Action<Intel8271> cut)
+        {
+            Intel8271 fdc = new();
+            FloppyDisk disk = AcornDiskImage.Blank(40);
+            fdc.Insert(0, disk);
+            Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+            Send(fdc, 0x4B, 0, 2, 0x21);            // write drive 0, track 0, sector 2, one 256-byte sector
+            int written = 0;
+            for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+            {
+                if (fdc.DataRequest)
+                {
+                    if (written == 100)
+                    {
+                        cut(fdc);
+                        break;
+                    }
+
+                    fdc.WriteData(0x5A);
+                    written++;
+                }
+
+                fdc.Tick();
+            }
+
+            return disk.Track(0, 0).Single(found => found.Sector == 2);
+        }
+
+        foreach (Action<Intel8271> cut in (Action<Intel8271>[])[fdc => fdc.Reset(), fdc => fdc.Insert(0, AcornDiskImage.Blank(40))])
+        {
+            FloppySector sector = Cut(cut);
+            sector.CrcError.Should().BeTrue();
+            sector.Data[..100].ToArray().Should().OnlyContain(value => value == 0x5A, "the bytes written before the cut");
+            sector.Data[100..].ToArray().Should().OnlyContain(value => value == 0xE5, "the rest is what was there");
+        }
+
+        Intel8271 formatter = new();
+        FloppyDisk formatted = AcornDiskImage.Blank(40);
+        formatter.Insert(0, formatted);
+        Send(formatter, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(formatter, 0x63, 0, 21, 0x2A, 0, 16);  // format drive 0, track 0: ten 256-byte sectors
+        int position = 0;
+        for (int cycle = 0; cycle < 10_000_000 && formatter.IsBusy; cycle++)
+        {
+            if (formatter.DataRequest)
+            {
+                if (position == 12)
+                {
+                    formatter.Reset();              // at the fourth sector's ID, three sectors written
+                    break;
+                }
+
+                formatter.WriteData(position % 4 == 2 ? (byte)(position / 4) : (byte)(position % 4 == 3 ? 1 : 0));
+                position++;
+            }
+
+            formatter.Tick();
+        }
+
+        formatted.Track(0, 0).Select(sector => sector.Sector).Should().Equal(0, 1, 2);
+    }
+
+    /// <summary>
     ///  A data request reaches the INT pin, and so NMI, only in non-DMA mode.
     /// </summary>
     /// <param name="nonDma">Whether the mode register selects non-DMA mode.</param>

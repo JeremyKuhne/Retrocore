@@ -85,6 +85,10 @@ public sealed class Intel8271
     private long _time;
     private long _idleSince;
     private IEnumerator<int>? _operation;
+
+    // What a write or format has put on the disk so far, kept when a reset or a disk change cuts the command off: the
+    // bytes written stay, with no CRC after them.
+    private Action? _abandon;
     private int _wait;
     private int _drive;
 
@@ -191,6 +195,7 @@ public sealed class Intel8271
         _disks[drive] = disk;
         if (_operation is null || drive != _drive) { return; }
 
+        Abandon();
         _operation = null;
         Sector = null;
         IsWriting = false;
@@ -292,6 +297,7 @@ public sealed class Intel8271
     /// </summary>
     public void Reset()
     {
+        Abandon();
         _operation = null;
         _phase = Idle;
         _commandCount = 0;
@@ -304,6 +310,13 @@ public sealed class Intel8271
         InterruptRequest = DataRequest = false;
         Sector = null;
         IsWriting = false;
+    }
+
+    // Keeps what a write or format cut off has written.
+    private void Abandon()
+    {
+        _abandon?.Invoke();
+        _abandon = null;
     }
 
     /// <summary>
@@ -607,6 +620,8 @@ public sealed class Intel8271
             int size = 128 << sizeCode;
             int held = found.Data.Length;
             byte[] buffer = found.Data.ToArray();
+            byte mark = deleted ? (byte)0xF8 : (byte)0xFB;
+            if (kind == WriteKind) { _abandon = () => disk.Write(found, buffer, mark, crcError: true); }
             for (int position = 0; position < size; position++)
             {
                 if (kind == ReadKind)
@@ -632,7 +647,7 @@ public sealed class Intel8271
                     {
                         // The bytes before the late one are on the disk already; the rest of the field is what was
                         // there, with no CRC to match.
-                        disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB, crcError: true);
+                        Abandon();
                         _result = LateDma;
                         yield break;
                     }
@@ -645,7 +660,8 @@ public sealed class Intel8271
             yield return 2 * ByteCycles;
             if (kind == WriteKind)
             {
-                disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB, crcError: size != held);
+                _abandon = null;
+                disk.Write(found, buffer, mark, crcError: size != held);
                 continue;
             }
 
@@ -797,13 +813,16 @@ public sealed class Intel8271
         // the sectors whose data was written by then: sixteen 256-byte sectors do not fit a track. A late DMA ends it
         // at once, with the sectors written before it kept.
         long end = _time + RevolutionCycles;
+        List<FloppySector> formatted = [];
+        int cylinder = _cylinders[_drive];
+        int side = Side;
+        _abandon = () => disk.Format(cylinder, side, formatted);
         yield return (gap5 == 0 ? gap1 : gap5 + 7 + gap1) * ByteCycles;
 
         int size = 128 << sizeCode;                             // 128 to 16384: 2048 fits a track once, larger never
         byte[] fill = new byte[size];
         fill.AsSpan().Fill(0xE5);
         int field = (2 + 11 + 7 + size + 2) * ByteCycles;
-        List<FloppySector> formatted = [];
         for (int index = 0; index < count && _result != LateDma; index++)
         {
             if (_time + ((7 + 4) * ByteCycles) + field > end) { break; }
@@ -833,7 +852,8 @@ public sealed class Intel8271
             yield return gap3 * ByteCycles;
         }
 
-        disk.Format(_cylinders[_drive], Side, formatted);
+        _abandon = null;
+        disk.Format(cylinder, side, formatted);
         if (_result != LateDma && _time < end) { yield return (int)(end - _time); }
     }
 }

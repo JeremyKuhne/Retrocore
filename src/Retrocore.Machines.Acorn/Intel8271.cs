@@ -505,19 +505,23 @@ public sealed class Intel8271
 
     // Steps the head until the current track register reaches a track, skipping the bad tracks, then settles. A
     // track that is itself bad cannot be reached: the head stops on the first good track past it, rather than
-    // stepping back and forth across it.
+    // stepping back and forth across it. The register runs from 0 to 255 and never wraps: with no good track left
+    // that way, as when tracks 1 and 0 are both bad and track 1 is sought from 3, the head stops where it is.
     private IEnumerable<int> Steps(byte track)
     {
         bool moved = false;
         bool outward = _currentTracks[_drive] > track;
         while (_currentTracks[_drive] != track && (_currentTracks[_drive] > track) == outward)
         {
+            int next = _currentTracks[_drive];
             do
             {
-                _currentTracks[_drive] = (byte)(_currentTracks[_drive] + (outward ? -1 : 1));
+                next += outward ? -1 : 1;
             }
-            while (IsBadTrack(_currentTracks[_drive]));
+            while (next is >= 0 and <= 0xFF && IsBadTrack((byte)next));
 
+            if (next is < 0 or > 0xFF) { break; }
+            _currentTracks[_drive] = (byte)next;
             _cylinders[_drive] = Math.Clamp(_cylinders[_drive] + (outward ? -1 : 1), 0, 83);
             moved = true;
             yield return _stepRate * 2 * Milliseconds;
@@ -590,7 +594,7 @@ public sealed class Intel8271
 
             // The data field: gap 2, the sync bytes and the mark, then the bytes.
             yield return 18 * ByteCycles;
-            int size = Math.Min(128 << sizeCode, found.Data.Length);
+            int size = found.Data.Length;                               // FindSector matched the size code
             byte[] buffer = new byte[size];
             for (int position = 0; position < size; position++)
             {
@@ -615,6 +619,10 @@ public sealed class Intel8271
                 {
                     if (DataRequest)
                     {
+                        // The bytes before the late one are on the disk already; the rest of the field is what was
+                        // there, with no CRC to match.
+                        found.Data[position..].CopyTo(buffer.AsSpan(position));
+                        disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB, crcError: true);
                         _result = LateDma;
                         yield break;
                     }
@@ -627,8 +635,7 @@ public sealed class Intel8271
             yield return 2 * ByteCycles;
             if (kind == WriteKind)
             {
-                found.Data[size..].CopyTo(buffer.AsSpan(size));
-                disk.Write(found, Pad(buffer, found.Data), deleted ? (byte)0xF8 : (byte)0xFB);
+                disk.Write(found, buffer, deleted ? (byte)0xF8 : (byte)0xFB);
                 continue;
             }
 
@@ -640,15 +647,6 @@ public sealed class Intel8271
 
             if (found.DataAddressMark == 0xF8) { _result |= DeletedData; }
         }
-    }
-
-    // Data of a sector's own length: what was written, then what was there.
-    private static byte[] Pad(byte[] written, ReadOnlySpan<byte> existing)
-    {
-        if (written.Length == existing.Length) { return written; }
-        byte[] data = existing.ToArray();
-        written.CopyTo(data, 0);
-        return data;
     }
 
     // Waits for the sector's ID to come under the head, into _found: up to two revolutions, or an ID from

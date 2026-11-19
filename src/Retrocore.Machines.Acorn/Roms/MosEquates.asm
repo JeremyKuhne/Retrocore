@@ -476,8 +476,10 @@ SOUND_WORKSPACE = $0800             ;; &0800-&083F, the sound system's workspace
 SOUND_BUFFERS = $0840               ;; &0840-&087F, the four sound channels' buffers, sixteen bytes each
 PRINTER_BUFFER = $0880              ;; &0880-&08BF, the printer buffer
 ENVELOPES = $08C0                   ;; &08C0-&08FF, envelopes 1-4, sixteen bytes each
-OUTPUT_BUFFER = $0900               ;; &0900-&09BF, the RS-423 or cassette output buffer, or envelopes 5-16
-SPEECH_BUFFER = $09C0               ;; &09C0-&09FF, the speech buffer
+;; &0900-&09BF as the RS-423 output buffer, or envelopes 5-16. The cassette output buffer is the whole page,
+;; &0900-&09FF: <BPUTV_DEFAULT> fills all 256 bytes before writing a block, over <SPEECH_BUFFER>.
+OUTPUT_BUFFER = $0900
+SPEECH_BUFFER = $09C0               ;; &09C0-&09FF, the speech buffer, which a cassette file being written also uses
 INPUT_BUFFER = $0A00                ;; &0A00-&0AFF, the RS-423 or cassette input buffer
 
 ;; The soft key buffer: the start offset of soft key n is at SOFT_KEYS+n, its text begins at SOFT_KEYS+1 plus that

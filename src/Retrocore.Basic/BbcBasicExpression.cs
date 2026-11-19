@@ -753,8 +753,9 @@ internal sealed class BbcBasicExpression
             return whole is >= int.MinValue and <= int.MaxValue ? (int)whole : throw new FormatException("Too big.");
         }
 
+        // Written so that NaN, which no comparison holds for, is too big rather than cast.
         double real = Number(value);
-        return Math.Abs(real) >= TwoToThe31 ? throw new FormatException("Too big.") : (int)Math.Truncate(real);
+        return Math.Abs(real) < TwoToThe31 ? (int)Math.Truncate(real) : throw new FormatException("Too big.");
     }
 
     /// <summary>

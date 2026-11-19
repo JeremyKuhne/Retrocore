@@ -142,7 +142,7 @@ public sealed partial class BasicEvaluator
         // An integer is true when not zero; a real is made one first, which refuses one of 2^31 or more in size.
         if (result.Value.Long is long integer) { return integer != 0; }
         double real = result.Value.Number;
-        return Math.Abs(real) >= BbcBasicExpression.TwoToThe31 ? throw new FormatException("Too big.") : Math.Truncate(real) != 0;
+        return Math.Abs(real) < BbcBasicExpression.TwoToThe31 ? Math.Truncate(real) != 0 : throw new FormatException("Too big.");
     }
 
     /// <summary>

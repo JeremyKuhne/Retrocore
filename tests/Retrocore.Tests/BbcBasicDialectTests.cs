@@ -564,6 +564,23 @@ public sealed class BbcBasicDialectTests
         BasicSource at = BasicSource.Analyze("10 PROC@foo:PROCfoo@a:PROCfoo@b\n", BasicDialect.BbcBasic);
         at.Sites.Where(site => site.Kind == BasicSiteKind.Function).Select(site => site.Key)
             .Should().Equal("PROC@foo", "PROCfoo@a", "PROCfoo@b");
+
+        // A hover names a BBC routine with its word, and a BBC name whole: no two-character note, which the Microsoft
+        // BASICs still get.
+        BasicSite procedure = routines.First(site => site.Key == "PROCfoo");
+        BasicSite function = routines.First(site => site.Key == "FNfoo");
+        source.Summary(procedure).Should().Be("**PROCfoo**: a procedure.");
+        source.Summary(function).Should().Be("**FNfoo**: a function.");
+        BasicSource variables = BasicSource.Analyze("10 count%=1:PRINT count%\n", BasicDialect.BbcBasic);
+        BasicSite count = variables.Sites.First(site => site.Kind == BasicSiteKind.Variable);
+        variables.Summary(count).Should().NotContain("first two characters");
+        BasicSource apple = BasicSource.Analyze("10 ZEBRA=1:PRINT ZE\n", BasicDialect.AppleSoft);
+        BasicSite zebra = apple.Sites.First(site => site.Kind == BasicSiteKind.Variable);
+        apple.Summary(zebra).Should().Contain("first two characters");
+
+        // NaN, which no comparison holds for, is too big for a condition rather than cast to an integer.
+        Action nan = () => BasicEvaluator.IsTrue(new BasicResult(new BasicValue(double.NaN)), BasicDialect.BbcBasic);
+        nan.Should().Throw<FormatException>().WithMessage("Too big.");
     }
 
     /// <summary>

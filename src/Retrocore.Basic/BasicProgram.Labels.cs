@@ -181,7 +181,16 @@ public sealed partial class BasicProgram
 
             int jump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
             if (jump < 0 || Column(index) < scanned) { continue; }
+            int found = references.Count;
             scanned = Targets(text, Column(index + 1), s_jumps[jump], labels, references);
+
+            // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
+            // is a computed jump.
+            for (int reference = references.Count - 1; reference >= found; reference--)
+            {
+                int end = references[reference].Item2;
+                if (end < text.Length && "%$`(".Contains(text[end])) { references.RemoveAt(reference); }
+            }
         }
     }
 

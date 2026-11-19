@@ -30,9 +30,10 @@ internal sealed class BbcBasicExpression
     private const int MaximumDepth = 32;
     private const int MaximumString = 255;
 
-    // BASIC II's reals: an 8-bit exponent around 128 and a 32-bit mantissa, so from 2^-128 to just under 2^127.
+    // BASIC II's reals: an 8-bit exponent around 128 and a 32-bit mantissa, so from 2^-129 (exponent 0, the mantissa
+    // a half) to just under 2^127.
     private const double LargestReal = 1.7014118346046923E38;
-    private const double SmallestReal = 2.938735877055719E-39;
+    private const double SmallestReal = 1.4693679385278594E-39;
 
     // BASIC II's zero page: LOMEM, HIMEM, ERL and TOP are words; PAGE is its high byte; COUNT a byte.
     private const int Lomem = 0x00;
@@ -647,7 +648,8 @@ internal sealed class BbcBasicExpression
     private static double Logarithm(double value, Func<double, double> logarithm) =>
         value <= 0 ? throw new FormatException("Log range.") : logarithm(value);
 
-    // A real as BASIC II holds one, in five bytes: past about 1.7E38 it is "Too big", and below about 2.9E-39 it is 0.
+    // A real as BASIC II holds one, in five bytes: past about 1.7E38 it is "Too big", and below about 1.5E-39, where
+    // the exponent would go below 0, it is 0.
     // ROUND_FP_A checks the exponent again after rounding, so 1.7014118345E38, which rounds up to 2^127, is too big.
     private static BasicValue Real(double value) => value switch
     {
@@ -659,10 +661,18 @@ internal sealed class BbcBasicExpression
             : throw new FormatException("Too big.")
     };
 
-    // A real rounded to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10. The rounding byte is the
-    // eight bits after the mantissa: above &80 rounds up, &80 itself sets the mantissa's lowest bit, so an odd
-    // mantissa stays (2147483649+0.5 is 2147483649), and below &80 truncates.
-    private static double RoundMantissa(double value)
+    /// <summary>
+    ///  Rounds a real to BASIC II's 32-bit mantissa, as ROUND_FP_A rounds it: 1E10+1 is 1E10.
+    /// </summary>
+    /// <param name="value">The real.</param>
+    /// <returns>The rounded real.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The rounding byte is the eight bits after the mantissa: above &amp;80 rounds up, &amp;80 itself sets the
+    ///   mantissa's lowest bit, so an odd mantissa stays (2147483649+0.5 is 2147483649), and below &amp;80 truncates.
+    ///  </para>
+    /// </remarks>
+    internal static double RoundMantissa(double value)
     {
         if (value == 0) { return 0; }
         double scale = Math.ScaleB(1.0, 31 - Math.ILogB(value));

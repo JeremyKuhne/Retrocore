@@ -359,15 +359,21 @@ internal sealed class BasicLineScanner
     }
 
     // Whether an operand starts at a place, rather than following one: the byte before it, past spaces, is no part
-    // of a name, number, string or bracketed expression. A token before it, such as PRINT, leaves an operand to come.
+    // of a name, number, string or bracketed expression. A token before it, such as PRINT, leaves an operand to come,
+    // but not one that is a whole value itself, such as FALSE or PAGE.
     private bool OperandStarts(int index)
     {
         int before = index - 1;
         while (before >= 0 && _bytes[before] == ' ') { before--; }
         if (before < 0) { return true; }
         byte value = _bytes[before];
+        if (value >= 0x80) { return _dialect.Word(value) is not { } word || !s_bbcValues.Contains(word); }
         return !char.IsAsciiLetterOrDigit((char)value) && !"%$)\"._`".Contains((char)value);
     }
+
+    // BBC BASIC's words that are a value with nothing after them.
+    private static readonly HashSet<string> s_bbcValues =
+        ["FALSE", "TRUE", "PI", "PAGE", "TIME", "LOMEM", "HIMEM", "TOP", "COUNT", "ERL", "ERR", "POS", "VPOS", "RND", "GET", "GET$"];
 
     // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no
     // ON GOTO: a line is a number that ends the statement or comes before a comma.

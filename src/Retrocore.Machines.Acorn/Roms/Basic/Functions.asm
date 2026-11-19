@@ -399,7 +399,8 @@ NOT_FUNCTION_LOOP:
 ;;
 ;; It gives the position, counting from 1, of the first copy of the search string at or after the start position
 ;; (1 if left out; only its low byte is used, and 0 is taken as 1, so 256 starts at 1), or 0 if there is none. An
-;; empty search string is found at the start position. The string searched is kept on BASIC's stack, the search
+;; empty search string is found at the start position up to LEN(string)+1, and beyond that gives 0, as the length is
+;; checked first: INSTR("ABC","",4) is 4 and INSTR("ABC","",5) is 0. The string searched is kept on BASIC's stack, the search
 ;; string in StrA, and IntA holds the position being tried (INT_A), the number of positions left to try (INT_A+1)
 ;; and the start less one (INT_A+3); WORK points to the characters being compared.
 ;; Out: INT_A = the position, or 0, A = &40 (an integer)

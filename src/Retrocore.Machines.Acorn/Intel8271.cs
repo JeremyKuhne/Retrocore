@@ -790,7 +790,7 @@ public sealed class Intel8271
         long end = _time + RevolutionCycles;
         yield return (gap5 == 0 ? gap1 : gap5 + 7 + gap1) * ByteCycles;
 
-        int size = Math.Clamp(128 << sizeCode, 128, 1024);
+        int size = 128 << sizeCode;                             // 128 to 16384: 2048 fits a track once, larger never
         byte[] fill = new byte[size];
         fill.AsSpan().Fill(0xE5);
         int field = (2 + 11 + 7 + size + 2) * ByteCycles;

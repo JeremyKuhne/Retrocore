@@ -102,7 +102,7 @@ public sealed partial class BasicVariables
         switch (kind)
         {
             case BasicVariableKind.Integer:
-                return new(BbcWord32(address));
+                return BasicValue.OfLong(BbcWord32(address));    // an integer, &80000000 included, not a real
             case BasicVariableKind.String:
                 int text = Word(address);
                 int length = _memory.Read(address + 3);

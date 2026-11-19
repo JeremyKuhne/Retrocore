@@ -453,6 +453,13 @@ public sealed class BbcBasicDialectTests
         BasicVariable z = variables.Find("Z%") ?? throw new InvalidOperationException("No Z%.");
         variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("&80000000").Value);
         variables.Read(z.Kind, z.ValueAddress).Number.Should().Be(-2147483648);
+
+        // Read back, it is still an integer: it writes back, is true in a condition and works in a watch.
+        BasicValue stored = variables.Read(z.Kind, z.ValueAddress);
+        stored.Long.Should().Be(-2147483648);
+        variables.Write(z.Kind, z.ValueAddress, stored);
+        BasicEvaluator.IsTrue(new BasicResult(stored), BasicDialect.BbcBasic).Should().BeTrue();
+        evaluator.Evaluate("NOT Z%").Value.Number.Should().Be(2147483647);
         Action realWrite = () => variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("-2147483648").Value);
         realWrite.Should().Throw<OverflowException>();
 

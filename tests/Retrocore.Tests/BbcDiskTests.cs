@@ -463,6 +463,27 @@ public class BbcDiskTests
         int written = disk.Track(0, 0).Count;
         written.Should().BeInRange(1, 15, "a track holds about 3,125 bytes, not sixteen 256-byte sectors");
         (written * 256).Should().BeLessThan(Intel8271.RevolutionCycles / Intel8271.ByteCycles);
+
+        // Ten 128-byte sectors with gap 3 of 230: the eighth's gap 3 reaches the index, so there is no ninth.
+        fdc = new();
+        disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x63, 0, 230, 0x0A, 0, 16);   // format drive 0, track 0: gap 3 of 230, ten 128-byte sectors
+        position = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest)
+            {
+                fdc.WriteData(position % 4 == 2 ? (byte)(position / 4) : id[position % 4]);
+                position++;
+            }
+
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0);
+        disk.Track(0, 0).Should().HaveCount(8);
     }
 
     /// <summary>

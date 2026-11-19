@@ -291,6 +291,12 @@ public sealed class BbcBasicDialectTests
         }
 
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "GOTO done%", labels).Should().BeEmpty("done% is another name");
+
+        // FALSE is a whole value, so the TO after it is FOR's, and P% a variable.
+        BasicSource falseLoop = BasicSource.Analyze("10 P%=3:FOR I%=FALSE TOP%:NEXT\n", BasicDialect.BbcBasic);
+        falseLoop.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Text)
+            .Should().Equal("P%", "I%", "P%");
     }
 
     /// <summary>
@@ -329,6 +335,25 @@ public sealed class BbcBasicDialectTests
         machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"));
         Action rounded = () => evaluator.Evaluate("1.7014118345E38");
         rounded.Should().Throw<FormatException>().WithMessage("Too big.");
+
+        // Exponent 0 holds reals down to 2^-129: 3E-39/2 is no zero in the ROM or the watch, and an exact half keeps
+        // an odd mantissa when BASIC stores it.
+        BbcMachineTests.Type(machine, "S=3E-39/2:U=2147483649.5\r");
+        BbcMachineTests.RunToPrompt(machine);
+        evaluator.Evaluate("S").Value.Number.Should().BeGreaterThan(0);
+        evaluator.Evaluate("3E-39/2=S").Value.Number.Should().Be(-1);
+        evaluator.Evaluate("U").Value.Number.Should().Be(2147483649.0);
+
+        // Written by the debugger, they pack as BASIC packs them.
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicVariable small = variables.Find("S") ?? throw new InvalidOperationException("No S.");
+        double tiny = Math.ScaleB(0.75, -128);
+        variables.Write(small.Kind, small.ValueAddress, new BasicValue(tiny));
+        variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(tiny);
+        byte[] packed = [.. Enumerable.Range(0, 5).Select(offset => machine.Bus.Peek((ushort)(small.ValueAddress + offset)))];
+        packed.Should().Equal(0, 0x40, 0, 0, 0);
+        variables.Write(small.Kind, small.ValueAddress, new BasicValue(2147483649.5));
+        variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
     }
 
     /// <summary>

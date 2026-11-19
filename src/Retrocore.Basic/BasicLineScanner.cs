@@ -90,6 +90,7 @@ internal sealed class BasicLineScanner
 
             // A BBC * command is the MOS's to read, to the end of the line: nothing in it is BASIC's.
             if (Bbc && statementStart && value == '*') { break; }
+            bool wasStart = statementStart;
             statementStart = value == ':';
             if (_skip.Count != 0 && _skip.Any(range => Column(index) >= range.Start && Column(index) < range.End))
             {
@@ -173,8 +174,13 @@ internal sealed class BasicLineScanner
                 routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
-                // BBC BASIC's ERROR and LET start a statement as THEN and ELSE do, so ON ERROR *KEY 1 FOO is a command.
-                statementStart = word is "THEN" or "ELSE" || (Bbc && word is "ERROR" or "LET");
+
+                // BBC BASIC's tokeniser decides by each word's flags: ERROR and LET start a statement as THEN and ELSE
+                // do, and REPEAT leaves one starting, so ON ERROR *KEY 1 FOO and REPEAT *KEY 1 FOO are commands.
+                statementStart = Bbc
+                    ? BbcBasicDialect.StatementStartsAfter(word, wasStart)
+                    : word is "THEN" or "ELSE";
+
                 if (word == "GOTO") { beforeGoto = previous; }
                 previous = word;
                 index = last;

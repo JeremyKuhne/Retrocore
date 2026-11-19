@@ -974,8 +974,8 @@ BAD_KEY:
 ;; The text is read with GSREAD, so it can hold control characters written as |M and so on. The old definition is
 ;; deleted first; the new one is read into the free space at the end of <SOFT_KEYS> and becomes the key's.
 ;; In: Y = the offset of the text after the command
-;; Errors: "Bad key" for a key number over 15, a definition that does not fit or a bad string, "Key in use" while
-;;   a soft key is being expanded
+;; Errors: "Bad key" for a key number over 15 or a definition that does not fit, "Bad string" from <GSREAD_HANDLER>
+;;   for a malformed definition such as an unterminated quotation, "Key in use" while a soft key is being expanded
 ;; Uses: A, X, Y, OS_WORK+2 (the key), OS_SCRATCH
 ;; See: <DELETE_SOFT_KEY>
 KEY_COMMAND:

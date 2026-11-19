@@ -105,6 +105,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\AppleSoftSourceKind.cs" Link="AppleSoftSourceKind.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\CommandAddress.cs" Link="CommandAddress.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DosCommand.cs" Link="DosCommand.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2PascalMemory.cs" Link="Apple2PascalMemory.cs" />

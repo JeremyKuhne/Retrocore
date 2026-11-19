@@ -44,6 +44,28 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  AppleSoft's documentation references resolve for each ROM variant.
+    /// </summary>
+    /// <param name="model">The Apple II model.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.IIPlus)]
+    [DataRow(Apple2Model.IIe)]
+    [DataRow(Apple2Model.IIeEnhanced)]
+    public void AppleSoftDocumentationIsCleanForEachModel(Apple2Model model)
+    {
+        AssemblyResult result = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
+        DocumentationSet basic = Set(result, "AppleSoft");
+        DocumentationResolver resolver = new(
+            basic,
+            Sets().Where(set => set.Module != "AppleSoft"),
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        var problems = resolver.Check();
+        problems.Should().BeEmpty($"AppleSoft documentation must resolve for {model}");
+    }
+
+    /// <summary>
     ///  Every SDK source passes the lint as the editor runs it: each module's root assembled with the files it
     ///  includes, with links reaching the other modules under the names the editor gives them. The sources are
     ///  checked both as the SDK's own copy and as a repository copy opened beside it, which stands in for the
@@ -136,7 +158,19 @@ public class SdkDocumentationTests
         List<string> problems = [];
         foreach ((string name, List<SourceAnalysis> sources) in projects)
         {
-            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, sources, name)));
+            List<SourceAnalysis> machineSources = name == "Retrocore.Machines.Apple2"
+                ? [.. sources.Where(source =>
+                    !Path.GetFileName(source.Root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))]
+                : sources;
+
+            foreach (SourceAnalysis analysis in sources)
+            {
+                List<SourceAnalysis> linked = Path.GetFileName(analysis.Root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase)
+                    ? sources
+                    : machineSources;
+
+                problems.AddRange(OwnProblems(analysis, linked, name));
+            }
         }
 
         foreach (string sample in Directory.EnumerateDirectories(Path.Join(repository, "sample")))
@@ -260,10 +294,12 @@ public class SdkDocumentationTests
 
     private static readonly string[] s_sdkFolders =["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
 
-    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.
+    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
+    // default module; the overlay is a mutually exclusive legacy source.
     private static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
+            .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))
             .Append(Path.GetFullPath(Path.Join(roms, "Slot7.rom.asm")));
 
     // The lint's findings for one module, its links reaching the SDK's other modules as the editor's do.
@@ -441,16 +477,13 @@ public class SdkDocumentationTests
         card.Success.Should().BeTrue();
         sets.Add(DocumentationSet.Create([DocumentationParser.Parse(slot7Text, slot7)], card, "Slot7"));
 
-        string appleSoft = Path.GetFullPath(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"));
-        string m6502 = Path.GetFullPath(Path.Join(s_inputs, "AppleSoft", "m6502.asm"));
+        string appleSoft = SdkModules.AppleSoftPath(s_inputs);
         AssemblyResult basic = SdkModules.AssembleAppleSoft(appleSoft, Apple2Model.IIeEnhanced);
-        sets.Add(DocumentationSet.Create(
-            [
-                DocumentationParser.Parse(File.ReadAllText(appleSoft), appleSoft),
-                DocumentationParser.Parse(File.ReadAllText(m6502), m6502)
-            ],
-            basic,
-            "AppleSoft"));
+        var appleSoftSources = Directory
+            .GetFiles(Path.Join(s_inputs, "AppleSoft"), "AppleSoft*.asm")
+            .Select(path => DocumentationParser.Parse(File.ReadAllText(path), path));
+
+        sets.Add(DocumentationSet.Create(appleSoftSources, basic, "AppleSoft"));
 
         // The video ROM, the Disk II's ROMs and DOS, each with every file its assembly reads, named as the editor
         // names them.

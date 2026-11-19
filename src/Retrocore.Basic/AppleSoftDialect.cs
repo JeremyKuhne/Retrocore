@@ -11,7 +11,7 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The tokenizer is the ROM's <c>CRUNCH</c> with Apple's changes, as the SDK's <c>applesoft.mac</c> gives them.
+///   The tokenizer is the ROM's <c>CRUNCH</c> with Apple's changes, as the SDK's AppleSoft sources document them.
 ///   Spaces outside strings, DATA and REM are dropped, even inside reserved words. Reserved words are found
 ///   anywhere, so <c>SCORE</c> is <c>SC</c>, <c>OR</c>, <c>E</c>; <c>AT</c> is not taken before <c>N</c>
 ///   (<c>ATN</c>) or <c>O</c> (<c>A TO</c>). On the Enhanced IIe, lowercase outside strings, DATA and REM is made

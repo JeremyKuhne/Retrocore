@@ -169,7 +169,9 @@ public sealed class BbcVideo : IVideoSource
         }
 
         // Draw a whole frame, both fields if interlaced, from copies of the 6845 and the teletext chip.
+        // Opaque black where the beam does not reach, as the scanned frame starts.
         byte[] frame = new byte[_scanned.Length];
+        for (int index = 3; index < frame.Length; index += 4) { frame[index] = 0xFF; }
         Crtc6845 crtc = Crtc.Clone();
         BbcTeletext teletext = _teletext.Clone();
         BbcBeam beam = new() { Pixels = frame };

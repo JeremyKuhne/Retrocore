@@ -101,7 +101,8 @@ public sealed class FloppyDisk : IMedium
     }
 
     /// <summary>
-    ///  Writes a sector's data field, as the write sector command does: its data and mark, with a good CRC.
+    ///  Writes a sector's data field, as the write sector command does: its data and mark, with a good CRC unless the
+    ///  write was cut short.
     /// </summary>
     /// <remarks>
     ///  <para>
@@ -111,11 +112,15 @@ public sealed class FloppyDisk : IMedium
     /// <param name="sector">A sector of this disk.</param>
     /// <param name="data">The data, the sector's size.</param>
     /// <param name="dataAddressMark">The data address mark, <c>$F8</c>-<c>$FB</c>.</param>
+    /// <param name="crcError">
+    ///  Whether the field was left without its CRC, as when the controller stops writing partway: the bytes written
+    ///  stay, the rest are what was there, and reading it reports a CRC error.
+    /// </param>
     /// <exception cref="ArgumentException">The data is not the sector's size, or the mark is no data mark.</exception>
-    public void Write(FloppySector sector, ReadOnlySpan<byte> data, byte dataAddressMark)
+    public void Write(FloppySector sector, ReadOnlySpan<byte> data, byte dataAddressMark, bool crcError = false)
     {
         ArgumentNullException.ThrowIfNull(sector);
-        sector.Overwrite(data, dataAddressMark);
+        sector.Overwrite(data, dataAddressMark, crcError);
         Changed();
     }
 

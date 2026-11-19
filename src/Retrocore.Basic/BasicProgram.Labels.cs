@@ -26,8 +26,13 @@ public sealed partial class BasicProgram
         ("RUN", false, false)
     ];
 
-    // BBC BASIC's words that take a line: the others' and TRACE, whose limit is a line number, kept as one.
-    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps = [.. s_jumps, ("TRACE", false, false)];
+    // BBC BASIC's words that take a line: the others', with DELETE's and LIST's range a comma between two (DELETE 10,
+    // last), and TRACE, whose limit is a line number, kept as one.
+    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps =
+    [
+        .. s_jumps.Select(jump => jump.Word is "DELETE" or "LIST" ? (jump.Word, true, false) : jump),
+        ("TRACE", false, false)
+    ];
 
     /// <summary>
     ///  Finds where a statement line names a label in place of a line number.
@@ -302,7 +307,11 @@ public sealed partial class BasicProgram
                 string label = caseSensitive ? name.Groups["name"].Value : name.Groups["name"].Value.ToUpperInvariant();
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
-                bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
+                bool alone = next >= text.Length
+                    || text[next] == ':'
+                    || StartsWord(text, next, "ELSE")
+                    || (jump.List && text[next] == ',');
+
                 if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
                     // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.

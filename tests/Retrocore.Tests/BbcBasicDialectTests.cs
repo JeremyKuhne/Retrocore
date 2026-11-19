@@ -703,6 +703,20 @@ public sealed class BbcBasicDialectTests
         renumber.Sites.Where(site => site.Kind == BasicSiteKind.LineReference).Select(site => site.Number)
             .Should().Equal(30, 40);
 
+        // DELETE and LIST take a range, a comma between two lines, either of them a label; end: is a label, as BBC's
+        // words are capitals only.
+        const string Ranges = "REM retrocore bbcbasic\n@first\n    PRINT 1\n@last\n    PRINT 2\n    DELETE first,last:LIST 10,last\n    GOTO end\nend:\n    PRINT 3\n";
+        string ranged = BasicProgram.Parse(Ranges, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        ranged.Should().Contain("DELETE 10,20:LIST 10,20").And.Contain("GOTO 50");
+
+        // A bare point is the real zero: VAL(".") is real, so adding &7FFFFFFF and 1 does not wrap, in the ROM and the
+        // watch.
+        BbcMachineTests.Type(machine, "CLS:PRINT STR$(VAL(\".\")+&7FFFFFFF+1);\"|\";.+1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "2147483648|1");
+        evaluator.Evaluate("VAL(\".\")+&7FFFFFFF+1").Value.Number.Should().Be(2147483648.0);
+        evaluator.Evaluate(".+1").Value.Number.Should().Be(1);
+
         // A real variable's block is 2 + 2 + 1 + 5 bytes for abc: reaching the stack is no room, one short is.
         DelegateBasicMemory memory = Memory(machine);
         BasicVariables variables = new(BasicDialect.BbcBasic, memory);
@@ -717,6 +731,14 @@ public sealed class BbcBasicDialectTests
             memory.Write(0x04, (byte)(heap + 11));
             memory.Write(0x05, (byte)((heap + 11) >> 8));
             variables.Create("abc").Name.Should().Be("abc");
+
+            // A tiny real, down to the smallest double, packs as zero rather than overflowing the rounding.
+            BasicVariable abc = variables.Find("abc") ?? throw new InvalidOperationException("No abc.");
+            foreach (double tiny in (double[])[double.Epsilon, -double.Epsilon, 1e-300, Math.ScaleB(1.0, -131)])
+            {
+                variables.Write(abc.Kind, abc.ValueAddress, new BasicValue(tiny));
+                variables.Read(abc.Kind, abc.ValueAddress).Number.Should().Be(0, tiny.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
         finally
         {

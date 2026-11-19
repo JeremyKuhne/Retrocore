@@ -150,7 +150,9 @@ public sealed partial class BasicVariables
             throw new OverflowException("Too big: a real variable holds less than 1.7E38.");
         }
 
-        double rounded = value == 0 ? 0 : BbcBasicExpression.RoundMantissa(value);
+        // Below half the smallest real, nothing rounds up to one: zero, before any rounding.
+        if (Math.Abs(value) < Math.ScaleB(1.0, -130)) { return new byte[BbcReal]; }
+        double rounded = BbcBasicExpression.RoundMantissa(value);
         if (rounded == 0 || Math.Abs(rounded) < Math.ScaleB(1.0, -129)) { return new byte[BbcReal]; }
         int exponent = Math.ILogB(rounded) + 1 + 0x80;
         if (exponent > 0xFF)

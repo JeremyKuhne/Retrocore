@@ -627,7 +627,15 @@ internal sealed class BbcBasicExpression
     // (so 1E0 is one) and its magnitude fits 31 bits; otherwise a real. The sign goes on after, so -2147483648 is real.
     private static BasicValue? Classify(string magnitude, bool negative)
     {
-        if (!BasicNumbers.TryParse(magnitude, out double number)) { return null; }
+        // BASIC takes a point with no digits around it, as in . (real zero) or 5., which the host's parser does not.
+        string digits = magnitude.StartsWith('.') ? "0" + magnitude : magnitude;
+        int point = digits.IndexOf('.', StringComparison.Ordinal);
+        if (point >= 0 && (point + 1 == digits.Length || !char.IsAsciiDigit(digits[point + 1])))
+        {
+            digits = digits.Insert(point + 1, "0");
+        }
+
+        if (!BasicNumbers.TryParse(digits, out double number)) { return null; }
         int mark = magnitude.IndexOf('E', StringComparison.Ordinal);
         bool zeroScale = mark < 0 || int.TryParse(magnitude[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture, out int power) && power == 0;
         bool integer = !magnitude.Contains('.') && zeroScale && number <= int.MaxValue;
@@ -732,8 +740,10 @@ internal sealed class BbcBasicExpression
     internal static double RoundMantissa(double value)
     {
         if (value == 0) { return 0; }
-        double scale = Math.ScaleB(1.0, 31 - Math.ILogB(value));
-        double scaled = Math.Abs(value) * scale;
+
+        // The value itself is scaled, not by a factor of 2^(31 - exponent), which overflows for a tiny one.
+        int power = Math.ILogB(value);
+        double scaled = Math.ScaleB(Math.Abs(value), 31 - power);
         double mantissa = Math.Floor(scaled);
         double rounding = Math.Floor((scaled - mantissa) * 256);
         if (rounding > 0x80)
@@ -745,7 +755,7 @@ internal sealed class BbcBasicExpression
             mantissa++;
         }
 
-        return Math.CopySign(mantissa / scale, value);
+        return Math.CopySign(Math.ScaleB(mantissa, power - 31), value);
     }
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);

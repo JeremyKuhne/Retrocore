@@ -127,7 +127,7 @@ public sealed partial class BasicProgram
             string trimmed = line.Trim();
             int indent = line.Length - line.TrimStart().Length;
             if (LabelLine().Match(trimmed) is { Success: true } label
-                && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(label.Groups["name"].Value.ToUpperInvariant())))
+                && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(KeywordForm(label.Groups["name"].Value, dialect))))
             {
                 // BBC BASIC's names are case-sensitive, so its labels are too: @loop is not LOOP.
                 string name = label.Groups["name"].Value;
@@ -290,4 +290,8 @@ public sealed partial class BasicProgram
 
     [GeneratedRegex(@"\bstep\s+(?<step>\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex PragmaStep();
+
+    // A name as the dialect's keywords are found: BBC BASIC's are capitals only, so end: is a label, not END.
+    private static string KeywordForm(string name, BasicDialect dialect) =>
+        dialect is BbcBasicDialect ? name : name.ToUpperInvariant();
 }

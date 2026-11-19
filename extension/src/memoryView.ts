@@ -144,7 +144,9 @@ body.nomarks .hex span.lb{background-image:none}
 #inspector button.ref:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 #listingPane{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--vscode-panel-border)}
 #listingHead{flex:none;height:24px;line-height:24px;padding:0 8px;color:var(--vscode-descriptionForeground);border-bottom:1px solid var(--vscode-panel-border);font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size);user-select:none}
-#listingHead span{cursor:pointer}
+button.heading{all:unset;cursor:pointer;white-space:pre}
+button.heading:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
+#head button.hex.heading span{display:inline-block}
 #listingPane.folded{flex:none;width:22px}
 body.nolist:not(.narrow) #side{flex:1 0 auto}
 #listingPane.folded #listingHead,#listingPane.folded #listing{display:none}
@@ -218,7 +220,7 @@ body.narrow .item .k{width:auto}
 </div>
 <div id="map" hidden aria-hidden="true"></div>
 <div class="main"><div id="bytes"><div id="head"></div><div id="grid" tabindex="0" role="grid" aria-label="Memory bytes"><div id="spacer"></div><div id="rows"></div></div><div id="strips"></div></div>
-<div id="listingPane"><div id="listingHead"><span data-fold="listing" title="The bytes as instructions and data, with labels, source lines and breakpoints. Click to collapse the column.">Disassembly</span></div>
+<div id="listingPane"><div id="listingHead"><button class="heading" data-fold="listing" aria-label="Collapse the Disassembly column" title="The bytes as instructions and data, with labels, source lines and breakpoints. Click to collapse the column.">Disassembly</button></div>
 <div id="listing" role="list" aria-label="Disassembly"></div>
 <button class="strip cw" data-fold="listing" title="Expand the Disassembly column" hidden><span class="codicon codicon-triangle-down"></span>Disassembly<span class="codicon codicon-triangle-down"></span></button></div>
 <div id="sash" role="separator" aria-label="Resize the inspector" tabindex="0"></div>
@@ -261,6 +263,8 @@ let glyphImages = [], flashImages = [], glyphCell = 0;
 let aligned = false, rowStarts = null;
 // Whether the grid highlights the bytes that differ from what Compare with names, and marks the bytes labels start at.
 let highlight = true, labelMarks = true;
+// Where the inspector is, beside the bytes or under them, and its sizes there, which the splitter sets.
+let dock = "right", sideWidth = 360, sideHeight = 220;
 // Whether the listing shows (the page remembers), the lines it shows, which request they answer, its width, and the
 // addresses Decode from here started an instruction at.
 let showListing = true, listingLines = [], listingKey = "";
@@ -809,15 +813,15 @@ function renderHead() {
     for (let index = 0; index < ROW; index++) {
         offsets.push('<span class="' + (index === 8 ? "mid" : "") + '" title="The byte at offset ' + hex(index, 2) + ' in each row. Click to collapse the Bytes column.">' + hex(index, 2) + "</span>");
     }
-    const toggle = (name, on, icon, title) => '<button class="tog codicon codicon-' + icon + '" data-toggle="' + name + '" aria-pressed="' + on + '" title="' + title + '"></button>';
+    const toggle = (name, on, icon, title) => '<button class="tog codicon codicon-' + icon + '" data-toggle="' + name + '" aria-pressed="' + on + '" aria-label="' + title.split(":")[0] + '" title="' + title + '"></button>';
     const strip = name => '<span class="fold" data-strip="' + name + '"></span>';
     const html = '<div class="row"><span class="addr" title="The address of each row&#39;s first byte">Addr</span>'
         + (labelWidth === 0 ? "" : folded.label ? strip("label")
-            : '<span class="lab" style="width:' + labelWidth + 'ch"><span data-fold="label" title="The first label starting in each row: bright where it starts the row, dimmed where it starts later in it, with a count where more start there. Its tooltip says what each names: a routine or code, data, or a named address. A corner marks each label&#39;s byte, and the bytes of a label on data are shaded; hover a name to see its byte, and click it to go there. Click the heading to collapse the column.">Label</span>'
+            : '<span class="lab" style="width:' + labelWidth + 'ch"><button class="heading" data-fold="label" aria-label="Collapse the Label column" title="The first label starting in each row: bright where it starts the row, dimmed where it starts later in it, with a count where more start there. Its tooltip says what each names: a routine or code, data, or a named address. A corner marks each label&#39;s byte, and the bytes of a label on data are shaded; hover a name to see its byte, and click it to go there. Click the heading to collapse the column.">Label</button>'
             + toggle("align", aligned, "list-tree", "Align to labels: start a row at each label, so a label&#39;s bytes begin a row of their own")
             + toggle("marks", labelMarks, "tag", "Label marks: mark the byte each label starts at with a corner") + "</span>")
-        + (folded.bytes ? strip("bytes") : '<span class="hex" data-fold="bytes">' + offsets.join("") + "</span>")
-        + (folded.text ? strip("text") : '<span class="txt"><span data-fold="text" title="The bytes as text. Click to collapse the column.">Text</span>'
+        + (folded.bytes ? strip("bytes") : '<button class="hex heading" data-fold="bytes" aria-label="Collapse the Bytes column">' + offsets.join("") + "</button>")
+        + (folded.text ? strip("text") : '<span class="txt"><button class="heading" data-fold="text" aria-label="Collapse the Text column" title="The bytes as text. Click to collapse the column.">Text</button>'
             + (machineSet === null ? "" : toggle("ascii", !machineText, "symbol-key", "ASCII: show the text as ASCII instead of the machine&#39;s own characters")) + "</span>") + "</div>";
     if (html !== headHtml) {
         headHtml = html;
@@ -1546,7 +1550,6 @@ async function loadInspection(address, key) {
 // the inspector's sizes beside the bytes and under them, which the splitter sets.
 const LISTING = 280, SASH = 4;
 let narrow = null, cramped = false;
-let dock = "right", sideWidth = 360, sideHeight = 220;
 
 // Fits the bytes' column to its rows and gives the listing and inspector the rest, or docks the inspector under the
 // bytes and the listing when they do not all fit, and leaves the listing out when even it does not fit beside the
@@ -2476,8 +2479,9 @@ rows.addEventListener("mouseover", event => markLabel(gutterLabel(event)));
 rows.addEventListener("mouseleave", () => markLabel(null));
 
 grid.addEventListener("mousedown", event => {
-    // The mouse's back and forward buttons go back and forward, from where the cursor is.
-    if (event.button === 3 || event.button === 4) return;
+    // The mouse's back and forward buttons go back and forward, from where the cursor is, and the right button's menu
+    // keeps the selection it opens over; only the main button selects.
+    if (event.button !== undefined && event.button !== 0) return;
     const label = gutterLabel(event);
     if (label !== null) {
         pane = "hex";
@@ -2550,7 +2554,7 @@ grid.addEventListener("keydown", event => {
         moveTo(control ? 0 : rowStart(rowOf(cursor)), event.shiftKey, false);
     } else if (key === "End") {
         moveTo(control ? SIZE - 1 : rowEnd(rowOf(cursor)), event.shiftKey, false);
-    } else if (key === "Tab" && (event.shiftKey ? pane === "text" : pane === "hex")) {
+    } else if (key === "Tab" && !folded.bytes && !folded.text && (event.shiftKey ? pane === "text" : pane === "hex")) {
         // Tab goes from the hex column to the text column and Shift+Tab back; past them, focus moves on as usual.
         moves++;
         pane = event.shiftKey ? "hex" : "text";

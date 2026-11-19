@@ -38,7 +38,7 @@ internal sealed partial class DebugSession
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
         int from = args.Int("address") ?? throw new ArgumentException("address is required.");
         int count = args.Int("count") ?? throw new ArgumentException("count is required.");
-        if (from is < 0 or > 0xFFFF || count < 1 || from + count > 0x10000)
+        if (from is < 0 or > 0xFFFF || count is < 1 or > 0x10000 || from + count > 0x10000)
         {
             throw new ArgumentOutOfRangeException(nameof(args), "A range to save is in $0000-$FFFF.");
         }
@@ -57,10 +57,18 @@ internal sealed partial class DebugSession
             image[index] = memory.Peek((ushort)address);
         }
 
+        // Every byte of a Decode from here start's instruction, which the listing decodes even in data.
+        HashSet<int> forcedBytes = [];
+        foreach (int start in analysis.Forced)
+        {
+            int size = analysis.MarkedCode.TryGetValue(start, out int marked) ? marked : InstructionSize(bank, start);
+            for (int index = 0; index < size && start + index <= 0xFFFF; index++) { forcedBytes.Add(start + index); }
+        }
+
         // What the listing shows as data, and where it shows instructions start.
         bool Data(int address)
         {
-            if (analysis.Forced.Contains(address)) { return false; }
+            if (forcedBytes.Contains(address)) { return false; }
             if (analysis.Marked(address)) { return true; }
             DebugPosition? position = analysis.Position(address);
             return position is null ? analysis.Guesses.Kinds[address] == GuessKind.Data : position.Data;

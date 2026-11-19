@@ -693,6 +693,12 @@ try {
     }
     assert.ok(exported.source.startsWith("; Memory: $0300-$0327, 40 bytes, saved from Retrocore Memory."), exported.source);
     await rejects(request("retro/memory/export", { memoryReference: "0x0000", address: 0xFFFF, count: 2 }), /\$0000-\$FFFF/);
+    // A count too large for 64K is refused before it is added to the address, which it would otherwise overflow.
+    await rejects(request("retro/memory/export", { memoryReference: "0x0000", address: 0x8000, count: 0x7FFF9000 }), /\$0000-\$FFFF/);
+    // A Decode from here start in data saves the whole instruction the listing shows there: TABLE's $01, $02 as ORA.
+    const decoded = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x031A, count: 4, starts: [0x031A] });
+    assert.equal(decoded.exact, true, decoded.source);
+    assert.match(decoded.source, /^\s+ORA /m, decoded.source);
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;
@@ -722,6 +728,9 @@ try {
     assert.match(areaAt(mapped.areas, 0x0400).name, /^Text page 1 \(80STORE with PAGE2, else RAMRD and RAMWRT\): /);
     assert.match(areaAt(mapped.areas, 0x0800).name, /^RAM from \$0200 \(RAMRD and RAMWRT\): /);
     assert.match(areaAt(mapped.areas, 0xD000).name, /^Alternate language card bank 2 \(ALTZP and the language card's switches\): /);
+    // A read-only bank is never written, though the CPU's writes there go to its area's address.
+    const romArea = areaAt((await memoryMap("rom:0x0000")).areas, 0xE000);
+    assert.equal(romArea.written, false, JSON.stringify(romArea));
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

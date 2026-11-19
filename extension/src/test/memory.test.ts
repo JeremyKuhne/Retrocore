@@ -606,7 +606,8 @@ test("the label, byte and text columns collapse into strips and expand again", a
         await page.settle();
     }
     const fold = (name: string) => page.window.dispatch("click", { target: { closest: (selector: string) => selector === "[data-fold]" ? { dataset: { fold: name } } : null } });
-    assert.match(page.elements.get("head")!.innerHTML, /<span class="hex" data-fold="bytes">/);
+    // The headings that collapse their columns are buttons, which Tab reaches and Enter or Space press.
+    assert.match(page.elements.get("head")!.innerHTML, /<button class="hex heading" data-fold="bytes" aria-label="Collapse the Bytes column">/);
     fold("label");
     fold("bytes");
     const heading = page.elements.get("head")!.innerHTML, html = page.elements.get("rows")!.innerHTML;
@@ -618,6 +619,12 @@ test("the label, byte and text columns collapse into strips and expand again", a
     assert.match(page.elements.get("rows")!.innerHTML, /cur on" data-o="1027" data-t="1"/);
     fold("bytes");
     assert.match(page.elements.get("rows")!.innerHTML, /<span class="hex">/);
+    // With the text collapsed, Tab leaves the grid rather than typing into the hidden text.
+    fold("text");
+    page.key("Tab");
+    const lists = { frozen: new Map<number, number>(), watched: new Set<string>() };
+    assert.equal((await drive(page, [], () => 0xA0, lists)).pane, "hex");
+    fold("text");
 });
 
 test("the inspector starts beside the bytes, and its dock buttons move it under them and back", async () => {
@@ -644,8 +651,8 @@ test("labels show in the gutter and the inspector", async () => {
     assert.match(page.elements.get("rows")!.innerHTML, /class="lab" style="width:10ch" data-a="1024" title="TEXT_PAGE at \$0400&#10;Click to go to \$0400.">TEXT_PAGE</);
     // The headings name the columns, the label column's at its width.
     const heading = page.elements.get("head")!.innerHTML;
-    assert.match(heading, /<span class="addr"[^>]*>Addr<\/span><span class="lab" style="width:10ch"><span data-fold="label" title="The first label starting in each row[^"]*">Label<\/span><button class="tog codicon codicon-list-tree" data-toggle="align" aria-pressed="false"/);
-    assert.match(heading, />00<\/span>.*>0F<\/span><\/span><span class="txt"><span data-fold="text" title="The bytes as text\. Click to collapse the column\.">Text</);
+    assert.match(heading, /<span class="addr"[^>]*>Addr<\/span><span class="lab" style="width:10ch"><button class="heading" data-fold="label" aria-label="Collapse the Label column" title="The first label starting in each row[^"]*">Label<\/button><button class="tog codicon codicon-list-tree" data-toggle="align" aria-pressed="false" aria-label="Align to labels"/);
+    assert.match(heading, />00<\/span>.*>0F<\/span><\/button><span class="txt"><button class="heading" data-fold="text" aria-label="Collapse the Text column" title="The bytes as text\. Click to collapse the column\.">Text</);
     assert.match(page.elements.get("rows")!.innerHTML, /class=" lb" data-o="1024" title="TEXT_PAGE"/);
     assert.match(page.elements.get("inspector")!.innerHTML, /\$0402  TEXT_PAGE\+2/);
     // Clicking a name goes to its label's byte.
@@ -1140,6 +1147,8 @@ test("the listing shows the bytes in view as instructions, selects a line's byte
     state = await drive(page, [{ goto: 0x0301 }, { decode: true }], () => 0, lists);
     assert.ok(listingStarts.some(starts => starts.includes(0x0301)), JSON.stringify(listingStarts));
     assert.equal(state.status, "The listing decodes an instruction from $0301.");
+    // The right button selects nothing, so its menu acts on the selection it opens over.
+    page.elements.get("grid")!.dispatch("mousedown", { button: 2, shiftKey: false, preventDefault: () => undefined, target: { closest: () => null } });
     // The bytes' right-click menu lists every action, Decode from here among them while the listing shows.
     page.elements.get("grid")!.dispatch("contextmenu", { target: {}, clientX: 10, clientY: 20, preventDefault: () => undefined });
     assert.match(page.elements.get("actionMenu")!.innerHTML, /data-act="freeze".*role="separator".*data-act="name".*data-act="decode".*role="separator".*data-act="fill".*role="separator".*data-act="copyAs"/);
@@ -1443,6 +1452,8 @@ test("Intel HEX is written in 16-byte records and read back into runs", () => {
     assert.equal(parseIntelHex("hello"), "Line 1 is not an Intel HEX record.");
     assert.equal(parseIntelHex(":020000040001F9\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
     assert.equal(parseIntelHex(":00000001FF"), "The file holds no bytes.");
+    // An extended linear address of $8000 or more stays positive, so its bytes are refused as past $FFFF.
+    assert.equal(parseIntelHex(":0200000480007A\n:0100000001FE"), "Line 2 puts bytes past $FFFF.");
 });
 
 test("bytes to fill or paste are hex, the Monitor's lines, or text in quotes", () => {

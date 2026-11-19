@@ -468,7 +468,9 @@ export function parseIntelHex(text: string): LoadedRun[] | string {
             case 4: {
                 const segment = length === 2 ? (data[0] << 8) | data[1] : -1;
                 if (segment < 0) return `Line ${number} is not an Intel HEX record.`;
-                base = type === 2 ? segment << 4 : segment << 16;
+                // Multiplied, as a shift is of a signed 32-bit number: $8000 << 16 would go negative and slip past
+                // the check that the bytes stay in 64K.
+                base = type === 2 ? segment * 16 : segment * 0x10000;
                 break;
             }
             case 3:

@@ -63,12 +63,15 @@ internal sealed record DebugMemoryBank(
 
     /// <summary>
     ///  Gets whether the CPU writes the bank's byte at an address now, which it can where it does not read it, such
-    ///  as the IIe's auxiliary RAM with RAMWRT on and RAMRD off.
+    ///  as the IIe's auxiliary RAM with RAMWRT on and RAMRD off. A read-only bank is never written, and a bank whose
+    ///  byte <see cref="ReadsHere"/> tells apart, such as an Apple III X-byte's view, is written where it is read, as
+    ///  the CPU writes the RAM it reads.
     /// </summary>
     /// <param name="cpu">The CPU's memory.</param>
     /// <param name="address">The CPU address.</param>
-    /// <returns>True when the CPU's writes there go to one of the bank's areas.</returns>
-    internal bool WrittenBy(IDebugMemory cpu, ushort address) => Areas.Contains(cpu.WriteArea(address));
+    /// <returns>True when the CPU's writes there change the bank's byte.</returns>
+    internal bool WrittenBy(IDebugMemory cpu, ushort address) => Poke is not null
+        && (ReadsHere?.Invoke(address) ?? Areas.Contains(cpu.WriteArea(address)));
 
     /// <summary>
     ///  Gets whether a write reaches an address of the bank now.

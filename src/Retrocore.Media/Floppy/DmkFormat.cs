@@ -256,10 +256,13 @@ public static class DmkFormat
             byte mark = track[data];
 
             // A WD controller takes the size code's low two bits, as this does; codes 4 to 7, 2048 to 16384 bytes, are
-            // the 8271's own sizes, taken when that data field is all on the track with a good CRC.
+            // the 8271's own sizes. One is taken when that data field is all on the track with a good CRC, or, for a
+            // sector written with a bad CRC, when no other ID field starts inside it, as one would in a WD track whose
+            // short sector carries a large code.
             int size = 128 << (sizeCode & 3);
             if (sizeCode is >= 4 and <= 7
-                && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { CrcError: false } large)
+                && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { } large
+                && (!large.CrcError || !IdWithin(track, data, data + ((large.Bytes.Length + 3) * step))))
             {
                 size = large.Bytes.Length;
             }
@@ -276,6 +279,20 @@ public static class DmkFormat
 
             disk.Add(cylinder, side, sector);
         }
+    }
+
+    // Whether the track's ID table points at an ID field from start up to, not including, end.
+    private static bool IdWithin(ReadOnlySpan<byte> track, int start, int end)
+    {
+        for (int entry = 0; entry < TableEntries; entry++)
+        {
+            int pointer = track[entry * 2] | (track[(entry * 2) + 1] << 8);
+            if (pointer == 0) { break; }
+            int offset = pointer & 0x3FFF;
+            if (offset > start && offset < end) { return true; }
+        }
+
+        return false;
     }
 
     // A data field's bytes after its mark, and whether its CRC, which follows high byte first, is wrong; a track cut

@@ -173,6 +173,9 @@ internal sealed partial class BbcBasicDialect : BasicDialect
     internal override int LineOverhead => 4;
 
     /// <inheritdoc/>
+    internal override bool LinesHoldZero => true;
+
+    /// <inheritdoc/>
     internal override byte RemToken => Rem;
 
     /// <inheritdoc/>
@@ -322,7 +325,7 @@ internal sealed partial class BbcBasicDialect : BasicDialect
     /// <returns>The bytes.</returns>
     /// <exception cref="FormatException">The text has a character that cannot be typed, or a bad escape.</exception>
     internal static byte[] TokenizeExpression(string text) =>
-        Crunch(BasicText.Parse(text), middle: true, lineNumbers: false).ToArray();
+        Crunch(BasicText.Parse(text, zero: true), middle: true, lineNumbers: false).ToArray();
 
     /// <inheritdoc/>
     internal override CrunchOutput Crunch(ReadOnlySpan<int> text) => Crunch(text, middle: false, lineNumbers: true);

@@ -565,6 +565,12 @@ public sealed class BbcBasicDialectTests
         at.Sites.Where(site => site.Kind == BasicSiteKind.Function).Select(site => site.Key)
             .Should().Equal("PROC@foo", "PROCfoo@a", "PROCfoo@b");
 
+        // A number's exponent is READ_EXPONENT's: E and a sign whatever follows, and up to two digits, so 2E and 3E+ hold
+        // no variable E, and renaming E5 does not touch 1E5; D starts a name, as in 1:D5.
+        BasicSource numbers = BasicSource.Analyze("10 E5=1:E=2:X=1E5:Y=2E:Z=3E+:W=4E-2:V=D5\n", BasicDialect.BbcBasic);
+        numbers.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Text)
+            .Should().Equal("E5", "E", "X", "Y", "Z", "W", "V", "D5");
+
         // A hover names a BBC routine with its word, and a BBC name whole: no two-character note, which the Microsoft
         // BASICs still get.
         BasicSite procedure = routines.First(site => site.Key == "PROCfoo");

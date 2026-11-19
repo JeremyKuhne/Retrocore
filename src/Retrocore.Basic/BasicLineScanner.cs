@@ -397,6 +397,24 @@ internal sealed class BasicLineScanner
     {
         int at = index;
         while (at + 1 < _bytes.Length && (char.IsAsciiDigit((char)_bytes[at + 1]) || _bytes[at + 1] == '.')) { at++; }
+
+        // BBC BASIC's READ_EXPONENT takes an E (never D, which starts a name such as D5) and a sign whatever follows,
+        // then up to two digits: 2E and 3E+ are numbers, not the variable E, and a third digit is left over.
+        if (Bbc)
+        {
+            if (at + 1 < _bytes.Length && _bytes[at + 1] == 'E')
+            {
+                at++;
+                if (at + 1 < _bytes.Length && _bytes[at + 1] is (byte)'+' or (byte)'-') { at++; }
+                for (int digit = 0; digit < 2 && at + 1 < _bytes.Length && char.IsAsciiDigit((char)_bytes[at + 1]); digit++)
+                {
+                    at++;
+                }
+            }
+
+            return at;
+        }
+
         if (at + 2 < _bytes.Length && _bytes[at + 1] is (byte)'E' or (byte)'D')
         {
             bool signed = _bytes[at + 2] is (byte)'+' or (byte)'-' || _dialect.Keyword(_bytes[at + 2]) is "+" or "-";

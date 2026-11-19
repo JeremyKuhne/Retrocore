@@ -164,7 +164,8 @@ public sealed class FloppyDisk : IMedium
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The snapshot is a DMK image (<see cref="DmkFormat.SnapshotKind"/>), which holds all of the disk.
+    ///   The snapshot is a DMK image (<see cref="DmkFormat.SnapshotKind"/>), which holds all of the disk; read it with
+    ///   <see cref="DmkFormat.ReadSnapshot"/>, which takes its size codes as they are.
     ///  </para>
     /// </remarks>
     public MediumSnapshot Snapshot() => new(DmkFormat.SnapshotKind, Version, _writeProtected, DmkFormat.Write(this));

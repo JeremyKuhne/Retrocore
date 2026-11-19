@@ -144,6 +144,14 @@ public sealed class BbcBasicDialectTests
         BasicProgram program = BasicProgram.FromImage(BasicDialect.BbcBasic, image);
         program.ToImage().Should().Equal(image);
         (BasicProgram.Parse(program.ToText(), BasicDialect.BbcBasic).Program?.ToImage()).Should().Equal(image);
+
+        // A BBC line holds a zero byte, as its length ends it: 10 REM, a zero, round trips through text as {$00}.
+        byte[] zero = [0x0D, 0x00, 0x0A, 0x06, 0xF4, 0x00, 0x0D, 0xFF];
+        BasicProgram withZero = BasicProgram.FromImage(BasicDialect.BbcBasic, zero);
+        withZero.ToText().Should().Contain("{$00}");
+        (BasicProgram.Parse(withZero.ToText(), BasicDialect.BbcBasic).Program?.ToImage()).Should().Equal(zero);
+        Action zeroElsewhere = () => BasicDialect.AppleSoft.Tokenize("REM {$00}");
+        zeroElsewhere.Should().Throw<FormatException>("a zero ends an AppleSoft line");
     }
 
     /// <summary>
@@ -344,6 +352,25 @@ public sealed class BbcBasicDialectTests
         Action rounded = () => evaluator.Evaluate("1.7014118345E38");
         rounded.Should().Throw<FormatException>().WithMessage("Too big.");
 
+        // SIN, COS and TAN refuse an angle of 2^23 or more, and an exponent takes two digits at most: VAL stops
+        // before a third, and a watch finds it left over. Each as the ROM has it.
+        BbcMachineTests.Type(machine, "CLS:PRINT VAL(\"1E001\");\"|\";1E01\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "1|10");
+        evaluator.Evaluate("VAL(\"1E001\")").Value.Number.Should().Be(1);
+        Action third = () => evaluator.Evaluate("1E001");
+        third.Should().Throw<FormatException>();
+        foreach (string trig in (string[])["SIN 8388608", "COS -8388608", "TAN 1E9"])
+        {
+            BbcMachineTests.Type(machine, $"CLS:PRINT {trig}\r");
+            BbcMachineTests.RunToPrompt(machine);
+            machine.ReadTextScreen().Should().Contain(line => line.Contains("Accuracy lost"), trig);
+            Action lost = () => evaluator.Evaluate(trig);
+            lost.Should().Throw<FormatException>().WithMessage("Accuracy lost.", trig);
+        }
+
+        evaluator.Evaluate("SIN 8388607").Value.Number.Should().NotBe(0);
+
         // ^ splits off the whole power nearest its right side, and takes the rest, or all of a power of 64 or more, by
         // LN and EXP, so 0^0.5 and (-1)^64 are Log range and 2^1024 Exp range, as in the ROM, while whole powers below
         // 64 of anything are not.
@@ -484,6 +511,16 @@ public sealed class BbcBasicDialectTests
         string name = "a" + new string('b', 70);
         BasicVariable made = variables.Create(name);
         variables.Find(name).Should().Be(made);
+
+        // The longest name, 255 characters, reads back whole; a longer one is refused before anything is made.
+        string longest = "c" + new string('d', 254);
+        BasicVariable madeLongest = variables.Create(longest);
+        variables.Find(longest).Should().Be(madeLongest);
+        variables.Write(madeLongest.Kind, madeLongest.ValueAddress, new BasicValue(1.5));
+        variables.Read(madeLongest.Kind, madeLongest.ValueAddress).Number.Should().Be(1.5);
+        variables.Find(longest).Should().Be(madeLongest, "writing the value left the name alone");
+        Action tooLong = () => variables.Create("e" + new string('f', 255));
+        tooLong.Should().Throw<ArgumentException>();
     }
 
     // A Model B at the prompt with X%=7, _count=1 and N$="ABCABC", and an evaluator on it.

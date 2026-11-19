@@ -188,6 +188,12 @@ public abstract partial class BasicDialect
     internal virtual int LineOverhead => 5;
 
     /// <summary>
+    ///  Gets whether a line can hold a zero byte, as one ended by its length and a carriage return can; a line a zero
+    ///  ends cannot.
+    /// </summary>
+    internal virtual bool LinesHoldZero => false;
+
+    /// <summary>
     ///  Gets the REM token.
     /// </summary>
     internal abstract byte RemToken { get; }
@@ -278,7 +284,7 @@ public abstract partial class BasicDialect
     public virtual byte[] Tokenize(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return Crunch(BasicText.Parse(text)).ToArray();
+        return Crunch(BasicText.Parse(text, zero: LinesHoldZero)).ToArray();
     }
 
     /// <summary>
@@ -345,7 +351,7 @@ public abstract partial class BasicDialect
     /// <summary>
     ///  Tokenizes text units as the ROM's <c>CRUNCH</c> does.
     /// </summary>
-    /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int})"/> gives them.</param>
+    /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int}, bool)"/> gives them.</param>
     /// <returns>The stored bytes, without the zero that ends the line, with the unit each came from.</returns>
     internal abstract CrunchOutput Crunch(ReadOnlySpan<int> text);
 

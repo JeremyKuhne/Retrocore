@@ -157,7 +157,7 @@ public sealed partial class BasicProgram
         CrunchOutput output;
         try
         {
-            output = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text, columns));
+            output = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text, columns, zero: true));
         }
         catch (FormatException)
         {

@@ -23,6 +23,9 @@ public sealed partial class BasicVariables
     private const int BbcString = 4;
     private const int BbcResidents = 27;
 
+    // The longest name read from a block or made: longer than any a line can hold.
+    private const int BbcLongestName = 255;
+
     private bool Bbc => _dialect is BbcBasicDialect;
 
     // The resident integers that are not zero, then each list's variables in the order BASIC made them.
@@ -78,7 +81,7 @@ public sealed partial class BasicVariables
                 System.Text.StringBuilder name = new();
                 name.Append((char)first);
                 int at = link + 2;
-                for (int length = 0; length < 255 && _memory.Read(at) is byte character and not 0; length++, at++)
+                for (int length = 1; length < BbcLongestName && _memory.Read(at) is byte character and not 0; length++, at++)
                 {
                     name.Append((char)character);
                 }
@@ -241,6 +244,12 @@ public sealed partial class BasicVariables
         if (!named)
         {
             throw new ArgumentException($"{name} {BadName}");
+        }
+
+        if (name.Length > BbcLongestName)
+        {
+            throw new ArgumentException(
+                $"The name is {name.Length} characters long: a variable's name can be at most {BbcLongestName}.");
         }
 
         // The last block's link, or the list's head, will point at the new block. A list that loops is corrupt, and

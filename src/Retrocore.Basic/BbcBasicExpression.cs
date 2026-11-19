@@ -230,6 +230,11 @@ internal sealed class BbcBasicExpression
         return left;
     }
 
+    // An angle for SIN, COS and TAN, which REDUCE_ANGLE refuses from 2^23 up in size.
+    private static double Angle(BasicValue argument) => Number(argument) is var angle && Math.Abs(angle) < 8388608
+        ? angle
+        : throw new FormatException("Accuracy lost.");
+
     // x^y as POWER_OPERATOR works it out. A y of 64 or more in size is all fraction; any other is split into the whole
     // number nearest it, n, and what is left, f, of at most a half. x^n is repeated multiplication (by the reciprocal
     // for a negative n), and any fraction is EXP(LN x * f), so x must then be above zero or it is "Log range": 0^0.5
@@ -361,7 +366,7 @@ internal sealed class BbcBasicExpression
             "ACS" => Real(Math.Acos(Unit(Number(argument)))),
             "ASN" => Real(Math.Asin(Unit(Number(argument)))),
             "ATN" => Real(Math.Atan(Number(argument))),
-            "COS" => Real(Math.Cos(Number(argument))),
+            "COS" => Real(Math.Cos(Angle(argument))),
             "DEG" => Real(Number(argument) * 180 / Math.PI),
             "EXP" => Number(argument) switch
             {
@@ -376,9 +381,9 @@ internal sealed class BbcBasicExpression
             "LOG" => Real(Logarithm(Number(argument), Math.Log10)),
             "RAD" => Real(Number(argument) * Math.PI / 180),
             "SGN" => Integer(Math.Sign(Number(argument))),
-            "SIN" => Real(Math.Sin(Number(argument))),
+            "SIN" => Real(Math.Sin(Angle(argument))),
             "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : Real(Math.Sqrt(Number(argument))),
-            "TAN" => Real(Math.Tan(Number(argument))),
+            "TAN" => Real(Math.Tan(Angle(argument))),
             "LEN" => Integer(Text(argument).Length),
             "ASC" => Integer(Text(argument) is { Length: > 0 } text ? text[0] : -1),
             "VAL" => Value(Text(argument)),
@@ -574,8 +579,9 @@ internal sealed class BbcBasicExpression
             if (at < _bytes.Length && _bytes[at] is (byte)'+' or (byte)'-') { at++; }
             if (at < _bytes.Length && char.IsAsciiDigit((char)_bytes[at]))
             {
+                // READ_EXPONENT takes at most two digits: a third is left over.
                 _at = at;
-                while (_at < _bytes.Length && char.IsAsciiDigit((char)_bytes[_at])) { _at++; }
+                while (_at < _bytes.Length && _at - at < 2 && char.IsAsciiDigit((char)_bytes[_at])) { _at++; }
             }
         }
 
@@ -621,7 +627,7 @@ internal sealed class BbcBasicExpression
             if (at < trimmed.Length && char.IsAsciiDigit(trimmed[at]))
             {
                 end = at;
-                while (end < trimmed.Length && char.IsAsciiDigit(trimmed[end])) { end++; }
+                while (end < trimmed.Length && end - at < 2 && char.IsAsciiDigit(trimmed[end])) { end++; }
             }
         }
 

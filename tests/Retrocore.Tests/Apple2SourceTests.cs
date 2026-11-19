@@ -98,7 +98,7 @@ public class Apple2SourceTests
             "character generator" => SdkModules.AssembleCharacterGenerator(Path.Join(system, "CharacterGenerator.asm"), Apple2Model.II),
             "Integer BASIC" => SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs)),
             "Programmer's Aid #1" => SdkModules.AssembleProgrammersAid(SdkModules.ProgrammersAidPath(s_inputs)),
-            _ => SdkModules.AssembleAppleSoft(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"), Apple2Model.IIPlus)
+            _ => SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIPlus)
         };
 
         result.Diagnostics.Should().BeEmpty();

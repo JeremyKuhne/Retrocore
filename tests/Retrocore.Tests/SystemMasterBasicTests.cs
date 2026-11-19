@@ -132,7 +132,7 @@ public class SystemMasterBasicTests
 
     // AppleSoft as built for a model, $D000-$F7FF.
     private static byte[] AppleSoft(Apple2Model model) =>
-        SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"), model)).ToArray();
+        SdkModules.AppleSoftImage(SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model)).ToArray();
 
     // The bytes of an image starting at $D000 from one address up to another.
     private static byte[] Range(byte[] image, int start, int end) => image[(start - Base)..(end - Base)];

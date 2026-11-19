@@ -39,13 +39,14 @@ const program = [
 ].join("\n");
 
 /** Launches an AppleSoft file on the IIe, which boots to AppleSoft's prompt, and stops on its first statement. */
-export async function testAppleSoftLaunch(root: string, romDirectory: string, stop: () => Promise<string>): Promise<void> {
+export async function testAppleSoftLaunch(root: string, romDirectory: string | undefined, stop: () => Promise<string>): Promise<void> {
     const folder = path.join(root, "artifacts", "vscode-m1-tests", "basic-launch");
     fs.mkdirSync(folder, { recursive: true });
     const file = path.join(folder, "hello.applesoft.bas");
     fs.writeFileSync(file, "REM retrocore applesoft\n    HOME\nagain:\n    PRINT \"HELLO\": GOTO again\n");
     assert.ok(await vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
-        type: "retrocore", request: "launch", name: "AppleSoft file", machine: "apple2", romDirectory, basic: file, stopOnEntry: true,
+        type: "retrocore", request: "launch", name: "AppleSoft file", machine: "apple2",
+        ...(romDirectory === undefined ? {} : { romDirectory }), basic: file, stopOnEntry: true,
         debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll")
     }));
     const session = vscode.debug.activeDebugSession;

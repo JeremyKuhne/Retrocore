@@ -48,7 +48,7 @@ internal static partial class MachineSymbols
         string roms = directory ?? SdkModules.RomDirectory;
         string monitor = Path.Join(roms, "System", "Monitor.asm");
         string firmware = SdkModules.FirmwarePath(model, roms);
-        string appleSoft = Path.Join(roms, "AppleSoft", "applesoft.mac");
+        string appleSoft = SdkModules.AppleSoftPath(roms);
         string integer = SdkModules.IntegerBasicPath(roms);
         string dos33 = SdkModules.DosPath("Dos33.asm", roms);
         string dos32 = SdkModules.DosPath("Dos32.asm", roms);
@@ -165,7 +165,8 @@ internal static partial class MachineSymbols
         "Monitor.asm" or "MonitorEntries.asm" => 0,
         "IIeEquates.asm" or "FirmwareEquates.asm" => 1,
         _ when file.StartsWith("Firmware", StringComparison.Ordinal) => 2,
-        "m6502.asm" or "applesoft.mac" => 3,
+        "m6502.asm" or "applesoft.mac" or "AppleSoft.asm" => 3,
+        _ when file.StartsWith("AppleSoft.", StringComparison.Ordinal) => 3,
         _ => 4
     };
 

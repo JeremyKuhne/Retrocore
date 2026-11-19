@@ -1827,6 +1827,14 @@
                 "default": 1983,
                 "description": "With dos 3.3, which DOS 3.3 to boot: 1983 (the 680-0210-A System Master's) or 1980 (the 680-0051 masters')."
               },
+              "appleSoftSource": {
+                "enum": [
+                  "native",
+                  "legacy"
+                ],
+                "default": "native",
+                "description": "Apple II: source listing for AppleSoft's ROM and debugger map: native Retrocore modules by default, or Microsoft's MACRO-10 source with Apple's changes as an overlay."
+              },
               "diskSectors": {
                 "enum": [
                   16,

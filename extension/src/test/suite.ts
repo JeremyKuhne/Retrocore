@@ -43,7 +43,6 @@ export async function run(): Promise<void> {
     await testMemorySubscriptions(workspace);
     await testMemoryRestart(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
-    if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
     const root = workspace.uri.fsPath;
     const stops: { reason: string }[] = [];
     const waiters: ((reason: string) => void)[] = [];
@@ -78,7 +77,7 @@ export async function run(): Promise<void> {
         vscode.debug.addBreakpoints([breakpoint]);
         assert.equal(await vscode.debug.startDebugging(workspace, {
             type: "retrocore", request: "launch", name: "M1 integration",
-            machine: "apple2", romDirectory, stopOnEntry: true, model: "iie-enhanced",
+            machine: "apple2", ...(romDirectory === undefined ? {} : { romDirectory }), stopOnEntry: true, model: "iie-enhanced",
             debugHost: path.join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll"),
             program: path.join(root, "artifacts", "iie-sample", "main.bin"),
             debugFile: path.join(root, "artifacts", "iie-sample", "main.dbg"), loadAddress: 0x6000
@@ -149,7 +148,7 @@ export async function run(): Promise<void> {
         for (const character of "PRINT 1\r") await boot.customRequest("retro/key", { code: character.charCodeAt(0) });
         assert.equal(await stop(), "function breakpoint");
         const print = await boot.customRequest("stackTrace", { threadId: 1 });
-        assert.equal(path.basename(print.stackFrames[0].source.path), "applesoft.mac");
+        assert.equal(path.basename(print.stackFrames[0].source.path), "AppleSoft.Print.asm");
         assert.equal(print.stackFrames[0].name, "PRINT");
 
         // The reset handler's "jsr SetNormal" (Apple's SETNORM) returned by then: JSR 6, LDY # 2, STY zp 3, RTS 6.

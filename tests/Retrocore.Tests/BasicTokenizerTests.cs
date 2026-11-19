@@ -27,7 +27,7 @@ public sealed class BasicTokenizerTests
     [TestMethod]
     public void KeywordsMatchTheRoms()
     {
-        AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"), Apple2Model.IIeEnhanced);
+        AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced);
         RomWords(appleSoft.Sections[0].Bytes.Span[(int)appleSoft.Symbols["RESLST"]..], lastLetterMarked: true)
             .Should().Equal(BasicDialect.AppleSoft.Keywords);
 
@@ -45,7 +45,7 @@ public sealed class BasicTokenizerTests
     {
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIe, Apple2Model.IIeEnhanced])
         {
-            AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(Path.Join(s_inputs, "AppleSoft", "applesoft.mac"), model);
+            AssemblyResult appleSoft = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
             appleSoft.Symbols.Should().ContainKeys("NEWSTT", "MAIN");
         }
 

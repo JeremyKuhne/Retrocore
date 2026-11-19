@@ -487,6 +487,51 @@ public class BbcDiskTests
     }
 
     /// <summary>
+    ///  The 8271 formats the sizes it is asked for, up to 16384 bytes: one 2048-byte sector fits a track, reads back
+    ///  and keeps its size through a DMK snapshot, and a 4096-byte one does not fit at all.
+    /// </summary>
+    /// <param name="sizeCode">The size code, 4 for 2048 bytes or 5 for 4096.</param>
+    /// <param name="sectors">The sectors a revolution holds.</param>
+    [TestMethod]
+    [DataRow(4, 1)]
+    [DataRow(5, 0)]
+    public void FormatTakesLargeSectors(int sizeCode, int sectors)
+    {
+        Intel8271 fdc = new();
+        FloppyDisk disk = AcornDiskImage.Blank(40);
+        fdc.Insert(0, disk);
+        Send(fdc, 0x35, 0x10, 0xFF, 0xFF, 0);
+        Send(fdc, 0x63, 3, 16, (byte)((sizeCode << 5) | 2), 0, 16);    // track 3, two sectors asked for
+        byte[] id = [3, 0, 0, (byte)sizeCode];
+        int position = 0;
+        for (int cycle = 0; cycle < 10_000_000 && fdc.IsBusy; cycle++)
+        {
+            if (fdc.DataRequest)
+            {
+                fdc.WriteData(position % 4 == 2 ? (byte)(position / 4) : id[position % 4]);
+                position++;
+            }
+
+            fdc.Tick();
+        }
+
+        fdc.Read(1).Should().Be(0);
+        IReadOnlyList<FloppySector> track = disk.Track(3, 0);
+        track.Should().HaveCount(sectors);
+        if (sectors == 0) { return; }
+
+        track[0].Data.Length.Should().Be(2048);
+        track[0].SizeCode.Should().Be(4);
+        IReadOnlyList<FloppySector> again = DmkFormat.Read(DmkFormat.Write(disk)).Track(3, 0);
+        again.Should().ContainSingle().Which.Data.Length.Should().Be(2048);
+
+        // Read back: verify track 3, sector 0, one 2048-byte sector.
+        Send(fdc, 0x5F, 3, 0, (byte)((sizeCode << 5) | 1));
+        RunWhileBusy(fdc);
+        fdc.Read(1).Should().Be(0);
+    }
+
+    /// <summary>
     ///  A format that fits still runs to the next index, writing gap 4, and a late DMA ends a format with the sectors
     ///  written before it kept.
     /// </summary>

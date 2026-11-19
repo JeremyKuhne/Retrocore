@@ -246,21 +246,28 @@ public static class DmkFormat
             byte trackNumber = track[offset + step];
             byte sideNumber = track[offset + (2 * step)];
             byte sectorNumber = track[offset + (3 * step)];
-            int size = 128 << (track[offset + (4 * step)] & 3);
+            byte sizeCode = track[offset + (4 * step)];
 
             // The data mark follows within the gap after the ID field and its CRC.
             int data = offset + (7 * step);
             int limit = Math.Min(track.Length, data + (60 * step));
             while (data < limit && track[data] is not (>= 0xF8 and <= 0xFB)) { data += step; }
-            if (data >= limit || data + ((size + 1) * step) > track.Length) { continue; }
+            if (data >= limit) { continue; }
             byte mark = track[data];
-            byte[] bytes = new byte[size];
-            for (int index = 0; index < size; index++) { bytes[index] = track[data + ((index + 1) * step)]; }
 
-            // The data field's CRC follows it, high byte first; a track cut short before it is taken as good.
-            int crcAt = data + ((size + 1) * step);
-            bool crcError = crcAt + step < track.Length
-                && ((track[crcAt] << 8) | track[crcAt + step]) != DataCrc(mark, bytes, doubleDensity);
+            // A WD controller takes the size code's low two bits, as this does; codes 4 to 7, 2048 to 16384 bytes, are
+            // the 8271's own sizes, taken when that data field is all on the track with a good CRC.
+            int size = 128 << (sizeCode & 3);
+            if (sizeCode is >= 4 and <= 7
+                && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { CrcError: false } large)
+            {
+                size = large.Bytes.Length;
+            }
+
+            if (ReadData(track, data, size, step, mark, doubleDensity) is not (byte[] bytes, bool crcError))
+            {
+                continue;
+            }
 
             FloppySector sector = new(trackNumber, sideNumber, sectorNumber, bytes, doubleDensity, mark)
             {
@@ -269,6 +276,26 @@ public static class DmkFormat
 
             disk.Add(cylinder, side, sector);
         }
+    }
+
+    // A data field's bytes after its mark, and whether its CRC, which follows high byte first, is wrong; a track cut
+    // short before the CRC is taken as good. Null when the bytes are not all on the track.
+    private static (byte[] Bytes, bool CrcError)? ReadData(
+        ReadOnlySpan<byte> track,
+        int data,
+        int size,
+        int step,
+        byte mark,
+        bool doubleDensity)
+    {
+        if (data + ((size + 1) * step) > track.Length) { return null; }
+        byte[] bytes = new byte[size];
+        for (int index = 0; index < size; index++) { bytes[index] = track[data + ((index + 1) * step)]; }
+        int crcAt = data + ((size + 1) * step);
+        bool crcError = crcAt + step < track.Length
+            && ((track[crcAt] << 8) | track[crcAt + step]) != DataCrc(mark, bytes, doubleDensity);
+
+        return (bytes, crcError);
     }
 
     // CRC-CCITT of a data field: double density includes the three A1 sync bytes before the mark.

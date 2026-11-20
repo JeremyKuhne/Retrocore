@@ -3,9 +3,12 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
+using Retrocore.Media.Floppy;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -340,6 +343,48 @@ public sealed class RecoveryJournalTests
         open.Should().Throw<ArgumentException>();
     }
 
+    /// <summary>
+    ///  A BBC Micro's SSD disk and UEF tape are kept and come back with their images' codecs, so each saves to its
+    ///  image in its own format.
+    /// </summary>
+    [TestMethod]
+    public void BbcMediaComeBackWithTheirImagesCodecs()
+    {
+        string id = Id();
+        string ssd = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.ssd");
+        byte[] disk = AcornDiskImage.Encode(AcornDiskImage.Blank(tracks: 40), doubleSided: false).Bytes;
+        File.WriteAllBytes(ssd, disk);
+        string uef = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.uef");
+        byte[] tape = UefFormat.Write([.. Enumerable.Repeat(1, 4800)]);
+        File.WriteAllBytes(uef, tape);
+
+        (BbcFloppyDrive floppy, BbcCassette cassette) = BbcDrives(ssd, uef);
+        floppy.Disk?.MarkChanged();
+        AcornTape recorded = cassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
+        recorded.Record(recorded.HalfCycles.Count, 2);
+        Stop(Open(id), floppy, cassette);
+        Disks(id).Select(entry => entry?["kind"]?.GetValue<string>()).Should().BeEquivalentTo([DmkFormat.SnapshotKind, AcornTape.SnapshotKind]);
+
+        (BbcFloppyDrive nextFloppy, BbcCassette nextCassette) = BbcDrives(ssd, uef);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([nextFloppy, nextCassette], journal).Should().BeEmpty();
+        nextFloppy.Media?.Changed.Should().BeTrue();
+        nextCassette.Media?.Changed.Should().BeTrue();
+        nextCassette.Mode.Should().Be(TapeMode.Playing, "a recovered tape plays, as LOAD and CHAIN need");
+        FloppyDisk backDisk = nextFloppy.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(backDisk)?.Codec.Should().BeOfType<AcornDiskCodec>().Which.Format.Should().Be("SSD");
+        AcornTape back = nextCassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<AcornTapeCodec>();
+        back.HalfCycles.Should().HaveCount(4801);
+
+        MediaActions.Device(nextFloppy, "save", Speaking())?.String("outcome").Should().Be("saved");
+        MediaActions.Device(nextCassette, "save", Speaking())?.String("outcome").Should().Be("saved");
+        File.ReadAllBytes(ssd).Should().Equal(disk);
+        UefFormat.Read(File.ReadAllBytes(uef)).HalfCycles.Should().Equal(back.HalfCycles);
+        Stop(journal, nextFloppy, nextCassette);
+        Disks(id).Should().BeEmpty();
+    }
+
     private static string Id() => $"test-{Guid.NewGuid():N}";
 
     private static RecoveryJournal Open(string id) => RecoveryJournal.Open(id, []) ?? throw new InvalidOperationException("The journal is taken.");
@@ -387,6 +432,23 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded.Disk, path, loaded.Codec, bytes);
         floppy.Insert(loaded.Disk, path, "DSK");
         return floppy;
+    }
+
+    // A BBC Micro's first disk drive and cassette with images in them, read and registered as the debug host does.
+    private static (BbcFloppyDrive Floppy, BbcCassette Cassette) BbcDrives(string ssd, string uef)
+    {
+        BbcFloppyDrive floppy = new(new Intel8271(), drive: 0);
+        byte[] disk = File.ReadAllBytes(ssd);
+        FloppyDisk read = AcornDiskImage.Read(disk, doubleSided: false);
+        MediaActions.Register(read, ssd, new AcornDiskCodec("SSD"), disk);
+        floppy.Insert(read, ssd, "SSD");
+
+        BbcCassette cassette = new();
+        byte[] tape = File.ReadAllBytes(uef);
+        AcornTape loaded = UefFormat.Read(tape);
+        MediaActions.Register(loaded, uef, new AcornTapeCodec(), tape);
+        cassette.Insert(loaded, uef);
+        return (floppy, cassette);
     }
 
     // Writes a block of one byte, as the machine would, unlocking the disk first.

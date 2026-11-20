@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -178,6 +179,7 @@ internal static partial class MediaActions
             (nameof(Disk35Disk), TwoImgContainer.SnapshotKind) => Disk35Disk.Load(image, writeProtected),
             (nameof(MemoryBlockDevice), TwoImgContainer.SnapshotKind) => MemoryBlockDevice.Load(image, writeProtected),
             (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.ReadSnapshot(image),
+            (nameof(AcornTape), AcornTape.SnapshotKind) => UefFormat.Read(image),
             (nameof(CommodoreDisk), CommodoreDisk.SnapshotKind) => G64Format.Read(image),
             (nameof(CommodoreTape), CommodoreTape.SnapshotKind) => CommodoreTape.FromSnapshot(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
@@ -210,6 +212,8 @@ internal static partial class MediaActions
             ["format"] = floppy.Format,
             ["jvcHeader"] = floppy.JvcHeader is { } header ? Convert.ToBase64String(header) : null,
         },
+        AcornTapeCodec => new() { ["kind"] = "acornTape" },
+        AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
         CommodoreDiskCodec disk => new() { ["kind"] = "commodoreDisk", ["format"] = disk.Format },
         CommodoreTapeCodec tape => new() { ["kind"] = "commodoreTape", ["format"] = tape.Format },
         _ => null,
@@ -225,6 +229,8 @@ internal static partial class MediaActions
             "block" => BlockImageCodec.For(codec.Bool("twoImg") == true ? "2MG" : format),
             "floppy" when codec.String("jvcHeader") is { } header => FloppyImageCodec.ForImage("JVC", Convert.FromBase64String(header)),
             "floppy" => FloppyImageCodec.For(format, [format]),
+            "acornTape" => new AcornTapeCodec(),
+            "acornDisk" => new AcornDiskCodec(format),
             "commodoreDisk" => new CommodoreDiskCodec(format),
             "commodoreTape" => new CommodoreTapeCodec(format),
             _ => null,

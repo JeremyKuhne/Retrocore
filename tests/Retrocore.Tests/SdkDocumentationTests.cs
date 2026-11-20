@@ -107,6 +107,7 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["bbc"] = "Retrocore.Machines.Acorn",
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
@@ -361,6 +362,23 @@ public class SdkDocumentationTests
 
         contracts[0xCE1F].Registers.Should().Equal("Y");
         contracts[0xCE26].Registers.Should().BeEquivalentTo(["A", "Y"]);
+    }
+
+    /// <summary>
+    ///  A note in parentheses after a Uses: item, as in the MOS's <c>Y (for a sound channel)</c>, still names the
+    ///  item for the debugger's check.
+    /// </summary>
+    [TestMethod]
+    public void UsesNotesNameTheirItem()
+    {
+        AssemblyResult mos = BbcSdkModules.AssembleMos(Path.Join(s_inputs, "Acorn"));
+        SourceMapModule module = new(mos, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        // FLUSH_BUFFER: "Uses: Y (for a sound channel)".
+        contracts[(ushort)mos.Symbols["FLUSH_BUFFER"]].Changes.Should().Contain("Y");
     }
 
     /// <summary>

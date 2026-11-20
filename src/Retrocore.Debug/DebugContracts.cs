@@ -165,7 +165,7 @@ internal sealed class DebugContracts
 
             List<string> kept = [];
             List<(string, ushort, int)> memory = [];
-            foreach (string item in topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items))
+            foreach (string item in topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote))
             {
                 string upper = item.ToUpperInvariant();
                 if (registers.Knows(upper))
@@ -183,7 +183,7 @@ internal sealed class DebugContracts
             if (topic.SectionsNamed("Uses").Any(Applies))
             {
                 changes = [with(StringComparer.OrdinalIgnoreCase)];
-                IEnumerable<string> uses = topic.SectionsNamed("Uses").Where(Applies).SelectMany(section => section.Items);
+                IEnumerable<string> uses = topic.SectionsNamed("Uses").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote);
                 changes.UnionWith(uses);
                 foreach (DocumentationEntry entry in topic.SectionsNamed("Out").Where(Applies).SelectMany(section => section.Entries))
                 {
@@ -207,6 +207,14 @@ internal sealed class DebugContracts
     }
 
     // A kept memory item: a symbol, symbol+n, or a range symbol..symbol+n.
+    // A Uses or Keeps item without the note in parentheses that may follow it: "Y (for a sound channel)" is Y, as
+    // the documentation check reads it.
+    private static string WithoutNote(string item)
+    {
+        int note = item.IndexOf(" (", StringComparison.Ordinal);
+        return note > 0 && item.EndsWith(')') ? item[..note] : item;
+    }
+
     private static (ushort Address, int Length)? Memory(DocumentationSet set, string item)
     {
         string[] range = item.Split("..");

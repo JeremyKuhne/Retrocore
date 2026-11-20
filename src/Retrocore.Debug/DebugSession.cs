@@ -844,6 +844,7 @@ internal sealed partial class DebugSession
             DebugMachines.Coco => LaunchCoco(args, loads),
             DebugMachines.Pet => LaunchPet(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Bbc => LaunchBbc(args, loads),
             DebugMachines.Kaypro2 => LaunchKaypro(args),
             _ => Apple2DebugTarget.Launch(args)
         };
@@ -1090,6 +1091,15 @@ internal sealed partial class DebugSession
     private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
     {
         CocoDebugTarget target = CocoDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a BBC Micro calls the MOS through its vectors, which it sets up as it starts, so the MOS and BASIC
+    // run first.
+    private static BbcDebugTarget LaunchBbc(JsonObject args, bool loads)
+    {
+        BbcDebugTarget target = BbcDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
         return target;
     }

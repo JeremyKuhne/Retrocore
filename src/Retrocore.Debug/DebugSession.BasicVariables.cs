@@ -231,6 +231,7 @@ internal sealed partial class DebugSession
         }
 
         if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
+        if (Basic == BasicDialect.BbcBasic) { return BbcProgramVariables(line, Span); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -246,6 +247,28 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Arrays", ["value"] = Span(arrays, free), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Free", ["value"] = Span(free, strings), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // BBC BASIC's memory, in its order: the program from PAGE to TOP, the variables on the heap from LOMEM, free space
+    // up to BASIC's stack, which runs down from HIMEM.
+    private List<JsonNode?> BbcProgramVariables(string line, Func<int, int, string> span)
+    {
+        int page = Target.Peek(BbcBasicDialect.PageHigh) << 8;
+        int top = Word(BbcBasicDialect.Top);
+        int lomem = Word(BbcBasicDialect.Lomem);
+        int heap = Word(BbcBasicDialect.Heap);
+        int stack = Word(BbcBasicDialect.BasicStack);
+        int himem = Word(BbcBasicDialect.Himem);
+        string data = $"&{Word(BbcBasicDialect.DataPointerAddress):X4}";
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = span(page, top), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Variables", ["value"] = span(lomem, heap), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free", ["value"] = span(heap, stack), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "BASIC's stack", ["value"] = span(stack, himem), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
         ];
@@ -330,8 +353,11 @@ internal sealed partial class DebugSession
         {
             for (int statement = 0; statement < line.Statements.Count; statement++)
             {
-                Match match = Definition().Match(view.Text(line, statement));
-                if (match.Success && string.Equals(match.Groups["name"].Value, name, StringComparison.OrdinalIgnoreCase))
+                // BBC BASIC's names are case-sensitive, and its DEF FN may have no parameter: FNa is not FNA.
+                bool bbc = Basic is BbcBasicDialect;
+                Match match = (bbc ? BbcDefinition() : Definition()).Match(view.Text(line, statement));
+                StringComparison comparison = bbc ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                if (match.Success && string.Equals(match.Groups["name"].Value, name, comparison))
                 {
                     return (match.Groups["parameter"].Value, match.Groups["body"].Value.Trim());
                 }
@@ -402,7 +428,8 @@ internal sealed partial class DebugSession
         if (expression is null || !Assignable.IsMatch(expression)) { return null; }
         return new JsonObject
         {
-            ["dataId"] = BasicDataPrefix + expression.ToUpperInvariant(),
+            // BBC BASIC's names keep their case: count is not COUNT, a word of its own.
+            ["dataId"] = BasicDataPrefix + (Basic is BbcBasicDialect ? expression.Trim() : expression.ToUpperInvariant()),
             ["description"] = $"{expression} (BASIC)",
             ["accessTypes"] = new JsonArray("write"),
             ["canPersist"] = true
@@ -462,7 +489,7 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (!BasicEvaluator.IsTrue(Evaluator.Evaluate(condition))) { return false; }
+                if (!BasicEvaluator.IsTrue(Evaluator.Evaluate(condition), Basic)) { return false; }
             }
             catch (FormatException exception)
             {
@@ -533,8 +560,18 @@ internal sealed partial class DebugSession
     [GeneratedRegex(@"^\s*DEF\s*FN\s*(?<name>[A-Z][A-Z0-9]*)\s*\(\s*(?<parameter>[A-Z][A-Z0-9]*)\s*\)\s*=(?<body>.*)$", RegexOptions.IgnoreCase)]
     private static partial Regex Definition();
 
+    // BBC BASIC's DEF FN: a name of letters, digits, _, @ and £ (&60) straight after FN, and an optional parameter
+    // that may end in % or $, or be @%.
+    [GeneratedRegex(@"^\s*DEF\s*FN(?<name>[A-Za-z0-9_@\x60]+)\s*(\(\s*(?<parameter>@%|[A-Za-z_\x60][A-Za-z0-9_\x60]*[$%]?)\s*\))?\s*=(?<body>.*)$")]
+    private static partial Regex BbcDefinition();
+
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*[$%!#]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
     private static partial Regex MicrosoftAssignable();
+
+    // BBC BASIC's names: @%, or a letter, _ or £ (&60), then letters, digits, _ and £, and % or $; an array's bracket
+    // follows the name straight away.
+    [GeneratedRegex(@"^\s*(?<name>@%|[A-Za-z_\x60][A-Za-z0-9_\x60]*[$%]?)(\((?<subscripts>[^()]*)\))?\s*$")]
+    private static partial Regex BbcAssignable();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9.]*[$%&]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]
     private static partial Regex BusinessAssignable();
@@ -543,12 +580,13 @@ internal sealed partial class DebugSession
     private static partial Regex MbasicAssignable();
 
     // A variable or array element that can be set: Business BASIC's names hold periods and may end in & for a long
-    // integer, and MBASIC's hold periods.
+    // integer, MBASIC's hold periods, and BBC BASIC's hold _ and £ and may be @%.
     private Regex Assignable
     {
         get
         {
             if (Target.Basic == BasicDialect.BusinessBasic) { return BusinessAssignable(); }
+            if (Target.Basic is BbcBasicDialect) { return BbcAssignable(); }
             return Target.Basic == BasicDialect.Mbasic ? MbasicAssignable() : MicrosoftAssignable();
         }
     }

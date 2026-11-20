@@ -146,10 +146,21 @@ internal sealed partial class DebugSession
                 {
                     prompt = null;
                 }
-                else if (!Target.InRom(Target.ProgramCounter))
+                else
                 {
-                    throw new InvalidOperationException(
-                        $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                    // In the ROM, BASIC is between statements, but only if it is the ROM paged in: a BBC Micro may be
+                    // running the DFS in BASIC's place.
+                    if (!Target.InRom(Target.ProgramCounter))
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                    }
+
+                    if (!Target.BasicPagedIn)
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and another ROM is paged in at ${Target.ProgramCounter:X4}. {StopFirst}");
+                    }
                 }
             }
         }
@@ -193,7 +204,7 @@ internal sealed partial class DebugSession
         {
             if (Target.IsInstructionBoundary)
             {
-                if (Target.ProgramCounter == rom.StatementStart) { return true; }
+                if (Target.ProgramCounter == rom.StatementStart && Target.BasicPagedIn) { return true; }
                 if (Target.CycleCount >= end) { return false; }
             }
 

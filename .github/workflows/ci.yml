@@ -78,6 +78,7 @@ jobs:
           node tools/Test-SoftCardDap.mjs
           node tools/Test-BusinessBasicDap.mjs
           node tools/Test-CocoDap.mjs
+          node tools/Test-BbcDap.mjs
           node tools/Test-AltairDap.mjs
           node tools/Test-OffMachine.mjs
 

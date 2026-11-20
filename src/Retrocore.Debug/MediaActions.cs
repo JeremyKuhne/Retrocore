@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -163,7 +165,17 @@ internal static partial class MediaActions
                 return differences;
             case "eject":
             case "insert" when device.Media is not null:
-                JsonObject? held = Detach([device], args, action == "eject" ? "eject it" : "insert another disk");
+
+            // The BBC's RECORD puts a new tape in, so the one there leaves; the PET's records onto the tape in place.
+            case "record" when device is BbcCassette && device.Media is not null:
+                string what = action switch
+                {
+                    "eject" => "eject it",
+                    "record" => "record a new tape",
+                    _ => "insert another disk"
+                };
+
+                JsonObject? held = Detach([device], args, what);
                 return held ?? Discard(device, action, args, machine);
             default:
                 return null;
@@ -370,6 +382,9 @@ internal static partial class MediaActions
         return medium switch
         {
             WozDisk => DiskIIImage.CodecFor(extension),
+            AcornTape => new AcornTapeCodec(),
+            FloppyDisk when extension.TrimStart('.').ToUpperInvariant() is "SSD" or "DSD" =>
+                new AcornDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
             CommodoreTape => new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant()),
             CommodoreDisk => new CommodoreDiskCodec(extension.TrimStart('.').ToUpperInvariant()),

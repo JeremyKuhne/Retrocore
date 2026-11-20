@@ -155,12 +155,16 @@ internal sealed partial class DebugSession
                 return true;
             }
 
+            // A pause's deadline holds even while another ROM, such as the DFS, is paged in where BASIC is.
             if (goal.Step == BasicStep.Pause && Target.CycleCount >= goal.Deadline)
             {
                 Stopped("pause", threadId: BasicThread);
                 return true;
             }
         }
+
+        // BASIC's own addresses mean BASIC only while it is paged in.
+        if (!Target.BasicPagedIn) { return false; }
 
         if (Target.BasicStatementStart(pc) is { } start) { return StatementStops(start.Line, start.Address); }
         if (pc == rom.Run) { _basicStarting = "RUN starts"; }
@@ -305,7 +309,11 @@ internal sealed partial class DebugSession
     private void StepBasic(BasicStep step)
     {
         int depth = BasicDepth();
-        if (step == BasicStep.Out && depth == 0) { throw new InvalidOperationException("BASIC is not in a GOSUB."); }
+        if (step == BasicStep.Out && depth == 0)
+        {
+            throw new InvalidOperationException("BASIC is not in a GOSUB, PROC or FN.");
+        }
+
         _basicGoal = new(step, depth, step == BasicStep.Into && CallsMachine(), ulong.MaxValue);
         Continue();
     }
@@ -328,7 +336,17 @@ internal sealed partial class DebugSession
     private int BasicDepth() => BasicStackEntries().Count;
 
     // The GOSUB entries on BASIC's stack, most recent first: the line each was in and its text pointer.
-    private List<(int Line, int TextPointer)> BasicStackEntries()
+    private List<(int Line, int TextPointer)> BasicStackEntries() => [.. BasicCallEntries().Select(entry => (entry.Line, entry.TextPointer))];
+
+    // The calls in progress, most recent first: GOSUBs, and a BASIC's other kinds, as BBC BASIC's PROCs and FNs.
+    private List<(int Line, int TextPointer, string Kind)> BasicCallEntries()
+    {
+        if (Target.BasicCalls is { } calls) { return [.. calls]; }
+        return [.. GosubEntries().Select(entry => (entry.Line, entry.TextPointer, "GOSUB"))];
+    }
+
+    // The GOSUB entries on BASIC's stack, most recent first: the line each was in and its text pointer.
+    private List<(int Line, int TextPointer)> GosubEntries()
     {
         List<(int, int)> entries = [];
         if (Target.Basic is not { } dialect) { return entries; }
@@ -478,9 +496,9 @@ internal sealed partial class DebugSession
 
             string note = Target.InRom(Target.ProgramCounter) ? "" : $" (in machine code at ${Target.ProgramCounter:X4})";
             frames.Add(BasicFrame(view, file, frames.Count, line, address, note));
-            foreach ((int caller, int pointer) in BasicStackEntries())
+            foreach ((int caller, int pointer, string kind) in BasicCallEntries())
             {
-                frames.Add(BasicFrame(view, file, frames.Count, caller, pointer + 1, " (GOSUB)"));
+                frames.Add(BasicFrame(view, file, frames.Count, caller, pointer + 1, $" ({kind})"));
             }
         }
 

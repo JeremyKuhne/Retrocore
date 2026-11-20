@@ -190,8 +190,17 @@ public sealed class BbcCassette : ITapeDrive, IMediumSlot
     }
 
     /// <inheritdoc/>
-    public void Mount(IMedium medium, string label, string format) =>
+    /// <remarks>
+    ///  <para>
+    ///   The tape goes in with PLAY down, as a tape the debugger inserts does, since the BBC Micro's motor relay, not
+    ///   a key, starts it.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format)
+    {
         Insert(medium as AcornTape ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label, format);
+        Play();
+    }
 
     /// <inheritdoc/>
     public IMedium? Unmount() => Eject();

@@ -42,6 +42,11 @@ internal sealed class Diagnostic
     public IReadOnlyList<DiagnosticRelatedInformation>? RelatedInformation { get; init; }
 
     /// <summary>
+    ///  Gets data the client sends back with a code action request, such as a historical name's replacement.
+    /// </summary>
+    public JsonObject? Data { get; init; }
+
+    /// <summary>
     ///  Writes the diagnostic.
     /// </summary>
     /// <returns>Its JSON, without the properties it lacks.</returns>
@@ -56,6 +61,7 @@ internal sealed class Diagnostic
 
         if (Code is not null) { diagnostic["code"] = Code; }
         if (Source is not null) { diagnostic["source"] = Source; }
+        if (Data is not null) { diagnostic["data"] = Data.DeepClone(); }
         if (RelatedInformation is not null)
         {
             diagnostic["relatedInformation"] = RelatedInformation.Select(item => (JsonNode?)item.ToJson()).ToJsonArray();

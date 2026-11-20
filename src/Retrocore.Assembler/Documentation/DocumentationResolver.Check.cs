@@ -169,6 +169,9 @@ public sealed partial class DocumentationResolver
                 }
 
                 break;
+            case "Also":
+                CheckAlso(topic, section, warn);
+                break;
             case "Entry":
                 foreach (DocumentationEntry entry in section.Entries)
                 {
@@ -316,5 +319,50 @@ public sealed partial class DocumentationResolver
                 }
             }
         }
+    }
+
+    private void CheckAlso(DocumentationTopic topic, DocumentationSection section, Action<string, int> warn)
+    {
+        foreach (string item in section.Items)
+        {
+            if (DocumentationAlso.Parse(item) is not { } also)
+            {
+                warn($"Also: write a historical name and the documents that give it, as 'COUT (A2RM)', not '{item}'.", section.Line);
+                continue;
+            }
+
+            if (also.Sources.Count == 0)
+            {
+                warn($"Also: say which document {also.Name} comes from, as '{also.Name} (A2RM)'.", section.Line);
+            }
+
+            foreach (string key in also.Sources)
+            {
+                if (Bibliography is not null && Bibliography.Find(key) is null)
+                {
+                    warn($"Also: no document '{key}' in the bibliography.", section.Line);
+                }
+            }
+
+            if (also.Name == LastName(topic.Name))
+            {
+                warn($"Also: {also.Name} is already the definition's name.", section.Line);
+            }
+            else if (Current.Defines(also.Name))
+            {
+                warn($"Also: {also.Name} is also a definition, which code reaches instead of {topic.Name}.", section.Line);
+            }
+            else if (Current.Topics.FirstOrDefault(other => !ReferenceEquals(other, topic)
+                && DocumentationAlso.Of(other.Sections).Any(name => name.Name == also.Name)) is { } other)
+            {
+                warn($"Also: {other.Name} has the historical name {also.Name} too.", section.Line);
+            }
+        }
+    }
+
+    private static string LastName(string name)
+    {
+        int separator = name.LastIndexOf("::", StringComparison.Ordinal);
+        return separator < 0 ? name : name[(separator + 2)..];
     }
 }

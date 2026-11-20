@@ -217,6 +217,25 @@ those before.
 A word in a register's place in an operand is the register, even when a symbol has that name: with `X = $12`,
 `lda X,x` loads from `$12` indexed by X.
 
+### Historical names
+
+A `;; Also:` section gives a definition its historical names ([DocComments.md](DocComments.md), section 2.4).
+Where no symbol has such a name, it resolves to the definition, so code written with the old name assembles:
+
+```asm
+.cpu Mos6502
+.org $0300
+    jsr COUT                    ; assembles as jsr CharacterOut
+    rts
+
+;; Prints a character through the output hook.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78)
+CharacterOut = $FDED
+```
+
+A symbol of the same name wins. An old name that two definitions give is an error where code uses it.
+
 ## Data
 
 | Directive | Emits |

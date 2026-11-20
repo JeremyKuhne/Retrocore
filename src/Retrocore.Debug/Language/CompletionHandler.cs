@@ -92,15 +92,29 @@ internal sealed class CompletionHandler
             .Select(site => new CompletionItem
             {
                 Label = site.Name,
+                FilterText = AlsoNames(analysis, site.Name) is { Length: > 0 } also ? $"{site.Name} {also}" : null,
                 Kind = site.Kind switch
                 {
                     SymbolSiteKind.Macro => CompletionItemKind.Function,
                     SymbolSiteKind.Constant => CompletionItemKind.Constant,
                     _ => CompletionItemKind.Reference
                 },
-                Detail = site.Value is { } value ? LanguageHost.Hex(value) : "macro",
+                Detail = Detail(site, AlsoNames(analysis, site.Name)),
                 Documentation = summaries.TryGetValue(site.Name, out string? summary)
                     ? new MarkupContent { Kind = MarkupKind.Markdown, Value = summary }
                     : null
             });
+
+    // The value, and the historical names typing finds the definition by: "$FDED, also COUT".
+    private static string Detail(SymbolSite site, string also)
+    {
+        string detail = site.Value is { } value ? LanguageHost.Hex(value) : "macro";
+        return also.Length == 0 ? detail : $"{detail}, also {also.Replace(" ", ", ", StringComparison.Ordinal)}";
+    }
+
+    // A definition's historical names, from its Also: sections, separated by spaces.
+    private static string AlsoNames(SourceAnalysis analysis, string name) =>
+        analysis.Documentation.Find(name) is { } topic
+            ? string.Join(" ", DocumentationAlso.Of(topic.Sections).Select(also => also.Name))
+            : "";
 }

@@ -17,5 +17,10 @@ internal enum DiagnosticSeverity
     /// <summary>
     ///  A warning.
     /// </summary>
-    Warning = 2
+    Warning = 2,
+
+    /// <summary>
+    ///  Something worth knowing that is not wrong, such as code written with a historical name.
+    /// </summary>
+    Information = 3
 }

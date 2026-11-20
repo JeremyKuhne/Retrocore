@@ -80,10 +80,10 @@ internal sealed partial class DebugSession
         };
     }
 
-    // The most memory references to keep sending memory events for.
+    // The most memory references without an editor subscriber to keep sending memory events for.
     private const int MemoryViewLimit = 32;
 
-    // The memory views that have read, oldest first. A memory event must name a view's reference exactly.
+    // The memory views that have read, least recently used first. Live editor subscribers are not evicted.
     private readonly List<MemoryView> _memoryViews = [];
 
     // Running frames since the last memory events, which go out every few frames while the machine runs.
@@ -448,26 +448,27 @@ internal sealed partial class DebugSession
         MemoryView? view = _memoryViews.Find(item => item.Reference == reference && item.Subscriber == subscriber);
         if (view is null)
         {
-            if (!_memoryViews.Any(item => item.Reference == reference)
-                && _memoryViews.Select(item => item.Reference).Distinct(StringComparer.Ordinal).Count() >= MemoryViewLimit)
+            if (subscriber is null && _memoryViews.Count(item => item.Subscriber is null) >= MemoryViewLimit)
             {
-                string oldest = _memoryViews[0].Reference;
-                _memoryViews.RemoveAll(item => item.Reference == oldest);
+                MemoryView oldest = _memoryViews.First(item => item.Subscriber is null);
+                _memoryViews.Remove(oldest);
             }
 
             view = new(reference, subscriber);
-            _memoryViews.Add(view);
         }
         else if (view.Bank != bank || view.Address != address)
         {
             // An expression such as HL that now resolves elsewhere: the view starts over there.
             view.Ranges.Clear();
+            _memoryViews.Remove(view);
         }
+        else { _memoryViews.Remove(view); }
 
         view.Bank = bank;
         view.Address = address;
         view.Add(offset, offset + count);
         view.Seen = Hash(view);
+        _memoryViews.Add(view);
     }
 
     private JsonObject UnsubscribeMemory(JsonObject args)

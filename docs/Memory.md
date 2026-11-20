@@ -283,7 +283,8 @@ Retrocore Memory uses these requests:
 The debugger keeps the disjoint ranges each view has read and a hash of their bytes. Retrocore Memory supplies an
 editor-specific `subscriber` with each `retro/memory/read`, and unsubscribes it when the editor closes. Reads without
 a subscriber, including standard `readMemory` reads, are tracked separately. The `initialize` capability
-`supportsRetrocoreMemorySubscriptions` advertises this support. After each stop, every eighth running
+`supportsRetrocoreMemorySubscriptions` advertises this support. Unscoped DAP reader references use a 32-entry
+least-recently used limit; live editor subscriptions remain until their editor closes. After each stop, every eighth running
 frame and each `writeMemory`, the debugger sends a `memory` event for each reference whose tracked bytes have
 changed, with offset 0 and the end of the changed view's last range as its count, as VS Code requires. The view
 that wrote is not told. A `writeMemory` also

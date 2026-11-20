@@ -745,8 +745,8 @@ call line, as AppleSoft does, since MACRO-10 sources define instructions as macr
 While debugging, the gutter shows the CPU cycles of each source line's latest
 run. Consecutive instructions on one line, such as a macro's, add up.
 The extension asks for full cycle snapshots only when their lines or calls change;
-stops always send a full snapshot. Other debug clients receive periodic snapshots
-unless they opt in with `retro/cycles`'s `changesOnly` argument.
+stops always send a full snapshot. `changesOnly` changes the cycle-event stream
+for the whole debug session, so it affects every consumer of that session's events.
 
 A `JSR` line also shows its latest call's cycles after the line's text, for
 example `⤷ 17c`. That count covers the `JSR`, the subroutine with any calls it

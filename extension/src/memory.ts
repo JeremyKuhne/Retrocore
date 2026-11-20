@@ -345,7 +345,7 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                 if (lastEditor === editor) lastEditor = undefined;
                 if (subscriber !== undefined && sessions.has(session.id)) {
                     void session.customRequest("retro/memory/unsubscribe", { subscriber })
-                        .then(undefined, error => vscode.window.showErrorMessage(`Retrocore: ${message(error)}`));
+                        .then(undefined, error => console.warn(`Retrocore: could not unsubscribe the closing memory editor: ${message(error)}`));
                 }
             });
             panel.webview.options = { enableScripts: true };

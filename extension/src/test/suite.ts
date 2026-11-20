@@ -39,6 +39,7 @@ export async function run(): Promise<void> {
     await testFavorites(workspace);
     await testProgramBreakpoints(workspace);
     await testDrivesView(workspace);
+    await testMemorySubscriptions(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
     const root = workspace.uri.fsPath;

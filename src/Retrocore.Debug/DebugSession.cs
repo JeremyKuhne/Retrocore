@@ -98,8 +98,7 @@ internal sealed partial class DebugSession
     private readonly Dictionary<(string Path, int Line), ulong> _lineCycles = [];
     private (string Path, int Line)? _cycleSource;
     private bool _cycleChangesOnly;
-    private Dictionary<(string Path, int Line), ulong>? _sentLineCycles;
-    private Dictionary<(string Path, int Line), ulong>? _sentCallCycles;
+    private bool _sourceCyclesDirty = true;
 
     // The cycles run on the current line since they were last added to its count, and whether the line was entered
     // since then, so its count starts over. Counting here and adding once per instruction keeps the dictionary, and
@@ -353,8 +352,7 @@ internal sealed partial class DebugSession
             if (args.Bool("changesOnly") is { } changesOnly)
             {
                 _cycleChangesOnly = changesOnly;
-                _sentLineCycles = null;
-                _sentCallCycles = null;
+                _sourceCyclesDirty = true;
             }
 
             if (args.Bool("clear") == true)
@@ -364,6 +362,7 @@ internal sealed partial class DebugSession
                 _lineEntered = false;
                 _callCycles.Clear();
                 _contracts?.Clear();
+                _sourceCyclesDirty = true;
             }
 
             return SourceCycles();
@@ -881,8 +880,7 @@ internal sealed partial class DebugSession
         _basicEnded = false;
         _lineCycles.Clear();
         _callCycles.Clear();
-        _sentLineCycles = null;
-        _sentCallCycles = null;
+        _sourceCyclesDirty = true;
         _contracts?.Clear();
         _cycleSource = null;
         _pendingLineCycles = 0;
@@ -1665,7 +1663,7 @@ internal sealed partial class DebugSession
         // Call cycles and contracts follow the machine's CPU, whose routines the SDK documents.
         if (!machineCpu) { return true; }
         (ushort Target, int Length)? call = Target.CallAt(before.ProgramCounter);
-        _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
+        _sourceCyclesDirty |= _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
         if (_contracts?.Observe(before, call, Target.Peek) is { Count: > 0 } broken)
         {
             foreach (string message in broken)
@@ -2071,6 +2069,7 @@ internal sealed partial class DebugSession
         {
             ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_lineCycles, source, out _);
             count = _lineEntered ? _pendingLineCycles : count + _pendingLineCycles;
+            _sourceCyclesDirty = true;
         }
 
         _pendingLineCycles = 0;
@@ -2086,25 +2085,10 @@ internal sealed partial class DebugSession
     private void NotifySourceCycles(bool force = false)
     {
         FlushLineCycles();
-        if (_cycleChangesOnly && !force)
-        {
-            if (SameCycles(_lineCycles, _sentLineCycles) && SameCycles(_callCycles.Last, _sentCallCycles)) { return; }
-        }
+        if (_cycleChangesOnly && !force && !_sourceCyclesDirty) { return; }
 
         Notify("retro/cycles", SourceCyclesJson());
-        if (_cycleChangesOnly)
-        {
-            _sentLineCycles = _lineCycles.ToDictionary(pair => pair.Key, pair => pair.Value);
-            _sentCallCycles = _callCycles.Last.ToDictionary(pair => pair.Key, pair => pair.Value);
-        }
-    }
-
-    private static bool SameCycles(
-        IReadOnlyDictionary<(string Path, int Line), ulong> current,
-        Dictionary<(string Path, int Line), ulong>? sent)
-    {
-        if (sent is null || sent.Count != current.Count) { return false; }
-        return current.All(pair => sent.TryGetValue(pair.Key, out ulong value) && value == pair.Value);
+        _sourceCyclesDirty = false;
     }
 
     private JsonObject SourceCyclesJson() => new JsonObject

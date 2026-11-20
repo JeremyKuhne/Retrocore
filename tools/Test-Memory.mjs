@@ -240,6 +240,23 @@ try {
     await write("6110", [saved[0x10]]);
     await write("6120", [saved[0x20]]);
 
+    at = "retaining live subscriptions while limiting unscoped readers";
+    await read("0x6100", 1);
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/read", { memoryReference: "0x6100", count: 1, subscriber: `live-${index}` });
+    }
+    for (let index = 0; index < 32; index++) {
+        await read(`0x${(0x7000 + index).toString(16)}`, 1);
+    }
+    drop("memory");
+    await write("6100", [saved[0] ^ 0xFF]);
+    assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
+        "adding unscoped references does not evict live editor subscriptions");
+    await write("6100", [saved[0]]);
+    for (let index = 0; index < 33; index++) {
+        await request("retro/memory/unsubscribe", { subscriber: `live-${index}` });
+    }
+
     at = "writes that cannot finish";
     const rom = (await read("0x0000", 1)).bytes[0];
     await rejects(write("0x0000", [rom ^ 0xFF]), /not RAM or video RAM/);

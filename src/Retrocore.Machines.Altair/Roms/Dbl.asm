@@ -22,7 +22,7 @@
 ;;
 ;; The labels follow Martin Eberhard's 2012 disassembly of an EPROM labeled "DBL 4.1" from a MITS turnkey board.
 ;;
-;; Maintained by hand. AltairRomSourceTests check that it assembles byte-identically to the PROM.
+;; Maintained by hand. AltairDiskTests check that it assembles byte-identically to the PROM.
 
 .cpu I8080
 

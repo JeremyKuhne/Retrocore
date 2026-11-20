@@ -317,6 +317,15 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
         _resetPending = true;
     }
 
+    /// <summary>
+    ///  Presses SHIFT-BREAK, which boots the disk in drive 0, or the tape.
+    /// </summary>
+    internal void ShiftReset()
+    {
+        _machine.PressShiftBreak();
+        _resetPending = true;
+    }
+
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>

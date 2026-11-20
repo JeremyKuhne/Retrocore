@@ -26,8 +26,11 @@ internal static class TypedText
     /// </summary>
     /// <param name="text">The text.</param>
     /// <param name="skipped">How many characters have no key and were left out.</param>
+    /// <param name="pound">
+    ///  The code that types £ on a keyboard with a £ key, such as the BBC Micro's &amp;60; null for none.
+    /// </param>
     /// <returns>The codes, in order.</returns>
-    public static List<int> Codes(string text, out int skipped)
+    public static List<int> Codes(string text, out int skipped, int? pound = null)
     {
         List<int> codes = [with(text.Length)];
         skipped = 0;
@@ -63,6 +66,9 @@ internal static class TypedText
                     break;
                 case '…':
                     codes.AddRange(['.', '.', '.']);
+                    break;
+                case '£' when pound is { } code:
+                    codes.Add(code);
                     break;
                 default:
                     skipped++;

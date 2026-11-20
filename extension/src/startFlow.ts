@@ -65,9 +65,9 @@ export function runChoices(machine: Machine): RunChoice[] {
     }
 
     if (machine.diskFormats.length !== 0) {
-        // The BBC Micro boots a disk only with SHIFT-BREAK, which neither the launch nor the panel can press yet.
+        // The BBC Micro boots a disk with SHIFT held as it starts, as SHIFT-BREAK does.
         const detail = machine.configuration.machine === "pet" ? "Puts it in drive 0 of the 4040 at device 8"
-            : machine.configuration.machine === "bbc" ? "Puts it in drive 0, without booting it" : "Boots it from the first drive";
+            : machine.configuration.machine === "bbc" ? "Boots it from drive 0, as SHIFT-BREAK does" : "Boots it from the first drive";
         choices.push({ kind: "disk", label: "A disk image", detail, extensions: machine.diskFormats });
     }
 
@@ -137,6 +137,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             break;
         case "disk":
             Object.assign(configuration, machine.configuration.machine === "apple2" ? { diskImage: path } : { disks: [path] });
+            if (machine.configuration.machine === "bbc") configuration.boot = true;
             break;
         case "tape":
             configuration[machine.tapeOption ?? "cassette"] = path;

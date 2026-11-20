@@ -115,7 +115,7 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
    - a binary program, loaded at the machine's usual address (on the PET, a `.prg`
      too, which loads where its first two bytes say);
    - a BASIC file, for the machine's own BASIC;
-   - a disk image, booted from the first drive (on the BBC Micro and the PET, inserted in it);
+   - a disk image, booted from the first drive (on the BBC Micro with SHIFT-BREAK; on the PET, inserted in it);
    - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro and the PET (in
      its built-in Datasette, with PLAY down);
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and

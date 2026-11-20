@@ -17,8 +17,6 @@ characters) are SDK sources. What is left is below.
 
 - The code DNFS copies into RAM (its NMI routines at `&0D00` and the Tube host code) shows as disassembly, not
   source.
-- The BASIC thread's map of a line counts a colon inside a `*` command as a statement break, though OSCLI takes the
-  whole rest of the line.
 - RS-423 works with the MOS, but the host's serial line is not connected to it.
 - The UEF reader ignores the base frequency (`&0113`) and phase (`&0115`) chunks.
 - The 8271's scan commands (`&00` and `&04`) run as verifies: they take no comparison bytes and leave the scan
@@ -26,6 +24,3 @@ characters) are SDK sources. What is left is below.
 - The 6845 starts the vertical sync at the start of a row in both fields, as MAME's does, not half a line later in
   the odd field of an interlaced picture.
 - The TRS-80's partial 6845 could move onto the shared `Crtc6845`.
-- Nothing presses SHIFT-BREAK: the display panel and the Desktop send BREAK alone, and Start Machine only inserts a
-  disk. A shifted reset, holding SHIFT until the MOS reads it, would boot a disk's `!BOOT`; until then `*EXEC !BOOT`
-  or `*RUN !BOOT` runs it.

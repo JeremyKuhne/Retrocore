@@ -299,6 +299,7 @@ internal sealed class BasicLineScanner
     {
         List<BasicStatement> statements = [new(0, _bytes.Length == 0 ? _text.Length : FirstColumn(0))];
         bool inString = false;
+        bool statementStart = true;
         for (int index = 0; index < _bytes.Length; index++)
         {
             byte value = _bytes[index];
@@ -311,7 +312,25 @@ internal sealed class BasicLineScanner
             if (value == '"')
             {
                 inString = true;
+                statementStart = false;
                 continue;
+            }
+
+            // A BBC * command is the MOS's to read, to the end of the line, colons and all, as OSCLI takes it; a word
+            // decides by its flags whether a statement starts after it, as THEN does.
+            if (Bbc && value != ' ')
+            {
+                if (statementStart && value == '*') { break; }
+                if (value == BbcBasicDialect.LineNumberToken && index + 3 < _bytes.Length)
+                {
+                    index += 3;
+                    statementStart = false;
+                    continue;
+                }
+
+                bool wasStart = statementStart;
+                string? word = value >= 0x80 ? BbcBasicDialect.Instance.Word(value) : null;
+                statementStart = value == ':' || (word is not null && BbcBasicDialect.StatementStartsAfter(word, wasStart));
             }
 
             // A function's token after its prefix is read with it: ABS is $FF $82, and $82 alone is REM.

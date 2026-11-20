@@ -94,8 +94,11 @@ The options are:
 - `speed`: `1` (the default) runs at 2 MHz, `2`, `4` or `8` that many times as fast, and `"max"` as fast as
   possible.
 
-The panel's key bar has **Escape** (Esc), **Copy** (End), **f0**-**f9** and **Break** (Ctrl+F12 or Ctrl+Break); the
-cursor keys are the arrows, and DELETE is Backspace. In Retrocore Desktop, F1-F9 and F10 are f1-f9 and f0.
+The panel's key bar has **Escape** (Esc), **Copy** (End), **Shift Lock** (Scroll Lock), **f0**-**f9** and **Break**
+(Ctrl+F12 or Ctrl+Break); the cursor keys are the arrows, DELETE is Backspace, and £ types the BBC's £. Shift with
+Break (Shift+click, or Ctrl+Shift+F12) is SHIFT-BREAK, which boots the disk in drive 0, and Start Machine boots a disk
+image the same way, with the launch's `boot`. In Retrocore Desktop, F1-F9 and F10 are f1-f9 and f0, Scroll Lock is
+SHIFT LOCK, and Ctrl+Shift+F12 is SHIFT-BREAK.
 **Machine reset** stops at the MOS's first instruction after BREAK. The **BRK instructions** filter stops at each
 error the MOS, BASIC or the DFS raises, and names it. The Drives view shows the cassette and the drives, and
 inserts, records, ejects and saves media; `retro/media` takes the same requests.

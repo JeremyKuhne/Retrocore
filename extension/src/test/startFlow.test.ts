@@ -115,10 +115,13 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.equal(machines.length, 26);
 });
 
-test("a BBC Micro's disk goes in drive 0 without booting, as nothing presses SHIFT-BREAK", () => {
+test("a BBC Micro's disk boots from drive 0 with SHIFT held as it starts, as SHIFT-BREAK does", () => {
     const disk = (id: string) => runChoices(machineById(id)!).find(choice => choice.kind === "disk")?.detail;
-    assert.equal(disk("bbcb"), "Puts it in drive 0, without booting it");
+    assert.equal(disk("bbcb"), "Boots it from drive 0, as SHIFT-BREAK does");
     assert.equal(disk("apple2-iie-enhanced"), "Boots it from the first drive");
+    const configuration = setupConfiguration({ machineId: "bbcb", kind: "disk", path: "welcome.ssd", options: {} });
+    assert.deepEqual([configuration.disks, configuration.boot], [["welcome.ssd"], true]);
+    assert.equal(setupConfiguration({ machineId: "bbcb", kind: "machine", options: {} }).boot, undefined, "only a disk boots");
 });
 
 test("a setup that starts from a disk keeps the drives it needs", () => {

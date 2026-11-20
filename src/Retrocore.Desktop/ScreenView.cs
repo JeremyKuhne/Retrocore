@@ -390,10 +390,11 @@ internal sealed class ScreenView : Control
             return;
         }
 
-        // Ctrl+F12 for keyboards without Break, which some laptops lack or hide behind Fn.
+        // Ctrl+F12 for keyboards without Break, which some laptops lack or hide behind Fn; with Shift, the BBC Micro's
+        // SHIFT-BREAK.
         if (e.Key == Key.Cancel || (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.Pause or Key.F12))
         {
-            _host.Reset();
+            _host.Reset(shift: e.KeyModifiers.HasFlag(KeyModifiers.Shift));
             e.Handled = true;
             return;
         }
@@ -439,6 +440,11 @@ internal sealed class ScreenView : Control
             if (character is > (char)0 and < (char)127 and not '\r' and not '\n' and not '\b' and not '\t')
             {
                 Type(character);
+            }
+            else if (character == '£' && _host.KeyMapName == "bbc")
+            {
+                // The BBC Micro's £ is its own key, SHIFT with _, whose code its character set shows as £.
+                Type(Retrocore.Debug.DebugSession.BbcPound);
             }
         }
 

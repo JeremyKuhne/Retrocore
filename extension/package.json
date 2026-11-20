@@ -1634,6 +1634,11 @@
                 "type": "string",
                 "description": "PET: a .tap, .wav or .prg tape in the second Datasette, cassette #2, with PLAY down."
               },
+              "boot": {
+                "type": "boolean",
+                "default": false,
+                "description": "BBC Micro: hold SHIFT as the machine starts, as SHIFT-BREAK does, so the filing system boots the disk in drive 0 (its !BOOT) or, without a disk interface, the tape."
+              },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,

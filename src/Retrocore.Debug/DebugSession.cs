@@ -23,6 +23,11 @@ internal sealed partial class DebugSession
     // Machine requests the session forwards to the launched target, which may not support them.
     private const string OnlyBasic = "Only BASIC variables can be set here; change registers and memory in a memory view.";
 
+    /// <summary>
+    ///  The BBC Micro's code for £, which its character set shows in place of the backquote: SHIFT with the _ key.
+    /// </summary>
+    internal const int BbcPound = 0x60;
+
     private static readonly string[] s_machineRequests =
     [
         "apple2/text",
@@ -468,7 +473,7 @@ internal sealed partial class DebugSession
         transport.On("retro/type", args => Reply(() =>
         {
             string text = args.String("text") ?? throw new ArgumentException("text is required.");
-            List<int> codes = TypedText.Codes(text, out int skipped);
+            List<int> codes = TypedText.Codes(text, out int skipped, Target is BbcDebugTarget ? BbcPound : null);
 
             // A machine with a typing pace takes the keys as the run reaches each one's time.
             if (Target.TypingPace is not null)
@@ -496,10 +501,12 @@ internal sealed partial class DebugSession
         }));
 
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
-        transport.On("retro/reset", _ => Reply(() =>
+        transport.On("retro/reset", args => Reply(() =>
         {
             // A reset abandons every call in progress, even where it keeps the stack pointer and RAM, as the 8080's does.
-            Target.Reset();
+            // The BBC Micro's shifted BREAK boots its disk or tape.
+            if (args.Bool("shift") == true && Target is BbcDebugTarget bbc) { bbc.ShiftReset(); }
+            else { Target.Reset(); }
             Target.CallStack.Reset();
             Pascal?.Reset();
             _pascalFrames = null;

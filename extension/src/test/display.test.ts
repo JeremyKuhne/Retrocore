@@ -735,6 +735,23 @@ test("when the session ends the panel says the machine is off and offers Restart
     assert.equal(off.hidden, true);
 });
 
+test("the BBC Micro types £ and SHIFT LOCK, and Shift with BREAK is SHIFT-BREAK", () => {
+    const { posted, screen, byId, window } = loadPanel();
+    window.dispatch("message", { data: {
+        machine: "bbc", rows: [""], cycles: 1, running: true,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    } });
+    posted.splice(0);
+    for (const key of ["£", "ScrollLock", "End", "`"]) {
+        screen.dispatch("keydown", { key, code: "", ctrlKey: false, altKey: false, shiftKey: false });
+    }
+    assert.deepEqual(posted.splice(0).map(message => (message as { code: number }).code), [96, 140, 135, 96], "£ is &60, as ` is");
+    screen.dispatch("keydown", { key: "F12", code: "", ctrlKey: true, altKey: false, shiftKey: true, preventDefault: () => {} });
+    byId.get("bbc-reset")?.dispatch("click", { shiftKey: true });
+    byId.get("bbc-reset")?.dispatch("click", { shiftKey: false });
+    assert.deepEqual(posted.splice(0), [{ command: "reset", shift: true }, { command: "reset", shift: true }, { command: "reset" }]);
+});
+
 test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys", () => {
     for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 255]) {
         assert.equal(panelKeyCode({ code }), code);

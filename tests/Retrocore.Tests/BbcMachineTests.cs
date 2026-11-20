@@ -534,4 +534,26 @@ public class BbcMachineTests
         machine.Bus.Peek(0x2A1 + 12).Should().Be(0x82);
         machine.Bus.Peek(0x2A1 + 15).Should().Be(0x60);
     }
+
+    /// <summary>
+    ///  SHIFT held for SHIFT-BREAK lets go after its time, as a hand does once the operating system has read it; and
+    ///  SHIFT LOCK, which no character types, has the keyboard's own code, &amp;8C.
+    /// </summary>
+    [TestMethod]
+    public void ShiftBreakAndShiftLockKeys()
+    {
+        BbcKeyboard keyboard = new();
+        keyboard.HoldShift(3);
+        keyboard.IsDown(BbcKey.Shift).Should().BeTrue();
+        keyboard.Tick();
+        keyboard.Tick();
+        keyboard.IsDown(BbcKey.Shift).Should().BeTrue();
+        keyboard.Tick();
+        keyboard.IsDown(BbcKey.Shift).Should().BeFalse();
+
+        keyboard.Type(0x8C).Should().BeTrue();
+        keyboard.Tick();
+        keyboard.IsDown(BbcKey.ShiftLock).Should().BeTrue();
+        BbcMachine.ShiftBreakCycles.Should().Be(500_000, "half a second of the keyboard's 1 MHz");
+    }
 }

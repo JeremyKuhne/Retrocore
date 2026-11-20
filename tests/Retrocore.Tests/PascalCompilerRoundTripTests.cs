@@ -58,10 +58,10 @@ public class PascalCompilerRoundTripTests
             (byte[]? compiled, string screen, _) = EmulatedPascalCompiler.CompileWithListing(source, boot, apple2, listing: null, s_inputs, files: null, Apple2Model.IIeEnhanced);
             if (compiled is null) { Assert.Fail($"The Compiler stopped:\n{screen}"); }
 
-            (byte[]? assembled, string assembling) = EmulatedPascalTools.Assemble(assembly, apple1, apple2, s_inputs);
+            (byte[]? assembled, string assembling) = EmulatedPascalTools.Assemble(assembly, apple1, apple2, s_inputs, Apple2Model.IIeEnhanced);
             if (assembled is null) { Assert.Fail($"The Assembler stopped:\n{assembling}"); }
 
-            (byte[]? linked, string linking) = EmulatedPascalTools.Link(compiled, [assembled], apple1, apple2, s_inputs);
+            (byte[]? linked, string linking) = EmulatedPascalTools.Link(compiled, [assembled], apple1, apple2, s_inputs, Apple2Model.IIeEnhanced);
             if (linked is null) { Assert.Fail($"The Linker stopped:\n{linking}"); }
 
             PascalCodeComparison.Compare(PascalCodeFile.Read(original), PascalCodeFile.Read(linked)).Should().BeEmpty();

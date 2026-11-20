@@ -82,9 +82,11 @@ internal static partial class PascalCommand
                 _ => Fail(Usage, code: 2)
             };
         }
-        catch (Exception exception) when (exception is InvalidDataException or IOException or ArgumentException or InvalidOperationException)
+        // A TimeoutException is the emulated system never booting, or a tool never finishing; its message has the screen,
+        // such as 1.3's 128K MEMORY REQUIRED on a II Plus.
+        catch (Exception exception) when (exception is InvalidDataException or IOException or ArgumentException or InvalidOperationException or TimeoutException)
         {
-            return Fail(exception.Message);
+            return Fail(exception.Message.TrimEnd());
         }
     }
 

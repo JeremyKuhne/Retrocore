@@ -148,7 +148,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
   Assembler, and `--pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code` links a host with
-  libraries with Apple's own Linker, both on an emulated Apple II, as `compile` runs the Compiler (below);
+  libraries with Apple's own Linker, both on an emulated Apple II, as `compile` runs the Compiler (below). With
+  `--iie`, `compile`, `assemble-native` and `link` run on a 128K IIe, which 1.3 needs; without it, on a II Plus;
 - `--pascal compare code code` compares two code files' segments, and says where their code first differs.
 
 A code file is a file's path, or a disk and the file's name: `--pascal disassemble APPLE3.dsk HILBERT.CODE HILBERT.2`.

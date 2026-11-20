@@ -267,7 +267,7 @@ public class PcodeAssemblyTests
     [TestMethod]
     public void AssembledProceduresAreWrittenForTheAssembler()
     {
-        byte[] code = Assemble(MixedSource.Replace(
+        byte[] code = Assemble(MixedSource.ReplaceLineEndings("\n").Replace(
             "Entry:  lda.w Value - Entry\n        rts",
             "Entry:  lda.w Value - Entry\nAgain:  lda.w $0030\n        beq Again\n        jsr $3D00\n        jmp ($3D00)",
             StringComparison.Ordinal));
@@ -286,7 +286,7 @@ public class PcodeAssemblyTests
             L000E    .WORD   L000E
                      .END
 
-            """);
+            """.ReplaceLineEndings("\n"));
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ public class PcodeAssemblyTests
             ; A second line.
                      .PROC   LOAD
 
-            """);
+            """.ReplaceLineEndings("\n"));
     }
 
     /// <summary>
@@ -347,7 +347,7 @@ public class PcodeAssemblyTests
             D0023    .BYTE   0
                      .END
 
-            """);
+            """.ReplaceLineEndings("\n"));
     }
 
     /// <summary>

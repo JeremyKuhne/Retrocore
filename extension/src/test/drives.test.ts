@@ -6,8 +6,8 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
-    conflictQuestion, contextWords, form, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
+    changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
+    conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaSource
 } from "../drives";
 
@@ -93,7 +93,74 @@ test("the menus offer Save for a changed disk, a Save that will ask for a change
     assert.ok(contextWords(drive(true, { readOnly: "file" }), true).includes("changedReadOnly"));
     assert.ok(contextWords(drive(true, { kind: "built", saves: false }), true).includes("changedReadOnly"), "a built disk saves as");
     assert.ok(contextWords(drive(true, {}, true), true).includes("locked"));
-    assert.deepEqual(contextWords(drive(true), false), ["device", "loaded", "insert", "eject", "unlocked"], "off, nothing to save");
+    assert.deepEqual(contextWords(drive(false), false), ["device", "loaded", "insert", "eject", "unlocked"], "off, nothing to save");
+    assert.deepEqual(contextWords(drive(true), false), ["device", "loaded", "insert", "eject", "unlocked", "revert", "save", "changed"],
+        "off, a disk the last run kept saves and reverts");
+});
+
+test("a Datasette's keys show while the machine runs; a tape drive that cannot save records to a file instead", () => {
+    const deck: Device = {
+        ...drive(false), id: "cassette1", kind: "tapeDrive", name: "Cassette #1", formats: ["tap", "wav"],
+        saveFormats: ["tap", "wav"], operations: ["insert", "eject", "record", "save"]
+    };
+    assert.ok(hasTapeKeys(deck));
+    const words = contextWords(deck, true);
+    for (const word of ["recordKey", "play", "stop", "rewind", "save"]) assert.ok(words.includes(word), word);
+    assert.ok(!words.includes("record"), "RECORD goes down on the tape in the deck, with no file to name");
+    assert.ok(!contextWords({ ...deck, media: null }, true).includes("play"), "no keys to press with no tape");
+    assert.deepEqual(contextWords(deck, false).filter(word => ["recordKey", "play"].includes(word)), [], "nor while the machine is off");
+
+    const recorder: Device = { ...deck, operations: ["insert", "eject", "record"] };
+    assert.ok(!hasTapeKeys(recorder));
+    assert.ok(contextWords(recorder, true).includes("record"));
+    assert.ok(!contextWords(recorder, true).includes("play"));
+});
+
+test("Discard asks about the disks kept now, again when the journal changed meanwhile, and lets nothing go unasked", async () => {
+    // The machine ran again while the first question was open: that answer lets nothing go, and the newer disks are asked about.
+    const journals = [{ disks: ["work.woz"], revision: "a" }, { disks: ["work.woz", "game.woz"], revision: "b" }];
+    const asked: string[][] = [];
+    const resolved: string[] = [];
+    const outcome = await discardKept(async () => journals.shift(), async disks => { asked.push(disks); return true; },
+        async revision => { resolved.push(revision); return revision === "a" ? { outcome: "changed" } : {}; });
+    assert.equal(outcome, "discarded");
+    assert.deepEqual(asked, [["work.woz"], ["work.woz", "game.woz"]]);
+    assert.deepEqual(resolved, ["a", "b"]);
+
+    // No to the question: nothing is resolved.
+    let sent = false;
+    assert.equal(await discardKept(async () => ({ disks: ["work.woz"], revision: "a" }), async () => false, async () => { sent = true; return {}; }), "kept");
+    assert.equal(sent, false);
+    assert.equal(await discardKept(async () => undefined, async () => true, async () => ({})), "none");
+});
+
+test("Save All saves each kept disk while the machine is the one asked about, and stops at the first not saved", async () => {
+    const kept = (id: string, ejected: string[] = []): Device => ({
+        ...drive(true), id, media: { ...drive(true).media!, kept: true },
+        ejected: ejected.map(item => ({ id: item, label: image, format: "WOZ", why: "ejected" as const, when: "", changed: true }))
+    });
+    const devices = [kept("disk0", ["k-1"]), { ...drive(false), id: "disk1" }, kept("disk2")];
+    const saved: string[] = [];
+    assert.equal(await saveAllKept(devices, () => true, async (id, ejected) => { saved.push(ejected ?? id); return true; }), true);
+    assert.deepEqual(saved, ["disk0", "k-1", "disk2"], "the unchanged disk is left alone");
+
+    // A question cancelled: the disks after it stay kept.
+    saved.length = 0;
+    assert.equal(await saveAllKept(devices, () => true, async (id, ejected) => { saved.push(ejected ?? id); return false; }), false);
+    assert.deepEqual(saved, ["disk0"]);
+
+    // Another machine chosen meanwhile: nothing more is saved to this one's images.
+    saved.length = 0;
+    let shown = true;
+    assert.equal(await saveAllKept(devices, () => shown, async (id, ejected) => { saved.push(ejected ?? id); shown = false; return true; }), false);
+    assert.deepEqual(saved, ["disk0"]);
+});
+
+test("a machine that is off asks before it lets a changed disk go, as Undo cannot put it back", () => {
+    const revert = letGoQuestion("Drive 1", "revert", image);
+    assert.equal(revert.message, "Revert the disk in Drive 1 to work.woz?");
+    assert.deepEqual(revert.buttons, ["Revert"]);
+    assert.match(letGoQuestion("Drive 1", "discard", image).detail, /^work\.woz\. .*Undo/);
 });
 
 test("the questions a save asks say what is off and offer the way out the plan draws", () => {
@@ -148,6 +215,15 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
         "Apple IIe stopped with 2 disks not saved: work.woz, prodos.2mg. Their changes were not kept.");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz"], []),
         "Apple IIe stopped with 1 disk not saved: work.woz. It is kept, still changed, for its next launch.");
+    assert.equal(crashedMessage("Apple IIe", [path.join(path.sep, "disks", "work.woz"), "prodos.2mg"], undefined),
+        "Apple IIe did not stop cleanly. 2 disks had changes not saved: work.woz, prodos.2mg.");
+    assert.match(crashedMessage("Apple IIe", ["work.woz"], new Date(2026, 10, 14, 10, 52).toISOString(), new Date(2026, 10, 14, 11, 0)),
+        /^Apple IIe did not stop cleanly\. 1 disk had changes not saved: work\.woz, the last kept at .+ today\.$/);
+    const discard = discardKeptQuestion("Apple IIe", ["work.woz"]);
+    assert.equal(discard.message, "Discard the changes to the disk Apple IIe kept?");
+    assert.deepEqual(discard.buttons, ["Discard"]);
+    assert.equal(summary({ ...drive(true), media: { ...drive(true).media!, kept: true }, activity: "idle", head: undefined }),
+        "work.woz · kept from the last run");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz"], ["hello.dsk"]),
         "Apple IIe stopped with 2 disks not saved: work.woz, hello.dsk. work.woz is kept, still changed, for its next "
             + "launch; the changes to hello.dsk were not kept.");

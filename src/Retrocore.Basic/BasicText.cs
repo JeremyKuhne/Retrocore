@@ -34,11 +34,14 @@ public static class BasicText
     /// </summary>
     /// <param name="text">The text.</param>
     /// <param name="columns">Receives the column each unit starts at, when given.</param>
+    /// <param name="zero">
+    ///  Whether <c>{$00}</c> is allowed: true for a dialect whose lines can hold a zero byte, such as BBC BASIC's.
+    /// </param>
     /// <returns>The units.</returns>
     /// <exception cref="FormatException">
     ///  The text has a character that cannot be typed, or an escape that is not one; the message gives its column.
     /// </exception>
-    internal static int[] Parse(string text, List<int>? columns = null)
+    internal static int[] Parse(string text, List<int>? columns = null, bool zero = false)
     {
         List<int> units = [with(text.Length)];
         for (int index = 0; index < text.Length; index++)
@@ -47,7 +50,7 @@ public static class BasicText
             columns?.Add(index);
             if (character == '{')
             {
-                units.Add(Escape(text, ref index));
+                units.Add(Escape(text, ref index, zero));
                 continue;
             }
 
@@ -156,7 +159,7 @@ public static class BasicText
     }
 
     // Parses the escape starting at text[index], leaving index on its last character.
-    private static int Escape(string text, ref int index)
+    private static int Escape(string text, ref int index, bool zero)
     {
         int start = index;
         if (index + 1 < text.Length && text[index + 1] == '{')
@@ -173,7 +176,7 @@ public static class BasicText
             && body[0] == '$'
             && byte.TryParse(body.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out byte value))
         {
-            if (value == 0) { throw Bad(start, "a line cannot hold a zero byte, which ends it"); }
+            if (value == 0 && !zero) { throw Bad(start, "a line cannot hold a zero byte, which ends it"); }
 
             return Raw | value;
         }

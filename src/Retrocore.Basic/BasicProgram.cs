@@ -14,7 +14,9 @@ namespace Retrocore.Basic;
 ///   In the Microsoft BASICs' memory and tokenized files each line is a two-byte link to the next line, a two-byte line
 ///   number, the tokenized statements and a zero byte; a zero link ends the program. Both words are low byte first.
 ///   Integer BASIC's lines are a length byte, the number, the tokens and $01 (<see cref="BasicDialect.Integer"/>);
-///   Business BASIC's are a length byte, the number, the tokens and a zero (<see cref="BasicDialect.BusinessBasic"/>).
+///   Business BASIC's are a length byte, the number, the tokens and a zero (<see cref="BasicDialect.BusinessBasic"/>);
+///   BBC BASIC's are the number high byte first, a length byte, the text and a carriage return
+///   (<see cref="BasicDialect.BbcBasic"/>).
 ///  </para>
 /// </remarks>
 public sealed partial class BasicProgram
@@ -63,7 +65,8 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(dialect);
         if (dialect is IntegerBasicDialect integer) { return integer.FromImage(bytes); }
         if (dialect is BusinessBasicDialect business) { return business.FromImage(bytes); }
-        if (dialect == BasicDialect.Level2 && bytes.Length > 0 && bytes[0] == 0xFF)
+        if (dialect is BbcBasicDialect bbc) { return bbc.FromImage(bytes); }
+        if ((dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic) && bytes.Length > 0 && bytes[0] == 0xFF)
         {
             // A program at $42E9 can begin with $FF too, so the links decide.
             BasicProgram? plain = ParseImage(dialect, bytes, out bool plainLinked);
@@ -91,6 +94,7 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(memory);
         if (dialect is IntegerBasicDialect integer) { return integer.Read(memory); }
         if (dialect is BusinessBasicDialect business) { return business.Read(memory); }
+        if (dialect is BbcBasicDialect bbc) { return bbc.Read(memory); }
         int start = Word(memory, dialect.Pointers.ProgramStart);
         int end = Word(memory, dialect.Pointers.Variables);
         if (start == 0 || end < start + 2)
@@ -112,12 +116,12 @@ public sealed partial class BasicProgram
 
             byte[] tokens = new byte[link - address - LineOverhead];
             for (int index = 0; index < tokens.Length; index++) { tokens[index] = memory.Read(address + 4 + index); }
-            if (memory.Read(link - 1) != 0 || tokens.Contains((byte)0))
+            if (memory.Read(link - 1) != 0 || dialect.TerminatorIn(tokens) >= 0)
             {
                 throw new InvalidDataException($"The line at ${address:X4} does not end where its link says, at ${link - 1:X4}.");
             }
 
-            lines.Add(new(Word(memory, address + 2), tokens));
+            lines.Add(new(Word(memory, address + 2), dialect.FromMemory(tokens, memory)));
             address = link;
         }
 
@@ -133,6 +137,7 @@ public sealed partial class BasicProgram
     {
         if (Dialect is IntegerBasicDialect) { return IntegerBasicDialect.Image(this); }
         if (Dialect is BusinessBasicDialect) { return BusinessBasicDialect.Image(this); }
+        if (Dialect is BbcBasicDialect) { return BbcBasicDialect.Image(this); }
         int at = address ?? Dialect.DefaultLoadAddress;
         List<byte> bytes = [];
         foreach (BasicLine line in Lines)
@@ -177,6 +182,12 @@ public sealed partial class BasicProgram
             return;
         }
 
+        if (Dialect is BbcBasicDialect bbc)
+        {
+            bbc.Write(this, memory);
+            return;
+        }
+
         BasicPointers pointers = Dialect.Pointers;
         int start = Word(memory, pointers.ProgramStart);
         byte[] image = ToImage(start);
@@ -204,7 +215,7 @@ public sealed partial class BasicProgram
         using ValueStringBuilder builder = new(stackalloc char[256]);
         if (pragma)
         {
-            builder.Append(Dialect == BasicDialect.Level2 ? "' retrocore " : "REM retrocore ");
+            builder.Append(Dialect == BasicDialect.Level2 || Dialect == BasicDialect.Mbasic ? "' retrocore " : "REM retrocore ");
             builder.Append(Dialect.Name);
             builder.Append('\n');
         }
@@ -265,7 +276,7 @@ public sealed partial class BasicProgram
             int link = ImageWord(bytes, offset, dialect.BigEndian);
             if (link == 0) { break; }
             if (offset + 4 > bytes.Length) { return null; }
-            int end = bytes[(offset + 4)..].IndexOf((byte)0);
+            int end = dialect.TerminatorIn(bytes[(offset + 4)..]);
             if (end < 0) { return null; }
             int next = offset + 4 + end + 1;
             origin ??= link - next;

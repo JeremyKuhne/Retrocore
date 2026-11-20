@@ -26,6 +26,15 @@ public sealed partial class BasicProgram
         ("RUN", false, false)
     ];
 
+    // BBC BASIC's words that take a line: the others', with DELETE's and LIST's range a comma between two (DELETE 10,
+    // last), and TRACE, whose limit is a line number, kept as one. RUN takes none in BASIC II.
+    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps =
+    [
+        .. s_jumps.Where(jump => jump.Word != "RUN")
+            .Select(jump => jump.Word is "DELETE" or "LIST" ? (jump.Word, true, false) : jump),
+        ("TRACE", false, false)
+    ];
+
     /// <summary>
     ///  Finds where a statement line names a label in place of a line number.
     /// </summary>
@@ -52,6 +61,15 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(labels);
         List<(int, int, string, bool, string)> references = [];
+
+        // BBC BASIC's jumps are where its tokeniser finds them, as the ROM's does: abbreviations such as G., words run
+        // together as in IF1THEN, and none in a * command, REM, DATA or string.
+        if (dialect is BbcBasicDialect)
+        {
+            BbcReferences(text, labels, references);
+            return Defined(references, labels);
+        }
+
         bool inString = false;
         for (int index = 0; index < text.Length; index++)
         {
@@ -68,9 +86,49 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect is ColorBasicDialect)) { break; }
-            if (StartsWord(text, index, "REM")) { break; }
-            if (StartsWord(text, index, "DATA"))
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic || dialect is ColorBasicDialect))
+            {
+                break;
+            }
+
+            // The PET's CRUNCH takes the first reserved word in token order at each place and goes on past it, with no
+            // word boundaries, so THEN right after a digit is a jump and the end of FOR and an EM after it are no REM.
+            // BASIC 1 skips spaces inside a word too, so R E M is a remark there.
+            if (dialect is PetBasicDialect)
+            {
+                // BASIC 2 and 4's GO TO, with spaces between, is the GO token then TO, a jump all the same.
+                if (!Spaced(dialect) && GoTo().Match(text, index) is { Success: true } go && go.Index == index)
+                {
+                    bool sub = go.Groups["word"].Value.Equals("SUB", StringComparison.OrdinalIgnoreCase);
+                    index = Targets(text, index + go.Length, sub ? s_jumps[0] : s_jumps[1], labels, references) - 1;
+                    continue;
+                }
+
+                (string? word, int length) = KeywordAt(dialect, text, index);
+                if (word is null) { continue; }
+                if (word == "REM") { break; }
+                if (word == "DATA")
+                {
+                    index = SkipData(text, index);
+                    continue;
+                }
+
+                // The word found is the jump: CRUNCH takes it whatever comes before, as in IF A=1THEN.
+                int spacedJump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+                if (spacedJump >= 0)
+                {
+                    index = Targets(text, index + length, s_jumps[spacedJump], labels, references) - 1;
+                    continue;
+                }
+
+                index += length - 1;
+                continue;
+            }
+
+            // Business BASIC and MBASIC take REM and DATA only set apart from names, as REMAIN is a variable.
+            bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
+            if (separated ? SetApart(text, index, "REM") : StartsWord(text, index, "REM")) { break; }
+            if (separated ? SetApart(text, index, "DATA") : StartsWord(text, index, "DATA"))
             {
                 index = SkipData(text, index);
                 continue;
@@ -80,18 +138,71 @@ public sealed partial class BasicProgram
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
-        // Integer BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only when one of
-        // that name is defined.
-        if (dialect is IntegerBasicDialect)
+        return dialect is IntegerBasicDialect ? Defined(references, labels) : references;
+    }
+
+    // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
+    // when one of that name is defined.
+    private static List<(int, int, string, bool, string)> Defined(
+        List<(int, int, string, bool, string)> references,
+        IReadOnlyDictionary<string, BasicLabel> labels)
+    {
+        references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
+        for (int index = 0; index < references.Count; index++)
         {
-            references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
-            for (int index = 0; index < references.Count; index++)
-            {
-                references[index] = references[index] with { Item4 = false };
-            }
+            references[index] = references[index] with { Item4 = false };
         }
 
         return references;
+    }
+
+    // The labels after each of BBC BASIC's jump tokens, found by its tokeniser with each byte's place in the text.
+    private static void BbcReferences(
+        string text,
+        IReadOnlyDictionary<string, BasicLabel> labels,
+        List<(int, int, string, bool, string)> references)
+    {
+        List<int> columns = [];
+        CrunchOutput output;
+        try
+        {
+            output = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text, columns, zero: true));
+        }
+        catch (FormatException)
+        {
+            return;
+        }
+
+        byte[] bytes = output.ToArray();
+        IReadOnlyList<int> positions = output.Positions;
+        int Column(int index) =>
+            index < positions.Count && positions[index] < columns.Count ? columns[positions[index]] : text.Length;
+
+        // Nothing the tokeniser copied as it is, after REM, DATA or a * command, holds a jump, whatever its bytes.
+        int tokenised = output.Rest >= 0 ? output.Rest : bytes.Length;
+        bool inString = false;
+        int scanned = 0;
+        for (int index = 0; index < tokenised; index++)
+        {
+            if (bytes[index] == '"') { inString = !inString; }
+            if (inString || bytes[index] < 0x80 || BbcBasicDialect.Instance.Word(bytes[index]) is not { } word)
+            {
+                continue;
+            }
+
+            int jump = Array.FindIndex(s_bbcJumps, candidate => candidate.Word == word);
+            if (jump < 0 || Column(index) < scanned) { continue; }
+            int found = references.Count;
+            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references, bbc: true);
+
+            // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
+            // is a computed jump.
+            for (int reference = references.Count - 1; reference >= found; reference--)
+            {
+                int end = references[reference].Item2;
+                if (end < text.Length && "%$`(".Contains(text[end])) { references.RemoveAt(reference); }
+            }
+        }
     }
 
     /// <summary>
@@ -112,7 +223,13 @@ public sealed partial class BasicProgram
         List<BasicDiagnostic> diagnostics)
     {
         string text = line.Statements;
-        if (labels.Count == 0 && !text.Contains("GO", StringComparison.OrdinalIgnoreCase)) { return text; }
+
+        // BASIC 1 may spell a jump G O T O, which holds no GO.
+        if (labels.Count == 0 && !Spaced(dialect) && !text.Contains("GO", StringComparison.OrdinalIgnoreCase))
+        {
+            return text;
+        }
+
         List<(int Start, int End, string Name, bool Required, string Word)> references = LabelReferences(dialect, text, labels);
         for (int index = references.Count - 1; index >= 0; index--)
         {
@@ -135,8 +252,9 @@ public sealed partial class BasicProgram
     private static (string Word, bool List, bool Required)? Jump(BasicDialect dialect, string text, int index, out int after)
     {
         after = index;
-        bool business = dialect == BasicDialect.BusinessBasic;
-        if (index > 0 && InName(text[index - 1], business)) { return null; }
+        // Business BASIC and MBASIC take a word only set apart from names, which hold periods in both.
+        bool separated = dialect == BasicDialect.BusinessBasic || dialect == BasicDialect.Mbasic;
+        if (index > 0 && InName(text[index - 1], separated)) { return null; }
         int end = -1;
         (string Word, bool List, bool Required)? found = null;
         if (GoTo().Match(text, index) is { Success: true } go && go.Index == index)
@@ -147,11 +265,16 @@ public sealed partial class BasicProgram
         }
         else
         {
+            bool spaced = Spaced(dialect);
             foreach ((string word, bool list, bool required) jump in s_jumps)
             {
-                if (string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0)
+                int length = spaced
+                    ? SpacedLength(text, index, jump.word)
+                    : string.Compare(text, index, jump.word, 0, jump.word.Length, StringComparison.OrdinalIgnoreCase) == 0 ? jump.word.Length : -1;
+
+                if (length >= 0)
                 {
-                    end = index + jump.word.Length;
+                    end = index + length;
                     found = jump;
                     break;
                 }
@@ -159,14 +282,14 @@ public sealed partial class BasicProgram
         }
 
         if (found is null) { return null; }
-        if (business && end < text.Length && InName(text[end], business)) { return null; }
+        if (separated && end < text.Length && InName(text[end], separated)) { return null; }
         after = end;
         return found;
     }
 
-    // Whether a character can be part of a name; Business BASIC's names hold periods.
-    private static bool InName(char character, bool business) =>
-        char.IsAsciiLetterOrDigit(character) || (business && character == '.');
+    // Whether a character can be part of a name; Business BASIC's and MBASIC's names hold periods.
+    private static bool InName(char character, bool periods) =>
+        char.IsAsciiLetterOrDigit(character) || (periods && character == '.');
 
     // Reads the line numbers and labels after a jump word: one, or a list after GOTO and GOSUB.
     private static int Targets(
@@ -174,17 +297,24 @@ public sealed partial class BasicProgram
         int at,
         (string Word, bool List, bool Required) jump,
         IReadOnlyDictionary<string, BasicLabel> labels,
-        List<(int, int, string, bool, string)> references)
+        List<(int, int, string, bool, string)> references,
+        bool bbc = false)
     {
         while (true)
         {
             at = SkipSpaces(text, at);
             if (Name().Match(text, at) is { Success: true } name && name.Index == at)
             {
-                string label = name.Groups["name"].Value.ToUpperInvariant();
+                // BBC BASIC's labels are case-sensitive, as its names are.
+                string label = bbc ? name.Groups["name"].Value : name.Groups["name"].Value.ToUpperInvariant();
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
-                bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
+                bool alone = next >= text.Length
+                    || text[next] == ':'
+                    || StartsWord(text, next, "ELSE")
+                    || (bbc && BbcWordAt(text, next) is "ELSE" or "REM")
+                    || (jump.List && text[next] == ',');
+
                 if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
                     // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.
@@ -202,6 +332,38 @@ public sealed partial class BasicProgram
             int separator = SkipSpaces(text, at);
             if (!jump.List || separator >= text.Length || text[separator] != ',') { return at; }
             at = separator + 1;
+        }
+    }
+
+    // The word BBC BASIC's tokeniser makes of the text at a column, abbreviated or not (EL. is ELSE), or null.
+    private static string? BbcWordAt(string text, int at)
+    {
+        try
+        {
+            byte[] bytes = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text[at..], [], zero: true)).ToArray();
+            return bytes.Length != 0 && bytes[0] >= 0x80 ? BbcBasicDialect.Instance.Word(bytes[0]) : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether BBC BASIC's tokeniser finds a word in a name, as it finds PRINT in PRINTX and PROC in PROCinit, so
+    ///  that a line of the name and a colon is a statement, not a label.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether the tokeniser makes a token of any of it.</returns>
+    internal static bool BbcTokenises(string name)
+    {
+        try
+        {
+            return BbcBasicDialect.Instance.Crunch(BasicText.Parse(name, [], zero: true)).ToArray().Any(value => value >= 0x80);
+        }
+        catch (FormatException)
+        {
+            return true;
         }
     }
 
@@ -224,9 +386,64 @@ public sealed partial class BasicProgram
         return text.Length;
     }
 
-    private static bool StartsWord(string text, int index, string word) =>
-        (index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
-            && string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+    // Whether a word starts at an index with no name's character, a period included, before or after it.
+    private static bool SetApart(string text, int index, string word)
+    {
+        if (index > 0 && InName(text[index - 1], periods: true)) { return false; }
+        if (string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            return false;
+        }
+
+        int end = index + word.Length;
+        return end >= text.Length || !InName(text[end], periods: true);
+    }
+
+
+    private static bool StartsWord(string text, int index, string word, bool spaced = false)
+    {
+        if (index > 0 && char.IsAsciiLetterOrDigit(text[index - 1])) { return false; }
+        if (!spaced)
+        {
+            return string.Compare(text, index, word, 0, word.Length, StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        return SpacedLength(text, index, word) >= 0;
+    }
+
+    // The first reserved word in token order at an index, as the PET's CRUNCH finds it (on BASIC 1 with spaces skipped
+    // inside it), and the characters it takes; none when the character there starts no word.
+    private static (string? Word, int Length) KeywordAt(BasicDialect dialect, string text, int index)
+    {
+        bool spaced = Spaced(dialect);
+        foreach (string keyword in dialect.Keywords)
+        {
+            int length = spaced
+                ? SpacedLength(text, index, keyword)
+                : string.Compare(text, index, keyword, 0, keyword.Length, StringComparison.OrdinalIgnoreCase) == 0 ? keyword.Length : -1;
+
+            if (length > 0) { return (keyword, length); }
+        }
+
+        return (null, 0);
+    }
+
+    // Whether a dialect skips spaces inside reserved words, as BASIC 1's RESCON does.
+    private static bool Spaced(BasicDialect dialect) => dialect is PetBasicDialect { Version: 1 };
+
+    // How many characters a reserved word takes from an index with spaces between its letters, or -1 when it is not
+    // there.
+    private static int SpacedLength(string text, int index, string word)
+    {
+        int at = index;
+        for (int letter = 0; letter < word.Length; letter++, at++)
+        {
+            while (letter > 0 && at < text.Length && text[at] == ' ') { at++; }
+            if (at >= text.Length || char.ToUpperInvariant(text[at]) != word[letter]) { return -1; }
+        }
+
+        return at - index;
+    }
 
     [GeneratedRegex(@"GO\s+(?<word>TO|SUB)", RegexOptions.IgnoreCase)]
     private static partial Regex GoTo();

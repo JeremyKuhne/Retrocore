@@ -126,7 +126,7 @@ internal sealed class MachineSession : DisposableBase
     internal void SetSetting(MachineChoice choice, object value)
     {
         if (Host.Running) { throw new InvalidOperationException("Stop the machine to change its settings."); }
-        if (choice.Option is "diskController" or "expansionInterface" && Equals(value, objB: false) && MachineCatalog.StartsWithDisks(Configuration))
+        if (choice.Option is "diskController" or "expansionInterface" or "diskInterface" && Equals(value, objB: false) && MachineCatalog.StartsWithDisks(Configuration))
         {
             throw new InvalidOperationException($"{Name} starts with disks in its drives, so it keeps its {choice.Label.ToLowerInvariant()}.");
         }

@@ -32,11 +32,36 @@ internal static class MachineCatalog
     private static readonly MachineChoice s_cocoSound = new("sound", "Sound",
         [new("On", "speaker", "The DAC, cassette and single-bit sound through the TV"), new("Off", "off")], "speaker");
 
+    private static readonly MachineChoice s_petRam = new("ramKilobytes", "Memory",
+        [new("8 KB", 8), new("16 KB", 16), new("32 KB", 32), new("4 KB", 4, "As the 2001-4 shipped")], 8);
+
+    private static readonly MachineChoice s_pet4032Ram = new("ramKilobytes", "Memory",
+        [new("32 KB", 32, "The 4032"), new("16 KB", 16, "The 4016"), new("8 KB", 8)], 32);
+
+    private static readonly MachineChoice s_basic4Revision = new("basicRevision", "BASIC 4",
+    [
+        new("Revised", "revised", "901465-23 at $B000"),
+        new("Original", "original", "901465-19, the first chip"),
+    ], "revised");
+
+    private static readonly MachineChoice s_petSnow = new("snow", "Snow",
+        [new("On", Value: true, "Accesses to video RAM while the screen is drawn show, as on the 2001's board"), new("Off", Value: false)],
+        Default: true);
+
+    // The 2001 with BASIC 2 launches without snow, so its choice starts off.
+    private static readonly MachineChoice s_petSnowOff = s_petSnow with { Default = false };
+
+    private static readonly MachineChoice s_petSound = new("sound", "Sound",
+        [new("On", "speaker", "The VIA's CB2, as a speaker on the user port plays it"), new("Off", "off")], "speaker");
+
     private static readonly MachineChoice s_cocoDisk = new("diskController", "Disk controller",
     [
         new("None", Value: false, "Tapes and ROM packs"),
         new("Disk controller", Value: true, "Disk Extended Color BASIC and four drives"),
     ], Default: false);
+
+    private static readonly MachineChoice s_bbcSound = new("sound", "Sound",
+        [new("On", "speaker", "The SN76489 through the internal speaker"), new("Off", "off")], "speaker");
 
     private static readonly MachineChoice s_model3Ram = new("ramKilobytes", "Memory",
         [new("48 KB", 48), new("32 KB", 32), new("16 KB", 16)], 48);
@@ -163,6 +188,41 @@ internal static class MachineCatalog
                 s_cocoDisk,
                 s_cocoSound,
             ]),
+        new("pet2001-basic2", "Commodore PET 2001 with BASIC 2", "6502, BASIC 2 (the upgrade ROMs), two Datasettes and 8 KB",
+            Options(("machine", "pet"), ("model", "pet2001-basic2")),
+            [s_petRam, s_petSnowOff, s_petSound]),
+        new("pet2001", "Commodore PET 2001", "6502, BASIC 1, two Datasettes and 8 KB",
+            Options(("machine", "pet"), ("model", "pet2001")),
+            [
+                s_petRam,
+                new("basicRevision", "BASIC 1",
+                [
+                    new("Revised", "revised", "901447-09, as most 2001s have"),
+                    new("Original", "original", "901447-01, the first chip"),
+                ], "revised"),
+                s_petSnow,
+                s_petSound,
+            ]),
+        new("pet4032", "Commodore PET 4032", "6502, BASIC 4 with its disk commands, a 4040 disk drive and 32 KB",
+            Options(("machine", "pet"), ("model", "pet4032")),
+            [s_pet4032Ram, s_basic4Revision, s_petSound]),
+        new("pet4032-business", "Commodore PET 4032 (business keyboard)",
+            "6502, BASIC 4, the business keyboard, a 4040 disk drive and 32 KB",
+            Options(("machine", "pet"), ("model", "pet4032-business")),
+            [s_pet4032Ram, s_basic4Revision, s_petSound]),
+        new("bbcb", "BBC Micro Model B", "6502 at 2 MHz, MOS 1.20, BASIC II, DNFS 1.20 and 32 KB",
+            Options(("machine", "bbc"), ("model", "bbcb")),
+            [
+                new("diskInterface", "Disk interface",
+                [
+                    new("Intel 8271", Value: true, "Acorn DFS and two drives"),
+                    new("None", Value: false, "Tapes only, with PAGE at &E00"),
+                ], Default: true),
+                s_bbcSound,
+            ]),
+        new("bbca", "BBC Micro Model A", "6502 at 2 MHz, MOS 1.20, BASIC II and 16 KB",
+            Options(("machine", "bbc"), ("model", "bbca")),
+            [s_bbcSound]),
         new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
             Options(("machine", "altair")),
             [
@@ -181,6 +241,8 @@ internal static class MachineCatalog
                 ], "2sio"),
                 new("upperCase", "Caps lock", [new("Off", Value: false), new("On", Value: true, "Letters type as capitals, as Altair BASIC needs")], Default: false),
             ]),
+        new("kaypro2", "Kaypro II", "Z80 at 2.5 MHz, 64 KB, 80x24 and two drives, running CP/M 2.2",
+            Options(("machine", "kaypro2")), []),
     ];
 
     // The models a launch option names, as the debug host reads them, by machine: an alias, or none for its default.
@@ -188,6 +250,8 @@ internal static class MachineCatalog
     {
         ["apple2"] = new() { [""] = "iie-enhanced", ["enhanced"] = "iie-enhanced", ["original"] = "iie" },
         ["coco"] = new() { [""] = "coco2" },
+        ["pet"] = new() { [""] = "pet2001-basic2" },
+        ["bbc"] = new() { [""] = "bbcb" },
         ["trs80-model3"] = new()
         {
             [""] = "3",

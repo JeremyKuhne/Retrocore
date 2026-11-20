@@ -696,6 +696,10 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             return ram && bus.RamOffset(address) == offset;
         }
 
+        // Whether the CPU's write at an address changes a RAM offset now, which it does under the ROM unless write
+        // protection is on, and not where I/O or the VIAs take it.
+        bool Writes(ushort address, int offset) => bus.WriteOffset(address) == offset;
+
         List<DebugMemoryBank> banks =
         [
             new(
@@ -709,7 +713,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[system + (address < 0x2000 ? address : address - 0x8000)] = value;
                     return true;
                 },
-                ReadsHere: address => Reads(address, system + (address < 0x2000 ? address : address - 0x8000)))
+                ReadsHere: address => Reads(address, system + (address < 0x2000 ? address : address - 0x8000)),
+                WritesHere: address => Writes(address, system + (address < 0x2000 ? address : address - 0x8000)))
         ];
 
         for (int bank = 0; bank < bus.SwitchableBanks; bank++)
@@ -726,7 +731,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[offset + address - 0x2000] = value;
                     return true;
                 },
-                ReadsHere: address => Reads(address, offset + address - 0x2000)));
+                ReadsHere: address => Reads(address, offset + address - 0x2000),
+                WritesHere: address => Writes(address, offset + address - 0x2000)));
         }
 
         banks.Add(new(
@@ -752,7 +758,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[bus.ExtendedOffset(value, address)] = data;
                     return true;
                 },
-                ReadsHere: address => Reads(address, bus.ExtendedOffset(value, address))));
+                ReadsHere: address => Reads(address, bus.ExtendedOffset(value, address)),
+                WritesHere: address => Writes(address, bus.ExtendedOffset(value, address))));
         }
 
         return banks;
@@ -827,15 +834,13 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             }
         }
 
-        if (args["disks"] is JsonArray disks)
+        string?[] disks = args.ImagePaths("disks", "game.dsk");
+        if (disks.Length > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }
+        for (int drive = 0; drive < disks.Length; drive++)
         {
-            if (disks.Count > machine.Drives.Count) { throw new ArgumentException("The Apple III has four drives."); }
-            for (int drive = 0; drive < disks.Count; drive++)
+            if (disks[drive] is { } disk)
             {
-                if (disks[drive] is JsonValue value && value.GetValue<string>() is { } disk)
-                {
-                    Apple2Loader.Insert(machine.Drives[drive], Path.GetFullPath(disk));
-                }
+                Apple2Loader.Insert(machine.Drives[drive], Path.GetFullPath(disk));
             }
         }
 

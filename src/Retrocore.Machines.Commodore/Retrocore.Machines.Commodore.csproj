@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Commodore machines: the PET 2001, its 6520 PIAs and 6522 VIA, keyboard matrix, video and Datasettes. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KlutzyNinja.Touki" Version="0.10.0" />
+    <InternalsVisibleTo Include="Retrocore.Tests" />
+    <InternalsVisibleTo Include="Retrocore.Perf" />
+    <ProjectReference Include="..\Retrocore.Core\Retrocore.Core.csproj" />
+    <ProjectReference Include="..\Retrocore.Cpu.M6502\Retrocore.Cpu.M6502.csproj" />
+    <ProjectReference Include="..\Retrocore.Media\Retrocore.Media.csproj" />
+  </ItemGroup>
+
+</Project>

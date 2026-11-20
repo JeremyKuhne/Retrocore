@@ -13,9 +13,10 @@ Memory opens in **Retrocore Memory**, the extension's memory editor:
   which has none, a click on **Memory** opens the 64K.
 - **Open in Retrocore Memory** on an assembly editor's context menu while debugging opens the label or address
   under the cursor, such as `TEXT_PAGE` or `$0400`, or the expression selected.
-- **Retrocore: Open Memory...** is on the debug toolbar, in the Machine and Variables views' title bars and in the
+- **Retrocore: Open Memory...** is on the debug toolbar, in the Machine, Variables and Watch views' title bars and in the
   command palette. It asks for the CPU's memory or a bank, showing where the memory map reads and writes each bank now,
-  then an address, label or expression, and opens it there.
+  then an address, label or expression, and opens it there. On a machine with banks, the list at the right of the
+  editor's toolbar names the space it shows, and picking another opens that one in its place, at the cursor's address.
 - **Open in Retrocore Memory** is the binary-data icon beside each variable that holds an address, such as PC, HL
   or a byte in the zero page or communication region, and on its context menu. The Watch view's context menu has
   it for every expression; one that holds no address says so.
@@ -28,7 +29,8 @@ A memory view stays current: at each stop, about four times a second while the m
 through another view, and when a card goes in or out or the machine resets while stopped, the debugger tells the
 view to read again if the bytes it has read have changed. Retrocore Memory also reads its labels, characters and
 frozen bytes again at each stop and at such a change, and the Machine view its banks. Bytes you
-edit are written at once, and the Variables view updates to match.
+edit are written at once, and the Variables view updates to match. When the session ends, its memory editors
+close; restarting it keeps them open, and they read the restarted machine.
 
 ## Retrocore Memory
 
@@ -37,13 +39,19 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 [MemoryViewer.md](backlog/MemoryViewer.md).
 
 - **Labels** from the program and the SDK's ROM sources name the bytes: the first label in each row shows in a
-  gutter beside the address (dimmed when it starts partway along the row), and a mark on the byte where each
-  starts. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
+  gutter beside the address (dimmed when it starts partway along the row, with **+N** where more start in the row,
+  which its tooltip lists with each one's kind: a routine or code, data, or a named address), and a small corner
+  on the byte where each starts, which the tag toggle in the Label heading hides. A label's kind is what
+  its documentation declares it, such as a routine or table, else code or data by the statement at it, or a
+  constant; the bytes of a label on data, its data statements and the bytes marked as data up to the next name,
+  are shaded, two shades by turns so one table next to another shows where it starts. Hovering a name marks its byte, and clicking
+  it goes there. Headings over the bytes name the columns, with each byte's offset in its row, and stay in view
+  as the bytes scroll. A label counts where its code or data is in memory now, so a ROM's labels go when RAM is mapped over it.
   Equates that the CPU's instructions address memory through name those bytes too, whatever is mapped there: an
   equate counts where an instruction's bytes access its value, while that code is installed, so the Monitor's `STA CH` names $24 `CH`, and the
   6809's `LDA [Vector]` names `Vector`, but `CMP #CR` does not make `CR` a name for $0D, nor does an index's offset
   or a term added to another address. A label at the same address comes first.
-- **Align to labels** in the toolbar, shown once there are labels, starts a row where each label starts, so a
+- **Align to labels**, the toggle in the Label heading, shown once there are labels, starts a row where each label starts, so a
   label's bytes begin a row of their own; each byte stays in its column, and **Up** and **Down** keep the column,
   or go to the nearest byte the row has. Each editor remembers the choice.
 - **The machine's characters.** On the Apple-1, the Apple II, the Apple III, the TRS-80 Models I, II, III and 4
@@ -53,7 +61,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   The Apple-1 keeps its screen in the terminal rather than memory, so a byte draws as the terminal would show it
   written to the display.
   Elsewhere it shows each byte's low seven bits as ASCII, so the Apple II's text, kept with bit 7 set, still reads.
-  **Machine text** in the toolbar turns this off to show ASCII instead, for typing, finding and copying too; each
+  **ASCII**, the toggle in the Text heading, shows ASCII instead, for typing, finding and copying too; each
   editor remembers the choice.
 - **The listing**, beside the bytes, shows the bytes in view as instructions and data, in the CPU's own syntax,
   as the Disassembly view does. It starts at the nearest place an instruction is known to start: the statement a
@@ -69,8 +77,11 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   (**Ctrl+D**) starts an instruction at the cursor, even in data, and it holds as the view scrolls. The listing
   scrolls with the lines the bytes in view decode to, keeps the cursor's line in view, and decodes again after
   typing or undo. It takes one tab stop: **Up** and **Down** move between lines, **Left** and **Right** to a line's
-  operand and source, **Enter** does what a click does, and **Escape** goes back to the bytes. **Listing** in the
-  toolbar hides it; each editor remembers the choice, and a narrow editor leaves it out.
+  operand and source, **Enter** does what a click does, and **Escape** goes back to the bytes. Its **Disassembly**
+  heading collapses it, as **Label**, the byte offsets and **Text** collapse theirs: each column folds into a narrow
+  strip with its name turned on its side between two triangles, reading upward, or downward for Disassembly, and
+  clicking the strip expands it again. Each editor remembers which are collapsed. The listing fills the room the bytes and
+  the inspector leave, and only an editor too narrow for it leaves it out.
 - **Breakpoints from the listing.** A dot in the listing's gutter shows where a breakpoint stops, set from any
   source, the Breakpoints view or the Disassembly view. Clicking the gutter, or **F9** on a line or in the bytes,
   sets a function breakpoint named by the address, such as `$6000` or, in a bank's editor, `aux:$0400`, which
@@ -83,6 +94,14 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   repeats a byte, bytes or text in quotes over the selection, such as `EA`, `01 02` or `"*"`. **Ctrl+V** pastes the
   clipboard at the cursor: hex bytes, which may be the Monitor's lines with their addresses (`0300: A9 C1`); or, in
   the text column, characters, each written as typing writes it. Each is one edit, which **Undo** takes back.
+- **Copy as, save and load.** **Copy as** in the inspector copies the selection as hex, the Monitor's lines
+  (`0300: A9 C1 20`), which can be typed into the machine, native `.byte` lines, BASIC `DATA` statements, a C array
+  or base64. **Save** writes the selection to a file, as its extension says: Intel HEX for `.hex` or `.ihx`, native
+  assembly for `.asm` or `.s`, and the bytes as they are for anything else. Assembly comes from the debugger's
+  `retro/memory/export`, through the disassembler's exporter: what the listing knows of code and data, the
+  session's labels, with equates for those outside the range the code uses, and the hints file's comments. The
+  debugger assembles it again, and where it would not give the same bytes saves `.byte` lines instead, and says so.
+  **Load** writes a binary's bytes at the cursor, or Intel HEX's at the addresses it gives, as one edit.
 - **Assemble in place.** **F2** in the bytes or the listing, **Assemble** in the inspector, or a double-click on a
   listing line asks for an instruction to type over the line at the cursor, as the Monitor's mini-assembler takes
   one: `LDA KBD`, `JSR COUT` or `BNE *+4`, in the CPU's native syntax with the session's labels and the hints file's
@@ -109,7 +128,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   anything is written.
 - **Changes.** Bytes that differ from what they held at the stop before are highlighted at each stop, and the
   inspector shows what they were.
-- **Comparing.** **Compare with** in the toolbar picks what the highlighted bytes differ from: what they held at
+- **Comparing.** **Compare with**, the list in the toolbar, with the diff toggle beside it that turns the highlighting off and on, picks what the highlighted bytes differ from: what they held at
   the last stop, a snapshot, or another bank's bytes at the same addresses, such as auxiliary RAM beside main RAM,
   read again at each stop. **Snapshot** keeps a copy of every byte and compares with it. The inspector shows what
   the byte at the cursor holds in the snapshot or the other bank.
@@ -123,7 +142,7 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   frame is focused, and `SP` in a caller's frame is the caller's; an address that frame puts in another bank, such
   as `$0400` in the CPU's editor while the Z80's frame is focused, reads as the CPU's, as an address does while
   a BASIC frame is focused. Opening a label or a Watch expression does the same.
-- **Follow**, beside Go to, goes to Go to's expression again at each stop, such as `PC`, `S+$100`, `HL` or
+- **Follow**, the eye toggle in the Go to box, goes to Go to's expression again at each stop, such as `PC`, `S+$100`, `HL` or
   `[$06].w`, so the view keeps up with a register or pointer; a new Go to while following follows that instead.
   Clearing it leaves the view where it is. Each editor remembers what it follows.
 - **Back** and **Forward** (**Alt+Left** and **Alt+Right** wherever focus is in the editor, or the mouse's back and forward buttons) go through
@@ -143,16 +162,28 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   it was. **Enter** or **F3** finds the next, with **Shift** the one before, wrapping around.
 - **The map** across the top is the whole space, colored by what memory reads there now (RAM, ROM, I/O, video,
   or nothing), with a line where each of the machine's regions starts and a box around the bytes in view. In a
-  bank's editor, the addresses where the CPU reads something else now are dimmed. Hovering names the address, its
-  region and what reads there, and a click goes there. It is read again at each stop.
-- **The inspector** beside the bytes shows the address with the label it is in, such as `COUT+3`, the byte at
+  bank's editor it shows what the CPU does with the bank now: bright where the CPU reads it, striped where it only
+  writes it, as with the IIe's RAMWRT on and RAMRD off, and dimmed where it does neither. The IIe's main and
+  auxiliary RAM are split into the parts one switch puts in the CPU's view, which hovering names, such as the
+  alternate zero page and stack (ALTZP), text page 1 (80STORE with PAGE2), RAM from $0200 (RAMRD and RAMWRT) and the
+  language card. Hovering names the address, its region and what reads there, and a click goes there. It is read
+  again at each stop.
+- **The inspector** is beside the bytes, or under them: the layout icons at the right of its tabs move it, the one
+  for where it is now showing pressed, and the splitter between it and the bytes, dragged or moved with the arrow keys,
+  sizes it. Each editor remembers both. It shows the address with the label it is in, such as `COUT+3`, the byte at
   the cursor as unsigned, signed, binary and the character it shows, and the word there with either byte first.
   It says which part of the machine's map the address is in and where in it, such as *Text page 1, row 10,
   column 0* or *Hi-res page 1, line 83, byte 5*; on a machine with banks, what the memory map does with it now,
   such as *Reads main language card* or, in auxiliary RAM's editor, *Not mapped now*; the documentation of its
   label from the sources, so `$24` explains `CH` and `$C030` the speaker; the source line that emitted it, which
   opens on a click; and the BASIC's floating point number starting there (five bytes for AppleSoft and Color
-  BASIC, four for Business BASIC, Level II's single and double). Its **Watch** and **Freeze** buttons act on the selection.
+  BASIC, four for Business BASIC, Level II's single and double). It says these in short lines under **Where**
+  (the address, its name and what kind of name, such as a *named address* for an equate naming RAM), **Value**
+  (the byte as hex, unsigned, signed and binary, and its character only where it is one), **Code**, **Used by**
+  and **As a number**, which shows the word in the CPU's byte order (**Both byte orders** adds the other) and the
+  floats, and is left out where an instruction starts, as its bytes are no number. Its buttons are what debugging
+  uses most, **Watch**, **Freeze**, **Name** and **Comment**; the **Mark**, **Edit** and **Export** menus hold the
+  rest, and right-clicking the bytes (or **Shift+F10**) lists them all by group, each acting on the selection.
 - **Bits, the instruction and references.** For a soft switch or flag byte, the inspector names the bits its
   documentation describes, with each one's value now: the masks it links to, as the CoCo 3's `INIT0` lists `MMUEN`
   and the rest, and what it says of a bit by number, as the IIe's `RDRAMRD` "reports in bit 7 whether RAMRD is on".
@@ -174,8 +205,12 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   a value (hex with `$`, binary with `%`, or decimal). Each step reads all of memory again. **Back a step** undoes
   one, and **Start over** chooses bytes or words again; at 200 or fewer they are listed, with what they were and
   are, to go to or watch.
-- **Freezing** holds a byte at a value while the machine runs: the debugger writes it back before each slice it
-  runs, every few milliseconds. Frozen bytes show in blue, and the **Frozen** tab lists them to watch or thaw;
+- **Freezing** holds a byte at a value while the machine runs, as for a game's lives: as each instruction that
+  writes ends, any frozen byte that changed is put back, however the write reached it, so the program never reads a
+  value of its own there, and the debugger writes them back before each slice it runs, every few milliseconds, for a
+  device's writes. With more than 256 bytes frozen, they are held at each slice only, as checking that many after
+  every store would slow the machine many times over. Frozen bytes
+  show in blue, and the **Frozen** tab lists them to watch or thaw;
   typing over one changes the value it is held at. Only RAM can be frozen. Frozen bytes are the session's, so
   every editor on that memory shows them. A byte frozen in the CPU's memory is held in the RAM it was frozen in,
   such as the language card's bank 2 at $D000, and waits while the program switches other memory there.
@@ -276,7 +311,7 @@ Retrocore Memory uses these requests:
 | `retro/memory/assemble` | For a `memoryReference`, an `address` and a `line`, such as `LDA KBD`: the `bytes` it assembles to there, in the space's CPU's native syntax with the session's symbols (the hints file's names in the space first), the `text` they decode to with operands named, and the CPU's `nop`. Nothing is written. A line that does not assemble is an error with the assembler's message. |
 | `retro/memory/numbers` | For a `memoryReference` and a `value`, as BASIC writes numbers: `formats`, each with the `label` the inspector gives it and the `bytes` in memory order, rounded once from the decimal text as BASIC stores the value, so Level II's double keeps all 56 bits. None in a coprocessor's view, with an integer BASIC, or where the value is too large for a format. |
 | `retro/memory/inspect` | For a `memoryReference` and an `address`: the `region` of the machine's map it is in, with its `kind` (`ram`, `rom`, `io`, `video`, or `none` where nothing is mapped) and the `detail` of where in it, such as a text screen's row and column; what the memory map does with it now, `mapped`, on a machine with banks; the `label` it is or is in, with the `offset` past it and its documentation's `summary`; the source `path` and `line` that emitted it; the BASIC's floating point `values` starting there, each a `label` and `value`; the `bits` its name's documentation describes, each a `bit`, the `name` of the mask linked for it or null, and its `meaning`; the `instruction` starting there where code is known to start, with its `text`, `size`, `cycles`, `cyclesTaken` for a branch, the `flags` it changes and its `summary`; and up to 32 `references` from known code, each the instruction's `address`, `text`, `label` and `kind` (`reads`, `writes`, `changes`, `jumps`, `calls`, `branches`, `jumps through` or `vector`), with their `referenceCount`. It takes the editor's Decode from here `starts`, as the listing does. Anything unknown is null. |
-| `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
+| `retro/memory/freeze` | For a `memoryReference`, freezes `freeze`'s `{ offset, value }` bytes and thaws `thaw`'s offsets, then lists the space's frozen bytes as `{ address, value }` in `frozen`. A frozen byte is written at once, again as each instruction that writes ends while 256 or fewer are frozen, and before each slice the machine runs. Only bytes a write can reach now can be frozen, each at a value from 0 to 255; a request with any other value, or a byte with no offset, changes nothing. An `evaluate` of `[address]` or `[address].w` that reads a frozen byte adds `(frozen)` to its result. |
 | `retro/memory/variable` | For a `variablesReference` and a variable's `name` in it, the `memoryReference` VS Code was not sent. An error for a variable that holds no address. |
 | `retro/memory/characters` | The machine's character set as its screen shows it now: each character's `width` and `height`, every code's rows in `glyphs` (one byte a row, leftmost pixel in bit 7), the other phase of flashing characters in `flashed`, and in `text` the character each code shows, NUL for graphics. Empty for a machine the debugger cannot draw. |
 
@@ -308,8 +343,9 @@ mapping, documented labels, source lines and floats, `retro/memory/map`'s region
 It checks the instruction at the cursor, with cycles measured on the 65C02 and a branch's when taken, the references
 to an address, and a soft switch's bits; on the Model I, the Z80's T-states; and `Test-CocoDap.mjs` the CoCo 3's
 `INIT0` and `INIT1` bits. It assembles lines with the session's labels on the IIe and in the Z80's syntax on the
-Model I, and checks that assembling writes nothing.
+Model I, and checks that assembling writes nothing, the kinds and data sizes `retro/memory/labels` gives, and that `retro/memory/export` saves the IIe program and the
+Model I's ROM as assembly that assembles back to the same bytes.
 `npm run test:grammar` runs the editor page's script with a stand-in DOM, for reading, writing, undo, read-only
 banks and bytes, labels, changes since the last stop, snapshots, RAM search, watching and freezing, the listing's
 breakpoints and finding instructions, the inspector with its bits, instruction and references, assembling in place, writing
-the inspector's values, fill and paste, the map, back and forward, following, bookmarks and finding numbers.
+the inspector's values, fill and paste, copy as, save and load, the map, back and forward, following, bookmarks and finding numbers.

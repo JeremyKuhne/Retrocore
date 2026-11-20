@@ -107,6 +107,7 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["bbc"] = "Retrocore.Machines.Acorn",
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
@@ -240,7 +241,21 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
-    private static readonly string[] s_sdkFolders = ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
+    /// <summary>
+    ///  The Kaypro II's sources, its ROMs' and MBASIC's modules, pass the lint as the editor runs it.
+    /// </summary>
+    [TestMethod]
+    public void KayproDocumentationIsCleanInTheEditor()
+    {
+        string folder = Path.Join(s_inputs, "Kaypro");
+        List<SourceAnalysis> sdk = [.. SourceIncludes.Roots(folder).Select(file => SourceAnalysis.Assemble(file, _ => null))];
+        string[] names = [.. sdk.Select(analysis => Path.GetFileName(analysis.Root))];
+        names.Should().Contain(["Kaypro2.asm", "Kaypro2CharacterGenerator.asm", "Mbasic.asm"]);
+        List<string> problems = [.. sdk.SelectMany(analysis => Problems(analysis, sdk, "SDK")).Order()];
+        problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    private static readonly string[] s_sdkFolders =["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
 
     // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources.
     private static IEnumerable<string> SdkRoots(string roms) =>
@@ -347,6 +362,23 @@ public class SdkDocumentationTests
 
         contracts[0xCE1F].Registers.Should().Equal("Y");
         contracts[0xCE26].Registers.Should().BeEquivalentTo(["A", "Y"]);
+    }
+
+    /// <summary>
+    ///  A note in parentheses after a Uses: item, as in the MOS's <c>Y (for a sound channel)</c>, still names the
+    ///  item for the debugger's check.
+    /// </summary>
+    [TestMethod]
+    public void UsesNotesNameTheirItem()
+    {
+        AssemblyResult mos = BbcSdkModules.AssembleMos(Path.Join(s_inputs, "Acorn"));
+        SourceMapModule module = new(mos, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        // FLUSH_BUFFER: "Uses: Y (for a sound channel)".
+        contracts[(ushort)mos.Symbols["FLUSH_BUFFER"]].Changes.Should().Contain("Y");
     }
 
     /// <summary>

@@ -4,9 +4,12 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
+using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -14,6 +17,16 @@ namespace Retrocore.Debug;
 // The changed disks a machine keeps in its recovery journal, and putting them back when it starts again.
 internal static partial class MediaActions
 {
+    // The disks put back from a journal, which their drives say were kept from the last run.
+    private static readonly ConditionalWeakTable<IMedium, object> s_recovered = [];
+
+    /// <summary>
+    ///  Gets whether a disk was put back from the machine's recovery journal, as kept from its last run.
+    /// </summary>
+    /// <param name="medium">The disk.</param>
+    /// <returns>True when it was.</returns>
+    internal static bool IsKept(IMedium medium) => s_recovered.TryGetValue(medium, out _);
+
     /// <summary>
     ///  Takes a checkpoint of a machine's changed disks, in its drives and ejected from them, under the machine's
     ///  lock; the journal commits it afterward, off the machine's thread.
@@ -140,6 +153,7 @@ internal static partial class MediaActions
 
                 medium.MarkChanged();
                 Keep(medium, from);
+                s_recovered.AddOrUpdate(medium, from);
                 if (outside is not null)
                 {
                     s_ejected.GetValue(device, _ => []).Add(outside);
@@ -176,7 +190,10 @@ internal static partial class MediaActions
             (nameof(WozDisk), WozDisk.SnapshotKind) => WozDisk.Load(image, writable: true),
             (nameof(Disk35Disk), TwoImgContainer.SnapshotKind) => Disk35Disk.Load(image, writeProtected),
             (nameof(MemoryBlockDevice), TwoImgContainer.SnapshotKind) => MemoryBlockDevice.Load(image, writeProtected),
-            (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.Read(image),
+            (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.ReadSnapshot(image),
+            (nameof(AcornTape), AcornTape.SnapshotKind) => UefFormat.Read(image),
+            (nameof(CommodoreDisk), CommodoreDisk.SnapshotKind) => G64Format.Read(image),
+            (nameof(CommodoreTape), CommodoreTape.SnapshotKind) => CommodoreTape.FromSnapshot(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
         };
 
@@ -207,6 +224,10 @@ internal static partial class MediaActions
             ["format"] = floppy.Format,
             ["jvcHeader"] = floppy.JvcHeader is { } header ? Convert.ToBase64String(header) : null,
         },
+        AcornTapeCodec => new() { ["kind"] = "acornTape" },
+        AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
+        CommodoreDiskCodec disk => new() { ["kind"] = "commodoreDisk", ["format"] = disk.Format },
+        CommodoreTapeCodec tape => new() { ["kind"] = "commodoreTape", ["format"] = tape.Format },
         _ => null,
     };
 
@@ -220,6 +241,10 @@ internal static partial class MediaActions
             "block" => BlockImageCodec.For(codec.Bool("twoImg") == true ? "2MG" : format),
             "floppy" when codec.String("jvcHeader") is { } header => FloppyImageCodec.ForImage("JVC", Convert.FromBase64String(header)),
             "floppy" => FloppyImageCodec.For(format, [format]),
+            "acornTape" => new AcornTapeCodec(),
+            "acornDisk" => new AcornDiskCodec(format),
+            "commodoreDisk" => new CommodoreDiskCodec(format),
+            "commodoreTape" => new CommodoreTapeCodec(format),
             _ => null,
         };
     }

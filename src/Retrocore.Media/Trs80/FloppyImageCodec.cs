@@ -7,7 +7,7 @@ using Retrocore.Media.Floppy;
 namespace Retrocore.Media.Trs80;
 
 /// <summary>
-///  Writes a TRS-80 or Color Computer floppy disk as an image: JV1, JV3, JVC or DMK.
+///  Writes a TRS-80, Color Computer or Kaypro floppy disk as an image: JV1, JV3, JVC, DMK or a raw Kaypro image (IMG).
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -48,8 +48,14 @@ public sealed class FloppyImageCodec : IImageCodec
         ArgumentNullException.ThrowIfNull(extension);
         ArgumentNullException.ThrowIfNull(saveFormats);
         string format = extension.TrimStart('.').ToUpperInvariant();
-        if (format == "DSK") { format = saveFormats.Contains("jvc", StringComparer.OrdinalIgnoreCase) ? "JVC" : "JV1"; }
-        return format is "JV1" or "JV3" or "JVC" or "DMK" ? new(format, jvcHeader: null) : null;
+        if (format == "DSK")
+        {
+            bool jvc = saveFormats.Contains("jvc", StringComparer.OrdinalIgnoreCase);
+            bool kaypro = saveFormats.Contains("img", StringComparer.OrdinalIgnoreCase);
+            format = jvc ? "JVC" : kaypro ? "IMG" : "JV1";
+        }
+
+        return format is "JV1" or "JV3" or "JVC" or "DMK" or "IMG" ? new(format, jvcHeader: null) : null;
     }
 
     /// <summary>
@@ -60,7 +66,7 @@ public sealed class FloppyImageCodec : IImageCodec
     /// <returns>The codec, or null for a format with no writer, IMD.</returns>
     public static FloppyImageCodec? ForImage(string format, ReadOnlySpan<byte> image) => format switch
     {
-        "JV1" or "JV3" or "DMK" => new(format, jvcHeader: null),
+        "JV1" or "JV3" or "DMK" or "IMG" => new(format, jvcHeader: null),
         "JVC" => new(format, JvcFormat.Header(image).ToArray()),
         _ => null,
     };
@@ -74,12 +80,13 @@ public sealed class FloppyImageCodec : IImageCodec
             throw new ArgumentException($"A floppy image holds a floppy disk, not a {snapshot.Kind} snapshot.", nameof(snapshot));
         }
 
-        if (Format == "DMK") { return new(snapshot.Image.ToArray(), []); }
-        FloppyDisk disk = DmkFormat.Read(snapshot.Image.Span);
+        FloppyDisk disk = DmkFormat.ReadSnapshot(snapshot.Image.Span);
         return Format switch
         {
+            "DMK" => DmkFormat.Encode(disk),
             "JV1" => Jv1Format.Encode(disk),
             "JV3" => Jv3Format.Encode(disk),
+            "IMG" => KayproFormat.Encode(disk),
             _ when _jvcHeader is not null => JvcFormat.Encode(disk, _jvcHeader),
             _ => JvcFormat.Encode(disk),
         };

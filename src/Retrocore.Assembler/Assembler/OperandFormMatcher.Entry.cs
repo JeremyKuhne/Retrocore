@@ -30,6 +30,18 @@ internal sealed partial class OperandFormMatcher
         internal Pattern Pattern { get; } = pattern;
 
         /// <summary>
+        ///  Gets the upper-case ASCII character a matching operand must start with, or <see cref="Edge"/> when
+        ///  any may.
+        /// </summary>
+        internal char First { get; } = RequiredChar(kind, pattern.Literals[0], last: false);
+
+        /// <summary>
+        ///  Gets the upper-case ASCII character a matching operand must end with, or <see cref="Edge"/> when any
+        ///  may.
+        /// </summary>
+        internal char Last { get; } = RequiredChar(kind, pattern.Literals[^1], last: true);
+
+        /// <summary>
         ///  Gets the forms that share a syntax pattern, in declaration order.
         /// </summary>
         internal List<ushort> Group { get; } = [];

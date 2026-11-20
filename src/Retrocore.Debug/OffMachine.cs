@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -23,7 +24,8 @@ namespace Retrocore.Debug;
 ///  </para>
 ///  <para>
 ///   Nothing is kept between requests: each builds the machine afresh and disposes it, so the saved machine the
-///   editor holds is the whole of an off machine's state. ROM dumps are used when the launch names them; without
+///   editor holds is the whole of an off machine's state. A drive's <c>generation</c> names what it holds, the same
+///   for each request while it holds the same image, and an answer about another is refused as a running machine's is. ROM dumps are used when the launch names them; without
 ///   them each machine's ROMs are assembled from the SDK's sources, as a launch does.
 ///  </para>
 /// </remarks>
@@ -32,13 +34,17 @@ internal static class OffMachine
     // Requests run on their own threads; one machine is built at a time.
     private static readonly Lock s_gate = new();
 
+    // The snapshot each drive's kept disk came back from, by drive, for the request being answered under the gate:
+    // its file, named afresh each time a run keeps the disk again.
+    private static Dictionary<string, string> s_snapshots = [];
+
     /// <summary>
     ///  Describes a machine with its saved cards and media.
     /// </summary>
     /// <param name="parameters">The launch configuration and the saved machine.</param>
     /// <returns>Its devices, hardware rows, saved machine and restore problems.</returns>
     /// <exception cref="ArgumentException">The configuration is missing or invalid.</exception>
-    internal static JsonObject Describe(JsonObject parameters) => With(parameters, _ => { });
+    internal static JsonObject Describe(JsonObject parameters) => With(parameters, _ => null, changes: false);
 
     /// <summary>
     ///  Changes a machine's hardware or a device's media, as <c>retro/hardware</c> or <c>retro/device</c> does.
@@ -57,21 +63,33 @@ internal static class OffMachine
             throw new ArgumentException("request must be hardware or device.");
         }
 
+        // Through media's steps, as the running machine's requests are: a changed disk is asked about before it goes,
+        // and a save answers what it found.
         return With(parameters, target =>
         {
+            ToMounts(arguments, target.Devices);
             if (request == "hardware")
             {
+                string[]? ids = target.Hardware().FirstOrDefault(row => row.Id == id)?.Devices;
+                if (MediaActions.Hardware(ids, target.Devices, action, arguments) is { } held) { return held; }
                 target.HardwareAction(id, action, arguments);
-                return;
+                return null;
             }
 
             IDevice device = target.Devices.FirstOrDefault(device => device.Id == id) ?? throw new ArgumentException($"There is no device '{id}'.");
-            target.DeviceAction(device, action, arguments);
-        });
+            JsonObject? answer = MediaActions.Device(device, action, arguments, (what, with) => target.DeviceAction(device, what, with));
+            if (answer is null) { target.DeviceAction(device, action, arguments); }
+
+            // The machine is built for each request, so nothing it let go of can be put back with Undo.
+            answer?.Remove("undo");
+            return answer;
+        }, changes: true);
     }
 
-    // Builds the machine with its saved cards and media, acts on it, and describes it.
-    private static JsonObject With(JsonObject parameters, Action<IDebugTarget> act)
+    // Builds the machine with its saved cards and media, and the disks its recovery journal kept from its last run,
+    // acts on it, and describes it, with media's answer. A change commits the journal, so a disk saved or let go
+    // leaves it; describing only looks.
+    private static JsonObject With(JsonObject parameters, Func<IDebugTarget, JsonObject?> act, bool changes)
     {
         JsonObject configuration = parameters["configuration"] as JsonObject ?? throw new ArgumentException("configuration is required: the machine's launch arguments.");
 
@@ -79,23 +97,122 @@ internal static class OffMachine
         {
             // Slot 7's image comes from the launch: one the saved machine moved builds it, while the launch stays its own.
             IDebugTarget target = Build(LaunchMedia.WithSaved(configuration, parameters["machineState"]));
+            RecoveryJournal? journal = null;
             try
             {
                 List<string> problems = parameters["machineState"] is JsonObject saved
                     ? MachineConfiguration.Restore(target, saved)
                     : [];
 
-                act(target);
+                // A journal a running session has is its own; the off machine shows the disks only once it stops.
+                if (configuration.String("recoveryId") is { } id && RecoveryJournal.Open(id, problems, claim: false) is { } opened)
+                {
+                    journal = opened;
+                    s_snapshots = Snapshots(opened);
+                    problems.AddRange(MediaActions.Recover(target.Devices, journal));
+                }
+
+                JsonObject? answer = act(target);
+                if (changes && journal is not null)
+                {
+                    // The tokens answered are of the disks as the journal names them now: a disk saved has left it, and
+                    // one locked or put back in its drive is named by its new snapshot.
+                    journal.Commit(MediaActions.Journal(target.Devices, journal), close: true);
+                    s_snapshots = Snapshots(journal);
+                }
+
                 JsonObject body = DeviceJson.Write(target.Devices);
+                ToTokens(body, answer, target.Devices);
                 body["hardware"] = HardwareRow.Json(Off(target.Hardware(), configuration));
                 body["configuration"] = MachineConfiguration.Capture(target);
                 body["problems"] = problems.ToJsonArray();
-                return body;
+                return DebugSession.WithAnswer(body, answer);
             }
             finally
             {
+                s_snapshots = [];
+                journal?.Release();
                 (target as IDisposable)?.Dispose();
             }
+        }
+    }
+
+    // The snapshot of the kept disk in each drive, as the journal names it now.
+    // An entry whose fields are not what they should be names nothing here, rather than failing the request.
+    private static Dictionary<string, string> Snapshots(RecoveryJournal journal) => journal.Named
+        .Where(entry => entry["ejected"] is null && RecoveryJournal.Text(entry, "drive") is not null)
+        .GroupBy(entry => RecoveryJournal.Text(entry, "drive") ?? "")
+        .ToDictionary(group => group.Key, group => RecoveryJournal.Text(group.First(), "file") ?? "");
+
+    // A machine built for each request mounts its disks afresh each time, with new generations, so the editor is told
+    // of a mount by a token of what its drive holds, which stays while the drive holds the same image. An answer back
+    // names a mount by its token, which becomes that mount's generation again, or one no mount has when the drive holds
+    // another image now, so a question left open while another disk went in is still refused or asked again.
+    private static int Token(IDevice device)
+    {
+        if (device is not IMediumSlot { Medium: { } medium })
+        {
+            return 0;
+        }
+
+        // An image's path as files are told apart where it is: in any case on Windows and macOS, as it is elsewhere.
+        string? path = MediaActions.Source(medium)?.Path;
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            path = path?.ToUpperInvariant();
+        }
+
+        // A kept disk is told apart from the image's own, and from another run's kept disk of the same image.
+        string snapshot = MediaActions.IsKept(medium) && s_snapshots.TryGetValue(device.Id, out string? kept) ? kept : "";
+        string held = $"{device.Id}|{path ?? device.Media?.Label}|{snapshot}";
+        uint hash = 2166136261;
+        foreach (char character in held)
+        {
+            hash = (hash ^ character) * 16777619;
+        }
+
+        return (int)(hash & 0x7FFFFFFF);
+    }
+
+    // The tokens in a change's arguments, its generation and its discards, as the mounts they name now.
+    private static void ToMounts(JsonObject arguments, IReadOnlyList<IDevice> devices)
+    {
+        int Mount(string? id, int token) =>
+            devices.FirstOrDefault(device => device.Id == id) is IMediumSlot slot and IDevice device && Token(device) == token
+                ? slot.MountGeneration
+                : -1;
+
+        if (arguments.Int("generation") is { } generation)
+        {
+            arguments["generation"] = Mount(arguments.String("id"), generation);
+        }
+
+        foreach (JsonObject entry in (arguments.Array("discards") ?? []).OfType<JsonObject>())
+        {
+            if (entry.Int("generation") is { } token)
+            {
+                entry["generation"] = Mount(entry.String("device"), token);
+            }
+        }
+    }
+
+    // The mounts' generations in the devices and media's answer, as their tokens.
+    private static void ToTokens(JsonObject body, JsonObject? answer, IReadOnlyList<IDevice> devices)
+    {
+        foreach (JsonObject written in (body["devices"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            IDevice? device = devices.FirstOrDefault(candidate => candidate.Id == written.String("id"));
+            if (device is not null && written["media"] is JsonObject { } media && media["generation"] is not null)
+            {
+                media["generation"] = Token(device);
+            }
+        }
+
+        if (answer is not null && answer["generation"] is not null)
+        {
+            answer["generation"] = devices.FirstOrDefault(device => device.Id == answer.String("device")) is { } device
+                ? Token(device)
+                : null;
         }
     }
 
@@ -122,7 +239,10 @@ internal static class OffMachine
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => Apple1DebugTarget.Launch(args),
             DebugMachines.Coco => CocoDebugTarget.Launch(args),
+            DebugMachines.Pet => PetDebugTarget.Launch(args),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Bbc => BbcDebugTarget.Launch(args),
+            DebugMachines.Kaypro2 => KayproDebugTarget.Launch(args),
             _ => throw new ArgumentException($"A machine that is off cannot yet be a {machine}.")
         };
     }

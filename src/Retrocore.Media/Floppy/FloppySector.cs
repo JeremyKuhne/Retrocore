@@ -25,16 +25,16 @@ public sealed class FloppySector
     /// <param name="side">The side number in its ID field.</param>
     /// <param name="sector">The sector number in its ID field.</param>
     /// <param name="data">
-    ///  The data, which the sector copies; its length, 128, 256, 512 or 1024, is the sector size.
+    ///  The data, which the sector copies; its length, a power of two from 128 to 16384, is the sector size.
     /// </param>
     /// <param name="doubleDensity">Whether the sector is recorded in double density (MFM).</param>
     /// <param name="dataAddressMark">The data address mark: <c>$FB</c> normal, <c>$F8</c>-<c>$FA</c> deleted.</param>
     /// <exception cref="ArgumentException">The data is not a sector size, or the mark is not a data mark.</exception>
     public FloppySector(byte track, byte side, byte sector, ReadOnlySpan<byte> data, bool doubleDensity, byte dataAddressMark = 0xFB)
     {
-        if (data.Length is not (128 or 256 or 512 or 1024))
+        if (data.Length is < 128 or > 16384 || !System.Numerics.BitOperations.IsPow2(data.Length))
         {
-            throw new ArgumentException("A sector holds 128, 256, 512 or 1024 bytes.", nameof(data));
+            throw new ArgumentException("A sector holds 128, 256, 512 and so on up to 16384 bytes.", nameof(data));
         }
 
         CheckMark(dataAddressMark);
@@ -67,7 +67,8 @@ public sealed class FloppySector
     public ReadOnlySpan<byte> Data => _data;
 
     /// <summary>
-    ///  Gets the ID field's size code: 0 for 128 bytes, 1 for 256, 2 for 512, 3 for 1024.
+    ///  Gets the ID field's size code: 0 for 128 bytes, 1 for 256, 2 for 512, 3 for 1024, and on to 7 for 16384, as
+    ///  the 8271 writes them.
     /// </summary>
     public byte SizeCode => (byte)(System.Numerics.BitOperations.Log2((uint)_data.Length) - 7);
 
@@ -91,11 +92,12 @@ public sealed class FloppySector
     }
 
     /// <summary>
-    ///  Writes the data field: new data and mark, recorded with a good CRC.
+    ///  Writes the data field: new data and mark, recorded with a good CRC unless the write was cut short.
     /// </summary>
     /// <param name="data">The data, the sector's size.</param>
     /// <param name="dataAddressMark">The data address mark.</param>
-    internal void Overwrite(ReadOnlySpan<byte> data, byte dataAddressMark)
+    /// <param name="crcError">Whether the field was left without its CRC.</param>
+    internal void Overwrite(ReadOnlySpan<byte> data, byte dataAddressMark, bool crcError = false)
     {
         if (data.Length != _data.Length)
         {
@@ -105,7 +107,7 @@ public sealed class FloppySector
         CheckMark(dataAddressMark);
         data.CopyTo(_data);
         DataAddressMark = dataAddressMark;
-        _crcError = false;
+        _crcError = crcError;
     }
 
     private static void CheckMark(byte dataAddressMark)

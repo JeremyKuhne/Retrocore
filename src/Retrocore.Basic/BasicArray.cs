@@ -16,6 +16,9 @@ namespace Retrocore.Basic;
 /// <param name="ElementsAddress">Where its first element starts.</param>
 /// <param name="ElementSize">The bytes in each element.</param>
 /// <param name="LowerBound">The first element's subscript: 0, or 1 in Apple-1 BASIC.</param>
+/// <param name="LastFastest">
+///  Whether the last subscript varies fastest in memory, as in BBC BASIC; elsewhere the first does.
+/// </param>
 public sealed record BasicArray(
     string Name,
     BasicVariableKind Kind,
@@ -23,7 +26,8 @@ public sealed record BasicArray(
     IReadOnlyList<int> Dimensions,
     int ElementsAddress,
     int ElementSize,
-    int LowerBound = 0)
+    int LowerBound = 0,
+    bool LastFastest = false)
 {
     /// <summary>
     ///  Gets the number of elements.
@@ -45,8 +49,9 @@ public sealed record BasicArray(
         }
 
         int index = 0;
-        for (int dimension = Dimensions.Count - 1; dimension >= 0; dimension--)
+        for (int step = 0; step < Dimensions.Count; step++)
         {
+            int dimension = LastFastest ? step : Dimensions.Count - 1 - step;
             int at = subscripts[dimension] - LowerBound;
             if (at < 0 || at >= Dimensions[dimension])
             {
@@ -67,8 +72,9 @@ public sealed record BasicArray(
     public int[] Subscripts(int index)
     {
         int[] subscripts = new int[Dimensions.Count];
-        for (int dimension = 0; dimension < Dimensions.Count; dimension++)
+        for (int step = 0; step < Dimensions.Count; step++)
         {
+            int dimension = LastFastest ? Dimensions.Count - 1 - step : step;
             subscripts[dimension] = index % Dimensions[dimension] + LowerBound;
             index /= Dimensions[dimension];
         }

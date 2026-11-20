@@ -15,7 +15,7 @@ namespace Retrocore.Machines.Chips;
 /// <remarks>
 ///  <para>
 ///   The TRS-80 Model I's Expansion Interface has an FD1771, which a doubler's WD1791 joins for double density; the
-///   Model III, 4 and II and the Color Computer's disk controller cartridge have an FD179x or WD179x.
+///   Model III, 4 and II, the Color Computer's disk controller cartridge and the Kaypro II have an FD179x or WD179x.
 ///  </para>
 ///  <para>
 ///   5¼-inch disks turn at 300 rpm. A sector passes the head at its place among the track's sectors after the
@@ -204,8 +204,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 
     /// <summary>
     ///  Selects a drive, its side, the motors and the density directly, for controllers with a drive control
-    ///  register such as the Color Computer's and the Model II's: the motors run while <paramref name="motor"/> is
-    ///  set.
+    ///  register such as the Color Computer's, the Kaypro II's and the Model II's: the motors run while
+    ///  <paramref name="motor"/> is set.
     /// </summary>
     /// <param name="drive">The drive, 0-3, or -1 for none.</param>
     /// <param name="side">The side, 0 or 1.</param>

@@ -933,13 +933,28 @@ After the reviews:
      a disk the launch built. Tests: `RecoveryJournalTests`, and `Test-CocoDap.mjs`,
      where a disk Disk BASIC wrote comes back changed in the relaunched machine, says what changed, lists its
      directory and saves to its JVC image.
+   - **Crashes, the notices and the off machine's kept disks (built).** The language server's off machine opens a
+     configuration's journal without taking it for a session (its `session.json` stays as the last session left it)
+     and puts its disks back, marked `kept`, so the Drives view shows them after a stop as "kept from the last run";
+     a change there goes through media's steps with their answers, as a running machine's does, and commits the
+     journal, so a kept disk saves to its image while off and a disk saved or let go leaves the journal. The
+     extension's answers go to either machine alike, a running session's or the off one, through one target. A
+     session's `session.json` names its machine. The language server finds the journals whose session did not end
+     cleanly and whose lock is free (`retrocore/recovery/list`), and `retrocore/recovery/resolve` recovers one (keeps
+     its disks, offered no more) or discards it (its journal and the snapshots it names). Opening a journal waits two
+     seconds for a host that is closing it. In the extension, the stop notice for kept disks offers **Save All**
+     (each through the off machine, asking only as Save does), **Review** (the Drives view of the machine while off)
+     and **Discard** (asked once, as nothing can put them back); as the extension starts, a session of the
+     workspace's that did not stop cleanly is offered with **Recover**, **Review** and **Discard**. Tests:
+     `RecoveryJournalTests`, and `Test-RecoveryDap.mjs`, where a debug host killed after a checkpoint leaves a
+     session the language server offers, its disk shows changed on the machine while off and saves there, a second
+     crash's disk is discarded, and of two hosts launching one machine only the first keeps its journal.
+     `RETROCORE_CHECKPOINT_SECONDS` shortens the checkpoint for such tests.
    - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle
-     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A session that
-     did not end cleanly is put back like one that did, without asking; crash discovery, its notification, the stop
-     notification's **Save All**, **Review** and **Discard**, and the off machine showing its kept disks come next.
-     Then built disks (kept in the history once it is built, with a notice), recordings as changed tapes, slot 7's
-     device (which cannot be mounted again in a running machine), Retrocore Desktop's journal, and the source-aware
-     default lock.
+     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the machine is not built without it. Injected write
+     failures (a full disk, access denied) are not yet tested. Then built disks (kept in the history once it is
+     built, with a notice), recordings as changed tapes, slot 7's device (which cannot be mounted again in a running
+     machine), Retrocore Desktop's journal, and the source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

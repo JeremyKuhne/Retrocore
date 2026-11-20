@@ -63,8 +63,12 @@ public sealed partial class BasicEvaluator
 
     private bool LevelTwo => _dialect == BasicDialect.Level2;
 
-    // Level II and Color BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit integers.
-    private bool Bitwise => LevelTwo || _dialect is ColorBasicDialect;
+    // MBASIC has Level II's types and suffixes, with ^ for powers.
+    private bool Mbasic => _dialect == BasicDialect.Mbasic;
+
+    // Level II, MBASIC, Color BASIC and the PET's BASIC take true as -1, and AND, OR and NOT bit by bit on 16-bit
+    // integers.
+    private bool Bitwise => LevelTwo || Mbasic || _dialect is ColorBasicDialect or PetBasicDialect;
 
     private double True => Bitwise ? -1 : 1;
 
@@ -89,7 +93,13 @@ public sealed partial class BasicEvaluator
             return new BusinessBasicExpression(_variables).Evaluate(expression);
         }
 
-        if (BareName().IsMatch(expression.Trim())) { return Variable(expression.Trim(), subscripts: null); }
+        if (_dialect is BbcBasicDialect)
+        {
+            return new BbcBasicExpression(_variables, _memory, _functions).Evaluate(expression);
+        }
+
+        string trimmed = expression.Trim();
+        if ((Mbasic ? MbasicBareName() : BareName()).IsMatch(trimmed)) { return Variable(trimmed, subscripts: null); }
         byte[] saved = _bytes;
         int savedAt = _at;
         try
@@ -117,6 +127,25 @@ public sealed partial class BasicEvaluator
         result.Value.IsString ? result.Value.Text?.Length > 0 : result.Value.Number != 0;
 
     /// <summary>
+    ///  Tests whether a result is true as a dialect's IF tests it: BBC BASIC's IF takes a number as a 32-bit integer,
+    ///  so 0.5 is false, and takes no string; the others as <see cref="IsTrue(BasicResult)"/>.
+    /// </summary>
+    /// <param name="result">The result.</param>
+    /// <param name="dialect">The dialect.</param>
+    /// <returns>Whether it is true.</returns>
+    /// <exception cref="FormatException">BBC BASIC, and the result is a string or too big for an integer.</exception>
+    public static bool IsTrue(BasicResult result, BasicDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        if (dialect is not BbcBasicDialect) { return IsTrue(result); }
+        if (result.Value.IsString) { throw new FormatException("Type mismatch: a condition is a number."); }
+        // An integer is true when not zero; a real is made one first, which refuses one of 2^31 or more in size.
+        if (result.Value.Long is long integer) { return integer != 0; }
+        double real = result.Value.Number;
+        return Math.Abs(real) < BbcBasicExpression.TwoToThe31 ? Math.Truncate(real) != 0 : throw new FormatException("Too big.");
+    }
+
+    /// <summary>
     ///  Writes a result as PRINT would, without a positive number's leading space; a string is quoted.
     /// </summary>
     /// <param name="result">The result.</param>
@@ -132,10 +161,35 @@ public sealed partial class BasicEvaluator
             return builder.Append('"').ToString();
         }
 
-        return BasicNumbers.Format(result.Value.Number, LevelTwo ? (result.Double ? 16 : 6) : 9);
+        if (_dialect is BbcBasicDialect) { return BbcBasicExpression.Format(result.Value.Number); }
+        return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 6) : 9);
     }
 
-    private BasicResult Or()
+    // MBASIC's logical operators below OR, at its precedences: IMP, then EQV, then XOR.
+    private BasicResult Or() => Mbasic ? Imp() : Disjunction();
+
+    private BasicResult Imp()
+    {
+        BasicResult left = Eqv();
+        while (Take("IMP")) { left = Logic(left, Eqv(), (a, b) => ~a | b, (a, b) => !a || b); }
+        return left;
+    }
+
+    private BasicResult Eqv()
+    {
+        BasicResult left = Xor();
+        while (Take("EQV")) { left = Logic(left, Xor(), (a, b) => ~(a ^ b), (a, b) => a == b); }
+        return left;
+    }
+
+    private BasicResult Xor()
+    {
+        BasicResult left = Disjunction();
+        while (Take("XOR")) { left = Logic(left, Disjunction(), (a, b) => a ^ b, (a, b) => a != b); }
+        return left;
+    }
+
+    private BasicResult Disjunction()
     {
         BasicResult left = And();
         while (Take("OR")) { left = Logic(left, And(), (a, b) => a | b, (a, b) => a || b); }
@@ -153,7 +207,7 @@ public sealed partial class BasicEvaluator
     {
         if (!Take("NOT")) { return Relation(); }
         double value = Number(Not());
-        return new(new(Bitwise ? ~ToInteger(value) : (value == 0 ? 1 : 0)));
+        return new(new(Bitwise ? ~LogicInteger(value) : (value == 0 ? 1 : 0)));
     }
 
     private BasicResult Relation()
@@ -182,19 +236,19 @@ public sealed partial class BasicEvaluator
 
     private BasicResult Additive()
     {
-        BasicResult left = Term();
+        BasicResult left = AdditiveOperand();
         while (true)
         {
             if (Take("+"))
             {
-                BasicResult right = Term();
+                BasicResult right = AdditiveOperand();
                 left = left.Value.IsString || right.Value.IsString
                     ? new(BasicValue.Of([.. Text(left), .. Text(right)]))
                     : new(new(Number(left) + Number(right)), left.Double || right.Double);
             }
             else if (Take("-"))
             {
-                BasicResult right = Term();
+                BasicResult right = AdditiveOperand();
                 left = new(new(Number(left) - Number(right)), left.Double || right.Double);
             }
             else
@@ -202,6 +256,42 @@ public sealed partial class BasicEvaluator
                 return left;
             }
         }
+    }
+
+    // MBASIC's MOD and \ bind between + and *, MOD the looser.
+    private BasicResult AdditiveOperand() => Mbasic ? Modulus() : Term();
+
+    private BasicResult Modulus()
+    {
+        BasicResult left = IntegerQuotient();
+        while (Take("MOD"))
+        {
+            (int dividend, int divisor) = IntegerOperands(left, IntegerQuotient());
+            left = new(new(dividend % divisor));
+        }
+
+        return left;
+    }
+
+    private BasicResult IntegerQuotient()
+    {
+        BasicResult left = Term();
+        while (Take("\\"))
+        {
+            (int dividend, int divisor) = IntegerOperands(left, Term());
+            left = new(new(dividend / divisor));
+        }
+
+        return left;
+    }
+
+    // MOD's and the backslash's operands, as CINT makes them; a zero divisor is an error.
+    private (int Dividend, int Divisor) IntegerOperands(BasicResult left, BasicResult right)
+    {
+        int divisor = LogicInteger(Number(right));
+        return divisor == 0
+            ? throw new FormatException("?Division by zero.")
+            : (LogicInteger(Number(left)), divisor);
     }
 
     private BasicResult Term()
@@ -265,6 +355,13 @@ public sealed partial class BasicEvaluator
         }
 
         if (value == '"') { return StringLiteral(); }
+
+        // MBASIC crunches numbers into binary constants, which are read whole.
+        if (Mbasic && value < ' ' && MbasicDialect.TryReadConstant(_bytes, ref _at, out double constant, out bool isDouble))
+        {
+            return new(new(constant), isDouble);
+        }
+
         if (char.IsAsciiDigit((char)value) || value == '.') { return NumberLiteral(); }
         if (_dialect.KeywordAt(_bytes, _at, out int length) is { } word)
         {
@@ -316,7 +413,7 @@ public sealed partial class BasicEvaluator
             }
         }
 
-        if (_at < _bytes.Length && LevelTwo && _bytes[_at] is (byte)'#' or (byte)'!' or (byte)'%')
+        if (_at < _bytes.Length && (LevelTwo || Mbasic) && _bytes[_at] is (byte)'#' or (byte)'!' or (byte)'%')
         {
             precise |= _bytes[_at] == '#';
             _at++;
@@ -344,22 +441,33 @@ public sealed partial class BasicEvaluator
         return Variable(name, subscripts);
     }
 
-    // Letters and digits, as a name continues.
+    // Letters and digits, as a name continues, and periods in MBASIC's names.
     private string Letters()
     {
         int start = _at;
-        while (_at < _bytes.Length && char.IsAsciiLetterOrDigit((char)_bytes[_at])) { _at++; }
+        while (_at < _bytes.Length && (char.IsAsciiLetterOrDigit((char)_bytes[_at]) || (Mbasic && _bytes[_at] == '.')))
+        {
+            _at++;
+        }
+
         return Encoding.ASCII.GetString(_bytes, start, _at - start);
     }
 
     // A type suffix: $ and %, and on Level II ! and # too.
     private bool IsSuffix(byte value) =>
-        value is (byte)'$' or (byte)'%' || (LevelTwo && value is (byte)'!' or (byte)'#');
+        value is (byte)'$' or (byte)'%' || ((LevelTwo || Mbasic) && value is (byte)'!' or (byte)'#');
 
     private BasicResult Variable(string name, List<int>? subscripts)
     {
         string key = name.ToUpperInvariant();
         if (subscripts is null && _bound.TryGetValue(key, out BasicValue bound)) { return new(bound); }
+
+        // The PET's ST, TI, TI$, DS and DS$ are the machine's, not the variable table's, as MEM and TIME$ are elsewhere.
+        if (subscripts is null && _dialect is PetBasicDialect pet && pet.IsReservedVariable(name))
+        {
+            throw new FormatException($"{name} cannot be evaluated without running BASIC.");
+        }
+
         if (subscripts is null)
         {
             if (_variables.Find(name) is not { } variable)
@@ -499,8 +607,16 @@ public sealed partial class BasicEvaluator
 
     private BasicResult Logic(BasicResult left, BasicResult right, Func<int, int, int> bits, Func<bool, bool, bool> logic) =>
         Bitwise
-            ? new(new(bits(ToInteger(Number(left)), ToInteger(Number(right)))))
+            ? new(new(bits(LogicInteger(Number(left)), LogicInteger(Number(right)))))
             : new(new(logic(Number(left) != 0, Number(right) != 0) ? 1 : 0));
+
+    // AND, OR and NOT's operand as an integer. The PET's BASIC converts it as AYINT and QINT do, down to the integer
+    // below; MBASIC as CINT does, rounding a half away from zero; Level II and Color BASIC truncate toward zero.
+    private int LogicInteger(double value)
+    {
+        if (_dialect is PetBasicDialect) { return ToInteger(Math.Floor(value)); }
+        return ToInteger(Mbasic ? Math.Round(value, MidpointRounding.AwayFromZero) : value);
+    }
 
     private static int ToInteger(double value) =>
         value is < short.MinValue or > short.MaxValue
@@ -549,6 +665,10 @@ public sealed partial class BasicEvaluator
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9]*[$%!#]?$")]
     private static partial Regex BareName();
+
+    // MBASIC's names hold periods too.
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9.]*[$%!#]?$")]
+    private static partial Regex MbasicBareName();
 
     [GeneratedRegex(@"^\s*[-+]?(\d+\.?\d*|\.\d+)([ED][-+]?\d+)?", RegexOptions.IgnoreCase)]
     private static partial Regex LeadingNumber();

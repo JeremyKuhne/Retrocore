@@ -47,24 +47,33 @@ export function runChoices(machine: Machine): RunChoice[] {
     const choices: RunChoice[] = [
         { kind: "machine", label: "Just the machine", detail: "Boots it as it is", extensions: [] },
         { kind: "source", label: "A source file", detail: "Assembles it, loads it and stops at its start", extensions: sourceExtensions },
-        { kind: "program", label: "A binary program", detail: "Loads it at the machine's usual address and stops at its start", extensions: ["bin"] }
+        machine.programFormats?.includes("prg") === true
+            ? {
+                kind: "program", label: "A program", extensions: machine.programFormats,
+                detail: "Loads a .prg where its first two bytes say, running a BASIC one, or a binary at the machine's usual address"
+            }
+            : { kind: "program", label: "A binary program", detail: "Loads it at the machine's usual address and stops at its start", extensions: machine.programFormats ?? ["bin"] }
     ];
 
     if (machine.basicDialects.length !== 0) {
         choices.push({
             kind: "basic",
             label: "A BASIC file",
-            detail: `Loads it into ${machine.basicDialects.map(dialectName).join(" or ")} and runs it`,
+            detail: `Loads it into ${machine.basicDialects.map(dialect => dialectName(dialect, machine)).join(" or ")} and runs it`,
             extensions: ["bas"]
         });
     }
 
     if (machine.diskFormats.length !== 0) {
-        choices.push({ kind: "disk", label: "A disk image", detail: "Boots it from the first drive", extensions: machine.diskFormats });
+        // The BBC Micro boots a disk only with SHIFT-BREAK, which neither the launch nor the panel can press yet.
+        const detail = machine.configuration.machine === "pet" ? "Puts it in drive 0 of the 4040 at device 8"
+            : machine.configuration.machine === "bbc" ? "Puts it in drive 0, without booting it" : "Boots it from the first drive";
+        choices.push({ kind: "disk", label: "A disk image", detail, extensions: machine.diskFormats });
     }
 
     if (machine.tapeFormats.length !== 0) {
-        choices.push({ kind: "tape", label: "A tape", detail: "Puts it in the cassette player", extensions: machine.tapeFormats });
+        const player = machine.configuration.machine === "pet" ? "the Datasette, with PLAY down" : "the cassette player";
+        choices.push({ kind: "tape", label: "A tape", detail: `Puts it in ${player}`, extensions: machine.tapeFormats });
     }
 
     if (machine.dos) {
@@ -79,7 +88,7 @@ export function runChoices(machine: Machine): RunChoice[] {
     return choices;
 }
 
-function dialectName(dialect: string): string {
+function dialectName(dialect: string, machine: Machine): string {
     switch (dialect) {
         case "applesoft": return "AppleSoft";
         case "integer": return "Integer BASIC";
@@ -87,6 +96,14 @@ function dialectName(dialect: string): string {
         case "level2": return "Level II BASIC";
         case "business": return "Business BASIC";
         case "colorbasic": return "Color BASIC";
+        case "mbasic": return "MBASIC";
+        // The PET's one dialect is the version its ROMs have: BASIC 1 on the 2001, BASIC 4 on the 4032, else BASIC 2.
+        case "petbasic": {
+            const model = String(machine.configuration.model ?? "");
+            const version = model === "pet2001" ? 1 : model.startsWith("pet4032") ? 4 : 2;
+            return `Commodore BASIC ${version} (PET)`;
+        }
+        case "bbcbasic": return "BBC BASIC";
         default: return dialect;
     }
 }
@@ -122,7 +139,7 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             Object.assign(configuration, machine.configuration.machine === "apple2" ? { diskImage: path } : { disks: [path] });
             break;
         case "tape":
-            Object.assign(configuration, { cassette: path });
+            configuration[machine.tapeOption ?? "cassette"] = path;
             break;
         case "dosSource":
             Object.assign(configuration, { source: path, dos: setup.dos ?? "3.3", stopOnEntry: false });
@@ -132,6 +149,15 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
     }
 
     return configuration;
+}
+
+/** The options that remove a machine's drives when set to false: its disk controller or interface, and the Model I's
+ * Expansion Interface, which its controller needs. */
+export const driveOptions: ReadonlySet<string> = new Set(["diskController", "expansionInterface", "diskInterface"]);
+
+/** Whether a change would leave a setup that starts from a disk without drives to put it in. */
+export function removesDrives(setup: Setup, option: string, value: string | number | boolean): boolean {
+    return setup.kind === "disk" && driveOptions.has(option) && value === false;
 }
 
 /** The setup's options with one changed, dropping it when it is back to the machine's default. */
@@ -214,7 +240,7 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     // A disk or tape it starts with is what it runs, so the launch installs what takes it.
     const disk = text("diskImage") ?? disks[0];
     if (disk !== undefined && machine.diskFormats.length !== 0) return { machineId: machine.id, kind: "disk", path: disk, options };
-    const tape = text("cassette");
+    const tape = text(machine.tapeOption ?? "cassette");
     if (tape !== undefined && machine.tapeFormats.length !== 0) return { machineId: machine.id, kind: "tape", path: tape, options };
     return { machineId: machine.id, kind: "machine", options };
 }

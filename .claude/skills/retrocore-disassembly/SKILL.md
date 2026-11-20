@@ -80,18 +80,21 @@ inference instead of turning it into a factual `In:`, `Out:`, or `Keeps:` claim.
 
 ## Finishing the source
 
-Edit the output by hand into a source someone can maintain. Follow the retrocore-native-assembly skill throughout:
-its syntax rules, `;;` documentation and naming. Then:
+Edit the output by hand into a source someone can maintain. Follow the retrocore-native-assembly skill throughout
+(its syntax rules and its section on converting a source) and [the style guide](../../../docs/AssemblyStyle.md).
+Then:
 
-- **Labels:** rename every generated one after what the code does. A routine's inner labels are `ROUTINE_Name`, and
-  no name may be only an address.
+- **Labels:** put each routine in a `.proc` and rename every generated label after what the code does, as a local
+  label of its routine. No name may be only an address. A documented name (from a manual or listing) that you
+  change goes in the definition's `;; Also:` section.
 - **Equates:** `.include` the SDK's equates instead of repeating their values, for example
   `../Roms/Dos/Equates.asm` and `../Roms/System/FirmwareEquates.asm`. Define only what they lack. DOS's page-3
   entries (`$03D0`-`$03FF`), for one, are set up as DOS runs, so no source names them.
-- **Data:** write text as `.byte "TEXT", $0D`. Name the constants a table or message number stands for.
+- **Data:** write text as `.byte "TEXT", $0D`, and tables with macros. Name the constants a table or message
+  number stands for.
 - **Mnemonics:** use lowercase, as the SDK sources do.
-- **Documentation:** give each routine a `;;` block with `In:`, `Out:` and `Keeps:`. After editing comments,
-  check them as the native-assembly skill says.
+- **Documentation:** give every definition a `;;` block above it, and each routine `In:`, `Out:` and `Keeps:`,
+  with links to the definitions it names. After editing comments, check them as the native-assembly skill says.
 - **Placement:** put a program from a System Master in `src/Retrocore.Machines.Apple2/Software/`. Add a test that
   assembles it and pins its SHA-256, as `SystemMasterBasicTests.MasterCreateSourceMatchesThe1980Master` does for
   `MasterCreate.asm`.

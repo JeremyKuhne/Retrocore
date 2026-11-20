@@ -409,10 +409,11 @@ ASSEMBLE_INSTRUCTION_FOUND:
 
 ;; Stores the instruction or data the statement assembled at P%, or at O% with OPT bit 2, and moves P% (and O%) on.
 ;;
-;; The bytes come from <OPCODE> and the two bytes after it, IntA's low bytes, or for EQUS from <STRING_BUFFER>.
+;; The bytes come from <OPCODE> and up to three bytes after it, IntA's low bytes (all four for EQUD), or for EQUS
+;; from <STRING_BUFFER>.
 ;; Before storing them it sets <ASSEMBLER_ADDRESS>, <ASSEMBLER_COUNT> and <ASSEMBLER_DESTINATION> for the listing,
 ;; even when there are none. EQU (at <ASSEMBLE_EQU_STORE>) comes here too.
-;; In: Y = the number of bytes, 0-4, or &FF for StrA's string, OPCODE and INT_A = the bytes
+;; In: Y = the number of bytes, 0-4, or &FF for StrA's string, OPCODE..OPCODE+3 = the bytes, OPCODE first
 ;; Out: P_PERCENT, O_PERCENT, ASSEMBLER_ADDRESS, ASSEMBLER_COUNT, ASSEMBLER_DESTINATION
 ;; Uses: A, X, Y
 ASSEMBLER_STORE:

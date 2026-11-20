@@ -149,10 +149,16 @@ try {
     const info = await request("dataBreakpointInfo", { name: "z80:$0200", asAddress: true });
     assert.equal(info.dataId, "bank:z80:0200:1");
     await request("setDataBreakpoints", { breakpoints: [{ dataId: info.dataId, accessType: "write" }] });
+    await request("retro/memory/freeze", { memoryReference: "z80:0x0000", freeze: [{ offset: 0x0200, value: 0x55 }] });
     await request("continue", { threadId: 4 });
     frame = await stoppedOn("data breakpoint", 4);
     assert.equal(frame.line, line("ld [$E400],a"));
     await request("setDataBreakpoints", { breakpoints: [] });
+    // The store was to a frozen byte, which went back as the Z80's instruction ended, though the Z80's store reaches
+    // the bus at the Apple's $1200.
+    const held = await request("retro/memory/read", { memoryReference: "z80:0x0000", offset: 0x0200, count: 1 });
+    assert.equal(Buffer.from(held.data, "base64")[0], 0x55, "the frozen value, not the Z80's $13");
+    assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "z80:0x0000", thaw: [0x0200] })).frozen, []);
 
     // Giving the bus back: the step ends on the Z80 thread, waiting at its next instruction, and the 6502 runs on
     // when continued; a pause stops it on its own thread.

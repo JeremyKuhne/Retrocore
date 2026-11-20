@@ -15,6 +15,39 @@ internal sealed partial class DebugSession
     // so switching to bank 1 does not write the value into bank 1.
     private readonly Dictionary<(string? Bank, ushort Address), (byte Value, Enum? Area)> _frozen = [];
 
+    // The most frozen bytes checked as each instruction that writes ends; more, as a whole screen frozen is, are held
+    // at each slice, as checking them all after every store would slow the machine many times over.
+    private const int FreezesChecked = 256;
+
+    // Whether the instruction running now has written anything, after which the frozen bytes are checked as it ends.
+    private bool _freezeWritten;
+
+    // Thaws every byte, as a new launch does.
+    private void ThawAll()
+    {
+        _frozen.Clear();
+        _freezeWritten = false;
+    }
+
+    // Notes whether the CPU's last bus cycle wrote, its own or, beside the SoftCard's Z80, the 6502's, and as an
+    // instruction that wrote ends, puts back each frozen byte that no longer holds its value, while no more than
+    // FreezesChecked are frozen. Checking the bytes
+    // themselves, not the address written, catches a write through any address for the byte: the Apple III's moved
+    // zero page, an X-byte, a SoftCard's translation, whatever it is now. An instruction that writes nothing changes no
+    // frozen byte, so most instructions check none; a device's own writes go back at the next slice.
+    private void FreezeCycle(IDebugTarget cpu)
+    {
+        if (cpu.LastCycle.Operation is BusOperation.Write or BusOperation.IoWrite
+            || cpu is SoftCardDebugTarget { HostCycle.Operation: BusOperation.Write or BusOperation.IoWrite })
+        {
+            _freezeWritten = true;
+        }
+
+        if (!_freezeWritten || !cpu.IsInstructionBoundary) { return; }
+        _freezeWritten = false;
+        ApplyFreezes();
+    }
+
     /// <summary>
     ///  Answers retro/memory/freeze: freezes bytes at values and thaws others, then lists the frozen bytes of the
     ///  reference's space.
@@ -22,8 +55,12 @@ internal sealed partial class DebugSession
     /// <remarks>
     ///  <para>
     ///   <c>freeze</c> lists <c>{ offset, value }</c> and <c>thaw</c> offsets, from the reference. A frozen byte is
-    ///   written at once, and again at the start of each slice the machine runs, every few milliseconds, so the
-    ///   program cannot keep another value there. Only bytes a write can reach now can be frozen.
+    ///   written at once, and again as each instruction that writes ends, wherever it no longer holds its value, so the
+    ///   program never reads a value of its own there, however the write reached it: through another address for the
+    ///   same byte, as the Apple III's zero page or a SoftCard's translation give. The bytes are also written at the
+    ///   start of each slice the machine runs, for a device's own writes, and only then while more than 256 are frozen,
+    ///   as checking that many after every store would slow the machine many times over. Only bytes a write can reach
+    ///   now can be frozen.
     ///  </para>
     ///  <para>
     ///   A request is all or nothing: every byte is checked before any changes, and should a write still fail, the
@@ -61,6 +98,10 @@ internal sealed partial class DebugSession
         {
             _frozen.Remove((bank?.Name, address));
         }
+
+        // A dictionary keeps the room its most entries took, and walking it walks that room, so after a large thaw
+        // checking the few bytes left would cost what checking all of them did.
+        if (thaws.Count != 0) { _frozen.TrimExcess(); }
 
         if (freezes.Count != 0)
         {
@@ -167,6 +208,8 @@ internal sealed partial class DebugSession
         {
             _frozen.Remove(key);
         }
+
+        if (gone is not null) { _frozen.TrimExcess(); }
     }
 
     // Whether an expression reads a frozen byte, as [$4100], [aux:$0400] or [$4100].w do, so a watch expression can

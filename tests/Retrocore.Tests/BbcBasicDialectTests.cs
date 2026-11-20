@@ -252,6 +252,17 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  An array's bracket must follow its name straight away: FIND_VARIABLE reads the next character, so A (1) is the
+    ///  variable A and then (1), and only A(1) is the array.
+    /// </summary>
+    [TestMethod]
+    public void ArrayBracketFollowsTheName()
+    {
+        BasicSource source = BasicSource.Analyze("10 PRINT A (1),B(1)\n", BasicDialect.BbcBasic);
+        source.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Key).Should().Equal("A", "B(");
+    }
+
+    /// <summary>
     ///  @% is a variable, and a * command's text is the MOS's, not BASIC's: renaming FOO leaves *LOAD FOO alone, while
     ///  * in an expression is still multiplication.
     /// </summary>
@@ -293,15 +304,31 @@ public sealed class BbcBasicDialectTests
         repeat.Sites.Should().NotContain(site => site.Kind == BasicSiteKind.Variable, "REPEAT leaves a statement starting");
 
         // Jumps are where the tokeniser finds them: run together, abbreviated, and never in a * command.
-        Dictionary<string, BasicLabel> labels = new() { ["DONE"] = new("done", 1, 0, 4, 80) };
-        foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done"])
+        Dictionary<string, BasicLabel> labels = new() { ["done"] = new("done", 1, 0, 4, 80) };
+        foreach (string jump in (string[])["IF1THEN done", "IF X=1THEN done", "G.done", "GOS.done", "IFX PRINT EL.done", "IF X THEN 10 EL. done"])
         {
             BasicProgram.LabelReferences(BasicDialect.BbcBasic, jump, labels).Should().ContainSingle(jump)
-                .Which.Name.Should().Be("DONE");
+                .Which.Name.Should().Be("done");
         }
 
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "GOTO done%", labels).Should().BeEmpty("done% is another name");
+
+        // A label after THEN is alone before ELSE however it is abbreviated, and before REM; RUN takes no line.
+        const string Else = "REM retrocore bbcbasic\n    IF X THEN done EL. other\n    IF X THEN done ELS.other\n    IF X THEN done REM why\ndone:\n    PRINT 1\nother:\n    PRINT 2\n";
+        string elsed = BasicProgram.Parse(Else, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        string[] ifs = [.. elsed.Split('\n').Where(line => line.Contains("IF X", StringComparison.Ordinal))];
+        ifs.Should().HaveCount(3);
+        foreach (string line in ifs) { line.Should().Contain("THEN 40").And.NotContain("done"); }
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "RUN done", labels).Should().BeEmpty("BASIC II's RUN takes no line");
+
+        // A line the tokeniser makes a statement of is no label, though it is a name and a colon: PRINTX: is PRINT X.
+        BasicParseResult statement = BasicProgram.Parse("REM retrocore bbcbasic\nX=1\nPRINTX:\nPROCinit:\nEND\nDEF PROCinit:ENDPROC\n", BasicDialect.BbcBasic);
+        statement.Program?.ToText().Should().Contain("PRINTX:").And.Contain("PROCinit:");
+
+        // TRACE takes a line, its limit, which the tokeniser keeps as a line number: a label there is the line.
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "TRACE done", labels).Should().ContainSingle()
+            .Which.Name.Should().Be("done");
 
         // A byte the tokeniser copies as it is, after REM, DATA or a * command, is no GOTO even when it is &E5.
         foreach (string literal in (string[])["DATA {$E5} done", "REM {$E5} done", "REPEAT *KEY 1 {$E5} done"])
@@ -328,6 +355,7 @@ public sealed class BbcBasicDialectTests
         {
             "f" => ("x", "x+&7FFFFFFF"),
             "g" => ("", "42"),
+            "a@b" => ("", "7"),
             _ => null
         };
 
@@ -425,6 +453,68 @@ public sealed class BbcBasicDialectTests
         packed.Should().Equal(0, 0x40, 0, 0, 0);
         variables.Write(small.Kind, small.ValueAddress, new BasicValue(2147483649.5));
         variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
+
+        // NaN and infinity have no packed form: writing one is too big, and the variable keeps its value.
+        foreach (double unpackable in (double[])[double.NaN, double.PositiveInfinity, double.NegativeInfinity])
+        {
+            Action write = () => variables.Write(small.Kind, small.ValueAddress, new BasicValue(unpackable));
+            write.Should().Throw<OverflowException>(unpackable.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            variables.Read(small.Kind, small.ValueAddress).Number.Should().Be(2147483649.0);
+        }
+
+        // The integer &80000000 is an integer, but the real -2147483648 is too big to be made one, as the ROM has it.
+        BbcMachineTests.Type(machine, "CLS:PRINT STR$(NOT &80000000);\"|\";STR$INT(&80000000)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "2147483647|-2147483648");
+        evaluator.Evaluate("NOT &80000000").Value.Number.Should().Be(2147483647);
+        evaluator.Evaluate("INT(&80000000)").Value.Number.Should().Be(-2147483648);
+        BasicEvaluator.IsTrue(evaluator.Evaluate("&80000000"), BasicDialect.BbcBasic).Should().BeTrue();
+        foreach (string real in (string[])["NOT -2147483648", "INT(-2147483648)"])
+        {
+            BbcMachineTests.Type(machine, $"CLS:PRINT {real}\r");
+            BbcMachineTests.RunToPrompt(machine);
+            machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"), real);
+            Action tooBig = () => evaluator.Evaluate(real);
+            tooBig.Should().Throw<FormatException>().WithMessage("Too big.", real);
+        }
+
+        Action condition = () => BasicEvaluator.IsTrue(evaluator.Evaluate("-2147483648"), BasicDialect.BbcBasic);
+        condition.Should().Throw<FormatException>().WithMessage("Too big.");
+
+        // Assigning to an integer variable takes the integer &80000000 and refuses the real -2147483648, as BASIC does.
+        BbcMachineTests.Type(machine, "CLS:Z%=-2147483648\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Contains("Too big"));
+        BasicVariable z = variables.Find("Z%") ?? throw new InvalidOperationException("No Z%.");
+        variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("&80000000").Value);
+        variables.Read(z.Kind, z.ValueAddress).Number.Should().Be(-2147483648);
+
+        // Read back, it is still an integer: it writes back, is true in a condition and works in a watch.
+        BasicValue stored = variables.Read(z.Kind, z.ValueAddress);
+        stored.Long.Should().Be(-2147483648);
+        variables.Write(z.Kind, z.ValueAddress, stored);
+        BasicEvaluator.IsTrue(new BasicResult(stored), BasicDialect.BbcBasic).Should().BeTrue();
+        evaluator.Evaluate("NOT Z%").Value.Number.Should().Be(2147483647);
+        Action realWrite = () => variables.Write(z.Kind, z.ValueAddress, evaluator.Evaluate("-2147483648").Value);
+        realWrite.Should().Throw<OverflowException>();
+
+        // An FN's name takes @ anywhere, in the ROM and the watch.
+        BbcMachineTests.Type(machine, "10 DEF FNa@b=7\rCLS:PRINT FNa@b\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Trim() == "7");
+        evaluator.Evaluate("FNa@b").Value.Number.Should().Be(7);
+
+        // With @%'s top byte set, STR$ takes @%'s format (STR$1 is 1.00 here, in the ROM), which the watch says it does
+        // not show rather than give the general format; STR$~ is hexadecimal either way.
+        BbcMachineTests.Type(machine, "@%=&0102020A:CLS:PRINT STR$1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == "1.00");
+        Action formatted = () => evaluator.Evaluate("STR$1");
+        formatted.Should().Throw<FormatException>().WithMessage("*@%*");
+        System.Text.Encoding.ASCII.GetString(evaluator.Evaluate("STR$~255").Value.Text ?? []).Should().Be("FF");
+        BbcMachineTests.Type(machine, "@%=&90A\r");
+        BbcMachineTests.RunToPrompt(machine);
+        System.Text.Encoding.ASCII.GetString(evaluator.Evaluate("STR$1").Value.Text ?? []).Should().Be("1");
     }
 
     /// <summary>
@@ -503,6 +593,35 @@ public sealed class BbcBasicDialectTests
         routines.Select(site => site.Key).Distinct().Should().Equal("PROCfoo", "FNfoo");
         routines.Select(site => site.Name).Distinct().Should().Equal("foo");
         source.References(routines[0]).Should().HaveCount(2);
+
+        // A routine's name takes @ anywhere, as SCAN_VARIABLE_NAME reads it: PROC@foo, PROCfoo@a and PROCfoo@b are
+        // three routines, none of them foo.
+        BasicSource at = BasicSource.Analyze("10 PROC@foo:PROCfoo@a:PROCfoo@b\n", BasicDialect.BbcBasic);
+        at.Sites.Where(site => site.Kind == BasicSiteKind.Function).Select(site => site.Key)
+            .Should().Equal("PROC@foo", "PROCfoo@a", "PROCfoo@b");
+
+        // A number's exponent is READ_EXPONENT's: E and a sign whatever follows, and up to two digits, so 2E and 3E+ hold
+        // no variable E, and renaming E5 does not touch 1E5; D starts a name, as in 1:D5.
+        BasicSource numbers = BasicSource.Analyze("10 E5=1:E=2:X=1E5:Y=2E:Z=3E+:W=4E-2:V=D5\n", BasicDialect.BbcBasic);
+        numbers.Sites.Where(site => site.Kind == BasicSiteKind.Variable).Select(site => site.Text)
+            .Should().Equal("E5", "E", "X", "Y", "Z", "W", "V", "D5");
+
+        // A hover names a BBC routine with its word, and a BBC name whole: no two-character note, which the Microsoft
+        // BASICs still get.
+        BasicSite procedure = routines.First(site => site.Key == "PROCfoo");
+        BasicSite function = routines.First(site => site.Key == "FNfoo");
+        source.Summary(procedure).Should().Be("**PROCfoo**: a procedure.");
+        source.Summary(function).Should().Be("**FNfoo**: a function.");
+        BasicSource variables = BasicSource.Analyze("10 count%=1:PRINT count%\n", BasicDialect.BbcBasic);
+        BasicSite count = variables.Sites.First(site => site.Kind == BasicSiteKind.Variable);
+        variables.Summary(count).Should().NotContain("first two characters");
+        BasicSource apple = BasicSource.Analyze("10 ZEBRA=1:PRINT ZE\n", BasicDialect.AppleSoft);
+        BasicSite zebra = apple.Sites.First(site => site.Kind == BasicSiteKind.Variable);
+        apple.Summary(zebra).Should().Contain("first two characters");
+
+        // NaN, which no comparison holds for, is too big for a condition rather than cast to an integer.
+        Action nan = () => BasicEvaluator.IsTrue(new BasicResult(new BasicValue(double.NaN)), BasicDialect.BbcBasic);
+        nan.Should().Throw<FormatException>().WithMessage("Too big.");
     }
 
     /// <summary>
@@ -578,6 +697,86 @@ public sealed class BbcBasicDialectTests
         Check("S$", [4, 2], 4, (at, value) => System.Text.Encoding.ASCII.GetString(value.Text ?? []) == $"{at[0]},{at[1]}");
     }
 
+    /// <summary>
+    ///  Edge cases the ROM decides: &amp;80000000 DIV or MOD anything is 0, as DIVIDE_INTEGERS loses its one set bit;
+    ///  labels are case-sensitive, as BBC names are; AUTO's and RENUMBER's numbers name no line; and the heap is full
+    ///  when a new block would reach BASIC's stack.
+    /// </summary>
+    [TestMethod]
+    public void RomEdgeCases()
+    {
+        BbcMachine machine = Boot();
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BbcMachineTests.Type(machine, "CLS:PRINT &80000000 DIV 2;\"|\";&80000000 MOD 3;\"|\";-7 DIV 2;\"|\";-7 MOD 2\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "0|0|-3|-1");
+        foreach ((string expression, double value) in (ReadOnlySpan<(string, double)>)[
+            ("&80000000 DIV 2", 0), ("&80000000 MOD 3", 0), ("&80000000 DIV -1", 0), ("-7 DIV 2", -3), ("-7 MOD 2", -1)])
+        {
+            evaluator.Evaluate(expression).Value.Number.Should().Be(value, expression);
+        }
+
+        // READ_NUMBER stops at a second point, which BASIC then finds where no operator can be.
+        BbcMachineTests.Type(machine, "CLS:X=1.2.3\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.StartsWith("Syntax error", StringComparison.Ordinal));
+        Action points = () => evaluator.Evaluate("1.2.3");
+        points.Should().Throw<FormatException>();
+
+        // @loop is not LOOP: GOTO LOOP stays a computed jump through the variable LOOP.
+        const string Source = "REM retrocore bbcbasic\n    LOOP=20:GOTO LOOP\n@loop\n    GOTO loop\n";
+        string program = BasicProgram.Parse(Source, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        program.Should().Contain("GOTO LOOP").And.Contain("GOTO 20");
+
+        // AUTO and RENUMBER take a new first line and a step; DELETE's lines are references.
+        BasicSource renumber = BasicSource.Analyze("10 RENUMBER 100,10:AUTO 500,5\n20 DELETE 30,40\n", BasicDialect.BbcBasic);
+        renumber.Sites.Where(site => site.Kind == BasicSiteKind.LineReference).Select(site => site.Number)
+            .Should().Equal(30, 40);
+
+        // DELETE and LIST take a range, a comma between two lines, either of them a label; end: is a label, as BBC's
+        // words are capitals only.
+        const string Ranges = "REM retrocore bbcbasic\n@first\n    PRINT 1\n@last\n    PRINT 2\n    DELETE first,last:LIST 10,last\n    GOTO end\nend:\n    PRINT 3\n";
+        string ranged = BasicProgram.Parse(Ranges, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        ranged.Should().Contain("DELETE 10,20:LIST 10,20").And.Contain("GOTO 50");
+
+        // A bare point is the real zero: VAL(".") is real, so adding &7FFFFFFF and 1 does not wrap, in the ROM and the
+        // watch.
+        BbcMachineTests.Type(machine, "CLS:PRINT STR$(VAL(\".\")+&7FFFFFFF+1);\"|\";.+1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.Replace(" ", "") == "2147483648|1");
+        evaluator.Evaluate("VAL(\".\")+&7FFFFFFF+1").Value.Number.Should().Be(2147483648.0);
+        evaluator.Evaluate(".+1").Value.Number.Should().Be(1);
+
+        // A real variable's block is 2 + 2 + 1 + 5 bytes for abc: reaching the stack is no room, one short is.
+        DelegateBasicMemory memory = Memory(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, memory);
+        int heap = memory.Read(0x02) | (memory.Read(0x03) << 8);
+        int stack = memory.Read(0x04) | (memory.Read(0x05) << 8);
+        try
+        {
+            memory.Write(0x04, (byte)(heap + 10));
+            memory.Write(0x05, (byte)((heap + 10) >> 8));
+            Action reaching = () => variables.Create("abc");
+            reaching.Should().Throw<InvalidOperationException>().WithMessage("No room*");
+            memory.Write(0x04, (byte)(heap + 11));
+            memory.Write(0x05, (byte)((heap + 11) >> 8));
+            variables.Create("abc").Name.Should().Be("abc");
+
+            // A tiny real, down to the smallest double, packs as zero rather than overflowing the rounding.
+            BasicVariable abc = variables.Find("abc") ?? throw new InvalidOperationException("No abc.");
+            foreach (double tiny in (double[])[double.Epsilon, -double.Epsilon, 1e-300, Math.ScaleB(1.0, -131)])
+            {
+                variables.Write(abc.Kind, abc.ValueAddress, new BasicValue(tiny));
+                variables.Read(abc.Kind, abc.ValueAddress).Number.Should().Be(0, tiny.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        finally
+        {
+            memory.Write(0x04, (byte)stack);
+            memory.Write(0x05, (byte)(stack >> 8));
+        }
+    }
+
     // A Model B at the prompt with X%=7, _count=1 and N$="ABCABC", and an evaluator on it.
     private static BasicEvaluator Variables()
     {
@@ -597,4 +796,231 @@ public sealed class BbcBasicDialectTests
 
     private static DelegateBasicMemory Memory(BbcMachine machine) =>
         new(address => machine.Bus.Peek((ushort)address), (address, value) => machine.Bus.Write((ushort)address, value));
+
+    /// <summary>
+    ///  Products and whole powers come out bit for bit as the ROM's, which truncates its partial products: 1.1*1.1 is
+    ///  1.21 in BASIC, where the exact product rounds a bit higher, and 1.1^10 drifts as BASIC's does.
+    /// </summary>
+    [TestMethod]
+    public void RealProductsAsTheRomWorksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "1.1*1.1", "1.21*3.14159", "-7.77*0.3", "123456.789*1E-5", "3.14159*-7.77", "2.5*1.1",
+            "1.1^10", "1.1^-3", "2.5^7", "0.3^5", "-7.77^3", "(1.1*1.1=1.21)"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+    }
+
+    /// <summary>
+    ///  Numbers are read as READ_NUMBER reads them, bit for bit: the digits as a 40-bit integer, scaled by ten a step
+    ///  at a time with the ROM's truncating multiply and divide, then rounded once, which is not always the nearest
+    ///  real to the decimal (4294967295.5 is 2^32).
+    /// </summary>
+    [TestMethod]
+    public void NumbersReadAsTheRomReadsThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "4294967295.5", "512330.05169784", "598.23534", "0.1", "3.14159265", "1.7E-38", "12345678901234",
+            "0.123456789012", "65536.00001", "1E-10", "VAL\"4294967295.5\"", "VAL\"-598.23534\"", "VAL\"1.7E-38\""
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        evaluator.Evaluate("4294967295.5").Value.Number.Should().Be(4294967296);
+    }
+
+    /// <summary>
+    ///  Quotients, square roots and RAD and DEG come out bit for bit as the ROM's: DIVIDE_FP_A_BY_FP_B keeps seven
+    ///  rounding bits and no remainder, so 75/9.1 rounds as a half would; SQR is five of the ROM's Newton steps; RAD and
+    ///  DEG multiply by its packed constants.
+    /// </summary>
+    [TestMethod]
+    public void QuotientsRootsAndAnglesAsTheRomWorksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "75/9.1", "150/9.1", "1/3", "-1/3", "1.1^-3", "(-3)^-5", "SQR 6", "SQR 2", "SQR 1E-38", "RAD 1", "RAD 180",
+            "DEG 13", "DEG PI"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        // A sign takes a factor without the sign tests, so a second sign starts a name; -0.0 is 0, unsigned.
+        foreach (string signs in (string[])["--1", "- -1", "-+1", "+-1", "++1"])
+        {
+            Action chained = () => evaluator.Evaluate(signs);
+            chained.Should().Throw<FormatException>(signs).WithMessage("No such variable*");
+        }
+
+        evaluator.Evaluate("5--3").Value.Number.Should().Be(8);
+        double.IsNegative(evaluator.Evaluate("-0.0").Value.Number).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  STR$ writes a real character for character as NUMBER_TO_STRING does, rounding with its own half a unit rather
+    ///  than to the nearest decimal: 89132.34994506836 is 89132.34994.
+    /// </summary>
+    [TestMethod]
+    public void StringsAsTheRomWritesThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "89132.34994506836", "476707.7541503906", "35.5469564050436", "-4486.574285507202", "1/3", "PI", "9.9999999995",
+            "999999999.95", "0.099999999999", "1E-10", "1.5E10", "-2147483648"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM S$({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"S$({index})=STR$({expressions[index]})\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "S$");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            byte[] rom = variables.Read(array.Kind, array.ElementAddress([index])).Text ?? [];
+            (evaluator.Evaluate($"STR$({expressions[index]})").Value.Text ?? []).Should().Equal(rom, expressions[index]);
+        }
+
+        BbcBasicExpression.Format(89132.34994506836).Should().Be("89132.34994");
+    }
+
+    /// <summary>
+    ///  Sums and differences come out bit for bit as ADD_FP_B_TO_FP_A's, which lines the smaller real up in 40 bits,
+    ///  dropping what falls below, and rounds once: 2147483649-(0.5+1/1048576) is 2147483649. A unary plus keeps its
+    ///  factor's type, so +N$ is N$, but takes no string literal, as it skips EVALUATE_FACTOR's test for one.
+    /// </summary>
+    [TestMethod]
+    public void SumsAsTheRomAlignsThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "2147483649-(0.5+1/1048576)", "2147483649+(0.5+1/1048576)", "1+1/3E9", "1-1/3E9", "4294967295-1/7",
+            "-1E10+1/3", "PI-PI/1E9"
+        ];
+
+        BbcMachineTests.Type(machine, $"N$=\"ABCABC\":DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        evaluator.Evaluate("2147483649-(0.5+1/1048576)").Value.Number.Should().Be(2147483649);
+
+        BbcMachineTests.Type(machine, "CLS:PRINT LEN +N$;\"|\";LEN +(N$)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        BbcMachineTests.Type(machine, "PRINT +\"AB\"\r");
+        BbcMachineTests.RunToPrompt(machine);
+        string[] screen = [.. machine.ReadTextScreen().Select(line => line.Trim()).Where(line => line.Length > 0)];
+        screen.Should().Contain("6|6").And.Contain("No such variable");
+        evaluator.Evaluate("LEN +N$").Value.Number.Should().Be(6);
+        evaluator.Evaluate("LEN +(N$)").Value.Number.Should().Be(6);
+        Action literal = () => evaluator.Evaluate("+\"AB\"");
+        literal.Should().Throw<FormatException>().WithMessage("No such variable*");
+        Action negated = () => evaluator.Evaluate("-N$");
+        negated.Should().Throw<FormatException>();
+    }
+
+    /// <summary>
+    ///  The smallest positive real, 2^-129, reads back as 0 once packed, as its five bytes are all 0, and the ROM packs
+    ///  the operand PUSH_REAL puts on its stack: the left one, or the right real when the left is an integer, and
+    ///  always the left of / and ^. So x+0, 0+x and x=0 treat it as 0, where 2.0*x does not.
+    /// </summary>
+    [TestMethod]
+    public void TinyRealsAsTheRomPacksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions = ["(1/2^43/2^43/2^43)+0", "0+(1/2^43/2^43/2^43)", "(1/2^43/2^43/2^43)-0", "0-(1/2^43/2^43/2^43)", "(1/2^43/2^43/2^43)*2", "2*(1/2^43/2^43/2^43)", "2.0*(1/2^43/2^43/2^43)", "1.5*(1/2^43/2^43/2^43)", "((1/2^43/2^43/2^43)=0)", "(0=(1/2^43/2^43/2^43))", "(0<(1/2^43/2^43/2^43))", "-(1/2^43/2^43/2^43)+0", "SQR (1/2^43/2^43/2^43)"];
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        BbcMachineTests.Type(machine, "CLS:PRINT 1/(1/2^43/2^43/2^43)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.StartsWith("Too big", StringComparison.Ordinal));
+        Action reciprocal = () => evaluator.Evaluate("1/(1/2^43/2^43/2^43)");
+        reciprocal.Should().Throw<FormatException>().WithMessage("Too big*");
+        evaluator.Evaluate("(1/2^43/2^43/2^43)+0").Value.Number.Should().Be(0);
+    }
 }

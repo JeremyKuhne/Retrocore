@@ -126,6 +126,42 @@ public sealed partial class BasicSource
     }
 
     /// <summary>
+    ///  Describes a variable or function for a hover: its name, its type, what BASIC calls it, and its other spellings
+    ///  in the program.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The Microsoft BASICs keep only a name's first two characters and its type, so a longer name is told by what
+    ///   BASIC keeps and the program's other spellings of it. BBC BASIC keeps names whole, and a routine with its
+    ///   word: PROCfoo is a procedure and FNfoo a function, two routines.
+    ///  </para>
+    /// </remarks>
+    /// <param name="site">The variable or function.</param>
+    /// <returns>The description, in Markdown.</returns>
+    internal string Summary(BasicSite site)
+    {
+        if (Dialect is BbcBasicDialect && site.Kind == BasicSiteKind.Function)
+        {
+            bool procedure = site.Key.StartsWith("PROC", StringComparison.Ordinal);
+            return $"**{(procedure ? "PROC" : "FN")}{site.Name}**: a {(procedure ? "procedure" : "function")}.";
+        }
+
+        string kind = Describe(site, Dialect);
+        string stored = site.Key.TrimEnd('(');
+        string[] spellings = [.. References(site).Select(other => other.Name).Distinct(StringComparer.Ordinal)];
+        string article = kind[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an" : "a";
+        string text = site.Kind == BasicSiteKind.Function ? $"**FN {site.Name}**: a function" : $"**{site.Name}**: {article} {kind}";
+        if (Dialect is not BbcBasicDialect && (site.Name != stored || spellings.Length > 1))
+        {
+            text += $". BASIC keeps only the first two characters and the type, so it is **{stored}**";
+            string[] others = [.. spellings.Where(name => name != site.Name)];
+            if (others.Length > 0) { text += $"; the program also writes it as {string.Join(", ", others)}"; }
+        }
+
+        return text + ".";
+    }
+
+    /// <summary>
     ///  Describes a variable's or function's type, as its suffix and parentheses give it.
     /// </summary>
     /// <param name="site">The variable or function.</param>

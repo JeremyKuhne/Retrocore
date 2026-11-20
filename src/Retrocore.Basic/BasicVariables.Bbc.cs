@@ -102,7 +102,7 @@ public sealed partial class BasicVariables
         switch (kind)
         {
             case BasicVariableKind.Integer:
-                return new(BbcWord32(address));
+                return BasicValue.OfLong(BbcWord32(address));    // an integer, &80000000 included, not a real
             case BasicVariableKind.String:
                 int text = Word(address);
                 int length = _memory.Read(address + 3);
@@ -144,7 +144,15 @@ public sealed partial class BasicVariables
     /// <exception cref="OverflowException">The real is too big for BBC BASIC.</exception>
     internal static byte[] PackBbcReal(double value)
     {
-        double rounded = value == 0 ? 0 : BbcBasicExpression.RoundMantissa(value);
+        // NaN and infinity have no packed form; they are too big, not a garbage exponent.
+        if (!double.IsFinite(value))
+        {
+            throw new OverflowException("Too big: a real variable holds less than 1.7E38.");
+        }
+
+        // Below half the smallest real, nothing rounds up to one: zero, before any rounding.
+        if (Math.Abs(value) < Math.ScaleB(1.0, -130)) { return new byte[BbcReal]; }
+        double rounded = BbcBasicExpression.RoundMantissa(value);
         if (rounded == 0 || Math.Abs(rounded) < Math.ScaleB(1.0, -129)) { return new byte[BbcReal]; }
         int exponent = Math.ILogB(rounded) + 1 + 0x80;
         if (exponent > 0xFF)
@@ -162,13 +170,18 @@ public sealed partial class BasicVariables
         switch (kind)
         {
             case BasicVariableKind.Integer:
-                double truncated = Math.Truncate(value.Number);
-                if (truncated is < int.MinValue or > int.MaxValue)
+                // An integer goes in as it is; a real is truncated, and one of 2^31 or more in size, -2^31 included,
+                // is too big, as BASIC's assignment has it.
+                bool fits = value.Long is long whole
+                    ? whole is >= int.MinValue and <= int.MaxValue
+                    : Math.Abs(value.Number) < BbcBasicExpression.TwoToThe31;
+
+                if (!fits)
                 {
                     throw new OverflowException("Too big: an integer variable holds -2147483648 to 2147483647.");
                 }
 
-                int integer = (int)truncated;
+                int integer = value.Long is long exact ? (int)exact : (int)Math.Truncate(value.Number);
                 Store(address, [(byte)integer, (byte)(integer >> 8), (byte)(integer >> 16), (byte)(integer >> 24)]);
                 break;
             case BasicVariableKind.String:
@@ -198,7 +211,8 @@ public sealed partial class BasicVariables
             int size = Math.Min(255, text.Length + (text.Length >= Spare ? Spare : 0));
             int heap = Word(BbcBasicDialect.Heap);
             if (allocated == 0 || start + allocated != heap) { start = heap; }
-            if (start + size > Word(BbcBasicDialect.BasicStack))
+            // CLAIM_HEAP refuses a heap top that reaches BASIC's stack, not only one past it.
+            if (start + size >= Word(BbcBasicDialect.BasicStack))
             {
                 throw new InvalidOperationException("No room: there is no room on the heap for the string.");
             }
@@ -268,7 +282,7 @@ public sealed partial class BasicVariables
         BasicVariableKind kind = BbcKind(name);
         int size = 2 + (name.Length - 1) + 1 + ValueSize(kind);
         int block = Word(BbcBasicDialect.Heap);
-        if (block + size > Word(BbcBasicDialect.BasicStack))
+        if (block + size >= Word(BbcBasicDialect.BasicStack))
         {
             throw new InvalidOperationException("No room: there is no room on the heap for another variable.");
         }

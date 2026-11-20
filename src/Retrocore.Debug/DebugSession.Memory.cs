@@ -216,19 +216,80 @@ internal sealed partial class DebugSession
     ///   and within a module the first name in order. Constants the CPU's instructions address memory through, such
     ///   as the Monitor's <c>CH</c> at $24, name the bytes no label does, whatever is mapped there.
     ///  </para>
+    ///  <para>
+    ///   Each has its <c>kind</c>: what its documentation declares it, such as <c>routine</c> or <c>table</c>; else
+    ///   <c>code</c> or <c>data</c> by the statement at it, or <c>constant</c> for a constant; or null. A label on
+    ///   data has the <c>size</c> of its data: the data statements, and the bytes the hints file marks as data, from
+    ///   it to the next name or the first byte that is neither.
+    ///  </para>
     /// </remarks>
     private JsonObject MemoryLabels(JsonObject args)
     {
         MemoryReference(Required(args, "memoryReference"), out DebugMemoryBank? bank);
-        SortedDictionary<int, string> labels = LabelsIn(bank, constants: true);
-        return new JsonObject
+        IDebugMemory memory = bank is null ? Target : new BankMemory(bank);
+        (SortedDictionary<int, string> labels, SortedDictionary<int, string> names) = LabelsAndNames(bank, memory);
+        IReadOnlyList<(int Start, int Length)> marked = MarkHints.Data(HintSpace(bank));
+        bool Marked(int address) => marked.Any(range => address >= range.Start && address < range.Start + range.Length);
+
+        JsonArray list = [];
+        foreach ((int address, string name) in names)
         {
-            ["labels"] = labels.Select(pair => (JsonNode?)new JsonObject
+            DebugPosition? position = _debug.Position(memory, (ushort)address);
+            bool data = position is { Data: true } || Marked(address);
+            string? statement = position is not null ? "code" : labels.ContainsKey(address) ? null : "constant";
+            string? kind = DocumentedKind(name, address) ?? (data ? "data" : statement);
+            list.Add((JsonNode)new JsonObject
             {
-                ["address"] = pair.Key,
-                ["name"] = pair.Value
-            }).ToJsonArray()
-        };
+                ["address"] = address,
+                ["name"] = name,
+                ["kind"] = kind,
+                ["size"] = data ? DataSize(memory, names, address, Marked) : null
+            });
+        }
+
+        return new JsonObject { ["labels"] = list };
+    }
+
+    // What a name's documentation declares it, such as routine or table, from the first module documenting it at
+    // that address.
+    private string? DocumentedKind(string name, int address)
+    {
+        foreach (IDebugModule module in _debug.Modules)
+        {
+            if (module.Documentation.Find(name) is { } topic && (topic.Value is null || topic.Value == address))
+            {
+                return topic.Kind.ToString().ToLowerInvariant();
+            }
+        }
+
+        return null;
+    }
+
+    // How many bytes of data run from a name: its data statements and marked bytes, to the next name or the first
+    // byte that is neither.
+    private int DataSize(IDebugMemory memory, SortedDictionary<int, string> names, int address, Func<int, bool> marked)
+    {
+        int at = address;
+        while (at <= 0xFFFF && (at == address || !names.ContainsKey(at)))
+        {
+            DebugPosition? position = _debug.Position(memory, (ushort)at);
+            if (position is { Data: true, Start: { } start, Size: > 0 } && start + position.Size > at)
+            {
+                at = start + position.Size;
+            }
+            else if (marked(at))
+            {
+                at++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // A statement can run past the next name, which then starts its own.
+        int next = names.Keys.FirstOrDefault(key => key > address, 0x10000);
+        return Math.Min(at, next) - address;
     }
 
     // Whether a module's code is installed: in the bank that holds its area, such as the system ROM while the language
@@ -286,6 +347,10 @@ internal sealed partial class DebugSession
         foreach ((int address, string name) in labels) { names.Add(address, name); }
         foreach ((int address, string name, bool _) in SourceNames(bank, memory, SourceNameKinds.Constants, names.ContainsKey))
         {
+            // A constant names what the CPU's instructions reach at its address, so in a bank's view it names the
+            // bank's byte only where the CPU reads the bank there now: the Monitor's BRKV is main RAM's $03F0, not
+            // auxiliary RAM's, unless the machine reads auxiliary RAM there. A coprocessor's space is its own CPU's view.
+            if (bank is { InstructionSet: null } && !bank.ReadBy(Target, (ushort)address)) { continue; }
             names[address] = name;
         }
 

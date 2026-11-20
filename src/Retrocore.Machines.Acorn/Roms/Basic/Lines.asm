@@ -670,7 +670,8 @@ COMPARE_TYPE_MISMATCH:
 ;; character by their codes, and when one is the start of the other the shorter is the smaller. The left operand is
 ;; pushed on BASIC's stack while the right is evaluated, and dropped afterwards.
 ;; In:
-;;   A = the type of the left operand, in the accumulators
+;;   A = the type of the left operand, in the accumulators, with zero and negative set to match it, as
+;;     COMPARE_VALUES_X's TXA sets them: the type is branched on by those flags, not tested
 ;;   PTR_B, PTR_B_OFFSET = the right operand
 ;; Out:
 ;;   zero = set when the two are equal

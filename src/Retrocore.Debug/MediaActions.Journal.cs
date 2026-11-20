@@ -178,7 +178,7 @@ internal static partial class MediaActions
             (nameof(WozDisk), WozDisk.SnapshotKind) => WozDisk.Load(image, writable: true),
             (nameof(Disk35Disk), TwoImgContainer.SnapshotKind) => Disk35Disk.Load(image, writeProtected),
             (nameof(MemoryBlockDevice), TwoImgContainer.SnapshotKind) => MemoryBlockDevice.Load(image, writeProtected),
-            (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.Read(image),
+            (nameof(FloppyDisk), DmkFormat.SnapshotKind) => DmkFormat.ReadSnapshot(image),
             (nameof(AcornTape), AcornTape.SnapshotKind) => UefFormat.Read(image),
             (nameof(CommodoreDisk), CommodoreDisk.SnapshotKind) => G64Format.Read(image),
             (nameof(CommodoreTape), CommodoreTape.SnapshotKind) => CommodoreTape.FromSnapshot(image),

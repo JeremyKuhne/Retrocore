@@ -64,6 +64,9 @@ internal sealed class BasicLineScanner
         bool afterExternal = false;
         bool inString = false;
         bool inData = false;
+
+        // BBC BASIC's AUTO and RENUMBER take a new first line and a step, kept as line numbers but naming no line.
+        bool newLines = false;
         string? previous = null;
         string? beforeGoto = null;
         string? via = null;
@@ -92,6 +95,7 @@ internal sealed class BasicLineScanner
             if (Bbc && statementStart && value == '*') { break; }
             bool wasStart = statementStart;
             statementStart = value == ':';
+            if (value == ':') { newLines = false; }
             if (_skip.Count != 0 && _skip.Any(range => Column(index) >= range.Start && Column(index) < range.End))
             {
                 name = null;
@@ -102,7 +106,15 @@ internal sealed class BasicLineScanner
             if (Bbc && value == BbcBasicDialect.LineNumberToken && index + 3 < _bytes.Length)
             {
                 int number = BbcBasicDialect.UnpackLineNumber(_bytes[index + 1], _bytes[index + 2], _bytes[index + 3]);
-                sites.Add(Site(BasicSiteKind.LineReference, index, End(index + 3)) with { Number = number, Via = via });
+                if (!newLines)
+                {
+                    sites.Add(Site(BasicSiteKind.LineReference, index, End(index + 3)) with
+                    {
+                        Number = number,
+                        Via = via
+                    });
+                }
+
                 index += 3;
                 name = null;
                 continue;
@@ -174,6 +186,7 @@ internal sealed class BasicLineScanner
                 routine = Bbc && afterFunction ? word : "";
                 afterExternal = word is "EXFN." or "EXFN%.";
                 inData = word == "DATA";
+                if (Bbc && word is "AUTO" or "RENUMBER") { newLines = true; }
 
                 // BBC BASIC's tokeniser decides by each word's flags: ERROR and LET start a statement as THEN and ELSE
                 // do, and REPEAT leaves one starting, so ON ERROR *KEY 1 FOO and REPEAT *KEY 1 FOO are commands.
@@ -203,8 +216,9 @@ internal sealed class BasicLineScanner
                 continue;
             }
 
-            // A BBC PROC or FN name may start with a digit, as in PROC1; it is a name, not a number.
-            if (Bbc && afterFunction && char.IsAsciiDigit((char)value))
+            // A BBC PROC or FN name may start with a digit, as in PROC1, or an @, as in PROC@foo: SCAN_VARIABLE_NAME
+            // takes digits and @ anywhere in a routine's name. It is a name, not a number or the resident @%.
+            if (Bbc && afterFunction && (char.IsAsciiDigit((char)value) || value == '@'))
             {
                 index = Name(index, afterFunction, routine, sites, diagnostics, split, out name);
                 split = null;
@@ -396,6 +410,24 @@ internal sealed class BasicLineScanner
     {
         int at = index;
         while (at + 1 < _bytes.Length && (char.IsAsciiDigit((char)_bytes[at + 1]) || _bytes[at + 1] == '.')) { at++; }
+
+        // BBC BASIC's READ_EXPONENT takes an E (never D, which starts a name such as D5) and a sign whatever follows,
+        // then up to two digits: 2E and 3E+ are numbers, not the variable E, and a third digit is left over.
+        if (Bbc)
+        {
+            if (at + 1 < _bytes.Length && _bytes[at + 1] == 'E')
+            {
+                at++;
+                if (at + 1 < _bytes.Length && _bytes[at + 1] is (byte)'+' or (byte)'-') { at++; }
+                for (int digit = 0; digit < 2 && at + 1 < _bytes.Length && char.IsAsciiDigit((char)_bytes[at + 1]); digit++)
+                {
+                    at++;
+                }
+            }
+
+            return at;
+        }
+
         if (at + 2 < _bytes.Length && _bytes[at + 1] is (byte)'E' or (byte)'D')
         {
             bool signed = _bytes[at + 2] is (byte)'+' or (byte)'-' || _dialect.Keyword(_bytes[at + 2]) is "+" or "-";
@@ -425,7 +457,8 @@ internal sealed class BasicLineScanner
         while (last + 1 < _bytes.Length
             && (char.IsAsciiLetterOrDigit((char)_bytes[last + 1])
                 || ((Business || Mbasic) && _bytes[last + 1] == '.')
-                || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[last + 1]))))
+                || (Bbc && BbcBasicDialect.IsNameCharacter(_bytes[last + 1]))
+                || (Bbc && function && _bytes[last + 1] == '@')))
         {
             last++;
         }
@@ -439,8 +472,10 @@ internal sealed class BasicLineScanner
             suffix = ((char)_bytes[last]).ToString();
         }
 
+        // An array's bracket follows its name; BBC BASIC takes only one straight after it, as FIND_VARIABLE reads the
+        // next character, so A (1) is the variable A and then (1), where the other BASICs pass the spaces.
         int next = last + 1;
-        while (next < _bytes.Length && _bytes[next] == ' ') { next++; }
+        while (!Bbc && next < _bytes.Length && _bytes[next] == ' ') { next++; }
         bool array = !function && next < _bytes.Length && _bytes[next] == '(';
         // The Microsoft BASICs keep a name's first two characters, MBASIC its first 40; Integer BASIC, Business BASIC
         // and BBC BASIC keep all of it.

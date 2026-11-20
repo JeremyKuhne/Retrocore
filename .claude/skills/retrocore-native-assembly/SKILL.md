@@ -86,6 +86,13 @@ in ways that keep the bytes.
   With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`), the same tests name the first byte
   that differs.
 
+Byte identity proves the assembled program has not changed; it does not prove that a new comment or contract is
+semantically correct. For `In:`, `Out:`, `Uses:` and `Keeps:`, trace every relevant exit path, including errors,
+timeouts, and conditional branches. Where a claim is consumed by the debugger or changes routine behavior, add a
+focused runtime or contract test with distinct register/flag values. Check hardware/model-specific conditional
+branches independently. Use [retrocore-conformance](../retrocore-conformance/SKILL.md) for oracle selection and
+evidence limits, and report any path that could not be exercised.
+
 ## Checking a source
 
 Assemble a file without a test:

@@ -26,6 +26,15 @@ public sealed partial class BasicProgram
         ("RUN", false, false)
     ];
 
+    // BBC BASIC's words that take a line: the others', with DELETE's and LIST's range a comma between two (DELETE 10,
+    // last), and TRACE, whose limit is a line number, kept as one. RUN takes none in BASIC II.
+    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps =
+    [
+        .. s_jumps.Where(jump => jump.Word != "RUN")
+            .Select(jump => jump.Word is "DELETE" or "LIST" ? (jump.Word, true, false) : jump),
+        ("TRACE", false, false)
+    ];
+
     /// <summary>
     ///  Finds where a statement line names a label in place of a line number.
     /// </summary>
@@ -181,10 +190,10 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            int jump = Array.FindIndex(s_jumps, candidate => candidate.Word == word);
+            int jump = Array.FindIndex(s_bbcJumps, candidate => candidate.Word == word);
             if (jump < 0 || Column(index) < scanned) { continue; }
             int found = references.Count;
-            scanned = Targets(text, Column(index + 1), s_jumps[jump], labels, references);
+            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references, bbc: true);
 
             // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
             // is a computed jump.
@@ -288,17 +297,24 @@ public sealed partial class BasicProgram
         int at,
         (string Word, bool List, bool Required) jump,
         IReadOnlyDictionary<string, BasicLabel> labels,
-        List<(int, int, string, bool, string)> references)
+        List<(int, int, string, bool, string)> references,
+        bool bbc = false)
     {
         while (true)
         {
             at = SkipSpaces(text, at);
             if (Name().Match(text, at) is { Success: true } name && name.Index == at)
             {
-                string label = name.Groups["name"].Value.ToUpperInvariant();
+                // BBC BASIC's labels are case-sensitive, as its names are.
+                string label = bbc ? name.Groups["name"].Value : name.Groups["name"].Value.ToUpperInvariant();
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
-                bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
+                bool alone = next >= text.Length
+                    || text[next] == ':'
+                    || StartsWord(text, next, "ELSE")
+                    || (bbc && BbcWordAt(text, next) is "ELSE" or "REM")
+                    || (jump.List && text[next] == ',');
+
                 if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
                     // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.
@@ -316,6 +332,38 @@ public sealed partial class BasicProgram
             int separator = SkipSpaces(text, at);
             if (!jump.List || separator >= text.Length || text[separator] != ',') { return at; }
             at = separator + 1;
+        }
+    }
+
+    // The word BBC BASIC's tokeniser makes of the text at a column, abbreviated or not (EL. is ELSE), or null.
+    private static string? BbcWordAt(string text, int at)
+    {
+        try
+        {
+            byte[] bytes = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text[at..], [], zero: true)).ToArray();
+            return bytes.Length != 0 && bytes[0] >= 0x80 ? BbcBasicDialect.Instance.Word(bytes[0]) : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether BBC BASIC's tokeniser finds a word in a name, as it finds PRINT in PRINTX and PROC in PROCinit, so
+    ///  that a line of the name and a colon is a statement, not a label.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether the tokeniser makes a token of any of it.</returns>
+    internal static bool BbcTokenises(string name)
+    {
+        try
+        {
+            return BbcBasicDialect.Instance.Crunch(BasicText.Parse(name, [], zero: true)).ToArray().Any(value => value >= 0x80);
+        }
+        catch (FormatException)
+        {
+            return true;
         }
     }
 

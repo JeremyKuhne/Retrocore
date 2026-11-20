@@ -15,7 +15,7 @@ namespace Retrocore.Tests;
 public sealed class OverlayBaseResolverTests
 {
     /// <summary>
-    ///  Laid out as the host ships the SDK, <c>Sdk/Roms/Pet</c> beside <c>Sdk/Roms/AppleSoft</c>, an overlay's base is
+    ///  Laid out as the host ships the SDK, <c>Sdk/Roms/Pet</c> beside <c>Sdk/Roms/Microsoft6502Basic</c>, an overlay's base is
     ///  not where it names it; the resolver finds it, and plain files do not.
     /// </summary>
     [TestMethod]
@@ -26,10 +26,10 @@ public sealed class OverlayBaseResolverTests
         {
             string roms = Path.Join(sdk, "Roms");
             Copy(Path.Join(AppContext.BaseDirectory, "Inputs", "Pet"), Path.Join(roms, "Pet"));
-            Directory.CreateDirectory(Path.Join(roms, "AppleSoft"));
+            Directory.CreateDirectory(Path.Join(roms, "Microsoft6502Basic"));
             File.Copy(
-                Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft", OverlayBaseResolver.BaseName),
-                Path.Join(roms, "AppleSoft", OverlayBaseResolver.BaseName));
+                Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic", OverlayBaseResolver.BaseName),
+                Path.Join(roms, "Microsoft6502Basic", OverlayBaseResolver.BaseName));
 
             string path = Path.Join(roms, "Pet", "Basic", "Basic2.mac");
             AssemblySource source = new(File.ReadAllText(path), path);
@@ -39,7 +39,7 @@ public sealed class OverlayBaseResolverTests
             plain.Success.Should().BeFalse();
             plain.Diagnostics.Should().Contain(diagnostic => diagnostic.Message.Contains("Cannot resolve overlay base", StringComparison.Ordinal));
 
-            AssemblyResult shipped = assembler.Assemble(source, Options(new OverlayBaseResolver(Path.Join(roms, "AppleSoft"))));
+            AssemblyResult shipped = assembler.Assemble(source, Options(new OverlayBaseResolver(Path.Join(roms, "Microsoft6502Basic"))));
             shipped.Success.Should().BeTrue(string.Join('\n', shipped.Diagnostics.Select(diagnostic => diagnostic.Message)));
         }
         finally
@@ -69,7 +69,7 @@ public sealed class OverlayBaseResolverTests
     [TestMethod]
     public void OnlyTheBaseFallsBack()
     {
-        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft");
+        string folder = Path.Join(AppContext.BaseDirectory, "Inputs", "Microsoft6502Basic");
         OverlayBaseResolver resolver = new(folder);
         string from = Path.Join(AppContext.BaseDirectory, "nowhere", "Basic2.mac");
         resolver.TryResolve(from, "../../Apple2/m6502.asm", out AssemblySource? found).Should().BeTrue();

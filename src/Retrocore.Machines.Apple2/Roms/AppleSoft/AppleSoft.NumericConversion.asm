@@ -2,7 +2,7 @@
 ;;
 ;; These entries convert an address in FAC and perform memory access. They follow the byte-conversion
 ;; helpers in AppleSoft.Strings.asm; floating-point input and conversion are in later modules. WAIT's
-;; default-mask branch targets <ZSTORD>, an alias of <STORDO> defined in AppleSoft.FloatingPoint.asm.
+;; default-mask branch targets <ZSTORD>, an alias of <STORDO> defined in MsBasic.FloatingPoint.asm.
 
 ;; Reads an address expression followed by a comma and a byte expression.
 ;; Out: POKER = address, X = byte value

@@ -258,8 +258,8 @@ MAME 0.289 is already in the cache. Its `pet` driver is the trace oracle, and VI
   - Its NMI vector's low byte is the RTS that ends MOTOROFF.
 - **`PetSdkModules`** (in the debug host, and linked into the tests) assembles each part and builds a model's
   `PetRoms`.
-  - The debug host's and the tests' copies of the sources keep `m6502.asm` in `AppleSoft` beside `Pet`.
-    `OverlayBaseResolver` finds it there, so nothing moves in the repository.
+  - The SDK copies `m6502.asm` into `Roms/Microsoft6502Basic`, beside `Roms/Pet`; `OverlayBaseResolver` finds it there
+    when the PET overlays' repository-relative paths do not apply.
   - The disassembler gained `--machine none`, which names nothing outside the program, for another machine's ROM.
 - Tests (`PetRomSourceTests`):
   - each build is pinned by digest, and with the dumps present a failure names the first differing byte;

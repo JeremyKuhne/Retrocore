@@ -2,7 +2,7 @@
 ;;
 ;; The <INITAT> template initializes the page-zero character reader and random seed; <INIT> installs the
 ;; interpreter vectors, discovers available memory and enters <MAIN>. <INITAT> immediately follows <ATNCON> in
-;; AppleSoft.Transcendental.asm. AppleSoft.AppleCommands.asm follows this module.
+;; MsBasic.Transcendental.asm. AppleSoft.AppleCommands.asm follows this module.
 
 ;; Group: Cold start
 

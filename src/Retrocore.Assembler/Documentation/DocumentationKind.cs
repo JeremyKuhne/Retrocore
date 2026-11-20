@@ -50,7 +50,7 @@ public enum DocumentationKind
     Struct,
 
     /// <summary>
-    ///  A scope or procedure.
+    ///  A scope. A documented <c>.proc</c> is a routine or a table, as a label is.
     /// </summary>
     Scope,
 

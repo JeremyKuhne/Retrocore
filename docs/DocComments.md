@@ -51,7 +51,8 @@ documented is also a lint error.
 | `.set NAME, value` | Variable | First value |
 | `.macro NAME params` | Macro | Parameter list |
 | `.enum`, `.struct`, `.union` | Enum, Struct | Members and their values or offsets |
-| `.scope`, `.proc` | Scope | Members |
+| `.proc NAME` | Routine, or Table when data follows, as for a label | As for a label |
+| `.scope` | Scope | Members |
 | `.define NAME` | Definition | Parameter list |
 
 Rules:

@@ -41,8 +41,11 @@ public static partial class DocumentationParser
                 case ".union":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Struct, "", []);
                 case ".scope":
-                case ".proc":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Scope, "", []);
+                case ".proc":
+                    // A .proc defines its name as the address of its first statement, so it documents a routine (or a
+                    // table) as a label does, with the contracts the debugger checks.
+                    return name.Length == 0 ? null : new(name, DocumentationKind.Routine, "", []);
                 case ".define":
                     int open = rest.IndexOf('(');
                     string defined = open < 0 ? name : rest[..open].Trim();

@@ -273,6 +273,35 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  A documented <c>.proc</c> is a routine, or a table when data follows, as a label is; a <c>.scope</c> stays a
+    ///  scope.
+    /// </summary>
+    [TestMethod]
+    public void ProceduresDocumentRoutinesAndTables()
+    {
+        DocumentationFile file = Parse("""
+            ;; Prints.
+            ;; Keeps: X
+            .proc Print
+                rts
+            .endproc
+            ;; Bytes.
+            .proc Bytes
+                .byte 1, 2
+            .endproc
+            ;; Names.
+            .scope Names
+            .endscope
+            """);
+
+        file.Diagnostics.Should().BeEmpty();
+        file.Comments.Select(comment => (comment.Name, comment.Kind)).Should().Equal(
+            ("Print", DocumentationKind.Routine),
+            ("Bytes", DocumentationKind.Table),
+            ("Names", DocumentationKind.Scope));
+    }
+
+    /// <summary>
     ///  Links resolve through scopes, modules, addresses, models and sections, and report what they cannot.
     /// </summary>
     [TestMethod]

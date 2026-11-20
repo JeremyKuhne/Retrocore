@@ -26,14 +26,26 @@ public sealed class AltairMachine : IMachine
     ///  Builds a machine.
     /// </summary>
     /// <param name="configuration">Its boards and switches.</param>
-    public AltairMachine(AltairConfiguration configuration)
+    /// <param name="roms">The boot PROMs fitted, or null for none.</param>
+    public AltairMachine(AltairConfiguration configuration, AltairRoms? roms = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         configuration.Validate();
         Configuration = configuration;
-        Bus = new(configuration);
+        Roms = roms ?? new();
+        Bus = new(configuration, Roms);
         Processor = new(Bus, I8080Variant.I8080);
+        Bus.InterruptEnable = () => Processor.Registers.InterruptEnable;
+        List<IDevice> devices = [];
+        if (Bus.Disk is { } disk) { devices.AddRange(disk.Drives); }
+        if (Bus.Cassette is { } cassette) { devices.Add(cassette); }
+        Devices = devices;
     }
+
+    /// <summary>
+    ///  Gets the boot PROMs fitted.
+    /// </summary>
+    public AltairRoms Roms { get; }
 
     /// <summary>
     ///  Gets the configuration.
@@ -61,7 +73,7 @@ public sealed class AltairMachine : IMachine
     public AltairFrontPanel FrontPanel => Bus.FrontPanel;
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices => Bus.Cassette is { } cassette ? [cassette] : [];
+    public IReadOnlyList<IDevice> Devices { get; }
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;

@@ -17,5 +17,15 @@ public enum AltairMemoryArea
     /// <summary>
     ///  RAM.
     /// </summary>
-    Ram
+    Ram,
+
+    /// <summary>
+    ///  The disk boot loader PROM, DBL, at $FF00.
+    /// </summary>
+    Dbl,
+
+    /// <summary>
+    ///  The multi-boot loader PROM, MBL, at $FE00.
+    /// </summary>
+    Mbl
 }

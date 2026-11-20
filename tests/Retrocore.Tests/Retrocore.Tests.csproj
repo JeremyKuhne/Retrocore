@@ -125,6 +125,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\DisassemblyProgram.cs" Link="DisassemblyProgram.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Trs80SdkModules.cs" Link="Trs80SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\KayproSdkModules.cs" Link="KayproSdkModules.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\AltairSdkModules.cs" Link="AltairSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple1SdkModules.cs" Link="Apple1SdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\CocoSdkModules.cs" Link="CocoSdkModules.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\BbcSdkModules.cs" Link="BbcSdkModules.cs" />
@@ -165,6 +166,7 @@
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\FirmwareEquates.asm" Link="Inputs\Roms\System\FirmwareEquates.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Trs80\Roms\*.asm" Link="Inputs\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Kaypro\Roms\*.asm" Link="Inputs\Kaypro\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Altair\Roms\*.asm" Link="Inputs\Altair\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Kaypro\Roms\Mbasic\*.asm" Link="Inputs\Kaypro\Mbasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\*.asm" Link="Inputs\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Inputs\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -131,6 +131,15 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     // An abbreviated PROC takes its name too, so PRO.REM calls REM rather than starting a remark.
     assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "PRINT"), "keyword.other"), "PRO.REM is a call, not a remark");
     assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "REM"), "entity.name.function"));
+    // A * where a statement starts is the MOS's to the line's end, as the tokeniser leaves it; elsewhere it multiplies.
+    assert.ok(has(scopes("bbcbasic", "150 *KEY 0 LIST:RUN|M", "RUN"), "string.unquoted.command"), "a * command's words are not BASIC's");
+    assert.ok(has(scopes("bbcbasic", "160 *LOAD SCREEN 7C00", "LOAD"), "string.unquoted.command"));
+    assert.ok(has(scopes("bbcbasic", "170 IF A THEN *CAT", "CAT"), "string.unquoted.command"), "THEN starts a statement");
+    assert.ok(has(scopes("bbcbasic", "180 X=1:*FX 15", "FX"), "string.unquoted.command"), "so does a colon");
+    assert.ok(has(scopes("bbcbasic", "190 PRINT 5 *LEN A$", "LEN"), "support.function"), "a * in an expression multiplies");
+    // A conditional word's abbreviation is not taken before a name character either, and @% is a name.
+    assert.ok(!has(scopes("bbcbasic", "200 PRINT COU.X", "COU."), "keyword"), "COU.X is no COUNT");
+    assert.ok(has(scopes("bbcbasic", "210 @%=&90A", "@%"), "variable.other"));
 });
 
 test("MBASIC finds reserved words only set apart from names", () => {

@@ -11,6 +11,17 @@
       "name": "entity.name.label.retrocore-bbcbasic"
     },
     {
+      "match": "^\\s*(\\d+)?\\s*(\\*.*)$",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-bbcbasic"
+        },
+        "2": {
+          "name": "string.unquoted.command.retrocore-bbcbasic"
+        }
+      }
+    },
+    {
       "match": "^\\s*(\\d+)",
       "captures": {
         "1": {
@@ -40,6 +51,10 @@
         },
         {
           "include": "#escape"
+        },
+        {
+          "match": "(?<=:|THEN|ELSE|ERROR|REPEAT|LET)\\s*\\*.*$",
+          "name": "string.unquoted.command.retrocore-bbcbasic"
         },
         {
           "match": "&[0-9A-F]+",
@@ -72,7 +87,7 @@
           }
         },
         {
-          "match": "(?:((?:AND|(?:A|AN)\\.))|((?:ABS|(?:AB)\\.))|((?:ACS|(?:AC)\\.))|((?:ADVAL|(?:AD|ADV|ADVA)\\.))|((?:ASC|(?:AS)\\.))|(ASN)|((?:ATN|(?:AT)\\.))|((?:AUTO|(?:AU|AUT)\\.))|((?:BGET(?![A-Za-z0-9_`])|(?:B|BG|BGE)\\.))|((?:BPUT(?![A-Za-z0-9_`])|(?:BP|BPU)\\.))|((?:COLOUR|(?:C|CO|COL|COLO|COLOU)\\.))|((?:CALL|(?:CA|CAL)\\.))|((?:CHAIN|(?:CH|CHA|CHAI)\\.))|((?:CHR\\$|(?:CHR)\\.))|((?:CLEAR(?![A-Za-z0-9_`])|(?:CL|CLE|CLEA)\\.))|((?:CLOSE(?![A-Za-z0-9_`])|(?:CLO|CLOS)\\.))|(CLG(?![A-Za-z0-9_`]))|(CLS(?![A-Za-z0-9_`]))|(COS)|((?:COUNT(?![A-Za-z0-9_`])|(?:COU|COUN)\\.))|((?:DEG|(?:DE)\\.))|(DEF)|((?:DELETE|(?:DEL|DELE|DELET)\\.))|((?:DIV|(?:DI)\\.))|(DIM)|((?:DRAW|(?:DR|DRA)\\.))|((?:ENDPROC(?![A-Za-z0-9_`])|(?:E|EN|END|ENDP|ENDPR|ENDPRO)\\.))|(END(?![A-Za-z0-9_`]))|((?:ENVELOPE|(?:ENV|ENVE|ENVEL|ENVELO|ENVELOP)\\.))|((?:ELSE|(?:EL|ELS)\\.))|((?:EVAL|(?:EV|EVA)\\.))|((?:ERL(?![A-Za-z0-9_`])|(?:ER)\\.))|((?:ERROR|(?:ERR|ERRO)\\.))|((?:EOF(?![A-Za-z0-9_`])|(?:EO)\\.))|(EOR)|(ERR(?![A-Za-z0-9_`]))|((?:EXP|(?:EX)\\.))|(EXT(?![A-Za-z0-9_`]))|((?:FOR|(?:F|FO)\\.))|((?:FALSE(?![A-Za-z0-9_`])|(?:FA|FAL|FALS)\\.))|(FN)|((?:G\\s*O\\s*T\\s*O|(?:G|GO|GOT)\\.))|((?:GET\\$|(?:GE|GET)\\.))|(GET)|((?:GOSUB|(?:GOS|GOSU)\\.))|((?:GCOL|(?:GC|GCO)\\.))|((?:HIMEM(?![A-Za-z0-9_`])|(?:H|HI|HIM|HIME)\\.))|((?:INPUT|(?:I|IN|INP|INPU)\\.))|(IF)|((?:INKEY\\$|(?:INK|INKE|INKEY)\\.))|(INKEY)|(INT)|((?:INSTR\\(|(?:INS|INST|INSTR)\\.))|((?:LIST|(?:L|LI|LIS)\\.))|((?:LINE|(?:LIN)\\.))|((?:LOAD|(?:LO|LOA)\\.))|((?:LOMEM(?![A-Za-z0-9_`])|(?:LOM|LOME)\\.))|((?:LOCAL|(?:LOC|LOCA)\\.))|((?:LEFT\\$\\(|(?:LE|LEF|LEFT|LEFT\\$)\\.))|(LEN)|(LET)|(LOG)|(LN)|((?:MID\\$\\(|(?:M|MI|MID|MID\\$)\\.))|((?:MODE|(?:MO|MOD)\\.))|(MOD)|((?:MOVE|(?:MOV)\\.))|((?:NEXT|(?:N|NE|NEX)\\.))|(NEW(?![A-Za-z0-9_`]))|((?:NOT|(?:NO)\\.))|((?:OLD(?![A-Za-z0-9_`])|(?:O|OL)\\.))|(ON)|((?:OFF|(?:OF)\\.))|(OR)|((?:OPENIN|(?:OP|OPE|OPEN|OPENI)\\.))|((?:OPENOUT|(?:OPENO|OPENOU)\\.))|((?:OPENUP|(?:OPENU)\\.))|((?:OSCLI|(?:OS|OSC|OSCL)\\.))|((?:PRINT|(?:P|PR|PRI|PRIN)\\.))|((?:PAGE(?![A-Za-z0-9_`])|(?:PA|PAG)\\.))|((?:PTR(?![A-Za-z0-9_`])|(?:PT)\\.))|(PI(?![A-Za-z0-9_`]))|((?:PLOT|(?:PL|PLO)\\.))|((?:POINT\\(|(?:PO|POI|POIN|POINT)\\.))|((?:PROC|(?:PRO)\\.))|(POS(?![A-Za-z0-9_`]))|((?:RETURN(?![A-Za-z0-9_`])|(?:R|RE|RET|RETU|RETUR)\\.))|((?:REPEAT|(?:REP|REPE|REPEA)\\.))|((?:REPORT(?![A-Za-z0-9_`])|(?:REPO|REPOR)\\.))|((?:READ|(?:REA)\\.))|((?:RUN(?![A-Za-z0-9_`])|(?:RU)\\.))|((?:RAD|(?:RA)\\.))|((?:RESTORE|(?:RES|REST|RESTO|RESTOR)\\.))|((?:RIGHT\\$\\(|(?:RI|RIG|RIGH|RIGHT|RIGHT\\$)\\.))|((?:RND(?![A-Za-z0-9_`])|(?:RN)\\.))|((?:RENUMBER|(?:REN|RENU|RENUM|RENUMB|RENUMBE)\\.))|((?:STEP|(?:S|ST|STE)\\.))|((?:SAVE|(?:SA|SAV)\\.))|((?:SGN|(?:SG)\\.))|((?:SIN|(?:SI)\\.))|((?:SQR|(?:SQ)\\.))|((?:SPC|(?:SP)\\.))|((?:STR\\$|(?:STR)\\.))|((?:STRING\\$\\(|(?:STRI|STRIN|STRING|STRING\\$)\\.))|((?:SOUND|(?:SO|SOU|SOUN)\\.))|((?:STOP(?![A-Za-z0-9_`])|(?:STO)\\.))|((?:TAN|(?:T|TA)\\.))|((?:THEN|(?:TH|THE)\\.))|(TO)|((?:TAB\\(|(?:TAB)\\.))|((?:TRACE|(?:TR|TRA|TRAC)\\.))|((?:TIME(?![A-Za-z0-9_`])|(?:TI|TIM)\\.))|((?:TRUE(?![A-Za-z0-9_`])|(?:TRU)\\.))|((?:UNTIL|(?:U|UN|UNT|UNTI)\\.))|((?:USR|(?:US)\\.))|((?:VDU|(?:V|VD)\\.))|((?:VAL|(?:VA)\\.))|((?:VPOS(?![A-Za-z0-9_`])|(?:VP|VPO)\\.))|((?:WIDTH|(?:W|WI|WID|WIDT)\\.)))",
+          "match": "(?:((?:AND|(?:A|AN)\\.))|((?:ABS|(?:AB)\\.))|((?:ACS|(?:AC)\\.))|((?:ADVAL|(?:AD|ADV|ADVA)\\.))|((?:ASC|(?:AS)\\.))|(ASN)|((?:ATN|(?:AT)\\.))|((?:AUTO|(?:AU|AUT)\\.))|((?:BGET|(?:B|BG|BGE)\\.)(?![A-Za-z0-9_`]))|((?:BPUT|(?:BP|BPU)\\.)(?![A-Za-z0-9_`]))|((?:COLOUR|(?:C|CO|COL|COLO|COLOU)\\.))|((?:CALL|(?:CA|CAL)\\.))|((?:CHAIN|(?:CH|CHA|CHAI)\\.))|((?:CHR\\$|(?:CHR)\\.))|((?:CLEAR|(?:CL|CLE|CLEA)\\.)(?![A-Za-z0-9_`]))|((?:CLOSE|(?:CLO|CLOS)\\.)(?![A-Za-z0-9_`]))|(CLG(?![A-Za-z0-9_`]))|(CLS(?![A-Za-z0-9_`]))|(COS)|((?:COUNT|(?:COU|COUN)\\.)(?![A-Za-z0-9_`]))|((?:DEG|(?:DE)\\.))|(DEF)|((?:DELETE|(?:DEL|DELE|DELET)\\.))|((?:DIV|(?:DI)\\.))|(DIM)|((?:DRAW|(?:DR|DRA)\\.))|((?:ENDPROC|(?:E|EN|END|ENDP|ENDPR|ENDPRO)\\.)(?![A-Za-z0-9_`]))|(END(?![A-Za-z0-9_`]))|((?:ENVELOPE|(?:ENV|ENVE|ENVEL|ENVELO|ENVELOP)\\.))|((?:ELSE|(?:EL|ELS)\\.))|((?:EVAL|(?:EV|EVA)\\.))|((?:ERL|(?:ER)\\.)(?![A-Za-z0-9_`]))|((?:ERROR|(?:ERR|ERRO)\\.))|((?:EOF|(?:EO)\\.)(?![A-Za-z0-9_`]))|(EOR)|(ERR(?![A-Za-z0-9_`]))|((?:EXP|(?:EX)\\.))|(EXT(?![A-Za-z0-9_`]))|((?:FOR|(?:F|FO)\\.))|((?:FALSE|(?:FA|FAL|FALS)\\.)(?![A-Za-z0-9_`]))|(FN)|((?:G\\s*O\\s*T\\s*O|(?:G|GO|GOT)\\.))|((?:GET\\$|(?:GE|GET)\\.))|(GET)|((?:GOSUB|(?:GOS|GOSU)\\.))|((?:GCOL|(?:GC|GCO)\\.))|((?:HIMEM|(?:H|HI|HIM|HIME)\\.)(?![A-Za-z0-9_`]))|((?:INPUT|(?:I|IN|INP|INPU)\\.))|(IF)|((?:INKEY\\$|(?:INK|INKE|INKEY)\\.))|(INKEY)|(INT)|((?:INSTR\\(|(?:INS|INST|INSTR)\\.))|((?:LIST|(?:L|LI|LIS)\\.))|((?:LINE|(?:LIN)\\.))|((?:LOAD|(?:LO|LOA)\\.))|((?:LOMEM|(?:LOM|LOME)\\.)(?![A-Za-z0-9_`]))|((?:LOCAL|(?:LOC|LOCA)\\.))|((?:LEFT\\$\\(|(?:LE|LEF|LEFT|LEFT\\$)\\.))|(LEN)|(LET)|(LOG)|(LN)|((?:MID\\$\\(|(?:M|MI|MID|MID\\$)\\.))|((?:MODE|(?:MO|MOD)\\.))|(MOD)|((?:MOVE|(?:MOV)\\.))|((?:NEXT|(?:N|NE|NEX)\\.))|(NEW(?![A-Za-z0-9_`]))|((?:NOT|(?:NO)\\.))|((?:OLD|(?:O|OL)\\.)(?![A-Za-z0-9_`]))|(ON)|((?:OFF|(?:OF)\\.))|(OR)|((?:OPENIN|(?:OP|OPE|OPEN|OPENI)\\.))|((?:OPENOUT|(?:OPENO|OPENOU)\\.))|((?:OPENUP|(?:OPENU)\\.))|((?:OSCLI|(?:OS|OSC|OSCL)\\.))|((?:PRINT|(?:P|PR|PRI|PRIN)\\.))|((?:PAGE|(?:PA|PAG)\\.)(?![A-Za-z0-9_`]))|((?:PTR|(?:PT)\\.)(?![A-Za-z0-9_`]))|(PI(?![A-Za-z0-9_`]))|((?:PLOT|(?:PL|PLO)\\.))|((?:POINT\\(|(?:PO|POI|POIN|POINT)\\.))|((?:PROC|(?:PRO)\\.))|(POS(?![A-Za-z0-9_`]))|((?:RETURN|(?:R|RE|RET|RETU|RETUR)\\.)(?![A-Za-z0-9_`]))|((?:REPEAT|(?:REP|REPE|REPEA)\\.))|((?:REPORT|(?:REPO|REPOR)\\.)(?![A-Za-z0-9_`]))|((?:READ|(?:REA)\\.))|((?:RUN|(?:RU)\\.)(?![A-Za-z0-9_`]))|((?:RAD|(?:RA)\\.))|((?:RESTORE|(?:RES|REST|RESTO|RESTOR)\\.))|((?:RIGHT\\$\\(|(?:RI|RIG|RIGH|RIGHT|RIGHT\\$)\\.))|((?:RND|(?:RN)\\.)(?![A-Za-z0-9_`]))|((?:RENUMBER|(?:REN|RENU|RENUM|RENUMB|RENUMBE)\\.))|((?:STEP|(?:S|ST|STE)\\.))|((?:SAVE|(?:SA|SAV)\\.))|((?:SGN|(?:SG)\\.))|((?:SIN|(?:SI)\\.))|((?:SQR|(?:SQ)\\.))|((?:SPC|(?:SP)\\.))|((?:STR\\$|(?:STR)\\.))|((?:STRING\\$\\(|(?:STRI|STRIN|STRING|STRING\\$)\\.))|((?:SOUND|(?:SO|SOU|SOUN)\\.))|((?:STOP|(?:STO)\\.)(?![A-Za-z0-9_`]))|((?:TAN|(?:T|TA)\\.))|((?:THEN|(?:TH|THE)\\.))|(TO)|((?:TAB\\(|(?:TAB)\\.))|((?:TRACE|(?:TR|TRA|TRAC)\\.))|((?:TIME|(?:TI|TIM)\\.)(?![A-Za-z0-9_`]))|((?:TRUE|(?:TRU)\\.)(?![A-Za-z0-9_`]))|((?:UNTIL|(?:U|UN|UNT|UNTI)\\.))|((?:USR|(?:US)\\.))|((?:VDU|(?:V|VD)\\.))|((?:VAL|(?:VA)\\.))|((?:VPOS|(?:VP|VPO)\\.)(?![A-Za-z0-9_`]))|((?:WIDTH|(?:W|WI|WID|WIDT)\\.)))",
           "captures": {
             "1": {
               "name": "keyword.operator.retrocore-bbcbasic"
@@ -442,7 +457,7 @@
           "name": "constant.numeric.retrocore-bbcbasic"
         },
         {
-          "match": "[A-Za-z_`][A-Za-z0-9_`]*[$%]?",
+          "match": "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?",
           "name": "variable.other.retrocore-bbcbasic"
         },
         {

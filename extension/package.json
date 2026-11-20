@@ -215,7 +215,7 @@
         "extensions": [
           ".bbcbasic.bas"
         ],
-        "configuration": "./basic-language-configuration.json",
+        "configuration": "./bbcbasic-language-configuration.json",
         "icon": {
           "light": "./media/basic.svg",
           "dark": "./media/basic.svg"
@@ -1637,7 +1637,7 @@
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I, Color Computer and PET: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I, Color Computer, PET and BBC Micro: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -2073,7 +2073,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm), or the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.mac and Basic2.mac, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, CharacterGenerator.asm and PetEquates.asm), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
               },
               "breakpoints": {
                 "type": "array",

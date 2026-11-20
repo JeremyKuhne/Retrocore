@@ -393,7 +393,19 @@ internal sealed partial class SourceMapModule : IDebugModule
     public IEnumerable<(string Name, long Value)> Labels => _labels;
 
     /// <inheritdoc/>
-    public bool TryResolve(string name, out long value) => _symbols.TryGetValue(name.TrimStart('.'), out value);
+    /// <remarks>
+    ///  <para>
+    ///   A historical name from a definition's <c>Also:</c> section resolves to the definition, as it does in the
+    ///   assembler, when no symbol has that name and only one definition gives it.
+    ///  </para>
+    /// </remarks>
+    public bool TryResolve(string name, out long value)
+    {
+        string trimmed = name.TrimStart('.');
+        if (_symbols.TryGetValue(trimmed, out value)) { return true; }
+        IReadOnlyList<DocumentationTopic> also = Documentation.FindAlso(trimmed);
+        return also.Count == 1 && _symbols.TryGetValue(also[0].Name, out value);
+    }
 
     // A location and the macro and include lines it came from.
     private static IEnumerable<string> Levels(AssemblyLocation? location)

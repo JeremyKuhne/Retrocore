@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug;
 using Retrocore.Documentation;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
@@ -111,6 +112,33 @@ public sealed class HistoricalNameTests
 
             result.Diagnostics.Should().BeEmpty();
             result.Sections[0].Bytes.Span[..3].ToArray().Should().Equal(0x20, 0xED, 0xFD);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The debugger resolves a historical name, in a watch or a breakpoint, to its definition.
+    /// </summary>
+    [TestMethod]
+    public void OldNamesResolveInTheDebugger()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-also").FullName;
+        try
+        {
+            string path = Path.Join(folder, "Library.asm");
+            File.WriteAllText(path, Library);
+            AssemblyResult result = new NativeAssembler().Assemble(
+                new AssemblySource(Library, path),
+                new AssemblyOptions(ProcessorVariant.Mos6502, origin: 0x1000, imageSize: 0x100));
+
+            DebugInfo debug = new();
+            debug.Add(new SourceMapModule(result, area: null));
+            debug.Resolve("CharacterOut").Should().Be(0xFDED);
+            debug.Resolve("COUT").Should().Be(0xFDED);
+            debug.Resolve("KEYIN").Should().Be(0x1000);
         }
         finally
         {

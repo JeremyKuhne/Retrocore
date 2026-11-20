@@ -87,7 +87,7 @@ writeFileSync(program, `${programLines.join("\n")}\n`);
 // and FNA and FNa apart; and 20000 PROC calls, many with the MOS's interrupts landing on them.
 const namesLines = ["10 count=0:total=0", "20 count=count+1:total=total+1", "30 FOR I%=1 TO 20000:PROCa:NEXT", "40 PROCb",
     "50 STOP", "100 DEF PROCa:ENDPROC", "200 DEF PROCb", "210 _x=1:my_var=2", "220 ENDPROC", "600 DEF FNsq(x)=x*x",
-    "610 DEF FNpi=3", "620 DEF FNdbl(x%)=x%*2", "630 DEF FNa_b(x)=x+100", "640 DEF FNA(x)=1", "650 DEF FNa(x)=2"];
+    "610 DEF FNpi=3", "620 DEF FNdbl(x%)=x%*2", "630 DEF FNa_b(x)=x+100", "640 DEF FNA(x)=1", "650 DEF FNa(x)=2", "660 DEF FNf(@%)=@%+1"];
 const names = join(tmpdir(), `retrocore-bbc-${process.pid}-names.bbcbasic.bas`);
 writeFileSync(names, `${namesLines.join("\n")}\n`);
 
@@ -244,8 +244,8 @@ try {
 
     assert.deepEqual([await watch("@%"), await watch("_x"), await watch("my_var")], ["133642", "5", "6"]);
     assert.deepEqual(
-        [await watch("FNsq(3)"), await watch("FNpi"), await watch("FNdbl(4.7)"), await watch("FNa_b(1)"), await watch("FNa(0)"), await watch("FNA(0)")],
-        ["9", "3", "8", "101", "2", "1"]);
+        [await watch("FNsq(3)"), await watch("FNpi"), await watch("FNdbl(4.7)"), await watch("FNa_b(1)"), await watch("FNa(0)"), await watch("FNA(0)"), await watch("FNf(3)")],
+        ["9", "3", "8", "101", "2", "1", "4"]);
     await request("setBreakpoints", { source: { path: names }, breakpoints: [] });
     await request("continue", { threadId: 2 });
     await screen(text => text.includes("STOP at line 50"), "the names program's STOP");

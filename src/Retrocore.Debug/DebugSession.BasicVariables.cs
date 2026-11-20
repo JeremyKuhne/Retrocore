@@ -561,8 +561,8 @@ internal sealed partial class DebugSession
     private static partial Regex Definition();
 
     // BBC BASIC's DEF FN: a name of letters, digits, _, @ and £ (&60) straight after FN, and an optional parameter
-    // that may end in % or $.
-    [GeneratedRegex(@"^\s*DEF\s*FN(?<name>[A-Za-z0-9_@\x60]+)\s*(\(\s*(?<parameter>[A-Za-z_\x60][A-Za-z0-9_\x60]*[$%]?)\s*\))?\s*=(?<body>.*)$")]
+    // that may end in % or $, or be @%.
+    [GeneratedRegex(@"^\s*DEF\s*FN(?<name>[A-Za-z0-9_@\x60]+)\s*(\(\s*(?<parameter>@%|[A-Za-z_\x60][A-Za-z0-9_\x60]*[$%]?)\s*\))?\s*=(?<body>.*)$")]
     private static partial Regex BbcDefinition();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*[$%!#]?)\s*(\((?<subscripts>[^()]*)\))?\s*$")]

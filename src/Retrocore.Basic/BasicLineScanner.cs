@@ -520,6 +520,15 @@ internal sealed class BasicLineScanner
                 before.Start,
                 found.End));
         }
+        else if (Business && GluedWord(index, letters + suffix, sites) is { } glued)
+        {
+            diagnostics.Add(new(
+                _line,
+                BasicSeverity.Warning,
+                $"BASIC reads {found.Text} as the variable {letters}{suffix}: {glued} needs a separator, such as a space, before it.",
+                found.Start,
+                found.End));
+        }
         else if (_foreign.Contains(letters) && suffix.Length == 0)
         {
             diagnostics.Add(new(
@@ -540,6 +549,20 @@ internal sealed class BasicLineScanner
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;
+
+    // The reserved word a Business BASIC name starts with when a number runs into it, as in IF A=1THEN 20: CRUNCH
+    // takes a word only with a separator before it, and a digit is none, so the word is part of the name. Null when
+    // the name follows something else or starts no word. The line's number counts as a separator, as in 10PRINT.
+    private string? GluedWord(int index, string name, List<BasicSite> sites)
+    {
+        int column = Column(index);
+        if (column == 0 || !(char.IsAsciiDigit(_text[column - 1]) || _text[column - 1] == '.')) { return null; }
+        if (sites.Any(site => site.Kind == BasicSiteKind.LineNumber && site.End == column)) { return null; }
+        return _dialect.AllKeywords
+            .Select(word => word.TrimEnd('('))
+            .Where(word => word.Length > 0 && char.IsAsciiLetter(word[0]) && name.StartsWith(word, StringComparison.Ordinal))
+            .MaxBy(word => word.Length);
+    }
 
     private bool Bbc => _dialect is BbcBasicDialect;
 

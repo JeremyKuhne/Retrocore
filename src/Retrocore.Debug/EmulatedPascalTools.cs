@@ -4,13 +4,14 @@
 
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 
 namespace Retrocore.Debug;
 
 /// <summary>
-///  Apple Pascal's Assembler and Linker, run on an emulated Apple II Plus as <see cref="EmulatedPascalCompiler"/> runs
-///  the Compiler: APPLE2 holds them, and their files go on a copy of APPLE1.
+///  Apple Pascal's Assembler and Linker, run on an emulated Apple II Plus, or a 128K IIe for 1.3, as
+///  <see cref="EmulatedPascalCompiler"/> runs the Compiler: APPLE2 holds them, and their files go on a copy of APPLE1.
 /// </summary>
 internal static partial class EmulatedPascalTools
 {
@@ -21,9 +22,10 @@ internal static partial class EmulatedPascalTools
     /// <param name="bootDisk">APPLE1's image.</param>
     /// <param name="toolsDisk">APPLE2's image, with <c>SYSTEM.ASSMBLER</c> and <c>6500.OPCODES</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="model">The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs.</param>
     /// <returns>The code file, or null when the Assembler flagged errors; and the screen when it finished.</returns>
     /// <exception cref="TimeoutException">The system never booted, or the Assembler never finished.</exception>
-    internal static (byte[]? Code, string Screen) Assemble(string source, string bootDisk, string toolsDisk, string? roms = null)
+    internal static (byte[]? Code, string Screen) Assemble(string source, string bootDisk, string toolsDisk, string? roms = null, Apple2Model model = Apple2Model.IIPlus)
     {
         // An Apple III Pascal system disk is SOS: its Assembler runs on an emulated Apple III.
         if (EmulatedApple3PascalTools.IsSos(bootDisk))
@@ -34,7 +36,7 @@ internal static partial class EmulatedPascalTools
         byte[] boot = Apple1(bootDisk);
         PascalVolume.WriteFile(boot, proDosOrder: false, "SYSTEM.WRK.TEXT", PascalFileKind.Text, PascalTextFile.Write(source));
 
-        EmulatedPascalSystem system = new(boot, toolsDisk, roms);
+        EmulatedPascalSystem system = new(boot, toolsDisk, roms, model: model);
         system.Type("A");
         Expect(system, "LISTING", "The Assembler never asked for a listing");
         system.Type("\n");
@@ -60,9 +62,10 @@ internal static partial class EmulatedPascalTools
     /// <param name="bootDisk">APPLE1's image.</param>
     /// <param name="toolsDisk">APPLE2's image, with <c>SYSTEM.LINKER</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
+    /// <param name="model">The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs.</param>
     /// <returns>The linked code file, or null when the Linker wrote none; and the screen when it finished.</returns>
     /// <exception cref="TimeoutException">The system never booted, or the Linker never finished.</exception>
-    internal static (byte[]? Code, string Screen) Link(byte[] host, IReadOnlyList<byte[]> libraries, string bootDisk, string toolsDisk, string? roms = null)
+    internal static (byte[]? Code, string Screen) Link(byte[] host, IReadOnlyList<byte[]> libraries, string bootDisk, string toolsDisk, string? roms = null, Apple2Model model = Apple2Model.IIPlus)
     {
         if (EmulatedApple3PascalTools.IsSos(bootDisk))
         {
@@ -86,7 +89,7 @@ internal static partial class EmulatedPascalTools
 
         // Each library by name, then an empty line; no map; and the output.
         IReadOnlyList<byte[]>? more = link is null ? null : output is null ? [link] : [link, output];
-        EmulatedPascalSystem system = new(boot, toolsDisk, roms, more);
+        EmulatedPascalSystem system = new(boot, toolsDisk, roms, more, model);
         system.Type("L");
         Expect(system, "HOST FILE", "The Linker never asked for a host", or: "HOST CODEFILE");
         system.Type(link is null ? "\n" : "LINK:HOST\n");
@@ -160,6 +163,7 @@ internal static partial class EmulatedPascalTools
         return count.Success && count.Groups[1].Value == "0";
     }
 
-    [GeneratedRegex(@"(\d+)\s+ERRORS FLAGGED")]
+    // 1.0-1.2 show the count in capitals; 1.3, on a IIe, in lower case.
+    [GeneratedRegex(@"(\d+)\s+ERRORS FLAGGED", RegexOptions.IgnoreCase)]
     private static partial Regex Errors();
 }

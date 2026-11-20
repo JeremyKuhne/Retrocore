@@ -85,16 +85,20 @@ internal sealed partial class SourceAnalysis
             SymbolSiteKind kind = symbol.IsConstant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
             string path = Path.GetFullPath(location.Path);
             int column = location.Column;
+            int? sourceLength = null;
+            int scope = name.LastIndexOf("::", StringComparison.Ordinal);
+            ReadOnlySpan<char> unqualified = name.AsSpan(scope < 0 ? 0 : scope + 2);
             if (_lines.TryGetValue(path, out string[]? lines)
                 && location.Line >= 0
                 && location.Line < lines.Length
                 && ProcedureDefinition().Match(lines[location.Line]) is { Success: true } procedure
-                && name.Equals(procedure.Groups["name"].Value, StringComparison.OrdinalIgnoreCase))
+                && unqualified.Equals(procedure.Groups["name"].Value, StringComparison.OrdinalIgnoreCase))
             {
                 column = procedure.Groups["name"].Index;
+                sourceLength = procedure.Groups["name"].Length;
             }
 
-            Add(new(name, path, location.Line, column, kind, symbol.Value));
+            Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the

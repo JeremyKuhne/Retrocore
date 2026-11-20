@@ -165,6 +165,42 @@ public sealed class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A successfully assembled scoped procedure points to its unqualified name.
+    /// </summary>
+    /// <param name="precedingLabel">Whether a label precedes the procedure on the same line.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void ScopedProcedureDefinitionRange(bool precedingLabel)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string label = precedingLabel ? "Alias: " : "";
+            File.WriteAllText(main, $"; retrocore: dialect=ca65\n.org $6000\n.scope Outer\n{label}.proc Inner\n    rts\n.endproc\n.endscope\n    jsr Outer::Inner\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeTrue();
+            SymbolSite procedure = analysis.Find("Outer::Inner").Should().ContainSingle().Which;
+            procedure.Line.Should().Be(3);
+            procedure.Column.Should().Be(precedingLabel ? 13 : 6);
+            procedure.SourceLength.Should().Be("Inner".Length);
+            if (precedingLabel)
+            {
+                SymbolSite alias = analysis.Find("Outer::Alias").Should().ContainSingle().Which;
+                alias.Column.Should().Be(0);
+                alias.SourceLength.Should().BeNull();
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  Failed assemblies index active procedure statements with their enclosing scopes, not inactive or macro bodies.
     /// </summary>
     [TestMethod]

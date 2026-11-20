@@ -160,11 +160,11 @@ async function testProcedureFixtures(configured: string, broken: string, diskFol
     fs.mkdirSync(configured, { recursive: true });
     const configuredRoot = path.join(configured, "system.asm");
     const configuredBios = path.join(configured, "Bios.asm");
-    fs.writeFileSync(configuredRoot, ".section HIGH\n.include \"Bios.asm\"\n    jsr InverseCapitalsOn\n");
+    fs.writeFileSync(configuredRoot, ".section HIGH\n.include \"Bios.asm\"\n    jsr InverseCapitalsOn\n    jsr Outer::Inner\n");
     fs.writeFileSync(path.join(configured, "system.cfg"),
         "MEMORY { HIGH: start = $FE00, size = $0200, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n");
     fs.writeFileSync(configuredBios,
-        ";; Shows capitals inverse. See <InverseCapitalsNext>.\n.proc InverseCapitalsOn\n    rts\n.endproc\nInverseCapitalsNext:\n    rts\n");
+        ";; Shows capitals inverse. See <InverseCapitalsNext>.\n.proc InverseCapitalsOn\n    rts\n.endproc\nInverseCapitalsNext:\n    rts\n.scope Outer\n.proc Inner\n    rts\n.endproc\n.endscope\n");
     const bios = await vscode.workspace.openTextDocument(vscode.Uri.file(configuredBios));
     await vscode.window.showTextDocument(bios);
     const procedure = new vscode.Position(1, bios.lineAt(1).text.indexOf("InverseCapitalsOn") + 1);
@@ -179,6 +179,13 @@ async function testProcedureFixtures(configured: string, broken: string, diskFol
     assert.equal(procedureDefinitions[0].range.start.line, 1);
     assert.equal(procedureDefinitions[0].range.start.character, 6);
     assert.equal(procedureDefinitions[0].range.end.character, 6 + "InverseCapitalsOn".length);
+    const configuredDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(configuredRoot));
+    const scopedDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider", configuredDocument.uri, new vscode.Position(3, 10));
+    assert.equal(scopedDefinitions[0].uri.fsPath, configuredBios);
+    assert.equal(scopedDefinitions[0].range.start.line, 7);
+    assert.equal(scopedDefinitions[0].range.start.character, 6);
+    assert.equal(scopedDefinitions[0].range.end.character, 11);
 
     // Unsaved configuration edits change diagnostics and addresses without touching the assembly.
     const config = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(configured, "system.cfg")));
@@ -250,12 +257,12 @@ async function testProcedureFixtures(configured: string, broken: string, diskFol
         "vscode.executeDefinitionProvider", brokenBiosDocument.uri, brokenProcedure);
     assert.equal(brokenDefinitions[0].uri.fsPath, brokenBios);
     assert.equal(brokenDefinitions[0].range.start.character, 6);
-    const scopedDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+    const brokenScopedDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
         "vscode.executeDefinitionProvider", brokenDocument.uri, new vscode.Position(3, 10));
-    assert.equal(scopedDefinitions[0].uri.fsPath, brokenBios);
-    assert.equal(scopedDefinitions[0].range.start.line, 5);
-    assert.equal(scopedDefinitions[0].range.start.character, 6);
-    assert.equal(scopedDefinitions[0].range.end.character, 11);
+    assert.equal(brokenScopedDefinitions[0].uri.fsPath, brokenBios);
+    assert.equal(brokenScopedDefinitions[0].range.start.line, 5);
+    assert.equal(brokenScopedDefinitions[0].range.start.character, 6);
+    assert.equal(brokenScopedDefinitions[0].range.end.character, 11);
 
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
 }

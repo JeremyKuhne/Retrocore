@@ -14,7 +14,7 @@
 ;;
 ;; A function is entered from <EVALUATE_FACTOR> with PTRB's offset just past its token, and returns its value in
 ;; BASIC's accumulators, with the type in A: &00 and zero set for a string in StrA, &40 for an integer in IntA, and
-;; &FF and negative set for a real number in FPA.
+;; negative set for a real number in FPA: &FF, or &80 from ASN and ATN for a negative angle.
 
 ; Error numbers raised in this part.
 ERROR_NO_SUCH_VARIABLE = $1A        ;; error 26, "No such variable"
@@ -628,8 +628,8 @@ READ_QUOTED_STRING_MISSING:
 ;; A variable that does not exist is an error, unless bit 1 of OPT is clear and the name is a valid one: that is the
 ;; assembler's first pass, with errors off, where a label not yet defined is given the value of P%.
 ;; In: PTR_B, PTR_B_OFFSET = the factor
-;; Out: A = the type: &00 (zero set) for a string in StrA, &40 for an integer in IntA, &FF (negative set) for a real
-;;   in FPA; PTR_B_OFFSET = after the factor
+;; Out: A = the type: &00 (zero set) for a string in StrA, &40 for an integer in IntA, &FF or &80 (negative set) for
+;;   a real in FPA, &80 from ASN and ATN for a negative angle; PTR_B_OFFSET = after the factor
 ;; Errors: "No such variable", "Missing )", "Bad HEX", "Missing "" and the functions' own errors
 ;; Entry: EVALUATE_FACTOR_NEXT = reads the next character with GET_CHARACTER_B first, EVALUATE_FACTOR_DISPATCH =
 ;;   evaluates the factor starting with the character in A

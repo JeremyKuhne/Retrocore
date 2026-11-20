@@ -51,13 +51,13 @@ internal struct BbcBeam
     public bool Interlaced;
 
     /// <summary>
-    ///  The characters the ULA's cursor still covers.
+    ///  The cursor's characters still to come, four from the 6845's cursor output, each shown as the control register says.
     /// </summary>
     public int CursorLeft;
 
-    // The last four characters' address, raster line and display enable, newest first: the address in bits 6-19,
-    // the line in bits 1-5, display enable in bit 0.
-    private long _pipeline;
+    // The last four characters' address, raster line and display enable, 20 bits each, newest first: the address in
+    // bits 6-19, the line in bits 1-5, display enable in bit 0. Four take 80 bits, more than a long holds.
+    private UInt128 _pipeline;
 
     /// <summary>
     ///  Takes in a character's address, raster line and display enable, before any skew.
@@ -66,16 +66,16 @@ internal struct BbcBeam
     /// <param name="line">The raster line.</param>
     /// <param name="display">The display enable.</param>
     public void Push(int address, int line, bool display) =>
-        _pipeline = (_pipeline << 20) | ((long)address << 6) | ((long)(line & 0x1F) << 1) | (display ? 1L : 0);
+        _pipeline = (_pipeline << 20) | (uint)((address << 6) | ((line & 0x1F) << 1) | (display ? 1 : 0));
 
     /// <summary>
     ///  Gets a character's address, raster line and display enable from some characters back.
     /// </summary>
-    /// <param name="characters">How far back, 0-2.</param>
+    /// <param name="characters">How far back, 0-3.</param>
     /// <returns>The character.</returns>
     public readonly (int Address, int Line, bool Display) Delayed(int characters)
     {
-        long entry = (_pipeline >> (characters * 20)) & 0xFFFFF;
+        uint entry = (uint)(_pipeline >> (characters * 20)) & 0xFFFFF;
         return ((int)(entry >> 6) & 0x3FFF, (int)(entry >> 1) & 0x1F, (entry & 1) != 0);
     }
 

@@ -696,6 +696,10 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             return ram && bus.RamOffset(address) == offset;
         }
 
+        // Whether the CPU's write at an address changes a RAM offset now, which it does under the ROM unless write
+        // protection is on, and not where I/O or the VIAs take it.
+        bool Writes(ushort address, int offset) => bus.WriteOffset(address) == offset;
+
         List<DebugMemoryBank> banks =
         [
             new(
@@ -709,7 +713,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[system + (address < 0x2000 ? address : address - 0x8000)] = value;
                     return true;
                 },
-                ReadsHere: address => Reads(address, system + (address < 0x2000 ? address : address - 0x8000)))
+                ReadsHere: address => Reads(address, system + (address < 0x2000 ? address : address - 0x8000)),
+                WritesHere: address => Writes(address, system + (address < 0x2000 ? address : address - 0x8000)))
         ];
 
         for (int bank = 0; bank < bus.SwitchableBanks; bank++)
@@ -726,7 +731,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[offset + address - 0x2000] = value;
                     return true;
                 },
-                ReadsHere: address => Reads(address, offset + address - 0x2000)));
+                ReadsHere: address => Reads(address, offset + address - 0x2000),
+                WritesHere: address => Writes(address, offset + address - 0x2000)));
         }
 
         banks.Add(new(
@@ -752,7 +758,8 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
                     bus.Ram[bus.ExtendedOffset(value, address)] = data;
                     return true;
                 },
-                ReadsHere: address => Reads(address, bus.ExtendedOffset(value, address))));
+                ReadsHere: address => Reads(address, bus.ExtendedOffset(value, address)),
+                WritesHere: address => Writes(address, bus.ExtendedOffset(value, address))));
         }
 
         return banks;

@@ -83,6 +83,14 @@ const programLines = ["10 A=1:B$=\"HI\"", "20 FOR I%=1 TO 3:PROCADD:NEXT", "30 S
 const program = join(tmpdir(), `retrocore-bbc-${process.pid}.bbcbasic.bas`);
 writeFileSync(program, `${programLines.join("\n")}\n`);
 
+// BBC BASIC's own names: case-sensitive, with _, and @%; DEF FNs with no parameter, an integer one, an _ in the name,
+// and FNA and FNa apart; and 20000 PROC calls, many with the MOS's interrupts landing on them.
+const namesLines = ["10 count=0:total=0", "20 count=count+1:total=total+1", "30 FOR I%=1 TO 20000:PROCa:NEXT", "40 PROCb",
+    "50 STOP", "100 DEF PROCa:ENDPROC", "200 DEF PROCb", "210 _x=1:my_var=2", "220 ENDPROC", "600 DEF FNsq(x)=x*x",
+    "610 DEF FNpi=3", "620 DEF FNdbl(x%)=x%*2", "630 DEF FNa_b(x)=x+100", "640 DEF FNA(x)=1", "650 DEF FNa(x)=2", "660 DEF FNf(@%)=@%+1"];
+const names = join(tmpdir(), `retrocore-bbc-${process.pid}-names.bbcbasic.bas`);
+writeFileSync(names, `${namesLines.join("\n")}\n`);
+
 // A one-line program for the Model A; after a semicolon PRINT gives a number no field.
 const modelA = join(tmpdir(), `retrocore-bbc-${process.pid}-a.bbcbasic.bas`);
 writeFileSync(modelA, "10 PRINT \"MODEL A\";6*7\n");
@@ -204,6 +212,44 @@ try {
     assert.match(stack[0].source.path, /Reset\.asm$/i);
     await request("continue", { threadId: 1 });
 
+    // BBC BASIC's names: a data breakpoint on count watches count, not the word COUNT; a condition of 0.5 is true
+    // only as BASIC's IF takes it, so not at all; the PROC calls leave one frame each, however the interrupts land;
+    // @%, _x and my_var can be set; and DEF FN finds FNpi, FNdbl, FNa_b and FNa as BASIC does.
+    events.length = 0;
+    await request("launch", { machine: "bbc", sdkRoms, romDirectory: "", basic: names, stopOnEntry: true, speed: "max", sound: "off" });
+    await request("setExceptionBreakpoints", { filters: [] });
+    await request("configurationDone");
+    await stopped("entry");
+    await request("next", { threadId: 2 });
+    await stopped("step");
+    let frame = (await basicFrames())[0];
+    const info = await request("dataBreakpointInfo", { name: "count", frameId: frame.id });
+    assert.equal(info.dataId, "basic:count", JSON.stringify(info));
+    await request("setDataBreakpoints", { breakpoints: [{ dataId: info.dataId, accessType: "write" }] });
+    await request("continue", { threadId: 2 });
+    const changed = await event("stopped");
+    assert.equal(changed.description, "count changed from 0 to 1.", JSON.stringify(changed));
+    await request("setDataBreakpoints", { breakpoints: [] });
+    const conditioned = await request("setBreakpoints", { source: { path: names }, breakpoints: [{ line: 4, condition: "0.5" }, { line: 8 }] });
+    assert.ok(conditioned.breakpoints.every(breakpoint => breakpoint.verified), JSON.stringify(conditioned.breakpoints));
+    await request("continue", { threadId: 2 });
+    await stopped("breakpoint");
+    const called = await basicFrames();
+    assert.deepEqual(called.map(item => item.name), ["210: _x=1", "40: PROCb (PROC)"]);
+    frame = called[0];
+    const watch = async expression => (await request("evaluate", { expression, frameId: frame.id, context: "watch" })).result;
+    for (const [target, value] of [["@%", "&20A0A"], ["_x", "5"], ["my_var", "6"]]) {
+        await request("setExpression", { expression: target, value, frameId: frame.id });
+    }
+
+    assert.deepEqual([await watch("@%"), await watch("_x"), await watch("my_var")], ["133642", "5", "6"]);
+    assert.deepEqual(
+        [await watch("FNsq(3)"), await watch("FNpi"), await watch("FNdbl(4.7)"), await watch("FNa_b(1)"), await watch("FNa(0)"), await watch("FNA(0)"), await watch("FNf(3)")],
+        ["9", "3", "8", "101", "2", "1", "4"]);
+    await request("setBreakpoints", { source: { path: names }, breakpoints: [] });
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("STOP at line 50"), "the names program's STOP");
+
     // A Model A boots to BASIC with no disk interface, and runs a BASIC file.
     await launch({ model: "bbca", basic: modelA });
     await screen(text => text.includes("BBC Computer 16K") && /^MODEL A42 *$/m.test(text), "the Model A's program");
@@ -231,11 +277,12 @@ try {
 
     await request("disconnect");
     console.log("BBC Micro DAP passed: stepping from the 6502 sample into Mos.asm and out, a breakpoint in BASIC's source, "
-        + "a BBC BASIC program on the BASIC thread, the reset stop, a BASIC file on the Model A, and the Model B saving "
+        + "a BBC BASIC program on the BASIC thread, BBC BASIC's names in data breakpoints, conditions, setExpression and DEF "
+        + "FN, PROC frames under interrupts, the reset stop, a BASIC file on the Model A, and the Model B saving "
         + `a program to an SSD that saves to its image, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [program, modelA, disk]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [program, names, modelA, disk]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

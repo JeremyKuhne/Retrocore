@@ -40,13 +40,11 @@ public static class DmkFormat
     private const byte IdMark = 0xFE;
     private const int StandardTrackLength = 0x1900;
 
-    // Written in the header's reserved bytes, 5 to 8, by this writer: its size codes are exact, so no sector size is
-    // guessed when it is read back, as a snapshot is.
-    private static ReadOnlySpan<byte> ExactSizes => "RCSZ"u8;
-    private const int ExactSizesOffset = 5;
+    // An ID mark's offset is 14 bits, and MAME takes a track of at most $3FFF bytes.
+    private const int MaximumTrackLength = 0x3FFF;
 
-    // An ID mark's offset is 14 bits.
-    private const int MaximumTrackLength = 0x4000;
+    // The largest sector a DMK reader elsewhere sizes right: they take a size code's low two bits.
+    private const int LargestPortableSector = 1024;
 
     /// <summary>
     ///  Gets whether an image looks like DMK: a write protect byte of 0 or <c>$FF</c>, a track length that divides
@@ -71,18 +69,49 @@ public static class DmkFormat
         HeaderSize + ((image[2] | (image[3] << 8)) * image[1] * ((image[4] & 0x10) != 0 ? 1 : 2));
 
     /// <summary>
-    ///  Reads an image.
+    ///  Reads an image from a file, sizing sectors as a WD controller does, by their size code's low two bits.
     /// </summary>
     /// <param name="image">The file's bytes.</param>
     /// <returns>The disk.</returns>
     /// <exception cref="InvalidDataException">The image is not DMK.</exception>
-    public static FloppyDisk Read(ReadOnlySpan<byte> image)
+    public static FloppyDisk Read(ReadOnlySpan<byte> image) => Read(image, exactSizes: false);
+
+    /// <summary>
+    ///  Reads a snapshot, an image <see cref="Write"/> made, whose size codes are exact: 0 to 7 for 128 to 16384
+    ///  bytes, so no size is guessed.
+    /// </summary>
+    /// <param name="image">The snapshot's bytes.</param>
+    /// <returns>The disk.</returns>
+    /// <exception cref="InvalidDataException">The image is not DMK.</exception>
+    public static FloppyDisk ReadSnapshot(ReadOnlySpan<byte> image) => Read(image, exactSizes: true);
+
+    /// <summary>
+    ///  Writes a disk as a DMK file, listing what other DMK readers would not read back: sectors over 1024 bytes,
+    ///  which they size by their size code's low two bits.
+    /// </summary>
+    /// <param name="disk">The disk.</param>
+    /// <returns>The image and its losses.</returns>
+    public static EncodedImage Encode(FloppyDisk disk)
+    {
+        ArgumentNullException.ThrowIfNull(disk);
+        FloppyLosses losses = new();
+        foreach ((int cylinder, _, IReadOnlyList<FloppySector> track) in disk.Tracks())
+        {
+            if (track.Any(sector => sector.Data.Length > LargestPortableSector))
+            {
+                losses.Add($"Sectors of more than {LargestPortableSector} bytes, which other DMK readers size wrongly", cylinder);
+            }
+        }
+
+        return new(Write(disk), losses.ToList());
+    }
+
+    private static FloppyDisk Read(ReadOnlySpan<byte> image, bool exactSizes)
     {
         if (!IsDmk(image)) { throw new InvalidDataException("The image is not DMK."); }
         int length = image[2] | (image[3] << 8);
         bool singleSided = (image[4] & 0x10) != 0;
         bool singleOnly = (image[4] & 0x40) != 0;
-        bool exactSizes = image.Slice(ExactSizesOffset, ExactSizes.Length).SequenceEqual(ExactSizes);
         FloppyDisk disk = new() { IsWriteProtected = image[0] == 0xFF };
         int sides = singleSided ? 1 : 2;
         for (int cylinder = 0; cylinder < image[1]; cylinder++)
@@ -122,7 +151,6 @@ public static class DmkFormat
         image[2] = (byte)length;
         image[3] = (byte)(length >> 8);
         image[4] = sides == 1 ? (byte)0x10 : (byte)0;
-        ExactSizes.CopyTo(image.AsSpan(ExactSizesOffset));
         for (int index = 0; index < tracks.Count; index++)
         {
             (byte[] bytes, byte gap) = tracks[index];
@@ -268,21 +296,9 @@ public static class DmkFormat
             if (data >= limit) { continue; }
             byte mark = track[data];
 
-            // An image this writer made, such as a snapshot, has exact size codes, 0 to 7 for 128 to 16384 bytes. In
-            // one from elsewhere, a WD controller takes a size code's low two bits, as this does; codes 4 to 7 are the
-            // 8271's own sizes, taken when that data field is all on the track with a good CRC. When its CRC is bad,
-            // the short field is taken if its own CRC is good, as a WD sector's is (the last on a track has only
-            // padding after it), and otherwise the large one, unless another ID field starts inside it.
+            // A snapshot, which this writer made, has exact size codes, 0 to 7 for 128 to 16384 bytes. A file is read
+            // as a WD controller reads it, by the code's low two bits: only the TRS-80, CoCo and Kaypro load DMK files.
             int size = 128 << (sizeCode & (exactSizes ? 7 : 3));
-            if (!exactSizes
-                && sizeCode is >= 4 and <= 7
-                && ReadData(track, data, 128 << sizeCode, step, mark, doubleDensity) is { } large
-                && (!large.CrcError
-                    || (ReadData(track, data, size, step, mark, doubleDensity) is not { CrcError: false }
-                        && !IdWithin(track, data, data + ((large.Bytes.Length + 3) * step)))))
-            {
-                size = large.Bytes.Length;
-            }
 
             if (ReadData(track, data, size, step, mark, doubleDensity) is not (byte[] bytes, bool crcError))
             {
@@ -296,20 +312,6 @@ public static class DmkFormat
 
             disk.Add(cylinder, side, sector);
         }
-    }
-
-    // Whether the track's ID table points at an ID field from start up to, not including, end.
-    private static bool IdWithin(ReadOnlySpan<byte> track, int start, int end)
-    {
-        for (int entry = 0; entry < TableEntries; entry++)
-        {
-            int pointer = track[entry * 2] | (track[(entry * 2) + 1] << 8);
-            if (pointer == 0) { break; }
-            int offset = pointer & 0x3FFF;
-            if (offset > start && offset < end) { return true; }
-        }
-
-        return false;
     }
 
     // A data field's bytes after its mark, and whether its CRC, which follows high byte first, is wrong; a track cut

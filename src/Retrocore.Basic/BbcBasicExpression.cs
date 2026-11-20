@@ -24,6 +24,19 @@ namespace Retrocore.Basic;
 ///   <c>COUNT</c> and <c>ERL</c> are read from BASIC's zero page. Numbers can be hexadecimal, <c>&amp;FF</c>. What
 ///   needs BASIC or the MOS running, such as <c>RND</c>, <c>TIME</c>, <c>GET</c> and <c>EVAL</c>, is refused.
 ///  </para>
+///  <para>
+///   Integers match BASIC II exactly, quirks included: <c>&amp;80000000 DIV</c> or <c>MOD</c> anything is 0. Reals are
+///   held as BASIC II holds them, a 32-bit mantissa rounded as <c>ROUND_FP_A</c> rounds it, and these come out bit
+///   for bit as the ROM's: addition and subtraction; multiplication, partial products truncated as
+///   <c>MULTIPLY_FP_A</c>'s are, and the whole powers <c>^</c> makes of it; division, with
+///   <c>DIVIDE_FP_A_BY_FP_B</c>'s seven rounding bits; <c>SQR</c>, <c>RAD</c> and <c>DEG</c>; numbers typed or from
+///   <c>VAL</c>, read as <c>READ_NUMBER</c> reads them, so 4294967295.5 is 2^32; and <c>STR$</c>, written as
+///   <c>NUMBER_TO_STRING</c> writes it. <c>SIN</c>, <c>COS</c>, <c>TAN</c>, <c>ATN</c>, <c>ASN</c>, <c>ACS</c>,
+///   <c>LN</c>, <c>LOG</c>, <c>EXP</c>, and <c>^</c> with a fraction or a power of 64 or more, use the host's
+///   functions, not the ROM's series: their results can differ in the last bits, more for a large angle, and a result
+///   at the edge of the range can be a value in one and "Too big" or 0 in the other. A condition comparing such a real
+///   for equality with one the program computed may therefore disagree with BASIC.
+///  </para>
 /// </remarks>
 internal sealed class BbcBasicExpression
 {
@@ -142,9 +155,20 @@ internal sealed class BbcBasicExpression
         _at += pair ? 2 : 1;
         BasicValue right = Sum();
         if (left.IsString != right.IsString) { throw new FormatException("Type mismatch."); }
-        int compared = left.IsString
-            ? left.Text.AsSpan().SequenceCompareTo(right.Text)
-            : left.Number.CompareTo(right.Number);
+        int compared;
+        if (left.IsString)
+        {
+            compared = left.Text.AsSpan().SequenceCompareTo(right.Text);
+        }
+        else if (IsInteger(left) && IsInteger(right))
+        {
+            compared = Int(left).CompareTo(Int(right));
+        }
+        else
+        {
+            (double first, double second) = Pushed(left, right);
+            compared = first.CompareTo(second);
+        }
 
         return Truth(holds(compared));
     }
@@ -166,7 +190,7 @@ internal sealed class BbcBasicExpression
                 {
                     left = IsInteger(left) && IsInteger(right)
                         ? Integer(unchecked(Int(left) + Int(right)))
-                        : Real(left.Number + right.Number);
+                        : Real(AddReals(Pushed(left, right)));
                 }
             }
             else if (TakeCharacter('-'))
@@ -174,7 +198,7 @@ internal sealed class BbcBasicExpression
                 BasicValue right = Term();
                 left = IsInteger(left) && IsInteger(right)
                     ? Integer(unchecked(Int(left) - Int(right)))
-                    : Real(Number(left) - Number(right));
+                    : Real(Subtract(Pushed(left, right)));
             }
             else
             {
@@ -194,22 +218,24 @@ internal sealed class BbcBasicExpression
 
                 // BASIC multiplies integers as integers only when both fit in 16 bits; otherwise in reals.
                 bool small = IsShort(left) && IsShort(right);
-                left = small ? Integer(Int(left) * Int(right)) : Real(Number(left) * Number(right));
+                left = small ? Integer(Int(left) * Int(right)) : Real(MultiplyReals(Pushed(left, right)));
             }
             else if (TakeCharacter('/'))
             {
-                double divisor = Number(Power());
-                left = divisor == 0 ? throw DivisionByZero() : Real(Number(left) / divisor);
+                // DIVIDE_OPERATOR makes the left operand a real and pushes it, whatever the right one is.
+                double dividend = Packed(Number(Real(Number(left))));
+                double divisor = Number(Real(Number(Power())));
+                left = divisor == 0 ? throw DivisionByZero() : Real(DivideReals(dividend, divisor));
             }
             else if (TakeWord("DIV"))
             {
                 int divisor = Int(Power());
-                left = divisor == 0 ? throw DivisionByZero() : Integer((int)((long)Int(left) / divisor));
+                left = divisor == 0 ? throw DivisionByZero() : Integer(Divide(Int(left), divisor, remainder: false));
             }
             else if (TakeWord("MOD"))
             {
                 int divisor = Int(Power());
-                left = divisor == 0 ? throw DivisionByZero() : Integer((int)((long)Int(left) % divisor));
+                left = divisor == 0 ? throw DivisionByZero() : Integer(Divide(Int(left), divisor, remainder: true));
             }
             else
             {
@@ -224,7 +250,7 @@ internal sealed class BbcBasicExpression
         BasicValue left = Factor();
         while (TakeCharacter('^'))
         {
-            left = Raise(Number(left), Number(Factor()));
+            left = Raise(Packed(Number(left)), Number(Factor()));
         }
 
         return left;
@@ -234,6 +260,169 @@ internal sealed class BbcBasicExpression
     private static double Angle(BasicValue argument) => Number(argument) is var angle && Math.Abs(angle) < 8388608
         ? angle
         : throw new FormatException("Accuracy lost.");
+
+    /// <summary>
+    ///  Multiplies two reals as BASIC II's <c>MULTIPLY_FP_A</c> does, bit for bit.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   For each of the multiplier's 32 mantissa bits from the top, the other mantissa, with a rounding byte below it,
+    ///   is halved, losing what falls off, and added when the bit is set; the 40 bits are then normalised and rounded
+    ///   as <c>ROUND_FP_A</c> rounds them. So a product can differ from the exact one in its last bit, as the ROM's
+    ///   does.
+    ///  </para>
+    /// </remarks>
+    /// <param name="shifted">The real whose mantissa is halved and added, already a BASIC II real.</param>
+    /// <param name="multiplier">The real whose mantissa bits choose the additions, already a BASIC II real.</param>
+    /// <returns>The product, before any range check.</returns>
+    internal static double MultiplyReals(double shifted, double multiplier)
+    {
+        if (shifted == 0 || multiplier == 0 || !double.IsFinite(shifted) || !double.IsFinite(multiplier))
+        {
+            return shifted * multiplier;
+        }
+
+        int shiftedPower = Math.ILogB(shifted);
+        int multiplierPower = Math.ILogB(multiplier);
+        ulong b = (ulong)Math.ScaleB(Math.Abs(shifted), 31 - shiftedPower) << 8;
+        ulong a = (ulong)Math.ScaleB(Math.Abs(multiplier), 31 - multiplierPower);
+        ulong sum = 0;
+        for (int bit = 31; bit >= 0; bit--)
+        {
+            b >>= 1;
+            if (((a >> bit) & 1) != 0) { sum += b; }
+        }
+
+        // The 40 bits are the product times 2^-24 of the mantissas': normalised so the top is bit 39, then rounded.
+        int power = shiftedPower + multiplierPower - 38;
+        while (sum < (1UL << 39))
+        {
+            sum <<= 1;
+            power--;
+        }
+
+        ulong mantissa = sum >> 8;
+        ulong rounding = sum & 0xFF;
+        if (rounding > 0x80)
+        {
+            mantissa++;
+        }
+        else if (rounding == 0x80)
+        {
+            mantissa |= 1;
+        }
+
+        double product = Math.ScaleB(mantissa, power + 8);
+        return (shifted < 0) != (multiplier < 0) ? -product : product;
+    }
+
+    /// <summary>
+    ///  Adds two reals as <c>ADD_FP_B_TO_FP_A</c> does, bit for bit; a subtraction adds the negated real.
+    /// </summary>
+    /// <param name="augend">A real, already a BASIC II real.</param>
+    /// <param name="addend">The other, already a BASIC II real.</param>
+    /// <returns>The sum, before any range check.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The real with the smaller exponent is shifted right to line up with the other, keeping 40 bits and dropping
+    ///   the rest, and left out altogether when it would be shifted 37 bits or more. Mantissas of one sign are added,
+    ///   a carry shifted back in at the top; of opposite signs the smaller is taken from the larger, which gives the
+    ///   sign. The result is normalised and rounded once, so 2147483649-(0.5+1/1048576) is 2147483649.
+    ///  </para>
+    /// </remarks>
+    internal static double AddReals(double augend, double addend)
+    {
+        if (augend == 0 || !double.IsFinite(augend) || !double.IsFinite(addend)) { return augend + addend; }
+        if (addend == 0) { return augend; }
+
+        int augendPower = Math.ILogB(augend) + 1;
+        int addendPower = Math.ILogB(addend) + 1;
+        if (augendPower < addendPower || (augendPower == addendPower && Math.Abs(augend) < Math.Abs(addend)))
+        {
+            (augend, addend, augendPower, addendPower) = (addend, augend, addendPower, augendPower);
+        }
+
+        int shift = augendPower - addendPower;
+        if (shift >= 37) { return augend; }
+
+        // Both as 40-bit mantissas, the larger's top at bit 39, worth mantissa * 2^(power - 40).
+        ulong larger = (ulong)Math.ScaleB(Math.Abs(augend), 32 - augendPower) << 8;
+        ulong smaller = ((ulong)Math.ScaleB(Math.Abs(addend), 32 - addendPower) << 8) >> shift;
+        ulong mantissa = (augend < 0) == (addend < 0) ? larger + smaller : larger - smaller;
+        int power = augendPower;
+        if (mantissa >= 1UL << 40)
+        {
+            // A carry out of the top is shifted back in, dropping the lowest bit.
+            mantissa >>= 1;
+            power++;
+        }
+
+        double sum = RoundForty(mantissa, power);
+        return augend < 0 ? -sum : sum;
+    }
+
+    /// <summary>
+    ///  Divides two reals as <c>DIVIDE_FP_A_BY_FP_B</c> does, bit for bit.
+    /// </summary>
+    /// <param name="dividend">The real divided, already a BASIC II real.</param>
+    /// <param name="divisor">The real it is divided by, already a BASIC II real and not zero.</param>
+    /// <returns>The quotient, before any range check.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The mantissas are divided by long division, 32 quotient bits and then seven more into the rounding byte, whose
+    ///   lowest bit is left clear: nothing records a remainder below them, so a quotient just above a half rounds as an
+    ///   exact half would, setting the lowest bit, where the exact quotient would round up (75/9.1).
+    ///  </para>
+    /// </remarks>
+    internal static double DivideReals(double dividend, double divisor)
+    {
+        if (dividend == 0 || !double.IsFinite(dividend) || !double.IsFinite(divisor) || divisor == 0)
+        {
+            return dividend / divisor;
+        }
+
+        int dividendPower = Math.ILogB(dividend);
+        int divisorPower = Math.ILogB(divisor);
+        ulong remainder = (ulong)Math.ScaleB(Math.Abs(dividend), 31 - dividendPower);
+        ulong mantissa = (ulong)Math.ScaleB(Math.Abs(divisor), 31 - divisorPower);
+        ulong quotient = 0;
+        for (int bit = 0; bit < 39; bit++)
+        {
+            bool one = remainder >= mantissa;
+            if (one) { remainder -= mantissa; }
+            quotient = (quotient << 1) | (one ? 1UL : 0);
+            remainder <<= 1;
+        }
+
+        // The 32 bits and the seven, shifted to the top of the rounding byte; the first bit is worth one.
+        double result = RoundForty(quotient << 1, dividendPower - divisorPower + 1);
+        return (dividend < 0) != (divisor < 0) ? -result : result;
+    }
+
+    // SQR as SQR_FP_A works it out: a first guess with half the exponent and the same mantissa, then five steps of
+    // Newton's method, each the mean of the guess and the number divided by it with the ROM's divide and add.
+    private static double SquareRoot(double number)
+    {
+        if (number == 0) { return 0; }
+
+        // The exponent byte, offset by &80, halved with the bit shifted out added back.
+        int exponent = Math.ILogB(number) + 1 + 0x80;
+        int halved = (exponent >> 1) + 0x40 + (exponent & 1);
+        double guess = Math.ScaleB(number, halved - exponent);
+        for (int step = 0; step < 5; step++)
+        {
+            double quotient = DivideReals(Packed(number), guess);
+            guess = Math.ScaleB(AddReals(quotient, guess), -1);
+        }
+
+        return guess;
+    }
+
+    // DIV or MOD as DIVIDE_INTEGERS works them out: &80000000's one set bit is lost with its leading zeros, so it gives
+    // 0 for both with any divisor, where everything else divides as two's complement.
+    private static int Divide(int dividend, int divisor, bool remainder) => dividend == int.MinValue
+        ? 0
+        : (int)(remainder ? (long)dividend % divisor : (long)dividend / divisor);
 
     // x^y as POWER_OPERATOR works it out. A y of 64 or more in size is all fraction; any other is split into the whole
     // number nearest it, n, and what is left, f, of at most a half. x^n is repeated multiplication (by the reciprocal
@@ -245,15 +434,48 @@ internal sealed class BbcBasicExpression
         double fraction = y - whole;
         double power = 1;
         if (whole < 0 && x == 0) { throw new FormatException("Division by zero."); }
-        double factor = whole < 0 ? Real(1 / x).Number : x;
-        for (int step = 0; step < Math.Abs(whole); step++) { power = Real(power * factor).Number; }
+        double factor = whole < 0 ? Real(DivideReals(1, x)).Number : x;
+        // RAISE_TO_POWER multiplies its running result, FPA, by x each time: x is the one shifted.
+        for (int step = 0; step < Math.Abs(whole); step++) { power = Real(MultiplyReals(factor, power)).Number; }
 
         if (fraction == 0) { return Real(power); }
         if (x <= 0) { throw new FormatException("Log range."); }
         double exponent = Math.Log(x) * fraction;
         if (exponent >= 89.5) { throw new FormatException("Exp range."); }
-        return Real(power * (exponent <= -89.5 ? 0 : Math.Exp(exponent)));
+        return Real(MultiplyReals(power, Real(exponent <= -89.5 ? 0 : Math.Exp(exponent)).Number));
     }
+
+    // The factor after a unary sign. UNARY_MINUS and the plus take it without the tests EVALUATE_FACTOR makes first
+    // for a sign and a string, so either is read as the start of a name: --1, +-1 and +"AB" are "No such variable",
+    // where 5--3 is not, and +N$ is N$.
+    private BasicValue Signed()
+    {
+        Skip();
+        return _at < _bytes.Length && _bytes[_at] is (byte)'-' or (byte)'+' or (byte)'"'
+            ? throw new FormatException("No such variable.")
+            : Factor();
+    }
+
+    // A real as the ROM leaves it once packed in five bytes: the smallest positive real, 2^-129, has an exponent of 0
+    // and a mantissa of &80000000, whose top bit the sign replaces, so all five bytes are 0 and it reads back as 0.
+    // Every other real, -2^-129 included, comes back as it went.
+    private static double Packed(double value) => value == SmallestReal ? 0 : value;
+
+    // Two operands as reals, as the ROM holds them to combine them: PUSH_REAL packs the left one onto BASIC's stack
+    // while the right is worked out in FPA, except when the left is an integer and the right a real, when the right
+    // is pushed and the integer made a real in FPA. So x+0 and 0+x are both 0 for x = 2^-129, where 2^100*x is not.
+    private static (double Left, double Right) Pushed(BasicValue left, BasicValue right)
+    {
+        double first = Number(Real(Number(left)));
+        double second = Number(Real(Number(right)));
+        return IsInteger(left) && !IsInteger(right) ? (first, Packed(second)) : (Packed(first), second);
+    }
+
+    private static double AddReals((double Left, double Right) operands) => AddReals(operands.Left, operands.Right);
+
+    private static double Subtract((double Left, double Right) operands) => AddReals(operands.Left, -operands.Right);
+
+    private static double MultiplyReals((double Left, double Right) operands) => MultiplyReals(operands.Left, operands.Right);
 
     private static bool IsShort(BasicValue value) => IsInteger(value) && Int(value) is >= short.MinValue and <= short.MaxValue;
 
@@ -279,13 +501,14 @@ internal sealed class BbcBasicExpression
         {
             case (byte)'-':
                 _at++;
-                BasicValue negated = Factor();
-                return IsInteger(negated) ? Integer(unchecked(-Int(negated))) : new(-Number(negated));
+                BasicValue negated = Signed();
+
+                // NEGATE_FP_A leaves a zero alone, so -0.0 is 0.
+                return IsInteger(negated) ? Integer(unchecked(-Int(negated))) : new(Number(negated) == 0 ? 0 : -Number(negated));
             case (byte)'+':
                 _at++;
-                BasicValue plus = Factor();
-                Number(plus);
-                return plus;
+                // The plus dispatches the factor after it and keeps its type, so +N$ is N$.
+                return Signed();
             case (byte)'(':
                 _at++;
                 BasicValue inner = Expression();
@@ -367,22 +590,24 @@ internal sealed class BbcBasicExpression
             "ASN" => Real(Math.Asin(Unit(Number(argument)))),
             "ATN" => Real(Math.Atan(Number(argument))),
             "COS" => Real(Math.Cos(Angle(argument))),
-            "DEG" => Real(Number(argument) * 180 / Math.PI),
+            "DEG" => Real(MultiplyReals(s_degreesPerRadian, Number(Real(Number(argument))))),
             "EXP" => Number(argument) switch
             {
                 >= 89.5 => throw new FormatException("Exp range."),
                 <= -89.5 => new(0),
                 double power => Real(Math.Exp(power))
             },
-            "INT" => Math.Floor(Number(argument)) is >= int.MinValue and <= int.MaxValue and double whole
-                ? Integer((int)whole)
-                : throw new FormatException("Too big."),
+            "INT" => IsInteger(argument)
+                ? Integer(Int(argument))
+                : Math.Abs(Number(argument)) < TwoToThe31
+                    ? Integer((int)Math.Floor(Number(argument)))
+                    : throw new FormatException("Too big."),
             "LN" => Real(Logarithm(Number(argument), Math.Log)),
             "LOG" => Real(Logarithm(Number(argument), Math.Log10)),
-            "RAD" => Real(Number(argument) * Math.PI / 180),
+            "RAD" => Real(MultiplyReals(s_radiansPerDegree, Number(Real(Number(argument))))),
             "SGN" => Integer(Math.Sign(Number(argument))),
             "SIN" => Real(Math.Sin(Angle(argument))),
-            "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : Real(Math.Sqrt(Number(argument))),
+            "SQR" => Number(argument) < 0 ? throw new FormatException("-ve root.") : Real(SquareRoot(Number(Real(Number(argument))))),
             "TAN" => Real(Math.Tan(Angle(argument))),
             "LEN" => Integer(Text(argument).Length),
             "ASC" => Integer(Text(argument) is { Length: > 0 } text ? text[0] : -1),
@@ -396,6 +621,14 @@ internal sealed class BbcBasicExpression
     {
         bool hex = TakeCharacter('~');
         BasicValue argument = Factor();
+
+        // With @%'s top byte set, STR$ takes @%'s format and digits, which a watch does not reproduce: it says so rather
+        // than give the general format the program would not. STR$~ is hexadecimal either way.
+        if (!hex && _memory.Read(BbcBasicDialect.ResidentIntegers + 3) != 0)
+        {
+            throw new FormatException("STR$ uses @%'s format here, as @%'s top byte is set, which a watch does not show.");
+        }
+
         string text = hex
             ? Int(argument).ToString("X", System.Globalization.CultureInfo.InvariantCulture)
             : Format(Number(argument));
@@ -452,7 +685,7 @@ internal sealed class BbcBasicExpression
     // FNname or FNname(argument): a one-line DEF FN's body, with its parameter bound to the argument.
     private BasicValue Function()
     {
-        string name = Letters();
+        string name = RoutineName();
         BasicValue? argument = null;
         if (TakeCharacter('('))
         {
@@ -525,6 +758,14 @@ internal sealed class BbcBasicExpression
     private static BasicValue Typed(BasicVariableKind kind, BasicValue value) =>
         kind == BasicVariableKind.Integer ? Integer((int)value.Number) : value;
 
+    // A PROC or FN name, as SCAN_VARIABLE_NAME reads one after the word: name characters, digits and @, anywhere.
+    private string RoutineName()
+    {
+        int start = _at;
+        while (_at < _bytes.Length && (BbcBasicDialect.IsNameCharacter(_bytes[_at]) || _bytes[_at] == '@')) { _at++; }
+        return Encoding.ASCII.GetString(_bytes, start, _at - start);
+    }
+
     private string Letters()
     {
         int start = _at;
@@ -572,7 +813,14 @@ internal sealed class BbcBasicExpression
     private BasicValue NumberLiteral()
     {
         int start = _at;
-        while (_at < _bytes.Length && (char.IsAsciiDigit((char)_bytes[_at]) || _bytes[_at] == '.')) { _at++; }
+        // READ_NUMBER stops at a second point and leaves it unread, so 1.2.3 is 1.2 and then .3, which is no operator.
+        bool point = false;
+        while (_at < _bytes.Length && (char.IsAsciiDigit((char)_bytes[_at]) || (_bytes[_at] == '.' && !point)))
+        {
+            point |= _bytes[_at] == '.';
+            _at++;
+        }
+
         string text = Encoding.ASCII.GetString(_bytes, start, _at - start);
         if (_at < _bytes.Length && _bytes[_at] == 'E')
         {
@@ -592,11 +840,143 @@ internal sealed class BbcBasicExpression
     // (so 1E0 is one) and its magnitude fits 31 bits; otherwise a real. The sign goes on after, so -2147483648 is real.
     private static BasicValue? Classify(string magnitude, bool negative)
     {
-        if (!BasicNumbers.TryParse(magnitude, out double number)) { return null; }
-        int mark = magnitude.IndexOf('E', StringComparison.Ordinal);
-        bool zeroScale = mark < 0 || int.TryParse(magnitude[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture, out int power) && power == 0;
-        bool integer = !magnitude.Contains('.') && zeroScale && number <= int.MaxValue;
-        return integer ? Integer(negative ? -(int)number : (int)number) : Real(negative ? -number : number);
+        if (magnitude.Length == 0) { return null; }
+        if (ReadNumber(magnitude) is not (ulong digits, int scale, bool point)) { return null; }
+
+        if (!point && scale == 0 && digits <= int.MaxValue)
+        {
+            return Integer(negative ? -(int)digits : (int)digits);
+        }
+
+        double number = ScaleByTens(digits, scale);
+        return Real(negative ? -number : number);
+    }
+
+    // READ_NUMBER's first part: the digits as a 40-bit integer, and the power of ten to scale it by. Once the top byte
+    // reaches &18 the next digit is dropped, adding one to the scale before the point and nothing after it, and the
+    // scale is a byte, so it wraps as the ROM's does.
+    private static (ulong Digits, int Scale, bool Point)? ReadNumber(string magnitude)
+    {
+        ulong digits = 0;
+        sbyte scale = 0;
+        bool point = false;
+        bool any = false;
+        int at = 0;
+        for (; at < magnitude.Length; at++)
+        {
+            char character = magnitude[at];
+            if (character == '.')
+            {
+                if (point) { break; }
+                point = true;
+                continue;
+            }
+
+            if (!char.IsAsciiDigit(character)) { break; }
+            any = true;
+            if (digits >> 32 >= 0x18)
+            {
+                if (!point) { scale++; }
+                continue;
+            }
+
+            if (point) { scale--; }
+            digits = (digits * 10) + (ulong)(character - '0');
+        }
+
+        if (!any && !point) { return null; }
+        if (at < magnitude.Length && magnitude[at] == 'E')
+        {
+            at++;
+            bool minus = at < magnitude.Length && magnitude[at] == '-';
+            if (at < magnitude.Length && magnitude[at] is '+' or '-') { at++; }
+            int exponent = 0;
+            for (int count = 0; count < 2 && at < magnitude.Length && char.IsAsciiDigit(magnitude[at]); count++, at++)
+            {
+                exponent = (exponent * 10) + (magnitude[at] - '0');
+            }
+
+            scale = unchecked((sbyte)(scale + (minus ? -exponent : exponent)));
+        }
+
+        return (digits, scale, point);
+    }
+
+    // READ_NUMBER's real part: the 40-bit integer normalised, then multiplied or divided by ten once for each power of
+    // the scale with MULTIPLY_FP_A_BY_TEN and DIVIDE_FP_A_BY_TEN, which keep 40 bits and truncate, and rounded once at
+    // the end by ROUND_FP_A. The mantissa is held with its top bit at bit 39, the value mantissa * 2^(power - 40).
+    private static double ScaleByTens(ulong mantissa, int scale)
+    {
+        const ulong Top = 1UL << 39;
+        if (mantissa == 0) { return 0; }
+
+        int power = 40;
+        while ((mantissa & Top) == 0)
+        {
+            mantissa <<= 1;
+            power--;
+        }
+
+        for (; scale > 0; scale--) { MultiplyByTen(ref mantissa, ref power); }
+        for (; scale < 0; scale++) { DivideByTen(ref mantissa, ref power); }
+
+        return RoundForty(mantissa, power);
+    }
+
+    // MULTIPLY_FP_A_BY_TEN: eight times it plus a quarter of that, the bit below the quarter carried in, unrounded.
+    private static void MultiplyByTen(ref ulong mantissa, ref int power)
+    {
+        power += 3;
+        mantissa = AddShifted(mantissa, mantissa >> 2, (mantissa >> 1) & 1, ref power);
+    }
+
+    // DIVIDE_FP_A_BY_TEN: a sixteenth of it times 1.5, 1.0625, 1 + 2^-8, 1 + 2^-16 and 1 + 2^-32, which make 1.6, each
+    // copy with the bit below it carried in, unrounded.
+    private static void DivideByTen(ref ulong mantissa, ref int power)
+    {
+        power -= 4;
+        mantissa = AddShifted(mantissa, mantissa >> 1, mantissa & 1, ref power);
+        mantissa = AddShifted(mantissa, mantissa >> 4, (mantissa >> 3) & 1, ref power);
+        mantissa = AddShifted(mantissa, mantissa >> 8, (mantissa >> 7) & 1, ref power);
+        mantissa = AddShifted(mantissa, mantissa >> 16, (mantissa >> 15) & 1, ref power);
+        mantissa = AddShifted(mantissa, mantissa >> 32, (mantissa >> 31) & 1, ref power);
+    }
+
+    // NORMALISE_AND_ROUND_FP_A on a 40-bit mantissa worth mantissa * 2^(power - 40): shifted until its top is bit 39,
+    // then rounded by ROUND_FP_A, above &80 rounding up and carrying back into the top, exactly &80 setting the lowest
+    // bit.
+    private static double RoundForty(ulong mantissa, int power)
+    {
+        if (mantissa == 0) { return 0; }
+        while (mantissa < 1UL << 39)
+        {
+            mantissa <<= 1;
+            power--;
+        }
+
+        ulong rounded = mantissa >> 8;
+        ulong rounding = mantissa & 0xFF;
+        if (rounding > 0x80 && ++rounded == 1UL << 32)
+        {
+            rounded >>= 1;
+            power++;
+        }
+        else if (rounding == 0x80)
+        {
+            rounded |= 1;
+        }
+
+        return Math.ScaleB(rounded, power - 32);
+    }
+
+    // ADD_FP_B_MANTISSA_CARRY: adds a copy and the carry in, and a carry out of the 40 bits shifts back in at the top.
+    private static ulong AddShifted(ulong mantissa, ulong copy, ulong carry, ref int power)
+    {
+        ulong sum = mantissa + copy + carry;
+        if (sum < 1UL << 40) { return sum; }
+
+        power++;
+        return sum >> 1;
     }
 
     // VAL: the number at the start of the string, or 0, read as BASIC reads one: spaces, a sign, spaces, the digits
@@ -630,38 +1010,99 @@ internal sealed class BbcBasicExpression
             }
         }
 
-        return Classify(trimmed[..end], negative) ?? Integer(0);
+        // No number at all is a real zero, as VAL gives it.
+        return Classify(trimmed[..end], negative) ?? Real(0);
     }
 
     /// <summary>
-    ///  Writes a number in BASIC II's general format, as STR$ and PRINT with @%'s default show it: up to ten
-    ///  significant digits without trailing zeros, E notation when the power of ten is ten or more or below -1, and a
-    ///  leading zero from 0.1 up to 1.
+    ///  Writes a number in BASIC II's general format, as STR$ and PRINT with @%'s default show it, character for
+    ///  character as <c>NUMBER_TO_STRING</c> makes it: up to ten significant digits without trailing zeros, E notation
+    ///  when the power of ten is ten or more or below -1, and a leading zero from 0.1 up to 1.
     /// </summary>
-    /// <param name="value">The number.</param>
+    /// <param name="value">The number, already a BASIC II real or integer.</param>
     /// <returns>The text, such as <c>1234567890</c>, <c>0.5</c>, <c>1.5E10</c> or <c>1E-2</c>.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The number is scaled into 1 up to 10 by the ROM's truncating multiply and divide by ten, and rounded by adding
+    ///   half a unit of the tenth digit, itself 5 divided by ten ten times, without rounding the sum; the digits are
+    ///   then taken from the top of the mantissa. That can fall short of the decimal rounding of the exact value, so
+    ///   89132.34994506836 shows as 89132.34994, as it does in BASIC.
+    ///  </para>
+    /// </remarks>
     internal static string Format(double value)
     {
         const int Digits = 10;
         if (!double.IsFinite(value)) { throw new FormatException("Too big."); }
         if (value == 0) { return "0"; }
 
-        // The digits, rounded to ten, and the power of ten of the first.
-        string scientific = Math.Abs(value).ToString("E" + (Digits - 1), System.Globalization.CultureInfo.InvariantCulture);
-        int mark = scientific.IndexOf('E');
-        string digits = scientific[..mark].Replace(".", "", StringComparison.Ordinal).TrimEnd('0');
-        int power = int.Parse(scientific[(mark + 1)..], System.Globalization.CultureInfo.InvariantCulture);
-        string sign = value < 0 ? "-" : "";
-        if (power >= Digits || power < -1)
+        // FPA as a 40-bit mantissa, its top at bit 39, worth mantissa * 2^(power - 40).
+        int power = Math.ILogB(value) + 1;
+        ulong mantissa = (ulong)Math.ScaleB(Math.Abs(value), 32 - power) << 8;
+        int exponent = 0;
+        while (true)
         {
-            string fraction = digits.Length > 1 ? "." + digits[1..] : "";
-            return $"{sign}{digits[0]}{fraction}E{power}";
+            // From 1 up to 10: the exponent byte from &81, and below &84 or with a top byte below &A0.
+            for (; power < 1; exponent--) { MultiplyByTen(ref mantissa, ref power); }
+            if (power > 4 || (power == 4 && mantissa >> 32 >= 0xA0))
+            {
+                DivideByTen(ref mantissa, ref power);
+                exponent++;
+                continue;
+            }
+
+            // Half a unit of the last digit, 5 divided by ten for each, added without rounding.
+            ulong half = 0xA0UL << 32;
+            int halfPower = 3;
+            for (int digit = 0; digit < Digits; digit++) { DivideByTen(ref half, ref halfPower); }
+            ulong sum = power - halfPower >= 37 ? mantissa : mantissa + (half >> (power - halfPower));
+            if (sum >= 1UL << 40)
+            {
+                sum >>= 1;
+                power++;
+            }
+
+            // Shifted until the digit before the point is the top four bits.
+            for (; power < 4; power++) { sum >>= 1; }
+            if (sum >> 32 >= 0xA0)
+            {
+                // Rounded up to 10: it starts again as 1, a power of ten more.
+                mantissa = 1UL << 39;
+                power = 1;
+                exponent++;
+                continue;
+            }
+
+            mantissa = sum;
+            break;
         }
 
-        if (power == -1) { return $"{sign}0.{digits}"; }
-        return digits.Length <= power + 1
-            ? sign + digits.PadRight(power + 1, '0')
-            : $"{sign}{digits[..(power + 1)]}.{digits[(power + 1)..]}";
+        // Where the point goes: E notation with one digit before it from ten digits' power up or below -1; from 0.1 up
+        // to 1, a leading 0 and no E part.
+        string text = value < 0 ? "-" : "";
+        int point;
+        if (exponent >= Digits || exponent < -1) { point = 1; }
+        else if (exponent >= 0)
+        {
+            point = exponent + 1;
+            exponent = 0;
+        }
+        else
+        {
+            text += "0.";
+            point = 0;
+            exponent = 0;
+        }
+
+        for (int digit = 0; digit < Digits; digit++)
+        {
+            text += (char)('0' + (int)(mantissa >> 36));
+            mantissa = (mantissa & ((1UL << 36) - 1)) * 10;
+            if (--point == 0) { text += '.'; }
+        }
+
+        string digits = text.TrimEnd('0');
+        if (digits.EndsWith('.')) { digits = digits[..^1]; }
+        return exponent == 0 ? digits : $"{digits}E{exponent}";
     }
 
     // ACS and ASN take -1 to 1, and BASIC says "-ve root" for anything else.
@@ -697,8 +1138,10 @@ internal sealed class BbcBasicExpression
     internal static double RoundMantissa(double value)
     {
         if (value == 0) { return 0; }
-        double scale = Math.ScaleB(1.0, 31 - Math.ILogB(value));
-        double scaled = Math.Abs(value) * scale;
+
+        // The value itself is scaled, not by a factor of 2^(31 - exponent), which overflows for a tiny one.
+        int power = Math.ILogB(value);
+        double scaled = Math.ScaleB(Math.Abs(value), 31 - power);
         double mantissa = Math.Floor(scaled);
         double rounding = Math.Floor((scaled - mantissa) * 256);
         if (rounding > 0x80)
@@ -710,7 +1153,7 @@ internal sealed class BbcBasicExpression
             mantissa++;
         }
 
-        return Math.CopySign(mantissa / scale, value);
+        return Math.CopySign(Math.ScaleB(mantissa, power - 31), value);
     }
 
     private static BasicValue Truth(bool value) => Integer(value ? -1 : 0);
@@ -726,12 +1169,28 @@ internal sealed class BbcBasicExpression
     private static byte[] Text(BasicValue value) =>
         value.Text ?? throw new FormatException("Type mismatch: a number where a string is needed.");
 
-    // A number as a 32-bit integer, truncated, as BASIC's integer operators take it.
+    // A number as a 32-bit integer, as BASIC's integer operators take it: an integer as it is, and a real truncated,
+    // which REAL_TO_INTEGER refuses from 2^31 up in size, -2^31 included, though the integer &80000000 is fine.
     private static int Int(BasicValue value)
     {
-        double truncated = Math.Truncate(Number(value));
-        return truncated is < int.MinValue or > int.MaxValue ? throw new FormatException("Too big.") : (int)truncated;
+        if (value.Long is long whole)
+        {
+            return whole is >= int.MinValue and <= int.MaxValue ? (int)whole : throw new FormatException("Too big.");
+        }
+
+        // Written so that NaN, which no comparison holds for, is too big rather than cast.
+        double real = Number(value);
+        return Math.Abs(real) < TwoToThe31 ? (int)Math.Truncate(real) : throw new FormatException("Too big.");
     }
+
+    /// <summary>
+    ///  2^31: the size from which a real is too big to be made an integer, -2^31 included.
+    /// </summary>
+    internal const double TwoToThe31 = 2147483648.0;
+
+    // RADIANS_PER_DEGREE and DEGREES_PER_RADIAN, the ROM's packed constants that RAD and DEG multiply by.
+    private static readonly double s_radiansPerDegree = Math.ScaleB(0x8EFA3512, -5 - 32);
+    private static readonly double s_degreesPerRadian = Math.ScaleB(0xE52EE0D3, 6 - 32);
 
     private static FormatException DivisionByZero() => new("Division by zero.");
 

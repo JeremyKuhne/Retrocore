@@ -53,6 +53,21 @@ Tell the user the window is open and what to look at. In the new window:
   Retrocore.Debug.dll" warning or the Output panel's **Retrocore Assembly** channel says why.
 - **Debugging.** Run and Debug lists the workspace's launch configurations, such as "Model I: Z80 sample".
 
+## Validating an extension change
+
+Match the evidence to the behavior being changed. `npm run test:grammar`, Node unit tests, and fake-DOM panel tests
+are useful, but they do not prove that a real VS Code webview handles focus, keyboard events, accessibility, menus,
+dialogs, or editor session transitions correctly.
+
+For a change involving those interactions, reproduce the relevant action in this self-hosted window and record
+exactly what was tried and observed. For keyboard or focus behavior, test the actual key/modifier and resulting
+focus or command; for dialogs or stopped/off-machine actions, test the visible choice and resulting target/state.
+Do not claim real-editor validation if only a Node or fake-DOM test ran. If the needed ROM or VS Code fixture is
+unavailable, report the specific scenario as not run and rely only on the tests that did execute.
+
+Use the existing editor test suite where it covers the behavior. Its full run may require `RETROCORE_IIE_ROMS`;
+check the test's prerequisites before treating a skipped or failed setup as product evidence.
+
 ## After changing the extension
 
 The development window runs the code it started with:

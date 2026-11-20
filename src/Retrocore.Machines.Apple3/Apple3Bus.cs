@@ -768,6 +768,27 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     };
 
     /// <summary>
+    ///  Gets the offset in <see cref="Ram"/> that a CPU write to an address changes, without extended addressing, as
+    ///  <see cref="Write"/> routes it: RAM under the ROM unless write protection is on, and none where I/O, a slot or
+    ///  the VIAs take the write.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>The offset, or null when the write changes no RAM.</returns>
+    public int? WriteOffset(ushort address)
+    {
+        bool io = (Environment & IoEnable) != 0;
+        return address switch
+        {
+            < 0xC000 => RamOffset(address),
+            < 0xC100 when io => null,
+            >= 0xC100 and < 0xC500 when io => null,
+            >= 0xC800 and < 0xD000 when io => null,
+            >= 0xFFD0 and < 0xFFF0 when (BankRegister & ViasVisible) != 0 => null,
+            _ => (Environment & WriteProtect) == 0 ? _system + address - 0x8000 : null
+        };
+    }
+
+    /// <summary>
     ///  Gets the number of switchable banks: 3 with 128K, 7 with 256K, 15 with 512K.
     /// </summary>
     public int SwitchableBanks => _switchableBanks;

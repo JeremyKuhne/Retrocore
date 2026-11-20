@@ -181,6 +181,13 @@ internal sealed partial class BbcDebugTarget
     {
         PokeWord(BbcBasicDialect.PtrA, textPointer);
         Poke(BbcBasicDialect.PtrAOffset, 1);
+        ForgetStatement();
+    }
+
+    // Forgets the last statement start seen, so the next at the same address, in a program loaded or typed since, or
+    // after the prompt, is read afresh.
+    private void ForgetStatement()
+    {
         _lastStart = -1;
         _lastResult = null;
     }
@@ -201,6 +208,7 @@ internal sealed partial class BbcDebugTarget
         _machine.Processor.Registers = registers;
         _basicCalls.Clear();
         _calls.Reset();
+        ForgetStatement();
     }
 
     // Takes BASIC's hooks from its assembled source.
@@ -263,6 +271,7 @@ internal sealed partial class BbcDebugTarget
         else if (pc == rom.Error || pc == _executeLine || pc == rom.Prompt)
         {
             _basicCalls.Clear();
+            ForgetStatement();
         }
     }
 

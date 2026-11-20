@@ -114,7 +114,7 @@ public static class JvcFormat
         [
             first.Count is > 0 and < 256 ? (byte)first.Count : (byte)SectorsPerTrack,
             1,
-            first.Count > 0 ? first[0].SizeCode : (byte)1,
+            first.Count > 0 && first[0].SizeCode <= 3 ? first[0].SizeCode : (byte)1,   // JVC sizes 128 to 1024 bytes
             first.Count > 0 ? first.Min(sector => sector.Sector) : (byte)1,
         ];
 

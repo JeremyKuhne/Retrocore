@@ -551,7 +551,7 @@ INPUT_FILE_DONE:
 ;;
 ;; Each value in the file is a type byte followed by the value, as PRINT# writes it: &00 and a string's length, then
 ;; its characters last first; &40 and an integer, most significant byte first; or &FF and a packed real, its last
-;; byte first. A string goes only into a string variable, and a number into a numeric one, converted as it is
+;; byte first, any type byte with bit 7 set, &80 included, being taken as a real. A string goes only into a string variable, and a number into a numeric one, converted as it is
 ;; assigned.
 ;; In: PTR_A_OFFSET = the offset after the # (INPUT_STATEMENT has read it)
 ;; Errors: 6 = "Type mismatch", 16 = "Syntax error", 45 = "Missing #", and the filing system's errors

@@ -435,7 +435,7 @@ public class PascalSystemDecompilerTests
         };
 
         string source = RoundTrip(SystemSource, options, out IReadOnlyList<string> warnings);
-        source.Should().Contain(HintedRecord);
+        source.Should().Contain(HintedRecord.ReplaceLineEndings("\n"));
         source.Should().Contain("  SysCom: T1;\n").And.Contain("  SymFile: T4;  (* The source *)\n");
         source.Should().Contain("    Buffer: T6;  (* A block *)\n");
         source.Should().Contain("IF BLOCKREAD(SymFile^, Buffer, 1, 0) <> 1 THEN").And.Contain("IF SysCom^.First = 0 THEN");

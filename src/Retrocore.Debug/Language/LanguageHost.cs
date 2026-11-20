@@ -121,6 +121,7 @@ internal static class LanguageHost
         server.OnNotification("textDocument/didOpen", parameters => sync.Open(LspParams.From(parameters)));
         server.OnNotification("textDocument/didChange", parameters => sync.Change(LspParams.From(parameters)));
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
+        server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
         server.OnRequest("textDocument/definition", parameters => Answer(definition.Handle, parameters, Locations));
         server.OnRequest("textDocument/references", parameters => Answer(references.Handle, parameters, Locations));
         server.OnRequest("textDocument/hover", parameters => Answer(hover.Handle, parameters, found => found?.ToJson()));
@@ -153,6 +154,17 @@ internal static class LanguageHost
         server.OnRequest("retrocore/recovery/resolve", parameters => RecoveryJournal.Resolve(parameters ?? []));
 
         await server.Run().ConfigureAwait(continueOnCapturedContext: false);
+    }
+
+    private static void WatchedFilesChanged(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        foreach (JsonNode? change in parameters.Array("changes") ?? [])
+        {
+            if (change.String("uri") is { } uri)
+            {
+                workspace.ConfigurationChanged(PathOf(new DocumentUri(uri)));
+            }
+        }
     }
 
     // What the server does, in its answer to initialize: whole-document sync, and the features the handlers serve.
@@ -245,7 +257,7 @@ internal static class LanguageHost
         }
 
         SourceAnalysis? analysis = workspace.AnalysisOf(path);
-        bool macro10 = analysis?.UsesMacro10(path) == true;
+        bool macro10 = analysis?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, lines) == true;
         if (analysis?.Find(word.Word, macro10) is { Count: > 0 } sites) { return sites; }
 
         // A local label: the nearest line in this file that defines it.

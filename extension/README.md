@@ -218,8 +218,11 @@ includes and macros:
 Each file is assembled as its own root unless an assembly already analysed
 includes it; a MACRO-10 base such as `m6502.asm` is analysed through the overlay
 beside it that names it. If the root has a same-named `.cfg` beside it, the server
-uses that linker configuration when assembling; it reads the configuration again
-on the next analysis. Files the extension does not recognize as `retrocore-asm` (such
+uses that linker configuration when assembling and reanalyzes on open-document
+edits and watched workspace file changes (subject to `files.watcherExclude`).
+This is an editor-only convenience: CLI builds and debug launches require an
+explicit `--config` or `linkerConfiguration` respectively. Files the extension does
+not recognize as `retrocore-asm` (such
 as `.s` sources) get language features once you select the language or add a
 `files.associations` entry.
 

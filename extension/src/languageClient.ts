@@ -66,7 +66,38 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
         return;
     }
 
-    await startFrom(context, host);
+    const configurations = vscode.workspace.createFileSystemWatcher("**/*.cfg");
+    const isConfiguration = (document: vscode.TextDocument): boolean =>
+        document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";
+    const notify = (method: string, params: object): void => {
+        const running = client;
+        if (running === undefined) return;
+        void (async () => {
+            await starting;
+            if (client === running) await running.sendNotification(method, params);
+        })().catch(error => console.error(`retrocore: configuration synchronization failed: ${String(error)}`));
+    };
+    const opened = (document: vscode.TextDocument): void => {
+        if (isConfiguration(document)) notify("textDocument/didOpen", {
+            textDocument: { uri: document.uri.toString(), languageId: document.languageId, version: document.version, text: document.getText() }
+        });
+    };
+    context.subscriptions.push(configurations, vscode.workspace.onDidOpenTextDocument(opened),
+        vscode.workspace.onDidChangeTextDocument(event => {
+            if (isConfiguration(event.document)) notify("textDocument/didChange", {
+                textDocument: { uri: event.document.uri.toString(), version: event.document.version },
+                contentChanges: [{ text: event.document.getText() }]
+            });
+        }),
+        vscode.workspace.onDidCloseTextDocument(document => {
+            if (isConfiguration(document)) notify("textDocument/didClose", { textDocument: { uri: document.uri.toString() } });
+        }));
+
+    const start = async (): Promise<void> => {
+        await startFrom(context, host, configurations);
+        for (const document of vscode.workspace.textDocuments) opened(document);
+    };
+    await start();
 
     // Restart on the rebuilt host once a build has settled.
     let pending: NodeJS.Timeout | undefined;
@@ -77,7 +108,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
             pending = undefined;
             void (async () => {
                 await stopLanguageClient();
-                if (fs.existsSync(host)) await startFrom(context, host);
+                if (fs.existsSync(host)) await start();
             })();
         }, 2000);
     };
@@ -85,7 +116,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
         { dispose: () => { if (pending !== undefined) clearTimeout(pending); } });
 }
 
-async function startFrom(context: vscode.ExtensionContext, host: string): Promise<void> {
+async function startFrom(context: vscode.ExtensionContext, host: string, configurations: vscode.FileSystemWatcher): Promise<void> {
     let server = host;
     try {
         // The packaged host never changes while it runs; a build can, so it runs from a copy.
@@ -102,7 +133,8 @@ async function startFrom(context: vscode.ExtensionContext, host: string): Promis
         transport: TransportKind.stdio
     };
     const clientOptions: LanguageClientOptions = {
-        documentSelector
+        documentSelector,
+        synchronize: { fileEvents: configurations }
     };
     const started = new LanguageClient("retrocore", "Retrocore Assembly", serverOptions, clientOptions);
     client = started;

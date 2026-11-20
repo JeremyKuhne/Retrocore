@@ -165,6 +165,74 @@ public sealed class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  Failed assemblies index active procedure statements with their enclosing scopes, not inactive or macro bodies.
+    /// </summary>
+    [TestMethod]
+    public void ProcedureFallbackFollowsPreprocessingAndScopes()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, """
+                .org $6000
+                .proc Outer
+                .proc Inner
+                    rts
+                .endproc
+                .endproc
+                .if 0
+                .proc Hidden
+                .endproc
+                .endif
+                .macro Invoke
+                .proc Ghost
+                .endproc
+                .endmacro
+                    Invoke
+                    jmp missing
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("Outer::Inner").Should().ContainSingle().Which.SourceLength.Should().Be("Inner".Length);
+            analysis.Find("Hidden").Should().BeEmpty();
+            analysis.Find("Ghost").Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An address-size annotation does not hide a procedure when assembly fails.
+    /// </summary>
+    /// <param name="size">The procedure's address-size annotation.</param>
+    [TestMethod]
+    [DataRow("far")]
+    [DataRow("near")]
+    public void ProcedureFallbackRecognizesAddressSize(string size)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $"; retrocore: dialect=ca65\n.proc Worker: {size}\n    rts\n.endproc\n    jmp missing\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            analysis.Find("Worker").Should().ContainSingle().Which.Column.Should().Be(6);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A root's companion linker configuration supplies its sections and their addresses.
     /// </summary>
     [TestMethod]
@@ -249,6 +317,35 @@ public sealed class LanguageAnalysisTests
             analysis.UsesMacro10(macro10).Should().BeTrue();
             analysis.Find("InverseCapitalsOn", analysis.UsesMacro10(native)).Should().BeEmpty();
             analysis.Find("InverseCapitalsOn", analysis.UsesMacro10(macro10)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A file with no parsed statements can still declare its own dialect.
+    /// </summary>
+    [TestMethod]
+    public void DialectFallbackUsesTheFileWhenNotParsed()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string root = Path.Join(directory, "main.asm");
+            string macro = Path.Join(directory, "unreached.mac");
+            string native = Path.Join(directory, "native.mac");
+            File.WriteAllText(root, ".org $6000\n    jmp missing\n");
+            File.WriteAllText(macro, "; no statements\n");
+            File.WriteAllText(native, "; retrocore: dialect=native\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(root, _ => null);
+
+            analysis.UsesMacro10(macro).Should().BeTrue();
+            analysis.UsesMacro10(native).Should().BeFalse();
+            SourceText.Macro10Dialect(macro, []).Should().BeTrue();
+            SourceText.Macro10Dialect(native, SourceText.Lines(File.ReadAllText(native))).Should().BeFalse();
         }
         finally
         {

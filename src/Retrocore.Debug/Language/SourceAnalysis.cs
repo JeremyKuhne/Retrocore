@@ -18,6 +18,7 @@ internal sealed partial class SourceAnalysis
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Func<string, string?> _text;
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -29,17 +30,48 @@ internal sealed partial class SourceAnalysis
     {
         Root = root;
         Result = result;
+        _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
         foreach (string member in Members)
         {
             if (text(member) is { } content) { _lines[member] = SourceText.Lines(content); }
         }
 
+        List<string> scopes = [];
         foreach (AssemblyStatement statement in project.Statements)
         {
-            if (statement.Location is { } location && _lines.ContainsKey(location.Path))
+            if (statement.Location is not { Path.Length: > 0 } location) { continue; }
+            string path = Path.GetFullPath(location.Path);
+            if (_lines.ContainsKey(path))
             {
-                _dialects.TryAdd(location.Path, statement.Dialect);
+                _dialects.TryAdd(path, statement.Dialect);
+            }
+
+            if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
+            {
+                string name = statement.Operand.Text.Trim();
+                if (statement.Kind == AssemblyStatementKind.Procedure
+                    && !location.IsMacroExpansion
+                    && _lines.TryGetValue(path, out string[]? lines)
+                    && location.Line < lines.Length
+                    && ProcedureDefinition().Match(lines[location.Line]) is { Success: true } match)
+                {
+                    Group procedure = match.Groups["name"];
+                    name = procedure.Value;
+                    string qualified = string.Join("::", scopes.Where(scope => scope.Length != 0).Append(name));
+                    if (!_definitions.ContainsKey(qualified))
+                    {
+                        Add(new(qualified, path, location.Line, procedure.Index, SymbolSiteKind.Label, Value: null, SourceLength: procedure.Length));
+                    }
+                }
+
+                scopes.Add(name);
+            }
+            else if (!result.Success
+                && statement.Kind is AssemblyStatementKind.EndProcedure or AssemblyStatementKind.EndScope
+                && scopes.Count != 0)
+            {
+                scopes.RemoveAt(scopes.Count - 1);
             }
         }
 
@@ -79,16 +111,6 @@ internal sealed partial class SourceAnalysis
                     if (!name.Success) { name = match.Groups["macro10"]; }
                     Add(new(name.Value, path, line, name.Index, SymbolSiteKind.Macro, Value: null));
                     continue;
-                }
-
-                match = ProcedureDefinition().Match(lines[line]);
-                if (!result.Success && match.Success)
-                {
-                    Group name = match.Groups["name"];
-                    if (!_definitions.ContainsKey(name.Value))
-                    {
-                        Add(new(name.Value, path, line, name.Index, SymbolSiteKind.Label, Value: null));
-                    }
                 }
 
                 match = TextDefinition().Match(lines[line]);
@@ -176,7 +198,7 @@ internal sealed partial class SourceAnalysis
         Assembler.Assembler assembler = new();
         AssemblyResult result = parsed.Success
             ? assembler.Assemble(parsed.Project, options)
-            : assembler.Assemble(source, options);
+            : new([.. parsed.Diagnostics]);
 
         return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
     }
@@ -215,8 +237,14 @@ internal sealed partial class SourceAnalysis
     /// </summary>
     /// <param name="path">The source's path.</param>
     /// <returns>Whether the assembler parsed it as MACRO-10.</returns>
-    internal bool UsesMacro10(string path) =>
-        _dialects.TryGetValue(path, out AssemblyDialect dialect) && dialect == AssemblyDialect.Macro10;
+    internal bool UsesMacro10(string path)
+    {
+        if (_dialects.TryGetValue(path, out AssemblyDialect dialect)) { return dialect == AssemblyDialect.Macro10; }
+        string[] lines = _lines.TryGetValue(path, out string[]? known) ? known : SourceText.Lines(_text(path) ?? "");
+        bool? declared = SourceText.Macro10Dialect(path, lines);
+        if (declared is not null) { return declared.Value; }
+        return !path.Equals(Root, StringComparison.OrdinalIgnoreCase) && UsesMacro10(Root);
+    }
 
     /// <summary>
     ///  Gets the source map entries a line produced, including through macros it invoked.
@@ -332,7 +360,7 @@ internal sealed partial class SourceAnalysis
     [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<colon>::?)|(?<equate>\s*(?:==?|\.equ\b|\.set\b|EQU\b))|\s|$)")]
     private static partial Regex TextDefinition();
 
-    [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?::[ \t]*[A-Za-z_]\w*)?[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]
     private static partial Regex ProcedureDefinition();
 
     [GeneratedRegex(

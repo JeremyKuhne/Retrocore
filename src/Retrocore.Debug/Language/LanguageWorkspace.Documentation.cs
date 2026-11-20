@@ -57,13 +57,18 @@ internal sealed partial class LanguageWorkspace
     ///  Gets the address a documentation link opens: the definition's file and line.
     /// </summary>
     /// <param name="target">The resolved target.</param>
+    /// <param name="path">The file containing the link.</param>
     /// <returns>A file URI with a line fragment, or null.</returns>
-    internal string? Href(DocumentationTarget target)
+    internal string? Href(DocumentationTarget target, string path)
     {
         if (target.Topic is { } topic) { return FileLink(topic.Path, topic.Line); }
+        bool macro10 = AnalysisOf(path)?.UsesMacro10(path) ?? SourceText.Macro10Dialect(path, LinesOf(path)) == true;
         foreach (SourceAnalysis analysis in AllAnalyses())
         {
-            if (analysis.Find(target.Name).FirstOrDefault() is { } site) { return FileLink(site.Path, site.Line); }
+            if (analysis.Find(target.Name, macro10).FirstOrDefault() is { } site)
+            {
+                return FileLink(site.Path, site.Line);
+            }
         }
 
         return null;

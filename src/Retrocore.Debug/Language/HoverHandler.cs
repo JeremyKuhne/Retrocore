@@ -133,7 +133,7 @@ internal sealed class HoverHandler
         string header = $"```\n({kind}) {site.Name}{value}\n```\n{where}";
         if (_workspace.TopicOf(site) is { } documented)
         {
-            string text = DocumentationMarkdown.Render(documented.Topic, documented.Resolver, _workspace.Href);
+            string text = DocumentationMarkdown.Render(documented.Topic, documented.Resolver, target => _workspace.Href(target, documented.Topic.Path));
             return text.Length == 0 ? header : $"{header}\n\n{text}";
         }
 

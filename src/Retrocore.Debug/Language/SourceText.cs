@@ -45,6 +45,19 @@ internal static class SourceText
     internal static string[] Lines(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 
     /// <summary>
+    ///  Gets a file's explicitly declared dialect, or its MACRO-10 extension when it has no pragma.
+    /// </summary>
+    /// <param name="path">The file's path.</param>
+    /// <param name="lines">The file's text.</param>
+    /// <returns>Whether it is MACRO-10, or null when its dialect is inherited.</returns>
+    internal static bool? Macro10Dialect(string path, string[] lines)
+    {
+        string? dialect = lines.Length == 0 ? null : Retrocore.Assembler.AssemblyPreprocessor.PragmaValue(lines[0], "dialect");
+        if (dialect is not null) { return dialect.Equals("macro10", StringComparison.OrdinalIgnoreCase); }
+        return Path.GetExtension(path).Equals(".mac", StringComparison.OrdinalIgnoreCase) ? true : null;
+    }
+
+    /// <summary>
     ///  Gets whether a character can be part of a name in any dialect.
     /// </summary>
     /// <param name="character">The character.</param>

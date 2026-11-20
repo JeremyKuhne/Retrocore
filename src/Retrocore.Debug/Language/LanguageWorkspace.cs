@@ -64,6 +64,12 @@ internal sealed partial class LanguageWorkspace
     internal void Update(string path, string text)
     {
         _open[path] = text;
+        if (Path.GetExtension(path).Equals(".cfg", StringComparison.OrdinalIgnoreCase))
+        {
+            ConfigurationChanged(path);
+            return;
+        }
+
         Schedule(RootOf(path));
     }
 
@@ -74,7 +80,28 @@ internal sealed partial class LanguageWorkspace
     internal void Close(string path)
     {
         _open.TryRemove(path, out _);
+        if (Path.GetExtension(path).Equals(".cfg", StringComparison.OrdinalIgnoreCase))
+        {
+            ConfigurationChanged(path);
+            return;
+        }
+
         Schedule(RootOf(path));
+    }
+
+    /// <summary>
+    ///  Reanalyzes roots that use a changed companion configuration.
+    /// </summary>
+    /// <param name="path">The configuration's full path.</param>
+    internal void ConfigurationChanged(string path)
+    {
+        foreach (string root in _analyses.Keys.Concat(_pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.Equals(Path.ChangeExtension(root, ".cfg"), path, StringComparison.OrdinalIgnoreCase))
+            {
+                Schedule(root);
+            }
+        }
     }
 
     /// <summary>

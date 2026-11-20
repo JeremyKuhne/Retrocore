@@ -18,7 +18,7 @@ import { registerBreakpoints } from "./breakpoints";
 import { registerMemory } from "./memory";
 import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
-import { webviewHtml } from "./display";
+import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -229,12 +229,13 @@ export function activate(context: vscode.ExtensionContext): void {
                         : (machine === "trs80-model3" || machine === "trs80-model2") && model !== undefined ? `TRS-80 ${model}`
                             : machine === "apple1" ? "Apple-1"
                                 : machine === "pet" ? petTitle(model)
-                                    : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
+                                    : machine === "bbc" ? `BBC Micro ${model ?? "Model B"}`
+                                        : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
                     // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal and the
                     // PET 2001's screen do; the Model II's and the Kaypro II's are green, like the IIe's. The Kaypro II's model is
                     // its title.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" || machine === "pet" ? "trs80-model1"
-                        : machine === "apple1" || machine === "coco" ? machine : "apple2";
+                        : machine === "apple1" || machine === "coco" ? machine : machine === "bbc" ? "coco" : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
                     const screen = running ? phosphor : "off";
@@ -257,9 +258,9 @@ export function activate(context: vscode.ExtensionContext): void {
                         panel.webview.html = webviewHtml(nonce);
                         panel.onDidDispose(() => { panel = undefined; panelBasic = undefined; }, undefined, context.subscriptions);
                         panel.webview.onDidReceiveMessage((input: unknown) => {
-                            if (typeof input === "object" && input !== null && "code" in input && typeof input.code === "number" && Number.isInteger(input.code) && input.code >= 0 && input.code < 256) {
+                            if (panelKeyCode(input) !== undefined) {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("retro/key", { code: input.code }).then(undefined, showError);
+                                    void displaySession.customRequest("retro/key", { code: panelKeyCode(input) }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "button" in input && typeof input.button === "number"
                                 && Number.isInteger(input.button) && input.button >= 0 && input.button <= 1

@@ -18,6 +18,7 @@ straight into the ROM or DOS source.
 | TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C) and its Level I ROM, the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 and 1500 baud; boots TRSDOS, LDOS and LS-DOS |
 | TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Five boot ROM versions and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
+| BBC Micro Model B and Model A | MOS 6502 at 2 MHz | MOS 1.20, BBC BASIC II, DNFS 1.20 and the SAA5050's characters | 6845 and video ULA in modes 0-6, SAA5050 teletext in mode 7, SN76489 sound, UEF tapes (play and record) and `.inf` files, the Intel 8271 with SSD and DSD disks, the analogue port |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT; runs Altair BASIC from your images |
 | Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
@@ -26,8 +27,8 @@ The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, a
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
 [TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md),
-[Color Computer](docs/Coco.md), [PET](docs/Pet.md), [Altair 8800](docs/Altair8800.md) and [Kaypro II](docs/Kaypro.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
-model runs with nothing external, and so are all of the PET's ROMs.
+[Color Computer](docs/Coco.md), [PET](docs/Pet.md), [BBC Micro](docs/BbcMicro.md), [Altair 8800](docs/Altair8800.md) and [Kaypro II](docs/Kaypro.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
+model runs with nothing external, and so are all of the PET's ROMs and the BBC Micro's MOS, BASIC, DFS and character ROM.
 
 > **Not published yet.** Retrocore has no public release on the VS Code Marketplace, Open VSX, or NuGet. To use
 > the VS Code extension, build and install the VSIX from this repository as shown below.
@@ -165,8 +166,8 @@ The debugger supports:
 Your program and the SDK's ROM and DOS sources debug together in the same session. Each source module is bound to
 its memory bank and active only while memory still holds the bytes it assembled to, so banked RAM or overwritten
 code never shows stale source lines. The [extension README](extension/README.md) covers all launch options; the
-[Apple II](docs/Apple2.md), [Model I](docs/Trs80ModelI.md) and [Color Computer](docs/Coco.md) guides cover each
-machine.
+[Apple II](docs/Apple2.md), [Model I](docs/Trs80ModelI.md), [Color Computer](docs/Coco.md) and
+[BBC Micro](docs/BbcMicro.md) guides cover each machine.
 
 ## SDK ROM sources
 
@@ -201,6 +202,10 @@ machine.
 | [`ColorBasic.asm`](src/Retrocore.Machines.Coco/Roms/ColorBasic.asm) | TRS-80 Color Computer Color BASIC, versions 1.0 to 1.3. |
 | [`ExtendedBasic.asm`](src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm) | TRS-80 Color Computer Extended Color BASIC, versions 1.0 and 1.1. |
 | [`DiskBasic.asm`](src/Retrocore.Machines.Coco/Roms/DiskBasic.asm) | TRS-80 Color Computer Disk Extended Color BASIC, versions 1.0 and 1.1. |
+| [`Mos.asm`](src/Retrocore.Machines.Acorn/Roms/Mos.asm) | The BBC Micro's MOS 1.20. |
+| [`BbcBasic.asm`](src/Retrocore.Machines.Acorn/Roms/BbcBasic.asm) | BBC BASIC II. |
+| [`Dnfs.asm`](src/Retrocore.Machines.Acorn/Roms/Dnfs.asm) | DNFS 1.20: the Acorn DFS and the Econet filing system. |
+| [`Saa5050.asm`](src/Retrocore.Machines.Acorn/Roms/Saa5050.asm) | The SAA5050 teletext character generator's 96 characters. |
 | [`Basic1.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic1.mac), [`Basic2.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic2.mac), [`Basic4.mac`](src/Retrocore.Machines.Commodore/Roms/Basic/Basic4.mac) | Commodore PET BASIC 1 (both first chips), BASIC 2 and BASIC 4 (both `$B000` chips, with the monitor and the disk commands), as Commodore's changes to Microsoft's `m6502.asm`. |
 | [`Editor1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Editor1.asm), [`Kernal1.asm`](src/Retrocore.Machines.Commodore/Roms/Basic1/Kernal1.asm), [`Editor2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Editor2.asm), [`Kernal2.asm`](src/Retrocore.Machines.Commodore/Roms/Basic2/Kernal2.asm), [`Editor4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Editor4.asm), [`Kernal4.asm`](src/Retrocore.Machines.Commodore/Roms/Basic4/Kernal4.asm) | The PET's screen editors and kernals for BASIC 1, 2 and 4, with BASIC 2's machine-language monitor; BASIC 4's editor builds the graphics or the business keyboard's. |
 | [`CharacterGenerator.asm`](src/Retrocore.Machines.Commodore/Roms/CharacterGenerator.asm) | The PET's character ROMs, the 2001's 901447-08 and the 2001-N's 901447-10. |
@@ -231,6 +236,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface with its drive select and doublers, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family. |
 | [`Retrocore.Machines.Kaypro`](src/Retrocore.Machines.Kaypro) | The Kaypro II: banked memory, the system PIO, serial keyboard, display and disks, and its SDK sources, MBASIC's included. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
+| [`Retrocore.Machines.Acorn`](src/Retrocore.Machines.Acorn) | The BBC Micro Model B and A: the paged ROMs, both VIAs, the video ULA and SAA5050, keyboard, sound, the serial ULA and cassette, the 8271, and SDK ROM sources. |
 | [`Retrocore.Machines.Commodore`](src/Retrocore.Machines.Commodore) | The Commodore PET 2001 and 4032: its PIAs and VIA, video, keyboard, sound, Datasettes, the IEEE-488 bus and the 4040 and 2040 disk drives, and SDK ROM sources. |
 | [`Retrocore.Debug`](src/Retrocore.Debug) | The debug adapter (DAP), assembly and BASIC language server, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--disassemble` CLI, in one host. |
 | [`Retrocore.Generators`](src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and ROM sources into tables. |
@@ -259,8 +265,9 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
 | `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources). |
+| `RETROCORE_BBC_ROMS` | BBC Micro ROM dumps: MAME's `bbcb` set unzipped (default `<cache>\bbc-roms\extract\bbcb` for the tests); optional for debugging, which builds the ROMs from the SDK's sources. |
 | `RETROCORE_PET_ROMS` | MAME's `pet2001`, `pet2001n`, `pet4016`, `pet4032b`, `c4040` and `c2040` sets unzipped, each in its folder (default `<cache>\pet-roms\extract`); optional for debugging (without them, every model's ROMs are built from the SDK's sources), but the 4040 and 2040 drives need their `c4040` and `c2040` sets. |
-| `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III, Color Computer, PET, 4040 and 2040 oracle tests (default `<cache>\mame\mame.exe`). |
+| `RETROCORE_MAME` | `mame.exe` path for the Model I, Apple III, Color Computer, PET, 4040, 2040 and BBC Micro oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
 | `RETROCORE_KAYPRO` | Kaypro II dumps and disks for the tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin`, `cpm22-rom149.img` (CP/M 2.2) and `MBasic.img` (default `<cache>\kaypro`). |
 | `RETROCORE_KAYPRO_ROMS` | Kaypro II chip dumps for debugging in place of the SDK's builds (MAME's `kayproii` names, or the names above); optional. |
@@ -291,6 +298,7 @@ node tools/Test-KayproDap.mjs         # needs nothing external; boots CP/M and M
 node tools/Test-Apple1Dap.mjs         # needs nothing external
 node tools/Test-Apple1BasicDap.mjs    # needs nothing external
 node tools/Test-CocoDap.mjs           # needs nothing external; uses the dumps in RETROCORE_COCO_ROMS when set
+node tools/Test-BbcDap.mjs            # needs nothing external; uses the dumps in RETROCORE_BBC_ROMS when set
 node tools/Test-PetDap.mjs            # needs nothing external
 node tools/Test-PetBasicDap.mjs       # needs nothing external
 node tools/Test-IntegerBasicDap.mjs   # needs nothing external
@@ -374,7 +382,8 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md);
 - [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md);
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
-- [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system.
+- [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
+- [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md).
 
 ## License
 

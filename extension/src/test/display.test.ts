@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { Script, createContext } from "node:vm";
-import { webviewHtml } from "../display";
+import { panelKeyCode, webviewHtml } from "../display";
 
 function panelScript(): string {
     const html = webviewHtml("NONCE");
@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -296,6 +296,7 @@ test("the panel sends control characters, the Apple keys and CONTROL-RESET", () 
     key("c", { ctrlKey: true });
     key("[", { ctrlKey: true });
     key("Cancel", { ctrlKey: true });
+    key("ñ");                   // not ASCII, and no machine's key: nothing is sent
     key("a");
     screen.dispatch("keydown", { key: "Alt", code: "AltLeft" });
     screen.dispatch("keyup", { key: "Alt", code: "AltLeft" });
@@ -350,7 +351,7 @@ test("the PET's key bar has Stop and Clr, the shifted HOME", () => {
     assert.match(bar, /data-code="3"[^>]*>Stop</);
     assert.match(bar, /data-code="147"[^>]*>Clr</);
     assert.match(bar, /id="pet-reset"[^>]*>Reset</);
-    assert.match(html, /data-machine="apple2 apple3 coco pet"/, "the PET has the Sound button");
+    assert.match(html, /data-machine="apple2 apple3 coco pet bbc"/, "the PET, and the BBC Micro, have the Sound button");
 });
 
 test("the Model I's Reset button, Ctrl+Break and Ctrl+F12 press its reset", () => {
@@ -732,4 +733,14 @@ test("when the session ends the panel says the machine is off and offers Restart
     // The next session's first frame brings the machine back.
     window.dispatch("message", { data: frame });
     assert.equal(off.hidden, true);
+});
+
+test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys", () => {
+    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 255]) {
+        assert.equal(panelKeyCode({ code }), code);
+    }
+
+    for (const input of [{ code: 256 }, { code: -1 }, { code: 1.5 }, { code: "A" }, { button: 0 }, null, 13]) {
+        assert.equal(panelKeyCode(input), undefined);
+    }
 });

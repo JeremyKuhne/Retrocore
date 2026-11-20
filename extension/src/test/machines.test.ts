@@ -53,7 +53,8 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
         "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
         "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "Commodore PET 2001 (BASIC 2)", "Commodore PET 2001",
-        "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "MITS Altair 8800", "Kaypro II"
+        "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "BBC Micro Model B", "BBC Micro Model A",
+        "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
     assert.deepEqual(machineById("altair")?.diskFormats, []);
@@ -129,6 +130,11 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound"], "the 4032's board has no snow");
         assert.equal(pet?.choices[0].default, 32);
     }
+    assert.deepEqual(machineById("bbcb")?.configuration, { machine: "bbc", model: "bbcb" });
+    assert.deepEqual(machineById("bbcb")?.diskFormats, ["ssd", "dsd"]);
+    assert.deepEqual(machineById("bbcb")?.basicDialects, ["bbcbasic"]);
+    assert.deepEqual(machineById("bbca")?.diskFormats, [], "the Model A has no disk interface");
+    assert.deepEqual(machineById("bbca")?.tapeFormats, ["uef"]);
 });
 
 test("a launch configuration finds its catalog machine as the host reads its model", () => {
@@ -139,6 +145,7 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "apple2", model: "enhanced" })?.id, "apple2-iie-enhanced");
     assert.equal(catalogMachine({ machine: "apple2", model: "original" })?.id, "apple2-iie");
     assert.equal(catalogMachine({ machine: "coco" })?.id, "coco2", "the CoCo 2 is the Color Computer default");
+    assert.equal(catalogMachine({ machine: "bbc" })?.id, "bbcb", "the Model B is the BBC Micro default");
     assert.equal(catalogMachine({ machine: "trs80-model1" })?.id, "trs80-model1-level2");
     assert.equal(catalogMachine({ machine: "trs80-model1", rom: "level1" })?.id, "trs80-model1-level1");
     assert.equal(catalogMachine({ machine: "trs80-model3" })?.id, "trs80-model3", "the Model III is its machine's default");

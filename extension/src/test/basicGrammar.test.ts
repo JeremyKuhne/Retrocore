@@ -21,8 +21,9 @@ before(async () => {
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
-        "source.retrocore-mbasic": "mbasic.tmLanguage.json",
-        "source.retrocore-petbasic": "petbasic.tmLanguage.json"
+        "source.retrocore-mbasic": "mbasic.tmLanguage.json",
+        "source.retrocore-petbasic": "petbasic.tmLanguage.json",
+        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -103,6 +104,44 @@ test("Color BASIC finds words only in capitals and never inside a name", () => {
     assert.ok(has(scopes("colorbasic", "50 GOSUB 100", "SUB"), "keyword.control"));
     assert.ok(has(scopes("colorbasic", "60 PRINT HEX$(255);STRING$(3,\"*\")", "HEX$"), "support.function"));
     assert.ok(has(scopes("colorbasic", "70 A=1 'NOTE", "NOTE"), "comment.line"));
+});
+
+test("BBC BASIC finds words only in capitals, keeps small letters in names, and runs DATA to the line's end", () => {
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LEFT$(A$,2)", "PRINT"), "keyword.other"));
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LEFT$(A$,2)", "LEFT$("), "support.function"));
+    assert.ok(has(scopes("bbcbasic", "20 FOR I%=1 TO 3", "FOR"), "keyword.control"));
+    assert.ok(has(scopes("bbcbasic", "30 my_name%=2", "my_name%"), "variable.other"), "a name with small letters and _");
+    assert.ok(!has(scopes("bbcbasic", "40 print", "print"), "keyword"), "lowercase is not tokenised");
+    assert.ok(has(scopes("bbcbasic", "50 DATA 1,2:PRINT", "PRINT"), "string.unquoted.data"), "DATA runs to the end of the line");
+    assert.ok(has(scopes("bbcbasic", "60 REM a note", "note"), "comment.line"));
+    for (const name of ["COUNTER", "TIMER", "ENDING"]) {
+        assert.ok(has(scopes("bbcbasic", `70 ${name}=1`, name), "variable.other"), `${name} is a name: its word is conditional`);
+    }
+    assert.ok(has(scopes("bbcbasic", "80 PRINT COUNT", "COUNT"), "keyword"), "COUNT alone is still a word");
+    // PROC and FN take the whole name after them, keywords and all.
+    assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "PRINT"), "keyword.other"), "PROCREM is a name, not a remark");
+    assert.ok(has(scopes("bbcbasic", "90 PROCREM:PRINT 1", "REM"), "entity.name.function"));
+    assert.ok(has(scopes("bbcbasic", "100 X=FNTIME", "TIME"), "entity.name.function"), "FNTIME names a function");
+    // Abbreviations: letters and a full stop are the first word in the table's order that starts with them.
+    assert.ok(has(scopes("bbcbasic", "110 P. \"HELLO\"", "P."), "keyword.other"), "P. is PRINT");
+    assert.ok(has(scopes("bbcbasic", "120 D. 1,2:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
+    assert.ok(has(scopes("bbcbasic", "130 PR.\"HI\"", "PR."), "keyword.other"));
+    assert.ok(has(scopes("bbcbasic", "135 PRINT &DEF", "DEF"), "constant.numeric"), "&DEF is a number, not DEF");
+    assert.ok(has(scopes("bbcbasic", "135 X=&BEEF", "BEEF"), "constant.numeric"), "&BEEF is a number, not a name");
+    // An abbreviated PROC takes its name too, so PRO.REM calls REM rather than starting a remark.
+    assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "PRINT"), "keyword.other"), "PRO.REM is a call, not a remark");
+    assert.ok(has(scopes("bbcbasic", "140 PRO.REM:PRINT 1", "REM"), "entity.name.function"));
+    // A * where a statement starts is the MOS's to the line's end, as the tokeniser leaves it; elsewhere it multiplies.
+    assert.ok(has(scopes("bbcbasic", "150 *KEY 0 LIST:RUN|M", "RUN"), "string.unquoted.command"), "a * command's words are not BASIC's");
+    assert.ok(has(scopes("bbcbasic", "160 *LOAD SCREEN 7C00", "LOAD"), "string.unquoted.command"));
+    assert.ok(has(scopes("bbcbasic", "170 IF A THEN *CAT", "CAT"), "string.unquoted.command"), "THEN starts a statement");
+    assert.ok(has(scopes("bbcbasic", "180 X=1:*FX 15", "FX"), "string.unquoted.command"), "so does a colon");
+    assert.ok(has(scopes("bbcbasic", "190 PRINT 5 *LEN A$", "LEN"), "support.function"), "a * in an expression multiplies");
+    assert.ok(has(scopes("bbcbasic", "195 PRINT myTHEN *LEN A$", "LEN"), "support.function"), "myTHEN is one name");
+    assert.ok(has(scopes("bbcbasic", "196 IF 1 TH. *KEY 0 PRINT:RUN|M", "RUN"), "string.unquoted.command"), "TH. is THEN");
+    // A conditional word's abbreviation is not taken before a name character either, and @% is a name.
+    assert.ok(!has(scopes("bbcbasic", "200 PRINT COU.X", "COU."), "keyword"), "COU.X is no COUNT");
+    assert.ok(has(scopes("bbcbasic", "210 @%=&90A", "@%"), "variable.other"));
 });
 
 test("MBASIC finds reserved words only set apart from names", () => {

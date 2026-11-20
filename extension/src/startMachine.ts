@@ -11,7 +11,7 @@ import * as vscode from "vscode";
 import { favoriteChoices } from "./favorites";
 import { machines, type Machine } from "./machines";
 import {
-    describeSetup, isUsable, optionValue, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
+    describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
 } from "./startFlow";
 
 const lastKey = "retrocore.lastSetup";
@@ -168,7 +168,14 @@ async function pickOptions(machine: Machine, setup: Setup): Promise<Setup> {
             })),
             { title: picked.choice.label });
 
-        if (value !== undefined) current = withOption(machine, current, picked.choice.option, value.value);
+        if (value === undefined) continue;
+        if (removesDrives(current, picked.choice.option, value.value)) {
+            // The disk it starts from needs a drive.
+            void vscode.window.showWarningMessage(`${machine.label} starts from a disk, so it keeps its ${picked.choice.label.toLowerCase()}.`);
+            continue;
+        }
+
+        current = withOption(machine, current, picked.choice.option, value.value);
     }
 }
 

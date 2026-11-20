@@ -55,6 +55,11 @@ public sealed partial class DocumentationResolver
     public DocumentationSet Current { get; }
 
     /// <summary>
+    ///  Gets the documents that <c>Also:</c> entries cite, or null to leave their keys unchecked.
+    /// </summary>
+    public DocumentationBibliography? Bibliography { get; init; }
+
+    /// <summary>
     ///  Maps a condition such as <c>ENHANCED</c> or <c>not ENHNCD</c> to the IIe model it selects.
     /// </summary>
     /// <param name="condition">The condition, or null.</param>
@@ -342,6 +347,11 @@ public sealed partial class DocumentationResolver
         {
             return new(DocumentationTargetKind.Symbol, name) { Set = set, Value = value };
         }
+
+        // A historical name reaches the definition that gives it in an Also: section.
+        IReadOnlyList<DocumentationTopic> also = set.FindAlso(name);
+        if (also.Count == 1) { return Found(also[0]); }
+        if (also.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
 
         return null;
     }

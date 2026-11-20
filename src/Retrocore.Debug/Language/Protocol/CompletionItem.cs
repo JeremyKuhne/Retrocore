@@ -37,6 +37,11 @@ internal sealed class CompletionItem
     public string? SortText { get; init; }
 
     /// <summary>
+    ///  Gets the text the client filters on, when it differs from the label: the name and its historical names.
+    /// </summary>
+    public string? FilterText { get; init; }
+
+    /// <summary>
     ///  Writes the completion.
     /// </summary>
     /// <returns>Its JSON, without the properties it lacks.</returns>
@@ -46,6 +51,7 @@ internal sealed class CompletionItem
         if (Detail is not null) { item["detail"] = Detail; }
         if (Documentation is not null) { item["documentation"] = Documentation.ToJson(); }
         if (SortText is not null) { item["sortText"] = SortText; }
+        if (FilterText is not null) { item["filterText"] = FilterText; }
         return item;
     }
 }

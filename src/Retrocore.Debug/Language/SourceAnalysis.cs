@@ -156,7 +156,14 @@ internal sealed partial class SourceAnalysis
         // MACRO-10 compares six characters; a local or scoped name may be stored with its scope.
         const int Significant = 6;
         if (name.Length > Significant && _definitions.TryGetValue(name[..Significant], out sites)) { return sites; }
-        return [.. Definitions.Where(site => site.Name.EndsWith($"::{name}", StringComparison.OrdinalIgnoreCase))];
+        List<SymbolSite> scoped = [.. Definitions.Where(site => site.Name.EndsWith($"::{name}", StringComparison.OrdinalIgnoreCase))];
+        if (scoped.Count != 0) { return scoped; }
+
+        // A historical name finds the definition whose Also: section gives it.
+        return [.. Documentation.FindAlso(name)
+            .Where(topic => topic.Name != name)
+            .SelectMany(topic => Find(topic.Name))
+            .Distinct()];
     }
 
     /// <summary>

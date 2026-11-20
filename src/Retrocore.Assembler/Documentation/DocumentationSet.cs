@@ -234,6 +234,44 @@ public sealed class DocumentationSet
     public DocumentationTopic? Find(string name) => _topics.TryGetValue(name, out DocumentationTopic? topic) ? topic : null;
 
     /// <summary>
+    ///  Finds the topics that give a historical name in their <c>Also:</c> sections.
+    /// </summary>
+    /// <param name="name">The historical name, such as <c>COUT</c>.</param>
+    /// <returns>The topics, in source order; usually none or one.</returns>
+    public IReadOnlyList<DocumentationTopic> FindAlso(string name) =>
+        AlsoIndex().TryGetValue(name, out List<DocumentationTopic>? found) ? found : [];
+
+    /// <summary>
+    ///  Gets every historical name the topics give.
+    /// </summary>
+    public IEnumerable<string> AlsoNames => AlsoIndex().Keys;
+
+    private Dictionary<string, List<DocumentationTopic>> AlsoIndex()
+    {
+        if (_also is null)
+        {
+            Dictionary<string, List<DocumentationTopic>> also = [with(StringComparer.Ordinal)];
+            foreach (DocumentationTopic topic in _ordered)
+            {
+                foreach (DocumentationAlso item in DocumentationAlso.Of(topic.Sections))
+                {
+                    if (!also.TryGetValue(item.Name, out List<DocumentationTopic>? topics))
+                    {
+                        topics = [];
+                        also[item.Name] = topics;
+                    }
+
+                    if (!topics.Contains(topic)) { topics.Add(topic); }
+                }
+            }
+
+            _also = also;
+        }
+
+        return _also;
+    }
+
+    /// <summary>
     ///  Finds the topic of a label documented as an entry into a routine, or the routine itself.
     /// </summary>
     /// <param name="name">The label.</param>
@@ -255,6 +293,8 @@ public sealed class DocumentationSet
     /// <param name="name">The name.</param>
     /// <returns>Whether it is defined.</returns>
     public bool Defines(string name) => _symbols.ContainsKey(name);
+
+    private Dictionary<string, List<DocumentationTopic>>? _also;
 
     private static DocumentationTopic Merge(DocumentationSet set, List<DocumentationComment> comments)
     {

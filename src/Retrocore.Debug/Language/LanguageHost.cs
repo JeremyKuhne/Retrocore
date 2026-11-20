@@ -118,6 +118,7 @@ internal static class LanguageHost
             "workspace/symbol",
             parameters => Answer(workspaceSymbols.Handle, parameters, symbols => Array(symbols, symbol => symbol.ToJson())));
 
+        server.OnRequest("textDocument/codeAction", CodeActionHandler.Handle);
         server.OnRequest("retrocore/basic/renumber", parameters => BasicFiles.Renumber(parameters ?? []));
         server.OnRequest("retrocore/basic/list", parameters => BasicFiles.List(parameters ?? []));
         server.OnRequest("retrocore/basic/store", parameters => BasicFiles.Store(parameters ?? []));
@@ -150,7 +151,8 @@ internal static class LanguageHost
                 ["resolveProvider"] = false
             },
             ["documentSymbolProvider"] = true,
-            ["workspaceSymbolProvider"] = true
+            ["workspaceSymbolProvider"] = true,
+            ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix") }
         },
         ["serverInfo"] = new JsonObject { ["name"] = "retrocore" }
     };

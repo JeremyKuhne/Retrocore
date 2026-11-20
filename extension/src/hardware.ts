@@ -59,6 +59,10 @@ export const cards: Card[] = [
         args: { action: "addSoftCard" }
     },
     {
+        label: "SoftCard ///", detail: "Microsoft's Z80 card for the Apple III, for its own CP/M disk; one at a time",
+        args: { action: "addSoftCard3" }, slots: ["slot1", "slot2", "slot3", "slot4"], machines: ["apple3"]
+    },
+    {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
         args: { action: "addLanguageCard" }, slots: ["slot0"]
     },
@@ -104,7 +108,8 @@ export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
-    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "cassetteInterface",
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "softCard3",
+    "cassetteInterface",
     "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory"
 ] as const;
 

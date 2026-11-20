@@ -29,6 +29,7 @@ names it with `"machine": "apple3"`:
 | `sound` | `speaker` (the default) or `off`. |
 | `screen` | The monitor: `color` (the default), or a monochrome `white`, `green` or `amber` one, which shows each pixel in the phosphor's color by its brightness. The display panel's **Screen** changes it. |
 | `proFiles` | ProFile cards, each `{ "slot": 4, "image": "profile.po" }` with slot 1-4 and an optional image ([The ProFile](#the-profile)). |
+| `softCard3` | Microsoft's SoftCard /// in this slot, 1-4, for CP/M ([The SoftCard ///](#the-softcard-)). |
 
 With no disk, the boot ROM runs its diagnostics and shows RETRY. Press a key to try again once a disk is in.
 
@@ -65,7 +66,8 @@ an Apple II disk such as DOS 3.3 in the built-in drive (the **Drives** view's dr
   - A 128-character set in RAM, loaded through the screen holes.
 - **Disks.** The Disk II's logic, built in, with three external drives.
 - **Other devices.** The keyboard with its Apple keys, the speaker and the 6-bit DAC, the clock and the serial port.
-- **Slots.** Four, for ProFile interface cards ([The ProFile](#the-profile)).
+- **Slots.** Four, for ProFile interface cards ([The ProFile](#the-profile)) and the SoftCard /// ([The SoftCard
+  ///](#the-softcard-)).
 
 ## The ProFile
 
@@ -101,6 +103,35 @@ boot lists the volume again from the ProFile.
 
 Phase by phase, how this was built and checked against MAME and the manual is in the
 [backlog plan](backlog/Apple3.md).
+
+## The SoftCard ///
+
+Microsoft's SoftCard /// (1982) puts a Z80 on a slot card so the Apple III runs CP/M. The Z80 has no memory of its
+own: it borrows the Apple III's bus by DMA, and the 6502 stops while it runs. The launch's `softCard3` puts it in a slot,
+1 to 4, as **Add Card** in the Machine view does, and its CP/M Master disk boots from `disks` to "Apple SoftCard /// CP/M
+56K Version 2.20" and `A>`.
+
+The card follows MAME's `softcard3`, which its authors describe as a best guess from the boot disk and checks on real
+hardware, and the installation manual
+([archive.org](https://archive.org/details/apple-iii-soft-card-iii-installation-and-operation-manual)):
+
+| Part | What it does |
+| --- | --- |
+| Clock | Twice the slots' 1.02 MHz. The boot code puts the III in 1 MHz mode before switching, so an Apple cycle holds two Z80 T-states, now and then three. |
+| Mapping PROM | 256 bytes: the Apple address is the Z80's low byte plus the PROM entry for its high byte, times 256. The DMA goes into the 6502's view, so it follows the bank and zero-page registers. Z80 `$0000` is Apple `$2000`, the I/O page is at Z80 `$A000` and zero page at `$F000`. The SDK's [`SoftCard3Prom.asm`](../src/Retrocore.Machines.Apple3/Roms/SoftCard3Prom.asm), byte-identical to MAME's `softcard3.rom`, is the card's PROM. |
+| Registers | At `$C080 + slot * 16`. A read returns `$50`, which the boot code looks for. Writing `$01` arms a Z80 reset for the next switch; writing `$10` lets the card answer reads of `$FFFC` and `$FFFD`. |
+| Switching | A 6502 read of `$FFFC` hands the bus to the Z80 and starts a supervision timer; a read of `$FFFD` stops the timer. The Z80 hands the bus back with `OUT ($00),A`. If the timer fires first, the card hands it back anyway, so the 6502 can serve SOS. MAME's period, 5 Hz, is marked as unchecked. |
+| Boot | Its own boot blocks, not SOS's. They load at `$A000`, look for the card from slot 4 down, load the SOS drivers named in `DRIVER.SOS`, and run CP/M's console, printer and disk I/O through those drivers on the 6502. |
+
+No source says whether the card lets the waiting 6502 make a refresh read in each Z80 opcode fetch, as the Apple II's
+SoftCard does, so it makes none; the Apple III's own video refreshes its RAM. Interrupts are not modelled, as MAME has
+none.
+
+The Z80 debugs as its own thread, **SoftCard /// Z80**, beside the 6502's: source breakpoints, stepping by line, the
+call stack and its registers. `z80:` names memory as the Z80 sees it, through the PROM, so `z80:$0100` is the Apple's
+`$2100` in the bank switched in, and a data breakpoint there watches the Z80's own accesses. A `.cpu Z80` source loads
+at `z80:$0100` and starts there with the Z80 holding the bus; the supervision timer does not run, so it keeps the bus
+until its `OUT ($00),A`. An instruction breakpoint at `z80:0x0000` stops CP/M's boot at the Z80's first instruction.
 
 ## Debugging
 
@@ -147,4 +178,8 @@ CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid A
   (`RETROCORE_APPLE3_DISKS`); the emulation test also needs the DOS 3.3 System Master in `<cache>\iie-disks`.
 - `Apple3OracleTests` runs MAME (`RETROCORE_MAME`).
 - `Apple3ProFileTests` needs no files: it runs Apple's `.PROFILE` driver from the SDK on the SDK's boot ROM.
-- `node tools/Test-Apple3Dap.mjs` drives the debug host.
+- `SoftCard3Tests` needs no files but for its CP/M boot, which needs the SoftCard /// CP/M Master disk
+  (`RETROCORE_SOFTCARD3`, by default `<cache>\softcard3`), and its PROM check, which needs MAME's `softcard3.rom` in
+  that folder's `extract`. `SoftCard3OracleTests` runs MAME.
+- `node tools/Test-Apple3Dap.mjs` drives the debug host, and `node tools/Test-SoftCard3Dap.mjs` the SoftCard ///'s
+  Z80 thread, booting CP/M too when the master disk is there.

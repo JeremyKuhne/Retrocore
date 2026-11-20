@@ -68,14 +68,15 @@ option, empty ones included. Each row names the devices on it, by id:
 | --- | --- |
 | IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card, the 3.5 disk controller or the Z80 SoftCard) |
 | II, II Plus | `model`, `memory`, `builtIn`, `gamePort`, `d0Socket` (the II only: Programmer's Aid #1 or empty, as the launch's `programmersAid` says), `slot0` (the language card, a firmware card with the other BASIC, or empty, as the launch's `slot0` says), `slot1` to `slot7` (as the IIe's, and slot 3 takes a card too) |
-| Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card or empty) |
+| Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card, the SoftCard ///, or empty) |
 | Model I | `model`, `rom`, `memory`, `cassette`, `expansion`, `disk` (the controller and its doubler, with its drives), `lowercase` |
 
 An empty slot's `value` is `empty`, and its `description` says what installs something there. A row's `actions`
 say what `retro/hardware` can do to it: `addCard` on a free IIe slot (1, 2, 4 and 5, 6 without a Disk II, and 7
 without block storage) or II and II Plus slot (those, 3, and an empty 0) or Apple III slot (1 to 4), `removeCard` on a Disk II card, the
-Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, or the language or firmware card in slot 0. A
-ProFile card goes in any of them; the Apple III takes no other card yet.
+Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, the SoftCard ///, or the language or firmware card in slot 0. A
+ProFile card goes in any of them; the Apple III's slots also take the SoftCard ///, one at a time (`addSoftCard3`), and no
+other card yet.
 
 ```json
 { "id": "slot5", "action": "addDiskII", "sectors": 16 }
@@ -84,6 +85,7 @@ ProFile card goes in any of them; the Apple III takes no other card yet.
 { "id": "slot5", "action": "addDisk35" }
 { "id": "slot4", "action": "addProFile" }
 { "id": "slot5", "action": "addSoftCard" }
+{ "id": "slot4", "action": "addSoftCard3" }
 { "id": "slot0", "action": "addLanguageCard" }
 { "id": "slot0", "action": "addFirmwareCard" }
 { "id": "slot5", "action": "removeCard" }
@@ -92,7 +94,8 @@ ProFile card goes in any of them; the Apple III takes no other card yet.
 
 A row may have `settings`, switches on its hardware, each with an `id`, a `label`, its `value` (on or off) and a
 `description`. `setSetting` changes one. The Z80 SoftCard has two: `translation`, its address translation (DIP switch
-S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default).
+S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default). The
+SoftCard /// has none.
 
 `retro/hardware` changes the machine at once, running or stopped, and returns the new `retro/devices` body. A Disk
 II added to a slot answers at $C080 plus 16 times the slot and at its ROM page, $Cn00, with firmware built from the
@@ -104,7 +107,7 @@ for the session; the launch configuration is unchanged. The session sends the sa
 state changes: on each stop, and with the running frames while the machine runs.
 
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
-slot 0 of a II or II Plus, `mockingboard`, `softCard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
+slot 0 of a II or II Plus, `mockingboard`, `softCard`, `softCard3` (the Apple III's), `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
 that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
 tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as

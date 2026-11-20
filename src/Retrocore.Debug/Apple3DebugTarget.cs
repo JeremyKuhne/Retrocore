@@ -20,8 +20,12 @@ namespace Retrocore.Debug;
 ///   <c>x80</c> to <c>x8F</c> for the 64K that X-byte reaches, as SOS writes an extended address. A breakpoint on
 ///   <c>bank2:$2000</c> stops only while bank 2 is switched in.
 ///  </para>
+///  <para>
+///   With the SoftCard /// in a slot, its Z80 is its own thread, and <c>z80</c> is memory as the Z80 sees it, through
+///   the card's mapping PROM and then the 6502's view.
+///  </para>
 /// </remarks>
-internal sealed partial class Apple3DebugTarget : IDebugTarget
+internal sealed partial class Apple3DebugTarget : IZ80CardHost
 {
     private const byte BrkOpcode = 0x00;
     private const byte JsrOpcode = 0x20;
@@ -151,7 +155,12 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;
 
     /// <inheritdoc/>
-    public ulong CycleCount => _machine.Processor.CycleCount;
+    /// <remarks>
+    ///  <para>
+    ///   The machine's cycles, which go on while the SoftCard /// holds the 6502.
+    ///  </para>
+    /// </remarks>
+    public ulong CycleCount => _machine.Cycles;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -184,7 +193,46 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public (string Name, ushort Start, int Length) MemoryScope => ("Zero page", 0, 256);
 
     /// <inheritdoc/>
-    public IReadOnlyList<DebugMemoryBank> Banks => field ??= CreateBanks();
+    /// <remarks>
+    ///  <para>
+    ///   With the SoftCard ///, <c>z80</c> is memory as its Z80 sees it.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<DebugMemoryBank> Banks
+    {
+        get
+        {
+            _banks ??= CreateBanks();
+            if (Coprocessor is not SoftCardDebugTarget softCard) { return _banks; }
+            if (_softCardBanks?[^1] != softCard.Bank) { _softCardBanks = [.. _banks, softCard.Bank]; }
+            return _softCardBanks;
+        }
+    }
+
+    private List<DebugMemoryBank>? _banks;
+    private DebugMemoryBank[]? _softCardBanks;
+    private SoftCardDebugTarget? _softCard;
+
+    /// <inheritdoc/>
+    public IDebugTarget? Coprocessor
+    {
+        get
+        {
+            if (_machine.Bus.SoftCard is not { } card) { return null; }
+            if (_softCard?.Card != card)
+            {
+                _softCard = new(this, card, "SoftCard /// Z80", "The SoftCard ///'s Z80's memory");
+            }
+
+            return _softCard;
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool CoprocessorActive => _machine.Bus.SoftCard is { OwnsBus: true };
+
+    /// <inheritdoc/>
+    public Z80Card? InstalledZ80Card => _machine.Bus.SoftCard;
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
@@ -211,16 +259,50 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public bool StepCycle()
     {
+        Advance(tState: false);
+        return _machine.Processor.FetchedOpcode;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The Z80 keeps its own clock, twice the slots', so a cycle holds one to three of its T-states.
+    ///  </para>
+    /// </remarks>
+    public void StepTState() => Advance(tState: true);
+
+    /// <inheritdoc/>
+    public bool StartsCycle => !_machine.MidCycle;
+
+    /// <inheritdoc/>
+    public bool Stepped { get; private set; }
+
+    // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard /// holds it, it runs no
+    // cycle, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
+    private void Advance(bool tState)
+    {
         ProcessorRegisters before = _machine.Processor.Registers;
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
-        _machine.StepCycle();
-        _calls.Observe(_machine.LastCycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
+        ulong cycles = _machine.Processor.CycleCount;
+        if (tState)
+        {
+            _machine.StepTState();
+        }
+        else
+        {
+            _machine.StepCycle();
+        }
+
+        Stepped = _machine.Processor.CycleCount != cycles;
+        if (Stepped)
+        {
+            _calls.Observe(_machine.LastCycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
+        }
+
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {
             throw new InvalidOperationException($"CPU stopped: {_machine.Processor.Status}.");
         }
-
-        return _machine.Processor.FetchedOpcode;
     }
 
     /// <inheritdoc/>
@@ -568,14 +650,27 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         ];
     }
 
-    // A slot: its ProFile card and the ProFile cabled to it, or empty.
+    // A slot: its ProFile card and the ProFile cabled to it, the SoftCard ///, or empty.
     private HardwareRow Slot(int slot)
     {
+        if (_machine.Bus.SoftCard is { } softCard && softCard.Slot == slot)
+        {
+            return new(
+                $"slot{slot}",
+                $"Slot {slot}",
+                "SoftCard ///",
+                "Microsoft's Z80 card, for CP/M: boot its own CP/M disk. A 6502 read of $FFFC, once the card is told to "
+                    + "answer it, hands the bus to the Z80, which shows as its own thread. The launch's softCard3 installs "
+                    + "it; Remove Card takes it out.",
+                [],
+                ["removeCard"]);
+        }
+
         if (_machine.Bus.ProFileIn(slot) is not { } card)
         {
             return HardwareRow.Empty(
                 slot,
-                "Add Card puts a ProFile interface card here; so does the launch's proFiles.",
+                "Add Card puts a ProFile interface card or the SoftCard /// here; so do the launch's proFiles and softCard3.",
                 free: true);
         }
 
@@ -597,11 +692,17 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         int slot = id is ['s', 'l', 'o', 't', >= '1' and <= '4' and var digit] ? digit - '0' : 0;
         switch (action)
         {
-            case "addProFile" when slot != 0 && _machine.Bus.ProFileIn(slot) is null:
+            case "addProFile" when slot != 0 && _machine.Bus.Card(slot) is null:
                 _machine.Bus.InstallProFile(slot);
                 break;
             case "removeCard" when slot != 0 && _machine.Bus.ProFileIn(slot) is not null:
                 _machine.Bus.RemoveProFile(slot);
+                break;
+            case "addSoftCard3" when slot != 0 && _machine.Bus.Card(slot) is null && _machine.Bus.SoftCard is null:
+                _machine.Bus.InstallSoftCard(slot, SoftCard3Prom());
+                break;
+            case "removeCard" when slot != 0 && _machine.Bus.SoftCard?.Slot == slot:
+                _machine.Bus.RemoveCard(slot);
                 break;
             default:
                 throw new ArgumentException($"The {id} hardware does not support {action}.");
@@ -612,13 +713,20 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
     public JsonObject? Cards()
     {
         JsonObject cards = [];
-        for (int slot = 1; slot <= 4; slot++)
-        {
-            cards[$"{slot}"] = _machine.Bus.ProFileIn(slot) is null ? "empty" : "proFile";
-        }
-
+        for (int slot = 1; slot <= 4; slot++) { cards[$"{slot}"] = CardIn(slot); }
         return cards;
     }
+
+    // The card in a slot, as the machine state names it.
+    private string CardIn(int slot) => _machine.Bus.ProFileIn(slot) is not null
+        ? "proFile"
+        : _machine.Bus.SoftCard?.Slot == slot ? "softCard3" : "empty";
+
+    // The SoftCard ///'s mapping PROM, assembled from the SDK's source once.
+    private byte[] SoftCard3Prom() => _softCard3Prom ??=
+        Apple3SdkModules.AssembleSoftCard3Prom(Path.Join(Apple3SdkModules.Directory(SdkRoms), "SoftCard3Prom.asm"));
+
+    private byte[]? _softCard3Prom;
 
     /// <inheritdoc/>
     public IEnumerable<string> RestoreCards(JsonObject cards)
@@ -627,15 +735,38 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
         foreach ((string key, JsonNode? node) in cards)
         {
             string? card = node?.GetValueKind() == System.Text.Json.JsonValueKind.String ? node.GetValue<string>() : null;
-            if (!int.TryParse(key, out int slot) || slot is < 1 or > 4 || card is not ("proFile" or "empty"))
+            if (!int.TryParse(key, out int slot) || slot is < 1 or > 4 || card is not ("proFile" or "softCard3" or "empty"))
             {
                 problems.Add($"Slot {key} cannot take the saved card '{node}'.");
                 continue;
             }
 
-            bool installed = _machine.Bus.ProFileIn(slot) is not null;
-            if (card == "proFile" && !installed) { _machine.Bus.InstallProFile(slot); }
-            if (card == "empty" && installed) { _machine.Bus.RemoveProFile(slot); }
+            string current = CardIn(slot);
+            if (card == current) { continue; }
+            string id = $"slot{slot}";
+            try
+            {
+                if (current != "empty") { HardwareAction(id, "removeCard", []); }
+                switch (card)
+                {
+                    case "proFile":
+                        HardwareAction(id, "addProFile", []);
+                        break;
+                    case "softCard3":
+                        // The machine has one SoftCard ///: the saved slot wins over the launch's.
+                        if (_machine.Bus.SoftCard is { } softCard)
+                        {
+                            HardwareAction($"slot{softCard.Slot}", "removeCard", []);
+                        }
+
+                        HardwareAction(id, "addSoftCard3", []);
+                        break;
+                }
+            }
+            catch (ArgumentException error)
+            {
+                problems.Add(error.Message);
+            }
         }
 
         return problems;
@@ -832,6 +963,16 @@ internal sealed partial class Apple3DebugTarget : IDebugTarget
             {
                 ProFileMedia.Insert(card.Drive, image);
             }
+        }
+
+        if (args.Int("softCard3") is { } softCard)
+        {
+            if (softCard is < 1 or > 4 || machine.Bus.Card(softCard) is not null)
+            {
+                throw new ArgumentException($"softCard3: slot {softCard} is not free for the SoftCard ///.");
+            }
+
+            target.HardwareAction($"slot{softCard}", "addSoftCard3", []);
         }
 
         string?[] disks = args.ImagePaths("disks", "game.dsk");

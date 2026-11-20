@@ -84,7 +84,8 @@ public class DisassemblerTests
         AnalysisProject project = new(image, origin: 0, ProcessorVariant.Mos6502) { FollowVectors = false };
         Disassembler.Analyze(project);
         DisassemblyResult? result = null;
-        long allocated = Allocations.During(() => result = Disassembler.Analyze(project));
+        // Analysis rents its owner map and decode scratch from the shared pools, which the measurement's GC can empty.
+        long allocated = Allocations.During(() => result = Disassembler.Analyze(project), pooled: true);
         result?.Instructions.Count.Should().Be(image.Length);
         // Output entries and two byte-wide flag arrays dominate; the allowance covers fixed result metadata.
         long budget = (long)image.Length * (Unsafe.SizeOf<DisassembledInstruction>() + (2 * sizeof(byte))) + FixedMetadataBudget;

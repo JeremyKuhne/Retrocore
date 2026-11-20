@@ -23,8 +23,12 @@ internal static class Allocations
     ///  Gets the bytes the work allocates on this thread, measured while no GC can run.
     /// </summary>
     /// <param name="work">
-    ///  The work, already run once so its code, types and pooled buffers are ready. Keep it short: the tests running
+    ///  The work, already run once so its code and types are ready. Keep it short: the tests running
     ///  beside it allocate meanwhile, and once the region is used up a GC ends it.
+    /// </param>
+    /// <param name="pooled">
+    ///  <see langword="true"/> when the work rents from a shared pool such as <see cref="System.Buffers.ArrayPool{T}.Shared"/>:
+    ///  it then runs once more in the region, unmeasured, to refill the pool before it is measured.
     /// </param>
     /// <returns>The bytes allocated, which is 0 for allocation-free work.</returns>
     /// <exception cref="InvalidOperationException">
@@ -37,8 +41,14 @@ internal static class Allocations
     ///   background GC's suspension, which leaves <see cref="GC.CollectionCount(int)"/> unchanged. So the work runs in
     ///   a no-GC region, and when <see cref="GC.EndNoGCRegion"/> reports that a GC ran anyway, it is measured again.
     ///  </para>
+    ///  <para>
+    ///   Starting the region runs a full blocking GC, and after a full GC the shared array pools trim themselves on
+    ///   the finalizer thread. When the machine's memory load is above the GC's high threshold (90% by default), as it
+    ///   can be during a full run, they drop every array they hold, including those the caller's warm-up returned. So each measurement first waits for that trim
+    ///   to finish, and pooled work runs once before it is measured.
+    ///  </para>
     /// </remarks>
-    internal static long During(Action work)
+    internal static long During(Action work, bool pooled = false)
     {
         ArgumentNullException.ThrowIfNull(work);
         int unstarted = 0;
@@ -56,6 +66,10 @@ internal static class Allocations
                 bool held;
                 try
                 {
+                    // The pools' trim after the region's GC runs as a finalizer; let it finish before refilling them.
+                    GC.WaitForPendingFinalizers();
+                    if (pooled) { work(); }
+
                     long start = GC.GetAllocatedBytesForCurrentThread();
                     work();
                     allocated = GC.GetAllocatedBytesForCurrentThread() - start;

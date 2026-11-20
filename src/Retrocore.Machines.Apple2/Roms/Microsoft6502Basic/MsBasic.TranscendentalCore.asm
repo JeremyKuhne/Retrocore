@@ -1,11 +1,5 @@
-;; Exponentiation, random numbers and transcendental functions ($EE8D-$F10A).
-;;
-;; These routines operate on Applesoft's floating-point accumulator <FAC> and use the five-byte packed format for
-;; constants and polynomial coefficients. <LOG> and the arithmetic primitives are in the floating-point modules.
-;; This module follows AppleSoft.FloatOutput.asm; its final table ends immediately before <INITAT>.
-
-
-;; Group: Exponentiation and square root
+;; Emits the square-root, power and negation routines.
+.macro POWER_ROUTINES
 
 ;; Takes the square root of <FAC> by raising it to one half.
 ;; Errors: <LOG> reports an illegal quantity for a negative argument
@@ -15,7 +9,7 @@ SQR:
     ldy #>FHALF
     jsr MOVFM
 
-;; Raises the number in ARG to the power in <FAC> and returns the result in <FAC>.
+;; Raises the argument accumulator to the power in <FAC> and returns the result in <FAC>.
 ;;
 ;; Zero to the zero power is one. A negative base is accepted only for an integer exponent; the parity of that
 ;; exponent determines the sign. Otherwise the result is exp(exponent * log(base)).
@@ -66,23 +60,10 @@ NEGOP:
 NEGRTS:
     rts
 
-;; Group: Exponential approximation
+.endmacro
 
-;; The five-byte floating-point constant log base 2 of e.
-LOGEB2:
-    .byte $81, $38, $AA, $3B, $29
-
-;; <EXP>'s polynomial: degree 7, followed by eight five-byte coefficients in evaluation order.
-EXPCON:
-    .byte $07                        ; polynomial degree
-    .byte $71, $34, $58, $3E, $56 ; 0.000021498763697
-    .byte $74, $16, $7E, $B3, $1B ; 0.00014352314036
-    .byte $77, $2F, $EE, $E3, $85 ; 0.0013422634824
-    .byte $7A, $1D, $84, $1C, $2A ; 0.0096140170119
-    .byte $7C, $63, $59, $58, $0A ; 0.055505126860
-    .byte $7E, $75, $FD, $E7, $C6 ; 0.24022638462
-    .byte $80, $31, $72, $18, $10 ; 0.69314718608
-    .byte $81, $00, $00, $00, $00 ; 1
+;; Emits the five-byte-precision exponential routine.
+.macro EXP_ROUTINE
 
 ;; Computes e raised to <FAC>, returning the result in <FAC>.
 ;;
@@ -139,7 +120,10 @@ SWAPLP:
     jsr MLDEXP
     rts
 
-;; Group: Polynomial evaluation
+.endmacro
+
+;; Emits the polynomial evaluators for five-byte coefficients.
+.macro POLYNOMIAL_ROUTINES
 
 ;; Evaluates X * P(X squared) for X in <FAC>.
 ;; In: A = low byte of coefficient table, Y = high byte of coefficient table
@@ -162,7 +146,7 @@ POLYX:
 ;; from highest power to constant.
 ;; In: A = low byte of table, Y = high byte of table
 ;; Out: FAC = polynomial result
-;; Entry: POLY1 = uses the table already saved in POLYPT
+;; Entry: POLY1 = uses the table already saved in <POLYPT>
 POLY:
     sta POLYPT
     sty POLYPT+1
@@ -203,65 +187,10 @@ POLY4:
 RANDRT:
     rts
 
-;; Group: Random numbers
+.endmacro
 
-;; Multiplier for <RND>, stored as four bytes followed by the first byte of <RADDZC>.
-;;
-;; The five-byte operands intentionally overlap; <RADDZC>'s fifth byte is the opcode at <RND>.
-RMULZC:
-    .byte $98, $35, $44, $7A
-
-;; Addend for <RND>: four bytes followed by the first instruction byte at <RND>.
-RADDZC:
-    .byte $68, $28, $B1, $46
-
-;; Implements RND using the sign of <FAC>.
-;;
-;; Zero returns the last value in <RNDX>; a negative argument starts a sequence from that argument. A positive
-;; argument advances the saved value using <RMULZC> and <RADDZC>. The high and low mantissa bytes are exchanged,
-;; the exponent is shifted into the mantissa during normalization, and the positive result is saved in <RNDX>.
-;; Out: FAC = pseudorandom value
-;; Entry: STRNEX = normalizes and saves the current mantissa
-RND:
-    jsr SIGN
-    tax
-    bmi RND1
-
-QSETNR:
-    lda #RNDX
-    ldy #0
-    jsr MOVFM
-    txa
-    beq RANDRT
-    lda #<RMULZC
-    ldy #>RMULZC
-    jsr FMULT
-    lda #<RADDZC
-    ldy #>RADDZC
-    jsr FADD
-
-RND1:
-    ldx FACLO
-    lda FACHO
-    sta FACLO
-    stx FACHO
-
-STRNEX:
-    lda #0
-    sta FACSGN
-    lda FACEXP
-    sta FACOV
-    lda #$80
-    sta FACEXP
-    jsr NORMAL
-    ldx #RNDX
-    ldy #0
-
-;; Stores <FAC> in the floating-point variable addressed by X and Y via <MOVMF>.
-GMOVMF:
-    jmp MOVMF
-
-;; Group: Sine, cosine and tangent
+;; Emits the sine, cosine and tangent routines.
+.macro TRIG_ROUTINES
 
 ;; Computes cosine of <FAC> in radians by adding pi/2 and falling into <SIN>.
 COS:
@@ -336,6 +265,9 @@ TAN:
     jsr COSC
     lda #TEMPF3
     ldy #0
+
+;; Divides the sine by the cosine through <FDIV>.
+GFDIV:
     jmp FDIV
 
 ;; Continues the cosine calculation using the quadrant sign in A from <TAN>.
@@ -343,31 +275,10 @@ COSC:
     pha
     jmp SIN1
 
-;; Five-byte floating-point pi/2.
-PI2:
-    .byte $81, $49, $0F, $DA, $A2
+.endmacro
 
-;; Five-byte floating-point 2*pi.
-TWOPI:
-    .byte $83, $49, $0F, $DA, $A2
-
-;; Five-byte floating-point one quarter.
-FR4:
-    .byte $7F, $00, $00, $00, $00
-
-;; <SIN>'s odd-polynomial table: degree 5 for P and six five-byte coefficients for X * P(X squared).
-SINCON:
-    .byte $05                        ; polynomial degree
-    .byte $84, $E6, $1A, $2D, $1B ; -14.381383816
-    .byte $86, $28, $07, $FB, $F8 ; 42.07777095
-    .byte $87, $99, $68, $89, $01 ; -76.704133676
-    .byte $87, $23, $35, $DF, $E1 ; 81.605223690
-    .byte $86, $A5, $5D, $E7, $28 ; -41.34170209
-    .byte $83, $49, $0F, $DA, $A2 ; 6.2831853070
-    ; Unused signature: "MICROSOFT!" backwards, each byte XORed with $87.
-    .byte $A6, $D3, $C1, $C8, $D4, $C8, $D5, $C4, $CE, $CA
-
-;; Group: Arctangent
+;; Emits the arctangent routine that uses <ATNCON>.
+.macro ATN_ROUTINE
 
 ;; Computes arctangent of <FAC> in radians.
 ;;
@@ -407,18 +318,4 @@ ATN3:
 ATN4:
     rts
 
-;; <ATN>'s odd-polynomial table: degree 11 for P and twelve five-byte coefficients for X * P(X squared).
-ATNCON:
-    .byte $0B                        ; polynomial degree
-    .byte $76, $B3, $83, $BD, $D3 ; -0.0006847939119
-    .byte $79, $1E, $F4, $A6, $F5 ; 0.004850942156
-    .byte $7B, $83, $FC, $B0, $10 ; -0.01611170184
-    .byte $7C, $0C, $1F, $67, $CA ; 0.03420963805
-    .byte $7C, $DE, $53, $CB, $C1 ; -0.05427913276
-    .byte $7D, $14, $64, $70, $4C ; 0.07245719654
-    .byte $7D, $B7, $EA, $51, $7A ; -0.08980239538
-    .byte $7D, $63, $30, $88, $7E ; 0.1109324134
-    .byte $7E, $92, $44, $99, $3A ; -0.1428398077
-    .byte $7E, $4C, $CC, $91, $C7 ; 0.1999991205
-    .byte $7F, $AA, $AA, $AA, $13 ; -0.3333333157
-    .byte $81, $00, $00, $00, $00 ; 1
+.endmacro

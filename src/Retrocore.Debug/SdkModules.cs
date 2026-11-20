@@ -141,16 +141,16 @@ internal static class SdkModules
     /// <param name="model">The emulated model, which selects each ROM's faithful variant.</param>
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="autostart">For the II, whether its Monitor is the Autostart ROM.</param>
-    /// <param name="appleSoftSource">The AppleSoft listing used for debugger source maps.</param>
+    /// <param name="basicSource">The AppleSoft listing used for debugger source maps.</param>
     /// <returns>The AppleSoft assembly, for BASIC's addresses; null when its source is missing.</returns>
     internal static AssemblyResult? AddTo(
         DebugInfo debug,
         Apple2Model model,
         string? directory = null,
         bool autostart = false,
-        AppleSoftSourceKind appleSoftSource = AppleSoftSourceKind.Native)
+        BasicSourceKind basicSource = BasicSourceKind.Native)
     {
-        return AddTo(debug, model, directory, out _, autostart, appleSoftSource);
+        return AddTo(debug, model, directory, out _, autostart, basicSource);
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ internal static class SdkModules
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="integer">Integer BASIC's assembly, for its addresses; null when its source is missing.</param>
     /// <param name="autostart">For the II, whether its Monitor is the Autostart ROM.</param>
-    /// <param name="appleSoftSource">The AppleSoft listing used for debugger source maps.</param>
+    /// <param name="basicSource">The AppleSoft listing used for debugger source maps.</param>
     /// <returns>The AppleSoft assembly, for BASIC's addresses; null when its source is missing.</returns>
     internal static AssemblyResult? AddTo(
         DebugInfo debug,
@@ -169,7 +169,7 @@ internal static class SdkModules
         string? directory,
         out AssemblyResult? integer,
         bool autostart = false,
-        AppleSoftSourceKind appleSoftSource = AppleSoftSourceKind.Native)
+        BasicSourceKind basicSource = BasicSourceKind.Native)
     {
         AssemblyResult? basic = null;
         integer = null;
@@ -207,7 +207,7 @@ internal static class SdkModules
         }
 
         // A source line applies only where the running bytes match it, so dumps of other revisions show disassembly.
-        string appleSoft = AppleSoftPath(roms, appleSoftSource);
+        string appleSoft = AppleSoftPath(roms, basicSource);
         if (File.Exists(appleSoft))
         {
             basic = AssembleAppleSoft(appleSoft, model);
@@ -285,7 +285,7 @@ internal static class SdkModules
     /// <param name="model">The model.</param>
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="autostart">For the II, whether its Monitor is the Autostart ROM.</param>
-    /// <param name="appleSoftSource">The AppleSoft listing used to build the ROM.</param>
+    /// <param name="basicSource">The AppleSoft listing used to build the ROM.</param>
     /// <returns>The ROMs.</returns>
     /// <exception cref="InvalidDataException">A source has errors.</exception>
     /// <exception cref="FileNotFoundException">A source is missing.</exception>
@@ -293,21 +293,21 @@ internal static class SdkModules
         Apple2Model model,
         string? directory = null,
         bool autostart = false,
-        AppleSoftSourceKind appleSoftSource = AppleSoftSourceKind.Native)
+        BasicSourceKind basicSource = BasicSourceKind.Native)
     {
         string roms = directory ?? RomDirectory;
         if (!model.IsIIe())
         {
             AssemblyResult glyphs = AssembleCharacterGenerator(CharacterGeneratorPath(roms), model);
             return Apple2Roms.FromBoardChips(
-                BuildBoardSystem(model, autostart, roms, appleSoftSource: appleSoftSource),
+                BuildBoardSystem(model, autostart, roms, basicSource: basicSource),
                 glyphs.Sections[0].Bytes.Span);
         }
 
         byte[] system = new byte[SystemRomSize];
         Place(system, AssembleSystem(FirmwarePath(model, roms), FirmwareOrigin, FirmwareSize, model));
         Place(system, AssembleSystem(Path.Join(roms, "System", "Monitor.asm"), MonitorOrigin, MonitorSize, model));
-        AppleSoftImage(AssembleAppleSoft(AppleSoftPath(roms, appleSoftSource), model))
+        AppleSoftImage(AssembleAppleSoft(AppleSoftPath(roms, basicSource), model))
             .Span
             .CopyTo(system.AsSpan(AppleSoftOrigin - SystemRomOrigin));
 
@@ -324,7 +324,7 @@ internal static class SdkModules
     /// <param name="autostart">For the II, whether its Monitor is the Autostart ROM.</param>
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="programmersAid">For the II, whether its D0 socket holds Programmer's Aid #1.</param>
-    /// <param name="appleSoftSource">The AppleSoft listing used to build the ROM.</param>
+    /// <param name="basicSource">The AppleSoft listing used to build the ROM.</param>
     /// <returns>The 12 KiB.</returns>
     /// <exception cref="InvalidDataException">A source has errors.</exception>
     internal static byte[] BuildBoardSystem(
@@ -332,14 +332,14 @@ internal static class SdkModules
         bool autostart,
         string? directory = null,
         bool programmersAid = false,
-        AppleSoftSourceKind appleSoftSource = AppleSoftSourceKind.Native)
+        BasicSourceKind basicSource = BasicSourceKind.Native)
     {
         string roms = directory ?? RomDirectory;
         byte[] system = new byte[BoardRomSize];
         system.AsSpan().Fill(0xFF);
         if (model == Apple2Model.IIPlus)
         {
-            AppleSoftImage(AssembleAppleSoft(AppleSoftPath(roms, appleSoftSource), model))
+            AppleSoftImage(AssembleAppleSoft(AppleSoftPath(roms, basicSource), model))
                 .Span
                 .CopyTo(system.AsSpan(AppleSoftOrigin - BoardRomOrigin));
         }
@@ -369,19 +369,19 @@ internal static class SdkModules
         Path.Join(directory ?? RomDirectory, "IntegerBasic", "IntegerBasic.asm");
 
     /// <summary>
-    ///  Gets the native AppleSoft source or the selectable legacy MACRO-10 overlay.
+    ///  Gets the native AppleSoft source or the selectable MACRO-10 overlay.
     /// </summary>
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="source">Which AppleSoft source to use.</param>
     /// <returns>The source path.</returns>
-    internal static string AppleSoftPath(string? directory = null, AppleSoftSourceKind source = AppleSoftSourceKind.Native)
+    internal static string AppleSoftPath(string? directory = null, BasicSourceKind source = BasicSourceKind.Native)
     {
         string file;
-        if (source == AppleSoftSourceKind.Native)
+        if (source == BasicSourceKind.Native)
         {
             file = "AppleSoft.asm";
         }
-        else if (source == AppleSoftSourceKind.Legacy)
+        else if (source == BasicSourceKind.Macro10)
         {
             file = "applesoft.mac";
         }
@@ -616,7 +616,8 @@ internal static class SdkModules
         string full = Path.GetFullPath(path);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
-            SourceResolver = new FileAssemblySourceResolver(),
+            SourceResolver = new OverlayBaseResolver(
+                Path.Join(Path.GetDirectoryName(full) ?? throw new InvalidDataException($"No directory for {full}."), "..", "Microsoft6502Basic")),
             PredefinedSymbols = new Dictionary<string, long>
             {
                 ["ENHNCD"] = model == Apple2Model.IIeEnhanced ? 1 : 0,

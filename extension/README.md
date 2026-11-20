@@ -28,11 +28,11 @@ A `files.associations` entry settles it either way: map `*.asm` to
 extension's language where it should not. This extension does not edit your
 settings automatically.
 
-MACRO-10 sources, including the retained legacy AppleSoft source (`m6502.asm` and
+MACRO-10 sources, including the retained AppleSoft source (`m6502.asm` and
 its `applesoft.mac` overlay), can use **MACRO-10 Assembly** (`retrocore-macro10`)
 instead: it is the same assembly language, highlighting and language server,
 with its own red `MAC` file icon. AppleSoft's SDK default is the native,
-documented listing; set `appleSoftSource` to `legacy` in an Apple II launch to
+documented listing; set `basicSource` to `macro10` in an Apple II launch to
 build and debug with the MACRO-10 source. The BASIC
 languages show a green `BAS` icon. Language icons appear only where your file
 icon theme has none of its own for the file.
@@ -590,9 +590,9 @@ switch with `IFNDEF NAME,<NAME==1>` that a build overrides.
 The SDK's default AppleSoft II (`src/Retrocore.Machines.Apple2/Roms/AppleSoft`) is a
 fully documented, modular listing in Retrocore's native assembly. It assembles
 byte-identically to the IIe ROM at $D000-$F7FF for both models: `ENHNCD` is 1 for the
-Enhanced IIe (the default) and 0 for the original. Set `appleSoftSource` to `legacy`
+Enhanced IIe (the default) and 0 for the original. Set `basicSource` to `macro10`
 in an Apple II launch to assemble and debug Microsoft's `m6502.asm` (MIT, with its
-`LICENSE`) plus `applesoft.mac`, Apple's changes as an overlay. `AppleSoftTests` pin
+`LICENSE` in `Microsoft6502Basic`) plus `applesoft.mac`, Apple's changes as an overlay. `AppleSoftTests` pin
 the II Plus and both IIe ROMs by digest, and compare against your dumps when
 `RETROCORE_IIE_ROMS` is set.
 

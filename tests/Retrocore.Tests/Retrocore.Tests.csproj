@@ -105,7 +105,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\SourceMapModule.Statement.cs" Link="SourceMapModule.Statement.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DebugInfo.cs" Link="DebugInfo.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\SdkModules.cs" Link="SdkModules.cs" />
-    <Compile Include="..\..\src\Retrocore.Debug\AppleSoftSourceKind.cs" Link="AppleSoftSourceKind.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\BasicSourceKind.cs" Link="BasicSourceKind.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\CommandAddress.cs" Link="CommandAddress.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\DosCommand.cs" Link="DosCommand.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2PascalMemory.cs" Link="Apple2PascalMemory.cs" />
@@ -139,6 +139,7 @@
     <None Include="..\..\src\Retrocore.Pascal\Pcode.asm" Link="Inputs\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Inputs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Inputs\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Microsoft6502Basic\*" Link="Inputs\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Inputs\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Inputs\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Mouse\*.asm" Link="Inputs\Mouse\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

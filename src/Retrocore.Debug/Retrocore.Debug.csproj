@@ -37,6 +37,7 @@
     <None Include="..\..\docs\Bibliography.md" Link="Sdk\Bibliography.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Sdk\Roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\AppleSoft\*" Link="Sdk\Roms\AppleSoft\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Apple2\Roms\Microsoft6502Basic\*" Link="Sdk\Roms\Microsoft6502Basic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\System\*.asm" Link="Sdk\Roms\System\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\DiskII\*" Link="Sdk\Roms\DiskII\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\Dos\*.asm" Link="Sdk\Roms\Dos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

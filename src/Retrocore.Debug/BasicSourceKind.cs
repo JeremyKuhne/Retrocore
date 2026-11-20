@@ -5,9 +5,9 @@
 namespace Retrocore.Debug;
 
 /// <summary>
-///  Selects the AppleSoft listing used for ROM builds and debugger source maps.
+///  Selects a Microsoft-derived BASIC listing used for ROM builds and debugger source maps.
 /// </summary>
-internal enum AppleSoftSourceKind
+internal enum BasicSourceKind
 {
     /// <summary>
     ///  The documented native Retrocore assembly modules.
@@ -15,7 +15,7 @@ internal enum AppleSoftSourceKind
     Native,
 
     /// <summary>
-    ///  Microsoft's MACRO-10 source with Apple's changes applied as an overlay.
+    ///  Microsoft's MACRO-10 source with the machine's changes applied as an overlay.
     /// </summary>
-    Legacy
+    Macro10
 }

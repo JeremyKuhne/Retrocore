@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Retrocore.Tests;
 
@@ -39,6 +40,18 @@ public sealed class AppleSoftTests
             ReadOnlySpan<byte> bytes = SdkModules.AppleSoftImage(result).Span;
             Convert.ToHexString(SHA256.HashData(bytes)).Should().Be(expectedHash);
         }
+    }
+
+    /// <summary>
+    ///  The relocated Microsoft source keeps its pinned, LF-normalized SHA-256.
+    /// </summary>
+    [TestMethod]
+    public void MicrosoftSourceKeepsItsPinnedSha()
+    {
+        string path = Path.GetFullPath(Path.Join(s_overlay, "..", "..", "Microsoft6502Basic", "m6502.asm"));
+        string source = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
+            .Should().Be("F3EC99C91DEDB8EB3441DED866F45797BB3E03ED26567A253E24CECF23CD63AC");
     }
 
     /// <summary>
@@ -94,7 +107,7 @@ public sealed class AppleSoftTests
         foreach (Apple2Model model in (Apple2Model[])[Apple2Model.IIPlus, Apple2Model.IIeEnhanced])
         {
             Apple2Roms native = SdkModules.BuildRoms(model, inputs);
-            Apple2Roms legacy = SdkModules.BuildRoms(model, inputs, appleSoftSource: AppleSoftSourceKind.Legacy);
+            Apple2Roms legacy = SdkModules.BuildRoms(model, inputs, basicSource: BasicSourceKind.Macro10);
 
             native.System.ToArray().Should().Equal(legacy.System.ToArray());
             native.Characters.ToArray().Should().Equal(legacy.Characters.ToArray());
@@ -141,6 +154,31 @@ public sealed class AppleSoftTests
         position?.Chain.Should().ContainSingle();
         position?.Chain[0].Path.Should().EndWith("AppleSoft.ControlFlow.asm");
 
+        foreach ((string name, string definition, string invocation) in ((string, string, string)[])
+            [
+                ("FADDH", "MsBasic.AdditionCore.asm", "MsBasic.FloatingPoint.asm"),
+                ("FADD", "MsBasic.AdditionCore.asm", "MsBasic.FloatingPoint.asm"),
+                ("LOG", "MsBasic.Logarithm.asm", "MsBasic.FloatArithmetic.asm"),
+                ("FMULT", "MsBasic.ArithmeticCore.asm", "MsBasic.FloatArithmetic.asm"),
+                ("MOVFM", "MsBasic.MovementCore.asm", "MsBasic.FloatMovement.asm"),
+                ("SIGN", "MsBasic.ConversionCore.asm", "MsBasic.FloatConversion.asm"),
+                ("FIN", "MsBasic.DecimalInputCore.asm", "MsBasic.FloatConversion.asm"),
+                ("FOUT", "MsBasic.OutputCore.asm", "MsBasic.FloatOutput.asm"),
+                ("EXP", "MsBasic.TranscendentalCore.asm", "MsBasic.Transcendental.asm"),
+                ("RND", "MsBasic.RandomCore.asm", "MsBasic.Transcendental.asm")
+            ])
+        {
+            ushort address = (ushort)debug.Resolve(name);
+            DebugPosition mapped = debug.Position(new Apple2TestMemory(bus), address)
+                ?? throw new AssertFailedException($"No source for {name}.");
+
+            mapped.Chain.Should().HaveCount(2);
+            mapped.Chain[0].Path.Should().EndWith(definition);
+            mapped.Chain[1].Path.Should().EndWith(invocation);
+            debug.Modules.SelectMany(module => module.Entries(mapped.Chain[0].Path, mapped.Chain[0].Line))
+                .Should().Contain(address, $"{name}'s source line must accept a breakpoint");
+        }
+
         // Language-card RAM at $D000 is someone else's code, such as ProDOS.
         bus.Read(0xC080);
         debug.Position(new Apple2TestMemory(bus), gone).Should().BeNull();
@@ -150,23 +188,24 @@ public sealed class AppleSoftTests
     ///  The legacy selection still maps through its original macro source.
     /// </summary>
     [TestMethod]
-    public void AppleSoftLegacySourceRemainsDebuggable()
+    public void AppleSoftMacro10SourceRemainsDebuggable()
     {
         string inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
         Apple2Roms roms = SdkModules.BuildRoms(
             Apple2Model.IIeEnhanced,
             inputs,
-            appleSoftSource: AppleSoftSourceKind.Legacy);
+            basicSource: BasicSourceKind.Macro10);
 
         Apple2Bus bus = new(roms);
         DebugInfo debug = new();
-        SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, inputs, appleSoftSource: AppleSoftSourceKind.Legacy);
+        SdkModules.AddTo(debug, Apple2Model.IIeEnhanced, inputs, basicSource: BasicSourceKind.Macro10);
 
         ushort gone = (ushort)debug.Resolve("GONE");
         DebugPosition? position = debug.Position(new Apple2TestMemory(bus), gone);
+        string microsoftSource = Path.GetFullPath(Path.Join(s_overlay, "..", "..", "Microsoft6502Basic", "m6502.asm"));
         position.Should().NotBeNull();
         position?.Chain.Should().ContainSingle();
-        position?.Chain[0].Path.Should().Be(Path.Join(Path.GetDirectoryName(Path.GetFullPath(s_overlay)), "m6502.asm"));
+        position?.Chain[0].Path.Should().Be(microsoftSource);
         position?.Chain[0].Line.Should().Be(2165);
     }
 }

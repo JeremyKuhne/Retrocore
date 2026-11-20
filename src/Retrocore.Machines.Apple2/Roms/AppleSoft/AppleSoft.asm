@@ -1,8 +1,8 @@
 ;; APPLESOFT II ($D000-$F7FF)
 ;;
 ;; Apple's floating-point BASIC, derived from Microsoft 6502 BASIC 1.1. This hand-maintained native listing
-;; assembles the II Plus, original IIe and enhanced IIe ROMs byte for byte. The original Microsoft source,
-;; its license and the selectable MACRO-10 overlay applesoft.mac remain beside it.
+;; assembles the II Plus, original IIe and enhanced IIe ROMs byte for byte. The original Microsoft source and
+;; its license are in Microsoft6502Basic; the selectable MACRO-10 overlay applesoft.mac remains here.
 ;;
 ;; Memory. <TXTTAB> points to the first program line, and <VARTAB> to the simple variables after the
 ;; program. A line has a two-byte link to the next line, a two-byte line number, tokenized text and a zero
@@ -49,12 +49,12 @@ APLPLS = 0                          ;; 1 for the II Plus ROM, with ENHNCD = 0
 .include "AppleSoft.Functions.asm"
 .include "AppleSoft.Strings.asm"
 .include "AppleSoft.NumericConversion.asm"
-.include "AppleSoft.FloatingPoint.asm"
-.include "AppleSoft.FloatArithmetic.asm"
-.include "AppleSoft.FloatMovement.asm"
-.include "AppleSoft.FloatConversion.asm"
-.include "AppleSoft.FloatOutput.asm"
-.include "AppleSoft.Transcendental.asm"
+.include "../Microsoft6502Basic/MsBasic.FloatingPoint.asm"
+.include "../Microsoft6502Basic/MsBasic.FloatArithmetic.asm"
+.include "../Microsoft6502Basic/MsBasic.FloatMovement.asm"
+.include "../Microsoft6502Basic/MsBasic.FloatConversion.asm"
+.include "../Microsoft6502Basic/MsBasic.FloatOutput.asm"
+.include "../Microsoft6502Basic/MsBasic.Transcendental.asm"
 .include "AppleSoft.Initialization.asm"
 .include "AppleSoft.AppleCommands.asm"
 .include "AppleSoft.HighResolution.asm"

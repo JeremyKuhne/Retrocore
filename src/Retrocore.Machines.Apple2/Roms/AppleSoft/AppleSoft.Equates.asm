@@ -1,8 +1,8 @@
 ;; APPLESOFT: BUILD CONSTANTS, WORKSPACE AND MACHINE ADDRESSES
 ;;
 ;; These equates name existing RAM and ROM locations; they allocate no workspace. The configuration symbols
-;; retain the intermediate assignments of the Microsoft expansion, but changing them does not regenerate this
-;; already-expanded listing. In particular, <ROMLOC> and <RAMLOC> are build history, not runtime memory limits.
+;; retain the intermediate assignments of the Microsoft expansion. Some shared modules use them, but changing
+;; them alone does not regenerate the whole listing. <ROMLOC> and <RAMLOC> are build history, not runtime limits.
 ;;
 ;; The two-byte pointers <TXTTAB>, <VARTAB>, <ARYTAB> and <STREND> delimit the program, simple variables,
 ;; arrays and free memory in ascending order. Strings occupy the high end of memory down to <FRETOP>, below

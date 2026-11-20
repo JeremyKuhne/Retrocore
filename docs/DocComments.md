@@ -146,6 +146,18 @@ GETLN:
   - **Other headings:** any other line ending in a colon, after an empty `;;` line, is a plain heading, as
     in Natural Docs.
 
+  For a shared source with documented vendor names for the same routine or location, use an `Also:` heading and
+  attribute each name to its variant and source:
+
+  ```text
+  ;; Also:
+  ;;   AppleSoft: `NAME`, Apple II Reference Manual
+  ;;   PET BASIC 2: `NAME`, Commodore 1979 BASIC 4 listing
+  ```
+
+  These are source names, not necessarily labels in the current build. Use `<SYMBOL>` when referring to a symbol
+  that resolves in the assembled variant; use code formatting for names that are only being identified as text.
+
 Both forms parse to the same sections, so every tool treats them alike.
 
 ### 2.1 Sections

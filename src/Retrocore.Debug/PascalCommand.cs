@@ -50,8 +50,8 @@ internal static partial class PascalCommand
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
                --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--code-room blocks] [--iie]
                --pascal assembly (file.code | disk NAME) output.text
-               --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code
-               --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code
+               --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code [--iie]
+               --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code [--iie]
                --pascal compare (file.code | disk NAME) (file.code | disk NAME)
         """;
 
@@ -76,8 +76,8 @@ internal static partial class PascalCommand
                 ["decompile", .. string[] rest] => Decompile(rest),
                 ["compile", .. string[] rest] => Compile(rest),
                 ["assembly", .. string[] rest] when rest.Length >= 2 && CodeFile(rest[..^1], out _) is { } file => Assembly(file, rest[..^1], rest[^1]),
-                ["assemble-native", string source, string boot, string tools, string output] => AssembleNative(source, boot, tools, output),
-                ["link", string host, .. string[] rest] when rest.Length >= 3 => Link(host, rest[..^3], rest[^3], rest[^2], rest[^1]),
+                ["assemble-native", .. string[] rest] => AssembleNative(rest),
+                ["link", .. string[] rest] => Link(rest),
                 ["compare", .. string[] rest] when CodeFiles(rest) is var (first, second) => Compare(first, second),
                 _ => Fail(Usage, code: 2)
             };
@@ -458,10 +458,20 @@ internal static partial class PascalCommand
         return written > 0 ? 0 : Fail("The code file has no assembled procedures.");
     }
 
-    // Assembles a 6502 source with Apple's Assembler, on an emulated Apple II.
-    private static int AssembleNative(string source, string boot, string tools, string output)
+    // assemble-native source.text APPLE1.dsk APPLE2.dsk output.code [--iie]
+    private static int AssembleNative(string[] args)
     {
-        (byte[]? code, string screen) = EmulatedPascalTools.Assemble(File.ReadAllText(source), boot, tools);
+        List<string> rest = [.. args];
+        Apple2Model model = rest.Remove("--iie") ? Apple2Model.IIeEnhanced : Apple2Model.IIPlus;
+        return rest is [string source, string boot, string tools, string output]
+            ? AssembleNative(source, boot, tools, output, model)
+            : Fail(Usage, code: 2);
+    }
+
+    // Assembles a 6502 source with Apple's Assembler, on an emulated Apple II.
+    private static int AssembleNative(string source, string boot, string tools, string output, Apple2Model model)
+    {
+        (byte[]? code, string screen) = EmulatedPascalTools.Assemble(File.ReadAllText(source), boot, tools, model: model);
         if (code is null)
         {
             Console.Error.WriteLine(screen);
@@ -473,14 +483,25 @@ internal static partial class PascalCommand
         return 0;
     }
 
+    // link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code [--iie]
+    private static int Link(string[] args)
+    {
+        List<string> rest = [.. args];
+        Apple2Model model = rest.Remove("--iie") ? Apple2Model.IIeEnhanced : Apple2Model.IIPlus;
+        return rest is [string host, .. var libraries, string boot, string tools, string output]
+            ? Link(host, [.. libraries], boot, tools, output, model)
+            : Fail(Usage, code: 2);
+    }
+
     // Links a host code file with library code files with Apple's Linker, on an emulated Apple II.
-    private static int Link(string host, string[] libraries, string boot, string tools, string output)
+    private static int Link(string host, string[] libraries, string boot, string tools, string output, Apple2Model model)
     {
         (byte[]? code, string screen) = EmulatedPascalTools.Link(
             File.ReadAllBytes(host),
             [.. libraries.Select(File.ReadAllBytes)],
             boot,
-            tools);
+            tools,
+            model: model);
 
         if (code is null)
         {

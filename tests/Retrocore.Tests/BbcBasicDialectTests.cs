@@ -830,6 +830,42 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  VAL of a string with no number is a real 0, so adding to it does not wrap as an integer would; and the FOR
+    ///  stack read while loops are live, integer and real, nested, on one line and over two.
+    /// </summary>
+    [TestMethod]
+    public void ValAndLiveLoopsAsTheRomHasThem()
+    {
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "R=VAL(\"X\")+&7FFFFFFF+1:S=VAL(\"\")+&7FFFFFFF+1\r");
+        BbcMachineTests.RunToPrompt(machine);
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        foreach ((string name, string expression) in (ReadOnlySpan<(string, string)>)[("R", "VAL(\"X\")+&7FFFFFFF+1"), ("S", "VAL(\"\")+&7FFFFFFF+1")])
+        {
+            BasicVariable stored = variables.Find(name) ?? throw new InvalidOperationException($"No {name}.");
+            double rom = variables.Read(stored.Kind, stored.ValueAddress).Number;
+            evaluator.Evaluate(expression).Value.Number.Should().Be(rom, expression);
+        }
+
+        // STOP would reset the stacks on its way to the prompt, so the loops are read while line 30 runs on.
+        foreach (string line in (string[])["10 FOR I%=1 TO -9 STEP -2:FOR F=0.5 TO -3.25 STEP -0.75", "20 FOR J%=5 TO 7", "30 GOTO 30"])
+        {
+            BbcMachineTests.Type(machine, line + "\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BbcMachineTests.Type(machine, "RUN\r");
+
+        variables = new(BasicDialect.BbcBasic, Memory(machine));
+        int Address(string name) => (variables.Find(name) ?? throw new InvalidOperationException($"No {name}.")).ValueAddress;
+        variables.Loops(0, 0, 0).Should().Equal(
+            new BasicLoop(Address("J%"), 1, 7, 20),
+            new BasicLoop(Address("F"), -0.75, -3.25, 10),
+            new BasicLoop(Address("I%"), -2, -9, 10));
+    }
+
+    /// <summary>
     ///  Numbers are read as READ_NUMBER reads them, bit for bit: the digits as a 40-bit integer, scaled by ten a step
     ///  at a time with the ROM's truncating multiply and divide, then rounded once, which is not always the nearest
     ///  real to the decimal (4294967295.5 is 2^32).

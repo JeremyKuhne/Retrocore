@@ -127,7 +127,8 @@ public sealed partial class BasicProgram
             string trimmed = line.Trim();
             int indent = line.Length - line.TrimStart().Length;
             if (LabelLine().Match(trimmed) is { Success: true } label
-                && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(KeywordForm(label.Groups["name"].Value, dialect))))
+                && !(trimmed.EndsWith(':') && dialect.AllKeywords.Contains(KeywordForm(label.Groups["name"].Value, dialect)))
+                && !(trimmed.EndsWith(':') && dialect is BbcBasicDialect && BbcTokenises(label.Groups["name"].Value)))
             {
                 // BBC BASIC's names are case-sensitive, so its labels are too: @loop is not LOOP.
                 string name = label.Groups["name"].Value;

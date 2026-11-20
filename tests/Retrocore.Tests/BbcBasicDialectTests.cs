@@ -314,6 +314,18 @@ public sealed class BbcBasicDialectTests
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "ON ERROR *KEY 1 GOTO done", labels).Should().BeEmpty();
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "GOTO done%", labels).Should().BeEmpty("done% is another name");
 
+        // A label after THEN is alone before ELSE however it is abbreviated, and before REM; RUN takes no line.
+        const string Else = "REM retrocore bbcbasic\n    IF X THEN done EL. other\n    IF X THEN done ELS.other\n    IF X THEN done REM why\ndone:\n    PRINT 1\nother:\n    PRINT 2\n";
+        string elsed = BasicProgram.Parse(Else, BasicDialect.BbcBasic).Program?.ToText() ?? "";
+        string[] ifs = [.. elsed.Split('\n').Where(line => line.Contains("IF X", StringComparison.Ordinal))];
+        ifs.Should().HaveCount(3);
+        foreach (string line in ifs) { line.Should().Contain("THEN 40").And.NotContain("done"); }
+        BasicProgram.LabelReferences(BasicDialect.BbcBasic, "RUN done", labels).Should().BeEmpty("BASIC II's RUN takes no line");
+
+        // A line the tokeniser makes a statement of is no label, though it is a name and a colon: PRINTX: is PRINT X.
+        BasicParseResult statement = BasicProgram.Parse("REM retrocore bbcbasic\nX=1\nPRINTX:\nPROCinit:\nEND\nDEF PROCinit:ENDPROC\n", BasicDialect.BbcBasic);
+        statement.Program?.ToText().Should().Contain("PRINTX:").And.Contain("PROCinit:");
+
         // TRACE takes a line, its limit, which the tokeniser keeps as a line number: a label there is the line.
         BasicProgram.LabelReferences(BasicDialect.BbcBasic, "TRACE done", labels).Should().ContainSingle()
             .Which.Name.Should().Be("done");
@@ -850,5 +862,82 @@ public sealed class BbcBasicDialectTests
         }
 
         evaluator.Evaluate("4294967295.5").Value.Number.Should().Be(4294967296);
+    }
+
+    /// <summary>
+    ///  Quotients, square roots and RAD and DEG come out bit for bit as the ROM's: DIVIDE_FP_A_BY_FP_B keeps seven
+    ///  rounding bits and no remainder, so 75/9.1 rounds as a half would; SQR is five of the ROM's Newton steps; RAD and
+    ///  DEG multiply by its packed constants.
+    /// </summary>
+    [TestMethod]
+    public void QuotientsRootsAndAnglesAsTheRomWorksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "75/9.1", "150/9.1", "1/3", "-1/3", "1.1^-3", "(-3)^-5", "SQR 6", "SQR 2", "SQR 1E-38", "RAD 1", "RAD 180",
+            "DEG 13", "DEG PI"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        // A sign takes a factor without the sign tests, so a second sign starts a name; -0.0 is 0, unsigned.
+        foreach (string signs in (string[])["--1", "- -1", "-+1", "+-1", "++1"])
+        {
+            Action chained = () => evaluator.Evaluate(signs);
+            chained.Should().Throw<FormatException>(signs).WithMessage("No such variable*");
+        }
+
+        evaluator.Evaluate("5--3").Value.Number.Should().Be(8);
+        double.IsNegative(evaluator.Evaluate("-0.0").Value.Number).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  STR$ writes a real character for character as NUMBER_TO_STRING does, rounding with its own half a unit rather
+    ///  than to the nearest decimal: 89132.34994506836 is 89132.34994.
+    /// </summary>
+    [TestMethod]
+    public void StringsAsTheRomWritesThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "89132.34994506836", "476707.7541503906", "35.5469564050436", "-4486.574285507202", "1/3", "PI", "9.9999999995",
+            "999999999.95", "0.099999999999", "1E-10", "1.5E10", "-2147483648"
+        ];
+
+        BbcMachineTests.Type(machine, $"DIM S$({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"S$({index})=STR$({expressions[index]})\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "S$");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            byte[] rom = variables.Read(array.Kind, array.ElementAddress([index])).Text ?? [];
+            (evaluator.Evaluate($"STR$({expressions[index]})").Value.Text ?? []).Should().Equal(rom, expressions[index]);
+        }
+
+        BbcBasicExpression.Format(89132.34994506836).Should().Be("89132.34994");
     }
 }

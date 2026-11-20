@@ -186,8 +186,11 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     {
         ProcessorRegisters before = _machine.Processor.Registers;
         bool wasBoundary = _machine.Processor.IsInstructionBoundary;
-        if (wasBoundary && _basicRom is not null) { ObserveBasicCall(before.ProgramCounter); }
         _machine.StepCycle();
+
+        // Only an opcode fetch runs the instruction at the boundary: an IRQ taken there leaves the PC where it was, so
+        // the same boundary comes again after RTI, and observing both would count a PROC's call or return twice.
+        if (_basicRom is not null && _machine.Processor.FetchedOpcode) { ObserveBasicCall(before.ProgramCounter); }
         _calls.Observe(_machine.LastCycle, before, _machine.Processor.Registers, wasBoundary, _machine.Processor.IsInstructionBoundary);
         if (_machine.Processor.Status != ProcessorExecutionStatus.Running)
         {

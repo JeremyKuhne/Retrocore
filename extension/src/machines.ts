@@ -625,9 +625,10 @@ export const machines: readonly Machine[] = [
     {
         id: "altair",
         label: "MITS Altair 8800",
-        detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
+        detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette, 88-DCDD 8-inch disks and 64 KB",
         configuration: { machine: "altair" },
-        diskFormats: [],
+        // A disk boots through DBL, which a launch with disks fits.
+        diskFormats: ["dsk"],
         // A tape alone cannot start an Altair, which needs a bootstrap keyed in to read it, so tapes go in through
         // Retro Devices or a launch's cassette option instead.
         tapeFormats: [],
@@ -661,6 +662,15 @@ export const machines: readonly Machine[] = [
                 values: [
                     { label: "Off", value: false },
                     { label: "On", detail: "Letters type as capitals, as Altair BASIC needs", value: true }
+                ],
+                default: false
+            },
+            {
+                option: "diskController",
+                label: "Disk controller",
+                values: [
+                    { label: "None", value: false },
+                    { label: "88-DCDD", detail: "Four 8-inch drives, with DBL at $FF00 to boot drive 0", value: true }
                 ],
                 default: false
             }

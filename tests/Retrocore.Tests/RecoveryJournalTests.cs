@@ -4,10 +4,12 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Acorn;
+using Retrocore.Machines.Altair;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
 using Retrocore.Media.Floppy;
 using System.Text.Json.Nodes;
 
@@ -505,6 +507,45 @@ public sealed class RecoveryJournalTests
         Disks(id).Should().BeEmpty();
     }
 
+    /// <summary>
+    ///  An Altair 8-inch disk changed by a write is kept, comes back into a new machine's drive with its image's codec,
+    ///  and saves to its image with the write and the image's trailer.
+    /// </summary>
+    [TestMethod]
+    public void AltairDiskComesBackWithItsCodec()
+    {
+        string id = Id();
+        string dsk = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.dsk");
+        byte[] image = new byte[AltairDisk.ImageBytes + AltairDisk.TrailerBytes];
+        image[0] = 0x80;
+        image[^AltairDisk.TrailerBytes] = 0xAA;
+        File.WriteAllBytes(dsk, image);
+
+        AltairDiskDrive drive = AltairDrive(dsk);
+        byte[] sector = new byte[AltairDisk.SectorBytes];
+        sector[0] = 0x85;
+        sector[1] = 0x42;
+        (drive.Disk ?? throw new InvalidOperationException("The drive is empty.")).WriteSector(5, 9, sector);
+        Stop(Open(id), drive);
+        Disks(id).Select(entry => entry?["kind"]?.GetValue<string>()).Should().Equal(AltairDisk.SnapshotKind);
+
+        AltairDiskDrive next = AltairDrive(dsk);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        next.Media?.Changed.Should().BeTrue();
+        AltairDisk back = next.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<AltairDiskCodec>();
+        MediaActions.Device(next, "save", Speaking())?.String("outcome").Should().Be("saved");
+
+        byte[] saved = File.ReadAllBytes(dsk);
+        saved.Length.Should().Be(image.Length);
+        saved[^AltairDisk.TrailerBytes].Should().Be(0xAA, "the trailer is kept");
+        int offset = ((5 * AltairDisk.SectorsPerTrack) + 9) * AltairDisk.SectorBytes;
+        saved.AsSpan(offset, 2).ToArray().Should().Equal(0x85, 0x42);
+        Stop(journal, next);
+        Disks(id).Should().BeEmpty();
+    }
+
     private static string Id() => $"test-{Guid.NewGuid():N}";
 
     private static RecoveryJournal Open(string id) => RecoveryJournal.Open(id, []) ?? throw new InvalidOperationException("The journal is taken.");
@@ -569,6 +610,18 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded, uef, new AcornTapeCodec(), tape);
         cassette.Insert(loaded, uef);
         return (floppy, cassette);
+    }
+
+    // Drive 0 of a new Altair's 88-DCDD with an image in it, registered with the host as a launch registers it.
+    private static AltairDiskDrive AltairDrive(string dsk)
+    {
+        AltairMachine machine = new(new AltairConfiguration { DiskDrives = 1 });
+        AltairDiskDrive drive = (machine.Bus.Disk ?? throw new InvalidOperationException("The 88-DCDD is missing.")).Drives[0];
+        byte[] bytes = File.ReadAllBytes(dsk);
+        (AltairDisk disk, AltairDiskCodec codec) = AltairDiskCodec.Load(bytes);
+        drive.Insert(disk, dsk, codec.Format);
+        MediaActions.Register(disk, dsk, codec, bytes);
+        return drive;
     }
 
     // Writes a block of one byte, as the machine would, unlocking the disk first.

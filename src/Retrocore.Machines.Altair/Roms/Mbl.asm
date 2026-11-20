@@ -20,7 +20,7 @@
 ;;
 ;; The labels follow Geoff Harrison's disassembly of a dump Grant Stockly provided.
 ;;
-;; Maintained by hand. AltairRomSourceTests check that it assembles byte-identically to the PROM.
+;; Maintained by hand. AltairDiskTests check that it assembles byte-identically to the PROM.
 
 .cpu I8080
 

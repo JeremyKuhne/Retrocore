@@ -57,7 +57,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
-    assert.deepEqual(machineById("altair")?.diskFormats, []);
+    assert.deepEqual(machineById("altair")?.diskFormats, ["dsk"], "the 88-DCDD's SIMH images");
     assert.deepEqual(machineById("altair")?.tapeFormats, [], "an Altair tape needs a bootstrap, so it cannot start the machine");
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });
     assert.deepEqual(machineById("apple3")?.basicDialects, ["business"]);

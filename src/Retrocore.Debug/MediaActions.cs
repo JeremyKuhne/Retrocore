@@ -6,6 +6,7 @@ using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -388,6 +389,7 @@ internal static partial class MediaActions
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
             CommodoreTape => new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant()),
             CommodoreDisk => new CommodoreDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
+            AltairDisk => new AltairDiskCodec(),
             _ => BlockImageCodec.For(extension),
         };
     }

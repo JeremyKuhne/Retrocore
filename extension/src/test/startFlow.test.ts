@@ -35,7 +35,7 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.deepEqual(kinds("apple1"), ["machine", "source", "program", "basic", "tape"], "the Apple-1 loads BASIC, and has no disks");
     assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "basic", "disk", "tape"]);
     assert.deepEqual(kinds("coco3"), ["machine", "source", "program", "disk", "tape"], "the CoCo 3's BASIC files do not launch yet");
-    assert.deepEqual(kinds("altair"), ["machine", "source", "program"], "an Altair tape needs a bootstrap keyed in first");
+    assert.deepEqual(kinds("altair"), ["machine", "source", "program", "disk"], "an Altair disk boots through DBL; a tape needs a bootstrap keyed in first");
     assert.deepEqual(kinds("pet2001-basic2"), ["machine", "source", "program", "basic", "tape"], "the PET has tapes and no disks");
     assert.deepEqual(kinds("pet2001"), ["machine", "source", "program", "basic", "tape"]);
     assert.deepEqual(kinds("pet4032"), ["machine", "source", "program", "basic", "disk", "tape"], "the 4032 comes with a 4040");

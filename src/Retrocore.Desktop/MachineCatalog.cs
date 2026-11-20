@@ -223,7 +223,7 @@ internal static class MachineCatalog
         new("bbca", "BBC Micro Model A", "6502 at 2 MHz, MOS 1.20, BASIC II and 16 KB",
             Options(("machine", "bbc"), ("model", "bbca")),
             [s_bbcSound]),
-        new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
+        new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette, 88-DCDD 8-inch disks and 64 KB",
             Options(("machine", "altair")),
             [
                 new("ramKilobytes", "Memory",
@@ -240,6 +240,11 @@ internal static class MachineCatalog
                     new("On the 88-SIO", "sio", "Ports $00 and $01; 4K BASIC 3.2 with the switches down"),
                 ], "2sio"),
                 new("upperCase", "Caps lock", [new("Off", Value: false), new("On", Value: true, "Letters type as capitals, as Altair BASIC needs")], Default: false),
+                new("diskController", "Disk controller",
+                [
+                    new("None", Value: false),
+                    new("88-DCDD", Value: true, "Four 8-inch drives, with DBL at $FF00 to boot drive 0"),
+                ], Default: false),
             ]),
         new("kaypro2", "Kaypro II", "Z80 at 2.5 MHz, 64 KB, 80x24 and two drives, running CP/M 2.2",
             Options(("machine", "kaypro2")), []),

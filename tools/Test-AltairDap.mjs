@@ -121,6 +121,7 @@ const playing = [
 const cache = process.env.RETROCORE_CACHE || join(homedir(), "Retrocore");
 const basic = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "8kbas.bin");
 const mitsTape = join(process.env.RETROCORE_ALTAIR_BASIC || join(cache, "altair-basic"), "tapes", "4KBAS32.TAP");
+const cpm = join(process.env.RETROCORE_ALTAIR_DISK || join(cache, "altair-disk"), "cpm22b-56k.dsk");
 
 // MITS's bootstrap for the 88-ACR, as the guide gives it, for 4K BASIC 3.2's tape.
 const bootstrap = [
@@ -203,7 +204,8 @@ try {
     await assert.rejects(assembled("RST $08,$10"));
     await request("retro/memory/mark", { memoryReference: "0x0000", address: 8, name: "" });
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
-    assert.deepEqual(Object.keys(hardware), ["model", "memory", "serial", "cassette", "terminal", "panel"]);
+    assert.deepEqual(Object.keys(hardware), ["model", "memory", "serial", "cassette", "disk", "proms", "terminal", "panel"]);
+    assert.equal(hardware.disk.value, "none", "no disks, so no 88-DCDD");
     assert.equal(hardware.cassette.value, "Cassette interface at ports $06 and $07, 300 baud");
     assert.equal(hardware.memory.value, "64 KB at $0000");
     assert.equal(hardware.serial.value, "Two MC6850 ACIAs at ports $10 and $12, 9600 baud");
@@ -429,6 +431,38 @@ try {
         await assert.rejects(request("evaluate", { expression: "PC" }), /No machine has been launched/);
         const failures = events.filter(message => message.event === "stopped" && message.body.reason === "exception");
         assert.deepEqual(failures.map(message => message.body.description), [], "the cancelled worker reported nothing");
+    }
+
+    // CP/M 2.2b, when its image is in the cache: the launch's disks fit the 88-DCDD and DBL, which boots drive 0.
+    // A file saved under CP/M changes the disk, and the host saves it back to its image.
+    if (existsSync(cpm)) {
+        phase("booting CP/M");
+        const copy = join(tmpdir(), `retrocore-altair-${process.pid}-cpm.dsk`);
+        writeFileSync(copy, readFileSync(cpm));
+        try {
+            events.length = 0;
+            await request("launch", { machine: "altair", disks: [copy], upperCase: true, stopOnEntry: false, speed: "max" });
+            await request("configurationDone");
+            await screen(screen => screen.trimEnd().endsWith("A>"), "CP/M's prompt");
+            const rows = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
+            assert.deepEqual(rows.disk.devices, ["disk0", "disk1", "disk2", "disk3"]);
+            assert.equal(rows.proms.value, "DBL at $FF00");
+            await type("dir\r");
+            await screen(screen => screen.includes("MBASIC   COM") && screen.trimEnd().endsWith("A>"), "CP/M's directory");
+            await type("save 1 retro.com\r");
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            await screen(screen => screen.trimEnd().endsWith("A>"), "CP/M's prompt after SAVE");
+            const disk0 = (await request("retro/devices")).devices.find(device => device.id === "disk0");
+            assert.equal(disk0.media.changed, true, "SAVE changed the disk");
+            const saved = await request("retro/device", { id: "disk0", action: "save", supportsRetrocoreMedia: true });
+            assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+            assert.ok(readFileSync(copy).includes(Buffer.from("RETRO   COM")), "the image has the file's directory entry");
+            assert.equal(readFileSync(copy).length, readFileSync(cpm).length, "the image keeps its trailer");
+        } finally {
+            if (existsSync(copy)) unlinkSync(copy);
+        }
+    } else {
+        console.log(`CP/M 2.2b (${cpm}) is missing, so no disk was booted.`);
     }
 
     await request("disconnect", {});

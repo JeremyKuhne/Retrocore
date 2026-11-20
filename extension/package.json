@@ -1491,6 +1491,18 @@
                 "default": true,
                 "description": "Apple-1: a 4 KB bank of RAM at $E000-$EFFF, where BASIC loads and runs."
               },
+              "proms": {
+                "type": "array",
+                "items": {
+                  "enum": ["dbl", "mbl"],
+                  "enumDescriptions": [
+                    "Altair 8800: MITS's disk boot loader at $FF00, which boots the 88-DCDD's drive 0.",
+                    "Altair 8800: MITS's multi-boot loader at $FE00, which loads a MITS tape from the device the sense switches A11-A8 name."
+                  ]
+                },
+                "uniqueItems": true,
+                "description": "Altair 8800: the boot PROMs fitted, both from the SDK's sources; DBL by default with the 88-DCDD, none without it."
+              },
               "cassetteInterface": {
                 "type": "boolean",
                 "default": true,
@@ -1581,7 +1593,7 @@
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given. Altair 8800: the 88-DCDD floppy controller with four 8-inch drives; defaults on when disks are given."
                   },
                   {
                     "enum": [
@@ -1645,7 +1657,7 @@
                   "type": "string"
                 },
                 "maxItems": 16,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
               },
               "diskUnits": {
                 "type": "array",

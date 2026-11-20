@@ -1010,7 +1010,8 @@ internal sealed class BbcBasicExpression
             }
         }
 
-        return Classify(trimmed[..end], negative) ?? Integer(0);
+        // No number at all is a real zero, as VAL gives it.
+        return Classify(trimmed[..end], negative) ?? Real(0);
     }
 
     /// <summary>

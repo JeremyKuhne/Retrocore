@@ -124,6 +124,23 @@ export async function testLanguageServer(root: string): Promise<void> {
     const homes = cout.filter(symbol => symbol.name === "COUT").map(symbol => path.basename(symbol.location.uri.fsPath));
     assert.ok(homes.includes("Monitor.asm"), homes.join(", "));
 
+    await until("AppleSoft symbols", async () => {
+        const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "INVERS");
+        return found.some(symbol => symbol.name === "INVERS" && path.basename(symbol.location.uri.fsPath) === "applesoft.mac")
+            ? found : undefined;
+    });
+
+    const configured = path.join(folder, "configured");
+    const broken = path.join(folder, "broken");
+    const diskFolder = fs.mkdtempSync(path.join(root, "retrocore-config-test-"));
+    try {
+        await testProcedureFixtures(configured, broken, diskFolder);
+    } finally {
+        fs.rmSync(configured, { recursive: true, force: true });
+        fs.rmSync(broken, { recursive: true, force: true });
+        fs.rmSync(diskFolder, { recursive: true, force: true });
+    }
+
     // MACRO-10 sources are a language of their own, for their own icon, and the server serves them as assembly.
     const overlayPath = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft", "applesoft.mac");
     const overlay = await vscode.workspace.openTextDocument(vscode.Uri.file(overlayPath));
@@ -135,5 +152,117 @@ export async function testLanguageServer(root: string): Promise<void> {
         return found !== undefined && found.length > 0 ? found : undefined;
     });
     assert.ok(overlaySymbols.length > 0, "The server outlines a MACRO-10 source.");
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+}
+
+async function testProcedureFixtures(configured: string, broken: string, diskFolder: string): Promise<void> {
+    // A companion linker configuration supplies the included procedure's address and documentation.
+    fs.mkdirSync(configured, { recursive: true });
+    const configuredRoot = path.join(configured, "system.asm");
+    const configuredBios = path.join(configured, "Bios.asm");
+    fs.writeFileSync(configuredRoot, ".section HIGH\n.include \"Bios.asm\"\n    jsr InverseCapitalsOn\n    jsr Outer::Inner\n");
+    fs.writeFileSync(path.join(configured, "system.cfg"),
+        "MEMORY { HIGH: start = $FE00, size = $0200, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n");
+    fs.writeFileSync(configuredBios,
+        ";; Shows capitals inverse. See <InverseCapitalsNext>.\n.proc InverseCapitalsOn\n    rts\n.endproc\nInverseCapitalsNext:\n    rts\n.scope Outer\n.proc Inner\n    rts\n.endproc\n.endscope\n");
+    const bios = await vscode.workspace.openTextDocument(vscode.Uri.file(configuredBios));
+    await vscode.window.showTextDocument(bios);
+    const procedure = new vscode.Position(1, bios.lineAt(1).text.indexOf("InverseCapitalsOn") + 1);
+    const procedureHover = await until("configured procedure hover", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", bios.uri, procedure);
+        return found.find(item => text(item).includes("(label) InverseCapitalsOn = $FE00"));
+    });
+    assert.match(text(procedureHover), /Shows capitals inverse/);
+    assert.match(text(procedureHover), /\[`InverseCapitalsNext`\]\(file:[^)]*Bios\.asm#L5\)/);
+    const procedureDefinitions = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeDefinitionProvider", bios.uri, procedure);
+    assert.equal(procedureDefinitions[0].uri.fsPath, configuredBios);
+    assert.equal(procedureDefinitions[0].range.start.line, 1);
+    assert.equal(procedureDefinitions[0].range.start.character, 6);
+    assert.equal(procedureDefinitions[0].range.end.character, 6 + "InverseCapitalsOn".length);
+    const configuredDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(configuredRoot));
+    const scopedDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider", configuredDocument.uri, new vscode.Position(3, 10));
+    assert.equal(scopedDefinitions[0].uri.fsPath, configuredBios);
+    assert.equal(scopedDefinitions[0].range.start.line, 7);
+    assert.equal(scopedDefinitions[0].range.start.character, 6);
+    assert.equal(scopedDefinitions[0].range.end.character, 11);
+
+    // Unsaved configuration edits change diagnostics and addresses without touching the assembly.
+    const config = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(configured, "system.cfg")));
+    await vscode.window.showTextDocument(config);
+    const replaceConfig = async (value: string): Promise<void> => {
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(config.uri, new vscode.Range(config.positionAt(0), config.positionAt(config.getText().length)), value);
+        assert.ok(await vscode.workspace.applyEdit(edit));
+    };
+    await replaceConfig("MEMORY {");
+    await until("invalid configuration diagnostic", () =>
+        vscode.languages.getDiagnostics(vscode.Uri.file(configuredRoot)).find(item => item.severity === vscode.DiagnosticSeverity.Error));
+    await replaceConfig("MEMORY { HIGH: start = $FE20, size = $01E0, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n");
+    await until("updated configuration address", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", bios.uri, procedure);
+        return found.find(item => text(item).includes("InverseCapitalsOn = $FE20"));
+    });
+    assert.ok(await config.save());
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+
+    // A change on disk is picked up even when the configuration was never opened.
+    const diskRoot = path.join(diskFolder, "disk.asm");
+    const diskConfig = path.join(diskFolder, "disk.cfg");
+    const diskBios = path.join(diskFolder, "diskBios.asm");
+    const diskConfiguration = (address: string): string =>
+        `MEMORY { HIGH: start = $${address}, size = $0080, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n`;
+    fs.writeFileSync(diskRoot, ".section HIGH\n.include \"diskBios.asm\"\n");
+    fs.writeFileSync(diskConfig, diskConfiguration("FE60"));
+    fs.writeFileSync(diskBios, ".proc DiskEntry\n    rts\n.endproc\n");
+    const diskDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(diskBios));
+    await vscode.window.showTextDocument(diskDocument);
+    const diskPosition = new vscode.Position(0, 7);
+    await until("initial disk configuration address", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", diskDocument.uri, diskPosition);
+        return found.find(item => text(item).includes("DiskEntry = $FE60"));
+    });
+    fs.writeFileSync(diskConfig, diskConfiguration("FE80"));
+    await until("disk configuration address", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", diskDocument.uri, diskPosition);
+        return found.find(item => text(item).includes("DiskEntry = $FE80"));
+    });
+
+    // An assembly with errors still finds its procedure; an unrelated native name cannot resolve to INVERS.
+    fs.mkdirSync(broken, { recursive: true });
+    const brokenRoot = path.join(broken, "system.asm");
+    const brokenBios = path.join(broken, "Bios.asm");
+    fs.writeFileSync(brokenRoot, ".org $6000\n.include \"Bios.asm\"\n    jsr InverseCapitalsMissing\n    jsr Outer::Inner\n");
+    fs.writeFileSync(brokenBios,
+        ";; Shows capitals inverse.\n.proc InverseCapitalsOn\n    rts\n.endproc\n.scope Outer\n.proc Inner\n    rts\n.endproc\n.endscope\n");
+    const brokenDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(brokenRoot));
+    await vscode.window.showTextDocument(brokenDocument);
+    await until("broken assembly diagnostics", () => {
+        const found = vscode.languages.getDiagnostics(brokenDocument.uri);
+        return found.some(diagnostic => diagnostic.message.includes("InverseCapitalsMissing")) ? found : undefined;
+    });
+    const missing = new vscode.Position(2, brokenDocument.lineAt(2).text.indexOf("InverseCapitalsMissing") + 1);
+    const missingDefinitions = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeDefinitionProvider", brokenDocument.uri, missing);
+    assert.deepEqual(missingDefinitions, [], "A native name must not resolve to the SDK's six-character INVERS.");
+
+    const brokenBiosDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(brokenBios));
+    await vscode.window.showTextDocument(brokenBiosDocument);
+    const brokenProcedure = new vscode.Position(1, brokenBiosDocument.lineAt(1).text.indexOf("InverseCapitalsOn") + 1);
+    const brokenHover = await until("procedure hover after an error", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", brokenBiosDocument.uri, brokenProcedure);
+        return found.find(item => text(item).includes("(label) InverseCapitalsOn"));
+    });
+    assert.match(text(brokenHover), /Shows capitals inverse/);
+    const brokenDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider", brokenBiosDocument.uri, brokenProcedure);
+    assert.equal(brokenDefinitions[0].uri.fsPath, brokenBios);
+    assert.equal(brokenDefinitions[0].range.start.character, 6);
+    const brokenScopedDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider", brokenDocument.uri, new vscode.Position(3, 10));
+    assert.equal(brokenScopedDefinitions[0].uri.fsPath, brokenBios);
+    assert.equal(brokenScopedDefinitions[0].range.start.line, 5);
+    assert.equal(brokenScopedDefinitions[0].range.start.character, 6);
+    assert.equal(brokenScopedDefinitions[0].range.end.character, 11);
+
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
 }

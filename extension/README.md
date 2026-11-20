@@ -187,8 +187,8 @@ includes and macros:
   second later. An error inside an include or a macro is reported where it is, with
   the include or invocation as related information.
 - **Go to definition** for labels, constants and macros, across includes. In a
-  source that does not assemble yet, column-0 labels and equates are still found,
-  and cheap locals resolve to the nearest definition.
+  source that does not assemble yet, column-0 labels and equates and `.proc`
+  definitions are still found, and cheap locals resolve to the nearest definition.
 - **Find all references** (Shift+F12) for labels, constants and macros: every use
   in code, across includes and the SDK's ROM sources, and every `<NAME>` link in a
   `;;` comment. Each use is resolved as going to its definition is, so a local
@@ -217,8 +217,13 @@ includes and macros:
 
 Each file is assembled as its own root unless an assembly already analysed
 includes it; a MACRO-10 base such as `m6502.asm` is analysed through the overlay
-beside it that names it. Files the extension does not recognize as `retrocore-asm`
-(such as `.s` sources) get language features once you select the language or add a
+beside it that names it. If the root has a same-named `.cfg` beside it, the server
+uses that linker configuration when assembling and reanalyzes on open-document
+edits and watched workspace file changes (subject to `files.watcherExclude`).
+This is an editor-only convenience: CLI builds and debug launches require an
+explicit `--config` or `linkerConfiguration` respectively. Files the extension does
+not recognize as `retrocore-asm` (such
+as `.s` sources) get language features once you select the language or add a
 `files.associations` entry.
 
 Not yet: find references, rename, semantic tokens and inlay hints, which need the

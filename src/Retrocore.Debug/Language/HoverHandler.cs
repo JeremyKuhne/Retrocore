@@ -63,7 +63,7 @@ internal sealed class HoverHandler
         // LDA is Pcode.asm's macro, even where the .cpu Pcode that owns it is in that include.
         bool expanded = operation
             && analysis?.ExpandsMacro(path, line) == true
-            && analysis.Find(word.Word).Any(site => site.Kind == SymbolSiteKind.Macro);
+            && analysis.Find(word.Word, analysis.UsesMacro10(path)).Any(site => site.Kind == SymbolSiteKind.Macro);
 
         // A mnemonic's .w suffix forces absolute addressing; the instruction is the same.
         string mnemonic = word.Word.EndsWith(".w", StringComparison.OrdinalIgnoreCase) ? word.Word[..^2] : word.Word;
@@ -133,7 +133,7 @@ internal sealed class HoverHandler
         string header = $"```\n({kind}) {site.Name}{value}\n```\n{where}";
         if (_workspace.TopicOf(site) is { } documented)
         {
-            string text = DocumentationMarkdown.Render(documented.Topic, documented.Resolver, _workspace.Href);
+            string text = DocumentationMarkdown.Render(documented.Topic, documented.Resolver, target => _workspace.Href(target, documented.Topic.Path));
             return text.Length == 0 ? header : $"{header}\n\n{text}";
         }
 

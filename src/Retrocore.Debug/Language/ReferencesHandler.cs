@@ -57,7 +57,7 @@ internal sealed class ReferencesHandler
         return references.Select(site => new LspLocation
         {
             Uri = DocumentUri.FromFileSystemPath(site.Path),
-            Range = new LspRange(site.Line, site.Column, site.Line, site.Column + site.Name.Length)
+            Range = new LspRange(site.Line, site.Column, site.Line, site.Column + (site.SourceLength ?? site.Name.Length))
         });
     }
 }

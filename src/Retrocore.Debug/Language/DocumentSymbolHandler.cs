@@ -59,7 +59,7 @@ internal sealed class DocumentSymbolHandler
 
     private static DocumentSymbol Symbol(SymbolSite site)
     {
-        LspRange range = new(site.Line, site.Column, site.Line, site.Column + site.Name.Length);
+        LspRange range = new(site.Line, site.Column, site.Line, site.Column + (site.SourceLength ?? site.Name.Length));
         return new DocumentSymbol
         {
             Name = site.Name,

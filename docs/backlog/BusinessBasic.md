@@ -168,8 +168,8 @@ Built 2026-11-13:
   breakpoint languages and the `retrocore.basic.dialect` setting know it, and an Apple III session makes a plain
   `.bas` file Business BASIC.
 - **Analysis:** the line scanner reads `$FF` words from the second list, names whole with dots and `&`, the name after
-  `EXFN.` as no variable, and gives no "BASIC reads X as Y" warning, since no word hides inside a name. It warns
-  instead of a word a number runs into, as in `IF A=1THEN 20`, which BASIC reads as the variable `THEN20`. Hover names a
+  `EXFN.` as no variable, and gives no "BASIC reads X as Y" warning, since no word hides inside a name. Instead it
+  warns when a number runs into a word, as in `IF A=1THEN 20`, which BASIC reads as the variable `THEN20`. Hover names a
   long integer, and keyword help covers all 116 words (`b` in `Keywords.txt`).
 - **Tests:** `BasicSourceTests.BusinessBasicNamesAndWords`, `BusinessBasicRenumbers` and the `business` row of
   `EveryKeywordHasHelp`; the extension's grammar test and its editor test of a `.business.bas` file.

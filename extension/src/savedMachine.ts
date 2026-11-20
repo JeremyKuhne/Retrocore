@@ -16,6 +16,9 @@ const prefix = "retrocore.savedMachine:";
 
 // Each launch configuration's recovery id, which names the journal its machine keeps its unsaved disks in.
 const recoveryPrefix = "retrocore.recoveryId:";
+// Whose each recovery id a configuration gave itself is, by the id: a configuration given another id since still
+// owns the journals of the ids it had, so they are offered and can be let go.
+const ownerPrefix = "retrocore.recoveryOwner:";
 
 /** The saved machines, by launch configuration. */
 export interface SavedMachines {
@@ -25,6 +28,13 @@ export interface SavedMachines {
     set(configuration: Record<string, unknown>, machine: unknown): Promise<void>;
     /** Fires when Reset Saved Machine clears any. */
     readonly onDidReset: vscode.Event<void>;
+    /**
+     * The recovery id of a configuration in a workspace folder (by its URI), which names the journal its machine keeps
+     * its unsaved disks in: its own, or one made the first time it is asked for.
+     */
+    recoveryId(configuration: Record<string, unknown>, folder: string | undefined): string | undefined;
+    /** The configuration a recovery id was made for: its name and workspace folder's URI, if any. */
+    recoveryOf(id: string): { name: string; folder: string | undefined; made: boolean } | undefined;
 }
 
 /** Saves each session's machine as it changes, and gives it back to the next launch of the same configuration. */
@@ -50,7 +60,33 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             last.set(name, text);
             await state.update(key(name), { fingerprint: fingerprint(configuration), configuration: machine } satisfies SavedMachine);
         },
-        onDidReset: reset.event
+        onDidReset: reset.event,
+        // Configurations of one name in the folders of a multi-root workspace are each their own.
+        recoveryId(configuration, folder) {
+            const name = configuration.name;
+            if (typeof configuration.recoveryId === "string") {
+                // Kept apart from the one made for the name, which still finds that id's journal.
+                const ownerKey = `${ownerPrefix}${configuration.recoveryId}`;
+                const owner = `${folder ?? ""}|${String(name)}`;
+                if (typeof name === "string" && state.get(ownerKey) !== owner) void state.update(ownerKey, owner);
+                return configuration.recoveryId;
+            }
+            if (typeof name !== "string") return undefined;
+            const recoveryKey = `${recoveryPrefix}${folder ?? ""}|${name}`;
+            let recoveryId = state.get<string>(recoveryKey);
+            if (recoveryId === undefined) {
+                recoveryId = randomUUID();
+                void state.update(recoveryKey, recoveryId);
+            }
+            return recoveryId;
+        },
+        recoveryOf(id) {
+            const made = state.keys().find(name => name.startsWith(recoveryPrefix) && state.get(name) === id)?.slice(recoveryPrefix.length);
+            const rest = made ?? state.get<string>(`${ownerPrefix}${id}`);
+            if (rest === undefined) return undefined;
+            const bar = rest.indexOf("|");
+            return { name: rest.slice(bar + 1), folder: bar > 0 ? rest.slice(0, bar) : undefined, made: made !== undefined };
+        }
     };
 
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
@@ -59,17 +95,8 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             if (typeof name !== "string") return configuration;
 
             // The machine keeps its changed disks for the next launch of the same configuration, under one id for
-            // it, made the first time it launches; a configuration can give its own. Configurations of one name in
-            // the folders of a multi-root workspace are each their own.
-            if (typeof configuration.recoveryId !== "string") {
-                const key = `${recoveryPrefix}${folder?.uri.toString() ?? ""}|${name}`;
-                let recoveryId = state.get<string>(key);
-                if (recoveryId === undefined) {
-                    recoveryId = randomUUID();
-                    void state.update(key, recoveryId);
-                }
-                configuration = { ...configuration, recoveryId };
-            }
+            // it, made the first time it launches; a configuration can give its own.
+            configuration = { ...configuration, recoveryId: saved.recoveryId(configuration, folder?.uri.toString()) };
             const machine = saved.get(configuration);
             if (machine !== undefined) return { ...configuration, machineState: machine };
 

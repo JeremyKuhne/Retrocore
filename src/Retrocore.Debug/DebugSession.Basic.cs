@@ -139,10 +139,29 @@ internal sealed partial class DebugSession
                 ? rom
                 : throw new InvalidOperationException(NoPromptMessage);
 
-            if (!ReachStatement(prompt) && !Target.InRom(Target.ProgramCounter))
+            if (!ReachStatement(prompt))
             {
-                throw new InvalidOperationException(
-                    $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                // A program that ended while it was waited for is at the prompt already, which is where it is going.
+                if (Basic.InDirectMode(memory))
+                {
+                    prompt = null;
+                }
+                else
+                {
+                    // In the ROM, BASIC is between statements, but only if it is the ROM paged in: a BBC Micro may be
+                    // running the DFS in BASIC's place.
+                    if (!Target.InRom(Target.ProgramCounter))
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and the CPU is at ${Target.ProgramCounter:X4}, outside the ROM. {StopFirst}");
+                    }
+
+                    if (!Target.BasicPagedIn)
+                    {
+                        throw new InvalidOperationException(
+                            $"BASIC did not reach a statement, and another ROM is paged in at ${Target.ProgramCounter:X4}. {StopFirst}");
+                    }
+                }
             }
         }
 
@@ -185,7 +204,7 @@ internal sealed partial class DebugSession
         {
             if (Target.IsInstructionBoundary)
             {
-                if (Target.ProgramCounter == rom.StatementStart) { return true; }
+                if (Target.ProgramCounter == rom.StatementStart && Target.BasicPagedIn) { return true; }
                 if (Target.CycleCount >= end) { return false; }
             }
 
@@ -222,11 +241,25 @@ internal sealed partial class DebugSession
         NoteLaunchedFile();
     }
 
-    // Identifies the program in memory: a hash of where it is and its bytes, or "none" when BASIC is not set up.
+    // Identifies the program in memory: a hash of where it is and its bytes, or "none" when BASIC is not set up. An
+    // interpreter that rewrites its lines as it runs, as MBASIC caches line pointers, is hashed by the lines read
+    // back, as VersionOf hashes a file.
     private string BasicVersion()
     {
         (int start, int end) = Basic.ProgramBounds(new TargetBasicMemory(Target));
         if (start == 0 || end < start + 2) { return "none"; }
+        if (Basic.RewritesLines)
+        {
+            try
+            {
+                return VersionOf(BasicProgram.Read(Basic, new TargetBasicMemory(Target)));
+            }
+            catch (InvalidDataException)
+            {
+                // A program being changed: its bytes say it is a different one.
+            }
+        }
+
         IBasicMemory text = TextMemory;
         ulong hash = HashBasis;
         hash = (hash ^ (ulong)start) * HashPrime;
@@ -239,8 +272,8 @@ internal sealed partial class DebugSession
     }
 
     private int Word(int address) => Target.Basic?.BigEndian == true
-        ? (Target.Peek((ushort)address) << 8) | Target.Peek((ushort)(address + 1))
-        : Target.Peek((ushort)address) | (Target.Peek((ushort)(address + 1)) << 8);
+        ? (Target.BasicPeek((ushort)address) << 8) | Target.BasicPeek((ushort)(address + 1))
+        : Target.BasicPeek((ushort)address) | (Target.BasicPeek((ushort)(address + 1)) << 8);
 
     // The machine's memory by the addresses BASIC's program and text pointers hold, which may reach banked memory.
     private IBasicMemory TextMemory => Basic.Text(new TargetBasicMemory(Target));

@@ -1,0 +1,531 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "MBASIC",
+  "scopeName": "source.retrocore-mbasic",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-mbasic"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-mbasic"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-mbasic"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-mbasic"
+        },
+        {
+          "match": "(?i:((?<![A-Za-z0-9.])END(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FOR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NEXT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INPUT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DIM(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])READ(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])G\\s*O\\s*T\\s*O(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RUN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])IF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RESTORE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])GOSUB(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RETURN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])STOP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PRINT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CLEAR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LIST(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NEW(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ON(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NULL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WAIT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])POKE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CONT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OUT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LPRINT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LLIST(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WIDTH(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ELSE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TRON(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TROFF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SWAP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERASE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EDIT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERROR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RESUME(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DELETE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])AUTO(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RENUM(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEFSTR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEFINT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEFSNG(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])DEFDBL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LINE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WHILE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WEND(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CALL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])WRITE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])COMMON(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CHAIN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OPTION(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RANDOMIZE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SYSTEM(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OPEN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FIELD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])GET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PUT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CLOSE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOAD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MERGE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FILES(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])NAME(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])KILL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LSET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RSET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SAVE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RESET(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TO(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])THEN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TAB\\()|((?<![A-Za-z0-9.])STEP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])USR)|((?<![A-Za-z0-9.])FN)|((?<![A-Za-z0-9.])SPC\\()|((?<![A-Za-z0-9.])NOT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ERR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])STRING\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])USING(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INSTR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])VARPTR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INKEY\\$(?![A-Za-z0-9.]))|(>)|(=)|(<)|(\\+)|(-)|(\\*)|(/)|(\\^)|((?<![A-Za-z0-9.])AND(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])XOR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EQV(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])IMP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MOD(?![A-Za-z0-9.]))|(\\\\)|((?<![A-Za-z0-9.])LEFT\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RIGHT\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MID\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SGN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ABS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SQR(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])RND(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SIN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOG(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EXP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])COS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])TAN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ATN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FRE(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])INP(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])POS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LEN(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])STR\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])VAL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])ASC(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CHR\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])PEEK(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])SPACE\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])OCT\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])HEX\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LPOS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CINT(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CSNG(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CDBL(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])FIX(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CVI(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CVS(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])CVD(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])EOF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOC(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])LOF(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MKI\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MKS\\$(?![A-Za-z0-9.]))|((?<![A-Za-z0-9.])MKD\\$(?![A-Za-z0-9.])))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "2": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "3": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "4": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "5": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "6": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "7": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "8": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "9": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "10": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "12": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "13": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "14": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "15": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "16": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "17": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "18": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "19": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "20": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "21": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "22": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "23": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "24": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "25": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "26": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "27": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "28": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "29": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "30": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "31": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "32": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "33": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "34": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "35": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "36": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "37": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "38": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "39": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "41": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "42": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "43": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "44": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "45": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "46": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "47": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "48": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "49": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "50": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "52": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "53": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "59": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "60": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "62": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "63": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "64": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "65": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "66": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "68": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "69": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "70": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "71": {
+              "name": "keyword.control.retrocore-mbasic"
+            },
+            "72": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "73": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "74": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "75": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "76": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "77": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "78": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "79": {
+              "name": "keyword.other.retrocore-mbasic"
+            },
+            "80": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "81": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "82": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "83": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "84": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "85": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "86": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "87": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "88": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "89": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "90": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "91": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "92": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "93": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "94": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "95": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "96": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "97": {
+              "name": "keyword.operator.retrocore-mbasic"
+            },
+            "98": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "99": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "100": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "101": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "102": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "103": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "104": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "105": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "106": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "107": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "108": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "109": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "110": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "111": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "112": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "113": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "114": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "115": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "116": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "117": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "118": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "119": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "120": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "121": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "122": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "123": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "124": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "125": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "126": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "127": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "128": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "129": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "130": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "131": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "132": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "133": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "134": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "135": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "136": {
+              "name": "support.function.retrocore-mbasic"
+            },
+            "137": {
+              "name": "support.function.retrocore-mbasic"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-mbasic"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-mbasic"
+        },
+        {
+          "match": "[A-Za-z][A-Za-z0-9.]*[$%!#]?",
+          "name": "variable.other.retrocore-mbasic"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-mbasic"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-mbasic"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?i:(?<![A-Za-z0-9.])(REM)(?![A-Za-z0-9.])|(')).*$",
+      "name": "comment.line.retrocore-mbasic",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-mbasic"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-mbasic"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?i:(?<![A-Za-z0-9.])(DATA)(?![A-Za-z0-9.]))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-mbasic"
+        }
+      },
+      "end": "(?=:|$)",
+      "contentName": "string.unquoted.data.retrocore-mbasic",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-mbasic",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-mbasic"
+    }
+  }
+}

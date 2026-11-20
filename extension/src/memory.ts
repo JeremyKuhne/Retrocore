@@ -10,7 +10,7 @@
 
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
-import { addressAt, bookmarkStore, breakpointAt, breakpointName, cpuWatches, hex, parseReference, referenceIn, resolveIn, withBookmark, type MemoryBookmark } from "./memoryModel";
+import { addressAt, bookmarkStore, breakpointAt, breakpointName, cpuWatches, hex, intelHex, parseIntelHex, parseReference, referenceIn, resolveIn, withBookmark, type MemoryBookmark } from "./memoryModel";
 import { memoryEditorHtml } from "./memoryView";
 
 /** Memory as the CPU maps it, or a bank, as the debug host's retro/memoryBanks describes it. */
@@ -58,9 +58,10 @@ export function memoryUri(session: vscode.DebugSession, memoryReference: string)
     });
 }
 
-/** Opens a memory reference of a session in Retrocore Memory. */
-export async function openMemory(session: vscode.DebugSession, memoryReference: string): Promise<void> {
-    await vscode.commands.executeCommand("vscode.openWith", memoryUri(session, memoryReference), memoryViewType);
+/** Opens a memory reference of a session in Retrocore Memory, in a column if given. */
+export async function openMemory(session: vscode.DebugSession, memoryReference: string, viewColumn?: vscode.ViewColumn): Promise<void> {
+    await vscode.commands.executeCommand("vscode.openWith", memoryUri(session, memoryReference), memoryViewType,
+        viewColumn === undefined ? undefined : { viewColumn, preserveFocus: true });
 }
 
 export function bankDetail(bank: MemoryBank): string {
@@ -78,6 +79,61 @@ function message(error: unknown): string {
 }
 
 /** The session's focused stack frame, if one is. */
+// Saves a range the page sends its bytes for, in the form the file's extension asks: Intel HEX for .hex and .ihx,
+// native assembly from the debugger for .asm and .s, and the bytes as they are for anything else.
+async function saveRange(session: vscode.DebugSession, base: string, received: { [key: string]: unknown }): Promise<unknown> {
+    const offset = Number(received.offset), data = received.data as number[];
+    const span = `${hex(offset, 4)}-${hex(offset + data.length - 1, 4)}`;
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const chosen = await vscode.window.showSaveDialog({
+        title: `Save $${span} (${data.length} bytes)`,
+        defaultUri: folder === undefined ? undefined : vscode.Uri.joinPath(folder, `memory-${span}.bin`),
+        filters: { "Binary": ["bin"], "Intel HEX": ["hex", "ihx"], "Native assembly": ["asm", "s"], "All files": ["*"] },
+        saveLabel: "Save"
+    });
+    if (chosen === undefined) return { cancelled: true };
+    const extension = chosen.path.slice(chosen.path.lastIndexOf(".") + 1).toLowerCase();
+    let contents: Uint8Array, form: string, exact: boolean | undefined;
+    if (extension === "hex" || extension === "ihx") {
+        contents = Buffer.from(intelHex(data, offset), "latin1");
+        form = "Intel HEX";
+    } else if (extension === "asm" || extension === "s") {
+        const exported = await session.customRequest("retro/memory/export", { memoryReference: base, address: offset, count: data.length, starts: received.starts }) as { source: string; exact: boolean };
+        contents = Buffer.from(exported.source, "utf8");
+        form = "assembly";
+        exact = exported.exact;
+    } else {
+        contents = Uint8Array.from(data);
+        form = "bytes";
+    }
+    await vscode.workspace.fs.writeFile(chosen, contents);
+    return { path: vscode.workspace.asRelativePath(chosen), form, exact };
+}
+
+// Reads a file to load into memory: Intel HEX, by its .hex or .ihx extension, as the runs of bytes it gives
+// addresses, or any other file's bytes as they are, which the page writes at the cursor.
+async function loadFile(): Promise<unknown> {
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const chosen = await vscode.window.showOpenDialog({
+        title: "Load into memory",
+        defaultUri: folder,
+        canSelectMany: false,
+        filters: { "Binary or Intel HEX": ["bin", "hex", "ihx"], "All files": ["*"] },
+        openLabel: "Load"
+    });
+    if (chosen === undefined || chosen.length === 0) return { cancelled: true };
+    const bytes = await vscode.workspace.fs.readFile(chosen[0]);
+    const name = vscode.workspace.asRelativePath(chosen[0]);
+    const extension = chosen[0].path.slice(chosen[0].path.lastIndexOf(".") + 1).toLowerCase();
+    if (extension === "hex" || extension === "ihx") {
+        const runs = parseIntelHex(Buffer.from(bytes).toString("latin1"));
+        if (typeof runs === "string") throw new Error(`${name}: ${runs}`);
+        return { name, runs };
+    }
+    if (bytes.length > 0x10000) throw new Error(`${name} is ${bytes.length} bytes, more than the 64K memory holds.`);
+    return { name, data: Array.from(bytes) };
+}
+
 function focusedFrame(session: vscode.DebugSession): number | undefined {
     const focused = vscode.debug.activeStackItem;
     return focused instanceof vscode.DebugStackFrame && focused.session.id === session.id ? focused.frameId : undefined;
@@ -105,6 +161,8 @@ interface MemoryEditor {
     session: vscode.DebugSession;
     /** The start of the space, such as "0x0000" or "aux:0x0000", which memory events name. */
     reference: string;
+    /** Points the editor at the session again when VS Code restarts it, which keeps its id. */
+    rebind: (session: vscode.DebugSession) => void;
     panel: vscode.WebviewPanel;
     ready: Promise<void>;
     tests: Map<number, (reply: { state?: unknown; error?: string }) => void>;
@@ -231,12 +289,26 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         }
     };
     context.subscriptions.push(vscode.debug.onDidStartDebugSession(session => sessions.set(session.id, session)));
+
+    // A session's editors close when it ends, as their memory is gone. VS Code restarts a session by ending it with
+    // restart set and starting it again with the same id, so a restart's editors stay, and read the new machine once
+    // the debugger has its configuration.
+    const restarting = new Set<string>();
+    const restarted = new Set<string>();
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
         sessions.delete(session.id);
         subscriptionSessions.delete(session.id);
         for (const editor of editors) {
             if (editor.session.id === session.id) void editor.panel.webview.postMessage({ type: "ended" });
         }
+        if (restarting.delete(session.id)) {
+            restarted.add(session.id);
+            return;
+        }
+        restarted.delete(session.id);
+        const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs).filter(tab =>
+            tab.input instanceof vscode.TabInputCustom && tab.input.uri.scheme === memoryScheme && tab.input.uri.authority === session.id);
+        if (tabs.length > 0) void vscode.window.tabGroups.close(tabs, true);
     }));
 
     // A memory event names the reference of a view whose bytes changed; that view reads them again.
@@ -244,6 +316,15 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         createDebugAdapterTracker(session) {
             sessions.set(session.id, session);
             return {
+                onWillReceiveMessage(received: unknown) {
+                    // VS Code asks the debugger to end the session with restart set when it restarts it.
+                    if (typeof received !== "object" || received === null || !("command" in received)) return;
+                    if (received.command !== "disconnect" && received.command !== "terminate") return;
+                    const restart = "arguments" in received && typeof received.arguments === "object" && received.arguments !== null
+                        && "restart" in received.arguments && received.arguments.restart === true;
+                    if (restart) restarting.add(session.id);
+                    else restarting.delete(session.id);
+                },
                 onDidSendMessage(sent: unknown) {
                     if (typeof sent !== "object" || sent === null) return;
                     if ("command" in sent && sent.command === "initialize" && "body" in sent
@@ -251,6 +332,16 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         && "supportsRetrocoreMemorySubscriptions" in sent.body
                         && sent.body.supportsRetrocoreMemorySubscriptions === true) {
                         subscriptionSessions.add(session.id);
+                    }
+
+                    // A restarted session is ready for its editors once the debugger has its configuration.
+                    if ("command" in sent && sent.command === "configurationDone" && restarted.delete(session.id)) {
+                        for (const editor of editors) {
+                            if (editor.session.id !== session.id) continue;
+                            editor.rebind(session);
+                            void editor.panel.webview.postMessage({ type: "restarted" });
+                        }
+                        return;
                     }
 
                     // Breakpoints set anywhere, from a source's gutter, the Breakpoints view, the Disassembly view or
@@ -309,11 +400,18 @@ export function registerMemory(context: vscode.ExtensionContext): void {
         openCustomDocument: uri => ({ uri, dispose: () => undefined }),
         async resolveCustomEditor(document, panel) {
             const uri = document.uri;
-            const session = uri.scheme === memoryScheme ? sessions.get(uri.authority) ?? (vscode.debug.activeDebugSession?.id === uri.authority ? vscode.debug.activeDebugSession : undefined) : undefined;
-            if (session?.type !== "retrocore") {
+            const found = uri.scheme === memoryScheme ? sessions.get(uri.authority) ?? (vscode.debug.activeDebugSession?.id === uri.authority ? vscode.debug.activeDebugSession : undefined) : undefined;
+            if (found?.type !== "retrocore") {
+                // A tab whose session is gone, as VS Code restores after a reload or in a new window, closes: its
+                // memory is gone with the machine.
                 panel.webview.html = blankPage("Retrocore Memory shows memory while its Retrocore debug session runs; this one has ended.");
+                const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs).filter(tab =>
+                    tab.input instanceof vscode.TabInputCustom && tab.input.uri.toString() === uri.toString());
+                if (tabs.length > 0) void vscode.window.tabGroups.close(tabs, true);
                 return;
             }
+            // A restart keeps the session's id but can give a new session object, which rebind points the editor at.
+            let session: vscode.DebugSession = found;
 
             const reference = decodeURIComponent(uri.path.split("/").filter(part => part.length > 0)[0] ?? "");
             let start: { bank: string | null; address: number };
@@ -334,6 +432,10 @@ export function registerMemory(context: vscode.ExtensionContext): void {
             let ready!: () => void;
             const editor: MemoryEditor = {
                 session, reference: base, panel, tests: new Map(),
+                rebind: restartedSession => {
+                    session = restartedSession;
+                    editor.session = restartedSession;
+                },
                 ready: new Promise<void>(resolve => { ready = resolve; })
             };
             editors.add(editor);
@@ -348,7 +450,8 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                         .then(undefined, error => console.warn(`Retrocore: could not unsubscribe the closing memory editor: ${message(error)}`));
                 }
             });
-            panel.webview.options = { enableScripts: true };
+            const icons = vscode.Uri.joinPath(context.extensionUri, "media", "codicons");
+            panel.webview.options = { enableScripts: true, localResourceRoots: [icons] };
             panel.webview.onDidReceiveMessage(async (received: { type: string; id?: number; [key: string]: unknown }) => {
                 if (received.type === "ready") {
                     await panel.webview.postMessage({
@@ -380,8 +483,26 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                                 banks: banks.filter(item => item.name !== start.bank).map(item => ({
                                     memoryReference: bankBase(item.name),
                                     label: item.name === null ? item.label : `${item.label} (${item.name})`
+                                })),
+                                // Every space, this editor's among them, for the toolbar's space list.
+                                spaces: banks.map(item => ({
+                                    name: item.name,
+                                    label: item.name === null ? item.label : `${item.label} (${item.name})`
                                 }))
                             });
+                            break;
+                        }
+                        case "switch": {
+                            // Another space in this editor's place: it opens at the cursor's address, and this closes.
+                            const name = received.bank === null ? null : String(received.bank);
+                            await reply(null);
+                            if (name === start.bank) break;
+                            const column = panel.viewColumn;
+                            await openMemory(session, `${name === null ? "" : `${name}:`}0x${hex(Number(received.address), 4)}`, column);
+                            const own = vscode.window.tabGroups.all.flatMap(group => group.tabs).filter(tab =>
+                                tab.input instanceof vscode.TabInputCustom && tab.input.uri.toString() === document.uri.toString()
+                                && tab.group.viewColumn === column);
+                            if (own.length > 0) await vscode.window.tabGroups.close(own, true);
                             break;
                         }
                         case "readOther": {
@@ -655,18 +776,40 @@ export function registerMemory(context: vscode.ExtensionContext): void {
                             await reply(text === undefined ? { cancelled: true } : { text });
                             break;
                         }
+                        case "pick": {
+                            // One of the page's choices, such as Copy as's forms.
+                            const items = (received.items as { label: string; detail?: string }[]).map((item, index) => ({ label: item.label, detail: item.detail, index }));
+                            const picked = await vscode.window.showQuickPick(items, { title: String(received.title) });
+                            await reply(picked === undefined ? { cancelled: true } : { index: picked.index });
+                            break;
+                        }
+                        case "save":
+                            await reply(await saveRange(session, base, received));
+                            break;
+                        case "load":
+                            await reply(await loadFile());
+                            break;
                     }
                 } catch (error) {
                     await panel.webview.postMessage({ type: "reply", id: received.id, error: message(error) });
                 }
             });
-            panel.webview.html = memoryEditorHtml(randomBytes(16).toString("hex"));
+            panel.webview.html = memoryEditorHtml(randomBytes(16).toString("hex"), {
+                cspSource: panel.webview.cspSource,
+                codicons: panel.webview.asWebviewUri(vscode.Uri.joinPath(icons, "codicon.css")).toString()
+            });
         }
     };
     context.subscriptions.push(vscode.window.registerCustomEditorProvider(memoryViewType, provider, {
         webviewOptions: { retainContextWhenHidden: true },
         supportsMultipleEditorsPerDocument: true
     }));
+
+    // Tabs VS Code restored from before this window's extension host started, even ones not shown yet, belong to
+    // sessions that have ended with it.
+    const stale = vscode.window.tabGroups.all.flatMap(group => group.tabs).filter(tab =>
+        tab.input instanceof vscode.TabInputCustom && tab.input.uri.scheme === memoryScheme && !sessions.has(tab.input.uri.authority));
+    if (stale.length > 0) void vscode.window.tabGroups.close(stale, true);
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.memory.open", async () => {
         const session = vscode.debug.activeDebugSession;

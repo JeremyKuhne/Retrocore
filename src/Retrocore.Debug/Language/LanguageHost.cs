@@ -59,6 +59,21 @@ internal static class LanguageHost
     internal const string ColorBasicId = "retrocore-colorbasic";
 
     /// <summary>
+    ///  The VS Code language of BBC BASIC documents.
+    /// </summary>
+    internal const string BbcBasicId = "retrocore-bbcbasic";
+
+    /// <summary>
+    ///  The VS Code language of MBASIC (BASIC-80 5.21) documents.
+    /// </summary>
+    internal const string MbasicId = "retrocore-mbasic";
+
+    /// <summary>
+    ///  The VS Code language of Commodore PET BASIC documents, BASIC 2's words.
+    /// </summary>
+    internal const string PetBasicId = "retrocore-petbasic";
+
+    /// <summary>
     ///  The VS Code language of a BASIC document whose pragma or file name gives its dialect.
     /// </summary>
     internal const string BasicId = "retrocore-basic";
@@ -78,6 +93,9 @@ internal static class LanguageHost
         or BusinessId
         or Level1Id
         or ColorBasicId
+        or BbcBasicId
+        or MbasicId
+        or PetBasicId
         or BasicId;
 
     /// <summary>
@@ -125,6 +143,14 @@ internal static class LanguageHost
         // A machine set up while it is off, for the Machine and Drives views with no debug session.
         server.OnRequest("retrocore/machine/describe", parameters => OffMachine.Describe(parameters ?? []));
         server.OnRequest("retrocore/machine/change", parameters => OffMachine.Change(parameters ?? []));
+
+        // The recovery journals of sessions that did not end cleanly, and what a person decides for one.
+        server.OnRequest("retrocore/recovery/list", parameters => new JsonObject
+        {
+            ["journals"] = RecoveryJournal.Unclean(parameters)
+        });
+
+        server.OnRequest("retrocore/recovery/resolve", parameters => RecoveryJournal.Resolve(parameters ?? []));
 
         await server.Run().ConfigureAwait(continueOnCapturedContext: false);
     }

@@ -66,8 +66,8 @@ internal static class IntegerBasicSyntax
     ///  Tokenizes a typed line as Integer BASIC's command loop does.
     /// </summary>
     /// <param name="text">
-    ///  The line's units, as <see cref="BasicText.Parse(string, List{int})"/> gives them: typed characters, and raw
-    ///  bytes marked with <see cref="BasicText.Raw"/>.
+    ///  The line's units, as <see cref="BasicText.Parse(string, List{int}, bool)"/> gives them: typed characters,
+    ///  and raw bytes marked with <see cref="BasicText.Raw"/>.
     /// </param>
     /// <returns>The tokens, or the error the ROM reports.</returns>
     internal static IntegerSyntaxResult Tokenize(ReadOnlySpan<int> text) => Tokenize(text, Integer);

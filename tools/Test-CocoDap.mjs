@@ -59,10 +59,19 @@ async function screen(test, what) {
     }
 }
 
-// Waits for some frames to pass while the machine runs.
-async function frames(count) {
+// Waits for a prompt on the screen and then for BASIC to have scanned the keyboard, so the next key typed is taken.
+// KEYIN takes a key only as it goes down against the last scan, kept in KEYBUF ($0152-$0159), which start-up leaves
+// zero, every key down; the first scan, once BASIC waits at its prompt, fills it, each byte with bit 7 set. A key
+// down at that first scan is never taken, so typing as soon as the prompt shows lost the first key on a slow host.
+async function prompt(test, what) {
+    const frame = await screen(test, what);
+    phase(`waiting for BASIC to scan the keyboard after ${what}`);
     drop("retro/frame");
-    for (let index = 0; index < count; index++) await event("retro/frame");
+    for (;;) {
+        const keys = Buffer.from((await request("readMemory", { memoryReference: "0x0152", count: 8 })).data, "base64");
+        if (keys.length === 8 && keys.every(column => (column & 0x80) !== 0)) return frame;
+        if (!(await event("retro/frame")).running) throw new Error(`Stopped before BASIC scanned the keyboard after ${what}.`);
+    }
 }
 
 // Forgets queued events of a kind, so a wait sees only what happens next.
@@ -160,6 +169,13 @@ try {
     await request("continue", { threadId: 1 });
     await screen(text => text.includes("EXTENDED COLOR BASIC 1.1") && text.includes("HELLO FROM THE 6809"), "the sample on the SDK's BASIC");
 
+    // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than
+    // launching with the drives empty.
+    await assert.rejects(request("launch", { machine: "coco", model: "coco2", sdkRoms, disks: disk }), /disks must be a list/);
+    await assert.rejects(
+        request("launch", { machine: "coco", model: "coco2", sdkRoms, disks: [null, { path: disk }] }),
+        /disks\[1\] must be an image's path/);
+
     // With a disk, Disk BASIC from the SDK's source takes the console out hook: stepping from PUTCHR through the hook
     // goes into DVEC3 in DiskBasic.asm.
     events.length = 0;
@@ -244,8 +260,7 @@ try {
     await request("setExceptionBreakpoints", { filters: [] });
     await request("launch", { machine: "coco", model: "coco3", sdkRoms, stopOnEntry: false, speed: "max", sound: "off" });
     await request("configurationDone");
-    await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK from the SDK's ROM");
-    await frames(10);                                           // BASIC waiting for a key, not still starting
+    await prompt(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK from the SDK's ROM");
     await type("WIDTH 80\r");
     const sdkWide = await screen(text => /^OK/m.test(text) && !text.includes("EXTENDED"), "the 80-column screen from the SDK's ROM");
     assert.equal(sdkWide.columns, 80);
@@ -298,14 +313,14 @@ try {
     assert.equal(listed.dialect, "colorbasic");
     assert.equal(listed.text, `${programLines.join("\n")}\n`);
     await request("continue", { threadId: 2 });
-    await screen(text => text.includes("BREAK IN 30"), "the STOP's BREAK");
+    await prompt(text => text.includes("BREAK IN 30"), "the STOP's BREAK");
     await type("CONT\r");
     const resumed = await event("stopped");
     assert.equal(resumed.description, "CONT resumes at 40.");
     assert.equal((await basicFrames())[0].name, "40: PRINT A;B$");
     await request("setExceptionBreakpoints", { filters: [] });
     await request("continue", { threadId: 2 });
-    await screen(text => text.includes(" 7 BYE"), "the program's PRINT");
+    await screen(text => / 7 BYE[\s\S]*\nOK/.test(text), "the program's PRINT and BASIC's OK after it");
 
     // Writing text puts a new program in memory.
     const written = await request("retro/basic/write", { text: "10 PRINT HEX$(255)\n20 GOTO 10\n" });
@@ -344,7 +359,7 @@ try {
 
     // A CoCo 2 with a disk boots Disk Extended Color BASIC.
     await launch({ model: "coco2", disks: [disk], recoveryId });
-    await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK");
+    await prompt(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK");
     assert.equal((await request("threads")).threads[0].name, "CoCo 2 6809");
     const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
     assert.deepEqual(Object.keys(hardware), ["model", "cpu", "rom", "memory", "video", "cassette", "cartridge", "disk"]);
@@ -385,7 +400,7 @@ try {
     // Kept: the machine launched again under the same recovery id has the changed disk back in its drive, still
     // changed against its image, which DIR reads.
     await launch({ model: "coco2", disks: [disk], recoveryId });
-    await screen(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK again");
+    await prompt(text => text.includes("DISK EXTENDED COLOR BASIC") && /\nOK/.test(text), "Disk BASIC's OK again");
     drive = (await request("retro/devices")).devices.find(device => device.id === "disk0");
     assert.equal(drive.media.changed, true, "the kept disk is back, changed");
     assert.equal(drive.media.label.toLowerCase(), disk.toLowerCase());
@@ -461,9 +476,8 @@ try {
 
     // A CoCo 3 boots Extended Color BASIC 2.0 and switches to 80 columns.
     await launch({ model: "coco3" });
-    await screen(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK");
+    await prompt(text => text.includes("EXTENDED COLOR BASIC 2.0") && /\nOK/.test(text), "the CoCo 3's OK");
     assert.equal((await request("threads")).threads[0].name, "CoCo 3 6809");
-    await frames(10);                                           // BASIC waiting for a key, not still starting
     await type("WIDTH 80\r");
     const wide = await screen(text => /^OK/m.test(text) && !text.includes("EXTENDED"), "the 80-column screen");
     assert.equal(wide.columns, 80);

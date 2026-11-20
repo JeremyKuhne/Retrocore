@@ -38,6 +38,7 @@ internal sealed partial class DebugSession
         "apple3/button",
         "apple3/fastDisk",
         "retro/media",
+        "retro/sound",
         "apple1/clearScreen",
         "altair/clearScreen"
     ];
@@ -113,8 +114,12 @@ internal sealed partial class DebugSession
     // Documented Keeps: contracts, checked when calls return; null when off or nothing documents one.
     private DebugContracts? _contracts;
 
-    // How often the machine's changed disks are kept in its recovery journal.
-    private const int CheckpointMilliseconds = 30_000;
+    // How often the machine's changed disks are kept in its recovery journal: every 30 seconds, or as
+    // RETROCORE_CHECKPOINT_SECONDS says, as the tests that end a host without stopping it do.
+    private static readonly int s_checkpointMilliseconds =
+        int.TryParse(Environment.GetEnvironmentVariable("RETROCORE_CHECKPOINT_SECONDS"), out int seconds) && seconds > 0
+            ? seconds * 1000
+            : 30_000;
 
     // The machine's recovery journal, when its launch gave a recoveryId, and the timer that checkpoints it.
     private RecoveryJournal? _journal;
@@ -166,6 +171,7 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/map", args => Reply(() => MemoryMap(args)));
         transport.On("retro/memory/numbers", args => Reply(() => MemoryNumbers(args)));
         transport.On("retro/memory/assemble", args => Reply(() => MemoryAssemble(args)));
+        transport.On("retro/memory/export", args => Reply(() => MemoryExport(args)));
         transport.On("retro/memory/characters", _ => Reply(MemoryCharacters));
         transport.On("retro/memory/freeze", args => Reply(() => FreezeMemory(args)));
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
@@ -446,7 +452,10 @@ internal sealed partial class DebugSession
         transport.On("retro/key", args => Reply(() =>
         {
             int code = (args.Int("code") ?? 0);
-            if (code is < 0 or > 127) { throw new ArgumentOutOfRangeException(nameof(args)); }
+            if (code < 0 || code > (_target?.MaximumKey ?? 127))
+            {
+                throw new ArgumentOutOfRangeException(nameof(args));
+            }
 
             // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
             // goes now and drops the rest of the paste.
@@ -517,8 +526,13 @@ internal sealed partial class DebugSession
         }));
     }
 
-    // The devices with media's answer, if there is one, beside them: { "outcome": "changed", "device": ..., "devices": ... }.
-    private static JsonObject WithAnswer(JsonObject body, JsonObject? answer)
+    /// <summary>
+    ///  Puts media's answer, if there is one, beside the devices: <c>{ "outcome": "changed", "device": ..., "devices": ... }</c>.
+    /// </summary>
+    /// <param name="body">The devices' body.</param>
+    /// <param name="answer">Media's answer, or null; its fields move into the body.</param>
+    /// <returns>The body.</returns>
+    internal static JsonObject WithAnswer(JsonObject body, JsonObject? answer)
     {
         if (answer is null) { return body; }
         foreach ((string key, JsonNode? value) in answer.ToList())
@@ -606,7 +620,7 @@ internal sealed partial class DebugSession
         List<string> problems = [];
         try
         {
-            _journal = RecoveryJournal.Open(id, problems);
+            _journal = RecoveryJournal.Open(id, problems, args.String("name"));
             if (_journal is null)
             {
                 problems.Add("Another running session keeps this machine's recovery journal, so this one keeps none: "
@@ -615,7 +629,7 @@ internal sealed partial class DebugSession
             else
             {
                 problems.AddRange(MediaActions.Recover(Target.Devices, _journal));
-                _checkpoints = new(_ => Checkpoint(), state: null, CheckpointMilliseconds, CheckpointMilliseconds);
+                _checkpoints = new(_ => Checkpoint(), state: null, s_checkpointMilliseconds, s_checkpointMilliseconds);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -848,7 +862,10 @@ internal sealed partial class DebugSession
             DebugMachines.Apple3 => Apple3DebugTarget.Launch(args),
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
+            DebugMachines.Pet => LaunchPet(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
+            DebugMachines.Bbc => LaunchBbc(args, loads),
+            DebugMachines.Kaypro2 => LaunchKaypro(args),
             _ => Apple2DebugTarget.Launch(args)
         };
 
@@ -942,6 +959,11 @@ internal sealed partial class DebugSession
             {
                 LoadOnDosDisk(dosTarget, [(address, File.ReadAllBytes(program))], args.Int("entryAddress"), program);
             }
+            else if (Target is PetDebugTarget pet && Path.GetExtension(program).Equals(".prg", StringComparison.OrdinalIgnoreCase))
+            {
+                // A PET program file gives its own address; one at BASIC's start is a BASIC program, which RUN starts.
+                pet.LoadPrg(File.ReadAllBytes(program), args.Bool("run") ?? true, args.Int("entryAddress"));
+            }
             else
             {
                 Target.Load(address, File.ReadAllBytes(program));
@@ -958,6 +980,13 @@ internal sealed partial class DebugSession
 
         // The disks the last run kept go back in their drives, over what the launch and saved machine put there.
         OpenJournal(args);
+
+        // A Kaypro's command, or MBASIC for a BASIC file, is typed at CP/M's prompt from the disks the session mounts.
+        if (Target is KayproDebugTarget kaypro
+            && (args.String("command") ?? (basicFile is not null ? "MBASIC" : null)) is { } command)
+        {
+            kaypro.TypeAtPrompt(command, seconds: 30);
+        }
 
         // The SDK's ROM sources follow the program, each applying only where its memory area is mapped.
         // The SDK's sources can come from the repository instead, so breakpoints set in the files being edited bind.
@@ -991,7 +1020,7 @@ internal sealed partial class DebugSession
         _basicEntry = basicFile is not null && _stopOnEntry && (args.Bool("run") ?? true);
         RebindBreakpoints();
         _memoryViews.Clear();
-        _frozen.Clear();
+        ThawAll();
         _memoryFrames = 0;
         _sentPixels = [];
 
@@ -1069,12 +1098,39 @@ internal sealed partial class DebugSession
         return target;
     }
 
+    // A Kaypro II boots CP/M from drive A as it powers on. The launch's command, or MBASIC for a BASIC file, is typed
+    // at CP/M's first prompt once the saved and kept disks are in their drives.
+    private static KayproDebugTarget LaunchKaypro(JsonObject args)
+    {
+        KayproDebugTarget target = KayproDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? 0);
+        return target;
+    }
+
     // A program on a Color Computer calls Color BASIC's routines through RAM hooks it sets up as it starts, so the
     // ROM runs first; Disk BASIC takes longer, as it resets the drives.
     private static CocoDebugTarget LaunchCoco(JsonObject args, bool loads)
     {
         CocoDebugTarget target = CocoDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a BBC Micro calls the MOS through its vectors, which it sets up as it starts, so the MOS and BASIC
+    // run first.
+    private static BbcDebugTarget LaunchBbc(JsonObject args, bool loads)
+    {
+        BbcDebugTarget target = BbcDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 2 : 0));
+        return target;
+    }
+
+    // A program on a PET calls the kernal, and a BASIC program needs BASIC's pointers, so the ROMs run first, through
+    // the RAM test to READY.
+    private static PetDebugTarget LaunchPet(JsonObject args, bool loads)
+    {
+        PetDebugTarget target = PetDebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
         return target;
     }
 
@@ -1592,6 +1648,8 @@ internal sealed partial class DebugSession
             }
 
             instruction |= cpu.StepCycle();
+
+            if (_frozen.Count is > 0 and <= FreezesChecked) { FreezeCycle(cpu); }
             if (_watches.Count != 0)
             {
                 Watch(cpu.LastCycle, cpu is SoftCardDebugTarget z80 ? z80.Card.Processor.LastCycle : null);

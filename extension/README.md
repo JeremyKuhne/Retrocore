@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -74,7 +74,7 @@ a separate VS Code window running the in-repo extension, on
 `sample\trs80\hello.asm` or the files given with `-File`. That window has its own
 profile under `artifacts\self-host`, so your VS Code profile is unchanged.
 Highlighting and IntelliSense need no ROMs, and neither does a launch: without dumps
-the IIe, the Model I and every Color Computer run ROMs assembled from the SDK's sources. `-RomDirectory` (or
+the IIe, the Model I, every Color Computer and the PET run ROMs assembled from the SDK's sources. `-RomDirectory` (or
 `RETROCORE_IIE_ROMS`) lets the IIe launch configurations use your IIe dumps instead, and
 `tools\Start-IIeDevelopment.ps1 <rom directory>` opens the IIe sample with them.
 `-SkipBuild` relaunches without building. After a change, rebuild and run
@@ -96,13 +96,14 @@ run `Install-Extension.ps1` to bring the fix to your everyday editor.
 No launch.json is needed to start a machine. Without dumps, the Apple II family and the
 TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
-their sources.
+their sources, the PET its BASIC, screen editor and kernal from theirs, the BBC Micro its MOS, BASIC, DFS and
+character ROM, and the Kaypro II its monitor ROM from its source.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, and the MITS Altair 8800. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -111,10 +112,12 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
 2. **What it runs.** The choices depend on the machine:
    - just the machine;
    - a source file, which is assembled and loaded, then stops at its start;
-   - a binary program, loaded at the machine's usual address;
+   - a binary program, loaded at the machine's usual address (on the PET, a `.prg`
+     too, which loads where its first two bytes say);
    - a BASIC file, for the machine's own BASIC;
-   - a disk image, booted from the first drive;
-   - a tape, on the Model I, the Apple-1 and the Color Computer;
+   - a disk image, booted from the first drive (on the BBC Micro and the PET, inserted in it);
+   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro and the PET (in
+     its built-in Datasette, with PLAY down);
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -124,7 +127,7 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
-     Expansion Interface and lowercase, and the Apple-1's memory and cassette interface. Each shows its current value; Esc goes back.
+     Expansion Interface and lowercase, the Apple-1's memory and cassette interface, and the PET's memory, sound and snow. Each shows its current value; Esc goes back.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -1036,6 +1039,102 @@ BREAK and **Ctrl+F12** or **Ctrl+Break** for RESET, which are also on the key ba
 TRS-80 cassette and disk commands work as on the Model I. See the
 [Color Computer guide](../docs/Coco.md) for what is emulated.
 
+## Debugging on the BBC Micro
+
+`"machine": "bbc"` debugs a BBC Micro, chosen by `model` (`bbcb`, the default, or
+`bbca`), with the same source debugging, call stack, cycle counts and `Keeps:` checks.
+The machine is configured by:
+
+- `diskInterface`: the Model B's Intel 8271 and DNFS, on by default;
+- `disks`: SSD or DSD images for drives 0 and 1, a DSD's second side being drive 2 or 3;
+- `cassette`: a `.uef` tape, or a file with an `.inf` file beside it; `fastCassette`
+  and `sound` (`speaker` or `off`).
+
+MOS 1.20, BASIC II, DNFS 1.20 and the SAA5050's characters are the SDK sources
+`Mos.asm`, `BbcBasic.asm`, `Dnfs.asm` and `Saa5050.asm`, so both models need nothing
+else, and debugging steps into the sources. Each paged ROM socket is its own memory
+area, so a breakpoint in `BbcBasic.asm` or `Dnfs.asm` stops only while ROMSEL has that
+ROM paged in. Dumps from `romDirectory` or `RETROCORE_BBC_ROMS`, under MAME's names
+(`os12.rom`, `basic2.rom`, `dnfs120.rom` and `saa5050`), replace the sources' ROMs when
+given. A program (`source` or `program`, loaded at `&2000` by default) runs after the MOS
+and BASIC have started for `bootSeconds` (2 by default); [the sample](../sample/bbc/hello.asm)
+prints through `OSASCI`.
+
+The panel shows the screen and takes keys: arrows for the cursor keys, **End** for
+COPY, **Escape** for ESCAPE, **Backspace** for DELETE, and **Ctrl+F12** or
+**Ctrl+Break** for BREAK. VS Code keeps F1-F11, so the function keys f0-f9 are on the
+key bar, with Escape, Copy and Break. The **BRK instructions** filter stops at each
+error the MOS, BASIC or the DFS raises. See the [BBC Micro guide](../docs/BbcMicro.md)
+for what is emulated.
+
+## Debugging on the Commodore PET
+
+`"machine": "pet"` debugs a PET, chosen by `model`: `pet2001-basic2`, the 2001 with
+the BASIC 2 upgrade ROMs that the 2001-N has (the default); `pet2001`, the 1977 PET
+with BASIC 1, the white screen and the chiclet keyboard; `pet4032`, the PET 4032 with
+BASIC 4 and its disk commands, the graphics keyboard and a 4040 as device 8; or
+`pet4032-business`, the same with the business keyboard. It has the same source
+debugging, 6502 call stack, cycle counts and `Keeps:` checks. The machine is configured
+by:
+
+- `ramKilobytes`: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 makes it a 4016);
+- `basicRevision`: BASIC 1's first chip on a `pet2001`, `revised` (901447-09, the
+  default) or `original` (901447-01), or BASIC 4's `$B000` chip on a 4032 (901465-23
+  or 901465-19);
+- `snow` (on by default on a `pet2001`, off on the others): a CPU access to video RAM
+  while a line is drawn shows as snow, as on the 2001's board;
+- `sound`: `speaker` (the default; the VIA's CB2, as a speaker on the user port plays
+  it) or `off`;
+- `screen`: `green` (the default with BASIC 2), `white` (the default on a `pet2001`)
+  or `amber`;
+- `cassette1` and `cassette2`: a `.tap`, `.wav` or `.prg` tape in each Datasette,
+  with PLAY down. A `.prg` goes in as the tape SAVE writes. `fastCassette` (on by
+  default) runs flat out while a cassette motor runs;
+- `diskUnits`: the device numbers of Commodore dual drives on the IEEE-488 bus, 8 to
+  15, such as `[8]`, and `diskModel`, `4040` (the default) or `2040`; `disks`: `.d64`,
+  `.d67` or `.g64` images for the first unit's drive 0, its drive 1, then the next
+  unit's (without `diskUnits`, as many units as they need, from device 8, and on a 4032
+  at least one; `[]` leaves it out). A 4040 runs
+  its own DOS 2.0 and controller ROMs, MAME's `c4040` set, and a 2040 DOS 1.2, its
+  `c2040` set, from `driveRomDirectory`, else `romDirectory` or `RETROCORE_PET_ROMS`.
+
+BASIC, the screen editor and the kernal are the SDK sources `Basic1.mac`,
+`Basic2.mac` and `Basic4.mac`, `Editor1.asm`, `Editor2.asm` and `Editor4.asm`, and
+`Kernal1.asm`, `Kernal2.asm` and `Kernal4.asm`, which assemble byte-identically to the
+chips, so the PET needs no external files, and debugging steps into the sources as ROM
+modules. Dumps from `romDirectory` or `RETROCORE_PET_ROMS`, MAME's `pet2001`,
+`pet2001n`, `pet4016` and `pet4032b` chips, in the folder or its folder for the set,
+replace the sources' ROMs when given.
+
+A `program` that is a `.prg` loads where its first two bytes say. One at `$0401` is a
+BASIC program: BASIC's pointers are set and `RUN` is typed (`"run": false` leaves it
+at the prompt). Any other starts at its load address, or `entryAddress`. A plain binary,
+or a `source`, loads at `$0800` by default. On BASIC 2 and 4, a `BRK` enters the
+machine-language monitor; ticking the Breakpoints view's BRK filter stops there first.
+
+A `basic` launch runs a Commodore BASIC file: `.petbasic.bas`, or a `.bas` whose first
+line is `REM retrocore petbasic`. One dialect serves every PET: the machine's ROMs
+decide, BASIC 1 on a `pet2001`, BASIC 4 on a 4032 and BASIC 2 otherwise. The editor
+knows BASIC 4's words, `DLOAD`, `DIRECTORY` and the rest, which have hovers.
+
+The panel shows the 40x25 screen. **Escape** is STOP, **Home** HOME, the arrows the
+cursor keys, **Backspace** DEL, **Insert** INST and **Tab** the business keyboard's
+TAB; lowercase letters type their keys
+unshifted, which the PET shows as capitals. The key bar has **Stop**, **Clr** (the
+shifted HOME) and **Reset**: the PET has no RESET key, so Reset, **Ctrl+F12** and
+**Ctrl+Break** reset the 6502, PIAs and VIA, keeping memory, as a reset switch does.
+Each Datasette's row in the [Drives](#machine-and-drives) view has its keys: insert a
+tape (with PLAY down), **Play**, **Record**, **Stop**, **Rewind** and eject. Record
+with no tape in puts in a blank one. A recording is a changed tape: ejecting it asks
+to save or discard it, as a changed disk does, and **Save to Its Image** and **Save
+As...** save it. In the [Machine](#machine-and-drives) view, **Add Card...** on a free
+**Device 8** to **Device 15** row connects a 4040 or a 2040 there, and its two drives
+take disks: `OPEN 15,8,15,"N0:NAME,ID"` formats one, and `SAVE "0:NAME",8` and
+`LOAD "$0",8` work as on a PET. On a 4032, BASIC 4's `HEADER "NAME",D0,IID`,
+`DSAVE`, `DLOAD` and `DIRECTORY` do the same. A 2040 reads a disk once `OPEN 15,8,15,"I0"`
+initializes it. A disk the drive wrote is a changed disk, which saves back to its D64,
+D67 or G64 image. See the [PET guide](../docs/Pet.md) for what is emulated.
+
 ## Debugging on the TRS-80 Model III, 4 and II
 
 `"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
@@ -1052,6 +1151,37 @@ build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
 panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
 BREAK and buttons for HOLD, F1 and F2. See the
 [Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
+
+## Debugging on the Kaypro II
+
+`"machine": "kaypro2"` debugs a Kaypro II, a 2.5 MHz Z80 with 64 KB running CP/M 2.2,
+with the same source debugging, cycle counts, `Keeps:` checks and I/O port watchpoints as
+the other Z80 machines. Without dumps it runs the SDK's builds of its monitor ROM and
+character generator (`Kaypro2.asm` and `Kaypro2CharacterGenerator.asm`; `sdkRoms` names
+another copy's directory); `romDirectory` or `RETROCORE_KAYPRO_ROMS` can hold MAME's dumps instead,
+`81-149c.u47` (or `81-149c.rom`) and `81-146.u43` (or `81-146a.bin`), in the directory
+or its `kayproii` folder, and `rom` names another monitor dump there. The options are:
+
+- `disks`: images for drive A, then drive B: raw `.img` (or `.dsk`), IMD or DMK images
+  of single-sided double-density 5.25-inch disks; changes save as `.img` or DMK;
+- `fastDisk`: run as fast as possible while a drive is busy (on by default);
+- `bootSeconds`: emulated seconds the ROM runs before a program loads (0 by default);
+- `screen` (green by default, or white or amber) and `speed`.
+
+The monitor boots CP/M from the disk in drive A as the machine powers on. A program
+(`source` or `program`, loaded at `$0100` by default, where CP/M runs its `.COM`
+files) starts as soon as it loads, unless `bootSeconds` lets the ROM run first. The
+panel shows the 80x24 screen and types ASCII: **Ctrl** with a letter types its control
+character (**Ctrl+C** is `^C`), the arrow keys send `$F1`-`$F4` as the Kaypro's own do,
+and **Ctrl+F12** or **Ctrl+Break** is the reset button. The Kaypro has no BREAK key;
+the key bar has **Esc** and **Reset**. The drives are **Drive A** and **Drive B** in
+the [Drives view](#machine-and-drives), where disks go in and out and are saved.
+
+`basic` names an MBASIC program (`.mbasic.bas`): CP/M boots, `command` (`MBASIC` by
+default; `B:MBASIC` when it is on drive B) starts MBASIC, the program goes into memory
+and RUN starts it. While MBASIC runs, a BASIC thread steps by statement with the GOSUB
+call stack, variables, arrays and FOR loops, as on the TRS-80, and the CPU thread steps
+through MBASIC's source (`Mbasic/`).
 
 ## Breakpoints
 
@@ -1112,8 +1242,8 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I, and Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted. Level I and the CoCo 3's
+Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
+Extended Color BASIC's words when their ROMs are fitted, and BBC BASIC II on the BBC Micro. Level I and the CoCo 3's
 BASIC are not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
@@ -1143,8 +1273,8 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II or Color BASIC has a **BASIC**
-thread beside the CPU's.
+A session running AppleSoft, Integer BASIC, Level II, Color BASIC or BBC BASIC has a
+**BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
 
@@ -1185,14 +1315,21 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   name runs from a capital through the letters and digits after it, so `IFA=BTHEN10`
   compares A with the variable BTHEN10. GOTO and GOSUB are stored as GO and then TO or
   SUB, and its numbers and pointers are high byte first, as the 6809 keeps them.
+- **BBC BASIC** also finds reserved words only in capitals, and keeps names whole, with
+  small letters and `_`. A line keeps the spaces typed after its number, so it lists as
+  typed. Its call stack shows each PROC and FN beside the GOSUBs, and Step Over and Step
+  Out step over them; its Variables are the resident integers A%-Z% that are not zero,
+  then the variables in the order BASIC made them, and its Program scope is PAGE to TOP,
+  the heap and BASIC's stack. STOP is an error, and there is no CONT.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas` and
-`.colorbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC, Business BASIC,
-Level II BASIC and Color BASIC. Business BASIC takes a reserved word only between
-separators, so its highlighting leaves `PRINTER` a name, and its names count in full,
-dots included. A Color BASIC file may use every word of Disk Extended Color BASIC; a
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
+`.colorbasic.bas`, `.mbasic.bas` and `.bbcbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+Business BASIC, Level II BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
+CP/M BASIC) and BBC BASIC. Business BASIC and MBASIC take a reserved word only between separators,
+so their highlighting leaves `PRINTER` a name, and their names count in full, dots
+included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
 machine without those ROMs stores the words they add as letters. A plain `.bas` file
 takes its dialect from a first line such as `REM retrocore applesoft` or
 `' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of
@@ -1341,10 +1478,12 @@ the launch makes them again. Each drive shows its media, its
 track, side and sector or its tape position, whether it is write-protected or
 changed, and whether it is seeking, reading or writing. Expanding a device lists
 its state and what it is (its controller, formats and geometry). Its inline
-buttons insert, record, eject and write-protect, as the device allows. What the
+buttons insert, record, eject and write-protect, as the device allows; the PET's
+Datasettes also have Play, Stop and Rewind, and record onto the tape in them. What the
 machine writes to an Apple disk stays in memory until you save it: **Save to Its
 Image** (the disk icon on a changed drive) replaces the image it came from, after
-asking, and **Save Disk As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po`.
+asking, and **Save As...** in its menu writes a `.woz`, `.dsk`, `.do` or `.po` (a
+PET tape, a `.tap` or `.wav`).
 
 [Devices.md](../docs/Devices.md) describes the device model and the
 `retro/devices` and `retro/device` requests behind the views.

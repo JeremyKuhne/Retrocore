@@ -44,6 +44,10 @@ test("a launch configuration becomes the setup Start Machine would make", () => 
     // Disks and tapes it starts with are what it runs, and a Color Computer's disks bring their controller.
     assert.deepEqual(setupFromConfiguration({ machine: "apple2", diskImage: "C:\\dos.dsk" }),
         { machineId: "apple2-iie-enhanced", kind: "disk", path: "C:\\dos.dsk", options: {} });
+    assert.deepEqual(setupFromConfiguration({ machine: "pet", cassette1: "C:\\game.tap", snow: true }),
+        { machineId: "pet2001-basic2", kind: "tape", path: "C:\\game.tap", options: { snow: true } }, "a PET's tape is in its first Datasette");
+    assert.deepEqual(setupFromConfiguration({ machine: "pet", model: "pet2001", program: "C:\\hello.prg" }),
+        { machineId: "pet2001", kind: "program", path: "C:\\hello.prg", options: {} });
     assert.deepEqual(setupFromConfiguration({ machine: "coco", disks: ["C:\\a.dsk", "C:\\b.dsk"] }),
         { machineId: "coco2", kind: "disk", path: "C:\\a.dsk", options: { diskController: true } });
     assert.deepEqual(setupFromConfiguration({ machine: "coco", source: "C:\\a.asm", disks: ["C:\\a.dsk"] }),

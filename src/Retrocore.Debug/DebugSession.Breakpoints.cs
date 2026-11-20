@@ -91,6 +91,12 @@ internal sealed partial class DebugSession
             "Stops before a 6502 BRK runs.",
             true);
 
+        (string, string, string, bool) bbcBrk = (
+            BrkFilter,
+            "BRK instructions",
+            "Stops before a 6502 BRK runs: on the BBC Micro, each error the MOS, BASIC or a filing system raises.",
+            false);
+
         // SOS calls are BRKs, so on the Apple III the BRK filter stops at the rest; an sos function breakpoint stops
         // at calls.
         (string, string, string, bool) sosBrk = (
@@ -120,14 +126,21 @@ internal sealed partial class DebugSession
             // The Model III's and Model 4's BASIC is Level II's; the Model II's boot ROM has no BASIC.
             DebugMachines.Trs80Model3 => basic ? [reset, .. checks, .. BasicFilters] : [reset, .. checks],
             DebugMachines.Trs80Model2 => [reset, .. checks],
+            DebugMachines.Kaypro2 => [reset, .. checks, .. BasicFilters],
 
             // The Apple III has no BASIC in ROM to stop in, nor a beam position to stop at yet.
             DebugMachines.Apple3 => [reset, sosBrk, .. checks],
             DebugMachines.Apple1 => [reset, brk, .. checks, .. BasicFilters],
             DebugMachines.Coco => [reset, .. checks],
 
+            // A BRK on BASIC 2 enters its machine-language monitor.
+            DebugMachines.Pet => [reset, brk, .. checks, .. BasicFilters],
+
             // The Altair has no ROM, BASIC or break instruction to stop in.
             DebugMachines.Altair => [reset, .. checks],
+
+            // BASIC and the MOS raise their errors with BRK.
+            DebugMachines.Bbc => [reset, bbcBrk, .. checks, .. BasicFilters],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]
         };
     }

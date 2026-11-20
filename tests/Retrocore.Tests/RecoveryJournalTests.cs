@@ -3,9 +3,12 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
+using Retrocore.Media.Floppy;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -331,6 +334,126 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A journal whose session did not end cleanly, with no process holding it, is found with its machine's name and
+    ///  disks; recovering it keeps the disks and stops offering it, and a clean or running one is never offered.
+    /// </summary>
+    [TestMethod]
+    public void AnUncleanSessionIsFoundAndRecovered()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("crashed.po");
+        Write(drive, block: 1, 0x21);
+        RecoveryJournal running = RecoveryJournal.Open(id, [], "Apple IIe for Work") ?? throw new InvalidOperationException("The journal is taken.");
+        running.Commit(MediaActions.Journal([drive], running));
+        Offered(id).Should().BeNull("a running session keeps its journal");
+
+        // The process ends without closing it: the system lets go of its lock, and its session says it did not end.
+        Crash(running);
+        JsonObject offered = Offered(id) ?? throw new InvalidOperationException("The session is not offered.");
+        offered.String("name").Should().Be("Apple IIe for Work");
+        offered["disks"]?.AsArray().Select(disk => disk?.GetValue<string>()).Should().Equal(image);
+        offered.String("kept").Should().NotBeNull();
+
+        RecoveryJournal.Resolve(new JsonObject { ["id"] = id, ["action"] = "recover" });
+        Offered(id).Should().BeNull("a recovered session is not offered again");
+        Disks(id).Should().HaveCount(1, "its disk is kept for the next launch");
+    }
+
+    /// <summary>
+    ///  Discarding a session's disks removes its journal and the snapshots it names, and no other file.
+    /// </summary>
+    [TestMethod]
+    public void DiscardingAnUncleanSessionLetsItsDisksGo()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("discarded.po");
+        Write(drive, block: 1, 0x31);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+        string stray = Path.Join(RecoveryJournal.Root, id, "Media", "stray.woz");
+        File.WriteAllText(stray, "a disk");
+
+        RecoveryJournal.Resolve(new JsonObject { ["id"] = id, ["action"] = "discard" });
+        Offered(id).Should().BeNull();
+        File.Exists(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().BeFalse();
+        Snapshots(id).Should().Equal("stray.woz");
+    }
+
+    /// <summary>
+    ///  A discard names the journal it asked about: once the machine kept its disks again, the discard lets nothing
+    ///  go and says so, and the journal as it is now, found by its id, can be asked about again.
+    /// </summary>
+    [TestMethod]
+    public void ADiscardAskedAboutAnEarlierJournalLetsNothingGo()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("asked.po");
+        Write(drive, block: 1, 0x51);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+        string asked = Offered(id)?.String("revision") ?? throw new InvalidOperationException("Not offered.");
+
+        // The machine runs again, changes its disk, and stops cleanly.
+        RecoveryJournal again = Open(id);
+        Write(drive, block: 2, 0x52);
+        Stop(again, drive);
+        Offered(id).Should().BeNull("a clean stop is not offered as a crash");
+        JsonObject now = RecoveryJournal.Unclean(new JsonObject
+        {
+            ["id"] = id
+        }).OfType<JsonObject>().Single();
+
+        now.String("revision").Should().NotBe(asked);
+
+        JsonObject stale = new() { ["id"] = id, ["action"] = "discard", ["revision"] = asked };
+        RecoveryJournal.Resolve(stale).String("outcome").Should().Be("changed");
+        Disks(id).Should().HaveCount(1, "the disk kept since stays");
+        JsonObject current = new() { ["id"] = id, ["action"] = "discard", ["revision"] = now.String("revision") };
+        RecoveryJournal.Resolve(current).String("outcome").Should().BeNull();
+        File.Exists(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The off machine opens a journal without taking it for a session: what its last session said stays, so a
+    ///  session that did not end cleanly is still offered after the off machine showed its disks.
+    /// </summary>
+    [TestMethod]
+    public void TheOffMachineLeavesTheSessionAsItWas()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("looked.po");
+        Write(drive, block: 1, 0x41);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+
+        RecoveryJournal looking = RecoveryJournal.Open(id, [], claim: false) ?? throw new InvalidOperationException("The journal is taken.");
+        Apple2Disk35Drive off = Again(image);
+        MediaActions.Recover([off], looking).Should().BeEmpty();
+        off.Media?.Changed.Should().BeTrue();
+        MediaActions.IsKept(off.Medium ?? throw new InvalidOperationException("The drive is empty.")).Should().BeTrue();
+        looking.Commit(MediaActions.Journal([off], looking), close: true);
+        Offered(id).Should().NotBeNull("only a person's choice, or a session, ends the offer");
+    }
+
+    // What the host offers for a journal whose session did not end cleanly, or null.
+    private static JsonObject? Offered(string id) =>
+        RecoveryJournal.Unclean().OfType<JsonObject>().FirstOrDefault(journal => journal.String("id") == id);
+
+    // Ends a session as a process that stops without closing its journal does: its lock goes, and its session still
+    // says it has not ended.
+    private static void Crash(RecoveryJournal journal)
+    {
+        journal.Release();
+        string session = Path.Join(RecoveryJournal.Root, journal.Id, "session.json");
+        JsonObject json = JsonNode.Parse(File.ReadAllText(session))?.AsObject() ?? throw new InvalidOperationException("No session.");
+        json["clean"].Should().NotBeNull();
+        json["clean"]?.GetValue<bool>().Should().BeFalse();
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]
@@ -338,6 +461,48 @@ public sealed class RecoveryJournalTests
     {
         Action open = () => RecoveryJournal.Open(@"..\elsewhere", []);
         open.Should().Throw<ArgumentException>();
+    }
+
+    /// <summary>
+    ///  A BBC Micro's SSD disk and UEF tape are kept and come back with their images' codecs, so each saves to its
+    ///  image in its own format.
+    /// </summary>
+    [TestMethod]
+    public void BbcMediaComeBackWithTheirImagesCodecs()
+    {
+        string id = Id();
+        string ssd = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.ssd");
+        byte[] disk = AcornDiskImage.Encode(AcornDiskImage.Blank(tracks: 40), doubleSided: false).Bytes;
+        File.WriteAllBytes(ssd, disk);
+        string uef = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.uef");
+        byte[] tape = UefFormat.Write([.. Enumerable.Repeat(1, 4800)]);
+        File.WriteAllBytes(uef, tape);
+
+        (BbcFloppyDrive floppy, BbcCassette cassette) = BbcDrives(ssd, uef);
+        floppy.Disk?.MarkChanged();
+        AcornTape recorded = cassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
+        recorded.Record(recorded.HalfCycles.Count, 2);
+        Stop(Open(id), floppy, cassette);
+        Disks(id).Select(entry => entry?["kind"]?.GetValue<string>()).Should().BeEquivalentTo([DmkFormat.SnapshotKind, AcornTape.SnapshotKind]);
+
+        (BbcFloppyDrive nextFloppy, BbcCassette nextCassette) = BbcDrives(ssd, uef);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([nextFloppy, nextCassette], journal).Should().BeEmpty();
+        nextFloppy.Media?.Changed.Should().BeTrue();
+        nextCassette.Media?.Changed.Should().BeTrue();
+        nextCassette.Mode.Should().Be(TapeMode.Playing, "a recovered tape plays, as LOAD and CHAIN need");
+        FloppyDisk backDisk = nextFloppy.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(backDisk)?.Codec.Should().BeOfType<AcornDiskCodec>().Which.Format.Should().Be("SSD");
+        AcornTape back = nextCassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<AcornTapeCodec>();
+        back.HalfCycles.Should().HaveCount(4801);
+
+        MediaActions.Device(nextFloppy, "save", Speaking())?.String("outcome").Should().Be("saved");
+        MediaActions.Device(nextCassette, "save", Speaking())?.String("outcome").Should().Be("saved");
+        File.ReadAllBytes(ssd).Should().Equal(disk);
+        UefFormat.Read(File.ReadAllBytes(uef)).HalfCycles.Should().Equal(back.HalfCycles);
+        Stop(journal, nextFloppy, nextCassette);
+        Disks(id).Should().BeEmpty();
     }
 
     private static string Id() => $"test-{Guid.NewGuid():N}";
@@ -387,6 +552,23 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded.Disk, path, loaded.Codec, bytes);
         floppy.Insert(loaded.Disk, path, "DSK");
         return floppy;
+    }
+
+    // A BBC Micro's first disk drive and cassette with images in them, read and registered as the debug host does.
+    private static (BbcFloppyDrive Floppy, BbcCassette Cassette) BbcDrives(string ssd, string uef)
+    {
+        BbcFloppyDrive floppy = new(new Intel8271(), drive: 0);
+        byte[] disk = File.ReadAllBytes(ssd);
+        FloppyDisk read = AcornDiskImage.Read(disk, doubleSided: false);
+        MediaActions.Register(read, ssd, new AcornDiskCodec("SSD"), disk);
+        floppy.Insert(read, ssd, "SSD");
+
+        BbcCassette cassette = new();
+        byte[] tape = File.ReadAllBytes(uef);
+        AcornTape loaded = UefFormat.Read(tape);
+        MediaActions.Register(loaded, uef, new AcornTapeCodec(), tape);
+        cassette.Insert(loaded, uef);
+        return (floppy, cassette);
     }
 
     // Writes a block of one byte, as the machine would, unlocking the disk first.

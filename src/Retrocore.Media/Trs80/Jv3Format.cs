@@ -142,6 +142,13 @@ public static class Jv3Format
                     losses.Add("Double-density data address marks other than $FB and $F8", cylinder);
                 }
 
+                // JV3's flags size a sector at 128 to 1024 bytes; a larger one, as the 8271 makes, has no entry.
+                if (Array.IndexOf(s_sizes, sector.Data.Length) < 0)
+                {
+                    losses.Add("Sectors of more than 1024 bytes", cylinder);
+                    continue;
+                }
+
                 if (sectors.Count == MaximumSectors)
                 {
                     losses.Add($"Sectors past the {MaximumSectors} that two JV3 tables list.");

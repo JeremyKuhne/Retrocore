@@ -126,6 +126,10 @@ try {
     assert.deepEqual([await z80("LD A,[HL]"), await z80("JP NZ,$0000"), await z80("XOR A")], [[0x7E], [0xC2, 0, 0], [0xAF]]);
     // AF's apostrophe opens no quoted text.
     assert.deepEqual(await z80("EX AF,AF'"), [0x08]);
+    // The ROM's start saved as Z80 assembly, which assembles back to the same bytes.
+    const saved = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x0000, count: 0x40 });
+    assert.equal(saved.exact, true, saved.source);
+    assert.ok(saved.source.includes(".cpu Z80") && saved.source.includes("DI"), saved.source);
     // The instruction at the ROM's start, with the T-states the Z80's instruction set gives.
     const reset = (await request("retro/memory/inspect", { memoryReference: "0x0000", address: 0 })).instruction;
     assert.deepEqual([reset.text, reset.size, reset.cycles, reset.cyclesTaken], ["DI", 1, 4, null], JSON.stringify(reset));
@@ -214,16 +218,16 @@ try {
     await write("4000", [low]);
 
     at = "closing one memory subscriber";
-    const saved = (await read("6100", 0x21)).bytes;
+    const savedBytes = (await read("6100", 0x21)).bytes;
     await request("retro/memory/read", { memoryReference: "0x6100", offset: 0, count: 1, subscriber: "first" });
     await request("retro/memory/read", { memoryReference: "0x6100", offset: 0x10, count: 1, subscriber: "second" });
     await read("0x6100", 1, 0x20);
     await request("retro/memory/unsubscribe", { subscriber: "first" });
     drop("memory");
-    await write("6100", [saved[0] ^ 0xFF]);
+    await write("6100", [savedBytes[0] ^ 0xFF]);
     assert.equal(queued("memory").some(body => body.memoryReference === "0x6100"), false,
         "the closed editor no longer tracks its bytes");
-    await write("6110", [saved[0x10] ^ 0xFF]);
+    await write("6110", [savedBytes[0x10] ^ 0xFF]);
     assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"), "the other editor remains subscribed");
     await request("retro/memory/unsubscribe", { subscriber: "second" });
     for (let index = 0; index < 33; index++) {
@@ -233,12 +237,12 @@ try {
         await request("retro/memory/unsubscribe", { subscriber: `extra-${index}` });
     }
     drop("memory");
-    await write("6120", [saved[0x20] ^ 0xFF]);
+    await write("6120", [savedBytes[0x20] ^ 0xFF]);
     assert.ok(queued("memory").some(body => body.memoryReference === "0x6100"),
         "unsubscribing many editors does not evict a standard DAP reader of the same reference");
-    await write("6100", [saved[0]]);
-    await write("6110", [saved[0x10]]);
-    await write("6120", [saved[0x20]]);
+    await write("6100", [savedBytes[0]]);
+    await write("6110", [savedBytes[0x10]]);
+    await write("6120", [savedBytes[0x20]]);
 
     at = "retaining live subscriptions while limiting unscoped readers";
     await read("0x6100", 1);
@@ -363,6 +367,19 @@ try {
     await request("pause", { threadId: 1 });
     await event("stopped");
     assert.equal((await read("0x5000", 1)).bytes[0], 0x55, "the run wrote the frozen value back");
+    // A frozen byte goes back as soon as the instruction that writes it ends, so the program never reads a value of
+    // its own there: LD ($5000),A then LD A,($5000) reads the frozen $55, which LD ($5001),A copies out.
+    at = "an instruction writing a frozen byte";
+    const stoppedAt = (await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference;
+    assert.ok(Number(stoppedAt) >= 0x7000 && Number(stoppedAt) < 0x8000, `stopped in the program's RAM, at ${stoppedAt}`);
+    await write(stoppedAt, [0x3E, 0x05, 0x32, 0x00, 0x50, 0x3A, 0x00, 0x50, 0x32, 0x01, 0x50, 0x18, 0xFE]);
+    await write("0x5001", [0x00]);
+    for (let step = 0; step < 4; step++) {
+        drop("stopped");
+        await request("next", { threadId: 1, granularity: "instruction" });
+        await event("stopped");
+    }
+    assert.deepEqual([(await read("0x5000", 1)).bytes[0], (await read("0x5001", 1)).bytes[0]], [0x55, 0x55]);
     assert.deepEqual((await request("retro/memory/freeze", { memoryReference: "0x0000", thaw: [0x5000] })).frozen, []);
     assert.equal((await request("evaluate", { expression: "[$5000]", context: "watch" })).result.endsWith("(frozen)"), false);
     console.log("Memory DAP integration passed on the Model I.");
@@ -717,6 +734,31 @@ try {
     await rejects(assemble("LDA NOSUCH"), /NOSUCH/);
     await rejects(assemble("  "), /Type an instruction/);
     assert.deepEqual((await read("0x6560", 3)).bytes, unassembled, "assembling writes nothing");
+    // Each label's kind, and the size of a label's data, which the editor shades.
+    at = "the kinds and data sizes of labels";
+    const labelled = new Map((await request("retro/memory/labels", { memoryReference: "0x0000" })).labels.map(label => [label.name, label]));
+    assert.deepEqual([labelled.get("TABLE").kind, labelled.get("TABLE").size], ["data", 11], JSON.stringify(labelled.get("TABLE")));
+    assert.deepEqual([labelled.get("BANK2").kind, labelled.get("BANK2").size], ["code", null]);
+    assert.equal(labelled.get("CH").kind, "constant", JSON.stringify(labelled.get("CH")));
+    // A constant names main RAM's byte, which the CPU reads, not auxiliary RAM's at the same address.
+    assert.equal(labelled.get("BRKV")?.address, 0x03F0);
+    const auxNames = (await request("retro/memory/labels", { memoryReference: "aux:0x0000" })).labels;
+    assert.equal(auxNames.find(label => label.address === 0x03F0), undefined, JSON.stringify(auxNames.filter(label => label.address < 0x0400)));
+    // Saving as assembly: the program as native source that assembles back to its bytes, by the session's labels.
+    at = "saving memory as assembly";
+    const exported = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x0300, count: 0x28 });
+    assert.equal(exported.exact, true, exported.source);
+    for (const expected of ["BANK2:", "SWITCHED:", "JMP SWITCHED", "TABLE:", ".byte $01, $02", "RTS", ".org $0300"]) {
+        assert.ok(exported.source.includes(expected), `${expected} in:\n${exported.source}`);
+    }
+    assert.ok(exported.source.startsWith("; Memory: $0300-$0327, 40 bytes, saved from Retrocore Memory."), exported.source);
+    await rejects(request("retro/memory/export", { memoryReference: "0x0000", address: 0xFFFF, count: 2 }), /\$0000-\$FFFF/);
+    // A count too large for 64K is refused before it is added to the address, which it would otherwise overflow.
+    await rejects(request("retro/memory/export", { memoryReference: "0x0000", address: 0x8000, count: 0x7FFF9000 }), /\$0000-\$FFFF/);
+    // A Decode from here start in data saves the whole instruction the listing shows there: TABLE's $01, $02 as ORA.
+    const decoded = await request("retro/memory/export", { memoryReference: "0x0000", address: 0x031A, count: 4, starts: [0x031A] });
+    assert.equal(decoded.exact, true, decoded.source);
+    assert.match(decoded.source, /^\s+ORA /m, decoded.source);
     // Find by value: a number's bytes as AppleSoft stores it, rounded as BASIC rounds it.
     at = "a number as the BASIC's floats";
     const numbers = async value => (await request("retro/memory/numbers", { memoryReference: "0x0000", value })).formats;
@@ -738,6 +780,17 @@ try {
     mapped = await memoryMap("aux:0x0000");
     assert.equal(areaAt(mapped.areas, 0x0400).mapped, false);
     assert.equal(areaAt(mapped.areas, 0xC000).kind, "none");
+    // Its runs split at the parts one switch puts in the CPU's view, each named by that switch, with whether the CPU
+    // reads and writes it now: at power-on, neither.
+    const zeroPage = areaAt(mapped.areas, 0x0000);
+    assert.deepEqual([zeroPage.start, zeroPage.length, zeroPage.mapped, zeroPage.written], [0x0000, 0x0200, false, false]);
+    assert.equal(zeroPage.name, "Alternate zero page and stack (ALTZP): the CPU reads main RAM here now");
+    assert.match(areaAt(mapped.areas, 0x0400).name, /^Text page 1 \(80STORE with PAGE2, else RAMRD and RAMWRT\): /);
+    assert.match(areaAt(mapped.areas, 0x0800).name, /^RAM from \$0200 \(RAMRD and RAMWRT\): /);
+    assert.match(areaAt(mapped.areas, 0xD000).name, /^Alternate language card bank 2 \(ALTZP and the language card's switches\): /);
+    // A read-only bank is never written, though the CPU's writes there go to its area's address.
+    const romArea = areaAt((await memoryMap("rom:0x0000")).areas, 0xE000);
+    assert.equal(romArea.written, false, JSON.stringify(romArea));
     at = "breakpoints in the listing";
     const gutter = (await request("setFunctionBreakpoints", { breakpoints: [{ name: "$6500" }, { name: "aux:$6510" }] })).breakpoints;
     lines = await listing(0x6500, 2);

@@ -56,13 +56,14 @@ internal sealed partial class Trs80DebugTarget
         };
 
         bool expansion = args.Bool("expansionInterface") ?? !level1;
+        string?[] disks = args.ImagePaths("disks", "ldos.dsk");
         Trs80Configuration configuration = new()
         {
             Rom = level1 ? Trs80Rom.Level1 : Trs80Rom.Level2,
             RamKilobytes = args.Int("ramKilobytes") ?? (expansion ? 48 : level1 ? 4 : 16),
             ExpansionInterface = expansion,
             // With a controller and no disk the ROM waits for a disk to boot, as a real Model I does until BREAK.
-            DiskController = expansion && (args.Bool("diskController") ?? Disks(args).Length != 0),
+            DiskController = expansion && (args.Bool("diskController") ?? disks.Length != 0),
             LowercaseModification = args.Bool("lowercase") ?? false,
             VideoSnow = args.Bool("snow") ?? false,
             Doubler = doubler
@@ -94,20 +95,14 @@ internal sealed partial class Trs80DebugTarget
         };
 
         if (args.String("cassette") is { } cassette) { target.Insert(cassette); }
-        if (args["disks"] is JsonArray disks)
+        if (disks.Length > WesternDigitalFloppyDiskController.DriveCount)
         {
-            if (disks.Count > WesternDigitalFloppyDiskController.DriveCount)
-            {
-                throw new ArgumentException("A Model I has four drives.");
-            }
+            throw new ArgumentException("A Model I has four drives.");
+        }
 
-            for (int drive = 0; drive < disks.Count; drive++)
-            {
-                if (disks[drive] is JsonValue value && value.GetValue<string>() is { } disk)
-                {
-                    target.Insert(drive, disk);
-                }
-            }
+        for (int drive = 0; drive < disks.Length; drive++)
+        {
+            if (disks[drive] is { } disk) { target.Insert(drive, disk); }
         }
 
         return target;
@@ -124,8 +119,6 @@ internal sealed partial class Trs80DebugTarget
         // A program loads between instructions.
         while (!_machine.Processor.IsInstructionBoundary) { _machine.StepCycle(); }
     }
-
-    private static JsonNode?[] Disks(JsonObject args) => args["disks"] is JsonArray disks ? [.. disks] : [];
 
     private static byte[] DumpSystem(string directory, bool level1, int revision)
     {
@@ -242,7 +235,7 @@ internal sealed partial class Trs80DebugTarget
             throw new ArgumentException($"There is no drive {drive}.");
         }
 
-        FloppyMedia.Insert(_machine.Drives[drive], path, coco: false);
+        FloppyMedia.Insert(_machine.Drives[drive], path, FloppyFamily.Trs80);
     }
 
     private JsonObject MediaState() => new JsonObject

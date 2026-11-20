@@ -32,7 +32,7 @@ internal sealed partial class DebugSession
     private const string NotAtStatement =
         "Set Next Statement works when BASIC is at the start of a statement: step on the BASIC thread first.";
 
-    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
+    private static readonly HashSet<string> s_machineCalls = ["CALL", "&", "USR", "SYS", "SYSTEM", "PERFORM", "EXFN.", "EXFN%."];
 
 
     // Where the machine-program documents live, which the extension gives at the session's start.
@@ -88,7 +88,8 @@ internal sealed partial class DebugSession
     ];
 
     // The BASIC ROM's addresses, when its source applies to the ROM mapped now.
-    private BasicRom? ActiveBasic => Target.BasicRom is { } rom && _debug.Position(Target, rom.Gone) is not null ? rom : null;
+    private BasicRom? ActiveBasic => Target.BasicRom is { } rom
+        && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
     private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
 
@@ -154,12 +155,16 @@ internal sealed partial class DebugSession
                 return true;
             }
 
+            // A pause's deadline holds even while another ROM, such as the DFS, is paged in where BASIC is.
             if (goal.Step == BasicStep.Pause && Target.CycleCount >= goal.Deadline)
             {
                 Stopped("pause", threadId: BasicThread);
                 return true;
             }
         }
+
+        // BASIC's own addresses mean BASIC only while it is paged in.
+        if (!Target.BasicPagedIn) { return false; }
 
         if (Target.BasicStatementStart(pc) is { } start) { return StatementStops(start.Line, start.Address); }
         if (pc == rom.Run) { _basicStarting = "RUN starts"; }
@@ -304,7 +309,11 @@ internal sealed partial class DebugSession
     private void StepBasic(BasicStep step)
     {
         int depth = BasicDepth();
-        if (step == BasicStep.Out && depth == 0) { throw new InvalidOperationException("BASIC is not in a GOSUB."); }
+        if (step == BasicStep.Out && depth == 0)
+        {
+            throw new InvalidOperationException("BASIC is not in a GOSUB, PROC or FN.");
+        }
+
         _basicGoal = new(step, depth, step == BasicStep.Into && CallsMachine(), ulong.MaxValue);
         Continue();
     }
@@ -327,7 +336,17 @@ internal sealed partial class DebugSession
     private int BasicDepth() => BasicStackEntries().Count;
 
     // The GOSUB entries on BASIC's stack, most recent first: the line each was in and its text pointer.
-    private List<(int Line, int TextPointer)> BasicStackEntries()
+    private List<(int Line, int TextPointer)> BasicStackEntries() => [.. BasicCallEntries().Select(entry => (entry.Line, entry.TextPointer))];
+
+    // The calls in progress, most recent first: GOSUBs, and a BASIC's other kinds, as BBC BASIC's PROCs and FNs.
+    private List<(int Line, int TextPointer, string Kind)> BasicCallEntries()
+    {
+        if (Target.BasicCalls is { } calls) { return [.. calls]; }
+        return [.. GosubEntries().Select(entry => (entry.Line, entry.TextPointer, "GOSUB"))];
+    }
+
+    // The GOSUB entries on BASIC's stack, most recent first: the line each was in and its text pointer.
+    private List<(int Line, int TextPointer)> GosubEntries()
     {
         List<(int, int)> entries = [];
         if (Target.Basic is not { } dialect) { return entries; }
@@ -337,7 +356,7 @@ internal sealed partial class DebugSession
         int at = BasicStackTop;
         for (int count = 0; count < MaximumStackEntries && at < 0xFFFB; count++)
         {
-            int token = Target.Peek((ushort)at);
+            int token = Target.BasicPeek((ushort)at);
             if (token == forToken)
             {
                 at += Target.BasicForSize;
@@ -477,9 +496,9 @@ internal sealed partial class DebugSession
 
             string note = Target.InRom(Target.ProgramCounter) ? "" : $" (in machine code at ${Target.ProgramCounter:X4})";
             frames.Add(BasicFrame(view, file, frames.Count, line, address, note));
-            foreach ((int caller, int pointer) in BasicStackEntries())
+            foreach ((int caller, int pointer, string kind) in BasicCallEntries())
             {
-                frames.Add(BasicFrame(view, file, frames.Count, caller, pointer + 1, " (GOSUB)"));
+                frames.Add(BasicFrame(view, file, frames.Count, caller, pointer + 1, $" ({kind})"));
             }
         }
 

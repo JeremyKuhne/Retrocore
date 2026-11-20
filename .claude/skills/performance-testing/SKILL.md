@@ -94,6 +94,15 @@ runs, or candidate before/after profiling. A lightweight baseline profile may fo
 the hypothesis; defer candidate attribution until the product pilot passes. The
 staged defaults and stop rules are in [investigation-workflow.md](investigation-workflow.md).
 
+Performance is not a substitute for the behavior contract. Before optimizing a
+correctness-sensitive path, write down the semantic guarantee and test it
+separately from the throughput/latency gate. If meeting a performance target
+changes when or how strongly behavior is guaranteed, such as applying a memory
+freeze at a run-slice boundary instead of every writing instruction, describe
+the difference and get that trade-off accepted; do not report the performance
+measurement as proof of semantic equivalence. Use [pre-pr-self-review](../pre-pr-self-review/SKILL.md)
+to include both evidence sets and their validation gaps in the change summary.
+
 ```powershell
 # One affected TFM; repeat only for additional supported targets the change affects.
 dotnet run -c Release -f <tfm> --project <root>.perf -- --filter *MyBenchmark*

@@ -22,6 +22,7 @@ import type { BreakpointHits } from "../breakpoints";
 import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
 import { testMemorySubscriptions } from "./memorySubscriptions";
+import { testMemoryRestart } from "./memoryRestart";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -40,6 +41,7 @@ export async function run(): Promise<void> {
     await testProgramBreakpoints(workspace);
     await testDrivesView(workspace);
     await testMemorySubscriptions(workspace);
+    await testMemoryRestart(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     if (romDirectory === undefined) throw new Error("RETROCORE_IIE_ROMS is required.");
     const root = workspace.uri.fsPath;

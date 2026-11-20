@@ -59,29 +59,39 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 - Name things after what the code does. In the SDK's ROM sources, names follow the original documentation:
   - Apple's for the IIe;
   - the documented ROM calls and Microsoft's BASIC names for Level II;
-  - Li-Chen Wang's Tiny BASIC names for Level I.
+  - Li-Chen Wang's Tiny BASIC names for Level I;
+  - for the PET's editors and kernals, Commodore's names from its 1979 BASIC 4 kernal listing, where BASIC 4 has
+    the same code, and Microsoft's for the jump table at `$FFC0`.
 
   Labels inside a routine are named after it (`ROUTINE_1`). Never use a name that is only an address (`SUB_F8C2`,
   `LE5D1`, `unref_e5cc`): find out what the code does and name it, and drop a label that nothing refers to.
 
 ## Editing the SDK's ROM sources
 
-The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms` and
-`src/Retrocore.Machines.Trs80/Roms` must assemble byte-identically to the ROMs, for every variant: `ENHANCED` for the
-IIe; `REVISION` 12 or 13 for Level II; `MODEL` 1 or 3 for `Level1.asm`; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for
-`Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and
-structure only in ways that keep the bytes.
+The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms`,
+`src/Retrocore.Machines.Trs80/Roms` and `src/Retrocore.Machines.Kaypro/Roms` (MBASIC.COM's too) must assemble
+byte-identically to the ROMs, for every variant: `ENHANCED` for the IIe; `REVISION` 12 or 13 for Level II; `MODEL` 1
+or 3 for `Level1.asm`; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for `Model2Boot.asm`;
+`MODEL4P` for `Model3CharacterGenerator.asm`. They are maintained by hand: change names, comments and structure only
+in ways that keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks.
 - **Rewriting data as macros:** check that the macro emits exactly the bytes it replaces.
 - **Verifying:** run the digest tests, which need no ROMs:
 
   ```powershell
-  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests"
+  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests|FullyQualifiedName~KayproTests"
   ```
 
   With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`), the same tests name the first byte
   that differs.
+
+Byte identity proves the assembled program has not changed; it does not prove that a new comment or contract is
+semantically correct. For `In:`, `Out:`, `Uses:` and `Keeps:`, trace every relevant exit path, including errors,
+timeouts, and conditional branches. Where a claim is consumed by the debugger or changes routine behavior, add a
+focused runtime or contract test with distinct register/flag values. Check hardware/model-specific conditional
+branches independently. Use [retrocore-conformance](../retrocore-conformance/SKILL.md) for oracle selection and
+evidence limits, and report any path that could not be exercised.
 
 ## Checking a source
 

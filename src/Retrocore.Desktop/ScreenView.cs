@@ -252,20 +252,26 @@ internal sealed class ScreenView : Control
 
     // Each machine's picture at 1x in Sharp, in device pixels, as the display panel's sharpBase has them: each dot a
     // whole number of pixels across and down in the screen's shape. The IIe's rows are twice as tall as its dots are
-    // wide; the Model I's dots are 2 wide by 3 tall; the CoCo 3's 704 dots by 249 lines show each line twice.
+    // wide; the Model I's dots are 2 wide by 3 tall; the Kaypro II's 560x240 shows each line twice; the CoCo 3's
+    // 704 dots by 249 lines show each line twice.
     private static (double Across, double Down) SharpBase(string machine, double width) => machine switch
     {
         "trs80-model1" => (768, 576),
         "trs80-model3" or "altair" => (640, 480),
         "trs80-model2" => (640, 576),
+        "kaypro2" => (560, 480),
         "coco" => width == 704 ? (704, 498) : (640, 480),
+        "bbc" => (704, 576),
+        "pet" => (640, 400),
         _ => (560, 384),
     };
 
     // The width to height of each machine's picture, as the display panel's aspect map has them.
     private static double Aspect(string machine) => machine switch
     {
-        "trs80-model1" or "trs80-model3" or "trs80-model2" or "coco" or "altair" => 4.0 / 3.0,
+        "bbc" => 704.0 / 576.0,
+        "trs80-model1" or "trs80-model3" or "trs80-model2" or "coco" or "altair" or "kaypro2" => 4.0 / 3.0,
+        "pet" => 320.0 / 200.0,
         _ => 280.0 / 192.0,
     };
 

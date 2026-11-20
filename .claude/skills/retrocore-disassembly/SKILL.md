@@ -72,6 +72,12 @@ The hints file is JSON. Each address is a string such as `"$0812"`, or a number:
 The output is a correct starting point, not a finished source. The generated labels are only addresses (`L_0905`,
 `D_0E50`), data is hex bytes, and the mnemonics are uppercase.
 
+The assembled-byte comparison proves that the edited output reconstructs the same bytes; it does not prove that a
+routine name, side-effect description, or inferred entry-point contract is correct. Trace each claimed entry and
+exit against the selected machine/ROM source or an independent runtime observation. Mark uncertain behavior as an
+inference instead of turning it into a factual `In:`, `Out:`, or `Keeps:` claim. See
+[retrocore-conformance](../retrocore-conformance/SKILL.md) for choosing an oracle and stating coverage limits.
+
 ## Finishing the source
 
 Edit the output by hand into a source someone can maintain. Follow the retrocore-native-assembly skill throughout:

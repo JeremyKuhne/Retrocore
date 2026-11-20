@@ -13,7 +13,10 @@ const dialects: Record<string, string> = {
     applesoft: "retrocore-applesoft", level2: "retrocore-level2", level1: "retrocore-level1", integer: "retrocore-integer",
     business: "retrocore-business",
     apple1: "retrocore-apple1",
-    colorbasic: "retrocore-colorbasic"
+    colorbasic: "retrocore-colorbasic",
+    mbasic: "retrocore-mbasic",
+    petbasic: "retrocore-petbasic",
+    bbcbasic: "retrocore-bbcbasic"
 };
 
 interface Diagnostic { line: number; severity: "error" | "warning"; message: string; start: number; end: number; }
@@ -42,6 +45,10 @@ function sessionDialect(): string | undefined {
     if (session.configuration.machine === "trs80-model1") return session.configuration.rom === "level1" ? "level1" : "level2";
     if (session.configuration.machine === "apple1") return "apple1";
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
+    if (session.configuration.machine === "kaypro2") return "mbasic";
+    // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
+    if (session.configuration.machine === "pet") return "petbasic";
+    if (session.configuration.machine === "bbc") return "bbcbasic";
     return undefined;
 }
 
@@ -178,7 +185,8 @@ export function registerBasicLanguage(context: vscode.ExtensionContext): void {
                 { label: "AppleSoft", dialect: "applesoft" },
                 { label: "Integer BASIC", dialect: "integer", detail: "Saving tokenizes through the Apple II's ROM (RETROCORE_II_ROMS)" },
                 { label: "Business BASIC", dialect: "business" },
-                { label: "Level II BASIC", dialect: "level2" }
+                { label: "Level II BASIC", dialect: "level2" },
+                { label: "MBASIC (BASIC-80 5.21)", dialect: "mbasic" }
             ],
             { title: "Which BASIC is this program?" }))?.dialect;
         if (dialect === undefined) return undefined;

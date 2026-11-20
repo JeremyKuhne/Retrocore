@@ -146,6 +146,23 @@ public class Apple3BusTests
     }
 
     /// <summary>
+    ///  The RAM offset a write changes follows the write path: RAM under the ROM unless write protection is on, none
+    ///  where I/O takes the write, and below $C000 the offset a read has.
+    /// </summary>
+    [TestMethod]
+    public void WriteOffsetFollowsWhereWritesGo()
+    {
+        Apple3Bus bus = Bus();
+        SetEnvironment(bus, BaseEnvironment);
+        bus.WriteOffset(0xF000).Should().Be(bus.RamOffset(0xF000), "the RAM under the ROM takes the write");
+        bus.WriteOffset(0xC000).Should().BeNull("I/O takes the write");
+        bus.WriteOffset(0x0400).Should().Be(bus.RamOffset(0x0400));
+        SetEnvironment(bus, BaseEnvironment | Apple3Bus.WriteProtect);
+        bus.WriteOffset(0xD000).Should().BeNull("write protection keeps the RAM from $C000 up");
+        bus.WriteOffset(0xBFFF).Should().Be(bus.RamOffset(0xBFFF));
+    }
+
+    /// <summary>
     ///  With I/O off, $C000-$CFFF is RAM.
     /// </summary>
     [TestMethod]

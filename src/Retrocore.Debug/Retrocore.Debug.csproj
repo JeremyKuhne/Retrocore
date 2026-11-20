@@ -51,6 +51,7 @@
     <None Include="..\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Sdk\Roms\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Kaypro\Roms\*.asm" Link="Sdk\Roms\Kaypro\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Altair\Roms\*.asm" Link="Sdk\Roms\Altair\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Kaypro\Roms\Mbasic\*.asm" Link="Sdk\Roms\Kaypro\Mbasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\*.asm" Link="Sdk\Roms\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Pascal\Pcode.asm" Link="Sdk\Pascal\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />

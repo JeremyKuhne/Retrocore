@@ -105,6 +105,177 @@ public sealed class LanguageAnalysisTests
     }
 
     /// <summary>
+    ///  A procedure remains navigable when its assembly has errors.
+    /// </summary>
+    /// <param name="error">A line that makes assembly fail.</param>
+    [TestMethod]
+    [DataRow("jsr missing")]
+    [DataRow(".notadirective")]
+    public void ProceduresSurviveErrors(string error)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            File.WriteAllText(main, $".org $6000\n    {error}\n    .proc InverseCapitalsOn\n    rts\n    .endproc\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().BeFalse();
+            SymbolSite procedure = analysis.Find("InverseCapitalsOn").Should().ContainSingle().Which;
+            procedure.Path.Should().Be(main);
+            procedure.Line.Should().Be(2);
+            procedure.Column.Should().Be(10);
+            procedure.Kind.Should().Be(SymbolSiteKind.Label);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Both names on a ca65 label-and-procedure line remain navigable, even on assembly errors.
+    /// </summary>
+    /// <param name="error">Whether assembly should fail.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void ProcedureWithPrecedingLabel(bool error)
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string failure = error ? "    jmp missing\n" : "";
+            File.WriteAllText(main, $"; retrocore: dialect=ca65\n.org $6000\nAlias: .proc Worker\n    rts\n.endproc\n{failure}");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Success.Should().Be(!error);
+            analysis.Find("Alias").Should().ContainSingle().Which.Column.Should().Be(0);
+            SymbolSite worker = analysis.Find("Worker").Should().ContainSingle().Which;
+            worker.Line.Should().Be(2);
+            worker.Column.Should().Be(13);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A root's companion linker configuration supplies its sections and their addresses.
+    /// </summary>
+    [TestMethod]
+    public void CompanionConfigurationPlacesSections()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string configuration = Path.Join(directory, "main.cfg");
+            string bios = Path.Join(directory, "bios.asm");
+            File.WriteAllText(main, ".section HIGH\n.include \"bios.asm\"\n    jsr InverseCapitalsOn\n");
+            File.WriteAllText(bios, ".proc InverseCapitalsOn\n    rts\n.endproc\n");
+            File.WriteAllText(
+                configuration,
+                "MEMORY { HIGH: start = $FE00, size = $0200, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            SymbolSite procedure = analysis.Find("InverseCapitalsOn").Should().ContainSingle().Which;
+            procedure.Path.Should().Be(bios);
+            procedure.Column.Should().Be(6);
+            procedure.Value.Should().Be(0xFE00);
+
+            File.WriteAllText(configuration, "MEMORY {");
+            SourceAnalysis.Assemble(main, _ => null).Result.Diagnostics.Should().NotBeEmpty(
+                "an invalid companion configuration must not be ignored");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Six-character matching is for MACRO-10, not a native symbol that happens to share a prefix.
+    /// </summary>
+    [TestMethod]
+    public void SixCharacterNamesFollowTheSourceDialect()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string native = Path.Join(directory, "native.asm");
+            string macro10 = Path.Join(directory, "macro10.mac");
+            File.WriteAllText(native, ".org $6000\nINVERS:\n    rts\n    jmp InverseCapitalsOn\n");
+            File.WriteAllText(macro10, "; retrocore: dialect=macro10\n\tORG\t^O10000\nINVERS:\tNOP\n");
+
+            SourceAnalysis nativeAnalysis = SourceAnalysis.Assemble(native, _ => null);
+            SourceAnalysis macroAnalysis = SourceAnalysis.Assemble(macro10, _ => null);
+
+            nativeAnalysis.Find("InverseCapitalsOn").Should().BeEmpty();
+            macroAnalysis.Find("INVERSE").Should().ContainSingle().Which.Name.Should().Be("INVERS");
+            macroAnalysis.Find("InverseCapitalsOn", macro10: false).Should().BeEmpty();
+            macroAnalysis.Find("InverseCapitalsOn", macro10: true).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An included source's explicit dialect, rather than its root's, controls its name matching.
+    /// </summary>
+    [TestMethod]
+    public void IncludedSourceUsesItsOwnDialect()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            string native = Path.Join(directory, "native.asm");
+            string macro10 = Path.Join(directory, "macro10.mac");
+            File.WriteAllText(native, ".org $6000\n.include \"macro10.mac\" dialect=macro10\n    rts\n");
+            File.WriteAllText(macro10, "INVERS:\tNOP\n");
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(native, _ => null);
+
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.UsesMacro10(native).Should().BeFalse();
+            analysis.UsesMacro10(macro10).Should().BeTrue();
+            analysis.Find("InverseCapitalsOn", analysis.UsesMacro10(native)).Should().BeEmpty();
+            analysis.Find("InverseCapitalsOn", analysis.UsesMacro10(macro10)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The MACRO-10 overlay and the base it composes both retain six-character name matching.
+    /// </summary>
+    [TestMethod]
+    public void Macro10OverlayAndBaseKeepTheirDialect()
+    {
+        string folder = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "Inputs", "AppleSoft"));
+        string overlay = Path.Join(folder, "applesoft.mac");
+        string basis = Path.Join(folder, "m6502.asm");
+
+        SourceAnalysis analysis = SourceAnalysis.Assemble(overlay, _ => null);
+
+        analysis.Result.Diagnostics.Should().BeEmpty();
+        analysis.UsesMacro10(overlay).Should().BeTrue();
+        analysis.UsesMacro10(basis).Should().BeTrue();
+        analysis.Find("INVERSEEXTRA", analysis.UsesMacro10(overlay)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+        analysis.Find("INVERSEEXTRA", analysis.UsesMacro10(basis)).Should().ContainSingle().Which.Name.Should().Be("INVERS");
+    }
+
+    /// <summary>
     ///  A <c>.define</c> in an included file is found from its uses, with its documentation, even when its name
     ///  is also a mnemonic.
     /// </summary>

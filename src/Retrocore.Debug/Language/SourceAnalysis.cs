@@ -16,10 +16,16 @@ internal sealed partial class SourceAnalysis
     private const int AddressSpaceSize = 0x10000;
 
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
-    private SourceAnalysis(string root, AssemblyResult result, IEnumerable<string> members, Func<string, string?> text)
+    private SourceAnalysis(
+        string root,
+        AssemblyResult result,
+        AssemblyProject project,
+        IEnumerable<string> members,
+        Func<string, string?> text)
     {
         Root = root;
         Result = result;
@@ -27,6 +33,14 @@ internal sealed partial class SourceAnalysis
         foreach (string member in Members)
         {
             if (text(member) is { } content) { _lines[member] = SourceText.Lines(content); }
+        }
+
+        foreach (AssemblyStatement statement in project.Statements)
+        {
+            if (statement.Location is { } location && _lines.ContainsKey(location.Path))
+            {
+                _dialects.TryAdd(location.Path, statement.Dialect);
+            }
         }
 
         // The assembler knows native names; show the spelling the source used.
@@ -37,7 +51,18 @@ internal sealed partial class SourceAnalysis
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
             string name = spelling.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
             SymbolSiteKind kind = symbol.IsConstant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
-            Add(new(name, Path.GetFullPath(location.Path), location.Line, location.Column, kind, symbol.Value));
+            string path = Path.GetFullPath(location.Path);
+            int column = location.Column;
+            if (_lines.TryGetValue(path, out string[]? lines)
+                && location.Line >= 0
+                && location.Line < lines.Length
+                && ProcedureDefinition().Match(lines[location.Line]) is { Success: true } procedure
+                && name.Equals(procedure.Groups["name"].Value, StringComparison.OrdinalIgnoreCase))
+            {
+                column = procedure.Groups["name"].Index;
+            }
+
+            Add(new(name, path, location.Line, column, kind, symbol.Value));
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
@@ -54,6 +79,16 @@ internal sealed partial class SourceAnalysis
                     if (!name.Success) { name = match.Groups["macro10"]; }
                     Add(new(name.Value, path, line, name.Index, SymbolSiteKind.Macro, Value: null));
                     continue;
+                }
+
+                match = ProcedureDefinition().Match(lines[line]);
+                if (!result.Success && match.Success)
+                {
+                    Group name = match.Groups["name"];
+                    if (!_definitions.ContainsKey(name.Value))
+                    {
+                        Add(new(name.Value, path, line, name.Index, SymbolSiteKind.Label, Value: null));
+                    }
                 }
 
                 match = TextDefinition().Match(lines[line]);
@@ -125,16 +160,25 @@ internal sealed partial class SourceAnalysis
     internal static SourceAnalysis Assemble(string root, Func<string, string?> openText)
     {
         string text = openText(root) ?? File.ReadAllText(root);
+        string configuration = Path.ChangeExtension(root, ".cfg");
+        string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
         WorkspaceSourceResolver resolver = new(openText);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
         {
             SourceResolver = resolver,
             SdkPaths = [SdkModules.SdkDirectory],
-            BuildTime = DateTimeOffset.UnixEpoch
+            BuildTime = DateTimeOffset.UnixEpoch,
+            LinkerConfiguration = configurationText is null ? null : new(configurationText, configuration)
         };
 
-        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(WithoutRomDeclaration(text), root), options);
-        return new(root, result, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
+        AssemblySource source = new(WithoutRomDeclaration(text), root);
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(source, options);
+        Assembler.Assembler assembler = new();
+        AssemblyResult result = parsed.Success
+            ? assembler.Assemble(parsed.Project, options)
+            : assembler.Assemble(source, options);
+
+        return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
     }
 
     /// <summary>
@@ -145,19 +189,34 @@ internal sealed partial class SourceAnalysis
     internal string[] LinesOf(string path) => _lines.TryGetValue(path, out string[]? lines) ? lines : [];
 
     /// <summary>
-    ///  Finds where a name is defined, trying the spellings the dialects allow.
+    ///  Finds where a name is defined, trying the spellings the reference's dialect allows.
     /// </summary>
     /// <param name="name">The name as written.</param>
+    /// <param name="macro10">Whether the reference uses MACRO-10, or null for the root's dialect.</param>
     /// <returns>The definitions, nearest first when there are several.</returns>
-    internal IReadOnlyList<SymbolSite> Find(string name)
+    internal IReadOnlyList<SymbolSite> Find(string name, bool? macro10 = null)
     {
         if (_definitions.TryGetValue(name, out List<SymbolSite>? sites)) { return sites; }
 
         // MACRO-10 compares six characters; a local or scoped name may be stored with its scope.
         const int Significant = 6;
-        if (name.Length > Significant && _definitions.TryGetValue(name[..Significant], out sites)) { return sites; }
+        if ((macro10 ?? UsesMacro10(Root))
+            && name.Length > Significant
+            && _definitions.TryGetValue(name[..Significant], out sites))
+        {
+            return sites;
+        }
+
         return [.. Definitions.Where(site => site.Name.EndsWith($"::{name}", StringComparison.OrdinalIgnoreCase))];
     }
+
+    /// <summary>
+    ///  Gets whether a source is assembled as MACRO-10.
+    /// </summary>
+    /// <param name="path">The source's path.</param>
+    /// <returns>Whether the assembler parsed it as MACRO-10.</returns>
+    internal bool UsesMacro10(string path) =>
+        _dialects.TryGetValue(path, out AssemblyDialect dialect) && dialect == AssemblyDialect.Macro10;
 
     /// <summary>
     ///  Gets the source map entries a line produced, including through macros it invoked.
@@ -272,6 +331,9 @@ internal sealed partial class SourceAnalysis
     // A name in column 0: a label (with or without a colon) or an equate. Directives start with a dot.
     [GeneratedRegex(@"^(?<name>[A-Za-z_@][\w@$%?]*(?:::[\w@$%?]+)*)(?:(?<colon>::?)|(?<equate>\s*(?:==?|\.equ\b|\.set\b|EQU\b))|\s|$)")]
     private static partial Regex TextDefinition();
+
+    [GeneratedRegex(@"^[ \t]*(?:[A-Za-z_@][\w@]*::?[ \t]*)?\.proc[ \t]+(?<name>[A-Za-z_]\w*)(?=[ \t]*(?:;|$))", RegexOptions.IgnoreCase)]
+    private static partial Regex ProcedureDefinition();
 
     [GeneratedRegex(
         @"^(?:\s*\.(?:macro|define)\s+(?<native>[A-Za-z_@.][\w@.]*)|(?<merlin>[A-Za-z_]\w*)\s+MAC\b|\s*DEFINE\s+(?<macro10>[A-Za-z$%.][\w$%.]*))",

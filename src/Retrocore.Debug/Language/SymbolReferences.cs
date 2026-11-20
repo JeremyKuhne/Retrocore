@@ -133,13 +133,14 @@ internal static partial class SymbolReferences
         string token,
         IReadOnlyList<SymbolSite> targets)
     {
-        IReadOnlyList<SymbolSite> sites = analysis.Find(token);
+        bool macro10 = analysis.UsesMacro10(where.Path);
+        IReadOnlyList<SymbolSite> sites = analysis.Find(token, macro10);
         if (sites.Count == 0 && SourceText.LocalDefinition(lines, token, where.Line) is { } local)
         {
             sites = [local with { Path = where.Path }];
         }
 
-        if (sites.Count == 0) { sites = [.. sdk.SelectMany(source => source.Find(token)).Take(1)]; }
+        if (sites.Count == 0) { sites = [.. sdk.SelectMany(source => source.Find(token, macro10)).Take(1)]; }
         return sites.Any(site => targets.Any(target => Same(site.Path, target.Path) && site.Line == target.Line));
     }
 

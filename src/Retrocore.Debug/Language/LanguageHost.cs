@@ -244,7 +244,9 @@ internal static class LanguageHost
             return [];
         }
 
-        if (workspace.AnalysisOf(path)?.Find(word.Word) is { Count: > 0 } sites) { return sites; }
+        SourceAnalysis? analysis = workspace.AnalysisOf(path);
+        bool macro10 = analysis?.UsesMacro10(path) == true;
+        if (analysis?.Find(word.Word, macro10) is { Count: > 0 } sites) { return sites; }
 
         // A local label: the nearest line in this file that defines it.
         if (SourceText.LocalDefinition(lines, word.Word, position.Line) is { } local)
@@ -253,6 +255,6 @@ internal static class LanguageHost
         }
 
         // A name the SDK's ROM sources define.
-        return [.. workspace.SdkAnalyses().SelectMany(analysis => analysis.Find(word.Word)).Take(1)];
+        return [.. workspace.SdkAnalyses().SelectMany(source => source.Find(word.Word, macro10)).Take(1)];
     }
 }

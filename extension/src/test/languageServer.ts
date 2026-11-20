@@ -124,6 +124,65 @@ export async function testLanguageServer(root: string): Promise<void> {
     const homes = cout.filter(symbol => symbol.name === "COUT").map(symbol => path.basename(symbol.location.uri.fsPath));
     assert.ok(homes.includes("Monitor.asm"), homes.join(", "));
 
+    await until("AppleSoft symbols", async () => {
+        const found = await vscode.commands.executeCommand<vscode.SymbolInformation[]>("vscode.executeWorkspaceSymbolProvider", "INVERS");
+        return found.some(symbol => symbol.name === "INVERS" && path.basename(symbol.location.uri.fsPath) === "applesoft.mac")
+            ? found : undefined;
+    });
+
+    // A companion linker configuration supplies the included procedure's address and documentation.
+    const configured = path.join(folder, "configured");
+    fs.mkdirSync(configured, { recursive: true });
+    const configuredRoot = path.join(configured, "system.asm");
+    const configuredBios = path.join(configured, "Bios.asm");
+    fs.writeFileSync(configuredRoot, ".section HIGH\n.include \"Bios.asm\"\n    jsr InverseCapitalsOn\n");
+    fs.writeFileSync(path.join(configured, "system.cfg"),
+        "MEMORY { HIGH: start = $FE00, size = $0200, file = %O; }\nSEGMENTS { HIGH: load = HIGH, type = ro; }\n");
+    fs.writeFileSync(configuredBios, ";; Shows capitals inverse.\n.proc InverseCapitalsOn\n    rts\n.endproc\n");
+    const bios = await vscode.workspace.openTextDocument(vscode.Uri.file(configuredBios));
+    await vscode.window.showTextDocument(bios);
+    const procedure = new vscode.Position(1, bios.lineAt(1).text.indexOf("InverseCapitalsOn") + 1);
+    const procedureHover = await until("configured procedure hover", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", bios.uri, procedure);
+        return found.find(item => text(item).includes("(label) InverseCapitalsOn = $FE00"));
+    });
+    assert.match(text(procedureHover), /Shows capitals inverse/);
+    const procedureDefinitions = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeDefinitionProvider", bios.uri, procedure);
+    assert.equal(procedureDefinitions[0].uri.fsPath, configuredBios);
+    assert.equal(procedureDefinitions[0].range.start.line, 1);
+    assert.equal(procedureDefinitions[0].range.start.character, 6);
+    assert.equal(procedureDefinitions[0].range.end.character, 6 + "InverseCapitalsOn".length);
+
+    // An assembly with errors still finds its procedure; an unrelated native name cannot resolve to INVERS.
+    const broken = path.join(folder, "broken");
+    fs.mkdirSync(broken, { recursive: true });
+    const brokenRoot = path.join(broken, "system.asm");
+    const brokenBios = path.join(broken, "Bios.asm");
+    fs.writeFileSync(brokenRoot, ".org $6000\n.include \"Bios.asm\"\n    jsr InverseCapitalsMissing\n");
+    fs.writeFileSync(brokenBios, ";; Shows capitals inverse.\n.proc InverseCapitalsOn\n    rts\n.endproc\n");
+    const brokenDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(brokenRoot));
+    await vscode.window.showTextDocument(brokenDocument);
+    await until("broken assembly diagnostics", () => {
+        const found = vscode.languages.getDiagnostics(brokenDocument.uri);
+        return found.some(diagnostic => diagnostic.message.includes("InverseCapitalsMissing")) ? found : undefined;
+    });
+    const missing = new vscode.Position(2, brokenDocument.lineAt(2).text.indexOf("InverseCapitalsMissing") + 1);
+    const missingDefinitions = await vscode.commands.executeCommand<vscode.Location[]>("vscode.executeDefinitionProvider", brokenDocument.uri, missing);
+    assert.deepEqual(missingDefinitions, [], "A native name must not resolve to the SDK's six-character INVERS.");
+
+    const brokenBiosDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(brokenBios));
+    await vscode.window.showTextDocument(brokenBiosDocument);
+    const brokenProcedure = new vscode.Position(1, brokenBiosDocument.lineAt(1).text.indexOf("InverseCapitalsOn") + 1);
+    const brokenHover = await until("procedure hover after an error", async () => {
+        const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", brokenBiosDocument.uri, brokenProcedure);
+        return found.find(item => text(item).includes("(label) InverseCapitalsOn"));
+    });
+    assert.match(text(brokenHover), /Shows capitals inverse/);
+    const brokenDefinitions = await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider", brokenBiosDocument.uri, brokenProcedure);
+    assert.equal(brokenDefinitions[0].uri.fsPath, brokenBios);
+    assert.equal(brokenDefinitions[0].range.start.character, 6);
+
     // MACRO-10 sources are a language of their own, for their own icon, and the server serves them as assembly.
     const overlayPath = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", "AppleSoft", "applesoft.mac");
     const overlay = await vscode.workspace.openTextDocument(vscode.Uri.file(overlayPath));

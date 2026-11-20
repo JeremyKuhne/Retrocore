@@ -365,6 +365,27 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  The Woz Monitor's output procedures keep the contracts their <c>.proc</c> comments promise, and GETLINE, the
+    ///  command loop's warm entry inside RESET, keeps its name at $FF1F.
+    /// </summary>
+    [TestMethod]
+    public void WozMonitorProceduresKeepTheirContracts()
+    {
+        AssemblyResult monitor = Apple1SdkModules.AssembleMonitor(Path.Join(s_inputs, "Apple1", "WozMonitor.asm"));
+        monitor.Symbols["GETLINE"].Should().Be(0xFF1F);
+        monitor.Symbols["RESET::GETLINE"].Should().Be(0xFF1F);
+
+        SourceMapModule module = new(monitor, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        contracts[(ushort)monitor.Symbols["PRBYTE"]].Registers.Should().BeEquivalentTo(["X", "Y"]);
+        contracts[(ushort)monitor.Symbols["PRHEX"]].Registers.Should().BeEquivalentTo(["X", "Y"]);
+        contracts[(ushort)monitor.Symbols["ECHO"]].Registers.Should().BeEquivalentTo(["A", "X", "Y"]);
+    }
+
+    /// <summary>
     ///  The Color Computer's ROM sources pass the lint as the editor runs it, 6809 registers and flags included.
     /// </summary>
     [TestMethod]

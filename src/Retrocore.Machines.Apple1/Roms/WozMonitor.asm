@@ -20,8 +20,9 @@
 ;; 7 set. Characters go out through port B (DSP); bit 7 of DSP reads 1 while the terminal is still taking the
 ;; last one, which can be up to a frame, 1/60 s.
 ;;
-;; Names are Wozniak's, from the listing in the Apple-1 Operation Manual. Maintained by hand; Apple1RomTests
-;; pins the build's digest.
+;; Names are Wozniak's, from the listing in the Apple-1 Operation Manual. The command loop is one procedure,
+;; RESET, and its labels are its own; the names programs use are RESET, GETLINE (the loop's warm entry, $FF1F),
+;; PRBYTE, PRHEX and ECHO. Maintained by hand; Apple1RomTests pins the build's digest.
 
 .cpu Mos6502
 
@@ -91,8 +92,10 @@ IRQ_HANDLER = $0000
 ;; Resets the machine: sets up the PIA and starts the command line.
 ;;
 ;; Port B's bits 0-6 become outputs to the terminal and bit 7 an input from it. Both ports take their keys and
-;; acknowledgements on the rising edge of CA1 and CB1, and CB2 strobes the terminal on each write.
-RESET:
+;; acknowledgements on the rising edge of CA1 and CB1, and CB2 strobes the terminal on each write. The setup
+;; then runs on into the line editor: A = $A7 is neither key NOTCR looks for, and Y = $7F passes 127 keys, so
+;; it drops to ESCAPE and starts a line after a backslash.
+.proc RESET
     CLD                             ; binary arithmetic
     CLI
     LDY #%01111111                  ; DSP bits 0-6 are outputs
@@ -100,6 +103,7 @@ RESET:
     LDA #%10100111                  ; CA1/CB1 rising edges; CB2 strobes writes; select the data registers
     STA KBDCR
     STA DSPCR
+
 ; A typed key that is not Return. Y = its place in the line.
 NOTCR:
     CMP #'_'                        ; the back arrow
@@ -196,7 +200,7 @@ NOTHEX:
 TONEXTITEM:
     JMP NEXTITEM
 
-;; Runs the program at the last address examined.
+; R: runs the program at the last address examined.
 RUN:
     JMP (XAML)
 
@@ -242,40 +246,49 @@ MOD8CHK:
     LDA XAML
     AND #7                          ; a new line every eight bytes
     BPL NXTPRNT                     ; always
+.endproc
+
+;; Inherit: <RESET::GETLINE>
+GETLINE = RESET::GETLINE
 
 ;; Shows a byte as two hex digits.
 ;;
 ;; In: A = the byte
 ;; Uses: A
 ;; Keeps: X, Y
-PRBYTE:
+.proc PRBYTE
     PHA
     LSR
     LSR
     LSR
     LSR
     JSR PRHEX                       ; the high digit
-    PLA
+    PLA                             ; falls into PRHEX for the low digit
+.endproc
+
 ;; Shows the low four bits of a byte as a hex digit.
 ;;
 ;; In: A = the digit, in bits 0-3
 ;; Uses: A
 ;; Keeps: X, Y
-PRHEX:
+.proc PRHEX
     AND #$0F
     ORA #'0'
     CMP #'9'+1
     BCC ECHO
-    ADC #6                          ; "A"-"F" (carry set)
+    ADC #6                          ; "A"-"F" (carry set); falls into ECHO
+.endproc
+
 ;; Sends a character to the terminal, waiting until it is ready for one.
 ;;
 ;; In: A = the character, bit 7 set
 ;; Keeps: A, X, Y
-ECHO:
+.proc ECHO
     BIT DSP
     BMI ECHO                        ; until the terminal takes the last character
     STA DSP
     RTS
+.endproc
 
     .word $0000                     ; unused
     .assert * = $FFFA, "The Monitor ends at the 6502's vectors."

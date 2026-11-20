@@ -62,7 +62,8 @@ documented is also a lint error.
 | `.macro NAME params` | Macro | Parameter list |
 | `.enum`, `.struct`, `.union` | Enum, Struct | Members and their values or offsets |
 | A member of a `.struct`, `.union` or `.enum` | Member | Its offset or value, named as the assembler names it (`Iob::COMMAND`) |
-| `.scope`, `.proc` | Scope | Members |
+| `.proc NAME` | Routine, or Table when data follows, as for a label | As for a label |
+| `.scope` | Scope | Members |
 | `.define NAME` | Definition | Parameter list |
 
 Rules:

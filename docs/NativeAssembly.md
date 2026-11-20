@@ -43,7 +43,9 @@ Native is the default. A file's first line can name its dialect explicitly:
 ; retrocore: dialect=native
 ```
 
-The other values are `ca65`, `merlin` and `macro10`. An `.include` can also name the dialect of the file it
+The other values are `ca65`, `merlin` and `macro10`. The same line can also opt the file in to the
+[style guide's](AssemblyStyle.md) checks with `style=strict`, alone or after the dialect:
+`; retrocore: dialect=native style=strict`. An `.include` can also name the dialect of the file it
 includes (see [Includes](#includes)). In VS Code, a file whose language is `retrocore-asm` is native unless its
 first line says otherwise.
 

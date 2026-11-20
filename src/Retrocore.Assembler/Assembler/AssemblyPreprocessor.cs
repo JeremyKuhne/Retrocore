@@ -95,7 +95,13 @@ internal sealed partial class AssemblyPreprocessor
             ReadOnlySpan<char> first = source.Text;
             int end = first.IndexOfAny('\r', '\n');
             first = (end < 0 ? first : first[..end]).Trim();
-            return !string.Equals(PragmaValue(source.Text, "dialect"), "native", StringComparison.OrdinalIgnoreCase);
+
+            // A pragma that only opts in to the style checks selects no dialect.
+            string? dialect = PragmaValue(source.Text, "dialect");
+            if (dialect is not null || PragmaValue(source.Text, "style") is null)
+            {
+                return !string.Equals(dialect, "native", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         return (source.Dialect ?? options?.Dialect ?? AssemblyDialect.Native) != AssemblyDialect.Native;
@@ -235,6 +241,11 @@ internal sealed partial class AssemblyPreprocessor
         ReadOnlySpan<char> first = source.Text;
         int end = first.IndexOfAny('\r', '\n');
         first = (end < 0 ? first : first[..end]).Trim();
+        if (PragmaValue(source.Text, "dialect") is null && PragmaValue(source.Text, "style") is not null)
+        {
+            return null;
+        }
+
         if (PragmaValue(source.Text, "dialect") is { } name
             && Enum.TryParse(name, ignoreCase: true, out AssemblyDialect dialect)
             && Enum.IsDefined(dialect))

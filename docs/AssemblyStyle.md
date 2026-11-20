@@ -5,7 +5,29 @@ hand. The goal is source a person can read, debug and change: structure that sho
 say what things are, and documentation the tools can check.
 
 [NativeAssembly.md](NativeAssembly.md) is the dialect and [DocComments.md](DocComments.md) the `;;` format. This
-guide is how to use them. Every `asm` example here assembles and passes the editor's lint (`NativeAssemblyDocsTests`
+guide is how to use them.
+
+## Checking a source
+
+A source opts in to the style checks with a pragma on its first line:
+
+```text
+; retrocore: style=strict
+```
+
+The editor's lint then reports, as warnings, what can be checked mechanically:
+
+- a trailing `;;` comment;
+- a label sharing its line with code;
+- a name that is only an address (`L_F8C2`, `SUB_D253`);
+- definitions, labels and block directives not at column 0, and instructions and data not four spaces in;
+- a comment not indented like the code it describes;
+- a macro body not indented one level in, with a `.repeat` or `.if` body one more;
+- prose in a `;;` comment that names a documented definition without linking it;
+- non-ASCII characters, and lines over 120 columns.
+
+The rest of this guide (what to name things, what deserves a constant, what a comment should say) is for the
+author and the reviewer. The pragma changes nothing the source assembles to. Every `asm` example here assembles and passes the editor's lint (`NativeAssemblyDocsTests`
 checks both).
 
 ## A routine, in full

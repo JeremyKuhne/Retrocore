@@ -13,4 +13,10 @@ namespace Retrocore.Documentation;
 public sealed record DocumentationFile(
     string Path,
     IReadOnlyList<DocumentationComment> Comments,
-    IReadOnlyList<DocumentationDiagnostic> Diagnostics);
+    IReadOnlyList<DocumentationDiagnostic> Diagnostics)
+{
+    /// <summary>
+    ///  Gets whether the file opts in to the style guide's checks (<c>; retrocore: style=strict</c>).
+    /// </summary>
+    public bool Strict { get; init; }
+}

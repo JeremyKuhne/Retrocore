@@ -83,7 +83,8 @@ For a disassembly, an old-style SDK source, or anything maintained by hand that 
 3. **Work out each fact from the code:** what a value means before naming it, what a routine keeps by reading
    it and everything it calls, what a comment claims. A doubt stays in the comment, saying what is uncertain
    and why.
-4. **Run the lint** (`SdkDocumentationTests`, or the editor) before finishing, and fix every problem.
+4. **Put `; retrocore: style=strict` on the first line** of each converted file, so the lint checks the
+   style, and **run the lint** (`SdkDocumentationTests`, or the editor) before finishing. Fix every problem.
 5. **Splitting the work** across several people or agents: give each its own files and copy of the source,
    and have each record the names it changes that other files use (`{"Old": "New::Name"}`). Apply each one's
    renames only to the others' files, never back to its own, then assemble and lint the whole.

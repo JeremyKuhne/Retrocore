@@ -26,6 +26,15 @@ public sealed partial class BasicProgram
         ("RUN", false, false)
     ];
 
+    // BBC BASIC's words that take a line: the others', with DELETE's and LIST's range a comma between two (DELETE 10,
+    // last), and TRACE, whose limit is a line number, kept as one. RUN takes none in BASIC II.
+    private static readonly (string Word, bool List, bool Required)[] s_bbcJumps =
+    [
+        .. s_jumps.Where(jump => jump.Word != "RUN")
+            .Select(jump => jump.Word is "DELETE" or "LIST" ? (jump.Word, true, false) : jump),
+        ("TRACE", false, false)
+    ];
+
     /// <summary>
     ///  Finds where a statement line names a label in place of a line number.
     /// </summary>
@@ -52,6 +61,15 @@ public sealed partial class BasicProgram
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(labels);
         List<(int, int, string, bool, string)> references = [];
+
+        // BBC BASIC's jumps are where its tokeniser finds them, as the ROM's does: abbreviations such as G., words run
+        // together as in IF1THEN, and none in a * command, REM, DATA or string.
+        if (dialect is BbcBasicDialect)
+        {
+            BbcReferences(text, labels, references);
+            return Defined(references, labels);
+        }
+
         bool inString = false;
         for (int index = 0; index < text.Length; index++)
         {
@@ -120,18 +138,71 @@ public sealed partial class BasicProgram
             index = Targets(text, after, jump, labels, references) - 1;
         }
 
-        // Integer BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only when one of
-        // that name is defined.
-        if (dialect is IntegerBasicDialect)
+        return dialect is IntegerBasicDialect ? Defined(references, labels) : references;
+    }
+
+    // Integer BASIC's and BBC BASIC's GOTO and GOSUB take any expression, such as GOSUB T, so a name is a label only
+    // when one of that name is defined.
+    private static List<(int, int, string, bool, string)> Defined(
+        List<(int, int, string, bool, string)> references,
+        IReadOnlyDictionary<string, BasicLabel> labels)
+    {
+        references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
+        for (int index = 0; index < references.Count; index++)
         {
-            references.RemoveAll(reference => !labels.ContainsKey(reference.Item3));
-            for (int index = 0; index < references.Count; index++)
-            {
-                references[index] = references[index] with { Item4 = false };
-            }
+            references[index] = references[index] with { Item4 = false };
         }
 
         return references;
+    }
+
+    // The labels after each of BBC BASIC's jump tokens, found by its tokeniser with each byte's place in the text.
+    private static void BbcReferences(
+        string text,
+        IReadOnlyDictionary<string, BasicLabel> labels,
+        List<(int, int, string, bool, string)> references)
+    {
+        List<int> columns = [];
+        CrunchOutput output;
+        try
+        {
+            output = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text, columns, zero: true));
+        }
+        catch (FormatException)
+        {
+            return;
+        }
+
+        byte[] bytes = output.ToArray();
+        IReadOnlyList<int> positions = output.Positions;
+        int Column(int index) =>
+            index < positions.Count && positions[index] < columns.Count ? columns[positions[index]] : text.Length;
+
+        // Nothing the tokeniser copied as it is, after REM, DATA or a * command, holds a jump, whatever its bytes.
+        int tokenised = output.Rest >= 0 ? output.Rest : bytes.Length;
+        bool inString = false;
+        int scanned = 0;
+        for (int index = 0; index < tokenised; index++)
+        {
+            if (bytes[index] == '"') { inString = !inString; }
+            if (inString || bytes[index] < 0x80 || BbcBasicDialect.Instance.Word(bytes[index]) is not { } word)
+            {
+                continue;
+            }
+
+            int jump = Array.FindIndex(s_bbcJumps, candidate => candidate.Word == word);
+            if (jump < 0 || Column(index) < scanned) { continue; }
+            int found = references.Count;
+            scanned = Targets(text, Column(index + 1), s_bbcJumps[jump], labels, references, bbc: true);
+
+            // A label is a whole name: target% and target$ are other variables, and target( an array, so GOTO target%
+            // is a computed jump.
+            for (int reference = references.Count - 1; reference >= found; reference--)
+            {
+                int end = references[reference].Item2;
+                if (end < text.Length && "%$`(".Contains(text[end])) { references.RemoveAt(reference); }
+            }
+        }
     }
 
     /// <summary>
@@ -226,17 +297,24 @@ public sealed partial class BasicProgram
         int at,
         (string Word, bool List, bool Required) jump,
         IReadOnlyDictionary<string, BasicLabel> labels,
-        List<(int, int, string, bool, string)> references)
+        List<(int, int, string, bool, string)> references,
+        bool bbc = false)
     {
         while (true)
         {
             at = SkipSpaces(text, at);
             if (Name().Match(text, at) is { Success: true } name && name.Index == at)
             {
-                string label = name.Groups["name"].Value.ToUpperInvariant();
+                // BBC BASIC's labels are case-sensitive, as its names are.
+                string label = bbc ? name.Groups["name"].Value : name.Groups["name"].Value.ToUpperInvariant();
                 int end = at + name.Length;
                 int next = SkipSpaces(text, end);
-                bool alone = next >= text.Length || text[next] == ':' || StartsWord(text, next, "ELSE");
+                bool alone = next >= text.Length
+                    || text[next] == ':'
+                    || StartsWord(text, next, "ELSE")
+                    || (bbc && BbcWordAt(text, next) is "ELSE" or "REM")
+                    || (jump.List && text[next] == ',');
+
                 if (!jump.Required && !(labels.ContainsKey(label) && alone))
                 {
                     // Not a label, such as GOTO in THEN GOTO: the scan goes on from the word itself.
@@ -254,6 +332,38 @@ public sealed partial class BasicProgram
             int separator = SkipSpaces(text, at);
             if (!jump.List || separator >= text.Length || text[separator] != ',') { return at; }
             at = separator + 1;
+        }
+    }
+
+    // The word BBC BASIC's tokeniser makes of the text at a column, abbreviated or not (EL. is ELSE), or null.
+    private static string? BbcWordAt(string text, int at)
+    {
+        try
+        {
+            byte[] bytes = BbcBasicDialect.Instance.Crunch(BasicText.Parse(text[at..], [], zero: true)).ToArray();
+            return bytes.Length != 0 && bytes[0] >= 0x80 ? BbcBasicDialect.Instance.Word(bytes[0]) : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///  Gets whether BBC BASIC's tokeniser finds a word in a name, as it finds PRINT in PRINTX and PROC in PROCinit, so
+    ///  that a line of the name and a colon is a statement, not a label.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>Whether the tokeniser makes a token of any of it.</returns>
+    internal static bool BbcTokenises(string name)
+    {
+        try
+        {
+            return BbcBasicDialect.Instance.Crunch(BasicText.Parse(name, [], zero: true)).ToArray().Any(value => value >= 0x80);
+        }
+        catch (FormatException)
+        {
+            return true;
         }
     }
 
@@ -288,6 +398,7 @@ public sealed partial class BasicProgram
         int end = index + word.Length;
         return end >= text.Length || !InName(text[end], periods: true);
     }
+
 
     private static bool StartsWord(string text, int index, string word, bool spaced = false)
     {

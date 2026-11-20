@@ -72,6 +72,7 @@ public sealed partial class BasicVariables
     {
         if (IntegerBasic) { return IntegerSimple(); }
         if (BusinessBasic) { return BusinessSimple(); }
+        if (Bbc) { return BbcSimple(); }
         List<BasicVariable> variables = [];
         int at = Word(Pointers.Variables);
         int end = Word(Pointers.Arrays);
@@ -118,6 +119,7 @@ public sealed partial class BasicVariables
     {
         if (IntegerBasic) { return IntegerArrays(); }
         if (BusinessBasic) { return BusinessArrays(); }
+        if (Bbc) { return BbcArrays(); }
         List<BasicArray> arrays = [];
         int at = Word(Pointers.Arrays);
         int end = Word(Pointers.FreeStart);
@@ -180,6 +182,7 @@ public sealed partial class BasicVariables
     {
         if (IntegerBasic) { return IntegerRead(kind, address); }
         if (BusinessBasic) { return BusinessRead(kind, address); }
+        if (Bbc) { return BbcRead(kind, address); }
         switch (kind)
         {
             case BasicVariableKind.String:
@@ -226,6 +229,12 @@ public sealed partial class BasicVariables
         if (BusinessBasic)
         {
             BusinessWrite(kind, address, value);
+            return;
+        }
+
+        if (Bbc)
+        {
+            BbcWrite(kind, address, value);
             return;
         }
 
@@ -276,6 +285,8 @@ public sealed partial class BasicVariables
             return Simple().FirstOrDefault(variable => variable.Name == full && variable.Kind != BasicVariableKind.Function);
         }
 
+        if (Bbc) { return BbcFind(name); }
+
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
         return Simple().FirstOrDefault(variable => variable.Kind == kind && variable.Name == stored);
@@ -301,6 +312,8 @@ public sealed partial class BasicVariables
             return Arrays().FirstOrDefault(array => array.Name == full);
         }
 
+        if (Bbc) { return Arrays().FirstOrDefault(array => array.Name == name); }
+
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
         return Arrays().FirstOrDefault(array => array.Kind == kind && array.Name == stored);
@@ -318,6 +331,7 @@ public sealed partial class BasicVariables
         if (Find(name) is { } existing) { return existing; }
         if (IntegerBasic) { return IntegerCreate(name); }
         if (BusinessBasic) { return BusinessCreate(name); }
+        if (Bbc) { return BbcCreate(name); }
         (char first, char second, BasicVariableKind kind) = Parse(name);
         byte[] rest = Mbasic ? MbasicRest(name) : [];
         int header = Mbasic ? 4 + rest.Length : LevelTwo ? 3 : 2;
@@ -366,6 +380,7 @@ public sealed partial class BasicVariables
     {
         if (IntegerBasic) { return IntegerLoops(); }
         if (BusinessBasic) { return BusinessLoops(stack, forSize, gosubSize); }
+        if (Bbc) { return BbcLoops(); }
         List<BasicLoop> loops = [];
         int forToken = _dialect.StackForToken;
         int gosubToken = _dialect.StackGosubToken;
@@ -400,6 +415,7 @@ public sealed partial class BasicVariables
     /// <returns>The size.</returns>
     public int ValueSize(BasicVariableKind kind) => kind switch
     {
+        BasicVariableKind.Integer or BasicVariableKind.String when Bbc => 4,
         BasicVariableKind.Integer => 2,
         BasicVariableKind.String => ColorBasic ? 5 : 3,
         BasicVariableKind.Single => 4,

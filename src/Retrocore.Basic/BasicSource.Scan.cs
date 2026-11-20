@@ -131,7 +131,7 @@ public sealed partial class BasicSource
         CrunchOutput output;
         try
         {
-            output = dialect.Crunch(BasicText.Parse(resolved, []));
+            output = dialect.Crunch(BasicText.Parse(resolved, [], dialect.LinesHoldZero));
         }
         catch (FormatException)
         {
@@ -168,7 +168,7 @@ public sealed partial class BasicSource
         CrunchOutput output;
         try
         {
-            output = dialect.Crunch(BasicText.Parse(statements, columns));
+            output = dialect.Crunch(BasicText.Parse(statements, columns, dialect.LinesHoldZero));
         }
         catch (FormatException)
         {

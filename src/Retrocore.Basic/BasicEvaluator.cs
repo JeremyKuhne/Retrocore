@@ -93,6 +93,11 @@ public sealed partial class BasicEvaluator
             return new BusinessBasicExpression(_variables).Evaluate(expression);
         }
 
+        if (_dialect is BbcBasicDialect)
+        {
+            return new BbcBasicExpression(_variables, _memory, _functions).Evaluate(expression);
+        }
+
         string trimmed = expression.Trim();
         if ((Mbasic ? MbasicBareName() : BareName()).IsMatch(trimmed)) { return Variable(trimmed, subscripts: null); }
         byte[] saved = _bytes;
@@ -122,6 +127,25 @@ public sealed partial class BasicEvaluator
         result.Value.IsString ? result.Value.Text?.Length > 0 : result.Value.Number != 0;
 
     /// <summary>
+    ///  Tests whether a result is true as a dialect's IF tests it: BBC BASIC's IF takes a number as a 32-bit integer,
+    ///  so 0.5 is false, and takes no string; the others as <see cref="IsTrue(BasicResult)"/>.
+    /// </summary>
+    /// <param name="result">The result.</param>
+    /// <param name="dialect">The dialect.</param>
+    /// <returns>Whether it is true.</returns>
+    /// <exception cref="FormatException">BBC BASIC, and the result is a string or too big for an integer.</exception>
+    public static bool IsTrue(BasicResult result, BasicDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        if (dialect is not BbcBasicDialect) { return IsTrue(result); }
+        if (result.Value.IsString) { throw new FormatException("Type mismatch: a condition is a number."); }
+        // An integer is true when not zero; a real is made one first, which refuses one of 2^31 or more in size.
+        if (result.Value.Long is long integer) { return integer != 0; }
+        double real = result.Value.Number;
+        return Math.Abs(real) < BbcBasicExpression.TwoToThe31 ? Math.Truncate(real) != 0 : throw new FormatException("Too big.");
+    }
+
+    /// <summary>
     ///  Writes a result as PRINT would, without a positive number's leading space; a string is quoted.
     /// </summary>
     /// <param name="result">The result.</param>
@@ -137,6 +161,7 @@ public sealed partial class BasicEvaluator
             return builder.Append('"').ToString();
         }
 
+        if (_dialect is BbcBasicDialect) { return BbcBasicExpression.Format(result.Value.Number); }
         return BasicNumbers.Format(result.Value.Number, LevelTwo || Mbasic ? (result.Double ? 16 : 6) : 9);
     }
 

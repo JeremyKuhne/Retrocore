@@ -34,7 +34,7 @@ internal static partial class BasicFeatures
             BasicSiteKind.LineReference => source.LineNumbered(site.Number) is { } target
                 ? $"```\n{source.Lines[target.Line].Trim()}\n```"
                 : $"There is no line {site.Number}.",
-            _ => Name(source, site)
+            _ => source.Summary(site)
         };
 
         return text is null ? null : new Hover
@@ -263,24 +263,6 @@ internal static partial class BasicFeatures
     // Such as "2 GOSUB, 1 GOTO".
     private static string Counts(string[] uses) =>
         string.Join(", ", uses.GroupBy(use => use).Select(group => $"{group.Count()} {group.Key}"));
-
-    // A variable or function: its type, what BASIC calls it, and its other spellings in the program.
-    private static string Name(BasicSource source, BasicSite site)
-    {
-        string kind = BasicSource.Describe(site, source.Dialect);
-        string stored = site.Key.TrimEnd('(');
-        string[] spellings = [.. source.References(site).Select(other => other.Name).Distinct(StringComparer.Ordinal)];
-        string article = kind[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an" : "a";
-        string text = site.Kind == BasicSiteKind.Function ? $"**FN {site.Name}**: a function" : $"**{site.Name}**: {article} {kind}";
-        if (site.Name != stored || spellings.Length > 1)
-        {
-            text += $". BASIC keeps only the first two characters and the type, so it is **{stored}**";
-            string[] others = [.. spellings.Where(name => name != site.Name)];
-            if (others.Length > 0) { text += $"; the program also writes it as {string.Join(", ", others)}"; }
-        }
-
-        return text + ".";
-    }
 
     // Whether a function site is the one DEF FN names.
     private static bool Defines(BasicSource source, BasicSite site)

@@ -33,7 +33,8 @@ public abstract partial class BasicDialect
         BusinessBasicDialect.Instance,
         ColorBasicDialect.Disk,
         MbasicDialect.Instance,
-        PetBasicDialect.Basic4
+        PetBasicDialect.Basic4,
+        BbcBasicDialect.Instance
     ];
 
     /// <summary>
@@ -61,6 +62,11 @@ public abstract partial class BasicDialect
     ///  Gets Apple Business BASIC 1.23, the Apple III's.
     /// </summary>
     public static BasicDialect BusinessBasic => BusinessBasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets BBC BASIC II, the BBC Micro's.
+    /// </summary>
+    public static BasicDialect BbcBasic => BbcBasicDialect.Instance;
 
     /// <summary>
     ///  Gets Apple-1 BASIC, the first form of Integer BASIC.
@@ -182,6 +188,12 @@ public abstract partial class BasicDialect
     internal virtual int LineOverhead => 5;
 
     /// <summary>
+    ///  Gets whether a line can hold a zero byte, as one ended by its length and a carriage return can; a line a zero
+    ///  ends cannot.
+    /// </summary>
+    internal virtual bool LinesHoldZero => false;
+
+    /// <summary>
     ///  Gets the REM token.
     /// </summary>
     internal abstract byte RemToken { get; }
@@ -272,7 +284,7 @@ public abstract partial class BasicDialect
     public virtual byte[] Tokenize(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return Crunch(BasicText.Parse(text)).ToArray();
+        return Crunch(BasicText.Parse(text, zero: LinesHoldZero)).ToArray();
     }
 
     /// <summary>
@@ -323,16 +335,23 @@ public abstract partial class BasicDialect
     }
 
     /// <summary>
-    ///  Formats a stored line the way the text form writes it: its number, a space and its statements.
+    ///  Formats a stored line the way the text form writes it: its number, a space and its statements; in BBC BASIC,
+    ///  which keeps the spaces after the number, its number and its text.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The text.</returns>
-    public string FormatLine(BasicLine line) => $"{line.Number} {Detokenize(line.Tokens.Span)}";
+    public string FormatLine(BasicLine line) => $"{line.Number}{LineNumberSeparator}{Detokenize(line.Tokens.Span)}";
+
+    /// <summary>
+    ///  Gets what the text form puts between a line's number and its statements: a space, or nothing in a dialect
+    ///  that keeps the spaces typed after the number in the line.
+    /// </summary>
+    internal virtual string LineNumberSeparator => " ";
 
     /// <summary>
     ///  Tokenizes text units as the ROM's <c>CRUNCH</c> does.
     /// </summary>
-    /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int})"/> gives them.</param>
+    /// <param name="text">The units, as <see cref="BasicText.Parse(string, List{int}, bool)"/> gives them.</param>
     /// <returns>The stored bytes, without the zero that ends the line, with the unit each came from.</returns>
     internal abstract CrunchOutput Crunch(ReadOnlySpan<int> text);
 

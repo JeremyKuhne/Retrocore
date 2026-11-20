@@ -192,6 +192,7 @@ public sealed class BasicSourceTests
     [DataRow("integer")]
     [DataRow("business")]
     [DataRow("colorbasic")]
+    [DataRow("bbcbasic")]
     [DataRow("mbasic")]
     public void EveryKeywordHasHelp(string name)
     {

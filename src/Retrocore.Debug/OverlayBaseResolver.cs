@@ -13,9 +13,9 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The PET's overlays name <c>m6502.asm</c> beside AppleSoft's in the repository. In the SDK the host ships, the
-///   sources sit under <c>Sdk/Roms</c>, AppleSoft's in <c>AppleSoft</c>, so the name no longer leads there. Only the
-///   base falls back, by its file name: any other source not found stays not found.
+///   The AppleSoft and PET overlays name the base by its repository path. The SDK ships the base in
+///   <c>Sdk/Roms/Microsoft6502Basic</c>, so those paths no longer lead there. Only the base falls back, by its file
+///   name: any other source not found stays not found.
 ///  </para>
 /// </remarks>
 /// <param name="fallback">The folder holding <see cref="BaseName"/>.</param>
@@ -31,7 +31,7 @@ internal sealed class OverlayBaseResolver(string fallback) : IAssemblySourceReso
     /// <summary>
     ///  Gets the folder of the SDK the host ships that holds the base.
     /// </summary>
-    internal static string SdkFallback => Path.Join(SdkModules.SdkDirectory, "Roms", "AppleSoft");
+    internal static string SdkFallback => Path.Join(SdkModules.SdkDirectory, "Roms", "Microsoft6502Basic");
 
     /// <summary>
     ///  Gets the fallback path of a request for the base, or null for any other request.

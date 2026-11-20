@@ -55,6 +55,14 @@ public class SdkDocumentationTests
     {
         AssemblyResult result = SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), model);
         DocumentationSet basic = Set(result, "AppleSoft");
+        foreach (string name in (string[])
+            ["FADD", "NORMAL", "SHIFTR", "FONE", "LOGCN2", "LOG", "MULLN2", "FMULT", "FDIV", "MOVFM", "MOVMF", "ROUND", "SIGN", "FCOMP",
+             "QINT", "INT", "FIN", "FINEDG", "NZ9999", "FOUT", "FHALF", "FOUTBL", "SQR", "EXPCON", "EXP",
+             "POLY", "RND", "RMULZC", "SIN", "GFDIV", "SINCON", "ATN", "ATNCON"])
+        {
+            basic.Find(name).Should().NotBeNull($"the shared macro must retain {name}'s documentation");
+        }
+
         DocumentationResolver resolver = new(
             basic,
             Sets().Where(set => set.Module != "AppleSoft"),
@@ -289,14 +297,17 @@ public class SdkDocumentationTests
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
 
-    private static readonly string[] s_sdkFolders =["AppleSoft", "DiskII", "Dos", "IntegerBasic", "ProgrammersAid", "System"];
+    private static readonly string[] s_sdkFolders =
+        ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "Microsoft6502Basic", "ProgrammersAid", "System"];
 
     // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
-    // default module; the overlay is a mutually exclusive legacy source.
+    // default module; the overlay is a mutually exclusive MACRO-10 source.
     private static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
             .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))
+            .Where(root => !Path.GetFileName(root).StartsWith("MsBasic.", StringComparison.Ordinal))
+            .Where(root => !Path.GetFileName(root).Equals("m6502.asm", StringComparison.OrdinalIgnoreCase))
             .Append(Path.GetFullPath(Path.Join(roms, "Slot7.rom.asm")));
 
     // The lint's findings for one module, its links reaching the SDK's other modules as the editor's do.
@@ -478,6 +489,7 @@ public class SdkDocumentationTests
         AssemblyResult basic = SdkModules.AssembleAppleSoft(appleSoft, Apple2Model.IIeEnhanced);
         var appleSoftSources = Directory
             .GetFiles(Path.Join(s_inputs, "AppleSoft"), "AppleSoft*.asm")
+            .Concat(Directory.GetFiles(Path.Join(s_inputs, "Microsoft6502Basic"), "MsBasic*.asm"))
             .Select(path => DocumentationParser.Parse(File.ReadAllText(path), path));
 
         sets.Add(DocumentationSet.Create(appleSoftSources, basic, "AppleSoft"));

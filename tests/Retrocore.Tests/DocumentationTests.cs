@@ -67,6 +67,9 @@ public class DocumentationTests
             ;;
             ;; Notes:
             ;; Anything here.
+            ;;
+            ;; Also:
+            ;; AppleSoft: `NAME`, Apple II reference manual.
             GETLN:
                 rts
             """).Comments.Single();
@@ -77,6 +80,8 @@ public class DocumentationTests
         Required(comment.Section("Uses")).Items.Should().Equal("A", "Y");
         Required(comment.Section("Notes")).IsKnown.Should().BeFalse();
         Required(comment.Section("Notes")).Text.Should().Be("Anything here.");
+        Required(comment.Section("Also")).IsKnown.Should().BeFalse();
+        Required(comment.Section("Also")).Text.Should().Be("AppleSoft: `NAME`, Apple II reference manual.");
     }
 
     /// <summary>

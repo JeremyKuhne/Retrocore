@@ -146,8 +146,10 @@ Every ROM the PET runs is an SDK source, maintained by hand and byte-identical t
 | [`Basic4/Editor4.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic4/Editor4.asm), [`Basic4/Kernal4.asm`](../src/Retrocore.Machines.Commodore/Roms/Basic4/Kernal4.asm) | BASIC 4's screen editors, `BUSINESS` 0 for the graphics keyboard's 901447-29 and 1 for the business keyboard's 901474-02, and kernal (901465-22), whose jump table at `$FF93` leads to the disk commands. |
 | [`CharacterGenerator.asm`](../src/Retrocore.Machines.Commodore/Roms/CharacterGenerator.asm) | The character ROMs: `ORIGINAL` 1 for the 2001's 901447-08, 0 for the 2001-N's 901447-10. |
 
-**BASIC** is a MACRO-10 overlay on Microsoft's [`m6502.asm`](../src/Retrocore.Machines.Apple2/Roms/AppleSoft/m6502.asm),
-as AppleSoft's is. BASIC 2 is that source's own Commodore build (`REALIO` 3) with three changes: long error messages,
+**BASIC** is currently built from the PET MACRO-10 overlays on Microsoft's
+[`m6502.asm`](../src/Retrocore.Machines.Apple2/Roms/Microsoft6502Basic/m6502.asm). The shared native Microsoft source
+is being extracted; AppleSoft already selects its native listing by default and retains its overlay as an option.
+BASIC 2 is that source's own Commodore build (`REALIO` 3) with three changes: long error messages,
 a spare byte in NEWSTT, and PEEK reading BASIC's own ROM. BASIC 1 is an earlier Microsoft version: another page-zero
 layout, no GO or NULL keyword, the code from before the fixes in the source's change log, and Commodore's patches into
 the editor's chip. The revised first chip fixes STKINI, which in the original stored a return address before moving

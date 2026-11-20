@@ -13,9 +13,8 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   BASIC is a MACRO-10 overlay on Microsoft's <c>m6502.asm</c>, which lives with AppleSoft's overlay. In the
-///   repository the overlay names it by its path there; in the debug host's and the tests' copies of the sources it
-///   is in <c>AppleSoft</c> beside <c>Pet</c>, where the resolver finds it.
+///   BASIC is a MACRO-10 overlay on Microsoft's <c>m6502.asm</c>, which lives in the shared
+///   <c>Microsoft6502Basic</c> source folder.
 ///  </para>
 /// </remarks>
 internal static class PetSdkModules
@@ -97,7 +96,7 @@ internal static class PetSdkModules
         if (Version(model) != 2) { symbols["REVISD"] = original ? 0 : 1; }
         AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, 0x10000)
         {
-            SourceResolver = new OverlayBaseResolver(Path.Join(directory, "..", "AppleSoft")),
+            SourceResolver = new OverlayBaseResolver(Path.Join(directory, "..", "Microsoft6502Basic")),
             PredefinedSymbols = symbols
         };
 

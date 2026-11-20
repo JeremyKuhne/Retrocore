@@ -112,7 +112,8 @@ internal static partial class MachineSymbols
         "IIeEquates.asm" or "FirmwareEquates.asm" => 1,
         _ when file.StartsWith("Firmware", StringComparison.Ordinal) => 2,
         "m6502.asm" or "applesoft.mac" or "AppleSoft.asm" => 3,
-        _ when file.StartsWith("AppleSoft.", StringComparison.Ordinal) => 3,
+        _ when file.StartsWith("AppleSoft.", StringComparison.Ordinal)
+            || file.StartsWith("MsBasic.", StringComparison.Ordinal) => 3,
         _ => 4
     };
 

@@ -940,4 +940,52 @@ public sealed class BbcBasicDialectTests
 
         BbcBasicExpression.Format(89132.34994506836).Should().Be("89132.34994");
     }
+
+    /// <summary>
+    ///  Sums and differences come out bit for bit as ADD_FP_B_TO_FP_A's, which lines the smaller real up in 40 bits,
+    ///  dropping what falls below, and rounds once: 2147483649-(0.5+1/1048576) is 2147483649. A unary plus keeps its
+    ///  factor's type, so +N$ is N$, but takes no string literal, as it skips EVALUATE_FACTOR's test for one.
+    /// </summary>
+    [TestMethod]
+    public void SumsAsTheRomAlignsThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions =
+        [
+            "2147483649-(0.5+1/1048576)", "2147483649+(0.5+1/1048576)", "1+1/3E9", "1-1/3E9", "4294967295-1/7",
+            "-1E10+1/3", "PI-PI/1E9"
+        ];
+
+        BbcMachineTests.Type(machine, $"N$=\"ABCABC\":DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        evaluator.Evaluate("2147483649-(0.5+1/1048576)").Value.Number.Should().Be(2147483649);
+
+        BbcMachineTests.Type(machine, "CLS:PRINT LEN +N$;\"|\";LEN +(N$)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        BbcMachineTests.Type(machine, "PRINT +\"AB\"\r");
+        BbcMachineTests.RunToPrompt(machine);
+        string[] screen = [.. machine.ReadTextScreen().Select(line => line.Trim()).Where(line => line.Length > 0)];
+        screen.Should().Contain("6|6").And.Contain("No such variable");
+        evaluator.Evaluate("LEN +N$").Value.Number.Should().Be(6);
+        evaluator.Evaluate("LEN +(N$)").Value.Number.Should().Be(6);
+        Action literal = () => evaluator.Evaluate("+\"AB\"");
+        literal.Should().Throw<FormatException>().WithMessage("No such variable*");
+        Action negated = () => evaluator.Evaluate("-N$");
+        negated.Should().Throw<FormatException>();
+    }
 }

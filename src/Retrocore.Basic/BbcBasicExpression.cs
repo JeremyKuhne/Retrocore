@@ -179,7 +179,7 @@ internal sealed class BbcBasicExpression
                 {
                     left = IsInteger(left) && IsInteger(right)
                         ? Integer(unchecked(Int(left) + Int(right)))
-                        : Real(left.Number + right.Number);
+                        : Real(AddReals(Number(Real(left.Number)), Number(Real(right.Number))));
                 }
             }
             else if (TakeCharacter('-'))
@@ -187,7 +187,7 @@ internal sealed class BbcBasicExpression
                 BasicValue right = Term();
                 left = IsInteger(left) && IsInteger(right)
                     ? Integer(unchecked(Int(left) - Int(right)))
-                    : Real(Number(left) - Number(right));
+                    : Real(AddReals(Number(Real(Number(left))), -Number(Real(Number(right)))));
             }
             else
             {
@@ -304,6 +304,51 @@ internal sealed class BbcBasicExpression
     }
 
     /// <summary>
+    ///  Adds two reals as <c>ADD_FP_B_TO_FP_A</c> does, bit for bit; a subtraction adds the negated real.
+    /// </summary>
+    /// <param name="augend">A real, already a BASIC II real.</param>
+    /// <param name="addend">The other, already a BASIC II real.</param>
+    /// <returns>The sum, before any range check.</returns>
+    /// <remarks>
+    ///  <para>
+    ///   The real with the smaller exponent is shifted right to line up with the other, keeping 40 bits and dropping
+    ///   the rest, and left out altogether when it would be shifted 37 bits or more. Mantissas of one sign are added,
+    ///   a carry shifted back in at the top; of opposite signs the smaller is taken from the larger, which gives the
+    ///   sign. The result is normalised and rounded once, so 2147483649-(0.5+1/1048576) is 2147483649.
+    ///  </para>
+    /// </remarks>
+    internal static double AddReals(double augend, double addend)
+    {
+        if (augend == 0 || !double.IsFinite(augend) || !double.IsFinite(addend)) { return augend + addend; }
+        if (addend == 0) { return augend; }
+
+        int augendPower = Math.ILogB(augend) + 1;
+        int addendPower = Math.ILogB(addend) + 1;
+        if (augendPower < addendPower || (augendPower == addendPower && Math.Abs(augend) < Math.Abs(addend)))
+        {
+            (augend, addend, augendPower, addendPower) = (addend, augend, addendPower, augendPower);
+        }
+
+        int shift = augendPower - addendPower;
+        if (shift >= 37) { return augend; }
+
+        // Both as 40-bit mantissas, the larger's top at bit 39, worth mantissa * 2^(power - 40).
+        ulong larger = (ulong)Math.ScaleB(Math.Abs(augend), 32 - augendPower) << 8;
+        ulong smaller = ((ulong)Math.ScaleB(Math.Abs(addend), 32 - addendPower) << 8) >> shift;
+        ulong mantissa = (augend < 0) == (addend < 0) ? larger + smaller : larger - smaller;
+        int power = augendPower;
+        if (mantissa >= 1UL << 40)
+        {
+            // A carry out of the top is shifted back in, dropping the lowest bit.
+            mantissa >>= 1;
+            power++;
+        }
+
+        double sum = RoundForty(mantissa, power);
+        return augend < 0 ? -sum : sum;
+    }
+
+    /// <summary>
     ///  Divides two reals as <c>DIVIDE_FP_A_BY_FP_B</c> does, bit for bit.
     /// </summary>
     /// <param name="dividend">The real divided, already a BASIC II real.</param>
@@ -354,7 +399,7 @@ internal sealed class BbcBasicExpression
         for (int step = 0; step < 5; step++)
         {
             double quotient = DivideReals(number, guess);
-            guess = Math.ScaleB(RoundMantissa(quotient + guess), -1);
+            guess = Math.ScaleB(AddReals(quotient, guess), -1);
         }
 
         return guess;
@@ -387,12 +432,13 @@ internal sealed class BbcBasicExpression
         return Real(MultiplyReals(power, Real(exponent <= -89.5 ? 0 : Math.Exp(exponent)).Number));
     }
 
-    // The factor after a unary sign. UNARY_MINUS and the plus take it without the sign tests EVALUATE_FACTOR makes
-    // first, so a second sign is read as the start of a name: --1 and +-1 are "No such variable", where 5--3 is not.
+    // The factor after a unary sign. UNARY_MINUS and the plus take it without the tests EVALUATE_FACTOR makes first
+    // for a sign and a string, so either is read as the start of a name: --1, +-1 and +"AB" are "No such variable",
+    // where 5--3 is not, and +N$ is N$.
     private BasicValue Signed()
     {
         Skip();
-        return _at < _bytes.Length && _bytes[_at] is (byte)'-' or (byte)'+'
+        return _at < _bytes.Length && _bytes[_at] is (byte)'-' or (byte)'+' or (byte)'"'
             ? throw new FormatException("No such variable.")
             : Factor();
     }
@@ -427,9 +473,8 @@ internal sealed class BbcBasicExpression
                 return IsInteger(negated) ? Integer(unchecked(-Int(negated))) : new(Number(negated) == 0 ? 0 : -Number(negated));
             case (byte)'+':
                 _at++;
-                BasicValue plus = Signed();
-                Number(plus);
-                return plus;
+                // The plus dispatches the factor after it and keeps its type, so +N$ is N$.
+                return Signed();
             case (byte)'(':
                 _at++;
                 BasicValue inner = Expression();

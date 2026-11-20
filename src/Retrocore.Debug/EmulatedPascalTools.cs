@@ -22,7 +22,10 @@ internal static partial class EmulatedPascalTools
     /// <param name="bootDisk">APPLE1's image.</param>
     /// <param name="toolsDisk">APPLE2's image, with <c>SYSTEM.ASSMBLER</c> and <c>6500.OPCODES</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
-    /// <param name="model">The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs.</param>
+    /// <param name="model">
+    ///  The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs. An Apple III Pascal system
+    ///  disk runs on an Apple III, whatever this is.
+    /// </param>
     /// <returns>The code file, or null when the Assembler flagged errors; and the screen when it finished.</returns>
     /// <exception cref="TimeoutException">The system never booted, or the Assembler never finished.</exception>
     internal static (byte[]? Code, string Screen) Assemble(string source, string bootDisk, string toolsDisk, string? roms = null, Apple2Model model = Apple2Model.IIPlus)
@@ -62,7 +65,10 @@ internal static partial class EmulatedPascalTools
     /// <param name="bootDisk">APPLE1's image.</param>
     /// <param name="toolsDisk">APPLE2's image, with <c>SYSTEM.LINKER</c>.</param>
     /// <param name="roms">The SDK's ROM sources, or null for the copy beside the host.</param>
-    /// <param name="model">The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs.</param>
+    /// <param name="model">
+    ///  The machine: a 64K II Plus with the language card, or a 128K IIe, which 1.3 needs. An Apple III Pascal system
+    ///  disk runs on an Apple III, whatever this is.
+    /// </param>
     /// <returns>The linked code file, or null when the Linker wrote none; and the screen when it finished.</returns>
     /// <exception cref="TimeoutException">The system never booted, or the Linker never finished.</exception>
     internal static (byte[]? Code, string Screen) Link(byte[] host, IReadOnlyList<byte[]> libraries, string bootDisk, string toolsDisk, string? roms = null, Apple2Model model = Apple2Model.IIPlus)

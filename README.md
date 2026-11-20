@@ -389,7 +389,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [debugging Business BASIC](docs/backlog/BusinessBasic.md);
-- [the Z80 SoftCards for the Apple II and Apple III](docs/backlog/SoftCard.md);
+- [the Z80 SoftCards](docs/backlog/SoftCard.md): interrupts, the Premium SoftCard IIe and CP/M 3, CP/M sources, if wanted;
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
 - [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md);

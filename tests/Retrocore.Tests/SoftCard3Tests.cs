@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Cpu.Z80;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
 
@@ -58,8 +59,21 @@ public sealed class SoftCard3Tests
     [TestMethod]
     public void SwitchesToTheZ80AndBack()
     {
+        Apple3Machine machine = SwitchingMachine(out SoftCard3 card);
+        machine.Run(2_000);
+        card.OwnsBus.Should().BeFalse();
+        card.TimerRunning.Should().BeFalse();
+        machine.Bus.Peek(0x0010).Should().Be(0x50);
+        machine.Bus.Peek(0x2100).Should().Be(0x5A);
+        machine.Processor.Registers.ProgramCounter.Should().BeInRange(0xA015, 0xA017);
+        card.Processor.Registers.PC.Should().Be(0x0007);
+    }
+
+    // A machine whose 6502 switches to a Z80 program that stores $5A and gives the bus back.
+    private static Apple3Machine SwitchingMachine(out SoftCard3 card)
+    {
         Apple3Machine machine = Machine();
-        SoftCard3 card = machine.Bus.InstallSoftCard(slot: 4, Prom());
+        card = machine.Bus.InstallSoftCard(slot: 4, Prom());
 
         // The Z80 stores $5A at Z80 $0100 (Apple $2100) and gives the bus back: LD A,$5A; LD ($0100),A; OUT ($00),A.
         ReadOnlySpan<byte> z80 = [0x3E, 0x5A, 0x32, 0x00, 0x01, 0xD3, 0x00, 0x76];
@@ -76,14 +90,58 @@ public sealed class SoftCard3Tests
 
         Start(machine, host);
         for (int i = 0; i < z80.Length; i++) { machine.Bus.DmaWrite((ushort)(0x2000 + i), z80[i]); }
+        return machine;
+    }
 
-        machine.Run(2_000);
-        card.OwnsBus.Should().BeFalse();
-        card.TimerRunning.Should().BeFalse();
-        machine.Bus.Peek(0x0010).Should().Be(0x50);
-        machine.Bus.Peek(0x2100).Should().Be(0x5A);
-        machine.Processor.Registers.ProgramCounter.Should().BeInRange(0xA015, 0xA017);
-        card.Processor.Registers.PC.Should().Be(0x0007);
+    /// <summary>
+    ///  Stepping by Z80 T-states runs the machine as stepping by cycles does: at 1 MHz a cycle holds two T-states,
+    ///  sometimes three, and a cycle is done only after its last.
+    /// </summary>
+    [TestMethod]
+    public void TStatesStepAsCyclesDo()
+    {
+        Apple3Machine byCycle = SwitchingMachine(out SoftCard3 cycleCard);
+        Apple3Machine byTState = SwitchingMachine(out SoftCard3 tStateCard);
+        byCycle.Run(2_000);
+
+        int steps = 0;
+        int mostInCycle = 0;
+        int inCycle = 0;
+        while (byTState.Cycles < byCycle.Cycles || byTState.MidCycle)
+        {
+            byTState.StepTState();
+            steps++;
+            inCycle++;
+            if (!byTState.MidCycle)
+            {
+                mostInCycle = Math.Max(mostInCycle, inCycle);
+                inCycle = 0;
+            }
+        }
+
+        steps.Should().BeGreaterThan(2_000, "the Z80's cycles take two or three steps each");
+        mostInCycle.Should().BeInRange(2, 3);
+        byTState.Time.Should().Be(byCycle.Time);
+        byTState.Processor.Registers.Should().Be(byCycle.Processor.Registers);
+        tStateCard.Processor.Registers.Should().Be(cycleCard.Processor.Registers);
+        tStateCard.OwnsBus.Should().Be(cycleCard.OwnsBus);
+        byTState.Bus.Peek(0x2100).Should().Be(0x5A);
+    }
+
+    /// <summary>
+    ///  A card taken out mid-cycle runs no more of the cycle's T-states, and the cycle finishes.
+    /// </summary>
+    [TestMethod]
+    public void CardTakenOutMidCycleStops()
+    {
+        Apple3Machine machine = SwitchingMachine(out SoftCard3 card);
+        while (!(card.OwnsBus && machine.MidCycle)) { machine.StepTState(); }
+        Z80Registers before = card.Processor.Registers;
+        machine.Bus.RemoveCard(card.Slot);
+        machine.StepTState();
+        machine.MidCycle.Should().BeFalse();
+        card.Processor.Registers.Should().Be(before);
+        machine.Run(100);
     }
 
     /// <summary>

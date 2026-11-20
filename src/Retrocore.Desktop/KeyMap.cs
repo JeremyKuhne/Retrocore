@@ -82,8 +82,8 @@ internal static class KeyMap
             [Key.Home] = 31,
             [Key.Escape] = 1
         },
-        // The BBC Micro's DELETE is 127, its cursor keys and COPY the MOS's codes &88-&8B and &87, and its function
-        // keys the keyboard's own codes, &F0-&F9 for f0-f9: F10 is f0.
+        // The BBC Micro's DELETE is 127, its cursor keys and COPY the MOS's codes &88-&8B and &87, SHIFT LOCK (Scroll
+        // Lock) the keyboard's &8C, and its function keys the keyboard's own codes, &F0-&F9 for f0-f9: F10 is f0.
         ["bbc"] = new()
         {
             [Key.Enter] = 13,
@@ -96,6 +96,7 @@ internal static class KeyMap
             [Key.Right] = 0x89,
             [Key.Down] = 0x8A,
             [Key.Up] = 0x8B,
+            [Key.Scroll] = 0x8C,
             [Key.F10] = 0xF0,
             [Key.F1] = 0xF1,
             [Key.F2] = 0xF2,

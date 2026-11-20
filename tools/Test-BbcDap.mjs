@@ -102,6 +102,20 @@ blank[0x106] = 0x03;
 blank[0x107] = 0x20;
 writeFileSync(disk, blank);
 
+// A disk whose boot option is 3, *EXEC, and whose !BOOT types a line that prints BOOTED: the catalogue's one entry is
+// eight bytes in each of its two sectors, and the file's 16 bytes start at sector 2.
+const bootDisk = join(tmpdir(), `retrocore-bbc-${process.pid}-boot.ssd`);
+const booting = Buffer.alloc(80 * 10 * 256);
+const bootText = Buffer.from("PRINT \"BOO\";\"TED\"\r", "latin1");
+booting.write("!BOOT  $", 8, "latin1");
+booting[0x105] = 8;
+booting[0x106] = 0x33;
+booting[0x107] = 0x20;
+booting.writeUInt16LE(bootText.length, 0x10C);
+booting[0x10F] = 2;
+bootText.copy(booting, 0x200);
+writeFileSync(bootDisk, booting);
+
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
 
@@ -275,14 +289,27 @@ try {
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));
     assert.equal(readFileSync(disk).subarray(8, 15).toString("latin1"), "HELLO  ", "the catalogue's first name");
 
+    // boot holds SHIFT as the machine starts, so the DFS runs !BOOT; Shift with BREAK does it again; and a pasted £ is
+    // the BBC's own £, &60.
+    await launch({ model: "bbcb", disks: [bootDisk], boot: true });
+    await screen(text => /^BOOTED *$/m.test(text), "!BOOT's line from boot");
+    await frames(5);
+    await type("CLS\r");
+    await screen(text => !/^BOOTED *$/m.test(text), "a cleared screen");
+    await request("retro/reset", { shift: true });
+    await screen(text => /^BOOTED *$/m.test(text), "!BOOT's line from SHIFT-BREAK");
+    await frames(5);
+    await request("retro/type", { text: "PRINT \"£\"\n" });
+    await screen(text => /^£ *$/m.test(text), "a pasted £");
+
     await request("disconnect");
     console.log("BBC Micro DAP passed: stepping from the 6502 sample into Mos.asm and out, a breakpoint in BASIC's source, "
         + "a BBC BASIC program on the BASIC thread, BBC BASIC's names in data breakpoints, conditions, setExpression and DEF "
         + "FN, PROC frames under interrupts, the reset stop, a BASIC file on the Model A, and the Model B saving "
-        + `a program to an SSD that saves to its image, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
+        + `a program to an SSD that saves to its image, booting a disk's !BOOT at start and with SHIFT-BREAK, and a pasted £, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [program, names, modelA, disk]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [program, names, modelA, disk, bootDisk]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

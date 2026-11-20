@@ -242,6 +242,22 @@ public sealed class BbcBasicDialectTests
     }
 
     /// <summary>
+    ///  A * command where a statement starts is the MOS's to the end of the line, as OSCLI takes it: its colons start
+    ///  no statements, after a colon, THEN or ERROR alike, where a * in an expression multiplies.
+    /// </summary>
+    [TestMethod]
+    public void StarCommandsTakeTheRestOfTheLine()
+    {
+        foreach ((string line, int count) in (ReadOnlySpan<(string, int)>)[
+            ("10 X=1:*KEY 0 LIST:RUN|M", 2), ("10 IF X THEN *FX 15:PRINT", 1), ("10 ON ERROR *KEY 1 A:B", 1),
+            ("10 *CAT:*DRIVE 1", 1), ("10 A=2*3:B=1", 2), ("10 PRINT \"*\":C=1", 2), ("10 GOTO 20:*FX 0:X", 2)])
+        {
+            BasicSource source = BasicSource.Analyze(line + "\n", BasicDialect.BbcBasic);
+            source.NumberedLines[0].Statements.Should().HaveCount(count, line);
+        }
+    }
+
+    /// <summary>
     ///  A hexadecimal number is a constant, not a name: renaming BEEF leaves &amp;BEEF alone.
     /// </summary>
     [TestMethod]

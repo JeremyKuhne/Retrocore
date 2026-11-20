@@ -96,8 +96,9 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <span class="keys" data-machine="bbc">
 <button data-code="27" title="ESCAPE (or Esc)">Escape</button>
 <button data-code="135" title="COPY (or End): copies the character under the copy cursor">Copy</button>
+<button data-code="140" title="SHIFT LOCK (or Scroll Lock): every key shifted until it is pressed again">Shift Lock</button>
 <button data-code="240" title="f0">f0</button><button data-code="241" title="f1">f1</button><button data-code="242" title="f2">f2</button><button data-code="243" title="f3">f3</button><button data-code="244" title="f4">f4</button><button data-code="245" title="f5">f5</button><button data-code="246" title="f6">f6</button><button data-code="247" title="f7">f7</button><button data-code="248" title="f8">f8</button><button data-code="249" title="f9">f9</button>
-<button id="bbc-reset" title="BREAK (or Ctrl+F12 or Ctrl+Break): the MOS starts again, keeping the program; OLD brings it back">Break</button>
+<button id="bbc-reset" title="BREAK (or Ctrl+F12 or Ctrl+Break): the MOS starts again, keeping the program; OLD brings it back. With Shift, SHIFT-BREAK boots the disk in drive 0">Break</button>
 </span>
 <span class="keys" data-machine="coco">
 <button data-code="1" title="BREAK (or Esc)">Break</button>
@@ -394,7 +395,8 @@ const keys={
     'apple1':{Enter:13,Backspace:95,ArrowLeft:95,Escape:27},
     'coco':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
     // The BBC Micro's DELETE is 127, and its cursor keys and COPY are the MOS's codes &88-&8B and &87.
-    'bbc':{Enter:13,Backspace:127,Delete:127,Tab:9,Escape:27,End:135,ArrowLeft:136,ArrowRight:137,ArrowDown:138,ArrowUp:139},
+    // SHIFT LOCK is the keyboard's &8C, and £ its own key, SHIFT with _, whose code &60 the BBC shows as £.
+    'bbc':{Enter:13,Backspace:127,Delete:127,Tab:9,Escape:27,End:135,ArrowLeft:136,ArrowRight:137,ArrowDown:138,ArrowUp:139,ScrollLock:140,'£':96},
     // The Altair's ADM-3A sends ASCII, with its arrows as ^H, ^L, ^K and ^J.
     'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10},
     // The PET's keys are PETSCII: DEL 20, INST 148, the cursor keys 157, 29, 145 and 17, HOME 19 and STOP 3; Tab is
@@ -410,7 +412,7 @@ const hints={
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
     'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
-    'bbc':'Esc: ESCAPE · End: COPY · arrows: the cursor keys · the buttons: f0-f9 · Ctrl+F12: BREAK',
+    'bbc':'Esc: ESCAPE · End: COPY · Scroll Lock: SHIFT LOCK · arrows: the cursor keys · the buttons: f0-f9 · Ctrl+F12: BREAK · Ctrl+Shift+F12: SHIFT-BREAK',
     'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET',
     'pet':'Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset'
 };
@@ -513,8 +515,9 @@ screen.addEventListener('keydown',event=>{
         }
     }
     // Ctrl+F12 for keyboards without Break, which some laptops lack or hide behind Fn.
+    // With Shift, the BBC Micro's SHIFT-BREAK.
     if(event.key==='Cancel'||(event.ctrlKey&&(event.key==='Pause'||event.key==='F12'))){
-        api.postMessage({command:'reset'});event.preventDefault();return;
+        api.postMessage(event.shiftKey?{command:'reset',shift:true}:{command:'reset'});event.preventDefault();return;
     }
     // Shift+Insert pastes, as the screen's Paste menu item does: the extension types the clipboard's text. Ctrl+V is
     // CONTROL-V, like any other Ctrl letter.
@@ -559,7 +562,7 @@ for(const button of document.querySelectorAll('[data-code]')){
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
 for(const id of ['reset','trs80-reset','model3-reset','model2-reset','kaypro-reset','apple1-reset','coco-reset','pet-reset','altair-reset','bbc-reset']){
-    document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'reset'});screen.focus();});
+    document.getElementById(id).addEventListener('click',event=>{api.postMessage(event.shiftKey?{command:'reset',shift:true}:{command:'reset'});screen.focus();});
 }
 for(const id of ['apple1-clear','altair-clear']){
     document.getElementById(id).addEventListener('click',()=>{api.postMessage({command:'clearScreen'});screen.focus();});

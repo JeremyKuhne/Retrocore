@@ -34,6 +34,9 @@ public sealed class BbcKeyboard
     private int _typingCycles;
     private (BbcKey Key, bool Shift, bool Control)? _holding;
 
+    // The 1 MHz cycles left that SHIFT is held for SHIFT-BREAK.
+    private int _shiftCycles;
+
     /// <summary>
     ///  Gets or sets the startup-option links, as the operating system reads them into OSBYTE &amp;FF after a power-on
     ///  or CTRL-BREAK: bits 0-2 the screen mode, bit 3 clear to swap BREAK and SHIFT-BREAK, bits 4-5 the disk timings,
@@ -96,6 +99,19 @@ public sealed class BbcKeyboard
         Array.Clear(_columns);
         _typed.Clear();
         _holding = null;
+        _shiftCycles = 0;
+    }
+
+    /// <summary>
+    ///  Holds SHIFT down for a time and then lets it go, as a hand does through SHIFT-BREAK until the operating
+    ///  system has read it.
+    /// </summary>
+    /// <param name="cycles">The 1 MHz cycles to hold it for.</param>
+    public void HoldShift(int cycles)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cycles);
+        Press(BbcKey.Shift);
+        _shiftCycles = cycles;
     }
 
     /// <summary>
@@ -105,7 +121,8 @@ public sealed class BbcKeyboard
     /// <param name="code">
     ///  An ASCII character, carriage return for RETURN, 8 or 127 for DELETE, 9 TAB, 27 ESCAPE, 1-26 CTRL with a letter,
     ///  the operating system's cursor and COPY codes: <c>$88</c> left, <c>$89</c> right, <c>$8A</c> down,
-    ///  <c>$8B</c> up and <c>$87</c> COPY; and <c>$F0-$F9</c> for the function keys f0-f9.
+    ///  <c>$8B</c> up and <c>$87</c> COPY; <c>$8C</c> for SHIFT LOCK, which no key's character is; and
+    ///  <c>$F0-$F9</c> for the function keys f0-f9.
     /// </param>
     /// <returns>Whether the BBC has a key for the character.</returns>
     public bool Type(byte code)
@@ -146,6 +163,7 @@ public sealed class BbcKeyboard
     internal void Tick()
     {
         if (!CpuReads) { _column = (_column + 1) & 15; }
+        if (_shiftCycles > 0 && --_shiftCycles == 0) { Release(BbcKey.Shift); }
         if (_typingCycles > 0 && --_typingCycles > 0) { return; }
         if (_holding is { } held)
         {
@@ -248,6 +266,7 @@ public sealed class BbcKeyboard
             0x89 => (true, BbcKey.Right),
             0x8A => (true, BbcKey.Down),
             0x8B => (true, BbcKey.Up),
+            0x8C => (true, BbcKey.ShiftLock),
             >= 0xF0 and <= 0xF9 => (true, s_functionKeys[code - 0xF0]),
             _ => (false, BbcKey.Space)
         };

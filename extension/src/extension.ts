@@ -291,7 +291,9 @@ export function activate(context: vscode.ExtensionContext): void {
                                 void paste("text" in input && typeof input.text === "string" ? input.text : undefined).then(undefined, showError);
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "reset") {
                                 if (displaySession !== undefined) {
-                                    void displaySession.customRequest("retro/reset").then(undefined, showError);
+                                    // Shift with BREAK is the BBC Micro's SHIFT-BREAK, which boots its disk.
+                                    const shift = "shift" in input && input.shift === true;
+                                    void displaySession.customRequest("retro/reset", shift ? { shift } : undefined).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "clearScreen") {
                                 if (displaySession !== undefined) {

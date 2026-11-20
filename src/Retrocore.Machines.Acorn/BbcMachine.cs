@@ -106,6 +106,22 @@ public sealed class BbcMachine : IMachine
     }
 
     /// <summary>
+    ///  Presses SHIFT-BREAK: BREAK with SHIFT held until the operating system has read it, half a second, so the
+    ///  filing system boots its disk's <c>!BOOT</c>, or the tape's first file, as the startup options say.
+    /// </summary>
+    public void PressShiftBreak()
+    {
+        Keyboard.HoldShift(ShiftBreakCycles);
+        PressBreak();
+    }
+
+    /// <summary>
+    ///  Gets the 1 MHz cycles SHIFT is held for through SHIFT-BREAK, or from power-on to boot: half a second, long
+    ///  after the operating system reads it as it starts.
+    /// </summary>
+    public static int ShiftBreakCycles => 500_000;
+
+    /// <summary>
     ///  Advances the CPU one cycle, and the devices one or, for a slow access, two or three 2 MHz cycles;
     ///  <see cref="LastCycle"/> then describes the CPU's bus activity.
     /// </summary>

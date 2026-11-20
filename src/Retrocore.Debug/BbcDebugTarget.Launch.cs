@@ -96,6 +96,8 @@ internal sealed partial class BbcDebugTarget
             SdkRoms = built
         };
 
+        // boot holds SHIFT as the machine starts, as SHIFT-BREAK does, so the filing system boots its disk or tape.
+        if (args.Bool("boot") == true) { machine.Keyboard.HoldShift(BbcMachine.ShiftBreakCycles); }
         target.SetSound(args.String("sound") ?? "speaker");
         if (args.String("cassette") is { } cassette) { target.InsertTape(cassette); }
         for (int drive = 0; drive < disks.Length; drive++)

@@ -173,11 +173,9 @@ public class BbcDiskTests
     public void ShiftBreakBoots()
     {
         BbcMachine machine = MachineWithDisks();
-        machine.Keyboard.Press(BbcKey.Shift);
-        machine.PressBreak();
-        machine.Run(TimeSpan.FromSeconds(1));
-        machine.Keyboard.Release(BbcKey.Shift);
+        machine.PressShiftBreak();
         machine.Run(TimeSpan.FromSeconds(10));
+        machine.Keyboard.IsDown(BbcKey.Shift).Should().BeFalse("SHIFT is let go once the MOS has read it");
         string[] screen = machine.ReadTextScreen();
         screen.Should().Contain(line => line.Trim() == "Press  SPACE  to see them", string.Join('\n', screen));
     }

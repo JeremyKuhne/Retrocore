@@ -403,7 +403,7 @@ internal sealed class MachineHost : DisposableBase
     /// <returns>The keys typed and the characters left out.</returns>
     internal (int Typed, int Skipped) Type(string text)
     {
-        List<int> codes = TypedText.Codes(text, out int skipped);
+        List<int> codes = TypedText.Codes(text, out int skipped, _target is BbcDebugTarget ? DebugSession.BbcPound : null);
         using (Gate())
         {
             foreach (int code in codes) { _typing.Enqueue(code); }
@@ -651,11 +651,19 @@ internal sealed class MachineHost : DisposableBase
     /// <summary>
     ///  Presses the machine's reset.
     /// </summary>
-    internal void Reset()
+    internal void Reset() => Reset(shift: false);
+
+    /// <summary>
+    ///  Presses the machine's reset, or the BBC Micro's SHIFT-BREAK.
+    /// </summary>
+    /// <param name="shift">Whether SHIFT is held, which on the BBC Micro boots its disk or tape.</param>
+    internal void Reset(bool shift)
     {
         using (Gate())
         {
-            _target.Reset();
+            // The BBC Micro's SHIFT-BREAK boots its disk or tape.
+            if (shift && _target is BbcDebugTarget bbc) { bbc.ShiftReset(); }
+            else { _target.Reset(); }
             _typing.Clear();
             _stopped = null;
             _paceAgain = true;
@@ -664,7 +672,7 @@ internal sealed class MachineHost : DisposableBase
 
     /// <summary>
     ///  Gets why the machine's CPU stopped, such as on an opcode that jams it, or null while it runs. The machine
-    ///  waits, with its picture as it was, until <see cref="Reset"/>.
+    ///  waits, with its picture as it was, until <see cref="Reset()"/>.
     /// </summary>
     internal string? Stopped => _stopped;
 

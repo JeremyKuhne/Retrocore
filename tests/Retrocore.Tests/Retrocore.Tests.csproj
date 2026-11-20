@@ -65,6 +65,7 @@
     <Compile Include="..\..\src\Retrocore.Debug\MediaActions.Journal.cs" Link="MediaActions.Journal.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.cs" Link="RecoveryJournal.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Written.cs" Link="RecoveryJournal.Written.cs" />
+    <Compile Include="..\..\src\Retrocore.Debug\RecoveryJournal.Sessions.cs" Link="RecoveryJournal.Sessions.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\JournalDisk.cs" Link="JournalDisk.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\Apple2Loader.cs" Link="Apple2Loader.cs" />
     <Compile Include="..\..\src\Retrocore.Debug\ProFileMedia.cs" Link="ProFileMedia.cs" />

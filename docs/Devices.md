@@ -207,7 +207,18 @@ its image (and stale or a conflict as the image is now), so a stop or relaunch l
 go leaves the journal; one that cannot go back, as when its drive is gone, stays in it, and the Debug Console says so.
 A second session that launches under a `recoveryId` a running one has keeps no journal. The extension gives each
 launch configuration a `recoveryId` of its own, and `retro/devices` says `recovery: true` for a session that keeps
-one. A disk a launch built, such as a `dos` launch's, is not kept: the next launch builds it again.
+one. A disk a launch built, such as a `dos` launch's, is not kept: the next launch builds it again. A disk put back
+from the journal says `kept: true` in its `media` while it is still changed.
+
+A session that did not stop cleanly, as when its host was killed, leaves its journal marked so, and its process's
+lock on it gone. The language server's `retrocore/recovery/list` answers `{ journals: [{ id, name, started, kept,
+disks }] }` for each such journal with disks: its recovery id, the machine's name (the launch's `name`), when the
+session started, when its disks were last kept, and their labels. `retrocore/recovery/resolve` takes `{ id, action }`:
+`recover` keeps the disks for the next launch and the machine while off and stops offering them; `discard` removes the
+journal and the snapshots it names. Either is refused while a session has the journal. Each journal listed also has a
+`revision`, and `retrocore/recovery/list` given `{ id }` answers for that journal alone, however its session ended; a
+discard given the `revision` it asked about lets nothing go and answers `{ outcome: "changed" }` once the journal has
+changed since, as when the machine ran again.
 
 ## A machine that is off
 
@@ -223,7 +234,11 @@ session, built as a launch builds it and never run:
 Both answer as `retro/devices` does, with the new saved machine as `configuration`, and add `problems`: what of the
 saved machine could not be restored, such as a disk image that no longer exists. Nothing is kept between requests, so
 the saved machine the editor holds is all of an off machine's state, and launching with it as `machineState` boots
-the machine as it was described. Game controllers are not opened while off; the game port's row says they are read
+the machine as it was described. A configuration with a `recoveryId` also has the disks its journal kept, put back as
+a launch puts them (unless a running session has the journal); a change goes through media's steps and answers as
+`retro/device` and `retro/hardware` do, so a kept disk saves there, and is asked about before an eject or insert takes
+it out, and the journal then drops a disk saved or let go. A disk let go of off has no Undo, as the machine is built
+for each request. Game controllers are not opened while off; the game port's row says they are read
 while it runs. `tools/Test-OffMachine.mjs` checks that each machine lists the same hardware and devices off as
 launched.
 
@@ -285,7 +300,7 @@ saying how many sectors or blocks were dropped; ejecting a changed disk, inserti
 **Save**, **Save As...** or **Discard**, saying what the machine changed, and a discard offers **Undo**. A changed
 disk's tooltip says what changed once the pointer is on it. A disk the machine ejected with changes stays under its
 drive as an **Ejected** row, with **Save**, **Insert Again** and **Discard**, until it is saved or let go. A session
-that ends with disks not saved says which, and that they are kept for the launch configuration's next launch, which puts them back in their drives still changed. A slot's inline buttons in the
+that ends with disks not saved says which, and that they are kept for the launch configuration's next launch, which puts them back in their drives still changed; its notice offers **Save All**, **Review** (the machine while off, whose drives show them as kept from the last run, to save there) and **Discard**. As the extension starts, a session of the workspace's that did not stop cleanly is offered with **Recover**, **Review** and **Discard**. A slot's inline buttons in the
 Machine view add or
 remove cards. The Machine view's title bar opens memory (**Retrocore: Open Memory...**) and refreshes both views,
 and its **...** menu resets a launch configuration's saved cards and media (**Retrocore: Reset Saved

@@ -37,6 +37,8 @@ export interface Media {
     medium?: string;
     version?: number;
     source?: MediaSource;
+    /** Whether the disk is one the recovery journal kept from the machine's last run, still changed. */
+    kept?: boolean;
 }
 
 /** A device as the debug host's retro/devices describes it. */
@@ -159,6 +161,7 @@ export function summary(device: Device): string {
     }
     if (device.transport && device.media) parts.push(`${device.transport.position.toLocaleString()} of ${device.transport.length.toLocaleString()} bytes`);
     if (device.blocks?.last !== null && device.blocks?.last !== undefined) parts.push(`block ${device.blocks.last}`);
+    if (device.media?.kept) parts.push("kept from the last run");
     const state = imageState(device);
     if (state !== undefined) parts.push(state);
     if (device.activity !== "idle") parts.push(device.activity);
@@ -206,7 +209,7 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
-            : media.changed ? `Changed: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
+            : media.changed ? `Changed${media.kept ? " in the last run" : ""}: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
             // A disk the machine did not change is the image as it was read, which is not the file there now.
             : source?.stale ? (source.current === null ? "Not changed by the machine; its image is gone" : "Not changed by the machine, but its image is not the file it was read from")
             : "The same as its image");
@@ -225,11 +228,12 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
 }
 
 /**
- * The words the drive's menus pick their actions by. While the machine is off, a tape cannot record and nothing has
- * changed a disk to save.
+ * The words the drive's menus pick their actions by. While the machine is off, a tape cannot record, and only a disk
+ * its last run kept, still changed, has anything to save or revert.
  */
 export function contextWords(device: Device, running: boolean): string[] {
     const words = ["device", device.media ? "loaded" : "empty"];
+    const live = running || device.media?.changed === true;
     if (device.operations.includes("insert")) words.push("insert");
     // A deck with keys records onto its tape, or a blank one, with nothing to name; its other keys move the tape.
     const keys = hasTapeKeys(device);
@@ -238,8 +242,8 @@ export function contextWords(device: Device, running: boolean): string[] {
     if (device.media && device.operations.includes("eject")) words.push("eject");
     if (device.media && device.operations.includes("writeProtect")) words.push(device.media.writeProtected ? "locked" : "unlocked");
     // Revert reads the image again, through the drive's insert.
-    if (running && device.media?.source?.kind === "image" && device.operations.includes("insert")) words.push("revert");
-    if (running && saves(device)) {
+    if (live && device.media?.source?.kind === "image" && device.operations.includes("insert")) words.push("revert");
+    if (live && saves(device)) {
         words.push("save");
         // Save writes the disk's own image at once; for a read-only image it saves as another, and for an image changed
         // on disk, as a disk the same as its image may have, it says first that it will ask.
@@ -379,6 +383,69 @@ export function stoppedMessage(machine: string, kept: string[], lost: string[]):
             : `${kept.join(", ")} ${kept.length === 1 ? "is" : "are"} kept, still changed, for its next launch; `
                 + `the changes to ${lost.join(", ")} were not kept.`;
     return `${machine} stopped with ${disks} not saved: ${[...kept, ...lost].join(", ")}. ${after}`;
+}
+
+/** What a notice says of a machine whose session did not stop cleanly, with the disks its journal kept. */
+export function crashedMessage(machine: string, files: string[], kept: string | undefined, now: Date = new Date()): string {
+    const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
+    const last = kept === undefined ? "" : `, the last kept at ${when(kept, now)}`;
+    return `${machine} did not stop cleanly. ${disks} had changes not saved: ${files.map(file => path.basename(file) || file).join(", ")}${last}.`;
+}
+
+/** What a question asks before the kept disks of a machine are let go, which nothing can put back. */
+export function discardKeptQuestion(machine: string, files: string[]): Question {
+    const disks = files.length === 1 ? "the disk" : `${files.length} disks`;
+    return {
+        message: `Discard the changes to ${disks} ${machine} kept?`,
+        detail: `${files.map(file => path.basename(file) || file).join(", ")}. Their images stay as they are; the changes cannot be put back.`,
+        buttons: ["Discard"]
+    };
+}
+
+/**
+ * The question before a machine that is off lets a changed disk go, which nothing can put back: reverting the disk in
+ * a drive to its image, or discarding one the machine ejected.
+ */
+export function letGoQuestion(drive: string, action: "revert" | "discard", file: string): Question {
+    const name = path.basename(file) || file;
+    return action === "revert"
+        ? { message: `Revert the disk in ${drive} to ${name}?`, detail: "The machine is off, so its changes cannot be put back with Undo.", buttons: ["Revert"] }
+        : { message: `Discard the disk ejected from ${drive}?`, detail: `${name}. The machine is off, so its changes cannot be put back with Undo.`, buttons: ["Discard"] };
+}
+
+/**
+ * Discard for a machine's kept disks: asks about the disks its journal keeps now, and asks again when the journal
+ * changed before the answer came, as when the machine ran again. Gives what came of it: discarded, kept (the person
+ * said no), or none (the journal keeps no disks, or a running session has it).
+ */
+export async function discardKept(
+    now: () => Promise<{ disks: string[]; revision: string } | undefined>,
+    confirm: (disks: string[]) => Promise<boolean>,
+    resolve: (revision: string) => Promise<{ outcome?: string }>): Promise<"discarded" | "kept" | "none"> {
+    for (;;) {
+        const journal = await now();
+        if (journal === undefined) return "none";
+        if (!await confirm(journal.disks)) return "kept";
+        if ((await resolve(journal.revision)).outcome !== "changed") return "discarded";
+    }
+}
+
+/**
+ * Save All for a machine's kept disks: each kept disk in a drive and each changed one the machine ejected, while the
+ * question about the machine stands. Stops at the first not saved, as when the person cancels a question its save
+ * asks, leaving the rest kept. Says whether all were saved.
+ */
+export async function saveAllKept(devices: Device[], still: () => boolean,
+    save: (id: string, ejected?: string) => Promise<boolean>): Promise<boolean> {
+    for (const device of devices) {
+        if (!still()) return false;
+        if (device.media?.kept && !await save(device.id)) return false;
+        for (const ejected of device.ejected ?? []) {
+            if (!ejected.changed) continue;
+            if (!still() || !await save(device.id, ejected.id)) return false;
+        }
+    }
+    return true;
 }
 
 /** What the status bar says for a moment after a save that asked nothing. */

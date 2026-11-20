@@ -144,6 +144,14 @@ internal static class LanguageHost
         server.OnRequest("retrocore/machine/describe", parameters => OffMachine.Describe(parameters ?? []));
         server.OnRequest("retrocore/machine/change", parameters => OffMachine.Change(parameters ?? []));
 
+        // The recovery journals of sessions that did not end cleanly, and what a person decides for one.
+        server.OnRequest("retrocore/recovery/list", parameters => new JsonObject
+        {
+            ["journals"] = RecoveryJournal.Unclean(parameters)
+        });
+
+        server.OnRequest("retrocore/recovery/resolve", parameters => RecoveryJournal.Resolve(parameters ?? []));
+
         await server.Run().ConfigureAwait(continueOnCapturedContext: false);
     }
 

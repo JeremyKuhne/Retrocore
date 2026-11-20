@@ -112,8 +112,12 @@ internal sealed partial class DebugSession
     // Documented Keeps: contracts, checked when calls return; null when off or nothing documents one.
     private DebugContracts? _contracts;
 
-    // How often the machine's changed disks are kept in its recovery journal.
-    private const int CheckpointMilliseconds = 30_000;
+    // How often the machine's changed disks are kept in its recovery journal: every 30 seconds, or as
+    // RETROCORE_CHECKPOINT_SECONDS says, as the tests that end a host without stopping it do.
+    private static readonly int s_checkpointMilliseconds =
+        int.TryParse(Environment.GetEnvironmentVariable("RETROCORE_CHECKPOINT_SECONDS"), out int seconds) && seconds > 0
+            ? seconds * 1000
+            : 30_000;
 
     // The machine's recovery journal, when its launch gave a recoveryId, and the timer that checkpoints it.
     private RecoveryJournal? _journal;
@@ -512,8 +516,13 @@ internal sealed partial class DebugSession
         }));
     }
 
-    // The devices with media's answer, if there is one, beside them: { "outcome": "changed", "device": ..., "devices": ... }.
-    private static JsonObject WithAnswer(JsonObject body, JsonObject? answer)
+    /// <summary>
+    ///  Puts media's answer, if there is one, beside the devices: <c>{ "outcome": "changed", "device": ..., "devices": ... }</c>.
+    /// </summary>
+    /// <param name="body">The devices' body.</param>
+    /// <param name="answer">Media's answer, or null; its fields move into the body.</param>
+    /// <returns>The body.</returns>
+    internal static JsonObject WithAnswer(JsonObject body, JsonObject? answer)
     {
         if (answer is null) { return body; }
         foreach ((string key, JsonNode? value) in answer.ToList())
@@ -601,7 +610,7 @@ internal sealed partial class DebugSession
         List<string> problems = [];
         try
         {
-            _journal = RecoveryJournal.Open(id, problems);
+            _journal = RecoveryJournal.Open(id, problems, args.String("name"));
             if (_journal is null)
             {
                 problems.Add("Another running session keeps this machine's recovery journal, so this one keeps none: "
@@ -610,7 +619,7 @@ internal sealed partial class DebugSession
             else
             {
                 problems.AddRange(MediaActions.Recover(Target.Devices, _journal));
-                _checkpoints = new(_ => Checkpoint(), state: null, CheckpointMilliseconds, CheckpointMilliseconds);
+                _checkpoints = new(_ => Checkpoint(), state: null, s_checkpointMilliseconds, s_checkpointMilliseconds);
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

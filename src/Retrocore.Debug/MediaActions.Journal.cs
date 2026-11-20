@@ -9,6 +9,7 @@ using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -16,6 +17,16 @@ namespace Retrocore.Debug;
 // The changed disks a machine keeps in its recovery journal, and putting them back when it starts again.
 internal static partial class MediaActions
 {
+    // The disks put back from a journal, which their drives say were kept from the last run.
+    private static readonly ConditionalWeakTable<IMedium, object> s_recovered = [];
+
+    /// <summary>
+    ///  Gets whether a disk was put back from the machine's recovery journal, as kept from its last run.
+    /// </summary>
+    /// <param name="medium">The disk.</param>
+    /// <returns>True when it was.</returns>
+    internal static bool IsKept(IMedium medium) => s_recovered.TryGetValue(medium, out _);
+
     /// <summary>
     ///  Takes a checkpoint of a machine's changed disks, in its drives and ejected from them, under the machine's
     ///  lock; the journal commits it afterward, off the machine's thread.
@@ -142,6 +153,7 @@ internal static partial class MediaActions
 
                 medium.MarkChanged();
                 Keep(medium, from);
+                s_recovered.AddOrUpdate(medium, from);
                 if (outside is not null)
                 {
                     s_ejected.GetValue(device, _ => []).Add(outside);

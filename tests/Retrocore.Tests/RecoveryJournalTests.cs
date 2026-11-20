@@ -334,6 +334,126 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A journal whose session did not end cleanly, with no process holding it, is found with its machine's name and
+    ///  disks; recovering it keeps the disks and stops offering it, and a clean or running one is never offered.
+    /// </summary>
+    [TestMethod]
+    public void AnUncleanSessionIsFoundAndRecovered()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("crashed.po");
+        Write(drive, block: 1, 0x21);
+        RecoveryJournal running = RecoveryJournal.Open(id, [], "Apple IIe for Work") ?? throw new InvalidOperationException("The journal is taken.");
+        running.Commit(MediaActions.Journal([drive], running));
+        Offered(id).Should().BeNull("a running session keeps its journal");
+
+        // The process ends without closing it: the system lets go of its lock, and its session says it did not end.
+        Crash(running);
+        JsonObject offered = Offered(id) ?? throw new InvalidOperationException("The session is not offered.");
+        offered.String("name").Should().Be("Apple IIe for Work");
+        offered["disks"]?.AsArray().Select(disk => disk?.GetValue<string>()).Should().Equal(image);
+        offered.String("kept").Should().NotBeNull();
+
+        RecoveryJournal.Resolve(new JsonObject { ["id"] = id, ["action"] = "recover" });
+        Offered(id).Should().BeNull("a recovered session is not offered again");
+        Disks(id).Should().HaveCount(1, "its disk is kept for the next launch");
+    }
+
+    /// <summary>
+    ///  Discarding a session's disks removes its journal and the snapshots it names, and no other file.
+    /// </summary>
+    [TestMethod]
+    public void DiscardingAnUncleanSessionLetsItsDisksGo()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("discarded.po");
+        Write(drive, block: 1, 0x31);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+        string stray = Path.Join(RecoveryJournal.Root, id, "Media", "stray.woz");
+        File.WriteAllText(stray, "a disk");
+
+        RecoveryJournal.Resolve(new JsonObject { ["id"] = id, ["action"] = "discard" });
+        Offered(id).Should().BeNull();
+        File.Exists(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().BeFalse();
+        Snapshots(id).Should().Equal("stray.woz");
+    }
+
+    /// <summary>
+    ///  A discard names the journal it asked about: once the machine kept its disks again, the discard lets nothing
+    ///  go and says so, and the journal as it is now, found by its id, can be asked about again.
+    /// </summary>
+    [TestMethod]
+    public void ADiscardAskedAboutAnEarlierJournalLetsNothingGo()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("asked.po");
+        Write(drive, block: 1, 0x51);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+        string asked = Offered(id)?.String("revision") ?? throw new InvalidOperationException("Not offered.");
+
+        // The machine runs again, changes its disk, and stops cleanly.
+        RecoveryJournal again = Open(id);
+        Write(drive, block: 2, 0x52);
+        Stop(again, drive);
+        Offered(id).Should().BeNull("a clean stop is not offered as a crash");
+        JsonObject now = RecoveryJournal.Unclean(new JsonObject
+        {
+            ["id"] = id
+        }).OfType<JsonObject>().Single();
+
+        now.String("revision").Should().NotBe(asked);
+
+        JsonObject stale = new() { ["id"] = id, ["action"] = "discard", ["revision"] = asked };
+        RecoveryJournal.Resolve(stale).String("outcome").Should().Be("changed");
+        Disks(id).Should().HaveCount(1, "the disk kept since stays");
+        JsonObject current = new() { ["id"] = id, ["action"] = "discard", ["revision"] = now.String("revision") };
+        RecoveryJournal.Resolve(current).String("outcome").Should().BeNull();
+        File.Exists(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The off machine opens a journal without taking it for a session: what its last session said stays, so a
+    ///  session that did not end cleanly is still offered after the off machine showed its disks.
+    /// </summary>
+    [TestMethod]
+    public void TheOffMachineLeavesTheSessionAsItWas()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("looked.po");
+        Write(drive, block: 1, 0x41);
+        RecoveryJournal running = Open(id);
+        running.Commit(MediaActions.Journal([drive], running));
+        Crash(running);
+
+        RecoveryJournal looking = RecoveryJournal.Open(id, [], claim: false) ?? throw new InvalidOperationException("The journal is taken.");
+        Apple2Disk35Drive off = Again(image);
+        MediaActions.Recover([off], looking).Should().BeEmpty();
+        off.Media?.Changed.Should().BeTrue();
+        MediaActions.IsKept(off.Medium ?? throw new InvalidOperationException("The drive is empty.")).Should().BeTrue();
+        looking.Commit(MediaActions.Journal([off], looking), close: true);
+        Offered(id).Should().NotBeNull("only a person's choice, or a session, ends the offer");
+    }
+
+    // What the host offers for a journal whose session did not end cleanly, or null.
+    private static JsonObject? Offered(string id) =>
+        RecoveryJournal.Unclean().OfType<JsonObject>().FirstOrDefault(journal => journal.String("id") == id);
+
+    // Ends a session as a process that stops without closing its journal does: its lock goes, and its session still
+    // says it has not ended.
+    private static void Crash(RecoveryJournal journal)
+    {
+        journal.Release();
+        string session = Path.Join(RecoveryJournal.Root, journal.Id, "session.json");
+        JsonObject json = JsonNode.Parse(File.ReadAllText(session))?.AsObject() ?? throw new InvalidOperationException("No session.");
+        json["clean"].Should().NotBeNull();
+        json["clean"]?.GetValue<bool>().Should().BeFalse();
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]

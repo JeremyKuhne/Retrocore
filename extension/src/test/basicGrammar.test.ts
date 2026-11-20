@@ -137,6 +137,8 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "170 IF A THEN *CAT", "CAT"), "string.unquoted.command"), "THEN starts a statement");
     assert.ok(has(scopes("bbcbasic", "180 X=1:*FX 15", "FX"), "string.unquoted.command"), "so does a colon");
     assert.ok(has(scopes("bbcbasic", "190 PRINT 5 *LEN A$", "LEN"), "support.function"), "a * in an expression multiplies");
+    assert.ok(has(scopes("bbcbasic", "195 PRINT myTHEN *LEN A$", "LEN"), "support.function"), "myTHEN is one name");
+    assert.ok(has(scopes("bbcbasic", "196 IF 1 TH. *KEY 0 PRINT:RUN|M", "RUN"), "string.unquoted.command"), "TH. is THEN");
     // A conditional word's abbreviation is not taken before a name character either, and @% is a name.
     assert.ok(!has(scopes("bbcbasic", "200 PRINT COU.X", "COU."), "keyword"), "COU.X is no COUNT");
     assert.ok(has(scopes("bbcbasic", "210 @%=&90A", "@%"), "variable.other"));

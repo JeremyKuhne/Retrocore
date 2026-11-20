@@ -53,7 +53,7 @@
           "include": "#escape"
         },
         {
-          "match": "(?<=:|THEN|ELSE|ERROR|REPEAT|LET)\\s*\\*.*$",
+          "match": "(?:(?<=:)|(?<=THEN)(?<![A-Za-z0-9_`]THEN)|(?<=TH\\.)(?<![A-Za-z0-9_`]TH\\.)|(?<=THE\\.)(?<![A-Za-z0-9_`]THE\\.)|(?<=ELSE)(?<![A-Za-z0-9_`]ELSE)|(?<=EL\\.)(?<![A-Za-z0-9_`]EL\\.)|(?<=ELS\\.)(?<![A-Za-z0-9_`]ELS\\.)|(?<=ERROR)(?<![A-Za-z0-9_`]ERROR)|(?<=ERR\\.)(?<![A-Za-z0-9_`]ERR\\.)|(?<=ERRO\\.)(?<![A-Za-z0-9_`]ERRO\\.)|(?<=REPEAT)(?<![A-Za-z0-9_`]REPEAT)|(?<=REP\\.)(?<![A-Za-z0-9_`]REP\\.)|(?<=REPE\\.)(?<![A-Za-z0-9_`]REPE\\.)|(?<=REPEA\\.)(?<![A-Za-z0-9_`]REPEA\\.)|(?<=LET)(?<![A-Za-z0-9_`]LET))\\s*\\*.*$",
           "name": "string.unquoted.command.retrocore-bbcbasic"
         },
         {

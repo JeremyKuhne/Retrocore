@@ -115,6 +115,11 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         : operators.has(word) ? "keyword.operator"
             : functions.has(word) || /[$(]$/.test(word) ? "support.function"
                 : "keyword.other";
+    // Where a statement starts, for a * command: after a colon, or after THEN, ELSE, ERROR, REPEAT or LET, in full or
+    // abbreviated, as a word of its own, so not at the end of a name such as myTHEN, which the tokeniser reads whole.
+    const starters = ["THEN", "ELSE", "ERROR", "REPEAT", "LET"].flatMap(word =>
+        [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]);
+    const statementStart = `(?:(?<=:)|${starters.map(form => `(?<=${escape(form)})(?<![A-Za-z0-9_\`]${escape(form)})`).join("|")})`;
     const captures = Object.fromEntries(reserved.map((word, index) => [String(index + 1), { name: `${kind(word)}.${scope}` }]));
     return {
         $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
@@ -138,7 +143,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
                     { include: "#data" },
                     { include: "#string" },
                     { include: "#escape" },
-                    ...(starCommands ? [{ match: "(?<=:|THEN|ELSE|ERROR|REPEAT|LET)\\s*\\*.*$", name: `string.unquoted.command.${scope}` }] : []),
+                    ...(starCommands ? [{ match: `${statementStart}\\s*\\*.*$`, name: `string.unquoted.command.${scope}` }] : []),
                     ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
                     { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
                     ...[...nameFollows].map(word => ({

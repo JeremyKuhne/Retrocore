@@ -163,7 +163,9 @@ public static partial class DocumentationParser
             index++;
         }
 
-        return new(path, comments, diagnostics);
+        bool strict = IsStrict(text);
+        if (strict) { Style(lines, path, diagnostics); }
+        return new(path, comments, diagnostics) { Strict = strict };
     }
 
     /// <summary>

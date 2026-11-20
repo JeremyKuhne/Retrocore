@@ -46,8 +46,8 @@ public class NativeAssemblyDocsTests
     }
 
     /// <summary>
-    ///  The style guide's and the skill's examples also pass the documentation lint, as the editor runs it on
-    ///  one file.
+    ///  The style guide's and the skill's examples also pass the documentation lint and the style checks, as the
+    ///  editor runs them on one file.
     /// </summary>
     /// <param name="file">The document, under the test's <c>Inputs\Docs</c>.</param>
     [TestMethod]
@@ -57,9 +57,11 @@ public class NativeAssemblyDocsTests
     {
         string path = Path.Join(AppContext.BaseDirectory, "Inputs", "Docs", file);
         List<string> failures = [];
-        foreach ((int line, string source) in Examples(File.ReadAllLines(path)))
+        foreach ((int line, string example) in Examples(File.ReadAllLines(path)))
         {
+            // The examples follow the style guide, so they are checked as a source that opts in to it.
             string name = $"{file}:{line}";
+            string source = $"; retrocore: style=strict\n{example}";
             AssemblyResult result = new NativeAssembler().Assemble(
                 new AssemblySource(source, name),
                 new AssemblyOptions("Mos6502", 0, 0x8000));

@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Documentation;
 
@@ -92,6 +93,12 @@ public sealed partial class DocumentationResolver
             effective.Sections.Where(section => section.Name is "In" or "Out" or "Parameters" or "Flags")
                 .SelectMany(section => section.Entries.Select(entry => entry.Name)),
             StringComparer.OrdinalIgnoreCase);
+
+        // In a file that follows the style guide, every documented definition the prose names is a link.
+        if (Current.Files.FirstOrDefault(file => SamePath(file.Path, topic.Path)) is { Strict: true })
+        {
+            CheckUnlinked(topic, entries, Warn);
+        }
 
         // Links and {references} anywhere in the topic's own text.
         foreach ((string text, int line) in Texts(topic))
@@ -364,5 +371,89 @@ public sealed partial class DocumentationResolver
     {
         int separator = name.LastIndexOf("::", StringComparison.Ordinal);
         return separator < 0 ? name : name[(separator + 2)..];
+    }
+
+    // A name in prose, which may be qualified: not part of a longer word, an address or a call, and not an entry's
+    // name before its "=".
+    [GeneratedRegex(
+        @"(?<![\w:$#.'])[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*(?![\w(]|\s*=(?!=))",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ProseName();
+
+    // What a link, code span, reference or quotation holds, which is not prose to look for names in.
+    [GeneratedRegex("<[^>]*>|`[^`]*`|\\{[^}]*\\}|\"[^\"]*\"", RegexOptions.CultureInvariant)]
+    private static partial Regex NotProse();
+
+    private void CheckUnlinked(DocumentationTopic topic, HashSet<string> entries, Action<string, int> warn)
+    {
+        HashSet<string> reported = [with(StringComparer.Ordinal)];
+        foreach ((string text, int line) in Prose(topic))
+        {
+            string prose = NotProse().Replace(text, " ");
+            foreach (Match word in ProseName().Matches(prose))
+            {
+                string name = word.Value;
+                if (name.Length < 2 || entries.Contains(name) || name == topic.Name || name == LastName(topic.Name))
+                {
+                    continue;
+                }
+
+                // An instruction is not a definition to link, and a plain capitalized word that starts a sentence
+                // is more likely English than a name.
+                if (_isInstruction(name) || (StartsSentence(prose, word.Index) && IsPlainWord(name))) { continue; }
+
+                DocumentationTarget resolved = Resolve(topic, name);
+                if (resolved.Kind != DocumentationTargetKind.Topic || resolved.Topic is not DocumentationTopic target)
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(target, topic) || target.Kind is DocumentationKind.File or DocumentationKind.Topic)
+                {
+                    continue;
+                }
+
+                if (reported.Add($"{line}:{name}"))
+                {
+                    warn($"Link {name} as <{name}>: it names a documented definition.", line);
+                }
+            }
+        }
+    }
+
+    private static bool StartsSentence(string text, int index)
+    {
+        string before = text[..index].TrimEnd();
+        return before.Length == 0 || before[^1] is '.' or '!' or '?' or ';';
+    }
+
+    // A word with one capital, at its start, and no digits or underscores: "Procedure", not "SysDirectory".
+    private static bool IsPlainWord(string name) =>
+        char.IsAsciiLetterUpper(name[0]) && name.Skip(1).All(char.IsAsciiLetterLower);
+
+    // A topic's prose: its summary, remarks, entries' meanings and free-text sections, not names in lists.
+    private static IEnumerable<(string Text, int Line)> Prose(DocumentationTopic topic)
+    {
+        foreach (DocumentationComment comment in topic.Comments)
+        {
+            if (comment.Summary.Length != 0) { yield return (comment.Summary, comment.Line); }
+            foreach (string remark in comment.Remarks) { yield return (remark, comment.Line); }
+            foreach (DocumentationSection section in comment.Sections)
+            {
+                if (section.Entries.Count != 0)
+                {
+                    foreach (DocumentationEntry entry in section.Entries) { yield return (entry.Meaning, entry.Line); }
+                }
+                else if (section.Name is "Deprecated" || !section.IsKnown)
+                {
+                    int offset = 0;
+                    foreach (string line in section.Lines)
+                    {
+                        yield return (line, section.Line + offset);
+                        offset++;
+                    }
+                }
+            }
+        }
     }
 }

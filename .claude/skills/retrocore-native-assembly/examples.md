@@ -166,7 +166,7 @@ Ok:
 ;; Also: COUT (A2RM78)
 CharacterOut = $FDED
 
-;; Prints a carriage return. A listing that calls COUT still assembles.
+;; Prints a carriage return. A listing that calls <COUT> still assembles.
 .proc PrintReturn
     lda #$8D
     jmp COUT

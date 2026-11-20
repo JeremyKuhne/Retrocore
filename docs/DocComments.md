@@ -370,6 +370,8 @@ broken link.
   - `Also:` items: their form, that their keys are in the bibliography, and that an old name is not also a
     definition or another definition's old name; and, as information with a quick fix, each use of an old
     name in code;
+  - in a source whose first line is `; retrocore: style=strict`, the style guide's checks
+    ([AssemblyStyle.md](AssemblyStyle.md)), unlinked names of documented definitions in prose among them;
   - that every exported symbol is documented, by its own comment or as an `Entry:` (or stacked label) of a
     documented routine.
 

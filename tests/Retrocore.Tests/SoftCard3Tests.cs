@@ -129,6 +129,20 @@ public sealed class SoftCard3Tests
     }
 
     /// <summary>
+    ///  An NMI raised while stopped mid-cycle, after the 6502 has run its part of the cycle beside the Z80 finishing
+    ///  its last instruction, stays pending for the 6502's next cycle rather than being cleared with this one.
+    /// </summary>
+    [TestMethod]
+    public void NmiRaisedMidCycleWaitsForTheNextCycle()
+    {
+        Apple3Machine machine = SwitchingMachine(out SoftCard3 card);
+        while (!(card.Running && !card.OwnsBus && machine.MidCycle)) { machine.StepTState(); }
+        machine.PressReset(control: false);
+        while (machine.MidCycle) { machine.StepTState(); }
+        (machine.Processor.Signals & ProcessorSignals.NonMaskableInterrupt).Should().NotBe(ProcessorSignals.None);
+    }
+
+    /// <summary>
     ///  A card taken out mid-cycle runs no more of the cycle's T-states, and the cycle finishes.
     /// </summary>
     [TestMethod]

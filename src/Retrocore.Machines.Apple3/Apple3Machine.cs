@@ -54,11 +54,11 @@ public sealed class Apple3Machine : IMachine
     // Whether the SoftCard /// held the 6502 in the last cycle.
     private bool _held;
 
-    // The cycle under way: its length, its speed, and whether the 6502 stepped in it. While it has Z80 T-states left,
-    // the card that runs them and the address the held 6502 is at.
+    // The cycle under way: its length, its speed, and whether the 6502 stepped in it with an NMI pending, so took it.
+    // While it has Z80 T-states left, the card that runs them and the address the held 6502 is at.
     private int _cycleUnits;
     private bool _cycleSlow;
-    private bool _cycleStepped;
+    private bool _nmiTaken;
     private SoftCard3? _tStateCard;
     private ushort _heldAddress;
 
@@ -245,7 +245,10 @@ public sealed class Apple3Machine : IMachine
         int units = slow ? SlowCycle : FastCycle;
         _cycleUnits = units;
         _cycleSlow = slow;
-        _cycleStepped = Bus.SoftCard is { } card ? StartWithSoftCard(card, units) : StepProcessor();
+        bool stepped = Bus.SoftCard is { } card ? StartWithSoftCard(card, units) : StepProcessor();
+
+        // An NMI raised after the 6502's step, while a debugger stops mid-cycle, waits for its next one.
+        _nmiTaken = _nmi && stepped;
         if (_tStateCard is null) { FinishCycle(); }
     }
 
@@ -267,7 +270,7 @@ public sealed class Apple3Machine : IMachine
     {
         int units = _cycleUnits;
         Bus.TickDisk(_cycleSlow);
-        if (_nmi && _cycleStepped)
+        if (_nmiTaken)
         {
             Processor.Signals &= ~ProcessorSignals.NonMaskableInterrupt;
             _nmi = false;

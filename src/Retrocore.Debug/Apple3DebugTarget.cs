@@ -722,9 +722,21 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
         ? "proFile"
         : _machine.Bus.SoftCard?.Slot == slot ? "softCard3" : "empty";
 
-    // The SoftCard ///'s mapping PROM, assembled from the SDK's source once.
-    private byte[] SoftCard3Prom() => _softCard3Prom ??=
-        Apple3SdkModules.AssembleSoftCard3Prom(Path.Join(Apple3SdkModules.Directory(SdkRoms), "SoftCard3Prom.asm"));
+    // The SoftCard ///'s mapping PROM, assembled from the SDK's source once. A source that is missing or does not
+    // assemble is the launch's problem, reported as the other bad arguments are.
+    private byte[] SoftCard3Prom()
+    {
+        if (_softCard3Prom is { } prom) { return prom; }
+        string path = Path.Join(Apple3SdkModules.Directory(SdkRoms), "SoftCard3Prom.asm");
+        try
+        {
+            return _softCard3Prom = Apple3SdkModules.AssembleSoftCard3Prom(path);
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            throw new ArgumentException($"The SoftCard /// needs the SDK's {path}: {error.Message}", error);
+        }
+    }
 
     private byte[]? _softCard3Prom;
 

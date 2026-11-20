@@ -155,9 +155,20 @@ internal sealed class BbcBasicExpression
         _at += pair ? 2 : 1;
         BasicValue right = Sum();
         if (left.IsString != right.IsString) { throw new FormatException("Type mismatch."); }
-        int compared = left.IsString
-            ? left.Text.AsSpan().SequenceCompareTo(right.Text)
-            : left.Number.CompareTo(right.Number);
+        int compared;
+        if (left.IsString)
+        {
+            compared = left.Text.AsSpan().SequenceCompareTo(right.Text);
+        }
+        else if (IsInteger(left) && IsInteger(right))
+        {
+            compared = Int(left).CompareTo(Int(right));
+        }
+        else
+        {
+            (double first, double second) = Pushed(left, right);
+            compared = first.CompareTo(second);
+        }
 
         return Truth(holds(compared));
     }
@@ -179,7 +190,7 @@ internal sealed class BbcBasicExpression
                 {
                     left = IsInteger(left) && IsInteger(right)
                         ? Integer(unchecked(Int(left) + Int(right)))
-                        : Real(AddReals(Number(Real(left.Number)), Number(Real(right.Number))));
+                        : Real(AddReals(Pushed(left, right)));
                 }
             }
             else if (TakeCharacter('-'))
@@ -187,7 +198,7 @@ internal sealed class BbcBasicExpression
                 BasicValue right = Term();
                 left = IsInteger(left) && IsInteger(right)
                     ? Integer(unchecked(Int(left) - Int(right)))
-                    : Real(AddReals(Number(Real(Number(left))), -Number(Real(Number(right)))));
+                    : Real(Subtract(Pushed(left, right)));
             }
             else
             {
@@ -207,12 +218,14 @@ internal sealed class BbcBasicExpression
 
                 // BASIC multiplies integers as integers only when both fit in 16 bits; otherwise in reals.
                 bool small = IsShort(left) && IsShort(right);
-                left = small ? Integer(Int(left) * Int(right)) : Real(MultiplyReals(Number(Real(Number(left))), Number(Real(Number(right)))));
+                left = small ? Integer(Int(left) * Int(right)) : Real(MultiplyReals(Pushed(left, right)));
             }
             else if (TakeCharacter('/'))
             {
+                // DIVIDE_OPERATOR makes the left operand a real and pushes it, whatever the right one is.
+                double dividend = Packed(Number(Real(Number(left))));
                 double divisor = Number(Real(Number(Power())));
-                left = divisor == 0 ? throw DivisionByZero() : Real(DivideReals(Number(Real(Number(left))), divisor));
+                left = divisor == 0 ? throw DivisionByZero() : Real(DivideReals(dividend, divisor));
             }
             else if (TakeWord("DIV"))
             {
@@ -237,7 +250,7 @@ internal sealed class BbcBasicExpression
         BasicValue left = Factor();
         while (TakeCharacter('^'))
         {
-            left = Raise(Number(left), Number(Factor()));
+            left = Raise(Packed(Number(left)), Number(Factor()));
         }
 
         return left;
@@ -398,7 +411,7 @@ internal sealed class BbcBasicExpression
         double guess = Math.ScaleB(number, halved - exponent);
         for (int step = 0; step < 5; step++)
         {
-            double quotient = DivideReals(number, guess);
+            double quotient = DivideReals(Packed(number), guess);
             guess = Math.ScaleB(AddReals(quotient, guess), -1);
         }
 
@@ -442,6 +455,27 @@ internal sealed class BbcBasicExpression
             ? throw new FormatException("No such variable.")
             : Factor();
     }
+
+    // A real as the ROM leaves it once packed in five bytes: the smallest positive real, 2^-129, has an exponent of 0
+    // and a mantissa of &80000000, whose top bit the sign replaces, so all five bytes are 0 and it reads back as 0.
+    // Every other real, -2^-129 included, comes back as it went.
+    private static double Packed(double value) => value == SmallestReal ? 0 : value;
+
+    // Two operands as reals, as the ROM holds them to combine them: PUSH_REAL packs the left one onto BASIC's stack
+    // while the right is worked out in FPA, except when the left is an integer and the right a real, when the right
+    // is pushed and the integer made a real in FPA. So x+0 and 0+x are both 0 for x = 2^-129, where 2^100*x is not.
+    private static (double Left, double Right) Pushed(BasicValue left, BasicValue right)
+    {
+        double first = Number(Real(Number(left)));
+        double second = Number(Real(Number(right)));
+        return IsInteger(left) && !IsInteger(right) ? (first, Packed(second)) : (Packed(first), second);
+    }
+
+    private static double AddReals((double Left, double Right) operands) => AddReals(operands.Left, operands.Right);
+
+    private static double Subtract((double Left, double Right) operands) => AddReals(operands.Left, -operands.Right);
+
+    private static double MultiplyReals((double Left, double Right) operands) => MultiplyReals(operands.Left, operands.Right);
 
     private static bool IsShort(BasicValue value) => IsInteger(value) && Int(value) is >= short.MinValue and <= short.MaxValue;
 

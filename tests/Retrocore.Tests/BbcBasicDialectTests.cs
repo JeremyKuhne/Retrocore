@@ -988,4 +988,39 @@ public sealed class BbcBasicDialectTests
         Action negated = () => evaluator.Evaluate("-N$");
         negated.Should().Throw<FormatException>();
     }
+
+    /// <summary>
+    ///  The smallest positive real, 2^-129, reads back as 0 once packed, as its five bytes are all 0, and the ROM packs
+    ///  the operand PUSH_REAL puts on its stack: the left one, or the right real when the left is an integer, and
+    ///  always the left of / and ^. So x+0, 0+x and x=0 treat it as 0, where 2.0*x does not.
+    /// </summary>
+    [TestMethod]
+    public void TinyRealsAsTheRomPacksThem()
+    {
+        BbcMachine machine = Boot();
+        string[] expressions = ["(1/2^43/2^43/2^43)+0", "0+(1/2^43/2^43/2^43)", "(1/2^43/2^43/2^43)-0", "0-(1/2^43/2^43/2^43)", "(1/2^43/2^43/2^43)*2", "2*(1/2^43/2^43/2^43)", "2.0*(1/2^43/2^43/2^43)", "1.5*(1/2^43/2^43/2^43)", "((1/2^43/2^43/2^43)=0)", "(0=(1/2^43/2^43/2^43))", "(0<(1/2^43/2^43/2^43))", "-(1/2^43/2^43/2^43)+0", "SQR (1/2^43/2^43/2^43)"];
+        BbcMachineTests.Type(machine, $"DIM R({expressions.Length})\r");
+        BbcMachineTests.RunToPrompt(machine);
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            BbcMachineTests.Type(machine, $"R({index})={expressions[index]}\r");
+            BbcMachineTests.RunToPrompt(machine);
+        }
+
+        BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+        BasicArray array = variables.Arrays().Single(found => found.Name == "R");
+        for (int index = 0; index < expressions.Length; index++)
+        {
+            double rom = variables.Read(array.Kind, array.ElementAddress([index])).Number;
+            evaluator.Evaluate(expressions[index]).Value.Number.Should().Be(rom, expressions[index]);
+        }
+
+        BbcMachineTests.Type(machine, "CLS:PRINT 1/(1/2^43/2^43/2^43)\r");
+        BbcMachineTests.RunToPrompt(machine);
+        machine.ReadTextScreen().Should().Contain(line => line.StartsWith("Too big", StringComparison.Ordinal));
+        Action reciprocal = () => evaluator.Evaluate("1/(1/2^43/2^43/2^43)");
+        reciprocal.Should().Throw<FormatException>().WithMessage("Too big*");
+        evaluator.Evaluate("(1/2^43/2^43/2^43)+0").Value.Number.Should().Be(0);
+    }
 }

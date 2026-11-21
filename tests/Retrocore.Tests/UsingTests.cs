@@ -530,6 +530,38 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  A file included inside a scope is in that scope, so the editor looks its names up there, as the assembler does.
+    /// </summary>
+    [TestMethod]
+    public void IncludedFilesAreInTheirIncludersScope()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-using").FullName;
+        try
+        {
+            string main = Path.Join(directory, "main.asm");
+            string part = Path.Join(directory, "part.asm");
+            File.WriteAllText(part, "    lda Value\n");
+            File.WriteAllText(main, """
+                Value = 1
+                .scope Outer
+                Value = 2
+                .include "part.asm"
+                .endscope
+
+                """);
+
+            SourceAnalysis analysis = SourceAnalysis.Assemble(main, _ => null);
+            analysis.Result.Diagnostics.Should().BeEmpty();
+            analysis.Result.Sections[0].Bytes.Span[..2].ToArray().Should().Equal(0xA5, 2);
+            analysis.Find("Value", part, line: 0).Should().ContainSingle().Which.Name.Should().Be("Outer::Value");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  The doc parser records the <c>.using</c> directives in effect at each line, ending with their scope.
     /// </summary>
     [TestMethod]

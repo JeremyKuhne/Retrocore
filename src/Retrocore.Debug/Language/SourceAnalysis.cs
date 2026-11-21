@@ -21,6 +21,7 @@ internal sealed partial class SourceAnalysis
     private readonly Func<string, string?> _text;
     private readonly Dictionary<string, IReadOnlyList<DocumentationScopes>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
     private HashSet<string>? _scopeNames;
+    private readonly Dictionary<string, (string Path, int Line)> _includedFrom = [with(StringComparer.OrdinalIgnoreCase)];
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(
@@ -47,6 +48,12 @@ internal sealed partial class SourceAnalysis
             if (_lines.ContainsKey(path))
             {
                 _dialects.TryAdd(path, statement.Dialect);
+            }
+
+            // An included file is inside the scopes around its .include line.
+            if (!location.IsMacroExpansion && location.ExpandedFrom is { Path.Length: > 0 } from)
+            {
+                _includedFrom.TryAdd(path, (Path.GetFullPath(from.Path), from.Line));
             }
 
             if (!result.Success && statement.Kind is AssemblyStatementKind.Procedure or AssemblyStatementKind.Scope)
@@ -342,14 +349,37 @@ internal sealed partial class SourceAnalysis
     }
 
     // The scope a line is in and the .using directives in effect on it.
-    private DocumentationScopes ScopesAt(string path, int line)
+    private DocumentationScopes ScopesAt(string path, int line) => ScopesAt(path, line, depth: 0);
+
+    private DocumentationScopes ScopesAt(string path, int line, int depth)
     {
         if (!_scopes.TryGetValue(path, out IReadOnlyList<DocumentationScopes>? lines))
         {
-            _scopes[path] = lines = DocumentationParser.ScopesByLine(LinesOf(path));
+            lines = DocumentationParser.ScopesByLine(LinesOf(path));
+
+            // Includes are textual: a file included inside a .scope or .proc is in that scope, though the
+            // including file's .using directives do not reach it.
+            const int MaximumIncludeDepth = 32;
+            if (depth < MaximumIncludeDepth
+                && _includedFrom.TryGetValue(path, out (string Path, int Line) site)
+                && ScopesAt(site.Path, site.Line, depth + 1).Scope is { Length: > 0 } outer)
+            {
+                lines = [.. lines.Select(scopes => Within(outer, scopes))];
+            }
+
+            _scopes[path] = lines;
         }
 
         return (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root;
+    }
+
+    private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
+
+    // A line's scopes in a file included inside the scope outer.
+    private static DocumentationScopes Within(string outer, DocumentationScopes scopes)
+    {
+        DocumentationUsing[] usings = [.. scopes.Usings.Select(directive => new DocumentationUsing(Qualify(outer, directive.Scope), directive.Names))];
+        return new(Qualify(outer, scopes.Scope), usings);
     }
 
     // Whether a qualified name is a scope that some definition is in.

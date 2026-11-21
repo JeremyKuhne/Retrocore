@@ -2,7 +2,7 @@
 name: copilot-review-loop
 description: Shape a change into reviewable pull requests and take each through Copilot's review in few rounds, reading every thread and review summary, replying, resolving only answered threads, and waiting for Copilot's own review of the head. Use when opening a PR or a stack of them, addressing review comments, iterating on Copilot's review, getting a PR green or clean, or checking a PR's review state.
 license: MIT
-compatibility: Requires the GitHub CLI (gh) authenticated for the repository, and a POSIX shell (Git Bash on Windows).
+compatibility: The scripts require the GitHub CLI (gh) authenticated for the repository, and a POSIX shell (Git Bash on Windows); without them, use the session's GitHub API tools (see Without the GitHub CLI).
 metadata:
    portability: repository
    applicability: retrocore
@@ -44,6 +44,9 @@ Scripts beside this file take PR numbers and work in the current repository.
 - `wait-review.sh <pr> [sha]`: run in the background after re-requesting; exits when Copilot's own account reviews
   that commit. Your replies are recorded as reviews too, so never wait on "any new review".
 
+Without the GitHub CLI (a cloud session, for example), do what each script does through the GitHub API tools
+rather than skipping it; see [Without the GitHub CLI](#without-the-github-cli).
+
 Each round:
 
 1. Run `review-state.sh`. Read every thread **and the newest review's body**: a "Needs a closer look" banner can name
@@ -64,3 +67,20 @@ no unexamined bug, and the checks pass. A resolved thread is not proof of a fix;
 
 **Stop and re-review** when a PR passes three rounds or fixes start breaking other things: run the independent full
 review again rather than patching finding by finding.
+
+## Without the GitHub CLI
+
+The scripts need `gh`. Where it is not available, do the same steps with the GitHub API tools the session has:
+
+- **Yours** means written by the account the session is authenticated as (for example, the login a "who am I"
+  call returns).
+- **Copilot** is `copilot-pull-request-reviewer[bot]` in the REST API and `copilot-pull-request-reviewer` in GraphQL
+  and some tools; accept either.
+- **`review-state.sh`:** read the PR's head commit; list every page of its reviews and find Copilot's newest, noting
+  whether its commit is the head; read that review's body; list every page of unresolved review threads, each with
+  all its comments, and treat a thread as unanswered unless its latest comment is yours; list the head's check runs.
+- **`resolve-answered.sh`:** resolve an unresolved thread only if its latest comment is yours, by the thread's node ID.
+- **Re-requesting:** request a Copilot review on the PR.
+- **`wait-review.sh`:** wait for a review whose author is Copilot and whose commit is the head you pushed. Where the
+  session is woken by pull-request events, wait for that event rather than polling. Your own replies arrive as
+  reviews and comments too, so they never count.

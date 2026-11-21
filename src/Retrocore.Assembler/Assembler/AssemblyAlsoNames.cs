@@ -32,7 +32,9 @@ internal sealed class AssemblyAlsoNames
             if (!seen.Add(source.Path) || !HasHeading(source.Text)) { continue; }
             foreach (DocumentationComment comment in DocumentationParser.Parse(source.Text, source.Path, style: false).Comments)
             {
-                if (comment.Keyword is not null) { continue; }
+                // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
+                // must not reach.
+                if (comment.Keyword is not null || comment.Kind == DocumentationKind.Scope) { continue; }
                 string[] also = [.. DocumentationAlso.Of(comment.Sections).Select(item => item.Name)];
                 if (also.Length == 0) { continue; }
                 names ??= [];

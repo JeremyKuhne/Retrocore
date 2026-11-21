@@ -1,11 +1,12 @@
 # Backlog: debugging BASIC programs
 
-Status: **two steps left: Level I and disk images.** AppleSoft, Integer BASIC and Level II are done: the library
-([`Retrocore.Basic`](../../src/Retrocore.Basic)), the command line, the machine-program editor with import and
-export, the language support, the BASIC thread, BASIC variables, and workspace files with labels and the `basic`
-launch. The [extension README](../../extension/README.md) describes them. Each dialect is a class behind one
-interface (`BasicDialect`), so the steps below add a dialect and a file source without changing the debugger or
-the editor.
+Status: **Level I, disk images, Color BASIC's tapes and the CoCo 3 left.** AppleSoft, Integer BASIC, Apple-1 BASIC,
+Level II, Color BASIC on the CoCo 1 and 2, Business BASIC, PET BASIC, BBC BASIC and MBASIC are done, each with some or
+all of: the library ([`Retrocore.Basic`](../../src/Retrocore.Basic)), the command line, the machine-program editor
+with import and export, the language support, the BASIC thread, BASIC variables, and workspace files with labels and
+the `basic` launch. The [extension README](../../extension/README.md) describes them. Each dialect is a class
+behind one interface (`BasicDialect`), so the steps below add a dialect and a file source without changing the
+debugger or the editor.
 
 ## Level I
 
@@ -44,8 +45,8 @@ The Color Computer 1 and 2's Color, Extended and Disk Extended Color BASIC get w
 document behind the panel's BASIC button, import and export, the BASIC thread with its stops, steps, GOSUB frames
 and variables, the `basic` launch, and language support. Their ROMs are SDK sources
 ([`ColorBasic.asm`](../../src/Retrocore.Machines.Coco/Roms/ColorBasic.asm), `ExtendedBasic.asm` and
-`DiskBasic.asm`), so the hooks are named from them. The CoCo 3's Super Extended BASIC follows once its source is
-built ([CocoRomSources.md](CocoRomSources.md), stage 4).
+`DiskBasic.asm`), so the hooks are named from them. The CoCo 3's Super Extended BASIC can follow: its ROM's
+source, `Coco3.asm`, is built ([CocoRomSources.md](CocoRomSources.md), stage 4).
 
 **Status:** steps 1-3 built 2026-11-12, awaiting review. Two things the plan did not foresee: a string's descriptor
 has a spare byte before its address, and a string array's elements are five bytes; and a GOSUB takes seven bytes of
@@ -85,4 +86,4 @@ the stack, its entry over the statement loop's return, which RETURN returns thro
 
 ## Later
 
-The CoCo 3's Super Extended BASIC, once its source is built.
+The CoCo 3's Super Extended BASIC, whose ROM's source, `Coco3.asm`, is now built.

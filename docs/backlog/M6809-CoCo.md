@@ -1,8 +1,8 @@
 # Backlog: the 6809 and the TRS-80 Color Computer
 
-Status: **MC6809 core, undocumented behaviour, instruction set and native assembly done; Color Computer 2
-next**. The next CPU after the Z80, and the machine built around it, following the path the Z80 and the Model I
-took.
+Status: **built**: the MC6809 and the Color Computer 1, 2 and 3, phases 0-7, ROM sources included, so the machine
+needs nothing external. What remains is the known gaps below. The next CPU after the Z80, and the machine built
+around it, following the path the Z80 and the Model I took.
 
 ## Why the 6809
 
@@ -105,9 +105,9 @@ Known gaps in what is built:
 
 - **GIME video.** Palette changes mid-frame apply to the whole frame; the CoCo 3's composite artifact colors in
   two-color graphics are not drawn; the GIME timer and keyboard interrupt have no tests of their own.
-- **Disks** are kept in memory: a changed disk is not written back to its file, as on the Model I.
-- **Color BASIC** debugs at the 6809 level only; a BASIC thread like Level II's and AppleSoft's, and `basic`
-  launches, would follow the ROM sources.
+- **Super Extended BASIC.** Color BASIC has the BASIC thread and `basic` launches on the CoCo 1 and 2
+  ([debugging BASIC programs](BasicDebugging.md#color-basic)); the CoCo 3's Super Extended BASIC has none yet, though
+  its ROM is now a source, `Coco3.asm` with the CoCo 3's build of the others.
 - **Cassette** reads and writes `.cas`; `.wav` is not read.
 
 OS-9 and the 6309 come after.

@@ -5,8 +5,8 @@
 ;; The lo-res graphics routines, which share a row's base address calculation and their tails.
 ;;
 ;; The lo-res screen is text page one: each text line holds two rows of blocks, the even row in the low nibble of
-;; each character and the odd row in the high nibble, so a block's color is a number from 0 to 15. <COLOR> holds the
-;; current color in both nibbles, and <GBASL>/<GBASH> the address of the line being drawn on.
+;; each character and the odd row in the high nibble, so a block's color is a number from 0 to 15. <PlotColor> holds the
+;; current color in both nibbles, and <LowResBase>/<LowResBaseHigh> the address of the line being drawn on.
 .scope LowRes
 
 ; The screen's size.
@@ -45,8 +45,9 @@ COLOR_STEP = 3
 ;; Plots one lo-res block in the current color.
 ;;
 ;; At $F800.
-;; In: A = the row (0-47), Y = the column (0-39), COLOR = the color in both nibbles
-;; Out: carry = clear, GBASL/GBASH = the base address of the row's text line, MASK = the row's nibble of a byte
+;; In: A = the row (0-47), Y = the column (0-39), PlotColor = the color in both nibbles
+;; Out: carry = clear, LowResBase/LowResBaseHigh = the base address of the row's text line, PlotMask = the row's nibble
+;;     of a byte
 ;; Keeps: X, Y
 ;; Entry:
 ;;   SameRow = plots a block in the row the last <Plot> set up, at another column
@@ -68,32 +69,33 @@ COLOR_STEP = 3
 ;; Stores the nibble mask for the row's half of each byte.
 ;; Also: RTMASK (A2RM78, A2RM79, IIEROM82, IIETRM85)
 SetMask:
-    sta MASK
+    sta PlotMask
 
 ;; Plots a block in the row the last <Plot> set up, at another column.
 ;;
 ;; At $F80E.
-;; In: Y = the column (0-39), GBASL/GBASH = as <Plot> left them, MASK = as <Plot> left it,
-;;   COLOR = the color in both nibbles
+;; In: Y = the column (0-39), LowResBase/LowResBaseHigh = as <Plot> left them, PlotMask = as <Plot> left it,
+;;   PlotColor = the color in both nibbles
 ;; Keeps: X, Y, carry
 ;; Also: PLOT1 (A2RM78, A2RM79, IIEROM82)
 SameRow:
 .assert * = $F80E, "Plot::SameRow must stay at $F80E."
 
     ; Changes only the bits of the row's nibble to the color's.
-    lda (GBASL),y
-    eor COLOR
-    and MASK
-    eor (GBASL),y
-    sta (GBASL),y
+    lda (LowResBase),y
+    eor PlotColor
+    and PlotMask
+    eor (LowResBase),y
+    sta (LowResBase),y
     rts
 .endproc
 
 ;; Draws a horizontal lo-res line in the current color.
 ;;
 ;; At $F819. A line whose right end is left of its start plots only the start.
-;; In: A = the row (0-47), Y = the leftmost column, H2 = the rightmost column, COLOR = the color in both nibbles
-;; Out: Y = H2 (when it is right of the start), carry = set
+;; In: A = the row (0-47), Y = the leftmost column, HorizontalLineEnd = the rightmost column, PlotColor = the color in
+;;     both nibbles
+;; Out: Y = HorizontalLineEnd (when it is right of the start), carry = set
 ;; Keeps: X
 ;; Also: HLINE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc HorizontalLine
@@ -103,7 +105,7 @@ SameRow:
 ;; Plots the next column, until the rightmost.
 ;; Also: HLINE1 (A2RM78, A2RM79, IIEROM82)
 Loop:
-    cpy H2
+    cpy HorizontalLineEnd
     bcs VerticalLine::Done
     iny
     jsr Plot::SameRow
@@ -121,8 +123,8 @@ NextVerticalRow:
 ;; Draws a vertical lo-res line in the current color.
 ;;
 ;; At $F828. A line whose bottom is above its top plots only the top.
-;; In: A = the top row, Y = the column (0-39), V2 = the bottom row, COLOR = the color in both nibbles
-;; Out: A = V2 (when it is below the top), carry = set
+;; In: A = the top row, Y = the column (0-39), VerticalLineEnd = the bottom row, PlotColor = the color in both nibbles
+;; Out: A = VerticalLineEnd (when it is below the top), carry = set
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Done = the return the lo-res lines share: <HorizontalLine> ends here too
@@ -134,7 +136,7 @@ NextVerticalRow:
     pla
 
     ; The next row, until the bottom one.
-    cmp V2
+    cmp VerticalLineEnd
     bcc NextVerticalRow
 
 ;; The return the lo-res lines share: <HorizontalLine> ends here too.
@@ -146,7 +148,7 @@ Done:
 ;; Clears the whole lo-res screen, all 48 rows, to black.
 ;;
 ;; At $F832.
-;; Out: COLOR = 0, V2 = 47, Y = $FF
+;; Out: PlotColor = 0, VerticalLineEnd = 47, Y = $FF
 ;; Keeps: X
 ;; Also: CLRSCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Clear
@@ -158,7 +160,7 @@ Done:
 ;; Clears the top 40 lo-res rows to black, leaving the mixed screen's four text lines.
 ;;
 ;; At $F836.
-;; Out: COLOR = 0, V2 = 39, Y = $FF
+;; Out: PlotColor = 0, VerticalLineEnd = 39, Y = $FF
 ;; Keeps: X
 ;; Entry:
 ;;   Rows = clears rows 0 to Y to black, a column at a time; <Clear> enters here
@@ -170,18 +172,18 @@ Done:
 ;; Clears rows 0 to Y to black, a column at a time; <Clear> enters here.
 ;;
 ;; In: Y = the bottom row
-;; Out: COLOR = 0, V2 = the bottom row, Y = $FF
+;; Out: PlotColor = 0, VerticalLineEnd = the bottom row, Y = $FF
 ;; Keeps: X
 ;; Also: CLRSC2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Rows:
-    sty V2
+    sty VerticalLineEnd
     ldy #COLUMNS - 1
 
 ;; Draws one column's line in black, from the right edge to the left.
 ;; Also: CLRSC3 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextColumn:
     lda #0
-    sta COLOR
+    sta PlotColor
     jsr VerticalLine
     dey
     bpl NextColumn
@@ -193,7 +195,7 @@ NextColumn:
 ;; At $F847. <Plot> and <ReadColor> pass the row's line, half the row. A line's address is $400, plus
 ;; $80 for an odd line, $100 for each pair of lines in a group of eight, and $28 for each group of eight.
 ;; In: A = the text line (0-23)
-;; Out: GBASL/GBASH = the line's base address, A = <GBASL>
+;; Out: LowResBase/LowResBaseHigh = the line's base address, A = <LowResBase>
 ;; Keeps: X, Y
 ;; Also: GBASCALC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc BaseAddress
@@ -203,8 +205,8 @@ NextColumn:
     pha
     lsr a
     and #PAGE_OF_LINE
-    ora #>LINE1
-    sta GBASH
+    ora #>TextPage1
+    sta LowResBaseHigh
 
     ; The low byte: the third times $28, plus $80 for an odd line.
     pla
@@ -215,24 +217,24 @@ NextColumn:
 ;; Adds four times the third, which makes it times $28 with the eight already there; the odd line's $80 shifts out.
 ;; Also: GBCALC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 StoreLow:
-    sta GBASL
+    sta LowResBase
     asl a
     asl a
-    ora GBASL
-    sta GBASL
+    ora LowResBase
+    sta LowResBase
     rts
 .endproc
 
 ;; Changes the lo-res color to the color number three higher, counting on from 15 to 0.
 ;;
 ;; At $F85F.
-;; In: COLOR = the color in both nibbles
-;; Out: COLOR = the next color in both nibbles, A = the same
+;; In: PlotColor = the color in both nibbles
+;; Out: PlotColor = the next color in both nibbles, A = the same
 ;; Keeps: X, Y
 ;; Also: NXTCOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextColor
 .assert * = $F85F, "NextColor must stay at $F85F."
-    lda COLOR
+    lda PlotColor
     clc
     adc #COLOR_STEP
     ; Falls into SetColor, which keeps the low nibble.
@@ -242,19 +244,19 @@ StoreLow:
 ;;
 ;; At $F864.
 ;; In: A = the color number (0-15; the high nibble is ignored)
-;; Out: COLOR = the color in both nibbles, A = the same
+;; Out: PlotColor = the color in both nibbles, A = the same
 ;; Keeps: X, Y
 ;; Also: SETCOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetColor
 .assert * = $F864, "SetColor must stay at $F864."
     and #LOW_NIBBLE
-    sta COLOR
+    sta PlotColor
     asl a
     asl a
     asl a
     asl a
-    ora COLOR
-    sta COLOR
+    ora PlotColor
+    sta PlotColor
     rts
 .endproc
 
@@ -262,7 +264,7 @@ StoreLow:
 ;;
 ;; At $F871.
 ;; In: A = the row (0-47), Y = the column (0-39)
-;; Out: A = the color number (0-15), GBASL/GBASH = the base address of the row's text line
+;; Out: A = the color number (0-15), LowResBase/LowResBaseHigh = the base address of the row's text line
 ;; Keeps: X, Y
 ;; Also: SCRN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadColor
@@ -270,7 +272,7 @@ StoreLow:
     lsr a
     php
     jsr BaseAddress
-    lda (GBASL),y
+    lda (LowResBase),y
     plp
 
 ;; Takes the high or low nibble of a byte; the disassembler's <Disassembler::Decode> uses it too.

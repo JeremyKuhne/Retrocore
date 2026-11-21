@@ -29,14 +29,14 @@ FIRMWARE_SET_WINDOW = $08
 ;; Sets text mode with a full window, and the lo-res and page-one switches for later graphics; clears STATUS.
 ;;
 ;; At $FB2F.
-;; Out: STATUS = 0
+;; Out: SavedStatus = 0
 ;; Also: INIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc InitDisplay
     .assert * = $FB2F, "InitDisplay must stay at $FB2F."
     lda #0
-    sta STATUS
-    lda LORES
-    lda LOWSCR
+    sta SavedStatus
+    lda HiResOff
+    lda Page2Off
     ; Falls into SetText.
 .endproc
 
@@ -46,7 +46,7 @@ FIRMWARE_SET_WINDOW = $08
 ;; Also: SETTXT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetText
     .assert * = $FB39, "SetText must stay at $FB39."
-    lda TXTSET
+    lda TextOn
     lda #0
     beq SetWindow
 .endproc
@@ -57,8 +57,8 @@ FIRMWARE_SET_WINDOW = $08
 ;; Also: SETGR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetGraphics
     .assert * = $FB40, "SetGraphics must stay at $FB40."
-    lda TXTCLR
-    lda MIXSET
+    lda TextOff
+    lda MixedOn
     jsr LowRes::ClearTop
     lda #MIXED_TEXT_TOP
     ; Falls into SetWindow.
@@ -70,13 +70,13 @@ FIRMWARE_SET_WINDOW = $08
 ;; At $FB4B. The Apple II's Monitors set the 40-column width here themselves, then WNDBTM = 24, and move the
 ;; cursor to the bottom line (<VerticalTabTo>).
 ;; In: A = the window's top line
-;; Out: WNDTOP, WNDLFT, WNDWDTH, WNDBTM, CV = the bottom line
+;; Out: WindowTop, WindowLeft, WindowWidth, WindowBottom, CV = the bottom line
 ;; Also: SETWND (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetWindow
     .assert * = $FB4B, "SetWindow must stay at $FB4B."
-    sta WNDTOP
+    sta WindowTop
     lda #0
-    sta WNDLFT
+    sta WindowLeft
 .if MONITOR = MONITOR_IIE
 
     ; The firmware does the rest, for 40 or 80 columns.
@@ -86,12 +86,12 @@ FIRMWARE_SET_WINDOW = $08
 
     ; 40 columns.
     lda #SCREEN_WIDTH
-    sta WNDWDTH
+    sta WindowWidth
 .endif
 
     ; The full screen's bottom, and the cursor on its last line. On the IIe nothing reaches these six bytes.
     lda #SCREEN_LINES
-    sta WNDBTM
+    sta WindowBottom
     lda #SCREEN_LINES - 1
     ; Falls into VerticalTabTo.
 .endproc
@@ -100,7 +100,7 @@ FIRMWARE_SET_WINDOW = $08
 ;;
 ;; At $FB5B.
 ;; In: A = the line, 0-23
-;; Out: CV = A, BASL/BASH = its base address (<VerticalTab>)
+;; Out: CV = A, TextBase/TextBaseHigh = its base address (<VerticalTab>)
 ;; Also: TABV (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc VerticalTabTo
     .assert * = $FB5B, "VerticalTabTo must stay at $FB5B."

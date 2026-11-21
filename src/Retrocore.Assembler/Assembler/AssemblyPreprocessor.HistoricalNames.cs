@@ -30,16 +30,27 @@ internal sealed partial class AssemblyPreprocessor
     /// </summary>
     /// <param name="node">The declaring statement.</param>
     /// <param name="qualified">The definition's qualified name.</param>
-    private void RecordHistoricalNames(AssemblyStatement node, string qualified)
+    /// <returns>For a <c>.set</c> with old names, the private name holding this value; otherwise null.</returns>
+    private string? RecordHistoricalNames(AssemblyStatement node, string qualified)
     {
         if (node.Location is not { IsMacroExpansion: false } location
             || !_alsoNames.TryGetValue(location.Path, out AssemblyAlsoNames? names)
-            || names is null)
+            || names is null
+            || names.Of(location.Path, location.Line) is not { Count: > 0 } historical)
         {
-            return;
+            return null;
         }
 
-        foreach (string name in names.Of(location.Path, location.Line))
+        // The assembler aliases a .set variable's version at this line, not the variable.
+        string? snapshot = null;
+        if (node.Kind == AssemblyStatementKind.Variable)
+        {
+            snapshot = $"{PrivatePrefix}also_{_project.Statements.Count}";
+            _defined.Add(snapshot);
+        }
+
+        string target = snapshot ?? qualified;
+        foreach (string name in historical)
         {
             _historicalNames ??= [with(StringComparer.Ordinal)];
             if (!_historicalNames.TryGetValue(name, out List<string>? targets))
@@ -47,8 +58,10 @@ internal sealed partial class AssemblyPreprocessor
                 _historicalNames[name] = targets = [];
             }
 
-            if (!targets.Contains(qualified)) { targets.Add(qualified); }
+            if (!targets.Contains(target)) { targets.Add(target); }
         }
+
+        return snapshot;
     }
 
     /// <summary>

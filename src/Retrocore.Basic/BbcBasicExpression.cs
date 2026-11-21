@@ -21,7 +21,9 @@ namespace Retrocore.Basic;
 ///   A function whose word has no bracket takes a factor, so <c>LEN "abc"</c> and <c>ABS -5</c> work as in BASIC;
 ///   <c>LEFT$(</c>, <c>RIGHT$(</c>, <c>MID$(</c>, <c>STRING$(</c> and <c>INSTR(</c> take a bracketed list. <c>TRUE</c>,
 ///   <c>FALSE</c> and <c>PI</c> are constants, and <c>PAGE</c>, <c>TOP</c>, <c>LOMEM</c>, <c>HIMEM</c>,
-///   <c>COUNT</c> and <c>ERL</c> are read from BASIC's zero page. Numbers can be hexadecimal, <c>&amp;FF</c>. What
+///   <c>COUNT</c> and <c>ERL</c> are read from BASIC's zero page. Numbers can be hexadecimal, <c>&amp;FF</c>. The
+///   indirections read memory as BASIC does: <c>?</c>, <c>!</c> and <c>$</c> before a factor, and <c>?</c> and
+///   <c>!</c> straight after a variable, as in <c>A%?1</c>. What
 ///   needs BASIC or the MOS running, such as <c>RND</c>, <c>TIME</c>, <c>GET</c> and <c>EVAL</c>, is refused.
 ///  </para>
 ///  <para>
@@ -518,6 +520,9 @@ internal sealed class BbcBasicExpression
                 return StringLiteral();
             case (byte)'&':
                 return HexLiteral();
+            case (byte)'?' or (byte)'!' or (byte)'$':
+                _at++;
+                return Indirection(value, Int(Factor()));
         }
 
         if (char.IsAsciiDigit((char)value) || value == '.') { return NumberLiteral(); }
@@ -727,8 +732,44 @@ internal sealed class BbcBasicExpression
         }
     }
 
-    // A variable or an array element: a name, a suffix, and subscripts in brackets.
+    // What ?, ! or $ reads at an address, as FIND_INDIRECTION and READ_VARIABLE read it: the low 16 bits of the address;
+    // a byte; four bytes, lowest first; or the characters up to a carriage return, none if there is no return in 256
+    // bytes. A $ address in page zero is "$ range".
+    private BasicValue Indirection(byte operation, int address)
+    {
+        address &= 0xFFFF;
+        switch (operation)
+        {
+            case (byte)'?':
+                return Integer(_memory.Read(address));
+            case (byte)'!':
+                return Integer(Word(address) | (Word((address + 2) & 0xFFFF) << 16));
+        }
+
+        if (address < 0x100) { throw new FormatException("$ range."); }
+        byte[] text = new byte[MaximumString];
+        for (int index = 0; index <= MaximumString; index++)
+        {
+            byte character = _memory.Read((address + index) & 0xFFFF);
+            if (character == '\r') { return BasicValue.Of(text[..index]); }
+            if (index < MaximumString) { text[index] = character; }
+        }
+
+        return BasicValue.Of([]);
+    }
+
+    // A variable or an array element: a name, a suffix, and subscripts in brackets, then, as FIND_VARIABLE takes it, a
+    // ? or ! straight after it for the byte or word at its value plus a factor: A%?1, P!4.
     private BasicValue Name()
+    {
+        BasicValue value = NameValue();
+        if (_at >= _bytes.Length || _bytes[_at] is not ((byte)'?' or (byte)'!')) { return value; }
+        byte operation = _bytes[_at++];
+        int address = Int(value);
+        return Indirection(operation, unchecked(address + Int(Factor())));
+    }
+
+    private BasicValue NameValue()
     {
         string name = Letters();
         if (_at < _bytes.Length && _bytes[_at] is (byte)'%' or (byte)'$') { name += (char)_bytes[_at++]; }
@@ -1194,7 +1235,8 @@ internal sealed class BbcBasicExpression
 
     private static FormatException DivisionByZero() => new("Division by zero.");
 
-    private int Word(int address) => _memory.Read(address) | (_memory.Read(address + 1) << 8);
+    // Two bytes, lowest first; the second wraps from &FFFF to 0, as the 6502's indexed reads do.
+    private int Word(int address) => _memory.Read(address) | (_memory.Read((address + 1) & 0xFFFF) << 8);
 
     private bool Next(char character) => _at + 1 < _bytes.Length && _bytes[_at + 1] == character;
 

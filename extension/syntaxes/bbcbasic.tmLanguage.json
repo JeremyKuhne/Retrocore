@@ -41,6 +41,9 @@
     "statements": {
       "patterns": [
         {
+          "include": "#assembler"
+        },
+        {
           "include": "#remark"
         },
         {
@@ -55,6 +58,506 @@
         {
           "match": "(?:(?<=:)|(?<=THEN)(?<![A-Za-z0-9_`]THEN)|(?<=TH\\.)(?<![A-Za-z0-9_`]TH\\.)|(?<=THE\\.)(?<![A-Za-z0-9_`]THE\\.)|(?<=ELSE)(?<![A-Za-z0-9_`]ELSE)|(?<=EL\\.)(?<![A-Za-z0-9_`]EL\\.)|(?<=ELS\\.)(?<![A-Za-z0-9_`]ELS\\.)|(?<=ERROR)(?<![A-Za-z0-9_`]ERROR)|(?<=ERR\\.)(?<![A-Za-z0-9_`]ERR\\.)|(?<=ERRO\\.)(?<![A-Za-z0-9_`]ERRO\\.)|(?<=REPEAT)(?<![A-Za-z0-9_`]REPEAT)|(?<=REP\\.)(?<![A-Za-z0-9_`]REP\\.)|(?<=REPE\\.)(?<![A-Za-z0-9_`]REPE\\.)|(?<=REPEA\\.)(?<![A-Za-z0-9_`]REPEA\\.)|(?<=LET)(?<![A-Za-z0-9_`]LET))\\s*\\*.*$",
           "name": "string.unquoted.command.retrocore-bbcbasic"
+        },
+        {
+          "match": "&[0-9A-F]+",
+          "name": "constant.numeric.hex.retrocore-bbcbasic"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-bbcbasic"
+        },
+        {
+          "match": "(?:(FN)([A-Za-z0-9_`]*))",
+          "captures": {
+            "1": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "entity.name.function.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "(?:((?:PROC|(?:PRO)\\.))([A-Za-z0-9_`]*))",
+          "captures": {
+            "1": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "entity.name.function.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "(?:((?:AND|(?:A|AN)\\.))|((?:ABS|(?:AB)\\.))|((?:ACS|(?:AC)\\.))|((?:ADVAL|(?:AD|ADV|ADVA)\\.))|((?:ASC|(?:AS)\\.))|(ASN)|((?:ATN|(?:AT)\\.))|((?:AUTO|(?:AU|AUT)\\.))|((?:BGET|(?:B|BG|BGE)\\.)(?![A-Za-z0-9_`]))|((?:BPUT|(?:BP|BPU)\\.)(?![A-Za-z0-9_`]))|((?:COLOUR|(?:C|CO|COL|COLO|COLOU)\\.))|((?:CALL|(?:CA|CAL)\\.))|((?:CHAIN|(?:CH|CHA|CHAI)\\.))|((?:CHR\\$|(?:CHR)\\.))|((?:CLEAR|(?:CL|CLE|CLEA)\\.)(?![A-Za-z0-9_`]))|((?:CLOSE|(?:CLO|CLOS)\\.)(?![A-Za-z0-9_`]))|(CLG(?![A-Za-z0-9_`]))|(CLS(?![A-Za-z0-9_`]))|(COS)|((?:COUNT|(?:COU|COUN)\\.)(?![A-Za-z0-9_`]))|((?:DEG|(?:DE)\\.))|(DEF)|((?:DELETE|(?:DEL|DELE|DELET)\\.))|((?:DIV|(?:DI)\\.))|(DIM)|((?:DRAW|(?:DR|DRA)\\.))|((?:ENDPROC|(?:E|EN|END|ENDP|ENDPR|ENDPRO)\\.)(?![A-Za-z0-9_`]))|(END(?![A-Za-z0-9_`]))|((?:ENVELOPE|(?:ENV|ENVE|ENVEL|ENVELO|ENVELOP)\\.))|((?:ELSE|(?:EL|ELS)\\.))|((?:EVAL|(?:EV|EVA)\\.))|((?:ERL|(?:ER)\\.)(?![A-Za-z0-9_`]))|((?:ERROR|(?:ERR|ERRO)\\.))|((?:EOF|(?:EO)\\.)(?![A-Za-z0-9_`]))|(EOR)|(ERR(?![A-Za-z0-9_`]))|((?:EXP|(?:EX)\\.))|(EXT(?![A-Za-z0-9_`]))|((?:FOR|(?:F|FO)\\.))|((?:FALSE|(?:FA|FAL|FALS)\\.)(?![A-Za-z0-9_`]))|(FN)|((?:G\\s*O\\s*T\\s*O|(?:G|GO|GOT)\\.))|((?:GET\\$|(?:GE|GET)\\.))|(GET)|((?:GOSUB|(?:GOS|GOSU)\\.))|((?:GCOL|(?:GC|GCO)\\.))|((?:HIMEM|(?:H|HI|HIM|HIME)\\.)(?![A-Za-z0-9_`]))|((?:INPUT|(?:I|IN|INP|INPU)\\.))|(IF)|((?:INKEY\\$|(?:INK|INKE|INKEY)\\.))|(INKEY)|(INT)|((?:INSTR\\(|(?:INS|INST|INSTR)\\.))|((?:LIST|(?:L|LI|LIS)\\.))|((?:LINE|(?:LIN)\\.))|((?:LOAD|(?:LO|LOA)\\.))|((?:LOMEM|(?:LOM|LOME)\\.)(?![A-Za-z0-9_`]))|((?:LOCAL|(?:LOC|LOCA)\\.))|((?:LEFT\\$\\(|(?:LE|LEF|LEFT|LEFT\\$)\\.))|(LEN)|(LET)|(LOG)|(LN)|((?:MID\\$\\(|(?:M|MI|MID|MID\\$)\\.))|((?:MODE|(?:MO|MOD)\\.))|(MOD)|((?:MOVE|(?:MOV)\\.))|((?:NEXT|(?:N|NE|NEX)\\.))|(NEW(?![A-Za-z0-9_`]))|((?:NOT|(?:NO)\\.))|((?:OLD|(?:O|OL)\\.)(?![A-Za-z0-9_`]))|(ON)|((?:OFF|(?:OF)\\.))|(OR)|((?:OPENIN|(?:OP|OPE|OPEN|OPENI)\\.))|((?:OPENOUT|(?:OPENO|OPENOU)\\.))|((?:OPENUP|(?:OPENU)\\.))|((?:OSCLI|(?:OS|OSC|OSCL)\\.))|((?:PRINT|(?:P|PR|PRI|PRIN)\\.))|((?:PAGE|(?:PA|PAG)\\.)(?![A-Za-z0-9_`]))|((?:PTR|(?:PT)\\.)(?![A-Za-z0-9_`]))|(PI(?![A-Za-z0-9_`]))|((?:PLOT|(?:PL|PLO)\\.))|((?:POINT\\(|(?:PO|POI|POIN|POINT)\\.))|((?:PROC|(?:PRO)\\.))|(POS(?![A-Za-z0-9_`]))|((?:RETURN|(?:R|RE|RET|RETU|RETUR)\\.)(?![A-Za-z0-9_`]))|((?:REPEAT|(?:REP|REPE|REPEA)\\.))|((?:REPORT|(?:REPO|REPOR)\\.)(?![A-Za-z0-9_`]))|((?:READ|(?:REA)\\.))|((?:RUN|(?:RU)\\.)(?![A-Za-z0-9_`]))|((?:RAD|(?:RA)\\.))|((?:RESTORE|(?:RES|REST|RESTO|RESTOR)\\.))|((?:RIGHT\\$\\(|(?:RI|RIG|RIGH|RIGHT|RIGHT\\$)\\.))|((?:RND|(?:RN)\\.)(?![A-Za-z0-9_`]))|((?:RENUMBER|(?:REN|RENU|RENUM|RENUMB|RENUMBE)\\.))|((?:STEP|(?:S|ST|STE)\\.))|((?:SAVE|(?:SA|SAV)\\.))|((?:SGN|(?:SG)\\.))|((?:SIN|(?:SI)\\.))|((?:SQR|(?:SQ)\\.))|((?:SPC|(?:SP)\\.))|((?:STR\\$|(?:STR)\\.))|((?:STRING\\$\\(|(?:STRI|STRIN|STRING|STRING\\$)\\.))|((?:SOUND|(?:SO|SOU|SOUN)\\.))|((?:STOP|(?:STO)\\.)(?![A-Za-z0-9_`]))|((?:TAN|(?:T|TA)\\.))|((?:THEN|(?:TH|THE)\\.))|(TO)|((?:TAB\\(|(?:TAB)\\.))|((?:TRACE|(?:TR|TRA|TRAC)\\.))|((?:TIME|(?:TI|TIM)\\.)(?![A-Za-z0-9_`]))|((?:TRUE|(?:TRU)\\.)(?![A-Za-z0-9_`]))|((?:UNTIL|(?:U|UN|UNT|UNTI)\\.))|((?:USR|(?:US)\\.))|((?:VDU|(?:V|VD)\\.))|((?:VAL|(?:VA)\\.))|((?:VPOS|(?:VP|VPO)\\.)(?![A-Za-z0-9_`]))|((?:WIDTH|(?:W|WI|WID|WIDT)\\.)))",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "4": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "5": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "6": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "7": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "8": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "9": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "12": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "13": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "14": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "15": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "16": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "17": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "18": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "19": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "20": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "21": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "22": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "23": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "24": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "25": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "26": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "27": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "28": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "29": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "30": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "31": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "32": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "33": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "34": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "35": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "36": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "37": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "38": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "39": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "40": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "41": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "42": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "43": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "44": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "45": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "46": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "47": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "48": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "49": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "50": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "51": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "52": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "53": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "54": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "55": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "56": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "57": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "58": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "59": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "60": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "61": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "62": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "63": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "64": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "65": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "66": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "67": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "68": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "69": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "70": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "71": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "72": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "73": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "74": {
+              "name": "keyword.operator.retrocore-bbcbasic"
+            },
+            "75": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "76": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "77": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "78": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "79": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "80": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "81": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "82": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "83": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "84": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "85": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "86": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "87": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "88": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "89": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "90": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "91": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "92": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "93": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "94": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "95": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "96": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "97": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "98": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "99": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "100": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "101": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "102": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "103": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "104": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "105": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "106": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "107": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "108": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "109": {
+              "name": "keyword.control.retrocore-bbcbasic"
+            },
+            "110": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "111": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "112": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "113": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "114": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "115": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "116": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            },
+            "117": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "118": {
+              "name": "support.function.retrocore-bbcbasic"
+            },
+            "119": {
+              "name": "keyword.other.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-bbcbasic"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-bbcbasic"
+        },
+        {
+          "match": "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?",
+          "name": "variable.other.retrocore-bbcbasic"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-bbcbasic"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-bbcbasic"
+        }
+      ]
+    },
+    "assembler": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.assembler.begin.retrocore-bbcbasic"
+        }
+      },
+      "end": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(\\])",
+      "endCaptures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-bbcbasic"
+        },
+        "2": {
+          "name": "punctuation.section.assembler.end.retrocore-bbcbasic"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "match": "[\\\\;][^:]*",
+          "name": "comment.line.assembler.retrocore-bbcbasic"
+        },
+        {
+          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(\\.)(@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?)(?:\\s*((?i:EQU[BWDS]|BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT)(?![A-Za-z0-9_`])))?",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.line-number.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "punctuation.definition.label.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "entity.name.label.retrocore-bbcbasic"
+            },
+            "4": {
+              "name": "keyword.other.mnemonic.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|((?i:EQU[BWDS]|BRK|CLC|CLD|CLI|CLV|DEX|DEY|INX|INY|NOP|PHA|PHP|PLA|PLP|RTI|RTS|SEC|SED|SEI|TAX|TAY|TSX|TXA|TXS|TYA|BCC|BCS|BEQ|BMI|BNE|BPL|BVC|BVS|AND|EOR|ORA|ADC|CMP|LDA|SBC|ASL|LSR|ROL|ROR|DEC|INC|CPX|CPY|BIT|JMP|JSR|LDX|LDY|STA|STX|STY|OPT)(?![A-Za-z0-9_`])))",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.line-number.retrocore-bbcbasic"
+            },
+            "2": {
+              "name": "keyword.other.mnemonic.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "variable.language.register.retrocore-bbcbasic"
+            },
+            "4": {
+              "name": "comment.line.assembler.retrocore-bbcbasic"
+            },
+            "5": {
+              "name": "keyword.other.mnemonic.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(\\d+)",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.line-number.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "match": "(?<=,)\\s*([XY])(\\)?)([^:]*)",
+          "captures": {
+            "1": {
+              "name": "variable.language.register.retrocore-bbcbasic"
+            },
+            "3": {
+              "name": "comment.line.assembler.retrocore-bbcbasic"
+            }
+          }
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
         },
         {
           "match": "&[0-9A-F]+",

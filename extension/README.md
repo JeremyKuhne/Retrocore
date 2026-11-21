@@ -1322,7 +1322,10 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   typed. Its call stack shows each PROC and FN beside the GOSUBs, and Step Over and Step
   Out step over them; its Variables are the resident integers A%-Z% that are not zero,
   then the variables in the order BASIC made them, and its Program scope is PAGE to TOP,
-  the heap and BASIC's stack. STOP is an error, and there is no CONT.
+  the heap and BASIC's stack. STOP is an error, and there is no CONT. Watches read memory
+  with `?`, `!` and `$` as BASIC does. Between `[` and `]`, the assembler's mnemonics,
+  registers and comments are highlighted and are not variables, while its labels are; and
+  another BASIC's word, such as `HOME`, is warned of only as a statement of its own.
 
 ### BASIC files
 

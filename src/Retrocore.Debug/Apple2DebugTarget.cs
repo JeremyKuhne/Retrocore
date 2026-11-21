@@ -15,7 +15,7 @@ namespace Retrocore.Debug;
 ///  The Apple IIe as the debugger sees it: a 6502 or 65C02, the IIe's memory areas, and its text, video, beam
 ///  and Disk II views.
 /// </summary>
-internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
+internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -696,21 +696,19 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         return _machine.Processor.FetchedOpcode;
     }
 
-    /// <summary>
-    ///  Advances by one of the SoftCard's Z80 T-states while it runs, else by a cycle, for the Z80's view.
-    /// </summary>
-    internal void StepTState() => Advance(halfCycle: true);
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A T-state is half of the Apple's cycle.
+    ///  </para>
+    /// </remarks>
+    public void StepTState() => Advance(halfCycle: true);
 
-    /// <summary>
-    ///  Gets whether the next <see cref="StepTState"/> starts an Apple cycle, the half in which the 6502 runs.
-    /// </summary>
-    internal bool StartsCycle => !_machine.MidCycle;
+    /// <inheritdoc/>
+    public bool StartsCycle => !_machine.MidCycle;
 
-    /// <summary>
-    ///  Gets whether the last step ran a 6502 cycle, which it does beside the Z80 while the Z80 finishes its instruction
-    ///  after giving the bus back.
-    /// </summary>
-    internal bool Stepped { get; private set; }
+    /// <inheritdoc/>
+    public bool Stepped { get; private set; }
 
     // Steps the machine and observes what the 6502 ran, if it stepped: while the SoftCard holds it, its last cycle is
     // an old one, but it runs beside the Z80 while the Z80 finishes an instruction after giving the bus back.
@@ -761,7 +759,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
         get
         {
             if (_machine.Bus.SoftCard is not { } card) { return null; }
-            if (_softCard?.Card != card) { _softCard = new(this, card); }
+            if (_softCard?.Card != card) { _softCard = new(this, card, "SoftCard Z80", "The SoftCard Z80's memory"); }
             return _softCard;
         }
     }
@@ -769,10 +767,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IDebugTarget
     /// <inheritdoc/>
     public bool CoprocessorActive => _machine.Bus.SoftCard is { OwnsBus: true };
 
-    /// <summary>
-    ///  Gets the SoftCard in the machine now, or null.
-    /// </summary>
-    internal SoftCard? InstalledSoftCard => _machine.Bus.SoftCard;
+    /// <inheritdoc/>
+    public Z80Card? InstalledZ80Card => _machine.Bus.SoftCard;
 
     /// <inheritdoc/>
     public (ushort Target, int Length)? CallAt(ushort address) =>

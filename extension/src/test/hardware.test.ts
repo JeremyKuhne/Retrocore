@@ -38,8 +38,10 @@ test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile, 
         "slot 0 takes the language and firmware cards");
 });
 
-test("the Apple III's slots are offered only the ProFile card", () => {
-    assert.deepEqual(cardsFor("slot4", "apple3").map(card => card.label), ["ProFile interface card"]);
+test("the Apple III's slots are offered the ProFile card and the SoftCard ///", () => {
+    assert.deepEqual(cardsFor("slot4", "apple3").map(card => card.label), ["ProFile interface card", "SoftCard ///"]);
+    assert.deepEqual(cardsFor("slot1", "apple3").find(card => card.label === "SoftCard ///")?.args, { action: "addSoftCard3" });
+    assert.ok(!cardsFor("slot5").some(card => card.label === "SoftCard ///"), "the Apple II takes its own SoftCard");
 });
 
 test("a saved machine comes back only while the launch's hardware options are the ones it was saved under", () => {

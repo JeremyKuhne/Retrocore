@@ -72,10 +72,13 @@ public sealed class Apple2Machine : IMachine
 
     /// <summary>
     ///  Presses CONTROL-RESET: the soft switches and devices reset and the processor takes its reset vector; RAM,
-    ///  media and the keyboard are kept, so the firmware can tell a warm reset from a cold one.
+    ///  media and the keyboard are kept, so the firmware can tell a warm reset from a cold one. A cycle
+    ///  <see cref="StepTState"/> stopped in the middle of finishes first, as a reset comes between cycles.
     /// </summary>
     public void Reset()
     {
+        if (_halfway) { FinishSoftCardCycle(); }
+
         Bus.HoldButtonsThroughReset();
         Bus.ResetDevices();
         Bus.ResetSwitches();

@@ -903,6 +903,13 @@ byte-identical to it and debugs as a ROM module. Memory references can name a ba
 `system`, `bank0` and up, `rom`, or an X-byte such as `x81` for SOS's extended
 addresses. See [the Apple III guide](../docs/Apple3.md).
 
+`softCard3` puts Microsoft's SoftCard /// in a slot, 1 to 4 (its boot disk looks from
+slot 4 down), so its own CP/M disk boots from `disks`. The Z80 shows as its own thread,
+**SoftCard /// Z80**, and `z80:` names memory as it sees it, through the card's mapping
+PROM: Z80 `$0000` is the Apple's `$2000`, the I/O page is at `$A000` and zero page at
+`$F000`. A `.cpu Z80` source loads at `z80:$0100` and starts there with the Z80 holding
+the bus, until its `OUT ($00),A` gives it back.
+
 ## Debugging on the TRS-80 Model I
 
 `"machine": "trs80-model1"` debugs a Model I with the same source debugging, call
@@ -1457,7 +1464,8 @@ takes the mouse card (one per machine), as the `mouse` launch option does: click
 display to move it with your mouse, and press Escape to let go. Any free slot also takes
 a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
 insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
-Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`, and the
+SoftCard ///, one at a time, as the `softCard3` launch option does.
 Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
 `disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
 Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
@@ -1473,7 +1481,7 @@ Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you
 launch the same configuration, by its `name`. launch.json stays as written: it sets
 up the first launch, and changing one of its hardware or media options (such as
-`diskImage`, `dos`, `model`, `mockingboard` or `softCard`) starts that configuration afresh.
+`diskImage`, `dos`, `model`, `mockingboard`, `softCard` or `softCard3`) starts that configuration afresh.
 **Retrocore: Reset Saved Machine** (also on the Machine view's **...** menu) does the same by
 hand. A disk a `dos` launch builds, and a tape being recorded, are not remembered;
 the launch makes them again. Each drive shows its media, its

@@ -17,6 +17,8 @@ internal sealed partial class SourceAnalysis
 
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, IReadOnlyList<DocumentationScopes>> _scopes = [with(StringComparer.OrdinalIgnoreCase)];
+    private HashSet<string>? _scopeNames;
     private DocumentationSet? _documentation;
 
     private SourceAnalysis(string root, AssemblyResult result, IEnumerable<string> members, Func<string, string?> text)
@@ -32,12 +34,15 @@ internal sealed partial class SourceAnalysis
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
+        HashSet<(string Path, int Line)> assembled = [];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
             string name = spelling.TryGetValue(symbol.Name, out string? source) ? source : symbol.Name;
             SymbolSiteKind kind = symbol.IsConstant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
-            Add(new(name, Path.GetFullPath(location.Path), location.Line, location.Column, kind, symbol.Value));
+            string path = Path.GetFullPath(location.Path);
+            Add(new(name, path, location.Line, location.Column, kind, symbol.Value));
+            assembled.Add((path.ToUpperInvariant(), location.Line));
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
@@ -59,7 +64,11 @@ internal sealed partial class SourceAnalysis
                 match = TextDefinition().Match(lines[line]);
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
-                if (match.Success && !instruction && !_definitions.ContainsKey(match.Groups["name"].Value))
+                // A line the assembler defined a name on has it already, qualified by its scope.
+                if (match.Success
+                    && !instruction
+                    && !_definitions.ContainsKey(match.Groups["name"].Value)
+                    && !assembled.Contains((path.ToUpperInvariant(), line)))
                 {
                     bool constant = match.Groups["equate"].Success;
                     SymbolSiteKind kind = constant ? SymbolSiteKind.Constant : SymbolSiteKind.Label;
@@ -164,6 +173,104 @@ internal sealed partial class SourceAnalysis
             .Where(topic => topic.Name != name)
             .SelectMany(topic => Find(topic.Name))
             .Distinct()];
+    }
+
+    /// <summary>
+    ///  Finds where a name used on a line is defined, looking a plain name up as the assembler does there: in the
+    ///  scopes that contain the line, innermost first, then in the scopes the <c>.using</c> directives in effect
+    ///  name, then as <see cref="Find(string)"/> does.
+    /// </summary>
+    /// <param name="name">The name as written.</param>
+    /// <param name="path">The full path of the file it is used in.</param>
+    /// <param name="line">The zero-based line it is used on.</param>
+    /// <returns>The definitions; several when two used scopes define the name.</returns>
+    internal IReadOnlyList<SymbolSite> Find(string name, string path, int line)
+    {
+        DocumentationScopes scopes = ScopesAt(path, line);
+        if (name.Contains("::", StringComparison.Ordinal) || (scopes.Scope.Length == 0 && scopes.Usings.Count == 0))
+        {
+            return Find(name);
+        }
+
+        for (string scope = scopes.Scope; scope.Length != 0; scope = Parent(scope))
+        {
+            if (_definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? sites)) { return sites; }
+        }
+
+        if (_definitions.TryGetValue(name, out List<SymbolSite>? root)) { return root; }
+        foreach (DocumentationUsing directive in scopes.Usings)
+        {
+            List<SymbolSite> used =
+            [
+                .. directive.Targets(IsScope)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .SelectMany(scope => _definitions.TryGetValue($"{scope}::{name}", out List<SymbolSite>? found) ? found : [])
+            ];
+
+            if (used.Count != 0) { return used; }
+        }
+
+        return Find(name);
+    }
+
+    /// <summary>
+    ///  Gets the names the <c>.using</c> directives in effect on a line make usable unqualified there.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <returns>Each name as code there can write it, and its definition, innermost directive first.</returns>
+    internal IEnumerable<(string Name, SymbolSite Site)> UsedNames(string path, int line)
+    {
+        foreach (DocumentationUsing directive in ScopesAt(path, line).Usings)
+        {
+            foreach (string scope in directive.Targets(IsScope).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                string prefix = $"{scope}::";
+                foreach (SymbolSite site in Definitions)
+                {
+                    if (site.Name.Length > prefix.Length
+                        && site.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                        && site.Name.IndexOf("::", prefix.Length, StringComparison.Ordinal) < 0)
+                    {
+                        yield return (site.Name[prefix.Length..], site);
+                    }
+                }
+            }
+        }
+    }
+
+    // The scope a line is in and the .using directives in effect on it.
+    private DocumentationScopes ScopesAt(string path, int line)
+    {
+        if (!_scopes.TryGetValue(path, out IReadOnlyList<DocumentationScopes>? lines))
+        {
+            _scopes[path] = lines = DocumentationParser.ScopesByLine(LinesOf(path));
+        }
+
+        return (uint)line < (uint)lines.Count ? lines[line] : DocumentationScopes.Root;
+    }
+
+    // Whether a qualified name is a scope that some definition is in.
+    private bool IsScope(string name)
+    {
+        if (_scopeNames is null)
+        {
+            _scopeNames = [with(StringComparer.OrdinalIgnoreCase)];
+            foreach (string definition in _definitions.Keys)
+            {
+                for (string scope = Parent(definition); scope.Length != 0 && _scopeNames.Add(scope); scope = Parent(scope))
+                {
+                }
+            }
+        }
+
+        return _scopeNames.Contains(name);
+    }
+
+    private static string Parent(string name)
+    {
+        int separator = name.LastIndexOf("::", StringComparison.Ordinal);
+        return separator < 0 ? "" : name[..separator];
     }
 
     /// <summary>

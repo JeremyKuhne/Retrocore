@@ -78,7 +78,17 @@ internal sealed partial class AssemblyPreprocessor
             return false;
         }
 
-        return ProcessSource(resolved, line.Dialect, line.Location, selected, includeDepth + 1, macroDepth);
+        // A .using does not reach into an included file, and an included file's does not leak out of it.
+        UsingDirective? usings = _constantUsings;
+        _constantUsings = null;
+        try
+        {
+            return ProcessSource(resolved, line.Dialect, line.Location, selected, includeDepth + 1, macroDepth);
+        }
+        finally
+        {
+            _constantUsings = usings;
+        }
     }
 
     private void IncludeBinary(string operand, Line line)

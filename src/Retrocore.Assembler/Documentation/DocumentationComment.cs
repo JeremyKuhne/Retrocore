@@ -84,6 +84,12 @@ public sealed class DocumentationComment
     public bool IsTrailing { get; init; }
 
     /// <summary>
+    ///  Gets the <c>.using</c> directives in effect at the comment, innermost first, whose scopes its plain links
+    ///  reach after the enclosing scopes.
+    /// </summary>
+    public IReadOnlyList<DocumentationUsing> Usings { get; init; } = [];
+
+    /// <summary>
     ///  Gets a section by its canonical name.
     /// </summary>
     /// <param name="name">The name, such as <c>Keeps</c>.</param>

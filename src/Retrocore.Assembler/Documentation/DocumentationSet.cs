@@ -320,6 +320,29 @@ public sealed class DocumentationSet
     /// <returns>Whether it is defined.</returns>
     public bool Defines(string name) => _symbols.ContainsKey(name);
 
+    /// <summary>
+    ///  Tests whether a qualified name is a scope: one that a documented or assembled name is qualified by.
+    /// </summary>
+    /// <param name="name">The qualified scope name, without a leading <c>::</c>.</param>
+    /// <returns>Whether some name is in that scope.</returns>
+    public bool IsScope(string name) => (_scopes ??= Scopes()).Contains(name);
+
+    private HashSet<string>? _scopes;
+
+    private HashSet<string> Scopes()
+    {
+        HashSet<string> scopes = [with(StringComparer.Ordinal)];
+        foreach (string name in _topics.Keys.Concat(_symbols.Keys))
+        {
+            for (int end = name.LastIndexOf("::", StringComparison.Ordinal); end > 0; end = name.LastIndexOf("::", end - 1, StringComparison.Ordinal))
+            {
+                if (!scopes.Add(name[..end])) { break; }
+            }
+        }
+
+        return scopes;
+    }
+
     private Dictionary<string, List<DocumentationTopic>>? _also;
 
     private static DocumentationTopic Merge(DocumentationSet set, List<DocumentationComment> comments)

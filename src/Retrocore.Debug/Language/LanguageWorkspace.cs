@@ -203,6 +203,14 @@ internal sealed partial class LanguageWorkspace
             list.Add(item);
         }
 
+        // Notes that are not errors, such as a .using nothing needs, show as unnecessary code.
+        foreach (AssemblyDiagnostic note in analysis.Result.Information)
+        {
+            (string path, Diagnostic item) = Convert(note, analysis.Root);
+            if (!byFile.TryGetValue(path, out List<Diagnostic>? list)) { byFile[path] = list = []; }
+            list.Add(item.Unnecessary());
+        }
+
         // Before the SDK is indexed, every link to another module would look broken; IndexSdk checks again.
         IEnumerable<KeyValuePair<string, List<Diagnostic>>> documentationDiagnostics = _sdkIndexed
             ? DocumentationDiagnostics(analysis)

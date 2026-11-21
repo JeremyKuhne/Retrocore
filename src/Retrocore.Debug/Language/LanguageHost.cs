@@ -220,7 +220,7 @@ internal static class LanguageHost
             return [];
         }
 
-        if (workspace.AnalysisOf(path)?.Find(word.Word) is { Count: > 0 } sites) { return sites; }
+        if (workspace.AnalysisOf(path)?.Find(word.Word, path, position.Line) is { Count: > 0 } sites) { return sites; }
 
         // A local label: the nearest line in this file that defines it.
         if (SourceText.LocalDefinition(lines, word.Word, position.Line) is { } local)

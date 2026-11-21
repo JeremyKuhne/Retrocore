@@ -1,5 +1,7 @@
 # `.using`: names from another scope without qualifying them
 
+Status: **built 2026-11-21** in the assembler, doc links and editor; no SDK source uses it yet.
+
 A specification for a native-dialect directive that makes a scope's names usable without their `Scope::` prefix,
 for a stretch of source. Motivation: the IIe firmware's routines work on the 80-column firmware's state, which the
 style guide puts in a scope (`EightyColumns::CursorColumn`, `EightyColumns::Mode` ...). Without `.using`, every use is

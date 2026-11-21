@@ -133,7 +133,7 @@ internal static partial class SymbolReferences
         string token,
         IReadOnlyList<SymbolSite> targets)
     {
-        IReadOnlyList<SymbolSite> sites = analysis.Find(token);
+        IReadOnlyList<SymbolSite> sites = analysis.Find(token, where.Path, where.Line);
         if (sites.Count == 0 && SourceText.LocalDefinition(lines, token, where.Line) is { } local)
         {
             sites = [local with { Path = where.Path }];

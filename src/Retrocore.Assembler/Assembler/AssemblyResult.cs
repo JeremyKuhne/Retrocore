@@ -41,6 +41,7 @@ public sealed class AssemblyResult
 
         SymbolDefinitions = Array.AsReadOnly(symbols);
         Diagnostics = [];
+        Information = image.Information is { } information ? information.AsReadOnly() : [];
         // Copy final values rather than retaining editable nodes or pass state for later model edits to change.
         AssemblySourceMapEntry[] mappings = new AssemblySourceMapEntry[image.StatementCount];
         for (int index = 0; index < mappings.Length; index++)
@@ -63,6 +64,7 @@ public sealed class AssemblyResult
     internal AssemblyResult(AssemblyDiagnostic[] diagnostics)
     {
         Diagnostics = Array.AsReadOnly(diagnostics);
+        Information = [];
         Sections = Array.AsReadOnly(Array.Empty<AssemblySection>());
         SourceMap = Array.AsReadOnly(Array.Empty<AssemblySourceMapEntry>());
         Symbols = new ReadOnlyDictionary<string, long>(new Dictionary<string, long>());
@@ -106,6 +108,12 @@ public sealed class AssemblyResult
     ///  Gets assembly errors.
     /// </summary>
     public IReadOnlyList<AssemblyDiagnostic> Diagnostics { get; }
+
+    /// <summary>
+    ///  Gets notes about a successful assembly that are not errors, such as a <c>.using</c> whose scopes give the
+    ///  code no name, which an editor shows as unnecessary.
+    /// </summary>
+    public IReadOnlyList<AssemblyDiagnostic> Information { get; }
 
     private static IReadOnlyDictionary<string, ReadOnlyMemory<byte>> EmptyFiles { get; } =
         new ReadOnlyDictionary<string, ReadOnlyMemory<byte>>(new Dictionary<string, ReadOnlyMemory<byte>>());

@@ -22,7 +22,7 @@ COMMAND_PAIR_STEP = $100 - 3
 
 ; Slots.
 
-;; The page of slot 1's ROM, the lowest page <MSLOT> can name a slot by.
+;; The page of slot 1's ROM, the lowest page <ExpansionRomSlot> can name a slot by.
 FIRST_SLOT_PAGE = SLOT_ROM_PAGE + 1
 
 .if MONITOR = MONITOR_IIE
@@ -34,7 +34,7 @@ FIRST_SLOT_PAGE = SLOT_ROM_PAGE + 1
 ;; The firmware function that prints a character in 80 columns.
 FIRMWARE_OUTPUT = $00
 
-;; The firmware function that sets <BASL>/<BASH> for a line, as <SetLineBase> does.
+;; The firmware function that sets <TextBase>/<TextBaseHigh> for a line, as <SetLineBase> does.
 FIRMWARE_LINE_BASE = $04
 
 ;; The firmware function that clears the window and homes the cursor, as <Home> does.
@@ -75,7 +75,7 @@ FIRMWARE_CLEAR_LINE_FROM = $04
 ;;
 ;; At $FBC1.
 ;; In: A = the line, 0-23
-;; Out: BASL/BASH = the line's address, A = its low byte, carry = clear
+;; Out: TextBase/TextBaseHigh = the line's address, A = its low byte, carry = clear
 ;; Keeps: X, Y
 ;; Also: BASCALC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc BaseAddress
@@ -85,8 +85,8 @@ FIRMWARE_CLEAR_LINE_FROM = $04
     ; The high byte: page one's, plus the line's page.
     lsr a
     and #LowRes::PAGE_OF_LINE
-    ora #>LINE1
-    sta BASH
+    ora #>TextPage1
+    sta TextBaseHigh
 
     ; The low byte: $80 for an odd line (bit 0, now in the carry), plus $28 for each third.
     pla
@@ -98,11 +98,11 @@ FIRMWARE_CLEAR_LINE_FROM = $04
 ;; Stores the low byte and multiplies its third by five.
 ;; Also: BASCLC2 (A2RM79, IIEROM82, IIETRM85)
 StoreLow:
-    sta BASL
+    sta TextBase
     asl a
     asl a
-    ora BASL
-    sta BASL
+    ora TextBase
+    sta TextBase
     rts
 .endproc
 
@@ -128,7 +128,7 @@ StoreLow:
 Cycle:
     lda #BELL_HALF_CYCLE
     jsr Delay
-    lda SPKR
+    lda Speaker
     dey
     bne Cycle
 
@@ -144,8 +144,8 @@ Done:
 ;; Also: STORADV (A2RM79, IIEROM82, IIETRM85)
 .proc StoreAndAdvance
 .assert * = $FBF0, "StoreAndAdvance must stay at $FBF0."
-    ldy CH
-    sta (BASL),y
+    ldy CursorColumn
+    sta (TextBase),y
     ; Falls into AdvanceCursor.
 .endproc
 
@@ -157,9 +157,9 @@ Done:
 ;; Also: ADVANCE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc AdvanceCursor
 .assert * = $FBF4, "AdvanceCursor must stay at $FBF4."
-    inc CH
-    lda CH
-    cmp WNDWDTH
+    inc CursorColumn
+    lda CursorColumn
+    cmp WindowWidth
     bcs CarriageReturn
 
 ;; The return that <Backspace>, and on the Enhanced IIe <CursorUp> and <Escape::Command>, share.
@@ -198,13 +198,13 @@ Done:
 ;; Also: BS (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Backspace
 .assert * = $FC10, "Backspace must stay at $FC10."
-    dec CH
+    dec CursorColumn
     bpl AdvanceCursor::Done
 
     ; The window's last column, on the line above.
-    lda WNDWDTH
-    sta CH
-    dec CH
+    lda WindowWidth
+    sta CursorColumn
+    dec CursorColumn
     ; Falls into CursorUp.
 .endproc
 
@@ -214,7 +214,7 @@ Done:
 ;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc CursorUp
 .assert * = $FC1A, "CursorUp must stay at $FC1A."
-    lda WNDTOP
+    lda WindowTop
     cmp CV
 .if ENHANCED
     bcs AdvanceCursor::Done
@@ -225,7 +225,7 @@ Done:
     ; Falls into VerticalTab.
 .endproc
 
-;; Sets <BASL>/<BASH> for the cursor's line, <CV>.
+;; Sets <TextBase>/<TextBaseHigh> for the cursor's line, <CV>.
 ;;
 ;; At $FC22.
 ;; Also: VTAB (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -237,18 +237,18 @@ Done:
 
 .if ENHANCED
 
-;; Sets <BASL>/<BASH> for a line, offset by the window's left edge.
+;; Sets <TextBase>/<TextBaseHigh> for a line, offset by the window's left edge.
 ;;
 ;; At $FC24. The Enhanced IIe has the internal firmware compute it (function 4), for 40 or 80 columns.
 ;; In: A = the line
-;; Out: BASL/BASH
+;; Out: TextBase/TextBaseHigh
 ;; Entry:
 ;;   ToFirmware = goes to the firmware function in Y; <ClearToEndOfWindow> and <Scroll> branch here too
 ;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; The firmware takes the line in BASL and the caller's Y in A.
-    sta BASL
+    sta TextBase
     tya
     ldy #FIRMWARE_LINE_BASE
 
@@ -261,11 +261,11 @@ ToFirmware:
 .endproc
 .else
 
-;; Sets <BASL>/<BASH> for a line, offset by the window's left edge.
+;; Sets <TextBase>/<TextBaseHigh> for a line, offset by the window's left edge.
 ;;
 ;; At $FC24.
 ;; In: A = the line
-;; Out: BASL/BASH = the line's address plus the window's left edge, A = its low byte
+;; Out: TextBase/TextBaseHigh = the line's address plus the window's left edge, A = its low byte
 ;; Keeps: X, Y
 ;; Entry:
 ;;   Done = the return that <CursorUp> and <Escape::Command> share
@@ -274,8 +274,8 @@ ToFirmware:
 .assert * = $FC24, "SetLineBase must stay at $FC24."
     ; BaseAddress returns with the carry clear.
     jsr BaseAddress
-    adc WNDLFT
-    sta BASL
+    adc WindowLeft
+    sta TextBase
 
 ;; The return that <CursorUp> and <Escape::Command> share.
 ;; Also: RTS4 (A2RM78, A2RM79, IIEROM82)
@@ -345,11 +345,11 @@ Done:
 ;; Control-S pause (<ScreenOutPausing>). The end of <ScreenOutNoInverse>.
 ;;
 ;; At $FC46.
-;; In: A = the character as given, Y = the character to print, YSAV1 = the caller's Y
-;; Out: Y = YSAV1
+;; In: A = the character as given, Y = the character to print, SavedOutputY = the caller's Y
+;; Out: Y = SavedOutputY
 .proc ScreenOutByWidth
 .assert * = $FC46, "ScreenOutByWidth must stay at $FC46."
-    bit RD80VID
+    bit Columns80State
     bpl FortyColumns
 
     ; 80 columns: the firmware prints A.
@@ -362,7 +362,7 @@ FortyColumns:
     pha
     jsr ScreenOutPausing
     pla
-    ldy YSAV1
+    ldy SavedOutputY
     rts
 .endproc
 
@@ -413,7 +413,7 @@ ToFirmware:
 .endif
 .else
 
-;; Clears from the cursor to the end of the window, a line at a time, then sets <BASL>/<BASH> for the
+;; Clears from the cursor to the end of the window, a line at a time, then sets <TextBase>/<TextBaseHigh> for the
 ;; cursor's line again.
 ;;
 ;; At $FC42.
@@ -424,7 +424,7 @@ ToFirmware:
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
     ; The first line clears from the cursor.
-    ldy CH
+    ldy CursorColumn
     lda CV
 
 ;; Clears line A from column Y, then the lines below it from column 0; <Home> enters here.
@@ -439,7 +439,7 @@ NextLine:
     pla
     ; The next line: the carry adds the one.
     adc #0
-    cmp WNDBTM
+    cmp WindowBottom
     bcc NextLine
     bcs VerticalTab
 .endproc
@@ -451,10 +451,10 @@ NextLine:
 ;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
-    lda WNDTOP
+    lda WindowTop
     sta CV
     ldy #0
-    sty CH
+    sty CursorColumn
     beq ClearToEndOfWindow::NextLine
 .endproc
 .endif
@@ -466,7 +466,7 @@ NextLine:
 .proc CarriageReturn
 .assert * = $FC62, "CarriageReturn must stay at $FC62."
     lda #0
-    sta CH
+    sta CursorColumn
     ; Falls into LineFeed.
 .endproc
 
@@ -478,7 +478,7 @@ NextLine:
 .assert * = $FC66, "LineFeed must stay at $FC66."
     inc CV
     lda CV
-    cmp WNDBTM
+    cmp WindowBottom
     bcc SetLineBase
 
     ; The bottom line: the cursor stays on it.
@@ -498,24 +498,24 @@ NextLine:
     bne SetLineBase::ToFirmware
 .endproc
 
-;; Runs the user's interrupt handler: switches slot ROM in and jumps through <IRQLOC>. The firmware's
+;; Runs the user's interrupt handler: switches slot ROM in and jumps through <UserIrqVector>. The firmware's
 ;; interrupt code calls it.
 ;;
 ;; At $FC74.
 .proc CallUserIrq
 .assert * = $FC74, "CallUserIrq must stay at $FC74."
-    sta SETSLOTCXROM
-    jmp (IRQLOC)
+    sta InternalCxRomOff
+    jmp (UserIrqVector)
 .endproc
 
-;; After the user's interrupt handler, selects again the $C800 ROM of the slot <MSLOT> names, then goes on
+;; After the user's interrupt handler, selects again the $C800 ROM of the slot <ExpansionRomSlot> names, then goes on
 ;; in the firmware's interrupt code (<IRQRESTORE>).
 ;;
-;; At $FC7A. The firmware jumps here with the saved <MSLOT> on the stack.
+;; At $FC7A. The firmware jumps here with the saved <ExpansionRomSlot> on the stack.
 .proc SelectInterruptRom
 .assert * = $FC7A, "SelectInterruptRom must stay at $FC7A."
     pla
-    sta MSLOT
+    sta ExpansionRomSlot
     cmp #FIRST_SLOT_PAGE
     bcc NoSlot
 
@@ -525,17 +525,17 @@ NextLine:
     ldy #0
     ldx LOC1
     sta LOC1
-    lda (LOC0),y
+    lda (SlotPointer),y
     stx LOC1
 
 ;; Switches internal ROM back in and goes on in the firmware.
 ;; Also: IRQNOSLT (IIETRM85)
 NoSlot:
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jmp IRQRESTORE
 .endproc
 
-;; The printable path of <ScreenOut>: applies <INVFLG> to a printable character, then prints it.
+;; The printable path of <ScreenOut>: applies <InverseMask> to a printable character, then prints it.
 ;;
 ;; At $FC95.
 ;; In: A = the character, carry = clear for a control character; the character pushed
@@ -543,7 +543,7 @@ NoSlot:
 .proc ApplyInverse
 .assert * = $FC95, "ApplyInverse must stay at $FC95."
     bcc Print
-    and INVFLG
+    and InverseMask
 
 ;; Prints it, its push already done.
 ;; Also: DOCOUT2 (IIETRM85)
@@ -579,23 +579,23 @@ ToFirmware:
 .assert * = $FC75, "RestoreAfterFirmware must stay at $FC75."
     ; The carry = 80STORE on, then negative = page two displayed; both saved.
     pha
-    lda RD80STORE
+    lda Store80State
     asl a
     pla
-    bit RDPAGE2
+    bit Page2State
     php
     bcc SelectSlotRom
-    sta LOWSCR
+    sta Page2Off
 
 ;; Notes whether internal ROM was in, switches slot ROM in and lets an interrupt in.
 ;; Also: RDCX (IIEROM82)
 SelectSlotRom:
-    bit RDCXROM
-    sta SETSLOTCXROM
+    bit InternalCxRomState
+    sta InternalCxRomOff
     cli
     sei
     bpl RestorePage
-    sta SETINTCXROM
+    sta InternalCxRomOn
 
 ;; Pulls the saved flags and displays page two again if it was displayed under 80STORE.
 ;; Also: ISSLOTS (IIEROM82)
@@ -603,7 +603,7 @@ RestorePage:
     plp
     bcc Done
     bpl Done
-    bit HISCR
+    bit Page2On
 
 ;; Also: ISPAGE1 (IIEROM82)
 Done:
@@ -617,29 +617,29 @@ Done:
 
 ;; Scrolls the text window up one line and clears the bottom line.
 ;;
-;; At $FC70. From the window's top line down, each line gets a copy of the one below it, from the window's
-;; right edge to its left; then the bottom line is cleared and <BASL>/<BASH> set for the cursor's line again.
+;; At $FC70. From the window's top line down, each line gets a copy of the one below it, from the window's right edge to
+;; its left; then the bottom line is cleared and <TextBase>/<TextBaseHigh> set for the cursor's line again.
 ;; Keeps: X
 ;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."
     ; The stack holds the line being read.
-    lda WNDTOP
+    lda WindowTop
     pha
     jsr SetLineBase
 
 ;; The line just read becomes the one to fill, and the next line down the one to read.
 ;; Also: SCRL1 (A2RM78, A2RM79)
 NextLine:
-    lda BASL
-    sta BAS2L
-    lda BASH
-    sta BAS2H
-    ldy WNDWDTH
+    lda TextBase
+    sta ScrollBase
+    lda TextBaseHigh
+    sta ScrollBaseHigh
+    ldy WindowWidth
     dey
     pla
     adc #1
-    cmp WNDBTM
+    cmp WindowBottom
     bcs ClearBottom
     pha
     jsr SetLineBase
@@ -647,13 +647,13 @@ NextLine:
 ;; Copies a character up a line.
 ;; Also: SCRL2 (A2RM78, A2RM79)
 CopyCharacter:
-    lda (BASL),y
-    sta (BAS2L),y
+    lda (TextBase),y
+    sta (ScrollBase),y
     dey
     bpl CopyCharacter
     bmi NextLine
 
-;; Clears the bottom line, which <BASL>/<BASH> still hold.
+;; Clears the bottom line, which <TextBase>/<TextBaseHigh> still hold.
 ;; Also: SCRL3 (A2RM78, A2RM79)
 ClearBottom:
     ldy #0
@@ -679,14 +679,14 @@ ClearBottom:
 ;; Clears a line from a column to its end, through the internal firmware.
 ;;
 ;; At $FC9E.
-;; In: Y = the column, BASL/BASH = the line
+;; In: Y = the column, TextBase/TextBaseHigh = the line
 ;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
     clc
 
     ; The firmware takes the column from BAS2L. ClearToEndOfLine (the carry set) is the function before.
-    sty BAS2L
+    sty ScrollBase
     ldy #FIRMWARE_CLEAR_TO_END_OF_LINE
     bcs KeyboardIn::ToFirmware
     iny
@@ -708,7 +708,7 @@ ClearBottom:
 ;; Clears a line from a column to its end, through the internal firmware.
 ;;
 ;; At $FC9E.
-;; In: Y = the column, BASL/BASH = the line
+;; In: Y = the column, TextBase/TextBaseHigh = the line
 ;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
 .proc ClearLineFrom
 .assert * = $FC9E, "ClearLineFrom must stay at $FC9E."
@@ -736,14 +736,14 @@ Column = $1F
 ;; Also: CLREOL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfLine
 .assert * = $FC9C, "ClearToEndOfLine must stay at $FC9C."
-    ldy CH
+    ldy CursorColumn
     ; Falls into ClearLineFrom.
 .endproc
 
 ;; Clears a line from a column to the window's right edge.
 ;;
 ;; At $FC9E.
-;; In: Y = the column, BASL/BASH = the line
+;; In: Y = the column, TextBase/TextBaseHigh = the line
 ;; Out: carry = set
 ;; Keeps: X
 ;; Also: CLREOLZ (IIEROM82, IIETRM85), CLEOLZ (A2RM78, A2RM79)
@@ -754,9 +754,9 @@ Column = $1F
 ;; Stores one blank.
 ;; Also: CLEOL2 (A2RM78, A2RM79)
 Loop:
-    sta (BASL),y
+    sta (TextBase),y
     iny
-    cpy WNDWDTH
+    cpy WindowWidth
     bcc Loop
     rts
 .endproc

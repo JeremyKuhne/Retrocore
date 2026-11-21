@@ -256,7 +256,7 @@ WaitForReturnOrEscape_Done:
 ;;
 ;; Leading spaces are skipped; the first character must be at least $C1. A carriage return, comma or the
 ;; input length ends the name. The characters and padding retain their high bits.
-;; In:  X = input length, IN = input line
+;; In:  X = input length, InputBuffer = input line
 ;; Out: carry = clear if accepted, set if empty or the first character is below $C1
 ParseName:
     txa

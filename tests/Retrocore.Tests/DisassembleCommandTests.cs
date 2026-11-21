@@ -130,7 +130,7 @@ public sealed class DisassembleCommandTests
                 .endscope
                 """.ReplaceLineEndings("\n"));
 
-            source.Should().Contain("LDA MASK").And.Contain("LDA PCL").And.NotContain("MnemonicBits");
+            source.Should().Contain("LDA PlotMask").And.Contain("LDA ProgramCounter").And.NotContain("MnemonicBits");
             source.Should().Contain("LDA CV").And.Contain("JSR B_FUNC");
         }
         finally
@@ -263,7 +263,7 @@ public sealed class DisassembleCommandTests
             string output = Path.Join(directory, "MasterCreate.asm");
             string[] args = ["--disk", disk, "--file", "MASTER CREATE", output, "--dos", "3.3-1980", "--sdk-roms", s_inputs];
             DisassembleCommand.Run(args).Should().Be(0);
-            File.ReadAllText(output).Should().Contain("JSR GetLine").And.Contain("STA PWREDUP");
+            File.ReadAllText(output).Should().Contain("JSR GetLine").And.Contain("STA SoftEntryCheck");
         }
         finally
         {

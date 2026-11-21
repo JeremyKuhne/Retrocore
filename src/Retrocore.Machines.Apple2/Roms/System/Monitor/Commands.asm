@@ -2,14 +2,14 @@
 ;; The Monitor's text-mode, hook, `BASIC`, G, cassette and register routines, and the commands between them
 ;; ($FE75-$FF58).
 
-; Text modes: the masks <INVFLG> holds. The normal one, TEXT_NORMAL, is in Monitor.asm.
+; Text modes: the masks <InverseMask> holds. The normal one, TEXT_NORMAL, is in Monitor.asm.
 
-;; <INVFLG> for inverse text: printable characters lose bits 6 and 7.
+;; <InverseMask> for inverse text: printable characters lose bits 6 and 7.
 TEXT_INVERSE = $3F
 
 ; Hooks.
 
-;; The bits of <A2L> that hold the slot number for `PR#` and `IN#`.
+;; The bits of <Address2> that hold the slot number for `PR#` and `IN#`.
 SLOT_NUMBER_MASK = $0F
 
 ; The internal firmware's functions, the numbers in Y for <CallFirmware>.
@@ -67,8 +67,8 @@ QUOTE_CODE = ((KEY_QUOTE ^ '0') + KEY_CODE_OFFSET) & $FF
 ;; Sets PC to A1 when the command gave an address: G, L and the Apple II Monitor's S.
 ;;
 ;; At $FE75.
-;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
-;; Out: PCL/PCH = A1 when X was 1, X = $FF when it was
+;; In: X = 1 when the command gave an address, 0 when not, Address1/Address1High = the address
+;; Out: ProgramCounter/ProgramCounterHigh = A1 when X was 1, X = $FF when it was
 ;; Keeps: Y
 ;; Entry:
 ;;   Loop = copies X + 1 bytes of A1 to PC: X = 1 for both
@@ -86,8 +86,8 @@ QUOTE_CODE = ((KEY_QUOTE ^ '0') + KEY_CODE_OFFSET) & $FF
 ;; Also: A1PCLP (A2RM78, IIEROM82)
 Loop:
 .assert * = $FE78, "SetPcFromA1::Loop must stay at $FE78, where the Enhanced IIe's firmware calls it."
-    lda A1L,x
-    sta PCL,x
+    lda Address1,x
+    sta ProgramCounter,x
     dex
     bpl Loop
 
@@ -100,7 +100,7 @@ Done:
 ;; I: sets inverse text.
 ;;
 ;; At $FE80.
-;; Out: Y = <INVFLG>
+;; Out: Y = <InverseMask>
 ;; Keeps: A, X
 ;; Also: SETINV (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetInverse
@@ -112,20 +112,20 @@ Done:
 ;; N: sets normal text.
 ;;
 ;; At $FE84.
-;; Out: Y = <INVFLG>
+;; Out: Y = <InverseMask>
 ;; Keeps: A, X
 ;; Entry:
-;;   Store = sets <INVFLG> to Y
+;;   Store = sets <InverseMask> to Y
 ;; Also: SETNORM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetNormal
 .assert * = $FE84, "SetNormal must stay at $FE84."
     ldy #TEXT_NORMAL
 
-;; Sets <INVFLG> to Y.
+;; Sets <InverseMask> to Y.
 ;; In: Y = the mask
 ;; Also: SETIFLG (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Store:
-    sty INVFLG
+    sty InverseMask
     rts
 .endproc
 
@@ -144,14 +144,14 @@ Store:
 ;; At $FE8B.
 ;; In: A = the slot, in bits 0-3
 ;; Entry:
-;;   FromA2 = control-K: sets the input hook to the slot in <A2L>, the number before it
+;;   FromA2 = control-K: sets the input hook to the slot in <Address2>, the number before it
 ;; Also: INPORT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetInput
 .assert * = $FE8B, "SetInput must stay at $FE8B."
-    sta A2L
+    sta Address2
 
-;; Control-K: sets the input hook to the slot in <A2L>, the number before it.
-;; In: A2L = the slot
+;; Control-K: sets the input hook to the slot in <Address2>, the number before it.
+;; In: Address2 = the slot
 ;; Also: INPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FromA2:
     ldx #KSWL
@@ -174,14 +174,14 @@ FromA2:
 ;; At $FE95.
 ;; In: A = the slot, in bits 0-3
 ;; Entry:
-;;   FromA2 = control-P: sets the output hook to the slot in <A2L>, the number before it
+;;   FromA2 = control-P: sets the output hook to the slot in <Address2>, the number before it
 ;; Also: OUTPORT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetOutput
 .assert * = $FE95, "SetOutput must stay at $FE95."
-    sta A2L
+    sta Address2
 
-;; Control-P: sets the output hook to the slot in <A2L>, the number before it.
-;; In: A2L = the slot
+;; Control-P: sets the output hook to the slot in <Address2>, the number before it.
+;; In: Address2 = the slot
 ;; Also: OUTPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 FromA2:
     ldx #CSWL
@@ -193,18 +193,19 @@ FromA2:
 ; firmware's function $0E stores it).
 .assert >KeyboardIn = >ScreenOut, "KeyboardIn and ScreenOut must share a page."
 
-;; Sets the hook at X to the ROM of the slot in <A2L>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
+;; Sets the hook at X to the ROM of the slot in <Address2>, $Cn00, or for slot 0 to the Monitor's routine whose low byte
 ;; is in Y.
 ;;
 ;; At $FE9B. For slot 0 the Apple II's Monitors and the original IIe store the page of the Monitor's keyboard and
 ;; screen routines. The Enhanced IIe stores a high byte of 0 instead, and the internal firmware's function $0E puts
 ;; in the page: it turns the 80-column firmware off first when it is on, but keeps input at slot 3 while output goes
 ;; there.
-;; In: X = the hook's address in page zero, <CSWL> or <KSWL>, Y = the Monitor routine's low byte, A2L = the slot
+;; In: X = the hook's address in page zero, <OutputHook> or <InputHook>, Y = the Monitor routine's low byte, Address2 =
+;;     the slot
 ;; Also: IOPRT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetHook
 .assert * = $FE9B, "SetHook must stay at $FE9B."
-    lda A2L
+    lda Address2
     and #SLOT_NUMBER_MASK
 .if ENHANCED
     beq Store
@@ -227,7 +228,7 @@ Default:
 ;; Stores the hook, which on the Enhanced IIe the firmware then finishes.
 ;; Also: IOPRT2 (A2RM78, A2RM79, IIEROM82)
 Store:
-    sty LOC0,x
+    sty SlotPointer,x
     sta LOC1,x
 .if ENHANCED
     ldy #FIRMWARE_SET_HOOK
@@ -276,12 +277,12 @@ ChecksumFix:
 ;; G: restores the registers and runs the program at A1, or at PC when the command gave no address.
 ;;
 ;; The program returns to the command line with rts.
-;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
+;; In: X = 1 when the command gave an address, 0 when not, Address1/Address1High = the address
 ;; Also: GO (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Go
     jsr SetPcFromA1
     jsr RestoreRegisters
-    jmp (PCL)
+    jmp (ProgramCounter)
 .endproc
 
 ;; Control-E: shows the saved registers (<ShowRegisters>), from page $FE, where every handler must be.
@@ -294,18 +295,18 @@ ChecksumFix:
 ;; T: traces the program without end, from A1 when the command gave an address, showing each instruction and
 ;; the registers.
 ;;
-;; It moves <YSAV> back onto the T, so that after each step (<Commands::Step>, which it falls into) the command
-;; line runs the T again. A BRK in the program, or reset, stops it.
+;; It moves <CommandPosition> back onto the T, so that after each step (<Commands::Step>, which it falls into) the
+;; command line runs the T again. A BRK in the program, or reset, stops it.
 ;; Also: TRACE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Trace
-    dec YSAV
+    dec CommandPosition
     ; Falls into Step.
 .endproc
 
 ;; S: runs one instruction, at A1 when the command gave an address, and shows it and the registers.
 ;;
 ;; <RunInstruction at Stepper::RunInstruction> runs it.
-;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
+;; In: X = 1 when the command gave an address, 0 when not, Address1/Address1High = the address
 ;; Also: STEPZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Step
     jsr SetPcFromA1
@@ -371,7 +372,7 @@ ChecksumFix:
 ;; Also: SLOTRTS (UNKN)
 .proc SelectSlotRom
 .assert * = $FEC5, "SelectSlotRom must stay at $FEC5, where the firmware returns through it."
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
 
 ;; The return, which the firmware jumps to at $FEC8.
 Done:
@@ -386,10 +387,10 @@ Done:
 ; Commands: the Control-Y handler, after the Enhanced IIe's SelectSlotRom.
 .scope Commands continued
 
-;; Control-Y: runs the user's routine, through the jump a program puts at <USRADR>.
+;; Control-Y: runs the user's routine, through the jump a program puts at <UserJump>.
 ;; Also: USR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc User
-    jmp USRADR
+    jmp UserJump
 .endproc
 
 .endscope
@@ -398,12 +399,12 @@ Done:
 ;; W: writes the bytes from A1 to A2 to the cassette, with the internal firmware's routine.
 ;;
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
-;; In: A1L/A1H = the first address, A2L/A2H = the last
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
 ;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
     lda #WRITE_HEADER_LENGTH
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jsr WRITETAPE
 
     ; WRITETAPE returns with zero set, so this always beeps.
@@ -415,8 +416,8 @@ Done:
 ;; exclusive-or with $FF.
 ;;
 ;; At $FECD. Integer `BASIC` calls $FECF, after the lda, with its own header length in A.
-;; In: A1L/A1H = the first address, A2L/A2H = the last
-;; Out: A1L/A1H = the address after A2
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
+;; Out: Address1/Address1High = the address after A2
 ;; Also: WRITE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc WriteCassette
 .assert * = $FECD, "WriteCassette must stay at $FECD."
@@ -430,9 +431,9 @@ Done:
 ;; Also: WR1 (A2RM78, A2RM79, IIEROM82)
 NextByte:
     ldx #0
-    eor (A1L,x)
+    eor (Address1,x)
     pha
-    lda (A1L,x)
+    lda (Address1,x)
     jsr Byte
     jsr NextInRange
     ldy #WRITE_NEXT_COUNT
@@ -465,24 +466,24 @@ NextBit:
 .scope Commands continued
 .if ENHANCED
 
-;; S: prints the address of each place from A1 to A2 that holds the byte in <A4L>, or with <A4H> not 0, those two
-;; bytes.
+;; S: prints the address of each place from A1 to A2 that holds the byte in <Address4>, or with <Address4High> not 0,
+;;     those two bytes.
 ;;
 ;; A4 is set with "<": 41<300.3FFS finds each $41 from $300 to $3FF.
-;; In: A1L/A1H = the first address, A2L/A2H = the last, A4L/A4H = the value
-;; Out: A1L/A1H = the address after A2
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last, Address4/Address4High = the value
+;; Out: Address1/Address1High = the address after A2
 ;; Also: MEMFIND (UNKN)
 .proc Search
     ; A4H, when it is not 0, must be in the second byte.
     ldy #1
-    lda A4H
+    lda Address4High
     beq CompareLow
-    cmp (A1L),y
+    cmp (Address1),y
     bne Next
 CompareLow:
     dey
-    lda A4L
-    cmp (A1L),y
+    lda Address4
+    cmp (Address1),y
     bne Next
     jsr PrintAddress
 Next:
@@ -521,19 +522,19 @@ Next:
 ;; ERR when the checksum is wrong.
 ;;
 ;; At $FEFD.
-;; In: A1L/A1H = the first address, A2L/A2H = the last
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
 ;; Entry:
 ;;   Finish = switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>
 ;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jsr READTAPE
 
 ;; Switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>.
 ;; In: zero = set when the checksum matched
 Finish:
-    sta SETSLOTCXROM
+    sta InternalCxRomOff
     beq Beep
     bne PrintError
 .endproc
@@ -551,7 +552,7 @@ TitleEnhanced:
 ;; Reads the next character of the input line that is not a blank, in uppercase.
 ;;
 ;; $FF13 on the Enhanced IIe, which the firmware's mini-assembler calls.
-;; In: Y = the index in <IN>
+;; In: Y = the index in <InputBuffer>
 ;; Out: A = the character, Y = the index after it
 ;; Also: SKIPBLNK (UNKN)
 .proc SkipBlanks
@@ -578,7 +579,7 @@ TitleEnhanced:
     bne RestoreRegisters::Done
 
     ; The next character's 8 bits, unless it is a carriage return, which starts the number again.
-    lda IN,y
+    lda InputBuffer,y
     ldx #7
     cmp #KEY_CR
     beq ReadHexNumber
@@ -592,15 +593,15 @@ TitleEnhanced:
 ;; R: reads the bytes from A1 to A2 from the cassette, then beeps, or prints ERR when the checksum is wrong.
 ;;
 ;; At $FEFD.
-;; In: A1L/A1H = the first address, A2L/A2H = the last
-;; Out: A1L/A1H = the address after A2
+;; In: Address1/Address1High = the first address, Address2/Address2High = the last
+;; Out: Address1/Address1High = the address after A2
 ;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
 
-;; The checksum of the bytes read: <MASK>'s byte.
+;; The checksum of the bytes read: <PlotMask>'s byte.
 ;; Also: CHKSUM (A2RM78, A2RM79, IIEROM82)
-Checksum = MASK
+Checksum = PlotMask
     ; Waits for the tape's tone, then lets the header play.
     jsr Cassette::ReadBit
     lda #READ_HEADER_DELAY
@@ -624,7 +625,7 @@ FindSync:
 NextByte:
     jsr Cassette::ReadByte
     ; Cassette::ReadByte leaves X at 0.
-    sta (A1L,x)
+    sta (Address1,x)
     eor Checksum
     sta Checksum
     jsr NextInRange
@@ -667,22 +668,22 @@ NextByte:
 ;; Restores A, X, Y and P from the registers <SaveRegisters> saved.
 ;;
 ;; At $FF3F.
-;; Out: A = <A5H>, X = <XREG>, Y = <YREG>, P = <STATUS>
+;; Out: A = <SavedA>, X = <SavedX>, Y = <SavedY>, P = <SavedStatus>
 ;; Entry:
 ;;   Done = the return, which the Enhanced IIe's <Commands::LetterOrQuote> returns through too
 ;; Also: RESTORE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc RestoreRegisters
 .assert * = $FF3F, "RestoreRegisters must stay at $FF3F."
-    lda STATUS
+    lda SavedStatus
     pha
-    lda A5H
+    lda SavedA
 
 ;; Restores X and Y, then P from the stack.
 ;; In: P = on the stack
 ;; Also: RESTR1 (A2RM78, A2RM79, IIEROM82)
 ExceptA:
-    ldx XREG
-    ldy YREG
+    ldx SavedX
+    ldy SavedY
     plp
 
 ;; The return, which the Enhanced IIe's <Commands::LetterOrQuote> returns through too.
@@ -693,26 +694,26 @@ Done:
 ;; Saves A, X, Y, P and S, then clears decimal mode.
 ;;
 ;; At $FF4A. Its rts, at $FF58, is the one other sources call as a routine that does nothing.
-;; Out: A5H = A, XREG = X, YREG = Y, STATUS = P, SPNT = S less 2 (its return address still on the stack), A = P,
-;;   X = SPNT
+;; Out: SavedA = A, SavedX = X, SavedY = Y, SavedStatus = P, SavedStackPointer = S less 2 (its return address still
+;;   on the stack), A = P, X = SavedStackPointer
 ;; Keeps: Y
 ;; Entry:
 ;;   ExceptA = saves X, Y, P and S, then clears decimal mode
 ;; Also: SAVE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SaveRegisters
 .assert * = $FF4A, "SaveRegisters must stay at $FF4A."
-    sta A5H
+    sta SavedA
 
 ;; Saves X, Y, P and S, then clears decimal mode.
 ;; Also: SAV1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 ExceptA:
-    stx XREG
-    sty YREG
+    stx SavedX
+    sty SavedY
     php
     pla
-    sta STATUS
+    sta SavedStatus
     tsx
-    stx SPNT
+    stx SavedStackPointer
     cld
     rts
 .endproc

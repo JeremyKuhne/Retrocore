@@ -5,15 +5,16 @@
 
 ; The registers the Monitor saves and shows.
 
-;; The registers <ShowRegisters> shows and <RegisterNames> names: A, X, Y, P and S, saved at <A5H>..<SPNT>.
+;; The registers <ShowRegisters> shows and <RegisterNames> names: A, X, Y, P and S, saved at
+;; <SavedA>..<SavedStackPointer>.
 REGISTER_COUNT = 5
 
 ;; Prints a carriage return, then the registers saved by <SaveRegisters> as "A=xx X=xx Y=xx P=xx S=xx".
 ;;
 ;; At $FAD7. In the Apple II Monitor, <Stepper::Finish> falls into it at the end of a step.
-;; In: A5H..SPNT = the registers
+;; In: SavedA..SavedStackPointer = the registers
 ;; Out: X = 0
-;; Uses: A, A3L/A3H
+;; Uses: A, Address3/Address3High
 ;; Entry:
 ;;   NoReturn = prints the registers without the carriage return first, at $FADA; <ShowBreak> calls it
 ;; Also: REGDSP (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -25,16 +26,16 @@ REGISTER_COUNT = 5
 ;; Also: RGDSP1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NoReturn:
 .assert * = $FADA, "ShowRegisters::NoReturn must stay at $FADA."
-    lda #<A5H
-    sta A3L
-    lda #>A5H
-    sta A3H
+    lda #<SavedA
+    sta Address3
+    lda #>SavedA
+    sta Address3High
 
     ; X runs from -5 to -1 over the five registers.
     ldx #$100 - REGISTER_COUNT
 
-;; Prints " r=xx" for one register; in page zero the saved byte's address wraps round to <A5H>, <XREG>,
-;; <YREG>, <STATUS> and <SPNT>.
+;; Prints " r=xx" for one register; in page zero the saved byte's address wraps round to <SavedA>, <SavedX>,
+;; <SavedY>, <SavedStatus> and <SavedStackPointer>.
 ;; Also: RDSP1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Next:
     lda #' '
@@ -43,7 +44,7 @@ Next:
     jsr CharacterOut
     lda #'='
     jsr CharacterOut
-    lda A5H + REGISTER_COUNT,x
+    lda SavedA + REGISTER_COUNT,x
     jsr PrintHexByte
     inx
     bmi Next
@@ -54,7 +55,8 @@ Next:
 ; Stepper: the ends of a stepped instruction, and the trailer copied after it.
 .scope Stepper continued
 
-;; The end of a taken branch run by <Stepper::RunInstruction>: moves <PCL>/<PCH> to the branch's target.
+;; The end of a taken branch run by <Stepper::RunInstruction>: moves <ProgramCounter>/<ProgramCounterHigh> to the
+;; branch's target.
 ;;
 ;; The copied branch lands on the trailer's jump to here in <Stepper::RunArea> when it is taken. The target is the
 ;; branch's address plus the real displacement plus 2, the branch's length.
@@ -63,9 +65,9 @@ Next:
     ; PC plus the displacement.
     clc
     ldy #1
-    lda (PCL),y
+    lda (ProgramCounter),y
     jsr NextInstruction::AddA
-    sta PCL
+    sta ProgramCounter
     tya
 
     ; Then plus LENGTH + 1 in SetPcHigh.
@@ -74,7 +76,7 @@ Next:
 .endproc
 
 ;; The end of an instruction run by <Stepper::RunInstruction> that did not branch: saves the registers and moves
-;; <PCL>/<PCH> past the instruction (<Stepper::SimulateRts::AddLength>).
+;; <ProgramCounter>/<ProgramCounterHigh> past the instruction (<Stepper::SimulateRts::AddLength>).
 ;; Also: NBRNCH (A2RM78, A2RM79)
 .proc FellThrough
     jsr SaveRegisters
@@ -101,8 +103,8 @@ Trailer:
 ; Startup: the power-up defaults, the disk signature and the title.
 .scope Startup continued
 
-;; The power-up defaults for $03F0-$03F4: <BRKV> = <ShowBreak>, <SOFTEV> = BASIC's cold start (<BasicColdStart>),
-;; and <PWREDUP> to match.
+;; The power-up defaults for $03F0-$03F4: <BreakVector> = <ShowBreak>, <SoftEntryVector> = BASIC's cold start
+;; (<BasicColdStart>), and <SoftEntryCheck> to match.
 ;; Also: PWRCON (A2RM79, IIEROM82, IIETRM85)
 PowerUpVectors:
     .word ShowBreak
@@ -173,7 +175,7 @@ RegisterNames:
 .assert * = $FB1E, "ReadPaddle must stay at $FB1E."
 
     ; Starts the timers.
-    lda PTRIG
+    lda PaddleTrigger
     ldy #0
     nop
     nop
@@ -181,7 +183,7 @@ RegisterNames:
 ;; Counts while the paddle's timer runs.
 ;; Also: PREAD2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Count:
-    lda PADDL0,x
+    lda Paddle0,x
     bpl Done
     iny
     bne Count

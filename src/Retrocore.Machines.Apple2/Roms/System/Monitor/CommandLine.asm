@@ -59,16 +59,16 @@ HEX_LETTER_CODE = (('A' ^ '0') + KEY_CODE_OFFSET) & $FF
 .proc CommandLine
 .assert * = $FF69, "CommandLine must stay at $FF69."
     lda #'*'
-    sta PROMPT
+    sta PromptCharacter
     jsr GetLineAfterReturn
     jsr ClearMode
 
 ;; Reads a number and the character after it, and runs that command.
-;; In: Y = the index in <IN>
+;; In: Y = the index in <InputBuffer>
 ;; Also: NXTITM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextItem:
     jsr ReadHexNumber
-    sty YSAV
+    sty CommandPosition
     ldy #Commands::Routines - Commands::Keys
 
 ;; Looks the character up in the key table, from its end.
@@ -81,7 +81,7 @@ Search:
 
     ; Runs it, then goes on after it.
     jsr Commands::RunCommand
-    ldy YSAV
+    ldy CommandPosition
     jmp NextItem
 .endproc
 
@@ -106,8 +106,8 @@ Search:
 ;; Also: NXTBIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextBit:
     asl a
-    rol A2L
-    rol A2H
+    rol Address2
+    rol Address2High
     dex
     bpl NextBit
     ; Falls into CopyNumber.
@@ -115,16 +115,16 @@ NextBit:
 
 ;; Copies the number in A2 to A1 and A3, unless a command is waiting for it, then reads the next character.
 ;;
-;; It starts with X = $FF, so that <A2H>,X is <A2L> in page zero.
+;; It starts with X = $FF, so that <Address2High>,X is <Address2> in page zero.
 ;; In: X = $FF
 ;; Out: X = 1
 ;; Also: NXTBAS (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc CopyNumber
-    lda MODE
+    lda CommandMode
     bne Next
-    lda A2H,x
-    sta A1H,x
-    sta A3H,x
+    lda Address2High,x
+    sta Address1High,x
+    sta Address3High,x
 
 ;; The next byte: the high one after the low one, then the next character.
 ;; Also: NXTBS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -138,23 +138,24 @@ Next:
 
 ;; Reads a hexadecimal number from the input line into A2, and returns the character after it as a command code.
 ;;
-;; At $FFA7. Each digit also copies the number to A1 and A3 unless a command is waiting (<MODE>). The
+;; At $FFA7. Each digit also copies the number to A1 and A3 unless a command is waiting (<CommandMode>). The
 ;; code is (character EOR "0") + $89, as <Commands::Keys> holds them. On the Enhanced IIe it reads the line in
 ;; uppercase, so a to f are digits too, and an apostrophe makes the character after it 8 bits of the number
 ;; (<Commands::LetterOrQuote>).
-;; In: Y = the index in <IN>
-;; Out: A = the code, Y = the index after the character, A2L/A2H = the number, X = 1 after a digit, 0 when none
+;; In: Y = the index in <InputBuffer>
+;; Out: A = the code, Y = the index after the character, Address2/Address2High = the number, X = 1 after a digit, 0 when
+;;     none
 ;; Entry:
 ;;   NextCharacter = reads the next character of the number
 ;; Also: GETNUM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadHexNumber
 .assert * = $FFA7, "ReadHexNumber must stay at $FFA7."
     ldx #0
-    stx A2L
-    stx A2H
+    stx Address2
+    stx Address2High
 
 ;; Reads the next character of the number.
-;; In: Y = the index in <IN>
+;; In: Y = the index in <InputBuffer>
 ;; Also: NXTCHR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 NextCharacter:
 .if ENHANCED
@@ -162,7 +163,7 @@ NextCharacter:
     jsr NextInputCharacter
     nop
 .else
-    lda IN,y
+    lda InputBuffer,y
     iny
 .endif
 
@@ -187,7 +188,7 @@ NextCharacter:
 ;;
 ;; $FFBE in every build, which Integer `BASIC` calls. The handler is entered as <Commands> says.
 ;; In: Y = the command's index
-;; Out: A = MODE, Y = 0, MODE = 0
+;; Out: A = CommandMode, Y = 0, CommandMode = 0
 ;; Also: TOSUB (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc RunCommand
 .assert * = $FFBE, "Commands::RunCommand must stay at $FFBE, where Integer BASIC calls it."
@@ -195,13 +196,13 @@ NextCharacter:
     pha
     lda Routines,y
     pha
-    lda MODE
+    lda CommandMode
     ; Falls into ClearMode, which returns to the handler.
 .endproc
 
 .endscope
 
-;; Clears <MODE>, so that no command is waiting for a number.
+;; Clears <CommandMode>, so that no command is waiting for a number.
 ;;
 ;; At $FFC7.
 ;; Out: Y = 0
@@ -210,7 +211,7 @@ NextCharacter:
 .proc ClearMode
 .assert * = $FFC7, "ClearMode must stay at $FFC7."
     ldy #0
-    sty MODE
+    sty CommandMode
     rts
 .endproc
 
@@ -236,32 +237,32 @@ COMMAND_PAGE = $FE
 .endmacro
 
     ; The commands. <CommandLine> searches from the end, so a later entry for the same key wins.
-    Command KEY_CTRL_C, ContinueBasic
-    Command KEY_CTRL_Y, User
-    Command KEY_CTRL_E, Registers
+    Command KEY_CONTROL_C, ContinueBasic
+    Command KEY_CONTROL_Y, User
+    Command KEY_CONTROL_E, Registers
 .if ENHANCED
     Command '!', Assemble
 .elseif MONITOR = MONITOR_II
     Command 'T', Trace
 .else
     ; Left from the T command; the later Control-Y entries hide it.
-    Command KEY_CTRL_Y, Trace
+    Command KEY_CONTROL_Y, Trace
 .endif
     Command 'V', VerifyMemory
-    Command KEY_CTRL_K, SetInput::FromA2
+    Command KEY_CONTROL_K, SetInput::FromA2
 .if ENHANCED
     Command 'S', Search
 .elseif MONITOR = MONITOR_II
     Command 'S', Step
 .elseif MONITOR = MONITOR_AUTOSTART
     ; Left from the S command: this one wins, and its five NOPs run into User.
-    Command KEY_CTRL_Y, Step + 1
+    Command KEY_CONTROL_Y, Step + 1
 .else
     ; Left from the S command: this one wins.
-    Command KEY_CTRL_Y, UserText
+    Command KEY_CONTROL_Y, UserText
 .endif
-    Command KEY_CTRL_P, SetOutput::FromA2
-    Command KEY_CTRL_B, StartBasic
+    Command KEY_CONTROL_P, SetOutput::FromA2
+    Command KEY_CONTROL_B, StartBasic
     Command '-', SetMode
     Command '+', SetMode
     Command 'M', MoveMemory
@@ -274,7 +275,7 @@ COMMAND_PAGE = $FE
     Command 'R', ReadCassette
     Command ':', SetMode
     Command '.', SetMode
-    Command KEY_CR, Return
+    Command KEY_RETURN, Return
     Command ' ', Blank
 
 ;; The command keys, as <ReadHexNumber> returns them.
@@ -293,13 +294,13 @@ Routines:
 
 .endscope
 
-;; The 6502's non-maskable interrupt vector: <NMI>, in page three, where a program puts a jump.
+;; The 6502's non-maskable interrupt vector: <NmiJump>, in page three, where a program puts a jump.
 ;;
 ;; At $FFFA.
 ;; Also: NMIVEC (UNKN)
 NmiVector:
 .assert * = $FFFA, "NmiVector must be at $FFFA, the 6502's NMI vector."
-    .word NMI
+    .word NmiJump
 
 ;; The 6502's reset vector: <Startup::ResetToMonitor> on the Apple II Monitor, <Startup::Reset> on the others.
 ;;

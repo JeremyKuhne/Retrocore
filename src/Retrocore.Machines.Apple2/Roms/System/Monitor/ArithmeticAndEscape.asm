@@ -25,9 +25,10 @@ PRODUCT_BYTES = 4
 
 ; Page zero, under the names this scope gives it.
 
-;; The count of operands <MakePositive> negated: bit 0 is set when the result is negative. The same byte is <LENGTH>.
+;; The count of operands <MakePositive> negated: bit 0 is set when the result is negative. The same byte is
+;; <OperandLength>.
 ;; Also: SIGN (A2RM78, A2RM79)
-SignCount = LENGTH
+SignCount = OperandLength
 
 ;; The low byte of the 16-bit accumulator: the multiplier or dividend on entry, the product's low half or the quotient
 ;; on return.
@@ -215,8 +216,8 @@ Number:
 ;; Also: MD3 (A2RM78)
 Negate:
     tya
-    sbc LOC0,x
-    sta LOC0,x
+    sbc SlotPointer,x
+    sta SlotPointer,x
     tya
     sbc LOC1,x
     sta LOC1,x
@@ -279,7 +280,7 @@ Loop:
 .else
     lda Title - 1,y
 .endif
-    sta LINE1 + TITLE_COLUMN - 1,y
+    sta TextPage1 + TITLE_COLUMN - 1,y
     dey
     bne Loop
     rts
@@ -287,19 +288,19 @@ Loop:
 
 .endscope
 
-;; Makes the soft entry vector valid: <PWREDUP> = <SOFTEV>'s high byte exclusive-ored with $A5. Call it after
-;; changing it.
+;; Makes the soft entry vector valid: <SoftEntryCheck> = <SoftEntryVector>'s high byte exclusive-ored with $A5. Call it
+;; after changing it.
 ;;
 ;; At $FB6F.
-;; Out: PWREDUP = the check byte for <SOFTEV>'s current high byte
+;; Out: SoftEntryCheck = the check byte for <SoftEntryVector>'s current high byte
 ;; Uses: A
 ;; Keeps: X, Y, carry
 ;; Also: SETPWRC (A2RM79, IIEROM82, IIETRM85)
 .proc ValidateSoftEntry
 .assert * = $FB6F, "ValidateSoftEntry must stay at $FB6F."
-    lda SOFTEV+1
+    lda SoftEntryVector+1
     eor #SOFT_ENTRY_CHECK
-    sta PWREDUP
+    sta SoftEntryCheck
     rts
 .endproc
 
@@ -316,22 +317,22 @@ Loop:
     ; Only a carriage return with Control-S waiting pauses.
     cmp #KEY_CR
     bne Print
-    ldy KBD
+    ldy Keyboard
     bpl Print
     cpy #KEY_CTRL_S
     bne Print
-    bit KBDSTRB
+    bit KeyboardStrobe
 
 ;; Waits for a key and clears the strobe, except for Control-C, which stays in the keyboard latch for the program
 ;; to see. Then prints A. At $FB88.
 ;; Also: KBDWAIT (A2RM79, IIEROM82, IIETRM85)
 WaitForKey:
 .assert * = $FB88, "WaitForKey must stay at $FB88."
-    ldy KBD
+    ldy Keyboard
     bpl WaitForKey
     cpy #KEY_CTRL_C
     beq Print
-    bit KBDSTRB
+    bit KeyboardStrobe
 
 ;; Prints the character.
 ;; Also: NOWAIT (A2RM79, IIEROM82, IIETRM85)
@@ -419,9 +420,9 @@ ModelId:
 .endif
 
     ; RDCXROM's bit 7 into the pushed status, then internal ROM.
-    bit RDCXROM
+    bit InternalCxRomState
     php
-    sta SETINTCXROM
+    sta InternalCxRomOn
     jmp B_FUNC
 .if ENHANCED
 

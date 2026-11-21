@@ -4,7 +4,7 @@
 
 ; Line input.
 
-;; The position in <IN> from which each character typed rings the bell: 248, eight before the buffer's end.
+;; The position in <InputBuffer> from which each character typed rings the bell: 248, eight before the buffer's end.
 INPUT_WARNING = $F8
 
 ;; The mask the original IIe's <GetLine> applies where the Apple II's apply <UPPERCASE_MASK>: every bit, so
@@ -25,14 +25,14 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 ;; line, then echoes it.
 ;;
 ;; At $FD3D.
-;; In: X = the position in <IN>
+;; In: X = the position in <InputBuffer>
 ;; Also: PICKFIX (IIETRM85)
 .proc PickUnderCursor
 .assert * = $FD3D, "LineInput::PickUnderCursor must stay at $FD3D."
     ldy #FIRMWARE_CHARACTER_UNDER_CURSOR
     jsr CallFirmware
-    ldy CH
-    sta IN,x
+    ldy CursorColumn
+    sta InputBuffer,x
     ; Falls into Echo.
 .endproc
 .endif
@@ -40,11 +40,11 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
 ;; Echoes a character typed into the line, other than Return, then performs the backspace key and Control-X, and
 ;; rings the bell near the buffer's end.
 ;;
-;; At $FD3D; on the Enhanced IIe, $FD47, after <PickUnderCursor>. The Apple II's Monitors echo in normal video,
-;; whatever <INVFLG> holds, and restore it; the original IIe keeps the save and restore but echoes with <INVFLG> as
-;; it is; the Enhanced IIe echoes the character it is given, in A, and leaves <INVFLG> alone. The 256th character
+;; At $FD3D; on the Enhanced IIe, $FD47, after <PickUnderCursor>. The Apple II's Monitors echo in normal video, whatever
+;; <InverseMask> holds, and restore it; the original IIe keeps the save and restore but echoes with <InverseMask> as it
+;; is; the Enhanced IIe echoes the character it is given, in A, and leaves <InverseMask> alone. The 256th character
 ;; cancels the line.
-;; In: X = the character's position in <IN>, A = the character
+;; In: X = the character's position in <InputBuffer>, A = the character
 ;; Also: NOTCR (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Echo
 .if ENHANCED
@@ -57,23 +57,23 @@ FIRMWARE_CHARACTER_UNDER_CURSOR = $0F
     nop
 .else
 .assert * = $FD3D, "LineInput::Echo must stay at $FD3D."
-    lda INVFLG
+    lda InverseMask
     pha
     lda #TEXT_NORMAL
 .if MONITOR = MONITOR_IIE
     nop
     nop
 .else
-    sta INVFLG
+    sta InverseMask
 .endif
-    lda IN,x
+    lda InputBuffer,x
     jsr CharacterOut
     pla
-    sta INVFLG
+    sta InverseMask
 .endif
 
     ; The editing keys.
-    lda IN,x
+    lda InputBuffer,x
     cmp #KEY_BS
     beq GetLine::TakeBack
     cmp #KEY_CTRL_X
@@ -108,7 +108,7 @@ Next:
 ;; Prints a Return, then reads a line as <GetLine> does.
 ;;
 ;; At $FD67.
-;; Out: X = the line's length, IN,X = the Return that ends it
+;; Out: X = the line's length, InputBuffer,X = the Return that ends it
 ;; Also: GETLNZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc GetLineAfterReturn
 .assert * = $FD67, "GetLineAfterReturn must stay at $FD67."
@@ -116,12 +116,12 @@ Next:
     ; Falls into GetLine.
 .endproc
 
-;; Reads a line into <IN> after printing the prompt character in <PROMPT>.
+;; Reads a line into <InputBuffer> after printing the prompt character in <PromptCharacter>.
 ;;
 ;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
 ;; the character under the cursor; on the Enhanced IIe, in 80 columns, the internal firmware gets it
 ;; (<LineInput::PickUnderCursor>). The Apple II's Monitors store lowercase letters as capitals; the IIe's keep them.
-;; Out: X = the line's length, IN,X = the Return that ends it
+;; Out: X = the line's length, InputBuffer,X = the Return that ends it
 ;; Entry:
 ;;   NoPrompt = reads a line without printing the prompt
 ;;   TakeBack = takes back a character; at the line's start, starts the line again
@@ -129,11 +129,11 @@ Next:
 ;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc GetLine
 .assert * = $FD6A, "GetLine must stay at $FD6A."
-    lda PROMPT
+    lda PromptCharacter
     jsr CharacterOut
 
 ;; Reads a line without printing the prompt.
-;; Out: X = the line's length, IN,X = the Return that ends it
+;; Out: X = the line's length, InputBuffer,X = the Return that ends it
 ;; Also: GETLN1 (A2RM79, IIETRM85)
 NoPrompt:
 .assert * = $FD6F, "GetLine::NoPrompt must stay at $FD6F."
@@ -153,13 +153,13 @@ NextCharacter:
     cmp #KEY_RIGHT
 .if ENHANCED
     bne Store
-    lda (BASL),y
-    bit RD80VID
+    lda (TextBase),y
+    bit Columns80State
     bmi LineInput::PickUnderCursor
     nop
 .else
     bne Uppercase
-    lda (BASL),y
+    lda (TextBase),y
 
 ;; On the Apple II's Monitors, makes a lowercase letter a capital: everything from the character before "a" up
 ;; has bit 5 cleared. The original IIe's mask keeps it.
@@ -177,7 +177,7 @@ Uppercase:
 ;; Stores the character in the line, and echoes it unless it is a Return.
 ;; Also: ADDINP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 Store:
-    sta IN,x
+    sta InputBuffer,x
     cmp #KEY_CR
     bne LineInput::Echo
     ; Falls into ClearAndPrintReturn.
@@ -203,7 +203,7 @@ Store:
     bne CharacterOut
 .endproc
 
-;; Prints a Return, then <A1L>/<A1H> as "AAAA-".
+;; Prints a Return, then <Address1>/<Address1High> as "AAAA-".
 ;;
 ;; At $FD92.
 ;; Out: Y = 0, when the output hook keeps Y as the screen's does
@@ -212,8 +212,8 @@ Store:
 ;; Also: PRA1 (A2RM78, A2RM79, IIEROM82)
 .proc PrintAddress
 .assert * = $FD92, "PrintAddress must stay at $FD92."
-    ldy A1H
-    ldx A1L
+    ldy Address1High
+    ldx Address1
 
 ;; Prints a Return, then Y and X as "YYXX-".
 ;; In: Y = the high byte, X = the low byte

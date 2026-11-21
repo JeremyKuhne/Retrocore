@@ -2,7 +2,7 @@
 ;; The Apple II, II Plus and IIe Monitors ($F800-$FFFF)
 ;;
 ;; The Monitor is each Apple II's lowest layer: reset and power-up, the BRK and IRQ entry points, character
-;; input and output through the <CSWL>/<KSWL> hooks, the text screen and lo-res graphics primitives, the
+;; input and output through the <OutputHook>/<InputHook> hooks, the text screen and lo-res graphics primitives, the
 ;; mini disassembler, and the Monitor command line (the * prompt). This file builds four Monitors:
 ;;
 ;; - The Apple II Monitor of the first Apple IIs (1978).
@@ -20,10 +20,10 @@
 ;; command, @ or A-F, at a time.
 ;;
 ;; The Autostart Monitor takes the machine from power-up to a program. Its RESET checks the soft entry
-;; vector at $3F2-$3F4 (<SOFTEV> and its check byte <PWREDUP>): when it is valid, a reset continues the
+;; vector at $3F2-$3F4 (<SoftEntryVector> and its check byte <SoftEntryCheck>): when it is valid, a reset continues the
 ;; program that set it; otherwise this is a power-up (PWRUP), which shows "APPLE ][", sets the vectors,
 ;; and boots the disk controller in the highest slot that has one, or starts BASIC. BRK goes through
-;; the vector <BRKV> ($3F0). STEP, TRACE and the multiply and divide routines are gone; in their space are
+;; the vector <BreakVector> ($3F0). STEP, TRACE and the multiply and divide routines are gone; in their space are
 ;; the title and boot code, the Control-S pause on output (VIDWAIT) and the escape keys I, J, K and M.
 ;;
 ;; The IIe's Monitor keeps the Autostart Monitor's design but moves much of the screen work to the
@@ -103,7 +103,7 @@ ENHANCED = 0
 
 ; Values several of the Monitor's files use.
 
-;; <INVFLG> for normal text: printable characters print as they are.
+;; <InverseMask> for normal text: printable characters print as they are.
 TEXT_NORMAL = $FF
 
 ;; Added to a slot number to make the high byte of its ROM's page, $Cn00.

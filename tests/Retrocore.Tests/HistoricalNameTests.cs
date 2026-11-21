@@ -128,6 +128,8 @@ public sealed class HistoricalNameTests
             new DocumentationAlso("COUT", ["A2RM78", "IIETR"]));
 
         DocumentationAlso.Parse("KEYIN").Should().BeEquivalentTo(new DocumentationAlso("KEYIN", []));
+        DocumentationAlso.Parse("COUT (A2RM78").Should().BeNull("the key list is not closed");
+        DocumentationAlso.Parse("COUT (A2RM78) in the manual").Should().BeNull("text follows the key list");
         DocumentationAlso.Parse("the old name").Should().BeNull();
     }
 
@@ -247,6 +249,23 @@ public sealed class HistoricalNameTests
             .endif
             """).Diagnostics.Select(diagnostic => diagnostic.Message).Should().Equal(
             "'COUT' is a historical name of First and Second: use one of those.");
+    }
+
+    /// <summary>
+    ///  An <c>Also:</c> on a <c>.scope</c> gives it no address: the old name stays unresolved.
+    /// </summary>
+    [TestMethod]
+    public void ScopesHaveNoOldNames()
+    {
+        Assemble("""
+            ;; The commands.
+            ;; Also: OLD (TEST)
+            .scope Commands
+            Go:
+                rts
+            .endscope
+                jmp OLD
+            """).Diagnostics.Should().ContainSingle().Which.Message.Should().Contain("OLD");
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ public sealed record DocumentationAlso(string Name, IReadOnlyList<string> Source
     ///  Reads an <c>Also:</c> item.
     /// </summary>
     /// <param name="item">The item, such as <c>COUT (A2RM, IIETR)</c>.</param>
-    /// <returns>The name and its sources, or null when the item does not start with a name.</returns>
+    /// <returns>The name and its sources, or null for an item not in the form NAME (KEY, ...).</returns>
     public static DocumentationAlso? Parse(string item)
     {
         string text = item.Trim();
@@ -25,8 +25,10 @@ public sealed record DocumentationAlso(string Name, IReadOnlyList<string> Source
         if (name.Length == 0 || !IsName(name)) { return null; }
         if (open < 0) { return new(name, []); }
 
+        // The documents' keys end the item: an unclosed list, or text after it, is not an item.
         int close = text.LastIndexOf(')');
-        string inside = close > open ? text[(open + 1)..close] : text[(open + 1)..];
+        if (close != text.Length - 1 || close < open) { return null; }
+        string inside = text[(open + 1)..close];
         string[] sources = [.. inside.Split(',').Select(source => source.Trim()).Where(source => source.Length != 0)];
         return new(name, sources);
     }

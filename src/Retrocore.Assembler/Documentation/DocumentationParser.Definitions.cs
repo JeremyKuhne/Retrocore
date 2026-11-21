@@ -40,6 +40,8 @@ public static partial class DocumentationParser
                 case ".struct":
                 case ".union":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Struct, "", []);
+                case ".scope" when after.Equals("continued", StringComparison.OrdinalIgnoreCase):
+                    return null;
                 case ".scope":
                 case ".proc":
                     return name.Length == 0 ? null : new(name, DocumentationKind.Scope, "", []);

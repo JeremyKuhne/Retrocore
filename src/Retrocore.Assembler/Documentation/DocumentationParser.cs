@@ -101,6 +101,18 @@ public static partial class DocumentationParser
                     continue;
                 }
 
+                // A continued scope is documented where it first opens.
+                if (IsContinuedScope(nextCode))
+                {
+                    diagnostics.Add(new(
+                        "Document a scope where it first opens; give a continued piece a plain ; comment.",
+                        path,
+                        start,
+                        DocumentationSeverity.Error));
+
+                    continue;
+                }
+
                 if (Qualify(Define(nextCode, containers), scopes) is not { } definition)
                 {
                     diagnostics.Add(new(
@@ -361,6 +373,15 @@ public static partial class DocumentationParser
         }
 
         return members;
+    }
+
+    // Whether a line is ".scope Name continued", which goes on with a scope opened earlier.
+    private static bool IsContinuedScope(string code)
+    {
+        string[] words = code.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 3
+            && words[0].Equals(".scope", StringComparison.OrdinalIgnoreCase)
+            && words[2].Equals("continued", StringComparison.OrdinalIgnoreCase);
     }
 
     // Names inside .proc and .scope are qualified by them, as the assembler qualifies their symbols.

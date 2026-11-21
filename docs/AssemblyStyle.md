@@ -110,6 +110,9 @@ The rest of this guide is the rules this follows.
 - **A family is a `.scope`**: routines that share a tail, or that are entered part way, such as the entries of a
   floating-point package or the handlers of one table. A `.proc` with labeled entries can serve too. Choose what
   shows how the code works.
+- **A family spread through the code** is one scope in pieces: `.scope Name continued` goes on with it. Use it
+  only where the layout forces it, as in a ROM whose routines sit at fixed addresses. The `;;` comment goes on
+  the first opening; each later piece starts with a plain `;` comment saying which part it is.
 - **Falling into the next routine** is said in a step comment (`; Falls into PrintDigit.`), as above.
 
 ```asm

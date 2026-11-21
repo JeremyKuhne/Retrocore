@@ -32,7 +32,7 @@ internal static class DirectiveDocs
         [".assert"] = "Fails the assembly when the expression is false: `.assert expression, message`.",
         [".export"] = "Exports names to the generated C# type and the debugger; each must be defined.",
         [".global"] = "Exports names as `.export` does, ignoring any that are never defined.",
-        [".scope"] = "Opens a namespace: `.scope [Name]` through `.endscope`; members are `Name::member`.",
+        [".scope"] = "Opens a namespace: `.scope [Name]` through `.endscope`; members are `Name::member`. `.scope Name continued` goes on with one opened earlier.",
         [".endscope"] = "Ends a `.scope`.",
         [".proc"] = "Opens a namespace and defines its name as the address of its first statement: `.proc Name` through `.endproc`.",
         [".endproc"] = "Ends a `.proc`.",

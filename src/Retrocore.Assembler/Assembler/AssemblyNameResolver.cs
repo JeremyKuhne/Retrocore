@@ -170,6 +170,29 @@ internal sealed partial class AssemblyNameResolver
             {
                 bool procedure = node.Kind == AssemblyStatementKind.Procedure;
                 string name = node.Operand.Text.Trim();
+
+                // ".scope Name continued" goes on with a scope this one already opened and closed.
+                if (!procedure && AssemblySyntax.ContinuedScope(name) is { } continuedName)
+                {
+                    _sites[index] = new(scope, cheap, unnamed);
+                    if (node.Label is not null
+                        || !scope.Children.TryGetValue(continuedName, out Scope? continued)
+                        || continued.Procedure)
+                    {
+                        _errors.Add(new(index, $"No .scope {continuedName} here to continue: it must be opened earlier, in the same scope."));
+                        _definitions[index] = scope.Qualify($"{_privatePrefix}continued_{index}");
+                        scope = new(scope, $"{_privatePrefix}continued_{index}", index, procedure: false);
+                        continue;
+                    }
+
+                    // The scope is in pieces now, so it has no one size.
+                    continued.Contiguous = false;
+                    continued.Pieces++;
+                    _definitions[index] = continued.Qualify($"{_privatePrefix}continued_{index}");
+                    scope = continued;
+                    continue;
+                }
+
                 if (node.Label is not null || (name.Length == 0 ? procedure : !AssemblySyntax.IsPlainIdentifier(name)))
                 {
                     _errors.Add(new(index, "A scope requires an unqualified name; .proc requires a name and neither takes a label."));
@@ -218,7 +241,8 @@ internal sealed partial class AssemblyNameResolver
                         _errors.Add(new(index, "A scope terminator takes no operand or label."));
                     }
 
-                    string end = scope.Qualify($"{_privatePrefix}end");
+                    // Each later piece of a continued scope ends with its own label.
+                    string end = scope.Qualify(scope.Pieces == 0 ? $"{_privatePrefix}end" : $"{_privatePrefix}end_{index}");
                     string start = scope.Procedure ? scope.Prefix : scope.Qualify($"{_privatePrefix}start");
                     _definitions[index] = end;
                     _sizes[scope.Prefix] = scope.Contiguous ? $"({end}-{start})" : "";
@@ -488,7 +512,7 @@ internal sealed partial class AssemblyNameResolver
 
                 if (size.Length == 0)
                 {
-                    _errors.Add(new(index, ".sizeof currently requires a contiguous procedure without section or origin changes."));
+                    _errors.Add(new(index, ".sizeof requires a contiguous scope or procedure: no section or origin changes, and not a continued scope."));
                     continue;
                 }
 

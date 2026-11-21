@@ -30,6 +30,22 @@ internal static class AssemblySyntax
         text.Length != 0 && IdentifierLength(text) == text.Length;
 
     /// <summary>
+    ///  Reads the operand of <c>.scope Name continued</c>, which goes on with a scope opened earlier.
+    /// </summary>
+    /// <param name="operand">The <c>.scope</c> directive's operand.</param>
+    /// <returns>The scope's name, or null when the operand is not a continuation.</returns>
+    internal static string? ContinuedScope(string operand)
+    {
+        const string Continued = "continued";
+        string text = operand.Trim();
+        if (!text.EndsWith(Continued, StringComparison.OrdinalIgnoreCase)) { return null; }
+        string name = text[..^Continued.Length];
+        if (name.Length == 0 || !char.IsWhiteSpace(name[^1])) { return null; }
+        name = name.Trim();
+        return IsPlainIdentifier(name) ? name : null;
+    }
+
+    /// <summary>
     ///  Matches an unqualified ordinary identifier suitable for an export or metadata name.
     /// </summary>
     /// <param name="text">The identifier.</param>

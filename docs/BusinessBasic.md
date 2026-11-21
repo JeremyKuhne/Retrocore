@@ -44,6 +44,14 @@ and starts at `INIT`.
 `RUNTIME = 1` and `DEBUG = 1` select Apple's run-time and debugger variants. They assemble, but nothing exists to
 check them against.
 
+Where the PDF's reformatting stretched the spaces in four error messages and in the sign-on, the source follows the
+bytes. Its comments note what Apple's code does as found, among others: engineering-notation PRINT USING fills one
+place; `SUB$` into an empty string with a one-character result writes 256 spaces; DEF FN with an integer argument
+overwrites two bytes; long-integer comparison is wrong when the top bytes differ by `$80` or more, and negating
+-2^56 overflows; a program file whose length's low byte is `$00` or `$01` loads its arrays 256 bytes high; CHAIN's
+room check ignores the variables it keeps; FLUSH always flushes every file. RND is a Lehmer generator, not
+Microsoft's, and "MICROSOFT!" sits hidden after the sine constants.
+
 ## Programs
 
 The BASIC library (`Retrocore.Basic`) reads Business BASIC programs as the `business` dialect:
@@ -74,7 +82,8 @@ runs puts BASIC back at its prompt first.
 between separators, so `PRINTER` stays a name. Hover gives each word's help and a variable's type (`&` is a long
 integer), and diagnostics, go to definition, references, completion, the outline and **Retrocore: Renumber BASIC
 Program** work as they do for the other BASICs. Names are significant in full, dots included; the name after
-`EXFN.` is a function in an invoked module, not a variable.
+`EXFN.` is a function in an invoked module, not a variable. A number that runs into a word, as in `IF A=1THEN 20`,
+gets a warning: BASIC needs a separator before the word, so it reads the variable `THEN20`.
 
 ## Debugging
 
@@ -94,7 +103,8 @@ Once Business BASIC is in memory, the debugger shows a **BASIC** thread, as it d
 - **Variables:** the Variables scope lists the simple variables, the Arrays scope each array's elements, and the
   Loops scope each FOR in progress, with its limit and step; values can be set, a string going into string space as
   BASIC's LET puts it. Long integers are exact. The Program scope says where the program, the arrays, the simple
-  variables and the strings are, as banked addresses such as `x81:$0201`.
+  variables and the strings are, as banked addresses such as `x81:$0201`. DEF FN functions are not listed, and
+  the `!` arrays (type `$C0`) are skipped.
 - **Expressions** in watches, hovers, conditions and the Debug Console are Business BASIC: names of any length with
   `%`, `&` and `$`, `DIV` and `MOD`, and the functions that need no machine (`RND(`, `TIME$`, `EOF` and user
   functions are refused). Numbers print as BASIC prints them, to six digits; a real mixed with a long integer is a

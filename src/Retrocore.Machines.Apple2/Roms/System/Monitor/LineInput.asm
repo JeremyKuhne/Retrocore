@@ -150,6 +150,10 @@ Next:
 ;; At $FD6A. Backspace deletes a character, Control-X cancels the line, and the right arrow (Control-U) takes
 ;; the character under the cursor. Lowercase stays lowercase.
 ;; Out: X = the line's length, IN,X = the Return that ends it
+;; Entry:
+;;   NoPrompt = reads a line without printing the prompt
+;;   Backspace = takes back a character; at the line's start, starts the line again
+;;   NextCharacter = reads the next character; Control-U takes the one under the cursor
 ;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc GetLine
 .assert * = $FD6A, "GetLine must stay at $FD6A."
@@ -197,6 +201,10 @@ Store:
 ;; the character under the cursor. The Apple II's Monitors store lowercase letters as capitals; the original
 ;; IIe keeps them.
 ;; Out: X = the line's length, IN,X = the Return that ends it
+;; Entry:
+;;   NoPrompt = reads a line without printing the prompt
+;;   Backspace = takes back a character; at the line's start, starts the line again
+;;   NextCharacter = reads the next character; Control-U takes the one under the cursor
 ;; Also: GETLN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc GetLine
 .assert * = $FD6A, "GetLine must stay at $FD6A."
@@ -270,6 +278,8 @@ Store:
 ;; Prints a Return, then <A1L>/<A1H> as "AAAA-".
 ;;
 ;; At $FD92.
+;; Entry:
+;;   YX = prints a Return, then Y and X as "YYXX-"
 ;; Also: PRA1 (A2RM78, A2RM79, IIEROM82)
 .proc PrintAddress
 .assert * = $FD92, "PrintAddress must stay at $FD92."

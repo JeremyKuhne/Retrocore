@@ -76,6 +76,8 @@ QUOTE_CODE = ((KEY_QUOTE ^ '0') + KEY_CODE_OFFSET) & $FF
 ;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
 ;; Out: PCL/PCH = A1 when X was 1, X = $FF when it was
 ;; Keeps: Y
+;; Entry:
+;;   Loop = copies X + 1 bytes of A1 to PC: X = 1 for both
 ;; Also: A1PC (A2RM78, A2RM79, IIEROM82)
 .proc SetPcFromA1
 .assert * = $FE75, "SetPcFromA1 must stay at $FE75."
@@ -118,6 +120,8 @@ Done:
 ;; At $FE84.
 ;; Out: Y = <INVFLG>
 ;; Keeps: A, X
+;; Entry:
+;;   Store = sets <INVFLG> to Y
 ;; Also: SETNORM (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetNormal
 .assert * = $FE84, "SetNormal must stay at $FE84."
@@ -145,6 +149,8 @@ Store:
 ;;
 ;; At $FE8B.
 ;; In: A = the slot, in bits 0-3
+;; Entry:
+;;   FromA2 = control-K: sets the input hook to the slot in <A2L>, the number before it
 ;; Also: INPORT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetInput
 .assert * = $FE8B, "SetInput must stay at $FE8B."
@@ -173,6 +179,8 @@ FromA2:
 ;;
 ;; At $FE95.
 ;; In: A = the slot, in bits 0-3
+;; Entry:
+;;   FromA2 = control-P: sets the output hook to the slot in <A2L>, the number before it
 ;; Also: OUTPORT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetOutput
 .assert * = $FE95, "SetOutput must stay at $FE95."
@@ -375,6 +383,8 @@ ChecksumFix:
 ;;
 ;; $FEC5 on the Enhanced IIe. The firmware returns through it, or through its rts at $FEC8 when the internal ROM
 ;; was in before the call; <WriteHeader at Cassette::WriteHeader> does too.
+;; Entry:
+;;   Done = the return, which the firmware jumps to at $FEC8
 ;; Also: SLOTRTS (UNKN)
 .proc SelectSlotRom
 .assert * = $FEC5, "SelectSlotRom must stay at $FEC5, where the firmware returns through it."
@@ -474,6 +484,8 @@ Next:
 ;;
 ;; At $FEFD.
 ;; In: A1L/A1H = the first address, A2L/A2H = the last
+;; Entry:
+;;   Finish = switches slot ROM back in and reports: <Beep> when zero is set, or <PrintError>
 ;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
@@ -680,6 +692,8 @@ NextByte:
 ;;
 ;; At $FF3F.
 ;; Out: A = <A5H>, X = <XREG>, Y = <YREG>, P = <STATUS>
+;; Entry:
+;;   Done = the return, which the Enhanced IIe's <Commands::LetterOrQuote> returns through too
 ;; Also: RESTORE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc RestoreRegisters
 .assert * = $FF3F, "RestoreRegisters must stay at $FF3F."
@@ -705,6 +719,8 @@ Done:
 ;; At $FF4A. Its rts, at $FF58, is the one other sources call as a routine that does nothing.
 ;; Out: A5H = A, XREG = X, YREG = Y, STATUS = P, SPNT = S
 ;; Keeps: Y
+;; Entry:
+;;   ExceptA = saves X, Y, P and S, then clears decimal mode
 ;; Also: SAVE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SaveRegisters
 .assert * = $FF4A, "SaveRegisters must stay at $FF4A."

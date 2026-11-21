@@ -104,6 +104,8 @@ MnemonicLow = V2
 ;; In: X = 0, PCL/PCH = the instruction
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, Y = 0
+;; Entry:
+;;   Opcode = decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E
 ;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
@@ -209,6 +211,8 @@ Done:
 ;; In: X = 0, PCL/PCH = the instruction
 ;; Out: A = the mnemonic's slot in <MnemonicsLeft> and <MnemonicsRight>, LENGTH = the operand's bytes (0-2),
 ;;   MASK = the operand format, X = the opcode's <GROUP_BITS>, Y = 0
+;; Entry:
+;;   Opcode = decodes the opcode in A; the Enhanced IIe firmware's mini-assembler calls it at $F88E
 ;; Also: INSDS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Decode
 .assert * = $F88C, "Decode must stay at $F88C."
@@ -303,6 +307,8 @@ HashNext:
 ;; and its operand, with a branch's operand printed as the address it goes to.
 ;; In: PCL/PCH = the instruction
 ;; Out: LENGTH = the operand's bytes (0-2)
+;; Entry:
+;;   Operand = prints the operand's bytes, the last first, or for a branch the address it goes to
 ;; Also: INSTDSP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc PrintInstruction
 .assert * = $F8D0, "PrintInstruction must stay at $F8D0."
@@ -489,6 +495,9 @@ Print:
 ;; At $F953. <PCL>/<PCH> are not changed.
 ;; In: LENGTH = the instruction's operand bytes, as <Disassembler::Decode> leaves it
 ;; Out: A = the address's low byte, Y = its high byte, X = LENGTH
+;; Entry:
+;;   AddLength = the same, adding the carry as given instead of one
+;;   AddA = adds A, sign-extended, and the carry to <PCL>/<PCH>
 ;; Also: PCADJ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc NextInstruction
 .assert * = $F953, "NextInstruction must stay at $F953."

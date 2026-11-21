@@ -162,6 +162,8 @@ Done:
 ;; Moves the cursor right; at the window's right edge, starts a new line.
 ;;
 ;; At $FBF4.
+;; Entry:
+;;   Done = the return that <Backspace>, and on the Enhanced IIe <CursorUp> and <Escape::Command>, share
 ;; Also: ADVANCE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc AdvanceCursor
 .assert * = $FBF4, "AdvanceCursor must stay at $FBF4."
@@ -250,6 +252,8 @@ Done:
 ;; At $FC24. The Enhanced IIe has the internal firmware compute it (function 4), for 40 or 80 columns.
 ;; In: A = the line
 ;; Out: BASL/BASH
+;; Entry:
+;;   ToFirmware = goes to the firmware function in Y; <ClearToEndOfWindow> and <Scroll> branch here too
 ;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
@@ -273,6 +277,8 @@ ToFirmware:
 ;; In: A = the line
 ;; Out: BASL/BASH, A = the low byte
 ;; Keeps: X, Y
+;; Entry:
+;;   Done = the return that <CursorUp> and <Escape::Command> share
 ;; Also: VTABZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc SetLineBase
 .assert * = $FC24, "SetLineBase must stay at $FC24."
@@ -373,6 +379,8 @@ FortyColumns:
 ;; Clears the window and puts the cursor at its top left, through the internal firmware.
 ;;
 ;; At $FC58.
+;; Entry:
+;;   ToFirmware = goes to the firmware function in Y; <ScreenOutByWidth> branches here too
 ;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Home
 .assert * = $FC58, "Home must stay at $FC58."
@@ -420,6 +428,8 @@ ToFirmware:
 ;;
 ;; At $FC42.
 ;; Keeps: X
+;; Entry:
+;;   NextLine = clears line A from column Y, then the lines below it from column 0; <Home> enters here
 ;; Also: CLREOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearToEndOfWindow
 .assert * = $FC42, "ClearToEndOfWindow must stay at $FC42."
@@ -555,6 +565,8 @@ Print:
 ;; Scrolls the text window up one line and clears the bottom line, through the internal firmware.
 ;;
 ;; At $FC70.
+;; Entry:
+;;   ToFirmware = goes to the firmware function in Y, for the screen routines around it
 ;; Also: SCROLL (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Scroll
 .assert * = $FC70, "Scroll must stay at $FC70."

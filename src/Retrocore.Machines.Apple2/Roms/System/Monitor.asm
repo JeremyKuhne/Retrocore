@@ -1,7 +1,8 @@
-;; APPLE II, II PLUS AND IIE MONITORS ($F800-$FFFF)
+; retrocore: style=strict
+;; The Apple II, II Plus and IIe Monitors ($F800-$FFFF)
 ;;
 ;; The Monitor is each Apple II's lowest layer: reset and power-up, the BRK and IRQ entry points, character
-;; input and output through the CSWL/KSWL hooks, the text screen and lo-res graphics primitives, the
+;; input and output through the <CSWL>/<KSWL> hooks, the text screen and lo-res graphics primitives, the
 ;; mini disassembler, and the Monitor command line (the * prompt). This file builds four Monitors:
 ;;
 ;; - The Apple II Monitor of the first Apple IIs (1978).
@@ -19,10 +20,10 @@
 ;; pause (VIDOUT), and escape mode takes one command, @ or A-F, at a time.
 ;;
 ;; The Autostart Monitor takes the machine from power-up to a program. Its RESET checks the soft entry
-;; vector at $3F2-$3F4 (SOFTEV and its check byte PWREDUP): when it is valid, a reset continues the
+;; vector at $3F2-$3F4 (<SOFTEV> and its check byte <PWREDUP>): when it is valid, a reset continues the
 ;; program that set it; otherwise this is a power-up (PWRUP), which shows "APPLE ][", sets the vectors,
 ;; and boots the disk controller in the highest slot that has one, or starts BASIC. BRK goes through
-;; the vector BRKV ($3F0). STEP, TRACE and the multiply and divide routines are gone; in their space are
+;; the vector <BRKV> ($3F0). STEP, TRACE and the multiply and divide routines are gone; in their space are
 ;; the title and boot code, the Control-S pause on output (VIDWAIT) and the escape keys I, J, K and M.
 ;;
 ;; The IIe's Monitor keeps the Autostart Monitor's design but moves much of the screen work to the
@@ -33,24 +34,22 @@
 ;; CLREOP, SETWND, INSDS2, OUTPORT), replaces the cassette routines with stubs into internal ROM, and
 ;; adds lowercase input; its IRQ entry goes to $C3FA.
 ;;
-;; Two predefined symbols choose the build. MONITOR picks the Monitor: 0 (MONITOR_II) for the Apple II
-;; Monitor, chip 341-0004; 1 (MONITOR_AUTOSTART) for the Autostart Monitor, chip 341-0020; 2
-;; (MONITOR_IIE, the default) for the IIe. For the IIe, ENHANCED picks the model: 1 (the default) for
+;; Two predefined symbols choose the build. MONITOR picks the Monitor: 0 (<MONITOR_II>) for the Apple II
+;; Monitor, chip 341-0004; 1 (<MONITOR_AUTOSTART>) for the Autostart Monitor, chip 341-0020; 2
+;; (<MONITOR_IIE>, the default) for the IIe. For the IIe, ENHANCED picks the model: 1 (the default) for
 ;; the Enhanced IIe, 0 for the original; the Apple II builds need 0, their default. Each build
 ;; assembles byte-identically to its chip, or to the $F800-$FFFF part of the IIe model's system ROM.
 ;; All but the Enhanced IIe's assemble for the NMOS 6502; the Enhanced IIe's for the 65C02.
 ;;
-;; Names are Apple's documented entry points, page-zero locations and soft switches; code only the
-;; Apple II has takes its names from Apple's listings in the Apple II Reference Manual (1978 for the
-;; Apple II Monitor, 1979 for the Autostart Monitor). Where those listings name a routine the IIe also
-;; has differently, the IIe's name is kept and the documentation gives the other. Other labels are
-;; named after the routine they are in. The page-zero locations, soft switches and keys it shares with
-;; the other IIe sources are in IIeEquates.asm, which it includes; the few page-zero names only the
-;; Apple II Monitor uses are defined here.
+;; The source is in the files of Monitor/, by subject, included below in address order. Routines are .procs, and
+;; the families that share code are scopes (<LowRes>, <Disassembler>, <Startup>, <Escape>, <Commands> ...), some in
+;; several pieces where the ROM interleaves them. Names say what the code does; each name Apple's listings gave a
+;; definition is in its Also: section, so code written with Apple's names still assembles and the editor offers the
+;; current ones. The page-zero locations, soft switches and keys the other IIe sources share are in IIeEquates.asm,
+;; which it includes; Monitor/Equates.asm has the few this source adds.
 ;;
-;; The address comments give the Enhanced IIe's address, or for code only an Apple II build has, that
-;; build's; "original" marks the address in the other three where it differs, and "1978" the Apple II
-;; Monitor's where it differs again.
+;; Programs call the Monitor's documented entry points by address, so each one's comment gives its address, and an
+;; .assert at it checks the address in every build.
 ;;
 ;; Maintained by hand. The SystemSourceTests digests check that the IIe models assemble byte-identically.
 

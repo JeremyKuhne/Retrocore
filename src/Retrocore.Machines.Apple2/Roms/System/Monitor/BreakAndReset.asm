@@ -1,287 +1,539 @@
-.if MONITOR = MONITOR_II
-    .byte $FF, $FF, $FF             ; $FA40 unused
+; retrocore: style=strict
+;; The Monitor's interrupt and BRK entries ($FA40-$FAD6), with the Apple II Monitor's instruction stepper around them
+;; and, in the other Monitors, the reset handler and power-up.
+;;
+;; The Apple II Monitor has the first and second pieces of <Stepper> here, with <Interrupt>, <Break> and
+;; <ShowBreak> between them. The Autostart and IIe Monitors have the same three routines at $FA40, then the first
+;; piece of <Startup>: <Startup::Reset> and <Startup::PowerUp>.
 
-;; Runs one instruction of the program at PCL/PCH for the S and T commands, then shows the registers.
+.if MONITOR = MONITOR_II
+
+; The opcodes the Stepper simulates instead of running them.
+
+;; The opcode of JSR, which <Stepper::SimulateJsr> simulates.
+OPCODE_JSR = $20
+
+;; The opcode of RTS, which <Stepper::SimulateRts> simulates.
+OPCODE_RTS = $60
+
+;; The opcode of JMP, which <Stepper::SimulateJmp> simulates.
+OPCODE_JMP = $4C
+
+;; The opcode of JMP indirect, which <Stepper::SimulateJmp::Indirect> simulates.
+OPCODE_JMP_INDIRECT = $6C
+
+;; The opcode of RTI, which <Stepper::SimulateRti> simulates.
+OPCODE_RTI = $40
+
+; Running a branch in the run area.
+
+;; The bits of an opcode that tell a relative branch: the low five.
+BRANCH_OPCODE_MASK = $1F
+
+;; The low five bits of every relative branch's opcode ($10, $30, ... $F0), and of no other opcode.
+BRANCH_OPCODE_BITS = $10
+
+;; The displacement a stepped branch runs with: from the byte after it in <Stepper::RunArea> to the jump to
+;; <Stepper::TakenBranch> at the end of <Stepper::Trailer>.
+TAKEN_DISPLACEMENT = 4
+
+;; The bytes of <Stepper::Trailer>, copied after the instruction in <Stepper::RunArea>.
+TRAILER_SIZE = 8
+.else
+
+; The reset handler's soft entry check.
+
+;; What <SOFTEV>'s high byte is exclusive-ored with to give <PWREDUP> when the soft entry vector is valid.
+SOFT_ENTRY_CHECK = $A5
+
+; Looking for a disk controller.
+
+;; The page of slot 0's ROM space: slot n's ROM is at the page this plus n.
+SLOT_PAGE_BASE = $C0
+
+;; The highest slot, the first one <Startup::PowerUp> tries.
+LAST_SLOT = 7
+
+;; The bytes of <BRKV>, <SOFTEV> and <PWREDUP>, which <Startup::PowerUp> sets from <Startup::PowerUpVectors>.
+POWER_UP_VECTOR_BYTES = 5
+.if ENHANCED
+
+;; The offset in a slot's ROM of the last byte of <Startup::DiskSignature> that <Startup::PowerUp> compares:
+;; $Cn05 on the Enhanced IIe, which compares three bytes.
+SIGNATURE_LAST = 5
+.else
+
+;; The offset in a slot's ROM of the last byte of <Startup::DiskSignature> that <Startup::PowerUp> compares:
+;; $Cn07, so the Autostart Monitor and the original IIe compare four bytes.
+SIGNATURE_LAST = 7
+.endif
+
+; The internal firmware's functions.
+.if ENHANCED
+
+;; The internal firmware's function that resets its state on a reset: 9 on the Enhanced IIe.
+FIRMWARE_RESET = $09
+.else
+
+;; The internal firmware's function that resets its state on a reset: 5 on the original IIe.
+FIRMWARE_RESET = $05
+.endif
+.endif
+.if MONITOR = MONITOR_II
+
+    ; Apple II Monitor: three unused bytes before the Stepper.
+    .byte $FF, $FF, $FF
+
+;; The Apple II Monitor's S and T commands' engine, which runs a program one instruction at a time.
 ;;
-;; Apple II Monitor only. It disassembles the instruction (<INSTDSP>) and runs it with the program's
-;; registers from <A5H>, <XREG>, <YREG> and <STATUS>. Most instructions are copied to <XQT> and run
-;; there, followed by NOPs and a jump to <NBRNCH>, which saves the registers again and moves PCL/PCH past
-;; the instruction. A relative branch is copied with a displacement of 4, so that when it is taken it
-;; lands on the jump to <BRANCH> instead, which applies the real displacement. JSR, RTS, JMP, JMP
-;; indirect and RTI would leave the copy, so they are simulated (<XJSR>, <XRTS>, <XJMP>, <XJMPAT>,
-;; <XRTI>), and BRK stops in <XBRK>. Every other way ends at <RTNJMP>, which shows the registers.
+;; <Stepper::RunInstruction> disassembles the instruction at <PCL>/<PCH> and runs it with the program's registers. Most
+;; instructions run in <Stepper::RunArea>, followed by <Stepper::Trailer>; the instructions that would leave it are
+;; simulated. Every way ends in <Stepper::Finish>, which shows the registers and returns to the command line. The scope
+;; is in three pieces, around <Interrupt>, <Break>, <ShowBreak> and <ShowRegisters>.
+.scope Stepper
+
+; Page zero, under the names this scope gives it.
+
+;; The low byte of the command line's return address while <RunInstruction> runs a user instruction.
 ;;
-;; The command line called it through <TOSUB>; its return address is moved to <RTNL>/<RTNH> while the
-;; instruction runs, so the instruction sees the program's stack.
+;; <RunInstruction> pops the address its caller left on the stack into it and <ReturnAddressHigh>, so the user's
+;; instruction sees the user's stack, and <Finish> pushes it back. The same byte is <H2>.
+;; Also: RTNL (A2RM78, A2RM79)
+ReturnAddress = H2
+
+;; The high byte of the return address at <ReturnAddress>. The same byte is <V2>.
+;; Also: RTNH (A2RM78, A2RM79)
+ReturnAddressHigh = V2
+
+;; The nine bytes, from <A1L>, where <RunInstruction> runs one user instruction: the instruction, padded with NOPs,
+;; then <Trailer>'s jumps to <FellThrough> and <TakenBranch>.
+;; Also: XQT (A2RM78, A2RM79)
+RunArea = A1L
+
+;; Runs one instruction of the program at <PCL>/<PCH> for the S and T commands, then shows the registers.
+;;
+;; At $FA43. It disassembles the instruction (<Disassembler::PrintInstruction>), then runs it with the program's
+;; registers from <A5H>, <XREG>, <YREG> and <STATUS>. Most instructions are copied to <Stepper::RunArea> and run there,
+;; followed by <Stepper::Trailer>: NOPs and a jump to <Stepper::FellThrough>, which saves the registers again and moves
+;; <PCL>/<PCH> past the instruction. A relative branch is copied with a displacement of <TAKEN_DISPLACEMENT>, so that
+;; when it is taken it lands on the trailer's jump to <Stepper::TakenBranch> instead, which applies the real
+;; displacement. JSR, RTS, JMP, JMP indirect and RTI would leave the copy, so they are simulated
+;; (<Stepper::SimulateJsr>, <Stepper::SimulateRts>, <Stepper::SimulateJmp>, <Stepper::SimulateRti>), and BRK stops in
+;; <ShowBreak>. Every other way ends at <Stepper::Finish>, which shows the registers.
+;;
+;; The command line called it through <Commands::RunCommand>; its return address is moved to
+;; <Stepper::ReturnAddress>/<Stepper::ReturnAddressHigh> while the instruction runs, so the instruction sees the
+;; program's stack.
 ;; In: PCL/PCH = the instruction to run
 ;; Out: PCL/PCH = the next instruction to run
-;; See: <STEPZ>, <TRACE>, <INITBL>
-STEP:
-    jsr INSTDSP                     ; $FA43 sets LENGTH
-    pla                             ; $FA46
-    sta RTNL                        ; $FA47
-    pla                             ; $FA49
-    sta RTNH                        ; $FA4A
-    ldx #$08                        ; $FA4C
+;; See: <Commands::Step>, <Commands::Trace>
+;; Also: STEP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc RunInstruction
+    .assert * = $FA43, "Stepper::RunInstruction must stay at $FA43."
+    jsr Disassembler::PrintInstruction
 
-XQINIT:
-    lda INITBL-1,x                  ; $FA4E fills XQT+1 to XQT+8 with NOPs and the two jumps
-    sta XQT,x                       ; $FA51
-    dex                             ; $FA53
-    bne XQINIT                      ; $FA54
-    lda (PCL,x)                     ; $FA56 the opcode
-    beq XBRK                        ; $FA58
-    ldy LENGTH                      ; $FA5A
-    cmp #$20                        ; $FA5C JSR
-    beq XJSR                        ; $FA5E
-    cmp #$60                        ; $FA60 RTS (equal, so carry is set)
-    beq XRTS                        ; $FA62
-    cmp #$4C                        ; $FA64 JMP
-    beq XJMP                        ; $FA66
-    cmp #$6C                        ; $FA68 JMP indirect (carry set)
-    beq XJMPAT                      ; $FA6A
-    cmp #$40                        ; $FA6C RTI
-    beq XRTI                        ; $FA6E
-    and #$1F                        ; $FA70
-    eor #$14                        ; $FA72 only a branch, %xxx10000, gives 4
-    cmp #$04                        ; $FA74
-    beq XQ2                         ; $FA76 a branch's displacement becomes 4
+    ; The command line's return address, out of the program's way.
+    pla
+    sta ReturnAddress
+    pla
+    sta ReturnAddressHigh
+    ldx #TRAILER_SIZE
 
-XQ1:
-    lda (PCL),y                     ; $FA78
+;; Copies <Stepper::Trailer> to XQT+1 through XQT+8; the instruction overwrites the start of it.
+;; Also: XQINIT (A2RM78, A2RM79)
+FillTrailer:
+    lda Trailer - 1,x
+    sta RunArea,x
+    dex
+    bne FillTrailer
 
-XQ2:
-    sta XQT,y                       ; $FA7A
-    dey                             ; $FA7D
-    bpl XQ1                         ; $FA7E
-    jsr RESTORE                     ; $FA80
-    jmp XQT                         ; $FA83 returns through NBRNCH or BRANCH
+    ; The instructions that are simulated, by opcode; X = 0 here. RTS and JMP indirect leave the carry set.
+    lda (PCL,x)
+    beq ShowBreak
+    ldy LENGTH
+    cmp #OPCODE_JSR
+    beq SimulateJsr
+    cmp #OPCODE_RTS
+    beq SimulateRts
+    cmp #OPCODE_JMP
+    beq SimulateJmp
+    cmp #OPCODE_JMP_INDIRECT
+    beq SimulateJmp::Indirect
+    cmp #OPCODE_RTI
+    beq SimulateRti
+
+    ; A relative branch is the only opcode this gives TAKEN_DISPLACEMENT for, and that is its displacement in
+    ; the copy.
+    and #BRANCH_OPCODE_MASK
+    eor #BRANCH_OPCODE_BITS ^ TAKEN_DISPLACEMENT
+    cmp #TAKEN_DISPLACEMENT
+    beq StoreByte
+
+;; Copies the instruction to <Stepper::RunArea>, from its last byte (Y = LENGTH) down to its opcode.
+;; Also: XQ1 (A2RM78)
+CopyByte:
+    lda (PCL),y
+
+;; Stores a byte of the instruction; a branch enters with its displacement in A.
+;; Also: XQ2 (A2RM78, A2RM79)
+StoreByte:
+    sta RunArea,y
+    dey
+    bpl CopyByte
+
+    ; Runs it with the program's registers. It returns through FellThrough or TakenBranch.
+    jsr RestoreRegisters
+    jmp RunArea
+.endproc
+
+.endscope
 .endif
-
-;; IRQ and BRK entry (the 6502's $FFFE vector points here on the original IIe).
-;; Saves A in A5H.
-;; Original IIe: looks at the pushed status; BRK goes to BREAK, other interrupts to the user's handler
-;; through IRQLOC ($03FE).
-;; Enhanced IIe: the vector points to the firmware at $C3FA instead; this entry passes A to it.
-;;
-;; The Apple II's two Monitors work as the original IIe's; the Apple II Monitor's is at $FA86.
-IRQ:
-    sta A5H                         ; $FA40 1978 $FA86
 .if ENHANCED
-    lda A5H                         ; $FA42
-    jmp IRQHANDLER                  ; $FA44
-.else
-    pla                             ; $FA42
-    pha                             ; $FA43
-    asl a                           ; $FA44
-    asl a                           ; $FA45
-    asl a                           ; $FA46
-.endif
 
-IRQ_1:
-.if ENHANCED
-    sta SETSLOTCXROM                ; $FA47
-    sta A5H                         ; $FA4A
-.else
-    bmi BREAK                       ; $FA47
-    jmp (IRQLOC)                    ; $FA49
-.endif
-
-;; Handles BRK: saves A, X, Y, P and S (SAVE), sets PCL/PCH from the return address on the stack,
-;; then jumps through BRKV ($03F0), normally OLDBRK.
+;; The Monitor's interrupt entry: saves A in <A5H> and goes to the internal firmware's interrupt handler.
 ;;
-;; The Apple II Monitor has no BRKV: it continues in <XBRK>, which does what OLDBRK does.
-BREAK:
-    plp                             ; $FA4C 1978 $FA92
-    jsr SAV1                        ; $FA4D
-    pla                             ; $FA50
-    sta PCL                         ; $FA51
-    pla                             ; $FA53
-    sta PCH                         ; $FA54
+;; At $FA40. The 6502's IRQ vector points at the firmware's handler, <IRQHANDLER>, so only code that jumps here by
+;; address comes this way. The firmware handles BRK and hands it back at <BreakFromFirmware>.
+;; In: A = the interrupted program's A
+;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Interrupt
+    .assert * = $FA40, "Interrupt must stay at $FA40."
+    sta A5H
+    lda A5H
+    jmp IRQHANDLER
+.endproc
+
+;; The internal firmware's way back to the Monitor for a BRK: switches slot ROM in, saves A in <A5H> and handles
+;; the BRK (<Break>).
+;;
+;; At $FA47, which the firmware jumps to.
+;; In: A = the program's A, the stack as the BRK left it
+.proc BreakFromFirmware
+    .assert * = $FA47, "BreakFromFirmware is at $FA47."
+    sta SETSLOTCXROM
+    sta A5H
+    ; Falls into Break.
+.endproc
+.else
+
+;; The interrupt and BRK entry: saves A in <A5H>, then handles a BRK (<Break>) or goes to the program's
+;; interrupt handler through <IRQLOC>.
+;;
+;; At $FA40; in the Apple II Monitor, $FA86. The 6502's IRQ vector points here.
+;; In: A = the interrupted program's A, the stack as the interrupt left it
+;; Also: IRQ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Interrupt
 .if MONITOR = MONITOR_II
-
-;; Apple II Monitor: shows the instruction at PC and the registers, and enters the Monitor.
-;;
-;; <BREAK> continues here after a BRK, and <STEP> comes here when the instruction to run is a BRK.
-;; Later Monitors call this code OLDBRK and reach it through the vector BRKV.
-XBRK:
+    .assert * = $FA86, "Interrupt (IRQ) is at $FA86 in the Apple II Monitor."
 .else
-    jmp (BRKV)                      ; $FA56
+    .assert * = $FA40, "Interrupt must stay at $FA40."
+.endif
+    sta A5H
 
-;; The default BRK handler: disassembles the instruction at PC, shows the registers, and enters the
+    ; The pushed status's break flag (bit 4) into bit 7.
+    pla
+    pha
+    asl a
+    asl a
+    asl a
+    bmi Break
+    jmp (IRQLOC)
+.endproc
+.endif
+
+;; Handles BRK: saves A, X, Y, P and S (<SaveRegisters::ExceptA>), sets <PCL>/<PCH> from the return address on the
+;; stack, then jumps through <BRKV>, normally to <ShowBreak>.
+;;
+;; At $FA4C; in the Apple II Monitor, $FA92. The return address a BRK pushes is two past the BRK, so that is
+;; where they point. The Apple II Monitor has no <BRKV>: it falls into <ShowBreak>.
+;; In: A5H = the program's A, the stack as the BRK left it
+;; Out: A5H..SPNT = the program's registers, PCL/PCH = the address after the BRK and its signature byte
+;; Also: BREAK (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Break
+.if MONITOR = MONITOR_II
+    .assert * = $FA92, "Break (BREAK) is at $FA92 in the Apple II Monitor."
+.else
+    .assert * = $FA4C, "Break must stay at $FA4C."
+.endif
+
+    ; The program's status back, then all its registers saved.
+    plp
+    jsr SaveRegisters::ExceptA
+
+    ; The return address.
+    pla
+    sta PCL
+    pla
+    sta PCH
+.if MONITOR != MONITOR_II
+
+    ; To the BRK handler; the Apple II Monitor has none, and falls into ShowBreak.
+    jmp (BRKV)
+.endif
+.endproc
+
+;; The default BRK handler: disassembles the instruction at <PCL>/<PCH>, shows the registers, and enters the
 ;; Monitor.
-OLDBRK:
+;;
+;; At $FA59, reached through <BRKV>; in the Apple II Monitor, $FA9C, which <Break> falls into and
+;; <Stepper::RunInstruction> jumps to when the instruction to run is a BRK.
+;; In: PCL/PCH = the address to show, A5H..SPNT = the registers to show
+;; Also: XBRK (A2RM78, A2RM79), OLDBRK (A2RM79, IIEROM82, IIETRM85)
+.proc ShowBreak
+.if MONITOR = MONITOR_II
+    .assert * = $FA9C, "ShowBreak (XBRK) is at $FA9C in the Apple II Monitor."
+.else
+    .assert * = $FA59, "ShowBreak must stay at $FA59."
 .endif
-    jsr INSDS1                      ; $FA59 1978 $FA9C
-    jsr RGDSP1                      ; $FA5C
-    jmp MON                         ; $FA5F
+    jsr Disassembler::PrintPcAndDecode
+    jsr ShowRegisters::NoReturn
+    jmp EnterMonitor
+.endproc
 .if MONITOR = MONITOR_II
 
-;; Apple II Monitor: simulates RTI for <STEP>: pulls the status, then the return address (<XRTS>).
+; Stepper: the simulated RTI, RTS, JSR and JMP, and the end of a step.
+.scope Stepper continued
+
+;; Simulates RTI for <Stepper::RunInstruction>: pulls the status, then the return address
+;; (<Stepper::SimulateRts>).
 ;;
 ;; The carry is cleared so the address is used as it is, where RTS adds one.
-XRTI:
-    clc                             ; $FAA5
-    pla                             ; $FAA6
-    sta STATUS                      ; $FAA7
+;; Out: STATUS = the pulled status
+;; Also: XRTI (A2RM78, A2RM79)
+.proc SimulateRti
+    clc
+    pla
+    sta STATUS
+    ; Falls into SimulateRts.
+.endproc
 
-;; Apple II Monitor: simulates RTS for <STEP>: pulls the return address into PCL/PCH and adds one.
+;; Simulates RTS for <Stepper::RunInstruction>: pulls the return address into <PCL>/<PCH> and adds one.
 ;;
-;; <STEP> enters with the carry set from its compare, which adds the one; <XRTI> enters with it clear.
-;; Entry: PCINC2 = with A the new PCH, PCINC3 = adds LENGTH and the carry to PCL/PCH
-XRTS:
-    pla                             ; $FAA9
-    sta PCL                         ; $FAAA
-    pla                             ; $FAAC
+;; <Stepper::RunInstruction> enters with the carry set from its compare, which adds the one;
+;; <Stepper::SimulateRti> enters with it clear.
+;; In: carry = set to add one to the pulled address
+;; Also: XRTS (A2RM78, A2RM79)
+.proc SimulateRts
+    pla
+    sta PCL
+    pla
 
-PCINC2:
-    sta PCH                         ; $FAAD
+;; Sets <PCH>, then moves the PC past the instruction (<Stepper::SimulateRts::AddLength>).
+;; Also: PCINC2 (A2RM78, A2RM79)
+SetPcHigh:
+    sta PCH
 
-PCINC3:
-    lda LENGTH                      ; $FAAF
-    jsr PCADJ3                      ; $FAB1 adds LENGTH and the carry to PCL/PCH
-    sty PCH                         ; $FAB4
-    clc                             ; $FAB6
-    bcc NEWPCL                      ; $FAB7
+;; Adds <LENGTH> and the carry to <PCL>/<PCH>; <Stepper::FellThrough> enters here.
+;; Also: PCINC3 (A2RM78, A2RM79)
+AddLength:
+    lda LENGTH
+    jsr NextInstruction::AddA
+    sty PCH
+    clc
+    bcc SimulateJmp::SetPcLow
+.endproc
 
-;; Apple II Monitor: simulates JSR for <STEP>: pushes the address of the JSR's last byte, as JSR does,
-;; then jumps to its target (<XJMP>).
-XJSR:
-    clc                             ; $FAB9
-    jsr PCADJ2                      ; $FABA PC + LENGTH, the JSR's last byte
-    tax                             ; $FABD
-    tya                             ; $FABE
-    pha                             ; $FABF
-    txa                             ; $FAC0
-    pha                             ; $FAC1
-    ldy #$02                        ; $FAC2
+;; Simulates JSR for <Stepper::RunInstruction>: pushes the address of the JSR's last byte, as JSR does, then jumps
+;; to its target (<Stepper::SimulateJmp>).
+;; Also: XJSR (A2RM78, A2RM79)
+.proc SimulateJsr
+    ; PC + LENGTH, the JSR's last byte, high byte first.
+    clc
+    jsr NextInstruction::AddLength
+    tax
+    tya
+    pha
+    txa
+    pha
 
-;; Apple II Monitor: simulates JMP for <STEP>: loads PCL/PCH from the instruction's operand.
+    ; The offset of the operand's high byte.
+    ldy #2
+    ; Falls into SimulateJmp.
+.endproc
+
+;; Simulates JMP for <Stepper::RunInstruction>: loads <PCL>/<PCH> from the instruction's operand.
 ;;
-;; JMP indirect enters at XJMPAT with the carry set: the first pass loads the pointer into PCL/PCH,
-;; and the second, from <NEWPCL>, loads the address it points to.
-;; Entry: XJMPAT = keeps the carry, NEWPCL = with A the new PCL
-XJMP:
-    clc                             ; $FAC4
+;; JMP indirect enters at <Stepper::SimulateJmp::Indirect> with the carry set: the first pass loads the pointer, and the
+;; second, from the start with Y = 1, loads the address it points to.
+;; In: Y = the offset of the operand's high byte
+;; Also: XJMP (A2RM78, A2RM79)
+.proc SimulateJmp
+    clc
 
-XJMPAT:
-    lda (PCL),y                     ; $FAC5 the high byte (Y = 2, then 1)
-    tax                             ; $FAC7
-    dey                             ; $FAC8
-    lda (PCL),y                     ; $FAC9
-    stx PCH                         ; $FACB
+;; Loads the operand at PC+Y-1 into <PCL>/<PCH>, and with the carry set loads again from there.
+;; Also: XJMPAT (A2RM78, A2RM79)
+Indirect:
+    lda (PCL),y
+    tax
+    dey
+    lda (PCL),y
+    stx PCH
 
-NEWPCL:
-    sta PCL                         ; $FACD
-    bcs XJMP                        ; $FACF
+;; Sets <PCL>, then loads again for JMP indirect, or ends the step.
+;; Also: NEWPCL (A2RM78, A2RM79)
+SetPcLow:
+    sta PCL
+    bcs SimulateJmp
+    ; Falls into Finish.
+.endproc
 
-;; Apple II Monitor: ends <STEP>: pushes back the command line's return address, then shows the
-;; registers (<REGDSP>) and returns to the command line.
-RTNJMP:
-    lda RTNH                        ; $FAD1
-    pha                             ; $FAD3
-    lda RTNL                        ; $FAD4
-    pha                             ; $FAD6
+;; Ends <Stepper::RunInstruction>: pushes back the command line's return address, then shows the registers
+;; (<ShowRegisters>) and returns to the command line.
+;; Also: RTNJMP (A2RM78)
+.proc Finish
+    lda ReturnAddressHigh
+    pha
+    lda ReturnAddress
+    pha
+    ; Falls into ShowRegisters.
+.endproc
+
+.endscope
 .else
 
-;; The reset handler (RESETVEC).
-;; Restores normal video, text mode, a full window and the screen and keyboard hooks, turns
-;; annunciators 0 and 1 off, lets the internal firmware reset its state, releases any $C800 ROM and
-;; clears the keyboard strobe, then beeps.
-;; When PWREDUP shows the reset vector (SOFTEV) was set by a program, jumps through SOFTEV; the first
-;; time SOFTEV holds BASIC's cold start ($E000) it is changed to $E003 so later resets warm-start
-;; AppleSoft. Otherwise this is a power-up (PWRUP).
+;; Taking the machine from reset or power-up to a program: the reset handler, power-up and their data, and the
+;; older reset sequence to the Monitor.
 ;;
-;; The Autostart Monitor reads CLRAN2 and CLRAN3 in place of the firmware call, as the IIe has no
-;; internal firmware to reset. The Apple II Monitor has no RESET: its reset vector points at OLDRST.
-RESET:
-    cld                             ; $FA62
-    jsr SETNORM                     ; $FA63
-    jsr INIT                        ; $FA66
-    jsr SETVID                      ; $FA69
-    jsr SETKBD                      ; $FA6C
+;; The Autostart and IIe Monitors have it in five pieces: <Startup::Reset> and <Startup::PowerUp> here, the
+;; power-up data (<Startup::PowerUpVectors>, <Startup::DiskSignature>, <Startup::Title>), <Startup::ShowTitle>,
+;; the Enhanced IIe's title, and the older reset (<Startup::ResetToMonitor>). The Apple II Monitor has only the last.
+.scope Startup
 
-INITAN:
-    lda CLRAN0                      ; $FA6F
-    lda CLRAN1                      ; $FA72
+;; The reset handler: restores the screen and keyboard, then continues the program that set the soft entry
+;; vector, or powers up.
+;;
+;; At $FA62, where the 6502's reset vector points. It restores normal video, text mode, a full window and the screen and
+;; keyboard hooks, turns annunciators 0 and 1 off, lets the internal firmware reset its state, releases any $C800 ROM
+;; and clears the keyboard strobe, then beeps. When <PWREDUP> shows the soft entry vector (<SOFTEV>) was set by a
+;; program, it jumps through it; the first time it holds AppleSoft's cold start (<BasicColdStart>, $E000) it is changed
+;; to $E003 so later resets warm-start AppleSoft. Otherwise this is a power-up (<Startup::PowerUp>).
+;;
+;; The Autostart Monitor reads <CLRAN2> and <CLRAN3> in place of the firmware call, as it has no internal firmware to
+;; reset. The Apple II Monitor has no Reset: its reset vector points at <Startup::ResetToMonitor>.
+;; Also: RESET (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Reset
+    .assert * = $FA62, "Startup::Reset must stay at $FA62."
+
+    ; The screen and the hooks.
+    cld
+    jsr SetNormal
+    jsr InitDisplay
+    jsr SetScreen
+    jsr SetKeyboard
+
+;; Turns annunciators 0 and 1 off, then resets the firmware's state or, on the Autostart Monitor, turns
+;; annunciators 2 and 3 off too.
+;; Also: INITAN (A2RM79, IIEROM82, IIETRM85)
+Annunciators:
+    lda CLRAN0
+    lda CLRAN1
 .if MONITOR = MONITOR_AUTOSTART
-    lda CLRAN2                      ; $FA75
-    lda CLRAN3                      ; $FA78
+    lda CLRAN2
+    lda CLRAN3
 .else
+    ldy #FIRMWARE_RESET
+    jsr CallFirmware
+    ; Keeps the code at the Autostart Monitor's addresses.
+    nop
+.endif
+
+    ; No $C800 ROM, and no key waiting.
+    lda CLRROM
+    bit KBDSTRB
+
+;; Beeps, then warm-starts through <SOFTEV> when <PWREDUP> matches it, or powers up.
+;; Also: NEWMON (A2RM79, IIEROM82, IIETRM85)
+CheckSoftEntry:
+    cld
+    jsr Beep
+    lda SOFTEV+1
+    eor #SOFT_ENTRY_CHECK
+    cmp PWREDUP
+    bne PowerUp
+
+    ; AppleSoft's cold start, $E000, the first time only.
+    lda SOFTEV
+    bne WarmStart
+    lda #>BasicColdStart
+    cmp SOFTEV+1
+    bne WarmStart
+
+;; Makes <SOFTEV> AppleSoft's warm start, so the next reset keeps the program, then cold-starts AppleSoft.
+;; <Startup::PowerUp> comes here when it finds no disk.
+;; Also: FIXSEV (A2RM79, IIEROM82, IIETRM85)
+FixSoftEntry:
+    ldy #<BasicWarmStart
+    sty SOFTEV
+    jmp BasicColdStart
+
+;; Warm reset: continues at the program's soft entry vector, <SOFTEV>.
+;; Also: NOFIX (A2RM79, IIEROM82, IIETRM85)
+WarmStart:
+    jmp (SOFTEV)
+.endproc
+
+;; Power-up: shows the title, sets the vectors to their defaults, then starts the disk controller in the highest
+;; slot that has one, or else AppleSoft.
+;;
+;; At $FAA6. It sets <BRKV>, <SOFTEV> and <PWREDUP> from <Startup::PowerUpVectors>, then looks for a bootable disk
+;; controller from slot 7 down to slot 1 by its signature bytes (<Startup::DiskSignature>), and starts the first
+;; one found at $Cn00. With none, it starts AppleSoft through <Startup::Reset::FixSoftEntry>.
+;; Also: PWRUP (A2RM79, IIEROM82, IIETRM85)
+.proc PowerUp
+    .assert * = $FAA6, "Startup::PowerUp must stay at $FAA6."
+    jsr ShowTitle
+
+;; Sets <BRKV>, <SOFTEV> and <PWREDUP> from <Startup::PowerUpVectors>.
+;; Also: SETPG3 (A2RM79, IIEROM82, IIETRM85)
+SetVectors:
+    ldx #POWER_UP_VECTOR_BYTES
+
+;; Copies a byte of the defaults, from the last.
+;; Also: SETPLP (A2RM79, IIEROM82, IIETRM85)
+CopyVector:
+    lda PowerUpVectors - 1,x
+    sta BRKV - 1,x
+    dex
+    bne CopyVector
+
+    ; LOC0/LOC1 points above slot 7's ROM.
+    lda #SLOT_PAGE_BASE + LAST_SLOT + 1
+    stx LOC0
+    sta LOC1
+
+;; Tries the next slot down; past slot 1, starts AppleSoft.
+;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
+NextSlot:
+    ldy #SIGNATURE_LAST
+    dec LOC1
+    lda LOC1
+    cmp #SLOT_PAGE_BASE
+    beq Reset::FixSoftEntry
+    sta MSLOT
+
+;; Compares every other byte of the slot's ROM with <Startup::DiskSignature>, from the last down to $Cn01.
+;; Also: NXTBYT (A2RM79, IIEROM82, IIETRM85)
+CompareByte:
+    lda (LOC0),y
+    cmp DiskSignature - 1,y
+    bne NextSlot
+    dey
+    dey
+    bpl CompareByte
+
+    ; A disk controller: boots it.
+    jmp (LOC0)
+
 .if ENHANCED
-    ldy #$09                        ; $FA75 firmware function: 5 on the original IIe, 9 on the Enhanced IIe
+
+    ; Two unused bytes.
+    .byte $00, $00
 .else
-    ldy #$05                        ; $FA75 firmware function: 5 on the original IIe, 9 on the Enhanced IIe
+
+    ; Two unused bytes.
+    .byte $EA, $EA
 .endif
-    jsr GOTOCX                      ; $FA77
-    nop                             ; $FA7A
-.endif
-    lda CLRROM                      ; $FA7B
-    bit KBDSTRB                     ; $FA7E
+.endproc
 
-NEWMON:
-    cld                             ; $FA81
-    jsr BELL                        ; $FA82
-    lda SOFTEV+1                    ; $FA85
-    eor #$A5                        ; $FA88
-    cmp PWREDUP                     ; $FA8A PWREDUP must equal SOFTEV's high byte EOR $A5
-    bne PWRUP                       ; $FA8D
-    lda SOFTEV                      ; $FA8F
-    bne NOFIX                       ; $FA92
-    lda #$E0                        ; $FA94
-    cmp SOFTEV+1                    ; $FA96
-    bne NOFIX                       ; $FA99
-
-FIXSEV:
-    ldy #$03                        ; $FA9B
-    sty SOFTEV                      ; $FA9D
-    jmp BASIC                       ; $FAA0
-
-;; Warm reset: continues at the program's reset vector, SOFTEV ($03F2).
-NOFIX:
-    jmp (SOFTEV)                    ; $FAA3
-
-;; Power-up: shows the title, sets BRKV, SOFTEV and PWREDUP to their defaults, then looks for a
-;; bootable disk controller from slot 7 down to slot 1 by its signature bytes, and starts the first
-;; one found at $Cn00. With none, starts AppleSoft (BASIC).
-PWRUP:
-    jsr APPLEII                     ; $FAA6
-
-SETPG3:
-    ldx #$05                        ; $FAA9
-
-SETPLP:
-    lda PWRCON-1,x                  ; $FAAB
-    sta BRKV-1,x                    ; $FAAE
-    dex                             ; $FAB1
-    bne SETPLP                      ; $FAB2
-    lda #$C8                        ; $FAB4
-    stx LOC0                        ; $FAB6
-    sta LOC1                        ; $FAB8
-
-SLOOP:
-.if ENHANCED
-    ldy #$05                        ; $FABA
-.else
-    ldy #$07                        ; $FABA
-.endif
-    dec LOC1                        ; $FABC
-    lda LOC1                        ; $FABE
-    cmp #$C0                        ; $FAC0
-    beq FIXSEV                      ; $FAC2
-    sta MSLOT                       ; $FAC4
-
-NXTBYT:
-    lda (LOC0),y                    ; $FAC7
-    cmp DISKID-1,y                  ; $FAC9
-    bne SLOOP                       ; $FACC
-    dey                             ; $FACE
-    dey                             ; $FACF
-    bpl NXTBYT                      ; $FAD0
-    jmp (LOC0)                      ; $FAD2
-.if ENHANCED
-    .byte $00, $00                  ; $FAD5
-.else
-    .byte $EA, $EA                  ; $FAD5
-.endif
+.endscope
 .endif

@@ -1,85 +1,61 @@
+; retrocore: style=strict
+;; The Monitor's own names for page zero, the entries it calls in the internal firmware and the language ROMs, and
+;; the page zero the Apple II Monitor's step and arithmetic routines use.
+
 ; Page zero not in IIeEquates.asm, because DOS has names of its own spelled the same. The firmware inherits these.
+
 ;; The high byte of the pointer at <LOC0>.
 ;;
-;; <PWRUP> counts it down from $C7 to $C1 as it tries each slot. On the Enhanced IIe, the interrupt return code
-;; at <VIDSYNC_1@Enhanced> points it briefly at a slot's $Cn00 page to select that slot's $C800 ROM, then restores it.
+;; <Startup::PowerUp> counts it down from $C7 to $C1 as it tries each slot. On the Enhanced IIe, the interrupt return
+;; code in the bytes the original IIe's <RestoreAfterFirmware> uses points it briefly at a slot's $Cn00 page to select
+;; that slot's $C800 ROM, then restores it.
 ;; See: <LOC0>, <MSLOT>
 LOC1 = $01
 
 ;; The cursor's line on the screen, 0-23.
 ;;
-;; It counts from the top of the screen, not of the window. <TABV>, <UP> and <LF> change it, and <VTAB> sets
-;; <BASL>/<BASH> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
-;; See: <CH>, <BASL>, <WNDTOP>, <WNDBTM>, <VTAB>
+;; It counts from the top of the screen, not of the window. <VerticalTabTo>, <CursorUp> and <LineFeed> change it, and
+;; <VerticalTab> sets <BASL>/<BASH> for it. The 80-column firmware keeps a copy in <Firmware:OURCV>.
+;; See: <CH>, <BASL>, <WNDTOP>, <WNDBTM>, <VerticalTab>
 CV = $25
 
-; The internal firmware's entries, CLRROM (a label in the Enhanced IIe's firmware) and AppleSoft's entries.
+; The internal firmware's entries, and CLRROM, a label in the Enhanced IIe's firmware.
+
+;; The internal firmware's dispatcher, which runs the function whose number is in Y; the original IIe's <CallFirmware>
+;; jumps here.
 B_FUNC = $C100
+
+;; Slot 3's input entry in the internal firmware's 80-column code; <CompareSlot3Rom> compares its bytes.
 BASICIN = $C305
+
+;; The Enhanced IIe firmware's interrupt handler, which the Enhanced IIe's interrupt vector points to.
 IRQHANDLER = $C3FA
+
+;; Where the Enhanced IIe firmware's interrupt code goes on once the Monitor has selected the interrupted slot's
+;; $C800 ROM again.
 IRQRESTORE = $C47C
+
+;; The Enhanced IIe firmware's cassette header routine, which the Monitor's <Cassette::WriteHeader> stub calls.
 TAPEHEADR = $C567
+
+;; The Enhanced IIe firmware's cassette write, which the Monitor's W command (<WriteCassette>) calls.
 WRITETAPE = $C5AA
+
+;; The Enhanced IIe firmware's cassette read, which the Monitor's R command (<ReadCassette>) calls.
 READTAPE = $C5D1
+
+;; The Enhanced IIe firmware's mini-assembler, which assembles each line read at its "!" prompt.
 MINILINE = $CF9C
-CLRROM = $CFFF                      ;; releases the $C800 expansion ROM
-BASIC = $E000                       ;; AppleSoft cold start
-BASIC2 = $E003                      ;; AppleSoft warm start
-.if MONITOR = MONITOR_II
 
-; Names the Apple II Monitor's listing gives page zero for STEP and the multiply and divide routines.
-;; The low byte of the Monitor command line's return address while STEP runs a user instruction.
-;;
-;; <STEP> pops the address its caller left on the stack into <RTNL>/<RTNH>, so the user's instruction
-;; sees the user's stack, and <RTNJMP> pushes it back. The same bytes are <H2> and <V2>.
-;; See: <RTNH>, <STEP>, <RTNJMP>
-RTNL = $2C
+;; Releases the $C800 expansion ROM: reading or writing it deselects every slot's.
+CLRROM = $CFFF
 
-;; The high byte of the return address <STEP> keeps at <RTNL>.
-;; See: <RTNL>, <STEP>
-RTNH = $2D
+; BASIC's entries.
 
-;; The sign count of <MULPM> and <DIVPM>: bit 0 is set when the result is negative.
-;;
-;; <MD1> clears it and adds one for each operand it makes positive; the caller applies the sign. The
-;; same byte is <LENGTH>.
-;; See: <MD1>, <MULPM>, <DIVPM>
-SIGN = $2F
+;; BASIC's cold start: Integer BASIC's or AppleSoft's, whichever the ROMs hold.
+;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
+BasicColdStart = $E000
 
-;; The nine bytes where STEP runs one user instruction, $3C-$44.
-;;
-;; <STEP> copies the instruction here, padded with NOPs and followed by jumps to <NBRNCH> and <BRANCH>
-;; from <INITBL>, then jumps here. The area overlaps <A1L> through <A5L>.
-;; See: <STEP>, <INITBL>
-XQT = $3C
-
-;; The low byte of the 16-bit accumulator of <MUL> and <DIV>.
-;;
-;; It holds the multiplier or dividend on entry and the low half of the product, or the quotient, on
-;; return.
-;; See: <ACH>, <XTNDL>, <AUXL>, <MUL>, <DIV>
-ACL = $50
-
-;; The high byte of the 16-bit accumulator at <ACL>.
-;; See: <ACL>
-ACH = $51
-
-;; The low byte of the 16-bit extension of <MUL> and <DIV>.
-;;
-;; <MUL> adds it to the product and returns the product's high half here; <DIV> takes it as the high
-;; half of the dividend and returns the remainder here.
-;; See: <XTNDH>, <ACL>, <MUL>, <DIV>
-XTNDL = $52
-
-;; The high byte of the extension at <XTNDL>.
-;; See: <XTNDL>
-XTNDH = $53
-
-;; The low byte of the 16-bit multiplicand or divisor of <MUL> and <DIV>.
-;; See: <AUXH>, <ACL>, <MUL>, <DIV>
-AUXL = $54
-
-;; The high byte of the multiplicand or divisor at <AUXL>.
-;; See: <AUXL>
-AUXH = $55
-.endif
+;; The warm start of the language in ROM, <BasicColdStart>'s second entry: it keeps the program in memory.
+;; Also: BASIC2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+BasicWarmStart = $E003

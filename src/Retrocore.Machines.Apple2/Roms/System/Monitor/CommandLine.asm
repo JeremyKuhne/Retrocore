@@ -1,195 +1,320 @@
-;; The older reset sequence, without the IIe's power-up checks: normal video, text, the screen and
-;; keyboard hooks, then the Monitor.
+; retrocore: style=strict
+;; The Monitor's entry and command line: the Apple II Monitor's reset routine, the * prompt, the hexadecimal number
+;; reader, the command table, and the 6502's vectors ($FF59-$FFFF).
+
+; Hexadecimal numbers.
+
+;; The decimal digits, which <ReadHexNumber> tells from other characters by their value EOR "0".
+DECIMAL_DIGITS = 10
+
+;; The lowest code <ReadHexNumber> gives a letter digit: "A"'s. The codes from it up are "A" to "F".
+HEX_LETTER_CODE = (('A' ^ '0') + KEY_CODE_OFFSET) & $FF
+
+; The Apple II Monitor has none of the later Monitors' power-up code, so Startup opens here, empty, in its build;
+; every build then continues it.
+.if MONITOR = MONITOR_II
+
+;; Taking the machine from reset to a program. The Apple II Monitor has only <Startup::ResetToMonitor>, its reset
+;; handler, which enters the Monitor; the user starts `BASIC` by hand.
+.scope Startup
+.endscope
+.endif
+
+; Startup: ResetToMonitor, at $FF59.
+.scope Startup continued
+
+;; Sets normal text, text mode with a full window (<InitDisplay>), and the screen and keyboard hooks, then enters the
+;; Monitor.
 ;;
-;; It is the Apple II Monitor's reset handler (RESETVEC), named RESET in its listing.
-OLDRST:
-    jsr SETNORM                     ; $FF59
-    jsr INIT                        ; $FF5C
-    jsr SETVID                      ; $FF5F
-    jsr SETKBD                      ; $FF62
+;; At $FF59. It is the Apple II Monitor's reset handler, which <ResetVector> points at and which the
+;; 1978 listing names `RESET`. The later Monitors' reset handler does the same set-up itself, and programs jump
+;; here to enter the Monitor.
+;; Also: OLDRST (A2RM79, IIEROM82, IIETRM85)
+.proc ResetToMonitor
+.assert * = $FF59, "Startup::ResetToMonitor must stay at $FF59."
+    jsr SetNormal
+    jsr InitDisplay
+    jsr SetScreen
+    jsr SetKeyboard
+    ; Falls into EnterMonitor.
+.endproc
 
-;; Enters the Monitor with a beep.
-MON:
-    cld                             ; $FF65
-    jsr BELL                        ; $FF66
+.endscope
 
-;; Enters the Monitor: prompts with "*", reads a command line and performs its commands.
-MONZ:
-    lda #'*'                        ; $FF69
-    sta PROMPT                      ; $FF6B
-    jsr GETLNZ                      ; $FF6D
-    jsr ZMODE                       ; $FF70
+;; Enters the Monitor with a beep: the command line, with decimal mode cleared.
+;;
+;; At $FF65. A BRK comes here after showing the registers.
+;; Also: MON (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc EnterMonitor
+.assert * = $FF65, "EnterMonitor must stay at $FF65."
+    cld
+    jsr Beep
+    ; Falls into CommandLine.
+.endproc
 
-;; Monitor command line: reads the next number and command character, and performs the command.
-NXTITM:
-    jsr GETNUM                      ; $FF73
-    sty YSAV                        ; $FF76
-    ldy #SUBTBL-CHRTBL              ; $FF78
+;; The Monitor's command line: prompts with "*", reads a line, and runs its commands, then prompts again.
+;;
+;; $FF69 in every build, which `CALL -151` enters from `BASIC`. A key that is no command beeps and starts over.
+;; Also: MONZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc CommandLine
+.assert * = $FF69, "CommandLine must stay at $FF69."
+    lda #'*'
+    sta PROMPT
+    jsr GetLineAfterReturn
+    jsr ClearMode
 
-CHRSRCH:
-    dey                             ; $FF7A
-    bmi MON                         ; $FF7B
-    cmp CHRTBL,y                    ; $FF7D
-    bne CHRSRCH                     ; $FF80
-    jsr TOSUB                       ; $FF82
-    ldy YSAV                        ; $FF85
-    jmp NXTITM                      ; $FF87
+;; Reads a number and the character after it, and runs that command.
+;; In: Y = the index in <IN>
+;; Also: NXTITM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextItem:
+    jsr ReadHexNumber
+    sty YSAV
+    ldy #Commands::Routines - Commands::Keys
 
-;; Shifts a hex digit into A2.
-DIG:
-    ldx #$03                        ; $FF8A
-    asl a                           ; $FF8C
-    asl a                           ; $FF8D
-    asl a                           ; $FF8E
-    asl a                           ; $FF8F
+;; Looks the character up in the key table, from its end.
+;; Also: CHRSRCH (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Search:
+    dey
+    bmi EnterMonitor
+    cmp Commands::Keys,y
+    bne Search
 
-;; Shifts A2 left one bit, taking the bit from A.
-NXTBIT:
-    asl a                           ; $FF90
-    rol A2L                         ; $FF91
-    rol A2H                         ; $FF93
-    dex                             ; $FF95
-    bpl NXTBIT                      ; $FF96
+    ; Runs it, then goes on after it.
+    jsr Commands::RunCommand
+    ldy YSAV
+    jmp NextItem
+.endproc
 
-;; Copies A2 to A1 and A3, unless a mode (".", ":", "+", "-") is pending.
-NXTBAS:
-    lda MODE                        ; $FF98
-    bne NXTBS2                      ; $FF9A
-    lda A2H,x                       ; $FF9C
-    sta A1H,x                       ; $FF9E
-    sta A3H,x                       ; $FFA0
+; Commands: the digits of a number, after the command line.
+.scope Commands continued
 
-;; Continues the copy in NXTBAS.
-NXTBS2:
-    inx                             ; $FFA2
-    beq NXTBAS                      ; $FFA3
-    bne NXTCHR                      ; $FFA5
+;; Shifts a hexadecimal digit into A2, then copies the number to A1 and A3 and reads on.
+;; In: A = the digit, in bits 0-3
+;; Also: DIG (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ShiftDigit
+    ; The digit's 4 bits, from the top of A.
+    ldx #3
+    asl a
+    asl a
+    asl a
+    asl a
 
-;; Reads a hex number from IN at Y into A2.
-;; Out: A = the next non-digit character (encoded for CHRTBL); Y after it
-GETNUM:
-    ldx #$00                        ; $FFA7
-    stx A2L                         ; $FFA9
-    stx A2H                         ; $FFAB
+;; Shifts the top bit of A into A2 X + 1 times.
+;; In: A = the bits, X = the count less one
+;; Also: NXTBIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextBit:
+    asl a
+    rol A2L
+    rol A2H
+    dex
+    bpl NextBit
+    ; Falls into CopyNumber.
+.endproc
 
-;; Reads the next character of a number.
-NXTCHR:
+;; Copies the number in A2 to A1 and A3, unless a command is waiting for it, then reads the next character.
+;;
+;; It starts with X = $FF, so that <A2H>,X is <A2L> in page zero.
+;; In: X = $FF
+;; Out: X = 1
+;; Also: NXTBAS (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc CopyNumber
+    lda MODE
+    bne Next
+    lda A2H,x
+    sta A1H,x
+    sta A3H,x
+
+;; The next byte: the high one after the low one, then the next character.
+;; Also: NXTBS2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Next:
+    inx
+    beq CopyNumber
+    bne ReadHexNumber::NextCharacter
+.endproc
+
+.endscope
+
+;; Reads a hexadecimal number from the input line into A2, and returns the character after it as a command code.
+;;
+;; At $FFA7. Each digit also copies the number to A1 and A3 unless a command is waiting (<MODE>). The
+;; code is (character EOR "0") + $89, as <Commands::Keys> holds them. On the Enhanced IIe, an apostrophe makes the
+;; character after it 8 bits of the number (<Commands::LetterOrQuote>).
+;; In: Y = the index in <IN>
+;; Out: A = the code, Y = the index after the character, A2L/A2H = the number, X = 1 after a digit, 0 when none
+;; Also: GETNUM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ReadHexNumber
+.assert * = $FFA7, "ReadHexNumber must stay at $FFA7."
+    ldx #0
+    stx A2L
+    stx A2H
+
+;; Reads the next character of the number.
+;; In: Y = the index in <IN>
+;; Also: NXTCHR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+NextCharacter:
 .if ENHANCED
-    jsr UPMON                       ; $FFAD
-    nop                             ; $FFB0
+    ; In uppercase.
+    jsr NextInputCharacter
+    nop
 .else
-    lda IN,y                        ; $FFAD
-    iny                             ; $FFB0
+    lda IN,y
+    iny
 .endif
-    eor #'0'                        ; $FFB1
-    cmp #$0A                        ; $FFB3
-    bcc DIG                         ; $FFB5
-    adc #$88                        ; $FFB7
-    cmp #$FA                        ; $FFB9
+
+    ; 0 to 9 are digits as they are, and A to F become $FA to $FF.
+    eor #'0'
+    cmp #DECIMAL_DIGITS
+    bcc Commands::ShiftDigit
+    adc #KEY_CODE_OFFSET - 1
+    cmp #HEX_LETTER_CODE
 .if ENHANCED
-    jmp RD3_1                       ; $FFBB
+    jmp Commands::LetterOrQuote
 .else
-    bcs DIG                         ; $FFBB
-    rts                             ; $FFBD
+    bcs Commands::ShiftDigit
+    rts
 .endif
+.endproc
 
-;; Performs the Monitor command at CHRTBL,Y by pushing its handler's address minus one and
-;; returning to it.
-;; Out: A = MODE
-TOSUB:
-    lda #COMMAND_PAGE               ; $FFBE
-    pha                             ; $FFC0
-    lda SUBTBL,y                    ; $FFC1
-    pha                             ; $FFC4
-    lda MODE                        ; $FFC5
+; Commands: running a handler, after ReadHexNumber.
+.scope Commands continued
 
-;; Clears MODE.
-ZMODE:
-    ldy #$00                        ; $FFC7
-    sty MODE                        ; $FFC9
-    rts                             ; $FFCB
+;; Runs the command at index Y of <Commands::Keys>, by returning to its handler's address minus one.
+;;
+;; $FFBE in every build, which Integer `BASIC` calls. The handler is entered as <Commands> says.
+;; In: Y = the command's index
+;; Out: A = MODE, Y = 0, MODE = 0
+;; Also: TOSUB (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc RunCommand
+.assert * = $FFBE, "Commands::RunCommand must stay at $FFBE, where Integer BASIC calls it."
+    lda #COMMAND_PAGE
+    pha
+    lda Routines,y
+    pha
+    lda MODE
+    ; Falls into ClearMode, which returns to the handler.
+.endproc
 
-;; The Monitor's commands: each key and the routine that performs it.
-;; CHRTBL holds the keys as GETNUM returns them, (key EOR $B0) + $89, and SUBTBL the low byte of
-;; each handler's address minus one; TOSUB pushes the page, COMMAND_PAGE, and returns to it. NXTITM
-;; searches from the end, so a later entry for the same key wins.
+.endscope
+
+;; Clears <MODE>, so that no command is waiting for a number.
+;;
+;; At $FFC7.
+;; Out: Y = 0
+;; Keeps: A, X
+;; Also: ZMODE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ClearMode
+.assert * = $FFC7, "ClearMode must stay at $FFC7."
+    ldy #0
+    sty MODE
+    rts
+.endproc
+
+; Commands: the key table, after ClearMode.
+.scope Commands continued
+
+;; The page of every command handler's address minus one, which <Commands::RunCommand> pushes.
 COMMAND_PAGE = $FE
-.set COMMANDS, 0
 
-.macro COMMAND key, handler
-    .ident(.sprintf("COMMAND_KEY_%d", COMMANDS)) = (((key) ^ $B0) + $89) & $FF
-    .ident(.sprintf("COMMAND_SUB_%d", COMMANDS)) = <(handler - 1)
+;; The commands <Command> has added so far: at the end, the length of <Commands::Keys> and
+;; <Commands::Routines>.
+.set CommandCount, 0
+
+;; One command of the key table: its key and the routine that runs it.
+;; Parameters:
+;;   key = the key, with its high bit set
+;;   handler = the routine, in page $FE after its first byte
+.macro Command key, handler
+    .ident(.sprintf("COMMAND_KEY_%d", CommandCount)) = (((key) ^ '0') + KEY_CODE_OFFSET) & $FF
+    .ident(.sprintf("COMMAND_SUB_%d", CommandCount)) = <(handler - 1)
     .assert >(handler - 1) = COMMAND_PAGE, "A Monitor command handler must follow the first byte of page $FE."
-    .set COMMANDS, COMMANDS + 1
+    .set CommandCount, CommandCount + 1
 .endmacro
 
-    COMMAND KEY_CTRL_C, BASCONT     ; continue BASIC
-    COMMAND KEY_CTRL_Y, USR         ; the user's routine
-    COMMAND KEY_CTRL_E, REGZ        ; show the registers
+    ; The commands. <CommandLine> searches from the end, so a later entry for the same key wins.
+    Command KEY_CTRL_C, ContinueBasic
+    Command KEY_CTRL_Y, User
+    Command KEY_CTRL_E, Registers
 .if ENHANCED
-    COMMAND '!', MINIASM            ; the mini-assembler
+    Command '!', Assemble
 .elseif MONITOR = MONITOR_II
-    COMMAND 'T', TRACE              ; trace
+    Command 'T', Trace
 .else
-    COMMAND KEY_CTRL_Y, TRACE       ; left from the T command; the later Control-Y entries win
+    ; Left from the T command; the later Control-Y entries hide it.
+    Command KEY_CTRL_Y, Trace
 .endif
-    COMMAND 'V', VFY                ; verify
-    COMMAND KEY_CTRL_K, INPRT       ; IN#
+    Command 'V', VerifyMemory
+    Command KEY_CTRL_K, SetInput::FromA2
 .if ENHANCED
-    COMMAND 'S', MEMFIND            ; search
+    Command 'S', Search
 .elseif MONITOR = MONITOR_II
-    COMMAND 'S', STEPZ              ; step
+    Command 'S', Step
 .elseif MONITOR = MONITOR_AUTOSTART
-    COMMAND KEY_CTRL_Y, STEPZ + 1   ; left from the S command; this one wins, and runs into USR
+    ; Left from the S command: this one wins, and its five NOPs run into User.
+    Command KEY_CTRL_Y, Step + 1
 .else
-    COMMAND KEY_CTRL_Y, SLOTRTS     ; left from the S command; this one wins
+    ; Left from the S command: this one wins.
+    Command KEY_CTRL_Y, UserText
 .endif
-    COMMAND KEY_CTRL_P, OUTPRT      ; PR#
-    COMMAND KEY_CTRL_B, XBASIC      ; start BASIC
-    COMMAND '-', SETMODE            ; subtract
-    COMMAND '+', SETMODE            ; add
-    COMMAND 'M', MOVE               ; move
-    COMMAND '<', LT                 ; destination
-    COMMAND 'N', SETNORM            ; normal text
-    COMMAND 'I', SETINV             ; inverse text
-    COMMAND 'L', LIST               ; list (disassemble)
-    COMMAND 'W', WRITE              ; write to cassette
-    COMMAND 'G', GO                 ; go
-    COMMAND 'R', READ               ; read from cassette
-    COMMAND ':', SETMODE            ; store
-    COMMAND '.', SETMODE            ; range
-    COMMAND KEY_CR, CRMON           ; end of the line
-    COMMAND ' ', BLANK              ; separator
+    Command KEY_CTRL_P, SetOutput::FromA2
+    Command KEY_CTRL_B, StartBasic
+    Command '-', SetMode
+    Command '+', SetMode
+    Command 'M', MoveMemory
+    Command '<', Destination
+    Command 'N', SetNormal
+    Command 'I', SetInverse
+    Command 'L', ListInstructions
+    Command 'W', WriteCassette
+    Command 'G', Go
+    Command 'R', ReadCassette
+    Command ':', SetMode
+    Command '.', SetMode
+    Command KEY_CR, Return
+    Command ' ', Blank
 
-CHRTBL:
-.repeat COMMANDS, index
+;; The command keys, as <ReadHexNumber> returns them.
+;; Also: CHRTBL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Keys:
+.repeat CommandCount, index
     .byte .ident(.sprintf("COMMAND_KEY_%d", index))
 .endrepeat
 
-SUBTBL:
-.repeat COMMANDS, index
+;; Each command's handler: the low byte of its address minus one, in <Commands::COMMAND_PAGE>.
+;; Also: SUBTBL (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Routines:
+.repeat CommandCount, index
     .byte .ident(.sprintf("COMMAND_SUB_%d", index))
 .endrepeat
 
-;; The 6502's NMI vector: $03FB.
-NMIVEC:
-    .word NMI                       ; $FFFA
+.endscope
 
-;; The 6502's reset vector: RESET.
+;; The 6502's non-maskable interrupt vector: <NMI>, in page three, where a program puts a jump.
 ;;
-;; The Apple II Monitor's points at OLDRST, which its listing calls RESET.
-RESETVEC:
+;; At $FFFA.
+;; Also: NMIVEC (UNKN)
+NmiVector:
+.assert * = $FFFA, "NmiVector must be at $FFFA, the 6502's NMI vector."
+    .word NMI
+
+;; The 6502's reset vector: <Startup::ResetToMonitor> on the Apple II Monitor, <Startup::Reset> on the others.
+;;
+;; At $FFFC.
+;; Also: RESETVEC (UNKN)
+ResetVector:
 .if MONITOR = MONITOR_II
-    .word OLDRST                    ; $FFFC
+    .word Startup::ResetToMonitor
 .else
-    .word RESET                     ; $FFFC
+    .word Startup::Reset
 .endif
 
-;; The 6502's IRQ and BRK vector: IRQ on the original IIe, the internal firmware at $C3FA on the
-;; Enhanced IIe.
-IRQVEC:
+;; The 6502's IRQ and BRK vector: <Interrupt>, or on the Enhanced IIe the internal firmware's handler at $C3FA.
+;;
+;; At $FFFE.
+;; Also: IRQVEC (UNKN)
+IrqVector:
 .if ENHANCED
-    .word IRQHANDLER                ; $FFFE
+    .word IRQHANDLER
 .else
-    .word IRQ                       ; $FFFE
+    .word Interrupt
 .endif
+.assert * = $10000, "The Monitor must end at $FFFF."

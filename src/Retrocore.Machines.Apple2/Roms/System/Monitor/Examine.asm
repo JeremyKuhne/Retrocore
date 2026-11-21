@@ -1,211 +1,407 @@
-;; Monitor examine: shows the eight bytes from A1 (to the next multiple of 8).
-XAM8:
-    lda A1L                         ; $FDA3
-    ora #$07                        ; $FDA5
-    sta A2L                         ; $FDA7
-    lda A1H                         ; $FDA9
-    sta A2H                         ; $FDAB
+; retrocore: style=strict
+;; The Monitor's examine and arithmetic commands, its hexadecimal and character output, and its M, V and L
+;; commands ($FDA3-$FE74).
 
-MOD8CHK:
-    lda A1L                         ; $FDAD
-    and #$07                        ; $FDAF
-    bne DATAOUT                     ; $FDB1
+; Sizes and counts.
 
-;; Monitor examine: shows memory from A1 to A2, eight bytes per line.
-XAM:
-    jsr PRA1                        ; $FDB3
+;; The bytes <Commands::ExamineLine> shows on a line. A line starts at an address that is a multiple of it, so one
+;; less is the mask of an address's place in its line.
+BYTES_PER_LINE = 8
 
-DATAOUT:
-    lda #' '                        ; $FDB6
-    jsr COUT                        ; $FDB8
-    lda (A1L),y                     ; $FDBB
-    jsr PRBYTE                      ; $FDBD
-    jsr NXTA1                       ; $FDC0
-    bcc MOD8CHK                     ; $FDC3
+;; What a hexadecimal digit's character is moved by when the digit is 10 to 15: the letters before A, after 9.
+LETTER_OFFSET = 'A' - '9' - 1
 
-RTS4C:
-    rts                             ; $FDC5
+;; The instructions <ListInstructions> disassembles for one L command.
+LIST_LENGTH = 20
 
-;; Monitor + and - commands: prints A1 plus or minus A2 as "=xx".
-XAMPM:
-    lsr a                           ; $FDC6
-    bcc XAM                         ; $FDC7
-    lsr a                           ; $FDC9
-    lsr a                           ; $FDCA
-    lda A2L                         ; $FDCB
-    bcc ADD                         ; $FDCD
-    eor #$FF                        ; $FDCF
-
-ADD:
-    adc A1L                         ; $FDD1
-    pha                             ; $FDD3
-    lda #'='                        ; $FDD4
-    jsr COUT                        ; $FDD6
-    pla                             ; $FDD9
-
-;; Prints A as two hex digits.
-PRBYTE:
-    pha                             ; $FDDA
-    lsr a                           ; $FDDB
-    lsr a                           ; $FDDC
-    lsr a                           ; $FDDD
-    lsr a                           ; $FDDE
-    jsr PRHEXZ                      ; $FDDF
-    pla                             ; $FDE2
-
-;; Prints the low four bits of A as a hex digit.
-PRHEX:
-    and #$0F                        ; $FDE3
-
-PRHEXZ:
-    ora #'0'                        ; $FDE5
-    cmp #'9' + 1                    ; $FDE7
-    bcc COUT                        ; $FDE9
-    adc #$06                        ; $FDEB
-
-;; Prints a character through the output hook, CSWL.
-;; In: A = character with the high bit set
-COUT:
-    jmp (CSWL)                      ; $FDED
-
-;; The screen's output routine (CSWL's default): applies INVFLG to printable characters, then prints
-;; with the Control-S pause (VIDWAIT).
-;; Keeps: A, Y
-COUT1:
-.if ENHANCED
-    pha                             ; $FDF0
-.endif
-    cmp #' '                        ; $FDF1 original $FDF0
-.if ENHANCED
-    jmp DOCOUT1                     ; $FDF3
-.else
-    bcc COUTZ                       ; $FDF2
-    and INVFLG                      ; $FDF4
-.endif
-
-;; Prints a character on the screen without applying INVFLG.
+;; The handlers of the Monitor's commands that are not documented routines of their own, and the parts of the
+;; command line that only <Commands::Routines> and <CommandLine> reach.
 ;;
-;; The Apple II Monitor prints with VIDOUT, without the Control-S pause.
+;; <CommandLine> reads each number and the character after it with <ReadHexNumber>, finds the character in
+;; <Commands::Keys>, and runs its handler through <Commands::RunCommand>. A handler is entered with:
+;;
+;; - A = <MODE>, the command that was waiting for this number (".", ":", "+" or "-"), or 0 for none, and the
+;;   byte itself cleared;
+;; - X = 1 when a number came before the command character, 0 when none did;
+;; - Y = 0;
+;; - <A1L>/<A1H> and <A3L>/<A3H> = the last number typed with no command waiting, the first of a range, and
+;;   <A2L>/<A2H> = the last number typed.
+;;
+;; The scope is in nine pieces, because the Monitor's documented routines sit between its parts at fixed
+;; addresses. Each handler's address minus one must be in page $FE, after its first byte (<Commands::Routines>).
+.scope Commands
+
+;; Examines memory from A1 to the end of its line of 8 bytes: a carriage return alone after another command.
+;; In: A1L/A1H = the first address, Y = 0
+;; Out: A1L/A1H = the address after the last byte shown
+;; Also: XAM8 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ExamineLine
+    ; The line ends at A1's last address with the same high bits.
+    lda A1L
+    ora #BYTES_PER_LINE - 1
+    sta A2L
+    lda A1H
+    sta A2H
+
+;; Starts a new line, printing its address, when A1 is at a multiple of 8.
+;; Also: MOD8CHK (A2RM79, IIEROM82, IIETRM85)
+CheckLineStart:
+    lda A1L
+    and #BYTES_PER_LINE - 1
+    bne PrintByte
+
+;; Examines memory from A1 to A2, 8 bytes a line: a carriage return, "AAAA-" and the bytes, each after a blank.
+;; In: A1L/A1H = the first address, A2L/A2H = the last, Y = 0
+;; Out: A1L/A1H = the address after A2
+;; Also: XAM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Range:
+    jsr PrintAddress
+
+;; Prints the byte at A1 as " xx", then steps A1 to the next until it passes A2.
+;; Also: DATAOUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+PrintByte:
+    lda #' '
+    jsr CharacterOut
+    lda (A1L),y
+    jsr PrintHexByte
+    jsr NextInRange
+    bcc CheckLineStart
+
+;; The return when A1 has passed A2.
+;; Also: RTS4C (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Done:
+    rts
+.endproc
+
+;; The ".", "+" and "-" commands, run by the number after them: "." examines A1 to A2, and "+" and "-" print
+;; <A1L> plus or minus <A2L> as "=xx".
+;;
+;; <Commands::Blank> comes here when a blank or carriage return ends the number, and the waiting command is not
+;; ":". A
+;; number with no command waiting comes here too, and with A1 = A2 shows its one byte.
+;; In: A = the waiting command, or 0 for none, A1L/A1H = the first number, A2L/A2H = the second, Y = 0
+;; Also: XAMPM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ExamineOrCalculate
+    ; Bit 0 is clear for "." ($AE) and 0: examine.
+    lsr a
+    bcc ExamineLine::Range
+
+    ; Bit 2 is clear for "+" ($AB) and set for "-" ($AD). For "-", the carry it leaves set makes adding the
+    ; complement a subtraction.
+    lsr a
+    lsr a
+    lda A2L
+    bcc Add
+    eor #$FF
+
+;; Adds <A1L> to <A2L>, or to its complement for "-", and prints "=" and the result.
+;; Also: ADD (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Add:
+    adc A1L
+    pha
+    lda #'='
+    jsr CharacterOut
+    pla
+    ; Falls into PrintHexByte.
+.endproc
+
+.endscope
+
+;; Prints a byte as two hexadecimal digits.
+;;
+;; At $FDDA.
+;; In: A = the byte
+;; Also: PRBYTE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc PrintHexByte
+.assert * = $FDDA, "PrintHexByte must stay at $FDDA."
+    ; The high nibble first.
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    jsr PrintHexDigit::Unmasked
+
+    ; Then the low one.
+    pla
+    ; Falls into PrintHexDigit.
+.endproc
+
+;; Prints the low nibble of A as a hexadecimal digit.
+;;
+;; At $FDE3.
+;; In: A = the nibble, in bits 0-3
+;; Also: PRHEX (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc PrintHexDigit
+.assert * = $FDE3, "PrintHexDigit must stay at $FDE3."
+    and #$0F
+
+;; Prints A, 0 to 15, as a hexadecimal digit.
+;; In: A = the digit, 0 to 15
+;; Also: PRHEXZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Unmasked:
+    ora #'0'
+    cmp #'9' + 1
+    bcc CharacterOut
+
+    ; 10 to 15 are A to F. The carry is set.
+    adc #LETTER_OFFSET - 1
+    ; Falls into CharacterOut.
+.endproc
+
+;; Prints a character through the output hook, <CSWL>/<CSWH>: on the screen through <ScreenOut>, or to the routine
+;; a program or `PR#` set.
+;;
+;; At $FDED.
+;; In: A = the character, with its high bit set
+;; Also: COUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc CharacterOut
+.assert * = $FDED, "CharacterOut must stay at $FDED."
+    jmp (CSWL)
+.endproc
+.if ENHANCED
+
+;; The screen's output routine, the output hook's default: prints a character, applying <INVFLG> to a printable
+;; one.
+;;
+;; At $FDF0. A character below $A0, a control character, is printed as it is. In 80 columns the
+;; firmware applies the mask itself and A comes back as given; in 40 columns a printable character comes back with
+;; the mask applied.
+;; In: A = the character, with its high bit set
+;; Out: A = the character as printed
+;; Keeps: Y
+;; Also: COUT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ScreenOut
+.assert * = $FDF0, "ScreenOut must stay at $FDF0."
+    pha
+    cmp #' '
+    jmp ApplyInverse
+.endproc
+
+;; Prints a character on the screen as it is, without <INVFLG>.
+;;
+;; At $FDF6. In 80 columns the firmware prints it; in 40 columns <ScreenOutPausing at ScreenOutPausing>
+;; does, with the Control-S pause.
+;; In: A = the character, with its high bit set
 ;; Keeps: A, Y
-COUTZ:
-.if ENHANCED
-    pha                             ; $FDF6
+;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ScreenOutNoInverse
+.assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
+    pha
 
-COUTZ_1:
-.endif
-    sty YSAV1                       ; $FDF7 original $FDF6
-.if ENHANCED
-    tay                             ; $FDF9
+;; Prints a character, with the one for 80 columns already pushed.
+;;
+;; <ApplyInverse at ApplyInverse> comes here with the character as given pushed and A = the character with <INVFLG>
+;; applied. <ScreenOutByWidth at ScreenOutByWidth@Enhanced> prints the pushed one in 80 columns, and A in 40.
+;; In: A = the character for 40 columns, with the one for 80 columns on the stack
+Pushed:
+    sty YSAV1
+    tay
+    pla
+    jmp ScreenOutByWidth
+
+    ; Two unused bytes.
+    .byte $EA, $EA
+.endproc
 .else
-    pha                             ; $FDF8
+
+;; The screen's output routine, the output hook's default: prints a character, applying <INVFLG> to a printable
+;; one.
+;;
+;; At $FDF0. A character below $A0, a control character, is printed as it is.
+;; In: A = the character, with its high bit set
+;; Out: A = the character as printed, with <INVFLG> applied when printable
+;; Keeps: Y
+;; Also: COUT1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ScreenOut
+.assert * = $FDF0, "ScreenOut must stay at $FDF0."
+    cmp #' '
+    bcc ScreenOutNoInverse
+    and INVFLG
+    ; Falls into ScreenOutNoInverse.
+.endproc
+
+;; Prints a character on the screen as it is, without <INVFLG>.
+;;
+;; At $FDF6. The Apple II Monitor prints with <ScreenOutDirect at ScreenOutDirect>; the others with
+;; <ScreenOutPausing at ScreenOutPausing>, which adds the Control-S pause.
+;; In: A = the character, with its high bit set
+;; Keeps: A, Y
+;; Also: COUTZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ScreenOutNoInverse
+.assert * = $FDF6, "ScreenOutNoInverse must stay at $FDF6."
+    sty YSAV1
+    pha
 .if MONITOR = MONITOR_II
-    jsr VIDOUT                      ; $FDF9
+    jsr ScreenOutDirect
 .else
-    jsr VIDWAIT                     ; $FDF9
+    jsr ScreenOutPausing
 .endif
-.endif
-    pla                             ; $FDFA original $FDFC
-.if ENHANCED
-    jmp CLREOP_1                    ; $FDFB
-    .byte $EA, $EA                  ; $FDFE
-.else
-    ldy YSAV1                       ; $FDFD
-    rts                             ; $FDFF
+    pla
+    ldy YSAV1
+    rts
+.endproc
 .endif
 
-;; Monitor command line: counts down the examine-on-return line (part of the blank handler).
-BL1:
-    dec YSAV                        ; $FE00
-    beq XAM8                        ; $FE02
+; Commands: the Return, blank, mode and "<" handlers, after the character output.
+.scope Commands continued
 
-;; Monitor command line: a blank or colon after a number. After a colon, stores the number at A3 and
-;; advances A3.
-BLANK:
-    dex                             ; $FE04
-    bne SETMDZ                      ; $FE05
-    cmp #':'                        ; $FE07
-    bne XAMPM                       ; $FE09
+;; A carriage return: alone on its line, examines the next line of 8 bytes; otherwise ends a number as a blank does.
+;;
+;; $FE00 in every build, which Integer `BASIC` calls. <Commands::Return> calls it. A carriage return is alone when
+;; it is the line's first character, so that <YSAV>, the index after it, counts down to 0.
+;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
+;; Also: BL1 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ExamineNextOrBlank
+.assert * = $FE00, "ExamineNextOrBlank must stay at $FE00, where Integer BASIC calls it."
+    dec YSAV
+    beq ExamineLine
+    ; Falls into Blank.
+.endproc
 
-STOR:
-    sta MODE                        ; $FE0B
-    lda A2L                         ; $FE0D
-    sta (A3L),y                     ; $FE0F
-    inc A3L                         ; $FE11
-    bne RTS5                        ; $FE13
-    inc A3H                         ; $FE15
+;; A blank, or a carriage return through <Commands::ExamineNextOrBlank>: runs the waiting command with the number
+;; before it.
+;;
+;; After ":" it stores the number's low byte at A3 and keeps ":" waiting, so each number after it is stored in
+;; the next byte. Any other waiting command, or none, goes to <Commands::ExamineOrCalculate>. With no number
+;; before it, the waiting command stays waiting.
+;; In: A = the waiting command, or 0, X = 1 after a number, 0 when none, Y = 0
+;; Also: BLANK (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Blank
+    dex
+    bne SetMode::FromA
+    cmp #':'
+    bne ExamineOrCalculate
 
-RTS5:
-    rts                             ; $FE17
+;; Stores A2L at A3 and steps A3 to the next byte, keeping ":" waiting.
+;; In: A = ":", A2L = the byte, A3L/A3H = where, Y = 0
+;; Also: STOR (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Store:
+    sta MODE
+    lda A2L
+    sta (A3L),y
+    inc A3L
+    bne Done
+    inc A3H
 
-;; Monitor command line: sets MODE from the command character (".", ":", "+", "-").
-SETMODE:
-    ldy YSAV                        ; $FE18
-    lda $01FF,y                     ; $FE1A
+;; The return.
+;; Also: RTS5 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Done:
+    rts
+.endproc
 
-;; Sets MODE from A.
-SETMDZ:
-    sta MODE                        ; $FE1D
-    rts                             ; $FE1F
+;; ".", ":", "+" and "-": waits for the next number, setting <MODE> to the command character.
+;;
+;; Its rts, at $FE1F, is one the Disk 3.5 firmware calls as a routine that does nothing on the IIe.
+;; Also: SETMODE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc SetMode
+    ; The command character is the one before IN,YSAV.
+    ldy YSAV
+    lda IN - 1,y
 
-;; Monitor < command: copies A2 to A4 and A5, the destination of MOVE and VFY.
-LT:
-    ldx #$01                        ; $FE20
+;; Sets <MODE> to A.
+;; In: A = the command, or 0 for none
+;; Also: SETMDZ (A2RM78, A2RM79, IIEROM82, IIETRM85)
+FromA:
+    sta MODE
+    rts
+.endproc
 
-;; Copies A2 to A4 and A5 (from LT).
-LT2:
-    lda A2L,x                       ; $FE22
-    sta A4L,x                       ; $FE24
-    sta A5L,x                       ; $FE26
-    dex                             ; $FE28
-    bpl LT2                         ; $FE29
-    rts                             ; $FE2B
+;; "<": sets the destination of the next command, A4 and A5, to the number before it, A2.
+;;
+;; M and V take their destination from A4, and the Enhanced IIe's S its value.
+;; Also: LT (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc Destination
+    ; Both bytes.
+    ldx #1
 
-;; Monitor M command: copies A1-A2 to A4.
-MOVE:
-    lda (A1L),y                     ; $FE2C
-    sta (A4L),y                     ; $FE2E
-    jsr NXTA4                       ; $FE30
-    bcc MOVE                        ; $FE33
-    rts                             ; $FE35
+;; Copies X + 1 bytes of A2 to A4 and A5.
+;; In: X = the index of the last byte, 1 for both
+;; Out: X = $FF
+;; Also: LT2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Copy:
+    lda A2L,x
+    sta A4L,x
+    sta A5L,x
+    dex
+    bpl Copy
+    rts
+.endproc
 
-;; Monitor V command: compares A1-A2 with the memory at A4, printing each difference as
-;; "AAAA-xx (yy)".
-VFY:
-    lda (A1L),y                     ; $FE36
-    cmp (A4L),y                     ; $FE38
-    beq VFY_1                       ; $FE3A
-    jsr PRA1                        ; $FE3C
-    lda (A1L),y                     ; $FE3F
-    jsr PRBYTE                      ; $FE41
-    lda #' '                        ; $FE44
-    jsr COUT                        ; $FE46
-    lda #'('                        ; $FE49
-    jsr COUT                        ; $FE4B
-    lda (A4L),y                     ; $FE4E
-    jsr PRBYTE                      ; $FE50
-    lda #')'                        ; $FE53
-    jsr COUT                        ; $FE55
+.endscope
 
-VFY_1:
-    jsr NXTA4                       ; $FE58
+;; M: copies the bytes from A1 to A2 to A4 on.
+;;
+;; At $FE2C. It copies upward a byte at a time, so a destination inside the source and above its
+;; start repeats the source's first bytes: 301<300.3FEM fills $301-$3FF with the byte at $300.
+;; In: A1L/A1H = the first address, A2L/A2H = the last, A4L/A4H = the destination, Y = 0
+;; Out: A1L/A1H = the address after A2, A4L/A4H = the address after the last copied
+;; Also: MOVE (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc MoveMemory
+.assert * = $FE2C, "MoveMemory must stay at $FE2C."
+    lda (A1L),y
+    sta (A4L),y
+    jsr NextInRangeAndTarget
+    bcc MoveMemory
+    rts
+.endproc
 
-VFYOK:
-    bcc VFY                         ; $FE5B
-    rts                             ; $FE5D
+;; V: compares the bytes from A1 to A2 with those from A4 on, printing each difference as "AAAA-xx (yy)".
+;;
+;; At $FE36. AAAA is the address in A1's range, xx its byte and yy the byte at A4.
+;; In: A1L/A1H = the first address, A2L/A2H = the last, A4L/A4H = the other range, Y = 0
+;; Out: A1L/A1H = the address after A2
+;; Also: VFY (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc VerifyMemory
+.assert * = $FE36, "VerifyMemory must stay at $FE36."
+    lda (A1L),y
+    cmp (A4L),y
+    beq Next
 
-;; Monitor L command: disassembles 20 instructions from A1 (or the current PC).
-LIST:
-    jsr A1PC                        ; $FE5E
-    lda #$14                        ; $FE61
+    ; A difference.
+    jsr PrintAddress
+    lda (A1L),y
+    jsr PrintHexByte
+    lda #' '
+    jsr CharacterOut
+    lda #'('
+    jsr CharacterOut
+    lda (A4L),y
+    jsr PrintHexByte
+    lda #')'
+    jsr CharacterOut
+Next:
+    jsr NextInRangeAndTarget
 
-LIST2:
-    pha                             ; $FE63
-    jsr INSTDSP                     ; $FE64
-    jsr PCADJ                       ; $FE67
-    sta PCL                         ; $FE6A
-    sty PCH                         ; $FE6C
-    pla                             ; $FE6E
-    sec                             ; $FE6F
-    sbc #$01                        ; $FE70
-    bne LIST2                       ; $FE72
-    rts                             ; $FE74
+;; The test for the end of the range.
+;; Also: VFYOK (A2RM78, IIEROM82, IIETRM85)
+Continue:
+    bcc VerifyMemory
+    rts
+.endproc
+
+;; L: disassembles 20 instructions, from A1 when the command gave an address, or else from PC.
+;;
+;; At $FE5E.
+;; In: X = 1 when the command gave an address, 0 when not, A1L/A1H = the address
+;; Out: PCL/PCH = the address after the last instruction
+;; Also: LIST (A2RM78, A2RM79, IIEROM82, IIETRM85)
+.proc ListInstructions
+.assert * = $FE5E, "ListInstructions must stay at $FE5E."
+    jsr SetPcFromA1
+    lda #LIST_LENGTH
+
+;; Disassembles the instruction at PC and moves PC past it, counting the instructions on the stack.
+;; Also: LIST2 (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Next:
+    pha
+    jsr Disassembler::PrintInstruction
+    jsr NextInstruction
+    sta PCL
+    sty PCH
+    pla
+    sec
+    sbc #1
+    bne Next
+    rts
+.endproc

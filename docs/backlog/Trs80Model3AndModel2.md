@@ -3,7 +3,8 @@
 The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of their ROMs, which are
 byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match the Model I.
 
-**Status:** proposed; nothing here is approved yet.
+**Status:** every stage is built; what each still lacks is listed with it: the Model 4's real-time clock and
+function keys, TRSDOS-II on the Model II and its oracle, which need an image, and MAME's `cpu_fc86` Model II boot ROM.
 
 ## Stages
 
@@ -29,4 +30,6 @@ byte-identical to MAME's dumps, and boot to their prompts. This is what remains 
    write: MAME's `cpu_fc86` Model II boot ROM, which MAME lists but has no dump of.
 5. **1500 baud cassettes.** Done: `CSAVE` and `CLOAD` at 1500 baud on the Model III and 4, timed as the ROM's source
    writes and reads, and high-speed CAS images.
-6. **Writing disk images back**, for every TRS-80, in their own formats.
+6. **Writing disk images back**, for every TRS-80, in their own formats. Done, with
+   [saving media back to images](MediaPersistence.md): the Model I's and the Model III family's floppies save as
+   JV3, DMK, DSK or JV1, and the Model II's as DMK or JV3.

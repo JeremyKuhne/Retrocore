@@ -590,7 +590,7 @@ internal sealed partial class DebugSession
         MediaActions.SourcesChanged -= SourcesChanged;
     }
 
-    // Sends the devices again when an image a disk came from changed on disk. It runs on a watcher's timer, where an
+    // Sends the devices again when an image a disk came from changed on disk. It runs on the thread pool, where an
     // exception would end the process, so a session whose client has gone, or that is between machines, lets it pass:
     // the next devices the client asks for show the image as it is.
     private void SourcesChanged()

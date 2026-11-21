@@ -172,7 +172,7 @@ internal sealed class ImageWatch
         }
     }
 
-    // A watcher on a file's folder, filtered to its name, whose events start the settle timer; or none when it cannot
+    // A watcher on a file's folder, filtered to its name, whose events set when the image is checked; or none when it cannot
     // be made, which a later sweep tries again.
     private FileSystemWatcher? Create(string file)
     {

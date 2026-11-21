@@ -295,6 +295,36 @@ public sealed class MediaSaveTests
     }
 
     /// <summary>
+    ///  An image is still watched while something told of another image's change has not returned, as a debug session
+    ///  waiting for its machine: each image's check goes on.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void ImageIsWatchedWhileAnotherChangeIsBeingTold()
+    {
+        (string first, _) = Image("first.dsk");
+        (string second, _) = Image("second.dsk");
+        Apple2FloppyDrive one = Drive(first);
+        Apple2FloppyDrive two = Drive(second, "disk2");
+        Until(() => { }, () => Source(one)?.Bool("stale") == false && Source(two)?.Bool("stale") == false);
+
+        using ManualResetEventSlim release = new();
+        void Held() => release.Wait(TimeSpan.FromSeconds(30));
+        MediaActions.SourcesChanged += Held;
+        try
+        {
+            byte[] outside = new byte[35 * 4096];
+            Until(() => File.WriteAllBytes(first, outside), () => Source(one)?.Bool("stale") == true);
+            Until(() => File.WriteAllBytes(second, outside), () => Source(two)?.Bool("stale") == true);
+        }
+        finally
+        {
+            MediaActions.SourcesChanged -= Held;
+            release.Set();
+        }
+    }
+
+    /// <summary>
     ///  A format that cannot hold all of the disk answers with what it would lose and writes nothing; accepted, it
     ///  saves and the disk stays changed.
     /// </summary>
@@ -607,7 +637,7 @@ public sealed class MediaSaveTests
     {
         using ManualResetEventSlim changed = new();
 
-        // A watcher's timer may raise the event it took before the handler was removed, after the wait is disposed.
+        // The event may be raised with the handlers it had before this one was removed, after the wait is disposed.
         void Changed()
         {
             try

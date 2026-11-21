@@ -53,7 +53,7 @@ internal static partial class MediaActions
 
     /// <summary>
     ///  Occurs when an image a disk came from changes on disk, or is marked read-only or writable, as the device list
-    ///  then shows; raised off the machine's thread.
+    ///  then shows; raised on the thread pool, after the change is in the disk's source.
     /// </summary>
     internal static event Action? SourcesChanged;
 
@@ -84,7 +84,13 @@ internal static partial class MediaActions
             }
         }
 
-        if (changed) { SourcesChanged?.Invoke(); }
+        // Told on the thread pool, not the watcher's thread: a session's handler waits for its machine, which must not
+        // hold up every other image's checks. The change is already in each source, whenever the handlers run.
+        if (changed && SourcesChanged is { } handlers)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(static handlers => handlers(), handlers, preferLocal: false);
+        }
+
         return true;
     }
 

@@ -119,7 +119,8 @@ internal static class ImageWatcher
             }
 
             long wait = next - Stopwatch.GetTimestamp();
-            if (wait > 0) { s_wake.WaitOne(TimeSpan.FromSeconds((double)wait / Stopwatch.Frequency)); }
+            // Rounded up to whole milliseconds, which the wait counts in, so it does not wake just short and spin.
+            if (wait > 0) { s_wake.WaitOne((int)Math.Ceiling(wait * 1000.0 / Stopwatch.Frequency)); }
         }
     }
 }

@@ -188,6 +188,12 @@ Done:
 ;; transitions between them. <WriteCassette> and <ReadCassette> call them.
 .scope Cassette
 
+; Page zero, under the name this scope gives it.
+
+;; The tape input's last level, which <ReadHalfCycle> compares the input with: <LENGTH>'s byte.
+;; Also: LASTIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
+LastLevel = LENGTH
+
 ;; Writes a cassette header tone, then the sync bit.
 ;;
 ;; At $FCC9.
@@ -282,7 +288,7 @@ NextBit:
 
 ;; Reads a bit by timing two transitions of the cassette input.
 ;;
-;; At $FCFA. <LENGTH> holds the input's last level; the Apple II's listings call it LASTIN here.
+;; At $FCFA. <LastLevel> holds the input's last level.
 ;; In: Y = the starting count
 ;; Out: carry = the bit: set for a 1, whose half cycles count Y down past 0
 ;; Keeps: X
@@ -305,12 +311,12 @@ NextBit:
     ; Until the input's level differs from the last one.
     dey
     lda TAPEIN
-    eor LENGTH
+    eor LastLevel
     bpl ReadHalfCycle
 
     ; The new level is the last one now.
-    eor LENGTH
-    sta LENGTH
+    eor LastLevel
+    sta LastLevel
     cpy #READ_ONE_THRESHOLD
     rts
 .endproc

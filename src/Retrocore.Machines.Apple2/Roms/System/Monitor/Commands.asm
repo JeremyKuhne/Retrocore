@@ -626,13 +626,17 @@ NextBit:
 ;; Also: READ (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ReadCassette
 .assert * = $FEFD, "ReadCassette must stay at $FEFD."
+
+;; The checksum of the bytes read: <MASK>'s byte.
+;; Also: CHKSUM (A2RM78, A2RM79, IIEROM82, IIETRM85)
+Checksum = MASK
     ; Waits for the tape's tone, then lets the header play.
     jsr Cassette::ReadBit
     lda #READ_HEADER_DELAY
     jsr Cassette::WriteHeader
 
     ; HEADR leaves A at $FF, where the checksum starts.
-    sta MASK
+    sta Checksum
     jsr Cassette::ReadBit
 
 ;; Waits out the header's half cycles for the shorter one of the sync bit.
@@ -644,21 +648,21 @@ FindSync:
     jsr Cassette::ReadHalfCycle
     ldy #READ_FIRST_COUNT
 
-;; Reads a byte into A1, keeping the checksum in MASK, and steps A1 to the next until it passes A2.
+;; Reads a byte into A1, keeping the checksum in <Checksum>, and steps A1 to the next until it passes A2.
 ;; Also: RD3 (A2RM78, A2RM79, IIEROM82)
 NextByte:
     jsr Cassette::ReadByte
     ; RDBYTE leaves X at 0.
     sta (A1L,x)
-    eor MASK
-    sta MASK
+    eor Checksum
+    sta Checksum
     jsr NextInRange
     ldy #READ_NEXT_COUNT
     bcc NextByte
 
     ; Then the checksum byte.
     jsr Cassette::ReadByte
-    cmp MASK
+    cmp Checksum
     beq Beep
     ; Falls into PrintError.
 .endproc

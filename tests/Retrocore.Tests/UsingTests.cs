@@ -479,6 +479,76 @@ public sealed class UsingTests
     }
 
     /// <summary>
+    ///  The strict lint's unlinked-name check also resolves a name by its own comment's <c>.using</c> directives.
+    /// </summary>
+    [TestMethod]
+    public void UnlinkedNamesUseTheirOwnCommentsUsings()
+    {
+        string text = """
+            ; retrocore: style=strict
+            .cpu Mos6502
+            .org $0300
+
+            ;; The first values.
+            .scope A
+
+            ;; A value.
+            FirstValue = 1
+
+            .endscope
+
+            ;; The second values.
+            .scope B
+
+            ;; Another value.
+            SecondValue = 2
+
+            .endscope
+
+            ENHANCED = 1
+            .using A
+            .if ENHANCED
+
+            ;; Uses <FirstValue>.
+            .proc Thing
+                rts
+            .endproc
+
+            .else
+            .using B
+
+            ;; Uses <FirstValue> and SecondValue.
+            .proc Thing
+                rts
+            .endproc
+
+            .endif
+            """;
+
+        DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(text, "test.asm")], Assemble(text));
+        new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message).Should()
+            .Contain("Link SecondValue as <SecondValue>: it names a documented definition.");
+    }
+
+    /// <summary>
+    ///  The editor's note on an unnecessary <c>.using</c> carries LSP's Unnecessary tag (1), so the editor fades it.
+    /// </summary>
+    [TestMethod]
+    public void UnnecessaryNotesCarryTheTag()
+    {
+        Diagnostic note = new Diagnostic
+        {
+            Range = new LspRange(0, 0, 0, 1),
+            Severity = DiagnosticSeverity.Error,
+            Message = "unused"
+        }.Unnecessary();
+
+        System.Text.Json.Nodes.JsonObject json = note.ToJson();
+        json["tags"]?.ToJsonString().Should().Be("[1]");
+        json["severity"]?.GetValue<int>().Should().Be((int)DiagnosticSeverity.Information);
+    }
+
+    /// <summary>
     ///  A documentation link in a comment inside a <c>.using</c>'s extent resolves as the code there would.
     /// </summary>
     [TestMethod]

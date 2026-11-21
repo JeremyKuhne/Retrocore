@@ -185,6 +185,33 @@ public sealed class HistoricalNameTests
     }
 
     /// <summary>
+    ///  An included library's own <c>Bibliography.md</c> serves its <c>Also:</c> entries, as well as the root's.
+    /// </summary>
+    [TestMethod]
+    public void IncludedFilesBibliographiesAreRead()
+    {
+        string folder = Directory.CreateTempSubdirectory("retrocore-also").FullName;
+        try
+        {
+            string main = Path.Join(folder, "Main.asm");
+            string library = Path.Join(folder, "lib", "Library.asm");
+            Directory.CreateDirectory(Path.Join(folder, "lib"));
+            File.WriteAllText(main, ".include \"lib/Library.asm\"\n");
+            File.WriteAllText(library, "");
+            File.WriteAllText(
+                Path.Join(folder, "lib", "Bibliography.md"),
+                "| Key | Title | Year | Publisher | Link |\n| --- | --- | --- | --- | --- |\n| LIBDOC | The Library | 1980 | Me | |\n");
+
+            global::Retrocore.Debug.Language.SourceBibliography.For(main, [main, library]).Find("LIBDOC").Should().NotBeNull();
+            global::Retrocore.Debug.Language.SourceBibliography.For(main).Find("LIBDOC").Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A bibliography is the table of a Markdown file; a later file replaces an earlier one's key.
     /// </summary>
     [TestMethod]

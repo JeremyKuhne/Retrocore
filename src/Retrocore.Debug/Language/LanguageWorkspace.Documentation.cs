@@ -27,38 +27,8 @@ internal sealed partial class LanguageWorkspace
         readText: path => OpenText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null),
         root: RepositoryRoot(analysis.Root))
     {
-        Bibliography = BibliographyFor(analysis.Root)
+        Bibliography = SourceBibliography.For(analysis.Root, analysis.Members)
     };
-
-    private static readonly Lazy<string?> s_sdkBibliography = new(() =>
-    {
-        string path = Path.Join(SdkModules.SdkDirectory, "Bibliography.md");
-        return File.Exists(path) ? File.ReadAllText(path) : null;
-    });
-
-    /// <summary>
-    ///  Gets the documents a source's <c>Also:</c> entries may cite: the SDK's bibliography, then each
-    ///  <c>Bibliography.md</c> from the root down to the source's folder, nearer ones replacing a key.
-    /// </summary>
-    /// <param name="path">The source.</param>
-    /// <returns>The documents.</returns>
-    internal static DocumentationBibliography BibliographyFor(string path)
-    {
-        List<string> texts = [];
-        if (s_sdkBibliography.Value is { } sdk) { texts.Add(sdk); }
-        List<string> local = [];
-        for (string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
-            directory is not null;
-            directory = Path.GetDirectoryName(directory))
-        {
-            string file = Path.Join(directory, "Bibliography.md");
-            if (File.Exists(file)) { local.Add(File.ReadAllText(file)); }
-        }
-
-        local.Reverse();
-        texts.AddRange(local);
-        return DocumentationBibliography.Parse(texts);
-    }
 
     /// <summary>
     ///  Finds the documentation of a definition.

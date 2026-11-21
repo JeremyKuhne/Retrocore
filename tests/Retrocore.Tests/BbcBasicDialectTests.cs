@@ -318,11 +318,31 @@ public sealed class BbcBasicDialectTests
     [TestMethod]
     public void ForeignWordsWarnOnlyAsStatements()
     {
-        BasicSource source = BasicSource.Analyze("10 HOME=1:PRINT HOME:DIM SET(1):SET(1)=2:HOME?0=1\n20 HOME\n30 IF 1 THEN HOME\n", BasicDialect.BbcBasic);
+        // Each statement, its foreign word, and whether BASIC II stops on it with Mistake: a ?, ! or ( must follow the
+        // name straight away, so after a space only = makes an assignment.
+        (string Statement, string Word, bool Mistake)[] statements =
+        [
+            ("HOME=&900", "HOME", false), ("PRINT HOME", "HOME", false), ("SET(1)=2", "SET", false),
+            ("HOME?0=1", "HOME", false), ("HOME!0=1", "HOME", false), ("HOME =&900", "HOME", false),
+            ("HOME", "HOME", true), ("IF 1 THEN HOME", "HOME", true), ("HOME ?0=1", "HOME", true),
+            ("HOME !0=1", "HOME", true), ("SET (1)=2", "SET", true)
+        ];
+
+        string program = "10 DIM SET(1)\n" + string.Concat(statements.Select((entry, index) => $"{index + 2}0 {entry.Statement}\n"));
+        BasicSource source = BasicSource.Analyze(program, BasicDialect.BbcBasic);
         source.Diagnostics.Where(diagnostic => diagnostic.Severity == BasicSeverity.Warning).Select(diagnostic => $"{diagnostic.Line}: {diagnostic.Message}")
-            .Should().Equal(
-                "1: BBC BASIC has no HOME statement: it reads HOME as a variable to assign, and stops with Mistake.",
-                "2: BBC BASIC has no HOME statement: it reads HOME as a variable to assign, and stops with Mistake.");
+            .Should().Equal(statements.Select((entry, index) => (entry, line: index + 1)).Where(pair => pair.entry.Mistake).Select(pair =>
+                $"{pair.line}: BBC BASIC has no {pair.entry.Word} statement: it reads {pair.entry.Word} as a variable to assign, and stops with Mistake."));
+
+        BbcMachine machine = Boot();
+        BbcMachineTests.Type(machine, "DIM SET(1):HOME=&900\r");
+        BbcMachineTests.RunToPrompt(machine);
+        foreach ((string statement, _, bool mistake) in statements)
+        {
+            BbcMachineTests.Type(machine, $"CLS:{statement}\r");
+            string screen = string.Join("\n", BbcMachineTests.RunToPrompt(machine));
+            screen.Contains("Mistake", StringComparison.Ordinal).Should().Be(mistake, statement);
+        }
 
         // AppleSoft still warns of a word it lacks wherever it is, as it reads the name by its first two letters.
         BasicSource appleSoft = BasicSource.Analyze("10 X=ELSE\n", BasicDialect.AppleSoft);
@@ -926,7 +946,7 @@ public sealed class BbcBasicDialectTests
         string[] numbers =
         [
             "?&70", "!&80", "B%?3", "B%!8", "B%?3+1", "?&70*2", "A%(1)?3", "R?3", "?(B%+3)", "!(B%+8) AND &FF", "-?&70",
-            "?&70=200", "A%(1)!J%", "B%?B%?3", "LEN $(B%+20)", "LEN $C%", "LEN $D%", "?(&10000+&70)", "?-&FF90"
+            "?&70=200", "A%(1)!J%", "B%?B%?3", "LEN $(B%+20)", "LEN $C%", "LEN $D%", "?(&10000+&70)", "?-&FF90", "!&FFFF AND &FFFFFF", "!-1 AND &FFFF"
         ];
 
         string[] texts = ["$(B%+20)", "$(B%+20)+\"!\"", "LEFT$($D%,3)"];
@@ -946,7 +966,12 @@ public sealed class BbcBasicDialectTests
         }
 
         BasicVariables variables = new(BasicDialect.BbcBasic, Memory(machine));
-        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, Memory(machine));
+
+        // The watch reads through a memory that refuses an address outside 16 bits, so a read past &FFFF must wrap.
+        BasicEvaluator evaluator = new(BasicDialect.BbcBasic, new DelegateBasicMemory(
+            address => address is >= 0 and <= 0xFFFF ? machine.Bus.Peek((ushort)address) : throw new ArgumentOutOfRangeException(nameof(address)),
+            (address, value) => machine.Bus.Write((ushort)address, value)));
+
         BasicArray stored = variables.Arrays().Single(found => found.Name == "N");
         for (int index = 0; index < numbers.Length; index++)
         {

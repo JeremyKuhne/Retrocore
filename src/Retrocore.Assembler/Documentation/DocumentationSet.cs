@@ -284,12 +284,26 @@ public sealed class DocumentationSet
     }
 
     /// <summary>
+    ///  Gets the symbol an <c>Entry:</c> label names: the routine's own local when the routine is a <c>.proc</c>
+    ///  that defines one (<c>Plot::SameRow</c> for <c>SameRow</c> in <c>Plot</c>), otherwise the label as written.
+    /// </summary>
+    /// <param name="routine">The routine whose comment lists the entry.</param>
+    /// <param name="label">The label as written.</param>
+    /// <returns>The symbol's name.</returns>
+    public string EntrySymbol(DocumentationTopic routine, string label)
+    {
+        string local = $"{routine.Name}::{label}";
+        return _symbols.ContainsKey(local) || _topics.ContainsKey(local) ? local : label;
+    }
+
+    /// <summary>
     ///  Finds the topic of a label documented as an entry into a routine, or the routine itself.
     /// </summary>
     /// <param name="name">The label.</param>
     /// <returns>The routine's topic, or null.</returns>
     public DocumentationTopic? FindRoutine(string name) =>
-        Find(name) ?? _ordered.FirstOrDefault(topic => topic.EntryLabels.Contains(name, StringComparer.Ordinal));
+        Find(name) ?? _ordered.FirstOrDefault(topic =>
+            topic.EntryLabels.Any(label => label == name || EntrySymbol(topic, label) == name));
 
     /// <summary>
     ///  Finds the documented label at an address.

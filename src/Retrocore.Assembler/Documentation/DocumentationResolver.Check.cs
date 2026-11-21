@@ -180,6 +180,8 @@ public sealed partial class DocumentationResolver
                 CheckAlso(topic, section, warn);
                 break;
             case "Entry":
+                // A routine written once per build lists each build's entries under its own condition.
+                if (!InThisBuild(section.Condition)) { break; }
                 foreach (DocumentationEntry entry in section.Entries)
                 {
                     if (!InsideRoutine(topic, entry.Name))
@@ -275,15 +277,34 @@ public sealed partial class DocumentationResolver
     }
 
     // An entry label must lie between the routine's address and the next documented routine.
+    // Whether a section's .if condition holds for the build the documentation's symbols come from: each part of it
+    // ("MONITOR = MONITOR_IIE and not ENHANCED") is evaluated from those symbols. A part they can't decide holds.
+    private bool InThisBuild(string? condition)
+    {
+        if (condition is null || Current.Symbols.Count == 0) { return true; }
+        long? Symbol(string name) => Current.Symbols.TryGetValue(name, out long value) ? value : null;
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool not = part.StartsWith("not ", StringComparison.OrdinalIgnoreCase);
+            if (Holds(not ? part[4..].Trim() : part, Symbol) is { } holds && holds == not) { return false; }
+        }
+
+        return true;
+    }
+
+    // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
+    // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).
     private bool InsideRoutine(DocumentationTopic topic, string label)
     {
-        if (!Current.Symbols.TryGetValue(label, out long address)) { return false; }
+        if (!Current.Symbols.TryGetValue(Current.EntrySymbol(topic, label), out long address)) { return false; }
         if (topic.Value is not { } start) { return true; }
+        HashSet<string> entries = [.. topic.EntryLabels.Select(entry => Current.EntrySymbol(topic, entry))];
+        string local = $"{topic.Name}::";
         long next = long.MaxValue;
         foreach (DocumentationTopic other in Current.Topics)
         {
-            bool entry = topic.EntryLabels.Contains(other.Name, StringComparer.Ordinal);
-            if (!entry && other.Kind == DocumentationKind.Routine && other.Value is { } value && value > start && value < next)
+            bool inside = entries.Contains(other.Name) || other.Name.StartsWith(local, StringComparison.Ordinal);
+            if (!inside && other.Kind == DocumentationKind.Routine && other.Value is { } value && value > start && value < next)
             {
                 next = value;
             }

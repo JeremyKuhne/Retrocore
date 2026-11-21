@@ -91,6 +91,9 @@ Hook:
 ;; At $FD1B. The original IIe's firmware takes the character under the cursor in A and flashes it while it
 ;; waits.
 ;; Out: A = the key, with its high bit set
+;; Entry:
+;;   ToFirmware = goes to the firmware function in Y; <ClearLineFrom> and, on the Enhanced IIe, <Escape::ReadEscapeKey>
+;;     branch
 ;; Also: KEYIN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc KeyboardIn
 .assert * = $FD1B, "KeyboardIn must stay at $FD1B."
@@ -146,6 +149,8 @@ ToFirmware:
 ;; The internal firmware's way back: switches slot ROM in, then returns with the status it saved.
 ;;
 ;; At $FD29.
+;; Entry:
+;;   PullStatus = returns with the saved status, the ROM left as it is; the firmware jumps here too
 ;; Also: SLOTRTN (UNKN)
 .proc SlotRomReturn
 .assert * = $FD29, "SlotRomReturn must stay at $FD29."

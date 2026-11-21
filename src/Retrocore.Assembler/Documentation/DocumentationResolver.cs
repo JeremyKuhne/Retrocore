@@ -67,11 +67,17 @@ public sealed partial class DocumentationResolver
     public static string? ModelOf(string? condition)
     {
         if (condition is null) { return null; }
-        bool model = condition.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
-            || condition.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
 
-        if (!model) { return null; }
-        return condition.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced";
+        // In a joined condition ("MONITOR = MONITOR_IIE and not ENHANCED") the part that names the switch decides.
+        foreach (string part in condition.Split(" and ", StringSplitOptions.TrimEntries))
+        {
+            bool model = part.Contains("ENHANCED", StringComparison.OrdinalIgnoreCase)
+                || part.Contains("ENHNCD", StringComparison.OrdinalIgnoreCase);
+
+            if (model) { return part.StartsWith("not ", StringComparison.OrdinalIgnoreCase) ? "Original" : "Enhanced"; }
+        }
+
+        return null;
     }
 
     /// <summary>

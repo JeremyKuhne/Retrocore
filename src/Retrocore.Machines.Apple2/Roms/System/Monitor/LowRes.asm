@@ -48,6 +48,8 @@ COLOR_STEP = 3
 ;; In: A = the row (0-47), Y = the column (0-39), COLOR = the color in both nibbles
 ;; Out: carry = clear, GBASL/GBASH = the base address of the row's text line, MASK = the row's nibble of a byte
 ;; Keeps: X, Y
+;; Entry:
+;;   SameRow = plots a block in the row the last <Plot> set up, at another column
 ;; Also: PLOT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc Plot
 .assert * = $F800, "Plot must stay at $F800."
@@ -122,6 +124,8 @@ NextVerticalRow:
 ;; In: A = the top row, Y = the column (0-39), V2 = the bottom row, COLOR = the color in both nibbles
 ;; Out: A = V2 (when it is below the top), carry = set
 ;; Keeps: X, Y
+;; Entry:
+;;   Done = the return the lo-res lines share: <HorizontalLine> ends here too
 ;; Also: VLINE (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc VerticalLine
 .assert * = $F828, "VerticalLine must stay at $F828."
@@ -156,6 +160,8 @@ Done:
 ;; At $F836.
 ;; Out: COLOR = 0, V2 = 39, Y = $FF
 ;; Keeps: X
+;; Entry:
+;;   Rows = clears rows 0 to Y to black, a column at a time; <Clear> enters here
 ;; Also: CLRTOP (A2RM78, A2RM79, IIEROM82, IIETRM85)
 .proc ClearTop
 .assert * = $F836, "ClearTop must stay at $F836."
